@@ -1,16 +1,11 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 //
-// The Apex sheet, imported last by upstream's light and dark entry files (patch
-// 0001-build), after _apex-tokens.scss and upstream's partials. In S1a it only proves
-// the hook: it adds the markers and no rule for an upstream actor, so the shell still
-// looks stock. The partials (design/SPEC.md 3) arrive from S1b.
+// Imported last by upstream's light and dark entry files, after _apex-tokens.scss.
 
-// The Apex marker, which the lane (packaging/pkgs/gnome-shell/check.sh) and the image
-// gates look for in the compiled light and dark sheets. A loud comment survives every
-// sassc output style.
+// The lane and the image gates look for this marker in the compiled sheets. A loud
+// comment survives every sassc output style.
 /*! apex-shell-theme #{$variant} */
 
-// A style class no upstream actor carries. An actor given it takes the variant's bar
-// foreground token, which proves at runtime that the Apex sheet and its tokens loaded
-// (G2); a sheet compiled without the tokens fails in sassc instead.
+// No upstream actor carries this class: an actor given it proves at runtime that the
+// Apex sheet and its tokens loaded. A sheet compiled without the tokens fails in sassc.
 .apex-theme-marker { color: $apex_bar_fg; }

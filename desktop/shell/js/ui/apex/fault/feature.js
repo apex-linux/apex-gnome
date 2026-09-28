@@ -1,18 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 //
-// Fault injection for the safety net's tests (ROADMAP S1a exit; ADR 0014, crash guard).
-// The layer loads this feature only when APEX_SHELL_TEST_FAULT names a phase, and
-// enables it after every real feature. It fails in that phase:
-//
-//   configure            configure() throws: the feature is off for the session, its hook
-//                        gives the stock value, and the rest of the layer runs
-//   enable               enable() throws at startup-prepared: the same
-//   abort-after-enable   the shell aborts ABORT_SECONDS after enable, while the crash
-//                        guard's marker exists, so the guard turns layer-enabled off
-//
-// Its one hook, 'test-fault', gives 'fault' while the feature is on; tests read it with
-// ApexHooks.value('test-fault', 'stock'). The image never sets the variable: G1 fails on
-// it (image/checks/desktop.sh).
+// Fault injection for the safety-net tests; layer.js loads it only when
+// APEX_SHELL_TEST_FAULT names a phase.
 
 import GLib from 'gi://GLib';
 

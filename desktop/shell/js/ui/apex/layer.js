@@ -1,55 +1,42 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
-//
-// The Apex layer (ADR 0014). main.js loads it through hooks.loadLayer(), which runs
-// configure() before the session mode exists, and calls enable() at startup-prepared.
-// It is never loaded in safe mode or in the gdm mode. Each feature is its own module,
-// ui/apex/<name>/feature.js, in its own try/catch: one that throws is off for the
-// session and its hooks give stock values, while the rest of the layer runs.
 
 import GLib from 'gi://GLib';
 import Gio from 'gi://Gio';
 
 import * as Hooks from './hooks.js';
 
-// The features, in enable order. Their names are those of the disabled-features key
-// (design/SPEC.md 6.2). S1a ships the empty layer; S2a adds 'panel' and 'dock'. A
-// feature module exports configure(name), which may be async, and enable() and
-// disable(), which are synchronous.
-const FEATURES = [];
+// Named as in the disabled-features key, in enable order. A feature module
+// (<name>/feature.js) exports configure(name), which may be async, and synchronous
+// enable() and disable().
+const FEATURES_IN_ENABLE_ORDER = [];
 
-// Fault injection for the safety net's tests: when APEX_SHELL_TEST_FAULT names one of
-// these phases, the 'fault' feature (fault/feature.js) is enabled last and fails in that
-// phase. Any other value injects nothing. The image never sets the variable (G1).
-const FAULT_PHASES = ['configure', 'enable', 'abort-after-enable'];
+// Tests only: an image gate fails when the image sets APEX_SHELL_TEST_FAULT.
+const TEST_FAULT_PHASES = ['configure', 'enable', 'abort-after-enable'];
 
-// GNOME's 'default' colour scheme draws a light shell in these modes (ADR 0014;
-// design/SPEC.md 6.2). Upstream sets 'prefer-dark' for every mode; the gdm mode keeps
-// it.
-const LIGHT_MODES = new Set(['user', 'unlock-dialog']);
+// Upstream gives every mode 'prefer-dark'; the greeter keeps it.
+const LIGHT_SESSION_MODES = new Set(['user', 'unlock-dialog']);
 
-// The crash guard's marker (ADR 0014): it exists from enable() until the shell has run
-// for this long, or until shutdown, as extensionSystem.js does with its own file.
-const STARTING_FILE = 'apex-shell-starting';
-const STARTING_SECONDS = 60;
+// apex-shell-safe.service acts only while this file exists (ConditionPathExists=).
+const CRASH_GUARD_MARKER = 'apex-shell-starting';
+const CRASH_GUARD_WINDOW_SECONDS = 60;
 
 const _features = [];
 
 function _sessionMode(params, mode) {
-    return LIGHT_MODES.has(mode) ? {...params, colorScheme: 'prefer-light'} : params;
+    return LIGHT_SESSION_MODES.has(mode) ? {...params, colorScheme: 'prefer-light'} : params;
 }
 
-// FEATURES, plus 'fault' when APEX_SHELL_TEST_FAULT names a phase.
 function _featureNames() {
     const fault = GLib.getenv('APEX_SHELL_TEST_FAULT');
     if (fault === null)
-        return FEATURES;
-    if (!FAULT_PHASES.includes(fault)) {
+        return FEATURES_IN_ENABLE_ORDER;
+    if (!TEST_FAULT_PHASES.includes(fault)) {
         console.warn(`Apex: APEX_SHELL_TEST_FAULT=${fault} names no phase ` +
-            `(${FAULT_PHASES.join(', ')}); no fault injected`);
-        return FEATURES;
+            `(${TEST_FAULT_PHASES.join(', ')}); no fault injected`);
+        return FEATURES_IN_ENABLE_ORDER;
     }
     console.warn(`Apex: APEX_SHELL_TEST_FAULT=${fault}: the fault feature fails in that phase`);
-    return [...FEATURES, 'fault'];
+    return [...FEATURES_IN_ENABLE_ORDER, 'fault'];
 }
 
 /**
@@ -80,9 +67,9 @@ export async function configure(settings) {
     }
 }
 
-function _markStarting() {
+function _createCrashGuardMarker() {
     const file = Gio.File.new_for_path(
-        GLib.build_filenamev([GLib.get_user_runtime_dir(), STARTING_FILE]));
+        GLib.build_filenamev([GLib.get_user_runtime_dir(), CRASH_GUARD_MARKER]));
     try {
         // Not empty: an empty array reaches g_file_replace_contents as NULL, which it
         // refuses without an exception.
@@ -99,7 +86,7 @@ function _markStarting() {
         } catch {}
     };
     const shutdownId = global.connect('shutdown', remove);
-    GLib.timeout_add_seconds_once(GLib.PRIORITY_DEFAULT, STARTING_SECONDS, () => {
+    GLib.timeout_add_seconds_once(GLib.PRIORITY_DEFAULT, CRASH_GUARD_WINDOW_SECONDS, () => {
         global.disconnect(shutdownId);
         remove();
     });
@@ -110,7 +97,7 @@ function _markStarting() {
  */
 export function enable() {
     try {
-        _markStarting();
+        _createCrashGuardMarker();
         for (const {name, feature} of _features) {
             try {
                 feature.enable?.();

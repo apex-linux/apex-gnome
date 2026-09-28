@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
-// One run of the Apex layer outside the shell, for tests/layer/run.sh: hooks.js and
-// layer.js load as file modules with a stub `global`, and every fact goes to stderr as
-// "probe: KEY=VALUE" (stderr is unbuffered, so the facts before an abort survive).
+// Facts go to stderr: it is unbuffered, so the facts before an abort survive.
 //
 // Environment:
 //   APEX_SHELL_DIR   desktop/shell of this repository
@@ -59,7 +57,6 @@ for (const mode of ['user', 'unlock-dialog', 'gdm', 'initial-setup']) {
 }
 fact('test-fault', Hooks.value('test-fault', 'stock'));
 
-// A provider that throws gives the stock value, and is dropped after the first time.
 Hooks.provide('probe', 'boom', () => {
     throw new Error('boom');
 });

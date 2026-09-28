@@ -1,25 +1,12 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
-# Tests of the Apex layer's safety net outside the shell (ADR 0014; ROADMAP S1a):
-# desktop/shell's hooks.js and layer.js run in gjs (probe.js) with a stub `global`, the
-# Apex schema compiled from desktop/schemas, and GSettings' memory or keyfile backend.
-# Each case is one gjs process, because safe mode is decided once per process.
-#
 #   tests/layer/run.sh
 #
-# Covered: the kill switches (APEX_SHELL_SAFE=1; apex.safe=1 on the kernel command
-# line, through a bubblewrap bind of a fixture over /proc/cmdline; layer-enabled=false;
-# a missing schema), the gdm mode, the session-mode colour hook, a throwing provider, a
-# layer that does not load, the crash guard's marker file, fault injection
-# (APEX_SHELL_TEST_FAULT=configure, enable, abort-after-enable), and the crash guard
-# itself: desktop/systemd/user/apex-shell-safe.service's condition and commands, run as
-# systemd would after the aborted shell, turn the layer off for the next login.
-#
+# Each case is one gjs process, because safe mode is decided once per process.
 # Needs gjs and glib-compile-schemas, and bwrap for a fixed kernel command line. Without
 # bwrap the cases run against the host's /proc/cmdline and the kernel cases skip;
-# APEX_LAYER_TESTS_NO_SKIP=1 (ci.yml) turns every skip into a failure. Output is TAP;
-# the exit status is 1 when a case fails.
+# APEX_LAYER_TESTS_NO_SKIP=1 turns every skip into a failure. Output is TAP.
 set -euo pipefail
 
 HERE=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)

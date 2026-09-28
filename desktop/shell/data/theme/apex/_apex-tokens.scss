@@ -1,12 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 //
-// Apex tokens (design/SPEC.md 2.1), one SCSS variable per token and variant, written by
-// hand from the spec. St has no var(), so each token is `$apex_<name>`. Patch
-// 0001-build imports this file right after upstream's _colors in the light and dark
-// entry files, so it may also reassign upstream colour variables before _drawing,
-// _common and _widgets read them. The high-contrast sheet does not import it.
-//
-// S1a carries only the top bar's tokens (SPEC 2.1 and 3.4); S1b adds the rest.
+// St has no var(), so each token is an SCSS variable. Imported right after upstream's
+// _colors, so it may also reassign upstream colour variables before _drawing, _common
+// and _widgets read them.
 
 $apex_bar: if($variant == 'light', rgba(250, 250, 252, .45), rgba(12, 12, 16, .4));
 $apex_bar_solid: if($variant == 'light', #f3f3f5, #121215);

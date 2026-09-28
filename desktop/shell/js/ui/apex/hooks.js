@@ -1,10 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 //
-// The only Apex module that upstream files import (ADR 0014; patch 0002-loader). It
-// imports GLib and Gio only, does nothing at load, and never throws. A hook with no
-// provider, or whose provider threw, gives the stock value. Safe mode, where no
-// provider is ever registered and the stylesheets come from theme/stock/, is decided
-// once per process.
+// Upstream files import this module statically: it imports only GLib and Gio, does
+// nothing at load and never throws.
 
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
@@ -12,7 +9,7 @@ import GLib from 'gi://GLib';
 const SCHEMA_ID = 'io.github.sekirokenjii.Apex.Desktop';
 const KERNEL_SWITCH = 'apex.safe=1';
 
-const _providers = new Map(); // hook name -> {owner, fn}
+const _providerByHook = new Map();
 let _safe = null;
 let _settings = null;
 
@@ -21,8 +18,8 @@ function _kernelSafe() {
     return new TextDecoder().decode(bytes).trim().split(/\s+/).includes(KERNEL_SWITCH);
 }
 
-// The reason for safe mode, or '' when the layer may run. The greeter (the gdm mode)
-// ignores layer-enabled: one user turning the layer off keeps the Apex CSS there.
+// The greeter ignores layer-enabled, so one user turning the layer off keeps the Apex
+// CSS there.
 function _safeReason() {
     if (GLib.getenv('APEX_SHELL_SAFE') === '1')
         return 'APEX_SHELL_SAFE=1';
@@ -39,8 +36,7 @@ function _safeReason() {
 
 /**
  * Safe mode: no layer, every hook stock, upstream's stylesheets. Decided once per
- * process, from APEX_SHELL_SAFE=1, apex.safe=1 on the kernel command line, a missing
- * Apex schema, or layer-enabled=false.
+ * process.
  *
  * @returns {boolean}
  */
@@ -60,7 +56,7 @@ export function safe() {
 }
 
 function _drop(name, e) {
-    _providers.delete(name);
+    _providerByHook.delete(name);
     console.error(`Apex: hook ${name} threw; stock for the rest of the session: ${e}`);
 }
 
@@ -73,7 +69,7 @@ function _drop(name, e) {
  * @returns {*}
  */
 export function value(name, stock, ...args) {
-    const p = _providers.get(name);
+    const p = _providerByHook.get(name);
     if (!p)
         return stock;
     try {
@@ -93,7 +89,7 @@ export function value(name, stock, ...args) {
  * @returns {*}
  */
 export function run(name, ...args) {
-    const p = _providers.get(name);
+    const p = _providerByHook.get(name);
     if (!p)
         return undefined;
     try {
@@ -113,7 +109,7 @@ export function run(name, ...args) {
  */
 export function provide(owner, name, fn) {
     if (!safe())
-        _providers.set(name, {owner, fn});
+        _providerByHook.set(name, {owner, fn});
 }
 
 /**
@@ -122,9 +118,9 @@ export function provide(owner, name, fn) {
  * @param {string} owner - the feature, or 'core'
  */
 export function withdraw(owner) {
-    for (const [name, p] of _providers) {
+    for (const [name, p] of _providerByHook) {
         if (p.owner === owner)
-            _providers.delete(name);
+            _providerByHook.delete(name);
     }
 }
 
@@ -146,7 +142,7 @@ export async function loadLayer(importLayer) {
         await layer.configure(_settings);
         return layer;
     } catch (e) {
-        _providers.clear();
+        _providerByHook.clear();
         console.error(`Apex: the layer did not load; stock shell for this session: ${e}`);
         return null;
     }
