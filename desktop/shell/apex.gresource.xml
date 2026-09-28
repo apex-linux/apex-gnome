@@ -11,6 +11,7 @@
   <gresource prefix="/org/gnome/shell/ui/apex">
     <file alias="hooks.js">js/ui/apex/hooks.js</file>
     <file alias="layer.js">js/ui/apex/layer.js</file>
+    <file alias="fault/feature.js">js/ui/apex/fault/feature.js</file>
   </gresource>
   <!--
     Upstream's own compiled light and dark sheets, which %prep moves here from

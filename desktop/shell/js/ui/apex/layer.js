@@ -17,6 +17,11 @@ import * as Hooks from './hooks.js';
 // disable(), which are synchronous.
 const FEATURES = [];
 
+// Fault injection for the safety net's tests: when APEX_SHELL_TEST_FAULT names one of
+// these phases, the 'fault' feature (fault/feature.js) is enabled last and fails in that
+// phase. Any other value injects nothing. The image never sets the variable (G1).
+const FAULT_PHASES = ['configure', 'enable', 'abort-after-enable'];
+
 // GNOME's 'default' colour scheme draws a light shell in these modes (ADR 0014;
 // design/SPEC.md 6.2). Upstream sets 'prefer-dark' for every mode; the gdm mode keeps
 // it.
@@ -33,6 +38,20 @@ function _sessionMode(params, mode) {
     return LIGHT_MODES.has(mode) ? {...params, colorScheme: 'prefer-light'} : params;
 }
 
+// FEATURES, plus 'fault' when APEX_SHELL_TEST_FAULT names a phase.
+function _featureNames() {
+    const fault = GLib.getenv('APEX_SHELL_TEST_FAULT');
+    if (fault === null)
+        return FEATURES;
+    if (!FAULT_PHASES.includes(fault)) {
+        console.warn(`Apex: APEX_SHELL_TEST_FAULT=${fault} names no phase ` +
+            `(${FAULT_PHASES.join(', ')}); no fault injected`);
+        return FEATURES;
+    }
+    console.warn(`Apex: APEX_SHELL_TEST_FAULT=${fault}: the fault feature fails in that phase`);
+    return [...FEATURES, 'fault'];
+}
+
 /**
  * The configure phase: value providers only, before the UI exists.
  *
@@ -42,7 +61,7 @@ export async function configure(settings) {
     Hooks.provide('core', 'session-mode', _sessionMode);
 
     const disabled = new Set(settings.get_strv('disabled-features'));
-    for (const name of FEATURES) {
+    for (const name of _featureNames()) {
         if (disabled.has(name)) {
             console.log(`Apex: feature ${name} is in disabled-features`);
             continue;

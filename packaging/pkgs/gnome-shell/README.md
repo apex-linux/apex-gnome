@@ -72,5 +72,9 @@ by hand.
 
 - The headless shell (G2) and the VM checks (G4): the static import graph, safe mode,
   the light shell for `color-scheme 'default'`, the gdm mode and the unlock dialog.
-- The image: `[apex]` admits the lane's RPMs once the image build reads
-  `rpms.lock.next` (the next stage of S1a).
+- The image: `image.sh context --lane-lock` takes `rpms.lock.next`, `[apex]` admits
+  exactly the locked gnome-shell, gnome-shell-common, mutter and mutter-common, and G1
+  (`image/checks/desktop.sh`) checks what was installed
+  ([packaging/README.md](../../README.md#the-image)).
+- The layer's safety net outside the shell: `tests/layer/run.sh` (gjs) runs the kill
+  switches, the fault injection and the crash guard on every push.
