@@ -3,7 +3,8 @@
 Fedora's gnome-shell SRPM, rebuilt with the Apex layer inside it
 ([ADR 0014](../../../docs/adr/0014-engine-level-desktop.md),
 [ARCHITECTURE 7.4](../../../docs/ARCHITECTURE.md#74-desktop-layer)). The lane itself,
-and the formats of the files here, are in [packaging/README.md](../../README.md#the-rebuild-lane).
+`apex-lane`, and the formats of the files here, are in
+[packaging/README.md](../../README.md#the-rebuild-lane).
 
 | File | Role |
 |---|---|

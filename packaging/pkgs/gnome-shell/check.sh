@@ -2,8 +2,8 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
 # The lane checks of gnome-shell (ADR 0014; ARCHITECTURE 11, "Lane"): the Apex layer and
-# theme are inside the built package. packaging/rebuild.sh runs it in the build
-# container after rpmbuild and its generic checks, as root, with:
+# theme are inside the built package. apex-lane runs it in the build container after
+# rpmbuild and its generic checks, as root, with:
 #   RPMS_DIR    the built binary RPMs (no debuginfo)
 #   PRISTINE    Fedora's %prep tree without any Apex input
 #   SOURCE1     the Source1 archive (desktop/shell/)

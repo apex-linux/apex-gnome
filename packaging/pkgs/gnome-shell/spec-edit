@@ -2,11 +2,11 @@
 # a directive, the text lines (each indented with one tab), then "end".
 #   after ERE     insert the text after the one spec line that matches ERE
 #   replace ERE   replace the one spec line that matches ERE with the text
-# ERE is a POSIX extended regular expression (grep -E) matched against each line. No
-# match, or more than one, fails the edit and the family is held. rebuild.sh fills in
-# @APEX_RELEASE@ (.apexN or .apexN.M), @PIN_EVR@ (the mutter-devel EVR the buildroot
-# gets) and @SOURCE1@ (the archive of desktop/shell/). It adds one PatchNNNN line per
-# series entry itself.
+# ERE is a POSIX extended regular expression, in the subset of packaging/README.md,
+# matched against each line. No match, or more than one, fails the edit and the family
+# is held. apex-lane fills in @APEX_RELEASE@ (.apexN or .apexN.M), @PIN_EVR@ (the
+# mutter-devel EVR the buildroot gets) and @SOURCE1@ (the archive of desktop/shell/). It
+# adds one PatchNNNN line per series entry itself.
 
 # %{autorelease} with braces expands to 1%{?dist}, so the suffix goes after .fc45 and
 # sorts above Fedora's build; "%autorelease -e apexN" would give 1.apexN.fc45, below it.
