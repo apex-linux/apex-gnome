@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-License-Identifier: GPL-2.0-or-later -->
+<!--
+  The Apex resource (ADR 0014). Patch 0001-build compiles it in js/meson.build and
+  links it into libshell next to upstream's js-resources, so a new Apex file is one
+  <file> line here and never an edit to an upstream resource list. Paths are relative
+  to the top of the gnome-shell tree, where %prep unpacks desktop/shell/ (Source1).
+  The resource is registered whenever libshell loads, in every session mode.
+-->
+<gresources>
+  <gresource prefix="/org/gnome/shell/ui/apex">
+    <file alias="hooks.js">js/ui/apex/hooks.js</file>
+    <file alias="layer.js">js/ui/apex/layer.js</file>
+  </gresource>
+  <!--
+    Upstream's own compiled light and dark sheets, which %prep moves here from
+    data/theme/ (packaging/pkgs/gnome-shell/spec-edit): the safe-mode sheets. There is
+    no stock high-contrast sheet; safe mode then uses the rebuilt one.
+  -->
+  <gresource prefix="/org/gnome/shell/theme/stock">
+    <file alias="gnome-shell-light.css">data/theme/apex/stock/gnome-shell-light.css</file>
+    <file alias="gnome-shell-dark.css">data/theme/apex/stock/gnome-shell-dark.css</file>
+  </gresource>
+</gresources>

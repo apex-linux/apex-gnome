@@ -1,0 +1,5 @@
+# Patches Apex applies to Fedora's gnome-shell, in order (ADR 0014: one patch per
+# concern; hook hunks only, all logic in desktop/shell/). A patch is disabled by leaving
+# it out. Format: packaging/README.md.
+0001-build.patch
+0002-loader.patch

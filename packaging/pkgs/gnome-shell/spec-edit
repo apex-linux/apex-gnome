@@ -1,0 +1,46 @@
+# Anchored edits to Fedora's gnome-shell.spec (ADR 0014). Format (packaging/README.md):
+# a directive, the text lines (each indented with one tab), then "end".
+#   after ERE     insert the text after the one spec line that matches ERE
+#   replace ERE   replace the one spec line that matches ERE with the text
+# ERE is a POSIX extended regular expression (grep -E) matched against each line. No
+# match, or more than one, fails the edit and the family is held. rebuild.sh fills in
+# @APEX_RELEASE@ (.apexN or .apexN.M), @PIN_EVR@ (the mutter-devel EVR the buildroot
+# gets) and @SOURCE1@ (the archive of desktop/shell/). It adds one PatchNNNN line per
+# series entry itself.
+
+# %{autorelease} with braces expands to 1%{?dist}, so the suffix goes after .fc45 and
+# sorts above Fedora's build; "%autorelease -e apexN" would give 1.apexN.fc45, below it.
+replace ^Release:[[:space:]]+%autorelease$
+	Release:        %{autorelease}@APEX_RELEASE@
+end
+
+after ^Source0:
+	Source1:        @SOURCE1@
+end
+
+after ^BuildRequires:[[:space:]]+meson$
+	BuildRequires:  sassc
+end
+
+# The exact mutter the shell is built against; Fedora's >= lines stay.
+after ^BuildRequires:[[:space:]]+mutter-devel[[:space:]]
+	BuildRequires:  mutter-devel = @PIN_EVR@
+end
+
+after ^Requires:[[:space:]]+mutter%\{\?_isa\}[[:space:]]
+	Requires:       mutter%{?_isa} = @PIN_EVR@
+end
+
+# tar -k fails rather than replace an upstream file; mkdir without -p fails if Source1
+# ever ships stock/; mv and rm fail if upstream stops shipping the compiled sheets. With
+# no CSS left, meson runs sassc on all three entry files and their @import hooks. Keep
+# prep_moved and prep_deleted in pkg.env in step with these lines.
+after ^%autosetup[[:space:]]
+	# Apex: the layer, the SCSS and the resource list (Source1, desktop/shell/ in
+	# apex-fedora). Upstream's compiled light and dark sheets become the safe-mode
+	# sheets, and the shipped high-contrast sheet goes, so sassc builds all three.
+	tar -xkf %{SOURCE1}
+	mkdir data/theme/apex/stock
+	mv data/theme/gnome-shell-light.css data/theme/gnome-shell-dark.css data/theme/apex/stock/
+	rm data/theme/gnome-shell-high-contrast.css
+end
