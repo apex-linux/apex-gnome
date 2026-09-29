@@ -24,10 +24,8 @@ after ^Requires:[[:space:]]+mutter%\{\?_isa\}[[:space:]]
 	Requires:       mutter%{?_isa} = @PIN_EVR@
 end
 
-# tar -k fails rather than replace an upstream file; mkdir without -p fails if Source1
-# ever ships stock/; mv and rm fail if upstream stops shipping the compiled sheets. With
-# no CSS left, meson runs sassc on all three entry files and their @import hooks. Keep
-# prep_moved and prep_deleted in pkg.env in step with these lines.
+# tar -k, mkdir without -p, mv and rm fail rather than clobber or miss an upstream file.
+# With no CSS left meson runs sassc on all three sheets; keep pkg.env's prep_* in step.
 after ^%autosetup[[:space:]]
 	# Apex: the layer, the SCSS and the resource list (Source1, desktop/shell/ in
 	# apex-fedora). Upstream's compiled light and dark sheets become the safe-mode

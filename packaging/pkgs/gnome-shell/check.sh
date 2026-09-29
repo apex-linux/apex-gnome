@@ -1,16 +1,8 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
-# apex-lane runs it in the build container after rpmbuild and its generic checks, as
-# root, with:
-#   RPMS_DIR    the built binary RPMs (no debuginfo)
-#   PRISTINE    Fedora's %prep tree without any Apex input
-#   SOURCE1     the Source1 archive (desktop/shell/)
-#   CHECK_WORK  a scratch directory to create
-# These checks need gresource (glib2-devel), which the image lacks.
-#
-# Exit status: 0 every check passed; 1 a check failed (the family is held; the last
-# line is the reason); 2 the checks could not run.
+# apex-lane's contract (packaging/README.md): exit 1 holds the family, the last line
+# giving the reason; exit 2 means the checks could not run.
 
 set -euo pipefail
 
@@ -41,8 +33,7 @@ for r in /org/gnome/shell/ui/apex/hooks.js /org/gnome/shell/ui/apex/layer.js \
 done
 ok "${lib##*/} holds the Apex layer and the stock sheets"
 
-# Every JS module of Source1 is in the resource: a module missing from
-# apex.gresource.xml would only fail at runtime.
+# A module missing from apex.gresource.xml would otherwise fail only at runtime.
 while IFS= read -r m; do
     [[ $m == js/ui/apex/*.js ]] || continue
     grep -Fxq -- "/org/gnome/shell/ui/apex/${m#js/ui/apex/}" <<<"$resources" ||
@@ -50,8 +41,7 @@ while IFS= read -r m; do
 done < <(tar -tf "$SOURCE1")
 ok "every js/ui/apex module of Source1 is in the resource"
 
-# Each resource is read into a variable first: grep -q on a pipe could end the writer
-# with SIGPIPE, which pipefail reports as a failure.
+# Read into a variable: grep -q on a pipe can SIGPIPE the writer, which pipefail fails.
 js=$(gresource extract "$lib" /org/gnome/shell/ui/main.js) || fail "${lib##*/} has no ui/main.js"
 grep -Fq 'ApexHooks.loadLayer(' <<<"$js" || fail "main.js in ${lib##*/} does not load the Apex layer"
 js=$(gresource extract "$lib" /org/gnome/shell/ui/sessionMode.js) || fail "${lib##*/} has no ui/sessionMode.js"

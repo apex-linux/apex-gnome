@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 //
-// Fault injection for the safety-net tests; layer.js loads it only when
-// APEX_SHELL_TEST_FAULT names a phase.
+// Test only: layer.js loads it only when APEX_SHELL_TEST_FAULT names a phase.
 
 import GLib from 'gi://GLib';
 
@@ -16,11 +15,8 @@ function _phase() {
     return GLib.getenv('APEX_SHELL_TEST_FAULT');
 }
 
-/**
- * @param {string} name - the feature's name, which owns its hooks
- */
-export function configure(name) {
-    Hooks.provide(name, 'test-fault', () => 'fault');
+export function configure(featureName) {
+    Hooks.provide(featureName, 'test-fault', () => 'fault');
     if (_phase() === 'configure')
         throw new Error('injected fault in configure (APEX_SHELL_TEST_FAULT=configure)');
 }
@@ -34,8 +30,7 @@ export function enable() {
     console.warn('Apex: APEX_SHELL_TEST_FAULT=abort-after-enable: ' +
         `the shell aborts in ${ABORT_SECONDS} s`);
     _abortId = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, ABORT_SECONDS, () => {
-        // A message at the error level is fatal: GLib aborts the process with SIGABRT,
-        // as a crash in the shell would.
+        // An error-level message is fatal: GLib aborts (SIGABRT), as a shell crash would.
         GLib.log_structured('Apex', GLib.LogLevelFlags.LEVEL_ERROR,
             {MESSAGE: 'Apex: APEX_SHELL_TEST_FAULT=abort-after-enable: aborting the shell'});
         return GLib.SOURCE_REMOVE;

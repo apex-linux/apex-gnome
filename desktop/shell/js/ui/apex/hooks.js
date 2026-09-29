@@ -8,6 +8,8 @@ import GLib from 'gi://GLib';
 
 const SCHEMA_ID = 'io.github.sekirokenjii.Apex.Desktop';
 const KERNEL_SWITCH = 'apex.safe=1';
+const GREETER_MODE = 'gdm';
+const RUN_STOCK_CODE = undefined;
 
 const _providerByHook = new Map();
 let _safe = null;
@@ -29,17 +31,11 @@ function _safeReason() {
     if (!schema)
         return `schema ${SCHEMA_ID} is not installed`;
     _settings = new Gio.Settings({settings_schema: schema});
-    if (global.session_mode !== 'gdm' && !_settings.get_boolean('layer-enabled'))
+    if (global.session_mode !== GREETER_MODE && !_settings.get_boolean('layer-enabled'))
         return 'layer-enabled is false';
     return '';
 }
 
-/**
- * Safe mode: no layer, every hook stock, upstream's stylesheets. Decided once per
- * process.
- *
- * @returns {boolean}
- */
 export function safe() {
     if (_safe === null) {
         let reason;
@@ -60,83 +56,47 @@ function _drop(name, e) {
     console.error(`Apex: hook ${name} threw; stock for the rest of the session: ${e}`);
 }
 
-/**
- * A value hook: the provider's value, or the stock value.
- *
- * @param {string} name - the hook
- * @param {*} stock - upstream's value
- * @param {...*} args - context for the provider
- * @returns {*}
- */
 export function value(name, stock, ...args) {
-    const p = _providerByHook.get(name);
-    if (!p)
+    const provider = _providerByHook.get(name);
+    if (!provider)
         return stock;
     try {
-        return p.fn(stock, ...args);
+        return provider.fn(stock, ...args);
     } catch (e) {
         _drop(name, e);
         return stock;
     }
 }
 
-/**
- * A behaviour hook: the provider's result, or undefined when the caller runs its
- * stock code.
- *
- * @param {string} name - the hook
- * @param {...*} args - context for the provider
- * @returns {*}
- */
 export function run(name, ...args) {
-    const p = _providerByHook.get(name);
-    if (!p)
-        return undefined;
+    const provider = _providerByHook.get(name);
+    if (!provider)
+        return RUN_STOCK_CODE;
     try {
-        return p.fn(...args);
+        return provider.fn(...args);
     } catch (e) {
         _drop(name, e);
-        return undefined;
+        return RUN_STOCK_CODE;
     }
 }
 
-/**
- * Registers a provider (the layer only). Nothing is registered in safe mode.
- *
- * @param {string} owner - the feature, or 'core'
- * @param {string} name - the hook
- * @param {Function} fn - the provider
- */
 export function provide(owner, name, fn) {
     if (!safe())
         _providerByHook.set(name, {owner, fn});
 }
 
-/**
- * Removes every provider of one owner (the layer only): its hooks give stock values.
- *
- * @param {string} owner - the feature, or 'core'
- */
 export function withdraw(owner) {
-    for (const [name, p] of _providerByHook) {
-        if (p.owner === owner)
+    for (const [name, provider] of _providerByHook) {
+        if (provider.owner === owner)
             _providerByHook.delete(name);
     }
 }
 
-/**
- * Loads the layer and runs its configure phase, before the session mode exists. It
- * never rejects: init.js would end the shell. It resolves to the layer, or to null in
- * the gdm mode (no Apex JS runs in the greeter), in safe mode, or when loading or
- * configuring threw.
- *
- * @param {Function} importLayer - `() => import('./apex/layer.js')`, from main.js, so
- *   that the specifier resolves next to main.js
- * @returns {Promise<?object>}
- */
+// Never rejects, because init.js would end the shell. importLayer comes from main.js so
+// that its import() specifier resolves next to main.js.
 export async function loadLayer(importLayer) {
     try {
-        if (global.session_mode === 'gdm' || safe())
+        if (global.session_mode === GREETER_MODE || safe())
             return null;
         const layer = await importLayer();
         await layer.configure(_settings);

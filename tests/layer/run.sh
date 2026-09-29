@@ -1,12 +1,7 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
-#   tests/layer/run.sh
-#
 # Each case is one gjs process, because safe mode is decided once per process.
-# Needs gjs and glib-compile-schemas, and bwrap for a fixed kernel command line. Without
-# bwrap the cases run against the host's /proc/cmdline and the kernel cases skip;
-# APEX_LAYER_TESTS_NO_SKIP=1 turns every skip into a failure. Output is TAP.
 set -euo pipefail
 
 HERE=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
@@ -44,7 +39,6 @@ mkdir -p "$T/schemas" "$T/noschema" "$T/data" "$T/home"
 cp "$REPO"/desktop/schemas/*.gschema.xml "$T/schemas/"
 glib-compile-schemas --strict "$T/schemas"
 
-# A kernel command line without apex.safe=1, bound over /proc/cmdline when bwrap can.
 readonly CMDLINE_PLAIN='BOOT_IMAGE=(hd0,gpt2)/boot/ostree/apex/vmlinuz root=UUID=0 rw rhgb quiet'
 sandbox=0
 printf '%s\n' "$CMDLINE_PLAIN" >"$T/cmdline.check"
@@ -53,10 +47,8 @@ if command -v bwrap >/dev/null 2>&1 &&
     sandbox=1
 fi
 
-# probe NAME CMDLINE [VAR=VALUE...]: run probe.js as case NAME with the kernel command
-# line CMDLINE and the environment VAR=VALUE; its output goes to $T/NAME/out, its exit
-# status to RC. Each case has its own runtime directory ($T/NAME/run) and XDG_CONFIG_HOME
-# ($T/NAME/config, for the keyfile backend); both survive the case.
+# A case's runtime and config directories outlive it, so the guard and a later case of
+# the same name see what its shell left there.
 probe() {
     local name=$1 cmdline=$2
     shift 2
@@ -82,12 +74,7 @@ has() { if grep -Eq -- "$2" "$OUT"; then ok "$1"; else not_ok "$1 (no line match
 lacks() { if grep -Eq -- "$2" "$OUT"; then not_ok "$1 (a line matches /$2/)"; _show; else ok "$1"; fi; }
 fact() { has "$1" "^probe: $2\$"; }
 
-# guard NAME: apex-shell-safe.service as systemd runs it after the shell of case NAME
-# failed: its ConditionPathExists= (with %t = the case's runtime directory), then its
-# ExecStart= and ExecStartPost= lines in order (with %S = the case's state directory,
-# StateDirectory= created first), with the keyfile GSettings backend in the case's
-# XDG_CONFIG_HOME. Prints "acted" or "skipped".
-guard() {
+run_guard_unit_like_systemd() {
     local dir=$T/$1 key value cond='' line runtime='%t' state='%S'
     local -a lines=()
     while IFS='=' read -r key value; do
@@ -111,7 +98,6 @@ guard() {
     printf 'acted\n'
 }
 
-# --- the layer runs ---------------------------------------------------------------------
 probe default "$CMDLINE_PLAIN" PROBE_ENABLE=1
 rc_is "default: the probe runs" 0
 fact "default: not safe" 'safe=false'
@@ -127,13 +113,12 @@ fact "default: a behaviour hook without a provider gives undefined" 'run-without
 fact "default: enable creates the crash guard's marker" 'starting-file=true'
 fact "default: shutdown removes it" 'starting-file\.after-shutdown=false'
 lacks "default: no safe mode" 'safe mode'
-if [[ $(guard default) == skipped ]]; then
+if [[ $(run_guard_unit_like_systemd default) == skipped ]]; then
     ok "default: a later shell failure does not trip the guard (no marker)"
 else
     not_ok "default: a later shell failure does not trip the guard (no marker)"
 fi
 
-# --- the kill switches ----------------------------------------------------------------------
 probe envsafe "$CMDLINE_PLAIN" APEX_SHELL_SAFE=1 PROBE_ENABLE=1
 rc_is "APEX_SHELL_SAFE=1: runs" 0
 fact "APEX_SHELL_SAFE=1: safe" 'safe=true'
@@ -178,7 +163,6 @@ fact "a layer that does not load: null" 'layer=null'
 has "and is logged" 'Apex: the layer did not load; stock shell for this session'
 fact "and its providers are gone" 'scheme\.user=prefer-dark'
 
-# --- fault injection ---------------------------------------------------------------------------
 probe configure "$CMDLINE_PLAIN" APEX_SHELL_TEST_FAULT=configure PROBE_ENABLE=1
 rc_is "FAULT=configure: the shell goes on" 0
 has "FAULT=configure: the feature is off for the session" 'Apex: feature fault off for this session \(configure: Error: injected fault in configure'
@@ -201,7 +185,7 @@ fact "FAULT=abort-after-enable: within the marker's 60 s" 'starting-file=true'
 fact "FAULT=abort-after-enable: the feature ran" 'test-fault\.after-enable=fault'
 lacks "FAULT=abort-after-enable: before the wait ends" '^probe: survived='
 if [[ -e $T/abort/run/apex-shell-starting ]]; then ok "the dead shell left the marker"; else not_ok "the dead shell left the marker"; fi
-if [[ $(guard abort) == acted ]]; then ok "the crash guard's condition holds and it runs"; else not_ok "the crash guard's condition holds and it runs"; fi
+if [[ $(run_guard_unit_like_systemd abort) == acted ]]; then ok "the crash guard's condition holds and it runs"; else not_ok "the crash guard's condition holds and it runs"; fi
 if [[ -e $T/abort/state/apex/shell-guard-tripped ]]; then ok "the guard leaves the agent's marker"; else not_ok "the guard leaves the agent's marker"; fi
 if [[ ! -e $T/abort/run/apex-shell-starting ]]; then ok "the guard consumes the layer's marker"; else not_ok "the guard consumes the layer's marker"; fi
 probe abort "$CMDLINE_PLAIN" GSETTINGS_BACKEND=keyfile

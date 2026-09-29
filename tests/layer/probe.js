@@ -1,21 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
 // Facts go to stderr: it is unbuffered, so the facts before an abort survive.
-//
-// Environment:
-//   APEX_SHELL_DIR   desktop/shell of this repository
-//   PROBE_MODE       the session mode (default user)
-//   PROBE_LAYER_OFF  1: set layer-enabled=false first (GSETTINGS_BACKEND=memory)
-//   PROBE_DISABLED   disabled-features, comma-separated
-//   PROBE_BROKEN     1: load a layer module that does not exist
-//   PROBE_ENABLE     1: run the enable phase
-//   PROBE_WAIT       seconds of main loop after enable (for the abort fault)
-// The layer itself reads APEX_SHELL_SAFE, APEX_SHELL_TEST_FAULT and /proc/cmdline.
 
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 
-const root = GLib.getenv('APEX_SHELL_DIR');
+const shellDir = GLib.getenv('APEX_SHELL_DIR');
 const fact = (key, value) => printerr(`probe: ${key}=${value}`);
 
 const handlers = new Map();
@@ -42,11 +32,11 @@ if (schema) {
         settings.set_strv('disabled-features', disabled.split(','));
 }
 
-const Hooks = await import(`file://${root}/js/ui/apex/hooks.js`);
+const Hooks = await import(`file://${shellDir}/js/ui/apex/hooks.js`);
 fact('safe', Hooks.safe());
 const layerUrl = GLib.getenv('PROBE_BROKEN') === '1'
-    ? `file://${root}/js/ui/apex/no-such-layer.js`
-    : `file://${root}/js/ui/apex/layer.js`;
+    ? `file://${shellDir}/js/ui/apex/no-such-layer.js`
+    : `file://${shellDir}/js/ui/apex/layer.js`;
 const layer = await Hooks.loadLayer(() => import(layerUrl));
 fact('layer', layer ? 'loaded' : 'null');
 
@@ -69,15 +59,15 @@ if (layer && GLib.getenv('PROBE_ENABLE') === '1') {
     fact('starting-file', GLib.file_test(marker, GLib.FileTest.EXISTS));
     fact('test-fault.after-enable', Hooks.value('test-fault', 'stock'));
     fact('scheme.user.after-enable', Hooks.value('session-mode', {...stock}, 'user').colorScheme);
-    const wait = Number(GLib.getenv('PROBE_WAIT') ?? '0');
-    if (wait > 0) {
+    const waitSeconds = Number(GLib.getenv('PROBE_WAIT') ?? '0');
+    if (waitSeconds > 0) {
         const loop = new GLib.MainLoop(null, false);
-        GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, wait, () => {
+        GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, waitSeconds, () => {
             loop.quit();
             return GLib.SOURCE_REMOVE;
         });
         loop.run();
-        fact('survived', `${wait}s`);
+        fact('survived', `${waitSeconds}s`);
     }
     for (const [signal, fn] of [...handlers.values()]) {
         if (signal === 'shutdown')

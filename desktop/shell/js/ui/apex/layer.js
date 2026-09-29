@@ -5,12 +5,10 @@ import Gio from 'gi://Gio';
 
 import * as Hooks from './hooks.js';
 
-// Named as in the disabled-features key, in enable order. A feature module
-// (<name>/feature.js) exports configure(name), which may be async, and synchronous
+// Each <name>/feature.js exports configure(name), which may be async, and synchronous
 // enable() and disable().
 const FEATURES_IN_ENABLE_ORDER = [];
 
-// Tests only: an image gate fails when the image sets APEX_SHELL_TEST_FAULT.
 const TEST_FAULT_PHASES = ['configure', 'enable', 'abort-after-enable'];
 
 // Upstream gives every mode 'prefer-dark'; the greeter keeps it.
@@ -39,11 +37,18 @@ function _featureNames() {
     return [...FEATURES_IN_ENABLE_ORDER, 'fault'];
 }
 
-/**
- * The configure phase: value providers only, before the UI exists.
- *
- * @param {Gio.Settings} settings - io.github.sekirokenjii.Apex.Desktop
- */
+async function _configureFeature(name) {
+    try {
+        const feature = await import(`./${name}/feature.js`);
+        // Awaited, so that an async configure that rejects lands in this catch too.
+        await feature.configure?.(name);
+        _features.push({name, feature});
+    } catch (e) {
+        Hooks.withdraw(name);
+        console.error(`Apex: feature ${name} off for this session (configure: ${e})`);
+    }
+}
+
 export async function configure(settings) {
     Hooks.provide('core', 'session-mode', _sessionMode);
 
@@ -53,17 +58,8 @@ export async function configure(settings) {
             console.log(`Apex: feature ${name} is in disabled-features`);
             continue;
         }
-        try {
-            // eslint-disable-next-line no-await-in-loop
-            const feature = await import(`./${name}/feature.js`);
-            // Awaited, so that an async configure that rejects lands in this catch too.
-            // eslint-disable-next-line no-await-in-loop
-            await feature.configure?.(name);
-            _features.push({name, feature});
-        } catch (e) {
-            Hooks.withdraw(name);
-            console.error(`Apex: feature ${name} off for this session (configure: ${e})`);
-        }
+        // eslint-disable-next-line no-await-in-loop
+        await _configureFeature(name);
     }
 }
 
@@ -71,8 +67,7 @@ function _createCrashGuardMarker() {
     const file = Gio.File.new_for_path(
         GLib.build_filenamev([GLib.get_user_runtime_dir(), CRASH_GUARD_MARKER]));
     try {
-        // Not empty: an empty array reaches g_file_replace_contents as NULL, which it
-        // refuses without an exception.
+        // Not empty: g_file_replace_contents silently refuses an empty array (NULL).
         const contents = new TextEncoder().encode(`${new Date().toISOString()}\n`);
         file.replace_contents(contents, null, false,
             Gio.FileCreateFlags.REPLACE_DESTINATION, null);
@@ -92,9 +87,6 @@ function _createCrashGuardMarker() {
     });
 }
 
-/**
- * The enable phase, at startup-prepared: features build their actors. It never throws.
- */
 export function enable() {
     try {
         _createCrashGuardMarker();

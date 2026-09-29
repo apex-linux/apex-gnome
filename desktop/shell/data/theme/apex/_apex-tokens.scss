@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 //
-// St has no var(), so each token is an SCSS variable. Imported right after upstream's
-// _colors, so it may also reassign upstream colour variables before _drawing, _common
-// and _widgets read them.
+// St has no var(), so tokens are SCSS variables. Imported right after upstream's _colors,
+// so it can reassign upstream colours before _drawing, _common and _widgets read them.
 
 $apex_bar: if($variant == 'light', rgba(250, 250, 252, .45), rgba(12, 12, 16, .4));
 $apex_bar_solid: if($variant == 'light', #f3f3f5, #121215);
