@@ -1,0 +1,256 @@
+# shellcheck shell=bash
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+SHOTS_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+TOKEN_FILE=${G2_TOKEN_FILE:-$SHOTS_DIR/../../desktop/shell/data/theme/apex/_apex-tokens.scss}
+G2_GJS=${G2_GJS:-gjs}
+# A mask that hides more than this of a capture hides the comparison, not a region.
+MAX_MASKED_PERCENT=5
+COMPARE_COULD_NOT_COMPARE=2
+
+npass=0
+nfail=0
+ngap=0
+gaps=()
+gap_until=
+pass() {
+    if [[ -n $gap_until ]]; then
+        nfail=$((nfail + 1))
+        printf 'FAIL %s (a known gap until %s, but it holds now: make it a plain assertion)\n' "$*" "$gap_until"
+    else
+        npass=$((npass + 1))
+        printf 'PASS %s\n' "$*"
+    fi
+}
+fail() {
+    if [[ -n $gap_until ]]; then
+        ngap=$((ngap + 1))
+        gaps+=("$gap_until: $*")
+        printf 'GAP  %s: %s\n' "$gap_until" "$*"
+    else
+        nfail=$((nfail + 1))
+        printf 'FAIL %s\n' "$*"
+    fi
+}
+# pass and fail read gap_until through bash's dynamic scope.
+known_gap() {
+    local gap_until=$1
+    shift
+    "$@"
+}
+check() {
+    local desc=$1
+    shift
+    if "$@" >/dev/null 2>&1; then pass "$desc"; else fail "$desc"; fi
+}
+summary() {
+    local g
+    printf '# %d passed, %d failed, %d known gaps\n' "$npass" "$nfail" "$ngap"
+    for g in "${gaps[@]}"; do
+        printf '# gap %s\n' "$g"
+    done
+    ((nfail == 0))
+}
+
+report_of() {
+    local log=$1 tag=${2:-APEXG2}
+    [[ -f $log ]] || return 0
+    sed -n "s/.*$tag \\({.*}\\)\$/\\1/p" "$log" | head -n 1
+}
+
+expect() {
+    local label=$1 report=$2 expr=$3 desc=$4
+    if [[ -z $report ]]; then
+        fail "$label: $desc (no report)"
+    elif jq -e "$JQ_DEFS $expr" <<<"$report" >/dev/null 2>&1; then
+        pass "$label: $desc"
+    else
+        fail "$label: $desc (got $(jq -c "$JQ_DEFS $expr" <<<"$report" 2>&1 | head -c 300))"
+    fi
+}
+
+expect_report() {
+    local label=$1 log=$2 expr=$3 desc=$4 tag=${5:-APEXG2}
+    expect "$label" "$(report_of "$log" "$tag")" "$expr" "$desc"
+}
+
+# shellcheck disable=SC2016 # jq variables, not shell ones
+JQ_DEFS='
+def nibble: if . >= 97 then . - 87 else . - 48 end;
+def byte: ascii_downcase | explode | map(nibble) | .[0] * 16 + .[1];
+def num: if startswith(".") then "0" + . elif startswith("-.") then "-0" + .[1:] else . end | tonumber;
+def rgba:
+  ascii_downcase as $c
+  | if ($c | test("^#[0-9a-f]{8}$")) then [$c[1:3], $c[3:5], $c[5:7], $c[7:9]] | map(byte)
+    elif ($c | test("^#[0-9a-f]{6}$")) then ([$c[1:3], $c[3:5], $c[5:7]] | map(byte)) + [255]
+    elif ($c | test("^#[0-9a-f]{3}$")) then ([$c[1:2], $c[2:3], $c[3:4]] | map(. + . | byte)) + [255]
+    elif $c == "transparent" then [0, 0, 0, 0]
+    elif ($c | test("^rgba?\\(")) then
+      ($c | capture("^rgba?\\(\\s*(?<r>[0-9]+)\\s*,\\s*(?<g>[0-9]+)\\s*,\\s*(?<b>[0-9]+)\\s*(,\\s*(?<a>[0-9.]+)\\s*)?\\)$")
+          // error("\($c) is not a colour"))
+      | [(.r | tonumber), (.g | tonumber), (.b | tonumber), ((.a // "1") | num * 255 | round)]
+    else error("\($c) is not a colour") end;
+def px:
+  if type == "number" then .
+  elif test("^-?[0-9]*\\.?[0-9]+px$") then rtrimstr("px") | num
+  elif test("^-?[0-9]*\\.?[0-9]+$") then num
+  else error("\(.) is not a length in px") end;
+def colour_is($want): (. | rgba) as $got | [$got, ($want | rgba)] | transpose | all(.[0] - .[1] | fabs <= 1);
+def px_is($want): (. - ($want | px)) | fabs < 0.01;
+'
+
+tokens_json() {
+    local token_file=${1:-$TOKEN_FILE}
+    awk '
+        function trim(s) { sub(/^[ \t]+/, "", s); sub(/[ \t]+$/, "", s); return s }
+        function split_top(s, parts,    n, depth, i, c, cur) {
+            n = 0; depth = 0; cur = ""
+            for (i = 1; i <= length(s); i++) {
+                c = substr(s, i, 1)
+                if (c == "(") depth++
+                if (c == ")") depth--
+                if (c == "," && depth == 0) { parts[++n] = trim(cur); cur = ""; continue }
+                cur = cur c
+            }
+            parts[++n] = trim(cur)
+            return n
+        }
+        /^\$[A-Za-z0-9_-]+[ \t]*:/ {
+            line = $0
+            sub(/[ \t]+\/\/[^"'\'']*$/, "", line)
+            name = line; sub(/^\$/, "", name); sub(/[ \t]*:.*$/, "", name)
+            value = line; sub(/^[^:]*:[ \t]*/, "", value); sub(/[ \t]*(!default)?[ \t]*;[ \t]*$/, "", value)
+            light = value; dark = value
+            if (value ~ /^if\(/ && split_top(substr(value, 4, length(value) - 4), arg) == 3) {
+                if (arg[1] ~ /^\$variant[ \t]*==[ \t]*["'\'']light["'\'']$/) { light = arg[2]; dark = arg[3] }
+                else if (arg[1] ~ /^\$variant[ \t]*==[ \t]*["'\'']dark["'\'']$/) { light = arg[3]; dark = arg[2] }
+            }
+            printf "%s\t%s\t%s\n", name, light, dark
+        }
+    ' "$token_file" | jq -Rn '[inputs | split("\t") | {key: .[0], value: {light: .[1], dark: .[2]}}] | from_entries'
+}
+
+tokens_for() {
+    local variant=$1 token_file=${2:-}
+    tokens_json "$token_file" | jq --arg v "$variant" 'map_values(.[$v])'
+}
+
+# Copied from design/SPEC.md, so that a token edit that leaves SPEC fails although every
+# metric follows the token file.
+readonly SPEC_TOP_BAR_TOKENS='
+apex_bar rgba(250,250,252,.45) rgba(12,12,16,.4)
+apex_bar_solid #f3f3f5 #121215
+apex_bar_fg #16161a #f6f6f8
+apex_bar_hover rgba(0,0,10,.08) rgba(255,255,255,.12)
+apex_border rgba(0,0,10,.09) rgba(255,255,255,.08)
+apex_radius_bar_pill 12px 12px
+apex_radius_workspace_dot 4px 4px
+apex_radius_clock_dot 3px 3px
+apex_font_bar_size 13.5px 13.5px
+apex_font_bar_weight 600 600
+apex_font_bar_emphasis_weight 700 700
+apex_font_bar_percentage_size 12.5px 12.5px
+apex_bar_transition 300ms 300ms
+apex_bar_blur 24px 24px
+apex_bar_saturation 160% 160%
+apex_bar_height 32px 32px
+apex_bar_padding 8px 8px
+apex_bar_gap 2px 2px
+apex_bar_pill_height 24px 24px
+apex_bar_pill_padding 10px 10px
+apex_bar_activities_gap 10px 10px
+apex_bar_diamond_size 10px 10px
+apex_bar_dots_gap 4px 4px
+apex_bar_dot_size 7px 7px
+apex_bar_clock_gap 8px 8px
+apex_bar_clock_dot_size 5px 5px
+apex_bar_status_gap 8px 8px
+apex_bar_icon_size 16px 16px
+apex_accent -st-accent-color -st-accent-color
+'
+
+tokens_are_spec() {
+    local token_file=${1:-} tokens name light dark variant want got jq_matches
+    tokens=$(tokens_json "$token_file")
+    while read -r name light dark; do
+        [[ -n $name ]] || continue
+        for variant in light dark; do
+            want=$light
+            [[ $variant == light ]] || want=$dark
+            got=$(jq -r --arg n "$name" --arg v "$variant" '.[$n][$v] // empty' <<<"$tokens")
+            # shellcheck disable=SC2016 # jq programs
+            case $want in
+                '#'* | rgba*) jq_matches='colour_is($w)' ;;
+                *px) jq_matches='px | px_is($w)' ;;
+                *) jq_matches='. == $w' ;;
+            esac
+            if [[ -n $got ]] && jq -en --arg g "$got" --arg w "$want" "$JQ_DEFS \$g | $jq_matches" >/dev/null 2>&1; then
+                pass "token \$$name ($variant) is SPEC's $want"
+            else
+                fail "token \$$name ($variant) is ${got:-missing}, but SPEC says $want"
+            fi
+        done
+    done <<<"$SPEC_TOP_BAR_TOKENS"
+}
+
+plan_entry() {
+    local name=$1 expected_dir=$2 expected_case=$3 actual_dir=$4 actual_case=$5 scene=$6 diff_dir=$7
+    shift 7
+    local expected_scenes actual_scenes
+    expected_scenes=$(report_of "$expected_dir/$expected_case.log" APEXG2-SCENES)
+    actual_scenes=$(report_of "$actual_dir/$actual_case.log" APEXG2-SCENES)
+    jq -cn --arg name "$name" --arg scene "$scene" \
+        --argjson expected_scenes "${expected_scenes:-null}" --argjson actual_scenes "${actual_scenes:-null}" \
+        --arg expected "$expected_dir/captures/$expected_case-$scene.png" \
+        --arg actual "$actual_dir/captures/$actual_case-$scene.png" \
+        --arg diff "$diff_dir/$name.png" --args '
+        {name: $name, expected: $expected, actual: $actual, diff: $diff,
+         masks: [$ARGS.positional[] as $mask_actor
+                 | [$expected_scenes, $actual_scenes] | map(.scenes[$scene].boxes[$mask_actor] // empty)
+                 | select(length > 0)
+                 | {name: $mask_actor, x: (map(.x) | min), y: (map(.y) | min),
+                    x1: (map(.x + .width) | max), y1: (map(.y + .height) | max)}
+                 | {name, x, y, width: (.x1 - .x), height: (.y1 - .y)}]}' "$@"
+}
+
+compare_captures() {
+    local plan=$1 results=$2
+    local -a gjs_command
+    read -ra gjs_command <<<"$G2_GJS"
+    "${gjs_command[@]}" -m "$SHOTS_DIR/compare.js" "$plan" "$results"
+}
+
+compare_and_expect_equal() {
+    local plan=$1 results=$2 status=0 planned compared
+    rm -f -- "$results"
+    compare_captures "$plan" "$results" || status=$?
+    planned=$(jq length "$plan" 2>/dev/null) || planned=0
+    compared=$(jq length "$results" 2>/dev/null) || compared=none
+    if ((status > COMPARE_COULD_NOT_COMPARE || planned == 0)) || [[ $compared != "$planned" ]]; then
+        fail "captures: compare.js compared $compared of $planned planned pairs (exit $status, G2_GJS=$G2_GJS)"
+        return
+    fi
+    expect_equal_captures "$results"
+}
+
+expect_equal_captures() {
+    local results=$1 pair name error differing masked total
+    while IFS= read -r pair; do
+        name=$(jq -r .name <<<"$pair")
+        error=$(jq -r '.error // empty' <<<"$pair")
+        if [[ -n $error ]]; then
+            fail "captures $name: not compared ($error)"
+            continue
+        fi
+        differing=$(jq -r .differing <<<"$pair")
+        masked=$(jq -r .masked <<<"$pair")
+        total=$(jq -r '.width * .height' <<<"$pair")
+        if ((masked * 100 > total * MAX_MASKED_PERCENT)); then
+            fail "captures $name: the masks $(jq -c .masks <<<"$pair") cover $masked of $total pixels, more than $MAX_MASKED_PERCENT %"
+        elif ((differing == 0)); then
+            pass "captures $name: equal outside the masks $(jq -c .masks <<<"$pair") ($masked of $total pixels masked)"
+        else
+            fail "captures $name: $differing pixel(s) differ outside the masks $(jq -c .masks <<<"$pair"), within $(jq -c .box <<<"$pair"); difference image $(jq -r .diff <<<"$pair")"
+        fi
+    done < <(jq -c '.[]' "$results")
+}
