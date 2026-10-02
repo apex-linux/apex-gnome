@@ -1,14 +1,19 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- SPDX-License-Identifier: GPL-2.0-or-later -->
 <!--
-  Every Apex JS module needs its <file> line here. Paths are relative to the top of the
-  gnome-shell tree, where %prep unpacks desktop/shell/.
+  Every Apex JS module and theme asset needs its <file> line here. Paths are relative to
+  the top of the gnome-shell tree, where %prep unpacks desktop/shell/.
 -->
 <gresources>
   <gresource prefix="/org/gnome/shell/ui/apex">
     <file alias="hooks.js">js/ui/apex/hooks.js</file>
     <file alias="layer.js">js/ui/apex/layer.js</file>
     <file alias="fault/feature.js">js/ui/apex/fault/feature.js</file>
+    <file alias="witness/feature.js">js/ui/apex/witness/feature.js</file>
+  </gresource>
+  <gresource prefix="/org/gnome/shell/theme/apex">
+    <file alias="diamond-light.svg">data/theme/apex/diamond-light.svg</file>
+    <file alias="diamond-dark.svg">data/theme/apex/diamond-dark.svg</file>
   </gresource>
   <!--
     Safe mode's sheets: upstream's compiled ones, moved here by %prep. With no stock

@@ -11,7 +11,7 @@ Fedora's gnome-shell SRPM, rebuilt with the Apex layer inside it
 | `pkg.env` | the SRPM, the hold family, the mutter pin and its mirrored RPMs, Source1 (`desktop/shell/`) and the `%prep` changes the lane checks |
 | `spec-edit` | anchored edits to Fedora's spec: `.apexN`, Source1, `BuildRequires: sassc`, the exact mutter pin, and the `%prep` lines |
 | `series`, `patches/` | the hook hunks, one patch per concern |
-| `check.sh` | the lane checks of this package: the Apex resource in libshell, the patched `main.js`, upstream's sheets under `theme/stock/`, the Apex markers in the rebuilt sheets |
+| `check.sh` | the lane checks of this package: the Apex resource in libshell, the patched `main.js`, upstream's sheets under `theme/stock/`, the Apex markers in the rebuilt sheets, and every Apex asset those sheets name |
 
 ## What the build does to Fedora's package
 

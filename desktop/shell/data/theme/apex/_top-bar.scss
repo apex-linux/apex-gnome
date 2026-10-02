@@ -1,0 +1,140 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+
+$_diamond_svg_size: 16px;
+$_open_states: hover, focus, active, checked;
+$_upstream_panel_button_natural_hpadding: $base_padding * 2;
+$_upstream_panel_button_minimum_hpadding: $base_padding;
+
+// A pill is its button's only child: the button keeps the bar's full height, so a click
+// on the screen's top edge still reaches it.
+@mixin pills($state: null) {
+  $s: if($state, ':#{$state}', '');
+
+  .panel-button#panelActivities#{$s} > StBoxLayout,
+  .panel-button.clock-display#{$s} > .clock-display-box,
+  .panel-button#{$s} > .panel-status-indicators-box,
+  .panel-button#{$s} > .system-status-icon { @content; }
+}
+
+#panel, #panel:overview {
+  height: $apex_bar_height;
+  background-color: $apex_bar;
+  box-shadow: none;
+  transition-duration: $apex_bar_transition;
+  font-size: apex-text-size($apex_font_bar_size);
+  font-weight: $apex_font_bar_weight;
+  color: $apex_bar_fg;
+  // Upstream sets tabular digits on the whole bar; the drawn clock is proportional.
+  font-feature-settings: normal;
+
+  #panelLeft, #panelRight { spacing: $apex_bar_gap; }
+
+  .panel-button {
+    -natural-hpadding: 0;
+    -minimum-hpadding: 0;
+    color: $apex_bar_fg;
+    font-weight: $apex_font_bar_weight;
+
+    &, &:hover, &:focus, &:active, &:checked, &:active:hover, &:checked:hover {
+      box-shadow: none;
+    }
+
+    .system-status-icon { icon-size: $apex_bar_icon_size; }
+  }
+
+  @include pills {
+    margin: ($apex_bar_height - $apex_bar_pill_height) / 2 0;
+    padding: 0 $apex_bar_pill_padding;
+    border-radius: $apex_radius_bar_pill;
+  }
+
+  // Inset by the outer pills' margins, not the boxes' padding, so the corners stay clickable.
+  .panel-button#panelActivities > StBoxLayout { margin-left: $apex_bar_padding; }
+  .panel-button > .panel-status-indicators-box { margin-right: $apex_bar_padding; }
+
+  @each $state in $_open_states {
+    @include pills($state) { background-color: $apex_bar_hover; }
+  }
+
+  .panel-button#panelActivities {
+    > StBoxLayout {
+      padding-left: $apex_bar_pill_padding + $apex_bar_diamond_size + $apex_bar_activities_gap;
+      spacing: $apex_bar_dots_gap;
+      background-image: url("resource:///org/gnome/shell/theme/apex/diamond-#{$variant}.svg");
+      background-size: $_diamond_svg_size $_diamond_svg_size;
+      background-position:
+        ($apex_bar_pill_padding + ($apex_bar_diamond_size - $_diamond_svg_size) / 2)
+        (($apex_bar_pill_height - $_diamond_svg_size) / 2);
+    }
+
+    // panel.js widens the active dot from this size and shrinks the others, until patch 0010.
+    .workspace-dot {
+      min-width: $apex_bar_dot_size;
+      min-height: $apex_bar_dot_size;
+      border-radius: $apex_radius_workspace_dot;
+      background-color: $apex_bar_fg;
+    }
+  }
+
+  .panel-button.clock-display {
+    color: $apex_bar_fg;
+
+    > .clock-display-box {
+      spacing: $apex_bar_clock_gap;
+      font-weight: $apex_font_bar_emphasis_weight;
+    }
+
+    .clock {
+      padding: 0;
+      border-width: 0;
+    }
+
+    @each $state in $_open_states {
+      &:#{$state} .clock { box-shadow: none; }
+    }
+
+    &:active .clock:hover, &:checked .clock:hover { box-shadow: none; }
+
+    // SPEC's accent dot waits for S1b's wallpaper: over Fedora's, the light bar hides it.
+    .messages-indicator {
+      icon-size: $apex_bar_clock_dot_size;
+      color: transparent;
+      background-color: $apex_bar_fg;
+      border-radius: $apex_radius_clock_dot;
+    }
+  }
+
+  .panel-button .panel-status-indicators-box {
+    spacing: $apex_bar_status_gap;
+
+    > .system-status-icon { margin: 0; }
+  }
+
+  .panel-button .power-status > StLabel {
+    font-size: apex-text-size($apex_font_bar_percentage_size);
+  }
+
+  // keyboard.js sizes InputSourceIndicatorContainer from its labels alone: they take the padding.
+  .panel-button > .system-status-icon > StLabel { padding: 0 $apex_bar_pill_padding; }
+
+  .panel-button.screen-recording-indicator,
+  .panel-button.screen-sharing-indicator {
+    -natural-hpadding: $_upstream_panel_button_natural_hpadding;
+    -minimum-hpadding: $_upstream_panel_button_minimum_hpadding;
+  }
+}
+
+// The lock screen and the greeter keep upstream's transparent panel and its fills until S3b.
+#panel.unlock-screen, #panel.login-screen {
+  @each $state in $_open_states {
+    @include pills($state) { background-color: transparent; }
+  }
+
+  .panel-button.clock-display .clock {
+    padding-left: $scaled_padding * 2;
+    padding-right: $scaled_padding * 2;
+  }
+
+  // Upstream fills the whole button here, so the status pill spans it and its glyphs centre.
+  .panel-button > .panel-status-indicators-box { margin-right: 0; }
+}

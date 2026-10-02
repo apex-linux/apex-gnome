@@ -73,3 +73,12 @@ done
 grep -Fq '/*! apex-shell-structure */' "$CHECK_WORK/high-contrast.css" ||
     fail "the high-contrast sheet has no Apex structure marker"
 ok "the light and dark sheets carry the Apex marker, the high-contrast sheet the structure marker"
+
+# St draws nothing, silently, for an image it cannot load.
+for v in light dark; do
+    while IFS= read -r uri; do
+        grep -Fxq -- "${uri#resource://}" <<<"$resources" ||
+            fail "the $v sheet names $uri, which is not in ${lib##*/} (apex.gresource.xml)"
+    done < <(grep -o 'resource:///org/gnome/shell/theme/apex/[^")]*' "$CHECK_WORK/$v.css" | sort -u)
+done
+ok "every Apex asset the light and dark sheets name is in ${lib##*/}"

@@ -107,6 +107,7 @@ fact "default: and in the unlock dialog" 'scheme\.unlock-dialog=prefer-light'
 fact "default: the greeter keeps upstream's dark" 'scheme\.gdm=prefer-dark'
 fact "default: other modes keep upstream's" 'scheme\.initial-setup=prefer-dark'
 fact "default: no fault feature without APEX_SHELL_TEST_FAULT" 'test-fault=stock'
+fact "default: nor the witness" 'test-witness\.after-enable=stock'
 fact "default: a throwing provider gives stock, twice" 'boom=stock,stock'
 if [[ $(grep -c 'hook boom threw' "$OUT") == 1 ]]; then ok "default: and is logged once"; else not_ok "default: and is logged once"; _show; fi
 fact "default: a behaviour hook without a provider gives undefined" 'run-without-provider=undefined'
@@ -169,6 +170,9 @@ has "FAULT=configure: the feature is off for the session" 'Apex: feature fault o
 fact "FAULT=configure: its hook gives stock" 'test-fault=stock'
 fact "FAULT=configure: the rest of the layer runs" 'scheme\.user=prefer-light'
 fact "FAULT=configure: enable still runs" 'starting-file=true'
+fact "FAULT=configure: the feature after it configures" 'test-witness=configured'
+has "FAULT=configure: and enables" 'Apex: feature witness enabled'
+fact "FAULT=configure: its hook reports it" 'test-witness\.after-enable=enabled'
 
 probe enable "$CMDLINE_PLAIN" APEX_SHELL_TEST_FAULT=enable PROBE_ENABLE=1
 rc_is "FAULT=enable: the shell goes on" 0
@@ -177,6 +181,8 @@ has "FAULT=enable: then off for the session" 'Apex: feature fault off for this s
 fact "FAULT=enable: its hook gives stock" 'test-fault\.after-enable=stock'
 fact "FAULT=enable: the rest of the layer runs" 'scheme\.user\.after-enable=prefer-light'
 fact "FAULT=enable: the crash guard's marker exists" 'starting-file=true'
+has "FAULT=enable: the feature after it enables" 'Apex: feature witness enabled'
+fact "FAULT=enable: and its hook reports it" 'test-witness\.after-enable=enabled'
 
 probe abort "$CMDLINE_PLAIN" APEX_SHELL_TEST_FAULT=abort-after-enable PROBE_ENABLE=1 PROBE_WAIT=20
 rc_is "FAULT=abort-after-enable: the shell aborts (SIGABRT)" 134

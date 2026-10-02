@@ -5,5 +5,6 @@
 theme_sources += files(
   '_apex-tokens.scss',
   '_apex.scss',
+  '_top-bar.scss',
   '_apex-structure.scss',
 )

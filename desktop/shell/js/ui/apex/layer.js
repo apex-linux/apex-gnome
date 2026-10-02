@@ -34,7 +34,7 @@ function _featureNames() {
         return FEATURES_IN_ENABLE_ORDER;
     }
     console.warn(`Apex: APEX_SHELL_TEST_FAULT=${fault}: the fault feature fails in that phase`);
-    return [...FEATURES_IN_ENABLE_ORDER, 'fault'];
+    return [...FEATURES_IN_ENABLE_ORDER, 'fault', 'witness'];
 }
 
 async function _configureFeature(name) {

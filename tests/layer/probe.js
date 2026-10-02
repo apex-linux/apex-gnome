@@ -46,6 +46,7 @@ for (const mode of ['user', 'unlock-dialog', 'gdm', 'initial-setup']) {
     fact(`scheme.${mode}`, `${params.colorScheme}${params.hasOverview ? '' : ' (params lost)'}`);
 }
 fact('test-fault', Hooks.value('test-fault', 'stock'));
+fact('test-witness', Hooks.value('test-witness', 'stock'));
 
 Hooks.provide('probe', 'boom', () => {
     throw new Error('boom');
@@ -58,6 +59,7 @@ if (layer && GLib.getenv('PROBE_ENABLE') === '1') {
     const marker = GLib.build_filenamev([GLib.get_user_runtime_dir(), 'apex-shell-starting']);
     fact('starting-file', GLib.file_test(marker, GLib.FileTest.EXISTS));
     fact('test-fault.after-enable', Hooks.value('test-fault', 'stock'));
+    fact('test-witness.after-enable', Hooks.value('test-witness', 'stock'));
     fact('scheme.user.after-enable', Hooks.value('session-mode', {...stock}, 'user').colorScheme);
     const waitSeconds = Number(GLib.getenv('PROBE_WAIT') ?? '0');
     if (waitSeconds > 0) {

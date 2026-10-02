@@ -9,3 +9,11 @@
 // No upstream actor carries this class: an actor given it proves at runtime that the
 // Apex sheet and its tokens loaded. A sheet compiled without the tokens fails in sassc.
 .apex-theme-marker { color: $apex_bar_fg; }
+
+// In pt, so that Large Text (text-scaling-factor) still scales the text: at the default
+// factor 0.75pt is one logical pixel.
+@function apex-text-size($px) {
+  @return $px / 1px * .75pt;
+}
+
+@import "top-bar";
