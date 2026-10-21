@@ -265,7 +265,7 @@ top_bar_gaps() {
     tokens=$(tokens_for "$variant")
     local -a metric=(top_bar_metric "$label top bar" "$scenes" "$tokens")
     local patch0010='S2a (patch 0010)' layer='S2a (the layer)' clock_hook='no step yet (a clock hook, or the owner accepts it)'
-    local wallpaper='S1b (the Aurora wallpaper and the light overview)'
+    local wallpaper='S1b (the Facets wallpaper and the light overview)'
 
     known_gap "$patch0010" "${metric[@]}" 'the active workspace dot is 22 x $apex_bar_dot_size' \
         '.topBar.dots | map(select(.active)) | map({width, height})' \
