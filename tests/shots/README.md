@@ -140,7 +140,7 @@ removes its pin.
 | S2a (the layer) | with `translucent-top-bar` off the bar is `$apex_bar_solid` over a `0 1px 0 $apex_border` line | the key does not exist yet |
 | S2b (patch 0003, the glass manager) | a 24 px blur at 160 % saturation behind the bar | no blur effect |
 | S1b (the override's `clock-show-weekday`) | the clock starts with the weekday | it does not |
-| S1b (the Aurora wallpaper and the light overview) | the unread-notification dot is the raw accent (SPEC 2.3, 3.4) | `$apex_bar_fg`: over Fedora's wallpaper an accent dot is about 1.4:1 against the light bar |
+| S1b (the Facets wallpaper and the light overview) | the unread-notification dot is the raw accent (SPEC 2.3, 3.4) | `$apex_bar_fg`: over Fedora's wallpaper an accent dot is about 1.4:1 against the light bar |
 | no step yet (a clock hook, or the owner accepts it) | `$apex_bar_clock_gap` between the date and the time | about 7 px with G2's 24-hour clock: one label, an EN SPACE. The mockup's en-US 12-hour clock adds a FIGURE SPACE before a one-digit hour ("Tue Sep 29" EN SPACE FIGURE SPACE "5:23 AM"): about 14 px |
 | no step yet (a clock hook, or the owner accepts it) | with the dot, the clock pill is padding + text + gap + dot + padding wide | 13 px wider: upstream's invisible pad left of the text |
 
