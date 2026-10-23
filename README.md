@@ -28,10 +28,19 @@ against the pinned apex-desktop with `APEX_DESKTOP_SRC`.
 ## Development
 
 ```bash
-just check        # the layer tests, G2's self-test, the script self-test and the comment guard
+just check        # the layer tests, G2's self-test, eslint, the theme, the script self-test and the comment guard
 just layer-test   # gjs and glib-compile-schemas; bwrap for the kernel command-line cases
 just shots-test   # gjs, GdkPixbuf and jq; dbus-daemon and python3-dbusmock for the fixtures
+just eslint       # node, npm and git: gnome-shell 51.0's eslint rules, pinned in lint/package-lock.json
+just theme        # sassc and git; dnf5, rpm2cpio, cpio and xz for Fedora's gnome-shell SRPM
 ```
+
+`just eslint` lints `desktop/shell/js` and the gjs tests with gnome-shell's own
+configuration (`lint/README.md`). `just theme` compiles the light, dark and high-contrast
+sheets as the rebuild does, from upstream's entry files with `0001-build`'s `@import` hooks
+and `desktop/shell/data/theme/apex/`, and fails on any sassc error or warning; it downloads
+the gnome-shell SRPM from Fedora 45's `fedora` and `updates`, or takes a source tree in
+`GNOME_SHELL_SRC`.
 
 Tests whose tools are missing skip locally; CI runs them in Fedora 45 and fails on a skip.
 The comment guard is `apex-lint`, from [apex-ci](https://github.com/apex-linux/apex-ci):
@@ -42,4 +51,5 @@ explains itself, and comments say only why
 ## License
 
 `desktop/shell/` and the patches are GPL-2.0-or-later, as gnome-shell is
-(`LICENSE.GPL-2.0`). Everything else is GPL-3.0-or-later (`LICENSE`).
+(`LICENSE.GPL-2.0`). `lint/eslint.config.js` keeps gnome-shell's MIT OR
+LGPL-2.1-or-later. Everything else is GPL-3.0-or-later (`LICENSE`).

@@ -59,10 +59,10 @@ function convert(bytes, converter) {
     });
     const parts = [];
     for (;;) {
-        const chunk = stream.read_bytes(READ_CHUNK, null);
-        if (chunk.get_size() === 0)
+        const block = stream.read_bytes(READ_CHUNK, null);
+        if (block.get_size() === 0)
             break;
-        parts.push(chunk.toArray());
+        parts.push(block.toArray());
     }
     stream.close(null);
     return concat(parts);

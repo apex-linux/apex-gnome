@@ -50,7 +50,7 @@ function withStyledActor(actor, read) {
     }
 }
 
-function markerColor() {
+function themeMarkerColor() {
     try {
         return withStyledActor(new St.Label({style_class: 'apex-theme-marker', text: 'apex'}),
             node => hex(node.get_foreground_color()).slice(0, 7));
@@ -134,7 +134,7 @@ async function report() {
         stylesheet: uri,
         sheet: uri ? sheetInfo(uri) : null,
         highContrastSheet: sheetInfo(HIGH_CONTRAST_SHEET),
-        markerColor: markerColor(),
+        markerColor: themeMarkerColor(),
         sessionColorScheme: Main.sessionMode.colorScheme,
         variant: Main.getStyleVariant?.() ?? null,
         colorSchemeSetting: setting('org.gnome.desktop.interface', s => s.get_string('color-scheme')),
@@ -271,8 +271,10 @@ function button(actor, unit) {
 function boxOf(actor, unit) {
     const [x, y] = actor.get_transformed_position();
     const [width, height] = actor.get_transformed_size();
-    return {x: round(x / unit.length), y: round(y / unit.length),
-        width: round(width / unit.length), height: round(height / unit.length)};
+    return {
+        x: round(x / unit.length), y: round(y / unit.length),
+        width: round(width / unit.length), height: round(height / unit.length),
+    };
 }
 
 // panel.js's WorkspaceDot allocates the widened width; its child draws the scaled, faded dot.
@@ -303,11 +305,11 @@ function clockTextGap(label, unit) {
 
 function panelItems(boxActor, unit) {
     return boxActor.get_children().filter(c => c.visible).map(container => {
-        const button = container.get_first_child();
-        const pill = button?.get_first_child();
-        const label = button ? firstVisibleLabel(button) : null;
+        const item = container.get_first_child();
+        const pill = item?.get_first_child();
+        const label = item ? firstVisibleLabel(item) : null;
         return {
-            accessibleName: button?.accessible_name ?? null,
+            accessibleName: item?.accessible_name ?? null,
             label: label ? {text: label.get_text(), weight: label.get_theme_node().get_font().get_weight()} : null,
             pill: pill ? {...boxOf(pill, unit), radius: round(pill.get_theme_node().get_border_radius(St.Corner.TOPLEFT) / unit.length)} : null,
         };
@@ -319,13 +321,15 @@ function reactiveActorAtTopLeftPixel(unit) {
     return actor ? {name: actor.get_name(), type: actor.constructor.name, ...boxOf(actor, unit)} : null;
 }
 
-function blurEffects(root, unit) {
+function blurEffects(root) {
     const found = [];
     const visit = actor => {
         for (const effect of actor.get_effects()) {
             if (effect instanceof Shell.BlurEffect) {
-                found.push({actor: actor.get_name() ?? actor.constructor.name,
-                    radius: effect.radius, saturation: effect.saturation ?? null});
+                found.push({
+                    actor: actor.get_name() ?? actor.constructor.name,
+                    radius: effect.radius, saturation: effect.saturation ?? null,
+                });
             }
         }
         actor.get_children().forEach(visit);
@@ -352,8 +356,10 @@ function statusGlyphs() {
 function statusGlyphSizes(unit) {
     return visibleStatusIcons().map(icon => {
         const {width, height} = boxOf(icon, unit);
-        return {name: glyphName(icon), width, height,
-            iconSize: lengthOrNull(icon.get_theme_node(), 'icon-size', unit)};
+        return {
+            name: glyphName(icon), width, height,
+            iconSize: lengthOrNull(icon.get_theme_node(), 'icon-size', unit),
+        };
     });
 }
 
@@ -397,7 +403,7 @@ function topBar(unit) {
         leftItems: panelItems(box('panelLeft'), unit),
         rightItems: panelItems(box('panelRight'), unit),
         corner: reactiveActorAtTopLeftPixel(unit),
-        glass: blurEffects(Main.layoutManager.panelBox, unit),
+        glass: blurEffects(Main.layoutManager.panelBox),
         statusGlyphs: statusGlyphSizes(unit),
         statusLabels: statusLabels(unit),
         accent: accentColor(),
@@ -423,8 +429,10 @@ function captureBox(actor, scale) {
     const [width, height] = actor.get_transformed_size();
     const x0 = Math.floor(x * scale);
     const y0 = Math.floor(y * scale);
-    return {x: x0, y: y0, width: Math.ceil((x + width) * scale) - x0,
-        height: Math.ceil((y + height) * scale) - y0};
+    return {
+        x: x0, y: y0, width: Math.ceil((x + width) * scale) - x0,
+        height: Math.ceil((y + height) * scale) - y0,
+    };
 }
 
 async function capture(scene) {
@@ -497,9 +505,11 @@ async function withUnreadNotification(unit) {
     const {dateMenu} = Main.panel.statusArea;
     const indicator = dateMenu._indicator;
     const measured = {
-        dot: {visible: indicator.visible, ...boxOf(indicator, unit),
+        dot: {
+            visible: indicator.visible, ...boxOf(indicator, unit),
             radius: round(indicator.get_theme_node().get_border_radius(St.Corner.TOPLEFT) / unit.length),
-            background: hex(indicator.get_theme_node().get_background_color())},
+            background: hex(indicator.get_theme_node().get_background_color()),
+        },
         pillWidth: boxOf(dateMenu.get_first_child(), unit).width,
         labelWidth: boxOf(dateMenu._clockDisplay, unit).width,
     };
@@ -666,8 +676,10 @@ function actorCensus() {
 
 async function layerState(layerEnabled) {
     const {stylesheet, sheet, markerColor, sessionColorScheme, variant, safe} = await report();
-    return {layerEnabled, stylesheet, markers: sheet?.markers ?? null, markerColor, sessionColorScheme,
-        variant, safe, actors: actorCensus()};
+    return {
+        layerEnabled, stylesheet, markers: sheet?.markers ?? null, markerColor, sessionColorScheme,
+        variant, safe, actors: actorCensus(),
+    };
 }
 
 // Each write reaches the layer's changed::layer-enabled handler, as gsettings set would.

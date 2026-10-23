@@ -69,6 +69,52 @@ jobs:
       - name: tests/shots/selftest.sh
         run: tests/shots/selftest.sh
 
+  eslint:
+    name: lint/eslint.sh (Fedora 45)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    container:
+      image: registry.fedoraproject.org/fedora:45@sha256:1e13e11f63e147a40a935c9046c79d53a30b861a3cf05ebb023bb53c562382cb
+    env:
+      APEX_LINT_NO_SKIP: "1"
+    steps:
+      - name: nodejs, npm and git for lint/package-lock.json
+        run: >-
+          dnf5 -y --setopt=install_weak_deps=False --repo=fedora --repo=updates install
+          nodejs npm git-core bash coreutils
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: lint/eslint.sh
+        run: lint/eslint.sh
+
+  theme:
+    name: lint/theme.sh (Fedora 45)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    container:
+      image: registry.fedoraproject.org/fedora:45@sha256:1e13e11f63e147a40a935c9046c79d53a30b861a3cf05ebb023bb53c562382cb
+    env:
+      APEX_LINT_NO_SKIP: "1"
+    steps:
+      - name: sassc, git, and dnf5 download with rpm2cpio for gnome-shell's SRPM
+        run: >-
+          dnf5 -y --setopt=install_weak_deps=False --repo=fedora --repo=updates install
+          sassc git-core dnf5-plugins rpm cpio tar xz bash coreutils
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: lint/theme.sh
+        run: lint/theme.sh
+
   scripts:
     name: shellcheck, actionlint, selftest
     runs-on: ubuntu-24.04
@@ -89,7 +135,7 @@ jobs:
 
       - name: bash -n and shellcheck
         run: |
-          files=(.github/scripts/*.sh packaging/pkgs/*/*.sh tests/*/*.sh)
+          files=(.github/scripts/*.sh lint/*.sh packaging/pkgs/*/*.sh tests/*/*.sh)
           for f in "${files[@]}"; do bash -n "$f"; done
           shellcheck -x -P .github/scripts --severity=style "${files[@]}"
 
