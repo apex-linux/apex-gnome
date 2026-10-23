@@ -1,6 +1,6 @@
 // SPDX-FileCopyrightText: 2025 Florian Müllner <fmuellner@gnome.org>
 // SPDX-License-Identifier: MIT OR LGPL-2.1-or-later
-// gnome-shell 51.0's eslint.config.js; only the files and the ignores are Apex's.
+// gnome-shell 51.0's eslint.config.js; the files, the ignores and the last block are Apex's.
 
 import {defineConfig} from '@eslint/config-helpers';
 import gnome from 'eslint-config-gnome';
@@ -46,6 +46,11 @@ export default defineConfig([
                 N_: 'readonly',
                 ngettext: 'readonly',
             },
+        },
+    }, {
+        // apex-lint's comment budget (CONTRIBUTING) wins over a JSDoc block per export.
+        rules: {
+            'jsdoc/require-jsdoc': 'off',
         },
     },
 ]);

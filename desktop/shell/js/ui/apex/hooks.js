@@ -41,9 +41,6 @@ function _turnedOff() {
     return global.session_mode !== GREETER_MODE && !_settings.get_boolean('layer-enabled');
 }
 
-/**
- * @returns {boolean} whether the shell runs stock
- */
 export function safe() {
     if (_safe === null) {
         let reason;
@@ -68,12 +65,6 @@ function _drop(name, e) {
     console.error(`Apex: hook ${name} threw; stock for the rest of the session: ${e}`);
 }
 
-/**
- * @param {string} name
- * @param {*} stock
- * @param {...*} args
- * @returns {*} the provider's value, or stock
- */
 export function value(name, stock, ...args) {
     const provider = _providerByHook.get(name);
     if (!provider || safe())
@@ -86,11 +77,6 @@ export function value(name, stock, ...args) {
     }
 }
 
-/**
- * @param {string} name
- * @param {...*} args
- * @returns {*} the provider's result, or undefined for the stock code
- */
 export function run(name, ...args) {
     const provider = _providerByHook.get(name);
     if (!provider || safe())
@@ -103,19 +89,11 @@ export function run(name, ...args) {
     }
 }
 
-/**
- * @param {string} owner
- * @param {string} name
- * @param {Function} fn
- */
 export function provide(owner, name, fn) {
     if (!safe())
         _providerByHook.set(name, {owner, fn});
 }
 
-/**
- * @param {string} owner
- */
 export function withdraw(owner) {
     for (const [name, provider] of _providerByHook) {
         if (provider.owner === owner)
@@ -123,13 +101,8 @@ export function withdraw(owner) {
     }
 }
 
-/**
- * Never rejects, because init.js would end the shell. importLayer comes from main.js so
- * that its import() specifier resolves next to main.js.
- *
- * @param {() => Promise<object>} importLayer
- * @returns {Promise<object|null>} the configured layer, or null
- */
+// Never rejects, because init.js would end the shell. importLayer comes from main.js so
+// that its import() specifier resolves next to main.js.
 export async function loadLayer(importLayer) {
     try {
         if (global.session_mode === GREETER_MODE || safe())

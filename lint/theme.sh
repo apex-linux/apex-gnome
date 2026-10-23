@@ -32,8 +32,14 @@ else
     (cd "$T/srpm" && dnf5 -q download --source --repo=fedora --repo=updates gnome-shell)
     srpm=("$T"/srpm/gnome-shell-*.src.rpm)
     printf 'theme: %s\n' "${srpm[0]##*/}" >&2
-    (cd "$T/srpm" && rpm2cpio "${srpm[0]}" | cpio -i --quiet 'gnome-shell-*.tar.*' '*.patch')
-    tar -xf "$T"/srpm/gnome-shell-*.tar.* -C "$T/tree" --strip-components=1 --wildcards '*/data/theme/*'
+    (cd "$T/srpm" && rpm2cpio "${srpm[0]}" | cpio -i --quiet --no-absolute-filenames '*gnome-shell-*.tar.*' '*.patch')
+    tarball=("$T"/srpm/gnome-shell-*.tar.*)
+    if [[ ! -e ${tarball[0]} ]]; then
+        printf 'theme: no gnome-shell tarball in the SRPM, which holds:\n' >&2
+        rpm2cpio "${srpm[0]}" | cpio -t --quiet >&2
+        exit 1
+    fi
+    tar -xf "${tarball[0]}" -C "$T/tree" --strip-components=1 --wildcards '*/data/theme/*'
     # Fedora's own patches come first in %prep; only their theme hunks matter here.
     for patch in "$T"/srpm/*.patch; do
         [[ -e $patch ]] || continue

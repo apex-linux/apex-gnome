@@ -97,20 +97,12 @@ function predict(filter, row, prev, i, bpp) {
     }
 }
 
-/**
- * @param {Uint8Array} bytes
- * @returns {{width: number, height: number}}
- */
 export function size(bytes) {
     if (bytes.length < 24 || SIGNATURE.some((b, i) => bytes[i] !== b))
         throw new Error('not a PNG file');
     return {width: readU32(bytes, 16), height: readU32(bytes, 20)};
 }
 
-/**
- * @param {Uint8Array} bytes
- * @returns {{width: number, height: number, rgba: Uint8Array}}
- */
 export function decode(bytes) {
     const {width, height} = size(bytes);
     let header = null;
@@ -169,11 +161,6 @@ function chunk(type, data) {
     return out;
 }
 
-/**
- * @param {{width: number, height: number, rgba: Uint8Array}} image
- * @param {(y: number) => number} [filterOfRow]
- * @returns {Uint8Array}
- */
 export function encode({width, height, rgba}, filterOfRow = () => Filter.NONE) {
     const stride = width * 4;
     const raw = new Uint8Array(height * (stride + 1));

@@ -80,9 +80,6 @@ jobs:
     env:
       APEX_LINT_NO_SKIP: "1"
     steps:
-      - name: Fedora's eslint packages
-        run: dnf5 -q --repo=fedora --repo=updates repoquery '*eslint*' | sort
-
       - name: nodejs, npm and git for lint/package-lock.json
         run: >-
           dnf5 -y --setopt=install_weak_deps=False --repo=fedora --repo=updates install
