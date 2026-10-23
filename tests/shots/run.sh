@@ -15,8 +15,8 @@ with the first (stable.sh). Exit 0 when every assertion passed; result.txt names
 image, the number of runs, the sha256 of the lane lock the image carries and the status.
 The newest 5 <UTC time> directories are kept.
 
-Environment: G2_RUNS; G2_IMAGE_DIR, the image/ directory of the image checkout (default
-this checkout's); G2_REPOS_BASE (default: that Containerfile's REPOS_BASE); G2_OUT_DIR
+Environment: G2_IMAGE_DIR, the image/ directory of an apex-image checkout, and
+G2_REPOS_BASE, the REPOS_BASE of its Containerfile (both required); G2_RUNS; G2_OUT_DIR
 (default _build/g2).
 EOF
 }
@@ -29,15 +29,9 @@ esac
 HERE=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 REPO=$(cd -- "$HERE/../.." && pwd)
 readonly HERE REPO
-readonly IMAGE_DIR=${G2_IMAGE_DIR:-$REPO/image}
+readonly IMAGE_DIR=${G2_IMAGE_DIR:-}
+readonly REPOS_BASE=${G2_REPOS_BASE:-}
 readonly OUT_DIR=${G2_OUT_DIR:-$REPO/_build/g2}
-if [[ -n ${G2_REPOS_BASE:-} ]]; then
-    REPOS_BASE=$G2_REPOS_BASE
-else
-    # shellcheck source=SCRIPTDIR/../../.github/scripts/lib.sh
-    REPOS_BASE=$(. "$REPO/.github/scripts/lib.sh" && containerfile_arg REPOS_BASE "$IMAGE_DIR/Containerfile")
-fi
-readonly REPOS_BASE
 readonly IMAGE=${1:-localhost/apex:build}
 readonly RUNS=${G2_RUNS:-2}
 # The image has no dbus-daemon, which dbus-run-session and the direct cases' system bus
@@ -58,6 +52,8 @@ log() { printf '== %s\n' "$*"; }
 die() { printf 'run.sh: %s\n' "$*" >&2; exit 1; }
 
 [[ $RUNS =~ ^[1-9][0-9]*$ ]] || die "G2_RUNS must be a positive number, got '$RUNS'"
+[[ -f $IMAGE_DIR/Containerfile ]] || die "G2_IMAGE_DIR must be the image/ directory of an apex-image checkout, got '$IMAGE_DIR'"
+[[ -n $REPOS_BASE ]] || die "G2_REPOS_BASE must be set (the REPOS_BASE of $IMAGE_DIR/Containerfile)"
 sudo podman image exists "$IMAGE" || die "no image $IMAGE in root's container storage (just vm-image builds it)"
 
 stamp=$(date -u +%Y%m%dT%H%M%SZ)

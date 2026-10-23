@@ -6,10 +6,16 @@ set -euo pipefail
 
 HERE=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 REPO=$(cd -- "$HERE/../.." && pwd)
-# The apex-desktop checkout, for the schema and the crash guard.
-DESKTOP_SRC=${APEX_DESKTOP_SRC:-$REPO}
+# apex-desktop owns the schema and the crash guard: fixtures/ holds copies, and
+# APEX_DESKTOP_SRC, an apex-desktop checkout, tests against its own files instead.
+if [[ -n ${APEX_DESKTOP_SRC:-} ]]; then
+    SCHEMA_DIR=$APEX_DESKTOP_SRC/desktop/schemas
+    GUARD_UNIT=$APEX_DESKTOP_SRC/desktop/systemd/user/apex-shell-safe.service
+else
+    SCHEMA_DIR=$HERE/fixtures
+    GUARD_UNIT=$HERE/fixtures/apex-shell-safe.service
+fi
 NO_SKIP=${APEX_LAYER_TESTS_NO_SKIP:-0}
-GUARD_UNIT=$DESKTOP_SRC/desktop/systemd/user/apex-shell-safe.service
 
 tests=0
 failed=0
@@ -41,7 +47,7 @@ mkdir -p "$T/schemas" "$T/noschema" "$T/data" "$T/home" "$T/shell"
 # The layer restyles the shell through main.js, which only the gnome-shell tree has.
 cp -R "$REPO/desktop/shell/js" "$T/shell/"
 printf '%s\n' "export const sessionMode = {_sync: () => printerr('probe: restyled')};" >"$T/shell/js/ui/main.js"
-cp "$DESKTOP_SRC"/desktop/schemas/*.gschema.xml "$T/schemas/"
+cp "$SCHEMA_DIR"/*.gschema.xml "$T/schemas/"
 glib-compile-schemas --strict "$T/schemas"
 
 readonly CMDLINE_PLAIN='BOOT_IMAGE=(hd0,gpt2)/boot/ostree/apex/vmlinuz root=UUID=0 rw rhgb quiet'

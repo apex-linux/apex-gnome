@@ -1,73 +1,43 @@
-# Apex
+# apex-gnome
 
-Apex is a personal, image-based Linux distribution for exactly one laptop: the ASUS
-Vivobook Pro 14X OLED **M7400QC** (Ryzen 5 5600H, RTX 3050 Mobile, Realtek ALC294,
-ELAN fingerprint reader, Samsung 2880×1800 OLED at 90 Hz).
+The patched GNOME of [Apex](https://github.com/apex-linux/apex), a Fedora 45 bootc desktop
+for one laptop, the ASUS Vivobook Pro 14X OLED (M7400QC). Today that is gnome-shell with
+the Apex layer; libadwaita, Settings and Files patch series join it in S2.
 
-- **Base:** Fedora 45 delivered with bootc. Updates are atomic and signed, the laptop
-  never reboots behind your back, and a bad update rolls back after a counted number of
-  failed boots.
-- **Desktop:** GNOME 51 on Wayland only, with GTK4/libadwaita apps. Legacy components
-  are removed and kept out by a build gate.
-- **Display:** pixel-exact by default (integer scale 2 on the built-in panel).
-- **Hardware:** fixes for this machine: ALC294 speakers, the ELAN `04f3:0c6e` reader,
-  firmware, dGPU power gating and the battery charge limit. Each fix is meant to go
-  upstream.
-- **Components:** everything Apex writes itself is Rust.
+| Path | What it is |
+|---|---|
+| `desktop/shell/` | The Apex layer: its loader and hooks (`js/ui/apex/`), the kill switches, fault injection, and the top-bar theme built from `_apex-tokens.scss`. It ships inside gnome-shell's resource |
+| `packaging/pkgs/gnome-shell/` | The rebuild recipe apex-image's lane builds from Fedora's SRPM: the patch series, `spec-edit`, `pkg.env` and the post-build `check.sh` |
+| `tests/layer/` | The layer's safety net in gjs: kill switches, fault injection, the crash guard and live layer cycles |
+| `tests/shots/` | G2, the headless shell of a built image, and its self-test |
 
-> Status: **S1a done; step M in progress**: the design reset and the move to the
-> `apex-linux` GitHub organisation. Nothing here is ready to install yet. See
-> [docs/ROADMAP.md](docs/ROADMAP.md).
+[apex-image](https://github.com/apex-linux/apex-image) pins this repository by commit in
+`components.lock`, builds gnome-shell from the recipe in its builder VM, and runs G2 on the
+image. The `just vm-*` and `just pkg-*` recipes the READMEs here name are apex-image's.
+The design is in the [apex](https://github.com/apex-linux/apex) repository:
+[DESIGN.md](https://github.com/apex-linux/apex/blob/main/docs/DESIGN.md) and
+[ARCHITECTURE §11](https://github.com/apex-linux/apex/blob/main/docs/ARCHITECTURE.md#11-quality-gates).
 
-## Read first
-
-- [Architecture](docs/ARCHITECTURE.md): how the pieces fit, and why.
-- [Design direction](docs/DESIGN.md): the look, the product rules and the settings
-  contract.
-- [Decisions](docs/adr/): one ADR per non-obvious choice.
-- [M1 contract](docs/specs/M1-IMPLEMENTATION.md): names, paths and formats shared
-  between components.
-- [Threat model](docs/THREAT-MODEL.md).
-- Hardware procedures and acceptance tests: [docs/hardware/](docs/hardware/).
-- [Install](docs/INSTALL.md) and [recovery](docs/RECOVERY.md) runbooks.
-- [Contributing](docs/CONTRIBUTING.md): code explains itself, and the comment guard
-  that holds every change to it.
-
-## Layout
-
-```
-crates/     Rust: apex-bootc, apex-update, apex-boot, apex-dbus, apex-updated, apexctl,
-            apex-lane, apex-lint
-desktop/    the Apex layer in gnome-shell, the apex-desktop schema, units and wallpapers
-hardware/   machine profile (single source of truth) and rendered drop-ins
-image/      Containerfile, package lists, rootfs overlay, image checks
-packaging/  RPM spec, libfprint patch series, the kernel lane's patches (S1c)
-.github/    ci.yml, the only workflow; the scripts of ci.yml and the builder VM
-```
+The layer reads its settings from apex-desktop's schema, and apex-desktop's crash guard
+unit turns it off after an early shell failure. `tests/layer/fixtures/` holds copies of
+both, so this repository's CI needs no other checkout; apex-image runs the layer tests
+against the pinned apex-desktop with `APEX_DESKTOP_SRC`.
 
 ## Development
 
-The development host needs only a Rust toolchain. `rust-toolchain.toml` pins the same
-version Fedora 45 ships.
-
 ```bash
-just check
+just check        # the layer tests, G2's self-test, the script self-test and the comment guard
+just layer-test   # gjs and glib-compile-schemas; bwrap for the kernel command-line cases
+just shots-test   # gjs, GdkPixbuf and jq; dbus-daemon and python3-dbusmock for the fixtures
 ```
 
-`just check` runs fmt, clippy, the tests and the comment guard
-([CONTRIBUTING](docs/CONTRIBUTING.md)) as ci.yml does.
-
-```bash
-just render
-```
-
-Packages and images build in a Fedora 45 builder VM
-([ARCHITECTURE §4](docs/ARCHITECTURE.md#4-build-and-publish)). GitHub runs only
-`ci.yml`, which checks the code on every pull request and every push to `main`.
-Hardware measurements need root and are run by hand. Nothing in this repository runs
-`sudo` for you.
+Tests whose tools are missing skip locally; CI runs them in Fedora 45 and fails on a skip.
+The comment guard is `apex-lint`, from [apex-ci](https://github.com/apex-linux/apex-ci):
+`cargo install --locked --git https://github.com/apex-linux/apex-ci apex-lint`. Code
+explains itself, and comments say only why
+([CONTRIBUTING](https://github.com/apex-linux/apex/blob/main/docs/CONTRIBUTING.md)).
 
 ## License
 
-GPL-3.0-or-later. Patches in `packaging/` carry the licenses of the projects they
-modify (GPL-2.0 for the kernel, LGPL-2.1-or-later for libfprint).
+`desktop/shell/` and the patches are GPL-2.0-or-later, as gnome-shell is
+(`LICENSE.GPL-2.0`). Everything else is GPL-3.0-or-later (`LICENSE`).

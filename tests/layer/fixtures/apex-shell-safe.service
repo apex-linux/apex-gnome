@@ -1,0 +1,22 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# Started by OnFailure= of GNOME Shell's unit (org.gnome.Shell@.service.d/50-apex.conf).
+[Unit]
+Description=Turn the Apex desktop layer off after an early GNOME Shell failure
+# As upstream's org.gnome.Shell-disable-extensions.service: it must not conflict with
+# anything, and runs next to gnome-session-shutdown.target.
+DefaultDependencies=no
+# The same OnFailure= list restarts the session bus. gsettings reaches dconf over that
+# bus and exits 0 even when the write is lost, so the guard finishes first.
+Before=gnome-session-restart-dbus.service
+# layer.js creates this file at enable and removes it after 60 s or at shutdown.
+ConditionPathExists=%t/apex-shell-starting
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/gsettings set io.github.apex_linux.Apex.Desktop layer-enabled false
+# apex-session-agent offers to turn the layer back on while this marker exists.
+StateDirectory=apex
+ExecStartPost=/usr/bin/touch %S/apex/shell-guard-tripped
+# The failed start is handled; a later failure needs the layer's marker again.
+ExecStartPost=/usr/bin/rm -f %t/apex-shell-starting

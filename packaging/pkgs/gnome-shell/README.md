@@ -1,10 +1,10 @@
 # gnome-shell in the rebuild lane
 
 Fedora's gnome-shell SRPM, rebuilt with the Apex layer inside it
-([ADR 0014](../../../docs/adr/0014-engine-level-desktop.md),
-[ARCHITECTURE 7.4](../../../docs/ARCHITECTURE.md#74-desktop-layer)). The lane itself,
+([ADR 0014](https://github.com/apex-linux/apex/blob/main/docs/adr/0014-engine-level-desktop.md),
+[ARCHITECTURE 7.4](https://github.com/apex-linux/apex/blob/main/docs/ARCHITECTURE.md#74-desktop-layer)). The lane itself,
 `apex-lane`, and the formats of the files here, are in
-[packaging/README.md](../../README.md#the-rebuild-lane).
+[packaging/README.md](https://github.com/apex-linux/apex-image/blob/main/packaging/README.md#the-rebuild-lane).
 
 | File | Role |
 |---|---|
@@ -76,6 +76,6 @@ by hand.
 - The image: `image.sh context --lane-lock` takes `rpms.lock.next`, `[apex]` admits
   exactly the locked gnome-shell, gnome-shell-common, mutter and mutter-common, and G1
   (`image/checks/desktop.sh`) checks what was installed
-  ([packaging/README.md](../../README.md#the-image)).
+  ([packaging/README.md](https://github.com/apex-linux/apex-image/blob/main/packaging/README.md#the-image)).
 - The layer's safety net outside the shell: `tests/layer/run.sh` (gjs) runs the kill
   switches, the fault injection and the crash guard on every push.

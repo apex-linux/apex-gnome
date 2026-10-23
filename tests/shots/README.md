@@ -1,7 +1,7 @@
 # G2: the headless shell
 
 G2 runs the gnome-shell of a built image headless, at scale 2, and asserts what it
-draws and how its safety net behaves ([ARCHITECTURE §11](../../docs/ARCHITECTURE.md#11-quality-gates),
+draws and how its safety net behaves ([ARCHITECTURE §11](https://github.com/apex-linux/apex/blob/main/docs/ARCHITECTURE.md#11-quality-gates),
 the ROADMAP S1a exit). It needs the built image and rootful podman, so it runs in the builder VM, never
 in GitHub's CI:
 
@@ -10,15 +10,16 @@ just vm-image    # builds localhost/apex:build in the builder VM
 just vm-g2       # G2 on it; or: just vm-g2 IMAGE
 ```
 
-In the VM, `tests/shots/run.sh [IMAGE]` does the same. It runs G2 twice (`G2_RUNS`,
+In the VM, apex-image runs `tests/shots/run.sh [IMAGE]` from the apex-gnome commit
+`components.lock` pins, with `G2_IMAGE_DIR` set to its `image/` and `G2_REPOS_BASE` to
+its Containerfile's `REPOS_BASE`. It runs G2 twice (`G2_RUNS`,
 default 2; `just vm-image` always runs it twice), writes each run to
 `_build/g2/<UTC time>/run-N/` (`_build/g2/latest` points at the newest, and the newest 5
 are kept), asserts each run and then that the second agrees with the first. Each
 assertion prints one `PASS`, `FAIL` or `GAP` line (see "Known gaps"); the summary is
 `assert.txt` and `stable.txt` in each run directory. `result.txt` names the image, the
-number of runs, the sha256 of the lane lock the image carries, and the status. Copy one
-to the host with
-`tools/builder-vm/builder-vm.sh fetch apex-fedora/_build/g2/latest/run-1/assert.txt .`.
+number of runs, the sha256 of the lane lock the image carries, and the status. apex-image's
+`tools/builder-vm/builder-vm.sh fetch` copies one to the host.
 
 CI runs what needs no image: shellcheck of these scripts, and `selftest.sh`
 (`just shots-test`), which tests the capture comparison, the reading of the token file,
@@ -72,7 +73,7 @@ clock stands still, while timeouts and frames, which run on the monotonic clock,
 The guard's shells, started by systemd, keep the real clock and have no fixtures.
 
 The layer follows `layer-enabled` live in a shell that started with it on
-([DESIGN.md](../../docs/DESIGN.md#schema-iogithubapex_linuxapexdesktop): the layer reads
+([DESIGN.md](https://github.com/apex-linux/apex/blob/main/docs/DESIGN.md#schema-iogithubapex_linuxapexdesktop): the layer reads
 every key live): `false` disables the features, every hook gives stock, and the session
 mode recomputes, so `main.js` loads the sheet from `theme/stock/`; `true` brings them
 back. `disabled-features` applies live too: a feature put in it is disabled and its hooks
@@ -144,7 +145,7 @@ out in logical or physical pixels.
 
 ## Known gaps
 
-`top_bar_gaps` asserts the rest of the designed top bar ([docs/DESIGN.md](../../docs/DESIGN.md)),
+`top_bar_gaps` asserts the rest of the designed top bar ([docs/DESIGN.md](https://github.com/apex-linux/apex/blob/main/docs/DESIGN.md)),
 which S1a's SCSS cannot draw (the look step's report). Each names the roadmap step that builds it.
 Until then its failure prints `GAP <step>: …`, counts as a known gap, and is listed at
 the end of `assert.txt` and of `run.sh`'s output; it does not fail G2. Once it passes it
