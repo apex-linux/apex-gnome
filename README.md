@@ -13,7 +13,9 @@ the Apex layer; libadwaita, Settings and Files patch series join it in S2.
 
 [apex-image](https://github.com/apex-linux/apex-image) pins this repository by commit in
 `components.lock`, builds gnome-shell from the recipe in its builder VM, and runs G2 on the
-image. The `just vm-*` and `just pkg-*` recipes the READMEs here name are apex-image's.
+image. [desktop/README.md](desktop/README.md) describes the layer, its S1a behaviour and
+the dev loop. The `just vm-*`, `just pkg-*` and `just shell-*` recipes the READMEs here
+name are apex-image's.
 The design is in the [apex](https://github.com/apex-linux/apex) repository:
 [DESIGN.md](https://github.com/apex-linux/apex/blob/main/docs/DESIGN.md) and
 [ARCHITECTURE §11](https://github.com/apex-linux/apex/blob/main/docs/ARCHITECTURE.md#11-quality-gates).
