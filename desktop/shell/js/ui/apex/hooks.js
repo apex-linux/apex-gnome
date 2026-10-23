@@ -36,8 +36,7 @@ function _safeReason() {
     return '';
 }
 
-// A session that starts without the layer keeps it off; one that starts with it follows
-// layer-enabled live.
+// A shell that started stock stays stock until the next login, so the crash guard's switch holds.
 function _turnedOff() {
     return global.session_mode !== GREETER_MODE && !_settings.get_boolean('layer-enabled');
 }

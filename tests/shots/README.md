@@ -75,8 +75,10 @@ The layer follows `layer-enabled` live in a shell that started with it on
 ([DESIGN.md](../../docs/DESIGN.md#schema-iogithubapex_linuxapexdesktop): the layer reads
 every key live): `false` disables the features, every hook gives stock, and the session
 mode recomputes, so `main.js` loads the sheet from `theme/stock/`; `true` brings them
-back. A feature that failed at enable stays off for the session. A shell that started
-with it off stays stock until the next login, so the crash guard's switch holds.
+back. `disabled-features` applies live too: a feature put in it is disabled and its hooks
+give stock, and one taken out configures and enables afresh. A feature that failed stays
+off for the session. A shell that started with `layer-enabled` off stays stock until the
+next login, so the crash guard's switch holds. `tests/layer/run.sh` covers these rules.
 
 gnome-shell connects the automation script to `startup-complete` only after it has
 imported it, so a startup that completes during the import never runs the script and

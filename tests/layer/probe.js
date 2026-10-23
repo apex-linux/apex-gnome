@@ -42,22 +42,40 @@ fact('layer', layer ? 'loaded' : 'null');
 
 const stock = {colorScheme: 'prefer-dark', hasOverview: true};
 
+// Awaited at the top level, so gjs runs the main loop and the layer's promise jobs between.
 function spin(ms) {
-    const loop = new GLib.MainLoop(null, false);
-    GLib.timeout_add(GLib.PRIORITY_DEFAULT, ms, () => {
-        loop.quit();
+    return new Promise(resolve => GLib.timeout_add(GLib.PRIORITY_DEFAULT, ms, () => {
+        resolve();
         return GLib.SOURCE_REMOVE;
-    });
-    loop.run();
+    }));
 }
 
-// The layer reacts to changed::layer-enabled from the main loop, and restyles after an import.
-function switchLayer() {
+async function setDisabledLive() {
+    const disabled = GLib.getenv('PROBE_DISABLE_LIVE');
+    if (disabled === null)
+        return;
+    for (const list of [disabled.split(','), []]) {
+        settings.set_strv('disabled-features', list);
+        await spin(200);
+        fact(`disabled-live.${list.join(',') || 'none'}`, `witness=${Hooks.value('test-witness', 'stock')} ` +
+            `scheme=${Hooks.value('session-mode', {...stock}, 'user').colorScheme}`);
+    }
+    settings.set_boolean('layer-enabled', false);
+    settings.set_strv('disabled-features', disabled.split(','));
+    await spin(200);
+    settings.set_boolean('layer-enabled', true);
+    await spin(200);
+    fact('disabled-while-off', `witness=${Hooks.value('test-witness', 'stock')}`);
+    settings.set_strv('disabled-features', []);
+    await spin(200);
+}
+
+async function switchLayer() {
     const cycles = Number(GLib.getenv('PROBE_SWITCH') ?? '0');
     for (let cycle = 1; cycle <= cycles; cycle++) {
         for (const on of [false, true]) {
             settings.set_boolean('layer-enabled', on);
-            spin(200);
+            await spin(200);
             fact(`switch.${cycle}.${on}`, `safe=${Hooks.safe()} ` +
                 `scheme=${Hooks.value('session-mode', {...stock}, 'user').colorScheme} ` +
                 `witness=${Hooks.value('test-witness', 'stock')}`);
@@ -94,7 +112,8 @@ if (layer && GLib.getenv('PROBE_ENABLE') === '1') {
         loop.run();
         fact('survived', `${waitSeconds}s`);
     }
-    switchLayer();
+    await setDisabledLive();
+    await switchLayer();
     for (const [signal, fn] of [...handlers.values()]) {
         if (signal === 'shutdown')
             fn();
@@ -102,5 +121,5 @@ if (layer && GLib.getenv('PROBE_ENABLE') === '1') {
     fact('starting-file.after-shutdown', GLib.file_test(marker, GLib.FileTest.EXISTS));
 }
 if (!layer && settings)
-    switchLayer();
+    await switchLayer();
 fact('done', 'yes');

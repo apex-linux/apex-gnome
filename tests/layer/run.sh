@@ -222,6 +222,17 @@ count_is "layer-enabled cycles: the features enable again each time" 'Apex: feat
 count_is "layer-enabled cycles: a feature that failed at enable stays off for the session" 'Apex: feature fault off for this session' 1
 lacks "layer-enabled cycles: every feature disables cleanly" 'did not disable cleanly|cannot restyle'
 
+probe livedisabled "$CMDLINE_PLAIN" APEX_SHELL_TEST_FAULT=configure PROBE_ENABLE=1 PROBE_DISABLE_LIVE=witness
+fact "disabled-features while enabled: the feature is off at once, its hooks stock" \
+    'disabled-live\.witness=witness=stock scheme=prefer-light'
+fact "taken out again: the feature configures and enables afresh" \
+    'disabled-live\.none=witness=enabled scheme=prefer-light'
+count_is "disabled-features while enabled: it says so" 'Apex: feature witness is in disabled-features' 2
+fact "disabled-features changed while the layer is off: it holds when the layer comes back" \
+    'disabled-while-off=witness=stock'
+count_is "a feature that failed to configure stays off: it configures once" 'Apex: feature fault off for this session' 1
+lacks "disabled-features while enabled: every feature disables cleanly" 'did not disable cleanly|cannot restyle'
+
 probe offswitch "$CMDLINE_PLAIN" PROBE_LAYER_OFF=1 PROBE_SWITCH=1
 fact "a session that starts with layer-enabled=false stays stock when it turns true" \
     'switch\.1\.true=safe=true scheme=prefer-dark witness=stock'

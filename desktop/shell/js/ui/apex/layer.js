@@ -18,9 +18,13 @@ const LIGHT_SESSION_MODES = new Set(['user', 'unlock-dialog']);
 const CRASH_GUARD_MARKER = 'apex-shell-starting';
 const CRASH_GUARD_WINDOW_SECONDS = 60;
 
-const _features = [];
+const _features = new Map();
+const _failed = new Set();
+const _enabled = new Set();
+let _names = [];
 let _settings = null;
 let _on = false;
+let _queue = Promise.resolve();
 
 function _sessionMode(params, mode) {
     return LIGHT_SESSION_MODES.has(mode) ? {...params, colorScheme: 'prefer-light'} : params;
@@ -39,24 +43,54 @@ function _featureNames() {
     return [...FEATURES_IN_ENABLE_ORDER, 'fault', 'witness'];
 }
 
+function _disabledFeatures() {
+    return new Set(_settings.get_strv('disabled-features'));
+}
+
+function _offForTheSession(name, phase, e) {
+    _features.delete(name);
+    _enabled.delete(name);
+    _failed.add(name);
+    Hooks.withdraw(name);
+    console.error(`Apex: feature ${name} off for this session (${phase}: ${e})`);
+}
+
 async function _configureFeature(name) {
     try {
         const feature = await import(`./${name}/feature.js`);
         // Awaited, so that an async configure that rejects lands in this catch too.
         await feature.configure?.(name);
-        _features.push({name, feature});
+        _features.set(name, feature);
     } catch (e) {
-        Hooks.withdraw(name);
-        console.error(`Apex: feature ${name} off for this session (configure: ${e})`);
+        _offForTheSession(name, 'configure', e);
+    }
+}
+
+// A feature put in disabled-features loses its hooks; one taken out configures afresh.
+async function _followDisabledFeatures() {
+    const disabled = _disabledFeatures();
+    for (const name of [..._names].reverse()) {
+        if (disabled.has(name) && _features.has(name)) {
+            _disableFeature(name);
+            _features.delete(name);
+            Hooks.withdraw(name);
+            console.log(`Apex: feature ${name} is in disabled-features`);
+        }
+    }
+    for (const name of _names) {
+        if (!disabled.has(name) && !_features.has(name) && !_failed.has(name))
+            // eslint-disable-next-line no-await-in-loop
+            await _configureFeature(name);
     }
 }
 
 export async function configure(settings) {
     _settings = settings;
     Hooks.provide('core', 'session-mode', _sessionMode);
+    _names = _featureNames();
 
-    const disabled = new Set(settings.get_strv('disabled-features'));
-    for (const name of _featureNames()) {
+    const disabled = _disabledFeatures();
+    for (const name of _names) {
         if (disabled.has(name)) {
             console.log(`Apex: feature ${name} is in disabled-features`);
             continue;
@@ -90,32 +124,40 @@ function _createCrashGuardMarker() {
     });
 }
 
-function _enableFeatures() {
-    for (const {name, feature} of [..._features]) {
+function _enableFeature(name) {
+    try {
+        _features.get(name).enable?.();
+        _enabled.add(name);
+        console.log(`Apex: feature ${name} enabled`);
+    } catch (e) {
+        const feature = _features.get(name);
+        _offForTheSession(name, 'enable', e);
         try {
-            feature.enable?.();
-            console.log(`Apex: feature ${name} enabled`);
-        } catch (e) {
-            _features.splice(_features.findIndex(f => f.name === name), 1);
-            Hooks.withdraw(name);
-            console.error(`Apex: feature ${name} off for this session (enable: ${e})`);
-            try {
-                feature.disable?.();
-            } catch {}
-        }
+            feature.disable?.();
+        } catch {}
     }
+}
+
+function _disableFeature(name) {
+    if (!_enabled.delete(name))
+        return;
+    try {
+        _features.get(name).disable?.();
+    } catch (e) {
+        console.error(`Apex: feature ${name} did not disable cleanly: ${e}`);
+    }
+}
+
+function _enableFeatures() {
+    for (const name of _names.filter(n => _features.has(n) && !_enabled.has(n)))
+        _enableFeature(name);
     _on = true;
 }
 
 function _disableFeatures() {
     _on = false;
-    for (const {name, feature} of [..._features].reverse()) {
-        try {
-            feature.disable?.();
-        } catch (e) {
-            console.error(`Apex: feature ${name} did not disable cleanly: ${e}`);
-        }
-    }
+    for (const name of [..._names].reverse())
+        _disableFeature(name);
 }
 
 // Only _sync recomputes the session mode's colour scheme and makes main.js reload its
@@ -129,23 +171,32 @@ async function _restyle() {
     }
 }
 
-async function _followLayerEnabled() {
+async function _followSettings() {
     const on = _settings.get_boolean('layer-enabled');
-    if (on === _on)
-        return;
-    console.log(`Apex: layer-enabled is ${on}: the ${on ? 'Apex' : 'stock'} shell`);
-    if (on)
+    if (on !== _on)
+        console.log(`Apex: layer-enabled is ${on}: the ${on ? 'Apex' : 'stock'} shell`);
+    if (on) {
+        await _followDisabledFeatures();
         _enableFeatures();
-    else
+    } else if (_on) {
         _disableFeatures();
+    } else {
+        return;
+    }
     await _restyle();
+}
+
+// One change at a time: configuring a feature that comes back is async.
+function _queueFollowSettings() {
+    _queue = _queue.then(() => _followSettings()).catch(e => console.error(`Apex: ${e}`));
 }
 
 export function enable() {
     try {
         _createCrashGuardMarker();
         _enableFeatures();
-        _settings.connect('changed::layer-enabled', () => _followLayerEnabled());
+        _settings.connect('changed::layer-enabled', () => _queueFollowSettings());
+        _settings.connect('changed::disabled-features', () => _queueFollowSettings());
     } catch (e) {
         console.error(`Apex: enable failed: ${e}`);
     }
