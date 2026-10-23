@@ -396,9 +396,11 @@ CLOCKS
 CYCLES_REPORT='
 {actors: {ClutterStage: 1, StWidget: 420, StLabel: 96, StIcon: 61}} as $census
 | ({stylesheet: "resource:///org/gnome/shell/theme/gnome-shell-light.css", markers: ["light"], markerColor: "#16161aff",
-   sessionColorScheme: "prefer-light", variant: "light", safe: false} + $census) as $on
+   sessionColorScheme: "prefer-light", variant: "light", safe: false,
+   spotlightKey: {modes: ["NORMAL", "OVERVIEW"], accelerators: ["<Super>space"]}} + $census) as $on
 | ({stylesheet: "resource:///org/gnome/shell/theme/stock/gnome-shell-dark.css", markers: [], markerColor: "#ffffffff",
-   sessionColorScheme: "prefer-dark", variant: "dark", safe: true} + $census) as $off
+   sessionColorScheme: "prefer-dark", variant: "dark", safe: true,
+   spotlightKey: {modes: [], accelerators: ["<Super>space"]}} + $census) as $off
 | {cycles: 3, states: ([$on + {layerEnabled: true}]
     + [range(1; 4) as $c | ($off + {cycle: $c, layerEnabled: false}), ($on + {cycle: $c, layerEnabled: true})])}'
 readonly APEX_LIGHT_REPORT='{"mode": "user", "stylesheet": "resource:///org/gnome/shell/theme/gnome-shell-light.css", "sheet": {"markers": ["light"], "apexRule": true}, "markerColor": "#16161a", "colorSchemeSetting": "default", "sessionColorScheme": "prefer-light", "variant": "light", "safe": false}'
@@ -434,6 +436,8 @@ test_layer_cycles() {
 .states[4].sessionColorScheme = "prefer-dark"|the stock colour scheme after the layer is back
 .states[6].actors.StWidget += 1|an actor left behind by a cycle
 .states[5].actors.StIcon -= 1|an actor the stock shell loses
+.states[3].spotlightKey.modes = ["NORMAL", "OVERVIEW"]|Super+Space left registered while the layer is off
+.states[6].spotlightKey.modes = []|Super+Space not back after the layer is
 CHANGES
     write_cycles_run '.states[5].layerEnabled = true'
     read -r passes failures <<<"$(assertion_counts layer_cycles "$T/cycles")"
@@ -538,6 +542,30 @@ test_fixtures() {
     kill "${pids[@]}" 2>/dev/null || true
 }
 
+test_spotlight_key() {
+    local passes failures what report
+    while IFS='|' read -r failures what report; do
+        printf 'APEXG2 %s\n' "$report" >"$T/spotlight.log"
+        read -r passes _ <<<"$(assertion_counts spotlight_key case "$T/spotlight.log")"
+        expect_eq "spotlight: $what fails $failures of 2" "$failures" $((2 - passes))
+    done <<'REPORTS'
+0|Super+Space in the normal and overview modes|{"spotlightKey": {"modes": ["NORMAL", "OVERVIEW"], "accelerators": ["<Super>space"]}}
+1|an override that moved it|{"spotlightKey": {"modes": ["NORMAL", "OVERVIEW"], "accelerators": ["<Super><Alt>space"]}}
+1|also on the lock screen|{"spotlightKey": {"modes": ["NORMAL", "OVERVIEW", "UNLOCK_SCREEN"], "accelerators": ["<Super>space"]}}
+1|not registered|{"spotlightKey": {"modes": [], "accelerators": ["<Super>space"]}}
+2|no Keybindings schema|{"spotlightKey": {"modes": [], "accelerators": "no-schema"}}
+2|a probe without the field|{"mode": "user"}
+REPORTS
+    while IFS='|' read -r failures what report; do
+        printf 'APEXG2 %s\n' "$report" >"$T/spotlight.log"
+        read -r passes _ <<<"$(assertion_counts no_spotlight_key case "$T/spotlight.log")"
+        expect_eq "spotlight: $what fails $failures of 1 in a stock shell" "$failures" $((1 - passes))
+    done <<'REPORTS'
+0|no binding|{"spotlightKey": {"modes": [], "accelerators": ["<Super>space"]}}
+1|a binding the layer left behind|{"spotlightKey": {"modes": ["NORMAL", "OVERVIEW"], "accelerators": ["<Super>space"]}}
+REPORTS
+}
+
 test_png_js
 test_compare_js
 test_incomplete_compare
@@ -547,6 +575,7 @@ test_today_pins
 test_known_gaps
 test_fixed_clock
 test_layer_cycles
+test_spotlight_key
 test_fixtures
 
 printf '1..%d\n' "$tests"

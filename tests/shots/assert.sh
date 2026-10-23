@@ -35,6 +35,8 @@ readonly TODAY_INACTIVE_DOT_OPACITY=0.5
 readonly TODAY_CLOCK_TEXT_GAP=7.04
 readonly TODAY_CLOCK_PILL_EXTRA=13
 readonly LAYER_CYCLES=3
+readonly SPOTLIGHT_ACCELERATORS='["<Super>space"]'
+readonly SPOTLIGHT_MODES='["NORMAL", "OVERVIEW"]'
 # direct.sh's G2_CLOCK, in UTC; the clock shows it as date, EN SPACE, 24-hour time.
 readonly FIXED_CLOCK=2026-09-28T09:41:00Z
 readonly FIXED_CLOCK_TEXT='Sep 28\u200209:41'
@@ -131,6 +133,20 @@ stock_view() {
     expect_report "$label" "$log" ".variant == \"$variant\"" "the $variant variant"
     expect_report "$label" "$log" '.safe == true and .testFault == "stock"' "safe mode: every hook gives its stock value"
     expect_report "$label" "$log" '.startingMarker == false' "no crash-guard marker: the layer did not run"
+    no_spotlight_key "$label" "$log"
+}
+
+spotlight_key() {
+    local label=$1 log=$2
+    expect_report "$label" "$log" ".spotlightKey.accelerators == $SPOTLIGHT_ACCELERATORS" \
+        "toggle-spotlight in the Keybindings schema is Super+Space"
+    expect_report "$label" "$log" ".spotlightKey.modes == $SPOTLIGHT_MODES" \
+        "the layer registered it in the normal and overview modes only"
+}
+
+no_spotlight_key() {
+    local label=$1 log=$2
+    expect_report "$label" "$log" '.spotlightKey.modes == []' "no Super+Space: toggle-spotlight is not registered"
 }
 
 stock_scheme() {
@@ -433,6 +449,10 @@ layer_cycles() {
         "while it is off: upstream's dark sheet from theme/stock/, the stock colour scheme, every hook stock"
     expect layer-cycles "$cycles" "[.states[] | select(.layerEnabled)] | length == $LAYER_CYCLES + 1 and all(.stylesheet == \"$APEX_LIGHT_SHEET\" and .markers == [\"light\"] and (.safe | not) and .sessionColorScheme == \"prefer-light\" and .variant == \"light\" and (.markerColor | colour_is(\"#16161a\")))" \
         "while it is on: the Apex light sheet, prefer-light, the light bar token (#16161a)"
+    expect layer-cycles "$cycles" '[.states[] | select(.layerEnabled | not) | .spotlightKey.modes] | length > 0 and all(. == [])' \
+        "while it is off: no Super+Space binding"
+    expect layer-cycles "$cycles" "[.states[] | select(.layerEnabled) | .spotlightKey.modes] | length > 0 and all(. == $SPOTLIGHT_MODES)" \
+        "while it is on: Super+Space in the normal and overview modes"
     expect layer-cycles "$cycles" '[.states[] | select(.layerEnabled) | .actors] | length > 1 and (unique | length) == 1' \
         "nothing left behind: each time it is on, the stage holds the same actors, type by type, as at startup"
     expect layer-cycles "$cycles" '[.states[] | select(.layerEnabled | not) | .actors] | length > 1 and (unique | length) == 1' \
@@ -466,6 +486,7 @@ direct_cases() {
     exits "$run" default 0
     apex_light default "$f"
     no_apex_failure default "$f"
+    spotlight_key default "$f"
     virtual_monitor default "$f"
     expect_report default "$f" '.testFault == "stock" and .env.APEX_SHELL_TEST_FAULT == null' \
         "no fault feature without APEX_SHELL_TEST_FAULT"
@@ -479,6 +500,7 @@ direct_cases() {
     exits "$run" default-scale1 0
     apex_light default-scale1 "$f"
     no_apex_failure default-scale1 "$f"
+    spotlight_key default-scale1 "$f"
     virtual_monitor default-scale1 "$f" 1
     top_bar default-scale1 "$f" light
     top_bar_today default-scale1 "$f" light
@@ -490,6 +512,7 @@ direct_cases() {
     expect_report dark-style "$f" '(.markerColor | colour_is("#f6f6f8")) and .safe == false' \
         "the marker actor takes the dark bar token (#f6f6f8)"
     no_apex_failure dark-style "$f"
+    spotlight_key dark-style "$f"
     top_bar dark-style "$f" dark
     top_bar_today dark-style "$f" dark
     top_bar_gaps dark-style "$f" dark
@@ -534,6 +557,7 @@ direct_cases() {
     logs fault-configure "$f" 'Apex: feature witness enabled' "the feature after it still enables"
     expect_report fault-configure "$f" '.testFault == "stock"' "the fault feature's hook gives stock"
     apex_light fault-configure "$f"
+    spotlight_key fault-configure "$f"
 
     f=$run/fault-enable.log
     exits "$run" fault-enable 0
@@ -542,6 +566,7 @@ direct_cases() {
     logs fault-enable "$f" 'Apex: feature witness enabled' "the feature after it still enables"
     expect_report fault-enable "$f" '.testFault == "stock"' "the fault feature's hook gives stock"
     apex_light fault-enable "$f"
+    spotlight_key fault-enable "$f"
     logs fault-enable "$f" 'APEXG2-SURVIVED 10s' "the rest of the layer runs: the shell is still up 10 s later"
 
     f=$run/fault-abort.log
