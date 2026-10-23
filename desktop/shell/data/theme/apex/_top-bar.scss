@@ -95,7 +95,7 @@ $_upstream_panel_button_minimum_hpadding: $base_padding;
 
     &:active .clock:hover, &:checked .clock:hover { box-shadow: none; }
 
-    // SPEC's accent dot waits for S1b's wallpaper: over Fedora's, the light bar hides it.
+    // The accent dot waits for S1b's wallpaper: over Fedora's, the light bar hides it.
     .messages-indicator {
       icon-size: $apex_bar_clock_dot_size;
       color: transparent;

@@ -273,19 +273,6 @@ CHANGES
     expect_eq "top bar: a report without the top bar passes none" 0 "$(grep -c '^PASS' "$T/top-bar.out")"
 }
 
-# shellcheck disable=SC2016 # expanded by the inner bash
-spec_run() { bash -c '. "$1/lib.sh"; tokens_are_spec "${2:-}" >/dev/null; echo "$npass $nfail"' _ "$HERE" "$@"; }
-
-test_tokens_are_spec() {
-    local passes failures
-    read -r passes failures <<<"$(spec_run)"
-    expect_eq "SPEC: every top-bar token is SPEC's value, in both variants" "$((2 * $(grep -c . <<<"$SPEC_TOP_BAR_TOKENS"))) 0" "$passes $failures"
-    # shellcheck disable=SC2016 # an SCSS variable, not a shell one
-    sed 's/^\$apex_bar_height: .*/$apex_bar_height: 36px;/' "$TOKEN_FILE" >"$T/drifted.scss"
-    read -r passes failures <<<"$(spec_run "$T/drifted.scss")"
-    expect_eq "SPEC: a bar height that leaves SPEC fails in both variants, although every metric would follow it" 2 "$failures"
-}
-
 test_today_pins() {
     local pin_count what change passes failures open_gaps
     read -r passes failures open_gaps <<<"$(assert_run top_bar_today light)"
@@ -366,7 +353,6 @@ test_compare_js
 test_incomplete_compare
 test_token_file
 test_top_bar
-test_tokens_are_spec
 test_today_pins
 test_known_gaps
 

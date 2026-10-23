@@ -2,8 +2,7 @@
 
 G2 runs the gnome-shell of a built image headless, at scale 2, and asserts what it
 draws and how its safety net behaves ([ARCHITECTURE §11](../../docs/ARCHITECTURE.md#11-quality-gates),
-[design/SPEC.md §7.2](../../design/SPEC.md#72-g2-headless-shell-from-s1a), the ROADMAP S1a
-exit). It needs the built image and rootful podman, so it runs in the builder VM, never
+the ROADMAP S1a exit). It needs the built image and rootful podman, so it runs in the builder VM, never
 in GitHub's CI:
 
 ```bash
@@ -112,14 +111,10 @@ sizes while the clock text grows to 1.25 × 13.5 px and stays within its pill. T
 measures in CSS px through St itself, so the values hold whether mutter lays the stage
 out in logical or physical pixels.
 
-Because every metric follows the token file, `lib.sh`'s `tokens_are_spec` also checks
-each top-bar token, in both variants, against its literal value in design/SPEC.md (§2.1,
-§2.6 to §2.9, §3.4 and §7.2): a token edit that leaves SPEC fails there.
-
 ## Known gaps
 
-`top_bar_gaps` asserts the rest of SPEC §3.4 and the top-bar row of §7.2, which S1a's
-SCSS cannot draw (the look step's report). Each names the roadmap step that builds it.
+`top_bar_gaps` asserts the rest of the designed top bar ([docs/DESIGN.md](../../docs/DESIGN.md)),
+which S1a's SCSS cannot draw (the look step's report). Each names the roadmap step that builds it.
 Until then its failure prints `GAP <step>: …`, counts as a known gap, and is listed at
 the end of `assert.txt` and of `run.sh`'s output; it does not fail G2. Once it passes it
 fails, until it moves into `top_bar` as a plain assertion.
@@ -140,15 +135,15 @@ removes its pin.
 | S2a (the layer) | with `translucent-top-bar` off the bar is `$apex_bar_solid` over a `0 1px 0 $apex_border` line | the key does not exist yet |
 | S2b (patch 0003, the glass manager) | a 24 px blur at 160 % saturation behind the bar | no blur effect |
 | S1b (the override's `clock-show-weekday`) | the clock starts with the weekday | it does not |
-| S1b (the Facets wallpaper and the light overview) | the unread-notification dot is the raw accent (SPEC 2.3, 3.4) | `$apex_bar_fg`: over Fedora's wallpaper an accent dot is about 1.4:1 against the light bar |
-| no step yet (a clock hook, or the owner accepts it) | `$apex_bar_clock_gap` between the date and the time | about 7 px with G2's 24-hour clock: one label, an EN SPACE. The mockup's en-US 12-hour clock adds a FIGURE SPACE before a one-digit hour ("Tue Sep 29" EN SPACE FIGURE SPACE "5:23 AM"): about 14 px |
+| S1b (the Facets wallpaper and the light overview) | the unread-notification dot is the raw accent | `$apex_bar_fg`: over Fedora's wallpaper an accent dot is about 1.4:1 against the light bar |
+| no step yet (a clock hook, or the owner accepts it) | `$apex_bar_clock_gap` between the date and the time | about 7 px with G2's 24-hour clock: one label, an EN SPACE. An en-US 12-hour clock adds a FIGURE SPACE before a one-digit hour ("Tue Sep 29" EN SPACE FIGURE SPACE "5:23 AM"): about 14 px |
 | no step yet (a clock hook, or the owner accepts it) | with the dot, the clock pill is padding + text + gap + dot + padding wide | 13 px wider: upstream's invisible pad left of the text |
 
 Not asserted here: the maximised-window trigger of the solid bar (G2 opens no window
 yet), the battery's "87%" at 12.5 px and the network, volume and battery glyphs (no
 battery or network without the dbusmock fixtures), Reduce Transparency (S2b), the bar
 text's contrast over other wallpapers (S2b's solid fallback; over the fixture wallpaper
-it is at least 4.8:1), and what the goldens judge: the Hugeicons glyphs (S5), `ss03`
+it is at least 4.8:1), and what the goldens judge: the Apex Symbolic glyphs (S1b), `ss03`
 (S1b, fontconfig) and the light bar over the still-dark overview (S1b).
 
 ## Files
@@ -164,9 +159,9 @@ it is at least 4.8:1), and what the goldens judge: the Hugeicons glyphs (S5), `s
 
 ## Not yet
 
-- python-dbusmock fixtures (battery, Wi-Fi, keyboard) and a fixed clock (SPEC §7.2):
+- python-dbusmock fixtures (battery, Wi-Fi, keyboard) and a fixed clock:
   until then the status pill holds what a bare container offers, and the clock is
   masked. With them: the status pill's glyphs and the percentage label.
 - A bar-text contrast check over the fixture wallpapers.
-- The other SPEC §7.2 rows (dock, launcher, overview, notifications, windows, keys), the
+- The metrics of the other surfaces (dock, launcher, overview, notifications, windows, keys), the
   enable and disable cycles, and approved goldens.

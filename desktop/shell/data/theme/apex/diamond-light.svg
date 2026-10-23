@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: GPL-2.0-or-later -->
-<!-- The mockup's 10 px square with a 2 px border and radius 2, rotated 45°, drawn on the
+<!-- The Apex diamond: a 10 px square with a 2 px border and radius 2, rotated 45°, drawn on the
      stroke's centre line. -->
 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
   <rect x="4" y="4" width="8" height="8" rx="1" fill="none" stroke="#16161a" stroke-width="2" transform="rotate(45 8 8)"/>

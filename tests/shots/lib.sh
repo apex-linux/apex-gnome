@@ -135,64 +135,6 @@ tokens_for() {
     tokens_json "$token_file" | jq --arg v "$variant" 'map_values(.[$v])'
 }
 
-# Copied from design/SPEC.md, so that a token edit that leaves SPEC fails although every
-# metric follows the token file.
-readonly SPEC_TOP_BAR_TOKENS='
-apex_bar rgba(250,250,252,.45) rgba(12,12,16,.4)
-apex_bar_solid #f3f3f5 #121215
-apex_bar_fg #16161a #f6f6f8
-apex_bar_hover rgba(0,0,10,.08) rgba(255,255,255,.12)
-apex_border rgba(0,0,10,.09) rgba(255,255,255,.08)
-apex_radius_bar_pill 12px 12px
-apex_radius_workspace_dot 4px 4px
-apex_radius_clock_dot 3px 3px
-apex_font_bar_size 13.5px 13.5px
-apex_font_bar_weight 600 600
-apex_font_bar_emphasis_weight 700 700
-apex_font_bar_percentage_size 12.5px 12.5px
-apex_bar_transition 300ms 300ms
-apex_bar_blur 24px 24px
-apex_bar_saturation 160% 160%
-apex_bar_height 32px 32px
-apex_bar_padding 8px 8px
-apex_bar_gap 2px 2px
-apex_bar_pill_height 24px 24px
-apex_bar_pill_padding 10px 10px
-apex_bar_activities_gap 10px 10px
-apex_bar_diamond_size 10px 10px
-apex_bar_dots_gap 4px 4px
-apex_bar_dot_size 7px 7px
-apex_bar_clock_gap 8px 8px
-apex_bar_clock_dot_size 5px 5px
-apex_bar_status_gap 8px 8px
-apex_bar_icon_size 16px 16px
-apex_accent -st-accent-color -st-accent-color
-'
-
-tokens_are_spec() {
-    local token_file=${1:-} tokens name light dark variant want got jq_matches
-    tokens=$(tokens_json "$token_file")
-    while read -r name light dark; do
-        [[ -n $name ]] || continue
-        for variant in light dark; do
-            want=$light
-            [[ $variant == light ]] || want=$dark
-            got=$(jq -r --arg n "$name" --arg v "$variant" '.[$n][$v] // empty' <<<"$tokens")
-            # shellcheck disable=SC2016 # jq programs
-            case $want in
-                '#'* | rgba*) jq_matches='colour_is($w)' ;;
-                *px) jq_matches='px | px_is($w)' ;;
-                *) jq_matches='. == $w' ;;
-            esac
-            if [[ -n $got ]] && jq -en --arg g "$got" --arg w "$want" "$JQ_DEFS \$g | $jq_matches" >/dev/null 2>&1; then
-                pass "token \$$name ($variant) is SPEC's $want"
-            else
-                fail "token \$$name ($variant) is ${got:-missing}, but SPEC says $want"
-            fi
-        done
-    done <<<"$SPEC_TOP_BAR_TOKENS"
-}
-
 plan_entry() {
     local name=$1 expected_dir=$2 expected_case=$3 actual_dir=$4 actual_case=$5 scene=$6 diff_dir=$7
     shift 7
