@@ -6,7 +6,7 @@
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 
-const SCHEMA_ID = 'io.github.sekirokenjii.Apex.Desktop';
+const SCHEMA_ID = 'io.github.apex_linux.Apex.Desktop';
 const KERNEL_SWITCH = 'apex.safe=1';
 const GREETER_MODE = 'gdm';
 const RUN_STOCK_CODE = undefined;

@@ -186,7 +186,7 @@ REPORT_OF_A_BAR_DRAWN_FROM_TOKENS='
     dnd: {off: ["system-shutdown-symbolic"], on: ["notifications-disabled-symbolic", "system-shutdown-symbolic"]},
     leftItems: [{accessibleName: "Activities", label: null, pill: {x: $pad, y: 4, width: 76, height: 24, radius: 12}}],
     rightItems: [{accessibleName: "System", label: null, pill: {x: 1337, y: 4, width: 95, height: 24, radius: 12}}],
-    opaque: {error: "io.github.sekirokenjii.Apex.Desktop has no translucent-top-bar key"},
+    opaque: {error: "io.github.apex_linux.Apex.Desktop has no translucent-top-bar key"},
     glass: []}}'
 # shellcheck disable=SC2016 # a jq program
 HEX_DEF='def hex: rgba | map([., 16] | "0123456789abcdef"[(.[0] / .[1] | floor):(.[0] / .[1] | floor) + 1]

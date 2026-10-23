@@ -157,7 +157,7 @@ fact "gdm mode: upstream's colour scheme" 'scheme\.gdm=prefer-dark'
 
 probe noschema "$CMDLINE_PLAIN" GSETTINGS_SCHEMA_DIR="$T/noschema"
 fact "no Apex schema: safe" 'safe=true'
-has "no Apex schema: and says why" 'Apex: safe mode \(schema io\.github\.sekirokenjii\.Apex\.Desktop is not installed\)'
+has "no Apex schema: and says why" 'Apex: safe mode \(schema io\.github\.apex_linux\.Apex\.Desktop is not installed\)'
 
 probe broken "$CMDLINE_PLAIN" PROBE_BROKEN=1
 fact "a layer that does not load: null" 'layer=null'
