@@ -84,6 +84,9 @@ async function _followDisabledFeatures() {
     }
 }
 
+/**
+ * @param {Gio.Settings} settings
+ */
 export async function configure(settings) {
     _settings = settings;
     Hooks.provide('core', 'session-mode', _sessionMode);

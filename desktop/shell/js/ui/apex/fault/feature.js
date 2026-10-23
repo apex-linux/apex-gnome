@@ -15,6 +15,9 @@ function _phase() {
     return GLib.getenv('APEX_SHELL_TEST_FAULT');
 }
 
+/**
+ * @param {string} featureName
+ */
 export function configure(featureName) {
     Hooks.provide(featureName, 'test-fault', () => 'fault');
     if (_phase() === 'configure')

@@ -7,6 +7,9 @@ import * as Hooks from '../hooks.js';
 
 let _enabled = false;
 
+/**
+ * @param {string} featureName
+ */
 export function configure(featureName) {
     Hooks.provide(featureName, 'test-witness', () => _enabled ? 'enabled' : 'configured');
 }

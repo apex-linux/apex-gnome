@@ -56,6 +56,7 @@ async function setDisabledLive() {
         return;
     for (const list of [disabled.split(','), []]) {
         settings.set_strv('disabled-features', list);
+        // eslint-disable-next-line no-await-in-loop
         await spin(200);
         fact(`disabled-live.${list.join(',') || 'none'}`, `witness=${Hooks.value('test-witness', 'stock')} ` +
             `scheme=${Hooks.value('session-mode', {...stock}, 'user').colorScheme}`);
@@ -75,6 +76,7 @@ async function switchLayer() {
     for (let cycle = 1; cycle <= cycles; cycle++) {
         for (const on of [false, true]) {
             settings.set_boolean('layer-enabled', on);
+            // eslint-disable-next-line no-await-in-loop
             await spin(200);
             fact(`switch.${cycle}.${on}`, `safe=${Hooks.safe()} ` +
                 `scheme=${Hooks.value('session-mode', {...stock}, 'user').colorScheme} ` +

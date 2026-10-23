@@ -42,8 +42,12 @@ function differenceImage(expected, masked, differs) {
     for (let p = 0; p < masked.length; p++) {
         const at = p * 4;
         const grey = (expected.rgba[at] + expected.rgba[at + 1] + expected.rgba[at + 2]) / 9;
-        const colour = differs[p] ? DIFFERENCE : masked[p] ? MASK_TINT.map(c => (c + grey) / 2) : [grey, grey, grey];
-        rgba.set(colour, at);
+        if (differs[p])
+            rgba.set(DIFFERENCE, at);
+        else if (masked[p])
+            rgba.set(MASK_TINT.map(c => (c + grey) / 2), at);
+        else
+            rgba.set([grey, grey, grey], at);
         rgba[at + 3] = 255;
     }
     return {width: expected.width, height: expected.height, rgba};
