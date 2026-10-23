@@ -37,7 +37,10 @@ done
 
 T=$(mktemp -d "${TMPDIR:-/tmp}/apex-layer-test.XXXXXX")
 trap 'rm -rf "$T"' EXIT
-mkdir -p "$T/schemas" "$T/noschema" "$T/data" "$T/home"
+mkdir -p "$T/schemas" "$T/noschema" "$T/data" "$T/home" "$T/shell"
+# The layer restyles the shell through main.js, which only the gnome-shell tree has.
+cp -R "$REPO/desktop/shell/js" "$T/shell/"
+printf '%s\n' "export const sessionMode = {_sync: () => printerr('probe: restyled')};" >"$T/shell/js/ui/main.js"
 cp "$DESKTOP_SRC"/desktop/schemas/*.gschema.xml "$T/schemas/"
 glib-compile-schemas --strict "$T/schemas"
 
@@ -61,7 +64,7 @@ probe() {
     local -a cmd=(env -i PATH="$PATH" HOME="$T/home" LANG=C.UTF-8
         XDG_RUNTIME_DIR="$dir/run" XDG_CONFIG_HOME="$dir/config" XDG_DATA_DIRS="$T/data"
         GSETTINGS_BACKEND=memory GSETTINGS_SCHEMA_DIR="$T/schemas"
-        APEX_SHELL_DIR="$REPO/desktop/shell" "$@" gjs -m "$HERE/probe.js")
+        APEX_SHELL_DIR="$T/shell" "$@" gjs -m "$HERE/probe.js")
     if ((sandbox)); then
         cmd=(bwrap --dev-bind / / --ro-bind "$dir/cmdline" /proc/cmdline "${cmd[@]}")
     fi
@@ -75,6 +78,7 @@ rc_is() { if [[ $RC == "$2" ]]; then ok "$1"; else not_ok "$1 (exit $RC, expecte
 has() { if grep -Eq -- "$2" "$OUT"; then ok "$1"; else not_ok "$1 (no line matches /$2/)"; _show; fi; }
 lacks() { if grep -Eq -- "$2" "$OUT"; then not_ok "$1 (a line matches /$2/)"; _show; else ok "$1"; fi; }
 fact() { has "$1" "^probe: $2\$"; }
+count_is() { if [[ $(grep -c -- "$2" "$OUT") == "$3" ]]; then ok "$1"; else not_ok "$1 ($(grep -c -- "$2" "$OUT") lines match /$2/, expected $3)"; _show; fi; }
 
 run_guard_unit_like_systemd() {
     local dir=$T/$1 key value cond='' line runtime='%t' state='%S'
@@ -203,6 +207,25 @@ fact "the next login: upstream's colour scheme" 'scheme\.user=prefer-dark'
 
 probe abortsafe "$CMDLINE_PLAIN" APEX_SHELL_TEST_FAULT=abort-after-enable APEX_SHELL_SAFE=1 PROBE_ENABLE=1 PROBE_WAIT=8
 rc_is "FAULT=abort-after-enable in safe mode: no layer, no fault" 0
+
+probe switch "$CMDLINE_PLAIN" APEX_SHELL_TEST_FAULT=enable PROBE_ENABLE=1 PROBE_SWITCH=3
+rc_is "layer-enabled cycles: the shell goes on" 0
+for cycle in 1 2 3; do
+    fact "cycle $cycle: layer-enabled=false gives stock hooks and the stock colour scheme" \
+        "switch\.$cycle\.false=safe=true scheme=prefer-dark witness=stock"
+    fact "cycle $cycle: layer-enabled=true gives the layer back" \
+        "switch\.$cycle\.true=safe=false scheme=prefer-light witness=enabled"
+done
+count_is "layer-enabled cycles: each switch restyles the shell once" '^probe: restyled$' 6
+count_is "layer-enabled cycles: each says which shell" 'Apex: layer-enabled is false: the stock shell' 3
+count_is "layer-enabled cycles: the features enable again each time" 'Apex: feature witness enabled' 4
+count_is "layer-enabled cycles: a feature that failed at enable stays off for the session" 'Apex: feature fault off for this session' 1
+lacks "layer-enabled cycles: every feature disables cleanly" 'did not disable cleanly|cannot restyle'
+
+probe offswitch "$CMDLINE_PLAIN" PROBE_LAYER_OFF=1 PROBE_SWITCH=1
+fact "a session that starts with layer-enabled=false stays stock when it turns true" \
+    'switch\.1\.true=safe=true scheme=prefer-dark witness=stock'
+lacks "and nothing restyles it" '^probe: restyled$'
 
 probe bogus "$CMDLINE_PLAIN" APEX_SHELL_TEST_FAULT=everything PROBE_ENABLE=1
 rc_is "FAULT=everything: runs" 0

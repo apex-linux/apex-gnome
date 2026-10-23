@@ -20,7 +20,8 @@ readonly APEX_DARK_SHEET=resource:///org/gnome/shell/theme/gnome-shell-dark.css
 readonly STOCK_SHEETS=resource:///org/gnome/shell/theme/stock
 readonly FEDORA_SHEETS=resource:///org/gnome/shell/theme
 readonly DIRECT_CASES=(default default-scale1 dark-style stock-light stock-dark safe-env layer-disabled
-    fault-configure fault-enable fault-abort kernel-safe fedora-light fedora-dark)
+    layer-cycles fault-configure fault-enable fault-abort kernel-safe fedora-light fedora-dark)
+readonly DIRECT_PARTS=(main kernel fedora)
 readonly CAPTURE_CASES=(default default-scale1 dark-style stock-light stock-dark fedora-light fedora-dark)
 readonly SCENES=(desktop overview)
 readonly STOCK_MAX_THUMBNAIL_SCALE=0.05
@@ -33,6 +34,14 @@ readonly TODAY_INACTIVE_DOT_SIZE=5.25
 readonly TODAY_INACTIVE_DOT_OPACITY=0.5
 readonly TODAY_CLOCK_TEXT_GAP=7.04
 readonly TODAY_CLOCK_PILL_EXTRA=13
+readonly LAYER_CYCLES=3
+# direct.sh's G2_CLOCK, in UTC; the clock shows it as date, EN SPACE, 24-hour time.
+readonly FIXED_CLOCK=2026-09-28T09:41:00Z
+readonly FIXED_CLOCK_TEXT='Sep 28\u200209:41'
+readonly BATTERY_PERCENT=87
+readonly WIFI_GLYPH=network-wireless-signal-excellent-symbolic
+readonly BATTERY_GLYPH=battery-level-80-symbolic
+readonly BLUETOOTH_GLYPH=bluetooth-active-symbolic
 readonly ALWAYS_LOADED_USER_UNIT=default.target
 readonly APEX_UNIT_STARTED='(Starting|Started) [^ ]*[Aa]pex|Activating service name=.[^ ]*[Aa]pex'
 
@@ -71,7 +80,7 @@ no_late_start() {
 
 no_apex_failure() {
     local label=$1 log=$2
-    local failure='Apex: (the layer did not load|hook .* threw|enable failed|feature .* off for this session)'
+    local failure='Apex: (the layer did not load|hook .* threw|enable failed|feature .* off for this session|feature .* did not disable cleanly|cannot restyle)'
     if grep -Eq "$failure" "$log"; then
         fail "$label: an Apex failure is logged: $(grep -Em1 "$failure" "$log")"
     else
@@ -210,6 +219,10 @@ top_bar() {
         '.topBar.status.pill.spacing' 'px_is($t.apex_bar_status_gap)'
     "${metric[@]}" 'its glyphs are $apex_bar_icon_size' \
         '.topBar.statusGlyphs' 'length > 0 and all(.iconSize | px_is($t.apex_bar_icon_size))'
+    "${metric[@]}" "it shows the fixtures' Wi-Fi at full signal ($WIFI_GLYPH) and their battery ($BATTERY_GLYPH)" \
+        '.topBar.statusGlyphs | map(.name)' "index([\"$WIFI_GLYPH\"]) != null and index([\"$BATTERY_GLYPH\"]) != null"
+    "${metric[@]}" "and the battery's $BATTERY_PERCENT% at \$apex_font_bar_percentage_size in \$apex_bar_fg" \
+        '.topBar.statusLabels' "length == 1 and (.[0] | .text == \"$BATTERY_PERCENT%\" and (.font.size | px_is(\$t.apex_font_bar_percentage_size)) and (.foreground | colour_is(\$t.apex_bar_fg)))"
     "${metric[@]}" 'on the lock screen and the greeter, upstream'"'"'s hover fill of the status button is centred on its pill' \
         '.topBar.lockScreen | {fill: .statusHover, left: (.status.pill.x - .status.x), right: (.status.x + .status.width - .status.pill.x - .status.pill.width)}' \
         '(.fill.boxShadow.inset == true or (.fill.background | rgba | .[3] > 0)) and ((.left - .right) | fabs <= 0.5)'
@@ -239,6 +252,8 @@ top_bar_today() {
         '.topBar.corner' '.name == "panelActivities" and .x == 0 and .y == 0'
     "${metric[@]}" 'Do Not Disturb adds stock'"'"'s notifications-disabled-symbolic to the status pill' \
         '.topBar.dnd' '(.off | type == "array") and (.on - .off) == ["notifications-disabled-symbolic"]'
+    "${metric[@]}" "the fixtures' connected Keychron K3 adds stock's $BLUETOOTH_GLYPH to the status pill" \
+        '.topBar.statusGlyphs | map(.name)' "index([\"$BLUETOOTH_GLYPH\"]) != null"
     "${metric[@]}" 'the left box holds the Activities pill alone' \
         '.topBar.leftItems | map(.accessibleName)' '. == ["Activities"]'
     "${metric[@]}" 'the right box has no search button' \
@@ -277,6 +292,8 @@ top_bar_gaps() {
         '.topBar.corner' '.x == 0 and .y == 0 and (.width | px_is("4px")) and (.height | px_is("4px"))'
     known_gap "$patch0010" "${metric[@]}" 'the status pill keeps only its own glyphs: Do Not Disturb adds none' \
         '.topBar.dnd' '(.off | type == "array") and .on == .off'
+    known_gap "$patch0010" "${metric[@]}" 'the status pill shows network, volume and battery only: a connected Bluetooth keyboard adds no glyph' \
+        '.topBar.statusGlyphs | map(.name)' "length > 0 and index([\"$BLUETOOTH_GLYPH\"]) == null"
     known_gap "$layer" "${metric[@]}" 'the focused-app name follows the Activities pill: "Desktop" at $apex_font_bar_emphasis_weight while nothing has focus' \
         '.topBar.leftItems | .[1].label' '.text == "Desktop" and .weight == ($t.apex_font_bar_emphasis_weight | tonumber)'
     known_gap "$layer" "${metric[@]}" 'the right box holds the search button: a 32 x $apex_bar_pill_height pill, radius $apex_radius_bar_pill, named "Search"' \
@@ -316,8 +333,8 @@ compare_with_fedora() {
         for scene in "${SCENES[@]}"; do
             plan_entry "apex-light-vs-fedora-$scene" "$run" fedora-light "$run" default "$scene" "$run/compare" panel
             plan_entry "apex-dark-vs-fedora-$scene" "$run" fedora-dark "$run" dark-style "$scene" "$run/compare" panel
-            plan_entry "safe-light-vs-fedora-$scene" "$run" fedora-light "$run" stock-light "$scene" "$run/compare" clock
-            plan_entry "safe-dark-vs-fedora-$scene" "$run" fedora-dark "$run" stock-dark "$scene" "$run/compare" clock
+            plan_entry "safe-light-vs-fedora-$scene" "$run" fedora-light "$run" stock-light "$scene" "$run/compare"
+            plan_entry "safe-dark-vs-fedora-$scene" "$run" fedora-dark "$run" stock-dark "$scene" "$run/compare"
         done
     } | jq -s . >"$plan"
     compare_and_expect_equal "$plan" "$results"
@@ -383,6 +400,48 @@ same_stock_sheet() {
     fi
 }
 
+fixtures_on_the_bus() {
+    local run=$1 part fixtures
+    for part in "${DIRECT_PARTS[@]}"; do
+        fixtures=$(report_of "$run/fixtures-$part.txt" G2-FIXTURES)
+        expect "fixtures ($part)" "$fixtures" ".battery | .present and .onBattery and .percentage == $BATTERY_PERCENT" \
+            "UPower's display device: a battery at $BATTERY_PERCENT %, discharging"
+        expect "fixtures ($part)" "$fixtures" '.wifi | .primary == "Apex-5G" and .ssid == "Apex-5G" and .strength >= 80 and .state == 70 and .connectivity == 4' \
+            "NetworkManager: the primary connection is Wi-Fi \"Apex-5G\" at full signal, connected globally"
+        expect "fixtures ($part)" "$fixtures" '.keyboard | .alias == "Keychron K3" and .connected and .icon == "input-keyboard"' \
+            "BlueZ: the keyboard \"Keychron K3\" is connected"
+    done
+}
+
+fixed_clock() {
+    local label=$1 log=$2
+    expect_report "$label" "$log" ".clock.now == \"$FIXED_CLOCK\"" "the wall clock stands at $FIXED_CLOCK (libfaketime)"
+    expect_report "$label" "$log" ".clock.text == \"$FIXED_CLOCK_TEXT\"" "and the top bar's clock shows it"
+}
+
+# shellcheck disable=SC2016 # jq programs
+layer_cycles() {
+    local run=$1 f=$1/layer-cycles.log cycles turns
+    exits "$run" layer-cycles 0
+    apex_light layer-cycles "$f"
+    no_apex_failure layer-cycles "$f"
+    cycles=$(report_of "$f" APEXG2-CYCLES)
+    turns=$(jq -nc --argjson n "$LAYER_CYCLES" '[true] + ([range($n) | false, true])')
+    expect layer-cycles "$cycles" ".error == null and [.states[].layerEnabled] == $turns" \
+        "layer-enabled turned off and on $LAYER_CYCLES times in one shell, each state measured"
+    expect layer-cycles "$cycles" "[.states[] | select(.layerEnabled | not)] | length == $LAYER_CYCLES and all(.stylesheet == \"$STOCK_SHEETS/gnome-shell-dark.css\" and .markers == [] and .safe and .sessionColorScheme == \"prefer-dark\" and .variant == \"dark\" and (.markerColor | (colour_is(\"#16161a\") or colour_is(\"#f6f6f8\")) | not))" \
+        "while it is off: upstream's dark sheet from theme/stock/, the stock colour scheme, every hook stock"
+    expect layer-cycles "$cycles" "[.states[] | select(.layerEnabled)] | length == $LAYER_CYCLES + 1 and all(.stylesheet == \"$APEX_LIGHT_SHEET\" and .markers == [\"light\"] and (.safe | not) and .sessionColorScheme == \"prefer-light\" and .variant == \"light\" and (.markerColor | colour_is(\"#16161a\")))" \
+        "while it is on: the Apex light sheet, prefer-light, the light bar token (#16161a)"
+    expect layer-cycles "$cycles" '[.states[] | select(.layerEnabled) | .actors] | length > 1 and (unique | length) == 1' \
+        "nothing left behind: each time it is on, the stage holds the same actors, type by type, as at startup"
+    expect layer-cycles "$cycles" '[.states[] | select(.layerEnabled | not) | .actors] | length > 1 and (unique | length) == 1' \
+        "and each time it is off, the same as the first time"
+    check "layer-cycles: the layer logs each switch ($LAYER_CYCLES x off, $LAYER_CYCLES x on)" bash -c \
+        "[[ \$(grep -c 'Apex: layer-enabled is false: the stock shell' '$f') == $LAYER_CYCLES && \$(grep -c 'Apex: layer-enabled is true: the Apex shell' '$f') == $LAYER_CYCLES ]]"
+    check "layer-cycles: the marker is removed at shutdown" grep -q '^layer-cycles .*marker-after-exit=no' "$run/results-main.txt"
+}
+
 direct_cases() {
     local run=$1 c f
     echo "# the direct cases: $(grep -m1 -E '^gnome-shell-[0-9]' "$run/rpm.txt" 2>/dev/null)"
@@ -397,9 +456,11 @@ direct_cases() {
         no_js_error "$c" "$f"
         no_late_start "$c" "$f"
         # fault-abort may abort before its report; its exit status says the shell ran.
-        [[ $c == fault-abort ]] ||
-            expect_report "$c" "$f" '.mode == "user"' "the probe ran: the static import graph loaded"
+        [[ $c == fault-abort ]] && continue
+        expect_report "$c" "$f" '.mode == "user"' "the probe ran: the static import graph loaded"
+        fixed_clock "$c" "$f"
     done
+    fixtures_on_the_bus "$run"
 
     f=$run/default.log
     exits "$run" default 0
@@ -454,6 +515,8 @@ direct_cases() {
     expect_report layer-disabled "$f" '.layerEnabled == false' "the user's layer-enabled is false"
     stock_view layer-disabled "$f" dark
     stock_scheme layer-disabled "$f"
+
+    layer_cycles "$run"
 
     f=$run/kernel-safe.log
     check "kernel-safe: /proc/cmdline carries apex.safe=1" grep -qw 'apex.safe=1' "$run/cmdline-kernel.txt"

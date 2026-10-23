@@ -23,8 +23,8 @@ globalThis.global = {
 
 const schema = Gio.SettingsSchemaSource.get_default()?.lookup(
     'io.github.apex_linux.Apex.Desktop', true);
-if (schema) {
-    const settings = new Gio.Settings({settings_schema: schema});
+const settings = schema ? new Gio.Settings({settings_schema: schema}) : null;
+if (settings) {
     if (GLib.getenv('PROBE_LAYER_OFF') === '1')
         settings.set_boolean('layer-enabled', false);
     const disabled = GLib.getenv('PROBE_DISABLED');
@@ -41,6 +41,29 @@ const layer = await Hooks.loadLayer(() => import(layerUrl));
 fact('layer', layer ? 'loaded' : 'null');
 
 const stock = {colorScheme: 'prefer-dark', hasOverview: true};
+
+function spin(ms) {
+    const loop = new GLib.MainLoop(null, false);
+    GLib.timeout_add(GLib.PRIORITY_DEFAULT, ms, () => {
+        loop.quit();
+        return GLib.SOURCE_REMOVE;
+    });
+    loop.run();
+}
+
+// The layer reacts to changed::layer-enabled from the main loop, and restyles after an import.
+function switchLayer() {
+    const cycles = Number(GLib.getenv('PROBE_SWITCH') ?? '0');
+    for (let cycle = 1; cycle <= cycles; cycle++) {
+        for (const on of [false, true]) {
+            settings.set_boolean('layer-enabled', on);
+            spin(200);
+            fact(`switch.${cycle}.${on}`, `safe=${Hooks.safe()} ` +
+                `scheme=${Hooks.value('session-mode', {...stock}, 'user').colorScheme} ` +
+                `witness=${Hooks.value('test-witness', 'stock')}`);
+        }
+    }
+}
 for (const mode of ['user', 'unlock-dialog', 'gdm', 'initial-setup']) {
     const params = Hooks.value('session-mode', {...stock}, mode);
     fact(`scheme.${mode}`, `${params.colorScheme}${params.hasOverview ? '' : ' (params lost)'}`);
@@ -71,10 +94,13 @@ if (layer && GLib.getenv('PROBE_ENABLE') === '1') {
         loop.run();
         fact('survived', `${waitSeconds}s`);
     }
+    switchLayer();
     for (const [signal, fn] of [...handlers.values()]) {
         if (signal === 'shutdown')
             fn();
     }
     fact('starting-file.after-shutdown', GLib.file_test(marker, GLib.FileTest.EXISTS));
 }
+if (!layer && settings)
+    switchLayer();
 fact('done', 'yes');

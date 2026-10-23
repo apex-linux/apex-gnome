@@ -7,9 +7,12 @@ usage() {
 usage: tests/shots/selftest.sh
 
 G2's own logic, without a VM or an image: png.js and compare.js, the token file as
-assert.sh reads it, and the top-bar assertions against reports built from the tokens.
-Needs gjs and jq (without them it skips, or fails with APEX_SHOTS_TESTS_NO_SKIP=1), and
-GdkPixbuf for png.js's cross-check against libpng. Output is TAP.
+assert.sh reads it, the top-bar, clock and layer-cycle assertions against reports built
+for them, and fixtures.py on a private bus, read back through libnm, gnome-bluetooth and
+UPower's D-Bus API as the shell reads them. Needs gjs and jq (without them it skips, or
+fails with APEX_SHOTS_TESTS_NO_SKIP=1), GdkPixbuf for png.js's cross-check against
+libpng, and for the fixtures dbus-daemon, python3-dbusmock and the NM and GnomeBluetooth
+typelibs. Output is TAP.
 EOF
 }
 
@@ -44,7 +47,7 @@ for tool in gjs jq; do
 done
 
 T=$(mktemp -d "${TMPDIR:-/tmp}/apex-shots-test.XXXXXX")
-trap 'rm -rf "$T"' EXIT
+trap 'kill "$(head -n 1 "$T/bus.pid" 2>/dev/null)" 2>/dev/null; rm -rf "$T"' EXIT
 # shellcheck source=tests/shots/lib.sh
 . "$HERE/lib.sh"
 
@@ -152,6 +155,8 @@ REPORT_OF_A_BAR_DRAWN_FROM_TOKENS='
 | ($t.apex_bar_dot_size | px) as $dot | ($t.apex_radius_workspace_dot | px) as $dot_radius
 | ($t.apex_bar_clock_gap | px) as $clock_gap | ($t.apex_bar_clock_dot_size | px) as $clock_dot
 | ($t.apex_bar_icon_size | px) as $icon | ($t.apex_font_bar_size | px) as $text_size
+| ["bluetooth-active-symbolic", "network-wireless-signal-excellent-symbolic", "battery-level-80-symbolic"] as $glyphs
+| ($glyphs | map({name: ., width: $icon, height: $icon, iconSize: $icon})) as $glyph_sizes
 | {height: ($t.apex_bar_pill_height | px), radius: ($t.apex_radius_bar_pill | px), background: "#00000000",
    hover: {background: $hover}, checked: {background: $hover}, padding: {left: $pp, right: $pp}} as $pill
 | {height: $h, foreground: $fg} as $button
@@ -167,13 +172,14 @@ REPORT_OF_A_BAR_DRAWN_FROM_TOKENS='
         label: {font: ($font + {weight: ($t.apex_font_bar_emphasis_weight | tonumber)}), foreground: $fg}}),
     status: ($button + {x: (1440 - $pad - 90), width: (90 + $pad),
         pill: ($pill + {x: (1440 - $pad - 90), width: 90, spacing: ($t.apex_bar_status_gap | px)})}),
-    statusGlyphs: [{name: "system-shutdown-symbolic", width: $icon, height: $icon, iconSize: $icon}],
+    statusGlyphs: $glyph_sizes,
+    statusLabels: [{text: "87%", font: ($font + {size: ($t.apex_font_bar_percentage_size | px)}), foreground: $fg}],
     accent: "#3584e4ff",
     lockScreen: {status: {x: 1342, width: 98, pill: {x: 1342, width: 98}},
         statusHover: {background: "#00000000", boxShadow: {color: "#ffffff2b", inset: true, x: 0, y: 0, blur: 0, spread: 100}}},
     largeText: {textScalingFactor: 1.25, barHeight: $h, clockPillHeight: ($t.apex_bar_pill_height | px),
         clockText: {size: (1.25 * $text_size), weight: ($t.apex_font_bar_emphasis_weight | tonumber), height: 24, naturalHeight: 21},
-        statusGlyphs: [{name: "system-shutdown-symbolic", width: $icon, height: $icon, iconSize: $icon}]},
+        statusGlyphs: $glyph_sizes},
     diamond: {box: {x: 16, y: 8, width: 60, height: 48}, colour: $fg, inkPixels: 180},
     dots: [{active: true, x: 38, y: 12.5, width: 25, height: $dot, opacity: 1, radius: $dot_radius},
            {active: false, x: 68.875, y: 13.375, width: 5.25, height: 5.25, opacity: 0.498, radius: $dot_radius}],
@@ -183,7 +189,7 @@ REPORT_OF_A_BAR_DRAWN_FROM_TOKENS='
     clockTextGap: 7.041,
     clockShowsWeekday: false,
     corner: {name: "panelActivities", type: "ActivitiesButton", x: 0, y: 0, width: 84, height: $h},
-    dnd: {off: ["system-shutdown-symbolic"], on: ["notifications-disabled-symbolic", "system-shutdown-symbolic"]},
+    dnd: {off: $glyphs, on: (["notifications-disabled-symbolic"] + $glyphs)},
     leftItems: [{accessibleName: "Activities", label: null, pill: {x: $pad, y: 4, width: 76, height: 24, radius: 12}}],
     rightItems: [{accessibleName: "System", label: null, pill: {x: 1337, y: 4, width: 95, height: 24, radius: 12}}],
     opaque: {error: "io.github.apex_linux.Apex.Desktop has no translucent-top-bar key"},
@@ -197,6 +203,7 @@ GAP_CLOSERS='the active dot at 22|.topBar.dots[0].width = 22
 inactive dots at full size and .45|.topBar.dots[1] |= (.width = 7 | .height = 7 | .opacity = 0.451)
 the hot-corner zone|.topBar.corner = {name: "hot-corner", type: "Actor", x: 0, y: 0, width: 4, height: 4}
 the status-pill filter|.topBar.dnd.on = .topBar.dnd.off
+no Bluetooth glyph|.topBar.statusGlyphs |= map(select(.name != "bluetooth-active-symbolic"))
 the focused-app name|.topBar.leftItems += [{accessibleName: "Desktop", label: {text: "Desktop", weight: 700}}]
 the search button|.topBar.rightItems |= [{accessibleName: "Search (Super+Space)", pill: {width: 32, height: 24, radius: 12}}] + .
 the solid bar|.topBar.opaque = {background: ($t.apex_bar_solid | hex), boxShadow: {color: ($t.apex_border | hex), inset: false, x: 0, y: 1, blur: 0, spread: 0}}
@@ -264,6 +271,11 @@ test_top_bar() {
 .topBar.largeText.clockText.naturalHeight = 30|Large Text that overflows the clock pill
 .topBar.largeText.barHeight = 35.2|a bar that grows with Large Text
 .topBar.largeText.clockText.size = 13.5|clock text that ignores Large Text
+del(.topBar.statusGlyphs[1])|no Wi-Fi glyph
+.topBar.statusGlyphs[2].name = "system-shutdown-symbolic"|the power glyph of a machine without a battery
+.topBar.statusLabels[0].text = "88%"|another battery percentage
+.topBar.statusLabels[0].font.size = 13.5|the percentage at the bar's text size
+.topBar.statusLabels = []|no percentage label
 CHANGES
     assert_run top_bar light '.monitorScale = 1 | .topBar.diamond.inkPixels = 16' >/dev/null
     expect_eq "top bar: at scale 1 a quarter of the diamond's stroke is 16 capture pixels" 0 "$(grep -c '^FAIL' "$T/top-bar.out")"
@@ -348,6 +360,184 @@ EOF
     fi
 }
 
+skip_or_fail() {
+    if [[ $NO_SKIP == 1 ]]; then
+        not_ok "$* (APEX_SHOTS_TESTS_NO_SKIP=1)"
+    else
+        tests=$((tests + 1))
+        printf 'ok %d # SKIP %s\n' "$tests" "$*"
+    fi
+}
+
+assertion_counts() {
+    # shellcheck disable=SC2016 # expanded by the inner bash
+    bash -c '. "$1/assert.sh"; "${@:3}" >"$2" 2>&1; echo "$npass $nfail"' _ "$HERE" "$T/assertions.out" "$@"
+}
+
+test_fixed_clock() {
+    local clock passes failures
+    # shellcheck disable=SC2016 # expanded by the inner bash
+    clock=$(bash -c '. "$1/assert.sh"; echo "$FIXED_CLOCK"' _ "$HERE")
+    expect_eq "clock: assert.sh expects the time direct.sh gives libfaketime" "$clock" \
+        "$(sed -n "s/^readonly G2_CLOCK='\([0-9-]*\) \([0-9:]*\)'\$/\1T\2Z/p" "$HERE/direct.sh")"
+    while IFS='|' read -r failures what clock; do
+        printf 'APEXG2 %s\n' "$clock" >"$T/clock.log"
+        read -r passes _ <<<"$(assertion_counts fixed_clock case "$T/clock.log")"
+        expect_eq "clock: $what fails $failures of 2" "$failures" $((2 - passes))
+    done <<'CLOCKS'
+0|the fixed time, as G2's 24-hour clock shows it,|{"clock": {"now": "2026-09-28T09:41:00Z", "text": "Sep 28\u200209:41"}}
+1|a plain space for the EN SPACE|{"clock": {"now": "2026-09-28T09:41:00Z", "text": "Sep 28 09:41"}}
+1|a shell that missed libfaketime|{"clock": {"now": "2026-10-23T14:02:11Z", "text": "Sep 28\u200209:41"}}
+2|a shell without FAKETIME|{"clock": null}
+CLOCKS
+}
+
+# shellcheck disable=SC2016 # a jq program
+CYCLES_REPORT='
+{actors: {ClutterStage: 1, StWidget: 420, StLabel: 96, StIcon: 61}} as $census
+| ({stylesheet: "resource:///org/gnome/shell/theme/gnome-shell-light.css", markers: ["light"], markerColor: "#16161aff",
+   sessionColorScheme: "prefer-light", variant: "light", safe: false} + $census) as $on
+| ({stylesheet: "resource:///org/gnome/shell/theme/stock/gnome-shell-dark.css", markers: [], markerColor: "#ffffffff",
+   sessionColorScheme: "prefer-dark", variant: "dark", safe: true} + $census) as $off
+| {cycles: 3, states: ([$on + {layerEnabled: true}]
+    + [range(1; 4) as $c | ($off + {cycle: $c, layerEnabled: false}), ($on + {cycle: $c, layerEnabled: true})])}'
+readonly APEX_LIGHT_REPORT='{"mode": "user", "stylesheet": "resource:///org/gnome/shell/theme/gnome-shell-light.css", "sheet": {"markers": ["light"], "apexRule": true}, "markerColor": "#16161a", "colorSchemeSetting": "default", "sessionColorScheme": "prefer-light", "variant": "light", "safe": false}'
+
+write_cycles_run() {
+    local change=$1 dir=$T/cycles
+    rm -rf "$dir" && mkdir -p "$dir"
+    {
+        printf 'APEXG2 %s\n' "$APEX_LIGHT_REPORT"
+        printf 'Apex: layer-enabled is %s\n' 'false: the stock shell' 'true: the Apex shell' 'false: the stock shell' \
+            'true: the Apex shell' 'false: the stock shell' 'true: the Apex shell'
+        printf 'APEXG2-CYCLES %s\n' "$(jq -nc "$CYCLES_REPORT | $change")"
+    } >"$dir/layer-cycles.log"
+    echo 'layer-cycles exit=0 secs=31 marker-after-exit=no' >"$dir/results-main.txt"
+}
+
+test_layer_cycles() {
+    local change what passes failures all
+    write_cycles_run .
+    read -r all failures <<<"$(assertion_counts layer_cycles "$T/cycles")"
+    if ((failures == 0 && all > 10)); then
+        ok "layer cycles: three clean off-and-on cycles pass all $all assertions"
+    else
+        not_ok "layer cycles: three clean cycles pass (passed/failed $all/$failures): $(grep -m3 '^FAIL' "$T/assertions.out" | paste -sd'|' -)"
+    fi
+    while IFS='|' read -r change what; do
+        write_cycles_run "$change"
+        read -r passes failures <<<"$(assertion_counts layer_cycles "$T/cycles")"
+        expect_eq "layer cycles: $what fails one assertion" "$((all - 1))/1" "$passes/$failures"
+    done <<'CHANGES'
+.states[3].stylesheet = "resource:///org/gnome/shell/theme/gnome-shell-light.css"|the Apex sheet while the layer is off
+.states[3].safe = false|a hook that keeps its provider while the layer is off
+.states[4].sessionColorScheme = "prefer-dark"|the stock colour scheme after the layer is back
+.states[6].actors.StWidget += 1|an actor left behind by a cycle
+.states[5].actors.StIcon -= 1|an actor the stock shell loses
+CHANGES
+    write_cycles_run '.states[5].layerEnabled = true'
+    read -r passes failures <<<"$(assertion_counts layer_cycles "$T/cycles")"
+    if ((failures >= 1)); then ok "layer cycles: a switch that did not reach the shell fails"; else not_ok "layer cycles: a switch that did not reach the shell fails"; fi
+    write_cycles_run .
+    sed -i '0,/true: the Apex shell/{/true: the Apex shell/d}' "$T/cycles/layer-cycles.log"
+    read -r passes failures <<<"$(assertion_counts layer_cycles "$T/cycles")"
+    expect_eq "layer cycles: a switch the layer did not log fails one assertion" "$((all - 1))/1" "$passes/$failures"
+}
+
+fixtures_report() {
+    local part
+    for part in main kernel fedora; do
+        printf '%s\n' "$1" >"$T/fixtures/fixtures-$part.txt"
+    done
+}
+
+# What the shell's indicators read: network.js through libnm, bluetooth.js through
+# gnome-bluetooth, system.js the display device's properties.
+write_fixture_reader() {
+    cat >"$T/read-fixtures.js" <<'EOF'
+import Gio from 'gi://Gio';
+import GLib from 'gi://GLib';
+import NM from 'gi://NM';
+import GnomeBluetooth from 'gi://GnomeBluetooth?version=3.0';
+
+const nm = NM.Client.new(null);
+const primary = nm.get_primary_connection();
+const ap = primary?.get_devices()[0]?.get_active_access_point();
+const upower = Gio.DBusProxy.new_for_bus_sync(Gio.BusType.SYSTEM, Gio.DBusProxyFlags.NONE, null,
+    'org.freedesktop.UPower', '/org/freedesktop/UPower/devices/DisplayDevice', 'org.freedesktop.UPower.Device', null);
+const bluetooth = new GnomeBluetooth.Client();
+const loop = new GLib.MainLoop(null, false);
+GLib.timeout_add(GLib.PRIORITY_DEFAULT, 1000, () => {
+    const devices = bluetooth.get_devices();
+    const connected = [];
+    for (let i = 0; i < devices.get_n_items(); i++) {
+        if (devices.get_item(i).connected)
+            connected.push(devices.get_item(i).alias);
+    }
+    print(JSON.stringify({
+        wifi: {id: primary?.get_id() ?? null, strength: ap?.get_strength() ?? null,
+            full: nm.connectivity === NM.ConnectivityState.FULL, wireless: nm.wireless_enabled},
+        battery: {present: upower.get_cached_property('IsPresent')?.unpack() ?? null,
+            percentage: upower.get_cached_property('Percentage')?.unpack() ?? null},
+        connectedBluetooth: connected,
+    }));
+    loop.quit();
+    return GLib.SOURCE_REMOVE;
+});
+loop.run();
+EOF
+}
+
+start_private_system_bus() {
+    cat >"$T/bus.conf" <<EOF
+<busconfig>
+  <type>system</type>
+  <listen>unix:dir=$T</listen>
+  <auth>EXTERNAL</auth>
+  <policy context="default"><allow send_destination="*" eavesdrop="true"/><allow eavesdrop="true"/><allow own="*"/></policy>
+</busconfig>
+EOF
+    dbus-daemon --config-file="$T/bus.conf" --fork --print-address=3 --print-pid=4 3>"$T/bus.address" 4>"$T/bus.pid"
+}
+
+test_fixtures() {
+    local passes failures address missing=()
+    mkdir -p "$T/fixtures"
+    fixtures_report 'G2-FIXTURES {"battery": {"percentage": 87.0, "present": true, "onBattery": true}, "wifi": {"primary": "Apex-5G", "ssid": "Apex-5G", "strength": 90, "state": 70, "connectivity": 4}, "keyboard": {"alias": "Keychron K3", "connected": true, "icon": "input-keyboard"}}'
+    read -r passes failures <<<"$(assertion_counts fixtures_on_the_bus "$T/fixtures")"
+    expect_eq "fixtures: what fixtures.py reports passes each part's three assertions" "9/0" "$passes/$failures"
+    fixtures_report 'G2-FIXTURES {"battery": {"percentage": 0.0, "present": false, "onBattery": false}, "wifi": {"primary": "Apex-5G", "ssid": "Apex-5G", "strength": 30, "state": 70, "connectivity": 4}, "keyboard": {"alias": "Keychron K3", "connected": false, "icon": "phone"}}'
+    read -r passes failures <<<"$(assertion_counts fixtures_on_the_bus "$T/fixtures")"
+    expect_eq "fixtures: no battery, a weak signal and a keyboard left unconnected fail all three" "0/9" "$passes/$failures"
+    fixtures_report 'fixtures.py: no owner for org.bluez after 20 s'
+    read -r passes failures <<<"$(assertion_counts fixtures_on_the_bus "$T/fixtures")"
+    expect_eq "fixtures: a fixtures.py that failed fails them" "0/9" "$passes/$failures"
+
+    command -v dbus-daemon >/dev/null 2>&1 || missing+=(dbus-daemon)
+    python3 -c 'import dbusmock' >/dev/null 2>&1 || missing+=(python3-dbusmock)
+    gjs -c "imports.gi.versions.GnomeBluetooth = '3.0'; imports.gi.NM; imports.gi.GnomeBluetooth" >/dev/null 2>&1 ||
+        missing+=('the NM and GnomeBluetooth 3.0 typelibs')
+    if ((${#missing[@]})); then
+        skip_or_fail "fixtures: fixtures.py on a private bus needs ${missing[*]}"
+        return
+    fi
+    start_private_system_bus
+    address=$(head -n 1 "$T/bus.address")
+    rm -rf "$T/fixtures" && mkdir -p "$T/fixtures"
+    DBUS_SYSTEM_BUS_ADDRESS=$address python3 "$HERE/fixtures.py" "$T/fixtures" >"$T/fixtures/fixtures-main.txt" 2>&1 || true
+    cp "$T/fixtures/fixtures-main.txt" "$T/fixtures/fixtures-kernel.txt"
+    cp "$T/fixtures/fixtures-main.txt" "$T/fixtures/fixtures-fedora.txt"
+    read -r passes failures <<<"$(assertion_counts fixtures_on_the_bus "$T/fixtures")"
+    expect_eq "fixtures: fixtures.py on a private bus passes the fixture assertions" "9/0" "$passes/$failures"
+    write_fixture_reader
+    expect_eq "fixtures: libnm, gnome-bluetooth and UPower's display device read them as the shell does" \
+        '{"wifi":{"id":"Apex-5G","strength":90,"full":true,"wireless":true},"battery":{"present":true,"percentage":87},"connectedBluetooth":["Keychron K3"]}' \
+        "$(DBUS_SYSTEM_BUS_ADDRESS=$address gjs -m "$T/read-fixtures.js" 2>"$T/read-fixtures.err")"
+    local -a pids
+    mapfile -t pids < <(cat "$T/bus.pid" "$T"/fixtures/fixture-*.pid 2>/dev/null)
+    kill "${pids[@]}" 2>/dev/null || true
+}
+
 test_png_js
 test_compare_js
 test_incomplete_compare
@@ -355,6 +545,9 @@ test_token_file
 test_top_bar
 test_today_pins
 test_known_gaps
+test_fixed_clock
+test_layer_cycles
+test_fixtures
 
 printf '1..%d\n' "$tests"
 ((failed == 0))

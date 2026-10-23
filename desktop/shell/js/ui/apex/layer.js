@@ -19,6 +19,8 @@ const CRASH_GUARD_MARKER = 'apex-shell-starting';
 const CRASH_GUARD_WINDOW_SECONDS = 60;
 
 const _features = [];
+let _settings = null;
+let _on = false;
 
 function _sessionMode(params, mode) {
     return LIGHT_SESSION_MODES.has(mode) ? {...params, colorScheme: 'prefer-light'} : params;
@@ -50,6 +52,7 @@ async function _configureFeature(name) {
 }
 
 export async function configure(settings) {
+    _settings = settings;
     Hooks.provide('core', 'session-mode', _sessionMode);
 
     const disabled = new Set(settings.get_strv('disabled-features'));
@@ -87,21 +90,62 @@ function _createCrashGuardMarker() {
     });
 }
 
+function _enableFeatures() {
+    for (const {name, feature} of [..._features]) {
+        try {
+            feature.enable?.();
+            console.log(`Apex: feature ${name} enabled`);
+        } catch (e) {
+            _features.splice(_features.findIndex(f => f.name === name), 1);
+            Hooks.withdraw(name);
+            console.error(`Apex: feature ${name} off for this session (enable: ${e})`);
+            try {
+                feature.disable?.();
+            } catch {}
+        }
+    }
+    _on = true;
+}
+
+function _disableFeatures() {
+    _on = false;
+    for (const {name, feature} of [..._features].reverse()) {
+        try {
+            feature.disable?.();
+        } catch (e) {
+            console.error(`Apex: feature ${name} did not disable cleanly: ${e}`);
+        }
+    }
+}
+
+// Only _sync recomputes the session mode's colour scheme and makes main.js reload its
+// stylesheet, which hooks.safe() now picks.
+async function _restyle() {
+    try {
+        const Main = await import('../main.js');
+        Main.sessionMode._sync();
+    } catch (e) {
+        console.error(`Apex: cannot restyle the shell: ${e}`);
+    }
+}
+
+async function _followLayerEnabled() {
+    const on = _settings.get_boolean('layer-enabled');
+    if (on === _on)
+        return;
+    console.log(`Apex: layer-enabled is ${on}: the ${on ? 'Apex' : 'stock'} shell`);
+    if (on)
+        _enableFeatures();
+    else
+        _disableFeatures();
+    await _restyle();
+}
+
 export function enable() {
     try {
         _createCrashGuardMarker();
-        for (const {name, feature} of _features) {
-            try {
-                feature.enable?.();
-                console.log(`Apex: feature ${name} enabled`);
-            } catch (e) {
-                Hooks.withdraw(name);
-                console.error(`Apex: feature ${name} off for this session (enable: ${e})`);
-                try {
-                    feature.disable?.();
-                } catch {}
-            }
-        }
+        _enableFeatures();
+        _settings.connect('changed::layer-enabled', () => _followLayerEnabled());
     } catch (e) {
         console.error(`Apex: enable failed: ${e}`);
     }
