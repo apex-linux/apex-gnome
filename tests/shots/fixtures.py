@@ -1,0 +1,159 @@
+#!/usr/bin/python3
+# SPDX-License-Identifier: GPL-3.0-or-later
+"""usage: fixtures.py LOG_DIR
+
+G2's python-dbusmock fixtures on the system bus (DBUS_SYSTEM_BUS_ADDRESS, or the
+default): UPower with a battery at 87 %, NetworkManager on the Wi-Fi network
+"Apex-5G", and BlueZ with the Bluetooth keyboard "Keychron K3" connected. The
+mocks keep running after this exits; each logs to LOG_DIR/fixture-NAME.log and leaves
+its pid in LOG_DIR/fixture-NAME.pid.
+Prints one line, G2-FIXTURES and what the bus then reports, as JSON.
+"""
+
+import json
+import subprocess
+import sys
+import time
+
+import dbus
+
+MOCK_IFACE = "org.freedesktop.DBus.Mock"
+READY_TIMEOUT_S = 20
+
+BATTERY_PERCENT = 87.0
+BATTERY_SECONDS_TO_EMPTY = 4 * 3600 + 21 * 60
+BATTERY_ENERGY_FULL_WH = 72.0
+UPOWER_TYPE_BATTERY = 2
+UPOWER_STATE_DISCHARGING = 2
+UPOWER_WARNING_NONE = 1
+
+WIFI_SSID = "Apex-5G"
+WIFI_STRENGTH = 90
+WIFI_FREQUENCY_MHZ = 5180
+WIFI_RATE_KBPS = 866700
+NM_80211_MODE_INFRA = 2
+NM_80211_AP_SEC_KEY_MGMT_PSK = 0x100
+NM_DEVICE_STATE_ACTIVATED = 100
+NM_ACTIVE_CONNECTION_STATE_ACTIVATED = 2
+
+KEYBOARD_NAME = "Keychron K3"
+KEYBOARD_ADDRESS = "DC:2C:26:4B:33:01"
+BLUETOOTH_CLASS_KEYBOARD = 0x002540
+
+UPOWER = "org.freedesktop.UPower"
+NM = "org.freedesktop.NetworkManager"
+NM_PATH = "/org/freedesktop/NetworkManager"
+BLUEZ = "org.bluez"
+SERVICES = {"upower": UPOWER, "networkmanager": NM, "bluez5": BLUEZ}
+TEMPLATE_PARAMETERS = {"upower": {"DaemonVersion": "1.90", "OnBattery": True}}
+
+
+def spawn(log_dir):
+    for template, name in SERVICES.items():
+        log = open(f"{log_dir}/fixture-{template}.log", "w", encoding="utf-8")
+        mock = subprocess.Popen(
+            [sys.executable, "-m", "dbusmock", "--system", "--template", template,
+             "--parameters", json.dumps(TEMPLATE_PARAMETERS.get(template, {}))],
+            stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
+        log.close()
+        with open(f"{log_dir}/fixture-{template}.pid", "w", encoding="utf-8") as pid:
+            print(mock.pid, file=pid)
+    bus = dbus.SystemBus()
+    deadline = time.monotonic() + READY_TIMEOUT_S
+    while not all(bus.name_has_owner(name) for name in SERVICES.values()):
+        if time.monotonic() > deadline:
+            missing = [name for name in SERVICES.values() if not bus.name_has_owner(name)]
+            sys.exit(f"fixtures.py: no owner for {', '.join(missing)} after {READY_TIMEOUT_S} s")
+        time.sleep(0.1)
+    return bus
+
+
+class Service:
+    def __init__(self, bus, name):
+        self.bus = bus
+        self.name = name
+
+    def mock(self, path, interface=MOCK_IFACE):
+        return dbus.Interface(self.bus.get_object(self.name, path), interface)
+
+    def props(self, path):
+        return dbus.Interface(self.bus.get_object(self.name, path), dbus.PROPERTIES_IFACE)
+
+    # The clients start after this, so a property the template lacks needs no signal.
+    def put(self, path, interface, values):
+        known = self.props(path).GetAll(interface)
+        for key, value in values.items():
+            if key in known:
+                self.props(path).Set(interface, key, value)
+            else:
+                self.mock(path).AddProperty(interface, key, value)
+
+
+def battery(bus):
+    upower = Service(bus, UPOWER)
+    root = upower.mock("/org/freedesktop/UPower")
+    root.AddDischargingBattery("BAT0", "Battery", dbus.Double(BATTERY_PERCENT),
+                               dbus.Int64(BATTERY_SECONDS_TO_EMPTY))
+    energy = BATTERY_ENERGY_FULL_WH * BATTERY_PERCENT / 100
+    root.SetupDisplayDevice(
+        dbus.UInt32(UPOWER_TYPE_BATTERY), dbus.UInt32(UPOWER_STATE_DISCHARGING),
+        dbus.Double(BATTERY_PERCENT), dbus.Double(energy), dbus.Double(BATTERY_ENERGY_FULL_WH),
+        dbus.Double(energy * 3600 / BATTERY_SECONDS_TO_EMPTY), dbus.Int64(BATTERY_SECONDS_TO_EMPTY),
+        dbus.Int64(0), dbus.Boolean(True), "battery-good-symbolic", dbus.UInt32(UPOWER_WARNING_NONE))
+    display = upower.props("/org/freedesktop/UPower/devices/DisplayDevice")
+    device = "org.freedesktop.UPower.Device"
+    return {"percentage": float(display.Get(device, "Percentage")),
+            "present": bool(display.Get(device, "IsPresent")),
+            "onBattery": bool(upower.props("/org/freedesktop/UPower").Get(UPOWER, "OnBattery"))}
+
+
+def wifi(bus):
+    nm = Service(bus, NM)
+    root = nm.mock(NM_PATH)
+    device = root.AddWiFiDevice("wlan0", "wlp1s0", dbus.Int32(NM_DEVICE_STATE_ACTIVATED))
+    access_point = root.AddAccessPoint(
+        device, "apex5g", WIFI_SSID, "02:A5:E0:00:00:01", dbus.UInt32(NM_80211_MODE_INFRA),
+        dbus.UInt32(WIFI_FREQUENCY_MHZ), dbus.UInt32(WIFI_RATE_KBPS), dbus.Byte(WIFI_STRENGTH),
+        dbus.UInt32(NM_80211_AP_SEC_KEY_MGMT_PSK))
+    connection = root.AddWiFiConnection(device, "apex5g", WIFI_SSID, "wpa-psk")
+    active = root.AddActiveConnection([device], connection, access_point, "apex5g",
+                                      dbus.UInt32(NM_ACTIVE_CONNECTION_STATE_ACTIVATED))
+    nm.put(device, f"{NM}.Device.Wireless", {"ActiveAccessPoint": dbus.ObjectPath(access_point)})
+    nm.put(NM_PATH, NM, {"PrimaryConnection": dbus.ObjectPath(active),
+                         "PrimaryConnectionType": "802-11-wireless"})
+    manager = nm.props(NM_PATH)
+    primary = manager.Get(NM, "PrimaryConnection")
+    ap = nm.props(nm.props(device).Get(f"{NM}.Device.Wireless", "ActiveAccessPoint"))
+    return {"primary": str(nm.props(primary).Get(f"{NM}.Connection.Active", "Id")),
+            "ssid": bytes(ap.Get(f"{NM}.AccessPoint", "Ssid")).decode(),
+            "strength": int(ap.Get(f"{NM}.AccessPoint", "Strength")),
+            "state": int(manager.Get(NM, "State")),
+            "connectivity": int(manager.Get(NM, "Connectivity"))}
+
+
+def keyboard(bus):
+    bluez = Service(bus, BLUEZ)
+    root = bluez.mock("/org/bluez", "org.bluez.Mock")
+    root.AddAdapter("hci0", "apex")
+    device = root.AddDevice("hci0", KEYBOARD_ADDRESS, KEYBOARD_NAME)
+    bluez.put(device, "org.bluez.Device1", {
+        "Icon": "input-keyboard", "Class": dbus.UInt32(BLUETOOTH_CLASS_KEYBOARD),
+        "Paired": True, "Bonded": True, "Trusted": True, "Connected": True,
+        "ServicesResolved": True})
+    props = bluez.props(device)
+    return {"alias": str(props.Get("org.bluez.Device1", "Alias")),
+            "connected": bool(props.Get("org.bluez.Device1", "Connected")),
+            "icon": str(props.Get("org.bluez.Device1", "Icon"))}
+
+
+def main():
+    if len(sys.argv) != 2 or sys.argv[1].startswith("-"):
+        print(__doc__, file=sys.stderr)
+        return 2
+    bus = spawn(sys.argv[1])
+    print("G2-FIXTURES " + json.dumps({"battery": battery(bus), "wifi": wifi(bus), "keyboard": keyboard(bus)}))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

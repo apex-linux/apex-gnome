@@ -11,7 +11,9 @@ built image plus dbus-daemon), with tests/shots at /w (read-only) and the run's 
 at /out. Each case is one headless shell under its own dbus-run-session, with a fresh
 HOME and XDG_RUNTIME_DIR, a 2880x1800 virtual monitor at scale 2 (default-scale1:
 1440x900 at scale 1, as the desktop VM runs) and probe.js as its automation script;
-/out/CASE.log gets its output, /out/results-PART.txt its exit status.
+/out/CASE.log gets its output, /out/results-PART.txt its exit status. Every shell sees
+fixtures.py's python-dbusmock services on the system bus (/out/fixtures-PART.txt) and a
+wall clock that libfaketime holds at G2_CLOCK.
 
   main     every case, with the VM's real /proc/cmdline
   kernel   the apex.safe=1 case (run.sh binds a fixture over /proc/cmdline)
@@ -28,16 +30,30 @@ esac
 [[ -e /run/.containerenv ]] || { echo "direct.sh: only inside run.sh's podman container" >&2; exit 2; }
 
 readonly SHELL_TIMEOUT=150
+readonly FAKETIME_LIB=/usr/lib64/faketime/libfaketime.so.1
+readonly G2_CLOCK='2026-09-28 09:41:00'
+readonly FIXTURE_NAMES=(org.freedesktop.UPower org.freedesktop.NetworkManager org.bluez)
 # Two fixed workspaces: stock widens the active workspace dot by a factor that depends on
 # the count. A 24-hour clock: in 12 hours a one-digit hour adds a figure space.
-readonly CAPTURE_SETTINGS='org.gnome.desktop.interface enable-animations false;org.gnome.desktop.interface cursor-blink false;org.gnome.mutter dynamic-workspaces false;org.gnome.desktop.wm.preferences num-workspaces 2;org.gnome.desktop.interface clock-format 24h'
+readonly CAPTURE_SETTINGS='org.gnome.desktop.interface enable-animations false;org.gnome.desktop.interface cursor-blink false;org.gnome.mutter dynamic-workspaces false;org.gnome.desktop.wm.preferences num-workspaces 2;org.gnome.desktop.interface clock-format 24h;org.gnome.desktop.interface show-battery-percentage true'
 
 cat /proc/cmdline >"/out/cmdline-$part.txt"
 # gnome-shell's loginManager.js takes its dummy manager only when /run/systemd/seats is
 # missing, and timeLimitsManager.js needs a system bus.
 rm -rf /run/systemd/seats
 mkdir -p /run/dbus
+# system.conf includes this file last: root may own the fixtures' names and call them.
+mkdir -p /etc/dbus-1
+{
+    echo '<busconfig><policy user="root">'
+    for name in "${FIXTURE_NAMES[@]}"; do
+        printf '<allow own="%s"/><allow send_destination="%s"/>\n' "$name" "$name"
+    done
+    echo '</policy></busconfig>'
+} >/etc/dbus-1/system-local.conf
 dbus-daemon --system --fork || echo "no system bus"
+mkdir -p "/out/fixtures-$part"
+python3 /w/fixtures.py "/out/fixtures-$part" >"/out/fixtures-$part.txt" 2>&1 || echo "fixtures.py: exit $?"
 mkdir -p /tmp/.X11-unix && chmod 1777 /tmp/.X11-unix
 
 run_case() {
@@ -51,7 +67,7 @@ run_case() {
     env -i HOME="$home" PATH=/usr/bin:/usr/sbin XDG_RUNTIME_DIR="$run" LANG=C.UTF-8 \
         DBUS_SYSTEM_BUS_ADDRESS=unix:path=/run/dbus/system_bus_socket \
         G2_CASE="$name" G2_CAPTURES=/out/captures G2_SETTINGS="$gsettings_triples" \
-        G2_SCALE=2 G2_MONITOR=2880x1800 "$@" \
+        G2_SCALE=2 G2_MONITOR=2880x1800 TZ=UTC G2_FAKETIME_LIB="$FAKETIME_LIB" G2_CLOCK="$G2_CLOCK" "$@" \
         timeout "$SHELL_TIMEOUT" dbus-run-session -- bash -c '
             set -u
             gsettings set org.gnome.desktop.interface scaling-factor "$G2_SCALE"
@@ -65,7 +81,9 @@ run_case() {
             echo "G2-SETTINGS scaling-factor=$(gsettings get org.gnome.desktop.interface scaling-factor)" \
                 "color-scheme=$(gsettings get org.gnome.desktop.interface color-scheme)" \
                 "layer-enabled=$(gsettings get io.github.apex_linux.Apex.Desktop layer-enabled)"
-            exec gnome-shell --headless --virtual-monitor "$G2_MONITOR" \
+            # Only the realtime clock stands still: timeouts run on the monotonic one.
+            exec env LD_PRELOAD="$G2_FAKETIME_LIB" FAKETIME="$G2_CLOCK" FAKETIME_DONT_FAKE_MONOTONIC=1 NO_FAKE_STAT=1 \
+                gnome-shell --headless --virtual-monitor "$G2_MONITOR" \
                 --wayland-display=apex-g2 --automation-script /w/probe.js
         ' >"/out/$name.log" 2>&1
     rc=$?
@@ -104,6 +122,7 @@ run_and_record_case stock-light "$CAPTURE_SETTINGS;org.gnome.desktop.interface c
 run_and_record_case stock-dark "$CAPTURE_SETTINGS;org.gnome.desktop.interface color-scheme prefer-dark" APEX_SHELL_SAFE=1 G2_SCENES=1
 run_and_record_case safe-env '' APEX_SHELL_SAFE=1
 run_and_record_case layer-disabled 'io.github.apex_linux.Apex.Desktop layer-enabled false'
+run_and_record_case layer-cycles "$CAPTURE_SETTINGS" G2_CYCLES=3
 run_and_record_case fault-configure '' APEX_SHELL_TEST_FAULT=configure
 run_and_record_case fault-enable '' APEX_SHELL_TEST_FAULT=enable PROBE_WAIT=10
 run_and_record_case fault-abort '' APEX_SHELL_TEST_FAULT=abort-after-enable PROBE_WAIT=20

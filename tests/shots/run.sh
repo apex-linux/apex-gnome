@@ -40,8 +40,10 @@ fi
 readonly REPOS_BASE
 readonly IMAGE=${1:-localhost/apex:build}
 readonly RUNS=${G2_RUNS:-2}
-# The image has no dbus-daemon, which dbus-run-session and the direct cases' system bus need.
+# The image has no dbus-daemon, which dbus-run-session and the direct cases' system bus
+# need, nor the fixtures' python3-dbusmock and libfaketime.
 readonly BUS_IMAGE=localhost/apex-g2-bus
+readonly FIXTURE_PACKAGES=(python3-dbusmock libfaketime)
 readonly FEDORA_BUS_IMAGE=localhost/apex-g2-fedora
 readonly SHELL_PACKAGES=(gnome-shell gnome-shell-common mutter mutter-common apex-desktop)
 readonly FEDORA_KEY=/usr/share/pki/rpm-gpg/RPM-GPG-KEY-fedora-45-primary
@@ -80,21 +82,22 @@ prune_old_runs() {
 
 prepare_bus_image() {
     local ctr=g2-bus-$stamp
-    log "the bus image: $IMAGE plus dbus-daemon, the shell's packages verified before and after"
+    log "the bus image: $IMAGE plus dbus-daemon and the fixtures' ${FIXTURE_PACKAGES[*]}, the shell's packages verified before and after"
     sudo podman rm -f "$ctr" >/dev/null 2>&1 || true
     # shellcheck disable=SC2016,SC2024 # expanded by the container's bash; builder owns the results
-    sudo podman run --name "$ctr" --entrypoint /bin/bash "$IMAGE" -c '
+    sudo podman run --name "$ctr" --env G2_FIXTURE_PACKAGES="${FIXTURE_PACKAGES[*]}" --entrypoint /bin/bash "$IMAGE" -c '
         set -u
         echo "# before dbus-daemon"
         rpm -q "$@"
         rpm -V --nomtime "$@"
         echo "rpm -V rc=$?"
+        IFS=" " read -ra fixtures <<<"$G2_FIXTURE_PACKAGES"
         same=dbus-daemon-$(rpm -q --qf "%{EPOCHNUM}:%{VERSION}-%{RELEASE}" dbus-libs)
-        dnf5 -y --setopt=install_weak_deps=False install "$same" ||
-            dnf5 -y --setopt=install_weak_deps=False install dbus-daemon || exit 1
+        dnf5 -y --setopt=install_weak_deps=False install "$same" "${fixtures[@]}" ||
+            dnf5 -y --setopt=install_weak_deps=False install dbus-daemon "${fixtures[@]}" || exit 1
         dnf5 clean all >/dev/null
         echo "# after dbus-daemon"
-        rpm -q "$@" dbus-daemon
+        rpm -q "$@" dbus-daemon "${fixtures[@]}"
         rpm -V --nomtime "$@"
         echo "rpm -V rc=$?"
     ' _ "${SHELL_PACKAGES[@]}" >"$root/bus-image.txt" 2>&1 ||

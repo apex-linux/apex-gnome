@@ -36,6 +36,11 @@ function _safeReason() {
     return '';
 }
 
+// A shell that started stock stays stock until the next login, so the crash guard's switch holds.
+function _turnedOff() {
+    return global.session_mode !== GREETER_MODE && !_settings.get_boolean('layer-enabled');
+}
+
 export function safe() {
     if (_safe === null) {
         let reason;
@@ -48,7 +53,11 @@ export function safe() {
         if (_safe)
             console.warn(`Apex: safe mode (${reason})`);
     }
-    return _safe;
+    try {
+        return _safe || _turnedOff();
+    } catch {
+        return true;
+    }
 }
 
 function _drop(name, e) {
@@ -58,7 +67,7 @@ function _drop(name, e) {
 
 export function value(name, stock, ...args) {
     const provider = _providerByHook.get(name);
-    if (!provider)
+    if (!provider || safe())
         return stock;
     try {
         return provider.fn(stock, ...args);
@@ -70,7 +79,7 @@ export function value(name, stock, ...args) {
 
 export function run(name, ...args) {
     const provider = _providerByHook.get(name);
-    if (!provider)
+    if (!provider || safe())
         return RUN_STOCK_CODE;
     try {
         return provider.fn(...args);

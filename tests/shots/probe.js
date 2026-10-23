@@ -28,6 +28,7 @@ const DARK_STYLE_TOGGLE_ICON = 'dark-mode-symbolic';
 const LARGE_TEXT_SCALING_FACTOR = 1.25;
 const HIGH_CONTRAST_SHEET = 'resource:///org/gnome/shell/theme/gnome-shell-high-contrast.css';
 const STRUCTURE_MARKER = '/*! apex-shell-structure */';
+const LAYER_ENABLED_KEY = 'layer-enabled';
 
 Gio._promisify(Shell.Screenshot.prototype, 'screenshot');
 
@@ -113,6 +114,16 @@ async function apexHooks() {
     }
 }
 
+// direct.sh freezes the wall clock with libfaketime; the guard's shells keep the real one.
+function clock() {
+    if (GLib.getenv('FAKETIME') === null)
+        return null;
+    return {
+        now: GLib.DateTime.new_now_local().format_iso8601(),
+        text: Main.panel.statusArea.dateMenu?._clockDisplay.get_text() ?? null,
+    };
+}
+
 async function report() {
     const hooks = await apexHooks();
     const context = St.ThemeContext.get_for_stage(global.stage);
@@ -132,6 +143,7 @@ async function report() {
         safe: hooks?.safe() ?? null,
         testFault: hooks?.value('test-fault', 'stock') ?? null,
         startingMarker: startingMarker(),
+        clock: clock(),
         thumbnailScale: WorkspaceThumbnail.MAX_THUMBNAIL_SCALE ?? null,
         monitors: Main.layoutManager.monitors.length,
         logical: primary ? `${primary.width}x${primary.height}` : null,
@@ -329,16 +341,33 @@ function visibleStatusIcons() {
         .filter(icon => icon.visible && icon instanceof St.Icon);
 }
 
+function glyphName(icon) {
+    return icon.icon_name ?? icon.gicon?.to_string() ?? null;
+}
+
 function statusGlyphs() {
-    return visibleStatusIcons().map(icon => icon.icon_name ?? icon.gicon?.to_string() ?? null);
+    return visibleStatusIcons().map(glyphName);
 }
 
 function statusGlyphSizes(unit) {
     return visibleStatusIcons().map(icon => {
         const {width, height} = boxOf(icon, unit);
-        return {name: icon.icon_name ?? null, width, height,
+        return {name: glyphName(icon), width, height,
             iconSize: lengthOrNull(icon.get_theme_node(), 'icon-size', unit)};
     });
+}
+
+// The battery's percentage is a label beside its glyph, in the same indicator.
+function statusLabels(unit) {
+    return Main.panel.statusArea.quickSettings.get_first_child().get_children()
+        .filter(indicator => indicator.visible)
+        .flatMap(indicator => indicator.get_children())
+        .filter(label => label.visible && label instanceof St.Label)
+        .map(label => ({
+            text: label.get_text(),
+            font: font(label.get_theme_node(), unit),
+            foreground: hex(label.get_theme_node().get_foreground_color()),
+        }));
 }
 
 function accentColor() {
@@ -370,6 +399,7 @@ function topBar(unit) {
         corner: reactiveActorAtTopLeftPixel(unit),
         glass: blurEffects(Main.layoutManager.panelBox, unit),
         statusGlyphs: statusGlyphSizes(unit),
+        statusLabels: statusLabels(unit),
         accent: accentColor(),
     };
 }
@@ -623,6 +653,41 @@ async function withDarkStyleOffInQuickSettings() {
     };
 }
 
+function actorCensus() {
+    const counts = {};
+    const visit = actor => {
+        const type = actor.constructor.name;
+        counts[type] = (counts[type] ?? 0) + 1;
+        actor.get_children().forEach(visit);
+    };
+    visit(global.stage);
+    return counts;
+}
+
+async function layerState(layerEnabled) {
+    const {stylesheet, sheet, markerColor, sessionColorScheme, variant, safe} = await report();
+    return {layerEnabled, stylesheet, markers: sheet?.markers ?? null, markerColor, sessionColorScheme,
+        variant, safe, actors: actorCensus()};
+}
+
+// Each write reaches the layer's changed::layer-enabled handler, as gsettings set would.
+async function withLayerCycles(cycles) {
+    const settings = new Gio.Settings({schema_id: APEX_SCHEMA});
+    dropStartupNotifications();
+    await settle();
+    const states = [await layerState(settings.get_boolean(LAYER_ENABLED_KEY))];
+    for (let cycle = 1; cycle <= cycles; cycle++) {
+        for (const on of [false, true]) {
+            settings.set_boolean(LAYER_ENABLED_KEY, on);
+            // eslint-disable-next-line no-await-in-loop
+            await settle();
+            // eslint-disable-next-line no-await-in-loop
+            states.push({cycle, ...await layerState(settings.get_boolean(LAYER_ENABLED_KEY))});
+        }
+    }
+    return {cycles, states};
+}
+
 // main.js connects to startup-complete only after importing this module, so a startup that
 // completes during the import would never run the script and leave the shell up.
 export function init() {
@@ -654,6 +719,17 @@ export async function run() {
             toggled = {error: `${e.message}\n${e.stack}`};
         }
         console.log(`APEXG2-TOGGLED ${JSON.stringify(toggled)}`);
+    }
+
+    const cycles = Number(GLib.getenv('G2_CYCLES') ?? '0');
+    if (cycles > 0) {
+        let result;
+        try {
+            result = await withLayerCycles(cycles);
+        } catch (e) {
+            result = {error: `${e.message}\n${e.stack}`};
+        }
+        console.log(`APEXG2-CYCLES ${JSON.stringify(result)}`);
     }
 
     const wait = Number(GLib.getenv('PROBE_WAIT') ?? '0');
