@@ -40,7 +40,7 @@ readonly TEST_UID=1000
 readonly TEST_RUNTIME_DIR=/run/user/$TEST_UID
 readonly UNIT=org.gnome.Shell@user.service
 readonly GUARD=apex-shell-safe.service
-readonly SCHEMA=io.github.sekirokenjii.Apex.Desktop
+readonly SCHEMA=io.github.apex_linux.Apex.Desktop
 readonly FAULT_VAR=APEX_SHELL_TEST_FAULT
 
 say() { printf '\n## %s\n' "$*"; }

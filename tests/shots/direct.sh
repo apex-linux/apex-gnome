@@ -64,7 +64,7 @@ run_case() {
             done
             echo "G2-SETTINGS scaling-factor=$(gsettings get org.gnome.desktop.interface scaling-factor)" \
                 "color-scheme=$(gsettings get org.gnome.desktop.interface color-scheme)" \
-                "layer-enabled=$(gsettings get io.github.sekirokenjii.Apex.Desktop layer-enabled)"
+                "layer-enabled=$(gsettings get io.github.apex_linux.Apex.Desktop layer-enabled)"
             exec gnome-shell --headless --virtual-monitor "$G2_MONITOR" \
                 --wayland-display=apex-g2 --automation-script /w/probe.js
         ' >"/out/$name.log" 2>&1
@@ -103,7 +103,7 @@ run_and_record_case dark-style "$CAPTURE_SETTINGS;org.gnome.desktop.interface co
 run_and_record_case stock-light "$CAPTURE_SETTINGS;org.gnome.desktop.interface color-scheme prefer-light" APEX_SHELL_SAFE=1 G2_SCENES=1
 run_and_record_case stock-dark "$CAPTURE_SETTINGS;org.gnome.desktop.interface color-scheme prefer-dark" APEX_SHELL_SAFE=1 G2_SCENES=1
 run_and_record_case safe-env '' APEX_SHELL_SAFE=1
-run_and_record_case layer-disabled 'io.github.sekirokenjii.Apex.Desktop layer-enabled false'
+run_and_record_case layer-disabled 'io.github.apex_linux.Apex.Desktop layer-enabled false'
 run_and_record_case fault-configure '' APEX_SHELL_TEST_FAULT=configure
 run_and_record_case fault-enable '' APEX_SHELL_TEST_FAULT=enable PROBE_WAIT=10
 run_and_record_case fault-abort '' APEX_SHELL_TEST_FAULT=abort-after-enable PROBE_WAIT=20

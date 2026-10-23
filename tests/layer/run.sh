@@ -6,8 +6,10 @@ set -euo pipefail
 
 HERE=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 REPO=$(cd -- "$HERE/../.." && pwd)
+# The apex-desktop checkout, for the schema and the crash guard.
+DESKTOP_SRC=${APEX_DESKTOP_SRC:-$REPO}
 NO_SKIP=${APEX_LAYER_TESTS_NO_SKIP:-0}
-GUARD_UNIT=$REPO/desktop/systemd/user/apex-shell-safe.service
+GUARD_UNIT=$DESKTOP_SRC/desktop/systemd/user/apex-shell-safe.service
 
 tests=0
 failed=0
@@ -36,7 +38,7 @@ done
 T=$(mktemp -d "${TMPDIR:-/tmp}/apex-layer-test.XXXXXX")
 trap 'rm -rf "$T"' EXIT
 mkdir -p "$T/schemas" "$T/noschema" "$T/data" "$T/home"
-cp "$REPO"/desktop/schemas/*.gschema.xml "$T/schemas/"
+cp "$DESKTOP_SRC"/desktop/schemas/*.gschema.xml "$T/schemas/"
 glib-compile-schemas --strict "$T/schemas"
 
 readonly CMDLINE_PLAIN='BOOT_IMAGE=(hd0,gpt2)/boot/ostree/apex/vmlinuz root=UUID=0 rw rhgb quiet'
@@ -157,7 +159,7 @@ fact "gdm mode: upstream's colour scheme" 'scheme\.gdm=prefer-dark'
 
 probe noschema "$CMDLINE_PLAIN" GSETTINGS_SCHEMA_DIR="$T/noschema"
 fact "no Apex schema: safe" 'safe=true'
-has "no Apex schema: and says why" 'Apex: safe mode \(schema io\.github\.sekirokenjii\.Apex\.Desktop is not installed\)'
+has "no Apex schema: and says why" 'Apex: safe mode \(schema io\.github\.apex_linux\.Apex\.Desktop is not installed\)'
 
 probe broken "$CMDLINE_PLAIN" PROBE_BROKEN=1
 fact "a layer that does not load: null" 'layer=null'

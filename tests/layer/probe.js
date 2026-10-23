@@ -22,7 +22,7 @@ globalThis.global = {
 };
 
 const schema = Gio.SettingsSchemaSource.get_default()?.lookup(
-    'io.github.sekirokenjii.Apex.Desktop', true);
+    'io.github.apex_linux.Apex.Desktop', true);
 if (schema) {
     const settings = new Gio.Settings({settings_schema: schema});
     if (GLib.getenv('PROBE_LAYER_OFF') === '1')

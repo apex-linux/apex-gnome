@@ -14,6 +14,10 @@ _build/g2/<UTC time>/run-N, then asserts each run (assert.sh) and that every run
 with the first (stable.sh). Exit 0 when every assertion passed; result.txt names the
 image, the number of runs, the sha256 of the lane lock the image carries and the status.
 The newest 5 <UTC time> directories are kept.
+
+Environment: G2_RUNS; G2_IMAGE_DIR, the image/ directory of the image checkout (default
+this checkout's); G2_REPOS_BASE (default: that Containerfile's REPOS_BASE); G2_OUT_DIR
+(default _build/g2).
 EOF
 }
 
@@ -25,8 +29,15 @@ esac
 HERE=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 REPO=$(cd -- "$HERE/../.." && pwd)
 readonly HERE REPO
-# shellcheck source=SCRIPTDIR/../../.github/scripts/lib.sh
-. "$REPO/.github/scripts/lib.sh"
+readonly IMAGE_DIR=${G2_IMAGE_DIR:-$REPO/image}
+readonly OUT_DIR=${G2_OUT_DIR:-$REPO/_build/g2}
+if [[ -n ${G2_REPOS_BASE:-} ]]; then
+    REPOS_BASE=$G2_REPOS_BASE
+else
+    # shellcheck source=SCRIPTDIR/../../.github/scripts/lib.sh
+    REPOS_BASE=$(. "$REPO/.github/scripts/lib.sh" && containerfile_arg REPOS_BASE "$IMAGE_DIR/Containerfile")
+fi
+readonly REPOS_BASE
 readonly IMAGE=${1:-localhost/apex:build}
 readonly RUNS=${G2_RUNS:-2}
 # The image has no dbus-daemon, which dbus-run-session and the direct cases' system bus need.
@@ -48,9 +59,9 @@ die() { printf 'run.sh: %s\n' "$*" >&2; exit 1; }
 sudo podman image exists "$IMAGE" || die "no image $IMAGE in root's container storage (just vm-image builds it)"
 
 stamp=$(date -u +%Y%m%dT%H%M%SZ)
-root=$REPO/_build/g2/$stamp
+root=$OUT_DIR/$stamp
 mkdir -p "$root"
-ln -sfn "$stamp" "$REPO/_build/g2/latest"
+ln -sfn "$stamp" "$OUT_DIR/latest"
 guard_containers=()
 
 # shellcheck disable=SC2329 # the EXIT trap calls it
@@ -61,9 +72,9 @@ remove_leftovers() {
 
 prune_old_runs() {
     local old
-    find "$REPO/_build/g2" -mindepth 1 -maxdepth 1 -type d -name '2*Z' -printf '%f\n' | LC_ALL=C sort -r |
+    find "$OUT_DIR" -mindepth 1 -maxdepth 1 -type d -name '2*Z' -printf '%f\n' | LC_ALL=C sort -r |
         tail -n +$((KEEP_G2_STAMPS + 1)) | while IFS= read -r old; do
-            sudo rm -rf -- "${REPO:?}/_build/g2/$old"
+            sudo rm -rf -- "${OUT_DIR:?}/$old"
         done
 }
 
@@ -99,7 +110,7 @@ prepare_fedora_image() {
     log "the baseline: Fedora's gnome-shell $fedora_vr in place of $apex_vr"
     mkdir -p "$rpms"
     # shellcheck disable=SC2024 # builder owns the results
-    sudo podman run --rm --net=host -v "$rpms:/rpms:z" "$(containerfile_arg REPOS_BASE)" \
+    sudo podman run --rm --net=host -v "$rpms:/rpms:z" "$REPOS_BASE" \
         dnf5 -q download --destdir /rpms --repo fedora --repo updates --repo updates-testing \
         "gnome-shell-$fedora_vr.x86_64" "gnome-shell-common-$fedora_vr.noarch" >"$root/fedora-download.txt" 2>&1 ||
         { cat "$root/fedora-download.txt" >&2; die "cannot download Fedora's gnome-shell $fedora_vr"; }
@@ -154,7 +165,7 @@ one_run() {
     log "${out##*/}: G1's desktop checks on the tested image"
     rc=0
     # shellcheck disable=SC2024 # builder owns the results
-    sudo podman run --rm --net=none -v "$REPO/image:/run/apex-image:ro,z" --entrypoint /bin/sh "$IMAGE" \
+    sudo podman run --rm --net=none -v "$IMAGE_DIR:/run/apex-image:ro,z" --entrypoint /bin/sh "$IMAGE" \
         -c 'ROOT=/ APEX_IMAGE_DIR=/run/apex-image sh /run/apex-image/checks/desktop.sh' \
         >"$out/g1-desktop.txt" 2>&1 || rc=$?
     echo "$rc" >"$out/g1-desktop.rc"
@@ -224,5 +235,5 @@ done
 echo
 grep -h '^# [0-9]* passed' "$root"/run-*/assert.txt "$root"/run-*/stable.txt 2>/dev/null | sed 's/^/  /' || true
 grep -h '^# gap ' "$root/run-1/assert.txt" 2>/dev/null | sed 's/^# gap /  known gap until /' || true
-echo "G2 $( ((status == 0)) && echo passed || echo FAILED ) after $((SECONDS - t0)) s: $root (also _build/g2/latest)"
+echo "G2 $( ((status == 0)) && echo passed || echo FAILED ) after $((SECONDS - t0)) s: $root (also $OUT_DIR/latest)"
 exit "$status"

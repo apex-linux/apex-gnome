@@ -15,7 +15,7 @@ import * as Png from './png.js';
 
 export const METRICS = {};
 
-const APEX_SCHEMA = 'io.github.sekirokenjii.Apex.Desktop';
+const APEX_SCHEMA = 'io.github.apex_linux.Apex.Desktop';
 const CRASH_GUARD_MARKER = 'apex-shell-starting';
 // Well before APEX_SHELL_TEST_FAULT=abort-after-enable aborts the shell (5 s after enable).
 const REPORT_AFTER_MS = 1500;

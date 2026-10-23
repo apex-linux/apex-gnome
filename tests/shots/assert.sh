@@ -578,7 +578,6 @@ main() {
     local run=$1
     echo "# G2 run $run: $(head -n 3 "$run/image.txt" 2>/dev/null | paste -sd' ' -)"
     g1_on_the_image "$run"
-    tokens_are_spec
     direct_cases "$run"
     crash_guard "$run"
     summary

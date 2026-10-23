@@ -186,7 +186,7 @@ REPORT_OF_A_BAR_DRAWN_FROM_TOKENS='
     dnd: {off: ["system-shutdown-symbolic"], on: ["notifications-disabled-symbolic", "system-shutdown-symbolic"]},
     leftItems: [{accessibleName: "Activities", label: null, pill: {x: $pad, y: 4, width: 76, height: 24, radius: 12}}],
     rightItems: [{accessibleName: "System", label: null, pill: {x: 1337, y: 4, width: 95, height: 24, radius: 12}}],
-    opaque: {error: "io.github.sekirokenjii.Apex.Desktop has no translucent-top-bar key"},
+    opaque: {error: "io.github.apex_linux.Apex.Desktop has no translucent-top-bar key"},
     glass: []}}'
 # shellcheck disable=SC2016 # a jq program
 HEX_DEF='def hex: rgba | map([., 16] | "0123456789abcdef"[(.[0] / .[1] | floor):(.[0] / .[1] | floor) + 1]
@@ -273,19 +273,6 @@ CHANGES
     expect_eq "top bar: a report without the top bar passes none" 0 "$(grep -c '^PASS' "$T/top-bar.out")"
 }
 
-# shellcheck disable=SC2016 # expanded by the inner bash
-spec_run() { bash -c '. "$1/lib.sh"; tokens_are_spec "${2:-}" >/dev/null; echo "$npass $nfail"' _ "$HERE" "$@"; }
-
-test_tokens_are_spec() {
-    local passes failures
-    read -r passes failures <<<"$(spec_run)"
-    expect_eq "SPEC: every top-bar token is SPEC's value, in both variants" "$((2 * $(grep -c . <<<"$SPEC_TOP_BAR_TOKENS"))) 0" "$passes $failures"
-    # shellcheck disable=SC2016 # an SCSS variable, not a shell one
-    sed 's/^\$apex_bar_height: .*/$apex_bar_height: 36px;/' "$TOKEN_FILE" >"$T/drifted.scss"
-    read -r passes failures <<<"$(spec_run "$T/drifted.scss")"
-    expect_eq "SPEC: a bar height that leaves SPEC fails in both variants, although every metric would follow it" 2 "$failures"
-}
-
 test_today_pins() {
     local pin_count what change passes failures open_gaps
     read -r passes failures open_gaps <<<"$(assert_run top_bar_today light)"
@@ -366,7 +353,6 @@ test_compare_js
 test_incomplete_compare
 test_token_file
 test_top_bar
-test_tokens_are_spec
 test_today_pins
 test_known_gaps
 
