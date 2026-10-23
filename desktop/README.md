@@ -17,6 +17,7 @@ directory with `git archive` and unpacks it at the top of Fedora's gnome-shell t
 | `apex.gresource.xml` | the Apex resource: `/org/gnome/shell/ui/apex` (the layer), `/org/gnome/shell/theme/apex` (the sheets' assets) and `/org/gnome/shell/theme/stock` (upstream's compiled light and dark sheets, the safe-mode sheets). Patch 0001-build compiles it and links it into libshell next to upstream's JS resource. |
 | `js/ui/apex/hooks.js` | the only Apex module upstream files import: `safe()`, `value()`, `run()`, and `loadLayer()` for `main.js` |
 | `js/ui/apex/layer.js` | the layer: the configure and enable phases, one `try/catch` per feature, the session-mode colour hook, the crash guard's marker file |
+| `js/ui/apex/spotlight/feature.js` | Super+Space (below) |
 | `js/ui/apex/fault/feature.js` | the fault-injection feature: loaded only when `APEX_SHELL_TEST_FAULT` names a phase, it fails in that phase (below) |
 | `data/theme/apex/_apex-tokens.scss` | the design tokens as SCSS variables, imported after upstream's `_colors` |
 | `data/theme/apex/_apex.scss` | the Apex sheet, imported last by the light and dark entry files |
@@ -39,10 +40,19 @@ Rules, which the lane and `.github/scripts/selftest.sh` enforce:
   as upstream does for its own, and needs its `<file>` line in `apex.gresource.xml`; the
   lane fails when a sheet names an asset the resource lacks.
 
-### The layer in S1a
+### The layer
 
-The layer is empty: `FEATURES` in `layer.js` lists no feature. It still does what every
-later feature relies on:
+`FEATURES_IN_ENABLE_ORDER` in `layer.js` lists one feature, `spotlight` (S1b). It
+registers `toggle-spotlight` from `io.github.apex_linux.Apex.Desktop.Keybindings`
+(`['<Super>space']`) with `Main.wm.addKeybinding` at enable, in the normal and overview
+action modes and without autorepeat, and removes it at disable. Until S3a's Spotlight it
+opens the stock overview with its search entry focused, and pressed while the overview is
+up it hides it. apex-desktop's override moves `switch-input-source` to Super+Alt+Space,
+so nothing else owns Super+Space; a Super tap (the overview) and Super+A (the launcher)
+are upstream's. The feature follows the kill switches and `disabled-features` like any
+other, and a missing Keybindings child schema turns off only this feature, logged once.
+
+The layer also does what every feature relies on:
 
 - In the user and unlock-dialog modes it gives the session mode the colour scheme
   `'prefer-light'`, so GNOME's `'default'` draws a light shell and Dark Style draws a
@@ -68,8 +78,10 @@ restyles upstream's actors fails there, and then needs a stock high-contrast cop
 
 `tests/layer/run.sh` (`just layer-test`, and ci.yml) runs `hooks.js` and `layer.js` in
 gjs outside the shell: every kill switch, `apex.safe=1` through a bubblewrap bind over
-`/proc/cmdline`, the gdm mode, the three fault phases, and the crash guard after an
-aborted shell.
+`/proc/cmdline`, the gdm mode, the three fault phases, the crash guard after an
+aborted shell, and Super+Space: its registration and removal through enable, the kill
+switches, `layer-enabled` and `disabled-features` cycles and a missing Keybindings schema,
+against `tests/layer/main-stub.js` for `main.js` and fixture typelibs for Meta and Shell.
 
 For the fault injection in the VM, the variable goes into the shell's environment with
 a user drop-in on its unit, which the image never ships:

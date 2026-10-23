@@ -71,6 +71,15 @@ async function setDisabledLive() {
     await spin(200);
 }
 
+async function pressToggleSpotlight() {
+    const presses = Number(GLib.getenv('PROBE_PRESS') ?? '0');
+    const Main = await import(`file://${shellDir}/js/ui/main.js`);
+    for (let press = 1; press <= presses; press++) {
+        Main.wm.press('toggle-spotlight');
+        fact(`press.${press}`, `overview=${Main.overview.visible}`);
+    }
+}
+
 async function switchLayer() {
     const cycles = Number(GLib.getenv('PROBE_SWITCH') ?? '0');
     for (let cycle = 1; cycle <= cycles; cycle++) {
@@ -114,6 +123,7 @@ if (layer && GLib.getenv('PROBE_ENABLE') === '1') {
         loop.run();
         fact('survived', `${waitSeconds}s`);
     }
+    await pressToggleSpotlight();
     await setDisabledLive();
     await switchLayer();
     for (const [signal, fn] of [...handlers.values()]) {

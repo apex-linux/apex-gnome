@@ -23,13 +23,15 @@ The design is in the [apex](https://github.com/apex-linux/apex) repository:
 The layer reads its settings from apex-desktop's schema, and apex-desktop's crash guard
 unit turns it off after an early shell failure. `tests/layer/fixtures/` holds copies of
 both, so this repository's CI needs no other checkout; apex-image runs the layer tests
-against the pinned apex-desktop with `APEX_DESKTOP_SRC`.
+against the pinned apex-desktop with `APEX_DESKTOP_SRC`. The fixtures' `Meta-51.gir` and
+`Shell-51.gir` carry the mutter and gnome-shell constants the layer uses, which gjs
+outside the shell otherwise lacks; `tests/layer/main-stub.js` stands in for `main.js`.
 
 ## Development
 
 ```bash
 just check        # the layer tests, G2's self-test, eslint, the theme, the script self-test and the comment guard
-just layer-test   # gjs and glib-compile-schemas; bwrap for the kernel command-line cases
+just layer-test   # gjs, glib-compile-schemas and gi-compile-repository (or g-ir-compiler); bwrap for the kernel command-line cases
 just shots-test   # gjs, GdkPixbuf and jq; dbus-daemon and python3-dbusmock for the fixtures
 just eslint       # node, npm and git: gnome-shell 51.0's eslint rules, pinned in lint/package-lock.json
 just theme        # sassc and git; dnf5, rpm2cpio, cpio and xz for Fedora's gnome-shell SRPM

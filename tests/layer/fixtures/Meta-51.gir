@@ -1,0 +1,22 @@
+<?xml version="1.0"?>
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+<!-- The Meta values the layer uses, as mutter 51.0's src/meta/prefs.h defines them. -->
+<repository version="1.2" xmlns="http://www.gtk.org/introspection/core/1.0"
+            xmlns:c="http://www.gtk.org/introspection/c/1.0">
+  <namespace name="Meta" version="51" c:identifier-prefixes="Meta" c:symbol-prefixes="meta">
+    <bitfield name="KeyBindingFlags" c:type="MetaKeyBindingFlags">
+      <member name="none" value="0" c:identifier="META_KEY_BINDING_NONE"/>
+      <member name="per_window" value="1" c:identifier="META_KEY_BINDING_PER_WINDOW"/>
+      <member name="builtin" value="2" c:identifier="META_KEY_BINDING_BUILTIN"/>
+      <member name="is_reversed" value="4" c:identifier="META_KEY_BINDING_IS_REVERSED"/>
+      <member name="non_maskable" value="8" c:identifier="META_KEY_BINDING_NON_MASKABLE"/>
+      <member name="ignore_autorepeat" value="16" c:identifier="META_KEY_BINDING_IGNORE_AUTOREPEAT"/>
+      <member name="no_auto_grab" value="32" c:identifier="META_KEY_BINDING_NO_AUTO_GRAB"/>
+      <member name="custom_trigger" value="64" c:identifier="META_KEY_BINDING_CUSTOM_TRIGGER"/>
+      <member name="trigger_release" value="128" c:identifier="META_KEY_BINDING_TRIGGER_RELEASE"/>
+    </bitfield>
+    <enumeration name="KeyBindingAction" c:type="MetaKeyBindingAction">
+      <member name="none" value="0" c:identifier="META_KEYBINDING_ACTION_NONE"/>
+    </enumeration>
+  </namespace>
+</repository>

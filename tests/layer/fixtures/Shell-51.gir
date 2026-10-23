@@ -1,0 +1,20 @@
+<?xml version="1.0"?>
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+<!-- ShellActionMode as gnome-shell 51.0's src/shell-action-modes.h defines it. -->
+<repository version="1.2" xmlns="http://www.gtk.org/introspection/core/1.0"
+            xmlns:c="http://www.gtk.org/introspection/c/1.0">
+  <namespace name="Shell" version="51" c:identifier-prefixes="Shell" c:symbol-prefixes="shell">
+    <bitfield name="ActionMode" c:type="ShellActionMode">
+      <member name="none" value="0" c:identifier="SHELL_ACTION_MODE_NONE"/>
+      <member name="normal" value="1" c:identifier="SHELL_ACTION_MODE_NORMAL"/>
+      <member name="overview" value="2" c:identifier="SHELL_ACTION_MODE_OVERVIEW"/>
+      <member name="lock_screen" value="4" c:identifier="SHELL_ACTION_MODE_LOCK_SCREEN"/>
+      <member name="unlock_screen" value="8" c:identifier="SHELL_ACTION_MODE_UNLOCK_SCREEN"/>
+      <member name="login_screen" value="16" c:identifier="SHELL_ACTION_MODE_LOGIN_SCREEN"/>
+      <member name="system_modal" value="32" c:identifier="SHELL_ACTION_MODE_SYSTEM_MODAL"/>
+      <member name="looking_glass" value="64" c:identifier="SHELL_ACTION_MODE_LOOKING_GLASS"/>
+      <member name="popup" value="128" c:identifier="SHELL_ACTION_MODE_POPUP"/>
+      <member name="all" value="4294967295" c:identifier="SHELL_ACTION_MODE_ALL"/>
+    </bitfield>
+  </namespace>
+</repository>

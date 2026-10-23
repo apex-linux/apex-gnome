@@ -30,7 +30,8 @@ skip() {
     fi
 }
 
-for tool in gjs glib-compile-schemas; do
+GI_COMPILER=$(command -v gi-compile-repository || command -v g-ir-compiler || true)
+for tool in gjs glib-compile-schemas "${GI_COMPILER:-gi-compile-repository}"; do
     if ! command -v "$tool" >/dev/null 2>&1; then
         if [[ $NO_SKIP == 1 ]]; then
             printf 'not ok 1 - %s not found, but APEX_LAYER_TESTS_NO_SKIP=1\n1..1\n' "$tool"
@@ -43,12 +44,22 @@ done
 
 T=$(mktemp -d "${TMPDIR:-/tmp}/apex-layer-test.XXXXXX")
 trap 'rm -rf "$T"' EXIT
-mkdir -p "$T/schemas" "$T/noschema" "$T/data" "$T/home" "$T/shell"
-# The layer restyles the shell through main.js, which only the gnome-shell tree has.
+mkdir -p "$T/schemas" "$T/noschema" "$T/nochild" "$T/data" "$T/home" "$T/shell" "$T/typelib"
+# main.js and the Meta and Shell typelibs come only with gnome-shell and mutter.
 cp -R "$REPO/desktop/shell/js" "$T/shell/"
-printf '%s\n' "export const sessionMode = {_sync: () => printerr('probe: restyled')};" >"$T/shell/js/ui/main.js"
+cp "$HERE/main-stub.js" "$T/shell/js/ui/main.js"
+for gir in "$HERE"/fixtures/*.gir; do
+    gir_name=${gir##*/}
+    "$GI_COMPILER" "$gir" -o "$T/typelib/${gir_name%.gir}.typelib"
+done
 cp "$SCHEMA_DIR"/*.gschema.xml "$T/schemas/"
 glib-compile-schemas --strict "$T/schemas"
+awk '/<child name="keybindings"/ { next }
+    /<schema id="io\.github\.apex_linux\.Apex\.Desktop\.Keybindings"/ { skip = 1 }
+    !skip { print }
+    skip && /<\/schema>/ { skip = 0 }' "$SCHEMA_DIR/io.github.apex_linux.Apex.Desktop.gschema.xml" \
+    >"$T/nochild/io.github.apex_linux.Apex.Desktop.gschema.xml"
+glib-compile-schemas --strict "$T/nochild"
 
 readonly CMDLINE_PLAIN='BOOT_IMAGE=(hd0,gpt2)/boot/ostree/apex/vmlinuz root=UUID=0 rw rhgb quiet'
 sandbox=0
@@ -69,7 +80,7 @@ probe() {
     printf '%s\n' "$cmdline" >"$dir/cmdline"
     local -a cmd=(env -i PATH="$PATH" HOME="$T/home" LANG=C.UTF-8
         XDG_RUNTIME_DIR="$dir/run" XDG_CONFIG_HOME="$dir/config" XDG_DATA_DIRS="$T/data"
-        GSETTINGS_BACKEND=memory GSETTINGS_SCHEMA_DIR="$T/schemas"
+        GSETTINGS_BACKEND=memory GSETTINGS_SCHEMA_DIR="$T/schemas" GI_TYPELIB_PATH="$T/typelib"
         APEX_SHELL_DIR="$T/shell" "$@" gjs -m "$HERE/probe.js")
     if ((sandbox)); then
         cmd=(bwrap --dev-bind / / --ro-bind "$dir/cmdline" /proc/cmdline "${cmd[@]}")
@@ -85,6 +96,11 @@ has() { if grep -Eq -- "$2" "$OUT"; then ok "$1"; else not_ok "$1 (no line match
 lacks() { if grep -Eq -- "$2" "$OUT"; then not_ok "$1 (a line matches /$2/)"; _show; else ok "$1"; fi; }
 fact() { has "$1" "^probe: $2\$"; }
 count_is() { if [[ $(grep -c -- "$2" "$OUT") == "$3" ]]; then ok "$1"; else not_ok "$1 ($(grep -c -- "$2" "$OUT") lines match /$2/, expected $3)"; _show; fi; }
+keybindings_are() {
+    local got
+    got=$(sed -n 's/^probe: keybinding\.\([a-z]*\)=.*/\1/p' "$OUT" | paste -sd' ' -)
+    if [[ $got == "$2" ]]; then ok "$1"; else not_ok "$1 (the stub saw '$got', expected '$2')"; _show; fi
+}
 
 run_guard_unit_like_systemd() {
     local dir=$T/$1 key value cond='' line runtime='%t' state='%S'
@@ -110,7 +126,7 @@ run_guard_unit_like_systemd() {
     printf 'acted\n'
 }
 
-probe default "$CMDLINE_PLAIN" PROBE_ENABLE=1
+probe default "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_PRESS=2
 rc_is "default: the probe runs" 0
 fact "default: not safe" 'safe=false'
 fact "default: the layer loads" 'layer=loaded'
@@ -126,6 +142,13 @@ fact "default: a behaviour hook without a provider gives undefined" 'run-without
 fact "default: enable creates the crash guard's marker" 'starting-file=true'
 fact "default: shutdown removes it" 'starting-file\.after-shutdown=false'
 lacks "default: no safe mode" 'safe mode'
+fact "spotlight: enable registers Super+Space, without autorepeat, in the normal and overview modes" \
+    'keybinding\.add=toggle-spotlight accelerators=<Super>space flags=IGNORE_AUTOREPEAT modes=NORMAL\|OVERVIEW'
+has "spotlight: the feature enables" 'Apex: feature spotlight enabled'
+keybindings_are "spotlight: registered once" add
+has "spotlight: a press opens the overview with its search entry focused" '^probe: overview=shown, search focused$'
+fact "spotlight: so the overview is up" 'press\.1=overview=true'
+fact "spotlight: pressed again while it is up, it hides the overview" 'press\.2=overview=false'
 if [[ $(run_guard_unit_like_systemd default) == skipped ]]; then
     ok "default: a later shell failure does not trip the guard (no marker)"
 else
@@ -139,6 +162,7 @@ has "APEX_SHELL_SAFE=1: and says why" 'Apex: safe mode \(APEX_SHELL_SAFE=1\)'
 fact "APEX_SHELL_SAFE=1: no layer" 'layer=null'
 fact "APEX_SHELL_SAFE=1: the stock colour scheme" 'scheme\.user=prefer-dark'
 fact "APEX_SHELL_SAFE=1: no provider at all" 'boom=stock,stock'
+keybindings_are "APEX_SHELL_SAFE=1: no Super+Space binding" ''
 
 if ((sandbox)); then
     probe kernel "BOOT_IMAGE=/vmlinuz root=UUID=0 rw apex.safe=1 rhgb quiet" PROBE_ENABLE=1
@@ -148,6 +172,7 @@ if ((sandbox)); then
     fact "apex.safe=1: no layer" 'layer=null'
     fact "apex.safe=1: the stock colour scheme" 'scheme\.user=prefer-dark'
     lacks "apex.safe=1: no crash guard marker without a layer" 'starting-file'
+    keybindings_are "apex.safe=1: no Super+Space binding" ''
     probe kernel-first "apex.safe=1 BOOT_IMAGE=/vmlinuz" PROBE_MODE=gdm
     fact "apex.safe=1 as the first word, in the greeter: safe" 'safe=true'
     probe lookalikes "BOOT_IMAGE=/vmlinuz apex.safe=0 xapex.safe=1 apex.safe=10 apex.safe rhgb"
@@ -161,6 +186,7 @@ probe off "$CMDLINE_PLAIN" PROBE_LAYER_OFF=1
 fact "layer-enabled=false: safe" 'safe=true'
 has "layer-enabled=false: and says why" 'Apex: safe mode \(layer-enabled is false\)'
 fact "layer-enabled=false: the stock colour scheme" 'scheme\.user=prefer-dark'
+keybindings_are "layer-enabled=false: no Super+Space binding" ''
 
 probe gdm "$CMDLINE_PLAIN" PROBE_MODE=gdm PROBE_LAYER_OFF=1
 fact "gdm mode: layer-enabled=false does not reach the greeter" 'safe=false'
@@ -227,6 +253,8 @@ count_is "layer-enabled cycles: each says which shell" 'Apex: layer-enabled is f
 count_is "layer-enabled cycles: the features enable again each time" 'Apex: feature witness enabled' 4
 count_is "layer-enabled cycles: a feature that failed at enable stays off for the session" 'Apex: feature fault off for this session' 1
 lacks "layer-enabled cycles: every feature disables cleanly" 'did not disable cleanly|cannot restyle'
+keybindings_are "layer-enabled cycles: Super+Space goes with each false and comes back with each true" \
+    'add remove add remove add remove add'
 
 probe livedisabled "$CMDLINE_PLAIN" APEX_SHELL_TEST_FAULT=configure PROBE_ENABLE=1 PROBE_DISABLE_LIVE=witness
 fact "disabled-features while enabled: the feature is off at once, its hooks stock" \
@@ -243,6 +271,7 @@ probe offswitch "$CMDLINE_PLAIN" PROBE_LAYER_OFF=1 PROBE_SWITCH=1
 fact "a session that starts with layer-enabled=false stays stock when it turns true" \
     'switch\.1\.true=safe=true scheme=prefer-dark witness=stock'
 lacks "and nothing restyles it" '^probe: restyled$'
+keybindings_are "nor adds Super+Space" ''
 
 probe bogus "$CMDLINE_PLAIN" APEX_SHELL_TEST_FAULT=everything PROBE_ENABLE=1
 rc_is "FAULT=everything: runs" 0
@@ -252,6 +281,28 @@ fact "FAULT=everything: no fault feature" 'test-fault=stock'
 probe disabled "$CMDLINE_PLAIN" APEX_SHELL_TEST_FAULT=enable PROBE_DISABLED=fault PROBE_ENABLE=1
 has "disabled-features skips a feature" 'Apex: feature fault is in disabled-features'
 fact "and its hook gives stock" 'test-fault=stock'
+
+probe spotlight-disabled "$CMDLINE_PLAIN" PROBE_DISABLED=spotlight PROBE_ENABLE=1 PROBE_PRESS=1
+has "disabled-features=['spotlight']: skips the feature" 'Apex: feature spotlight is in disabled-features'
+keybindings_are "disabled-features=['spotlight']: no Super+Space binding" ''
+fact "disabled-features=['spotlight']: Super+Space opens nothing" 'press\.1=overview=false'
+fact "disabled-features=['spotlight']: no handler gets the press" 'unbound-press=toggle-spotlight'
+fact "disabled-features=['spotlight']: the rest of the layer runs" 'scheme\.user\.after-enable=prefer-light'
+
+probe spotlight-live "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_DISABLE_LIVE=spotlight
+keybindings_are "spotlight in and out of disabled-features, and the layer off and on: the binding follows each change" \
+    'add remove add remove add'
+count_is "spotlight in disabled-features while enabled: it says so" 'Apex: feature spotlight is in disabled-features' 2
+lacks "spotlight live: the feature disables cleanly" 'did not disable cleanly|cannot restyle'
+
+probe spotlight-nochild "$CMDLINE_PLAIN" GSETTINGS_SCHEMA_DIR="$T/nochild" PROBE_ENABLE=1
+fact "no Keybindings child schema: not safe mode" 'safe=false'
+has "no Keybindings child schema: only spotlight is off, and says why" \
+    'Apex: feature spotlight off for this session \(configure: Error: schema io\.github\.apex_linux\.Apex\.Desktop\.Keybindings is not installed\)'
+count_is "no Keybindings child schema: in one log line" 'Apex: .*spotlight' 1
+keybindings_are "no Keybindings child schema: no Super+Space binding" ''
+fact "no Keybindings child schema: the rest of the layer runs" 'scheme\.user\.after-enable=prefer-light'
+fact "no Keybindings child schema: enable still runs" 'starting-file=true'
 
 printf '1..%d\n' "$tests"
 ((failed == 0))

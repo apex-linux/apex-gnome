@@ -16,6 +16,8 @@ import * as Png from './png.js';
 export const METRICS = {};
 
 const APEX_SCHEMA = 'io.github.apex_linux.Apex.Desktop';
+const APEX_KEYBINDINGS_SCHEMA = 'io.github.apex_linux.Apex.Desktop.Keybindings';
+const TOGGLE_SPOTLIGHT = 'toggle-spotlight';
 const CRASH_GUARD_MARKER = 'apex-shell-starting';
 // Well before APEX_SHELL_TEST_FAULT=abort-after-enable aborts the shell (5 s after enable).
 const REPORT_AFTER_MS = 1500;
@@ -101,6 +103,17 @@ function setting(schemaId, read) {
     }
 }
 
+// windowManager.js keeps each binding's action modes here, and removeKeybinding sets NONE.
+function spotlightKey() {
+    const modes = Main.wm._allowedKeybindings[TOGGLE_SPOTLIGHT] ?? Shell.ActionMode.NONE;
+    return {
+        modes: Object.entries(Shell.ActionMode)
+            .filter(([name, bit]) => name !== 'ALL' && bit !== 0 && (modes & bit) === bit)
+            .map(([name]) => name),
+        accelerators: setting(APEX_KEYBINDINGS_SCHEMA, s => s.get_strv(TOGGLE_SPOTLIGHT)),
+    };
+}
+
 function startingMarker() {
     return GLib.file_test(GLib.build_filenamev([GLib.get_user_runtime_dir(), CRASH_GUARD_MARKER]),
         GLib.FileTest.EXISTS);
@@ -142,6 +155,7 @@ async function report() {
         apexHooks: hooks !== null,
         safe: hooks?.safe() ?? null,
         testFault: hooks?.value('test-fault', 'stock') ?? null,
+        spotlightKey: spotlightKey(),
         startingMarker: startingMarker(),
         clock: clock(),
         thumbnailScale: WorkspaceThumbnail.MAX_THUMBNAIL_SCALE ?? null,
@@ -678,7 +692,7 @@ async function layerState(layerEnabled) {
     const {stylesheet, sheet, markerColor, sessionColorScheme, variant, safe} = await report();
     return {
         layerEnabled, stylesheet, markers: sheet?.markers ?? null, markerColor, sessionColorScheme,
-        variant, safe, actors: actorCensus(),
+        variant, safe, spotlightKey: spotlightKey(), actors: actorCensus(),
     };
 }
 
