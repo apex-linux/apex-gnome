@@ -67,7 +67,7 @@ starts python-dbusmock's `upower`, `networkmanager` and `bluez5` templates there
 | Service | Fixture | The shell shows |
 |---|---|---|
 | UPower | a battery at 87 %, discharging (the display device) | `battery-level-80-symbolic` and, with `show-battery-percentage`, "87%" |
-| NetworkManager | the primary connection: Wi-Fi "Apex-5G" at signal 90, connected globally | `network-wireless-signal-excellent-symbolic` |
+| NetworkManager | the primary connection: Wi-Fi "Apex-5G" at signal 90, connected globally, with "Apex-2.4G" (72) and the open "Library Guest" (48) in range, each with WPA2's ciphers or none, as libnm needs to list a network | `network-wireless-signal-excellent-symbolic`, and three networks in the Wi-Fi menu |
 | BlueZ | the Bluetooth keyboard "Keychron K3", paired and connected | no glyph: the status pill shows network, volume and battery only (the `panel` feature) |
 
 `fixtures-PART.txt` holds what the bus reports afterwards, and `assert.sh` checks it for
@@ -208,8 +208,13 @@ notification card's fill, ring, radius, inset, gap, type, icon and close button,
 footer and Clear, the date labels, the month card and its name, headings and days
 (weekday, weekend, other month, today), and the events card.
 
-None of these surfaces is in a compared capture, so the comparison with Fedora's build
-is unchanged.
+`overview_style` reads the overview scene in the same cases, after its capture: the
+scrim, the search field at rest and focused and its gap under the bar, the thumbnails'
+gap, radius and ring and the current one's ring, and, as stand-ins since G2 opens no
+windows and searches nothing, a window title and a search section.
+
+None of these surfaces is in a capture compared with Fedora, so the comparison with Fedora's build
+is unchanged: the Apex overview is compared only run to run, and safe mode's with Fedora's.
 
 ## Known gaps
 

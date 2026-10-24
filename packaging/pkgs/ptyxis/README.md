@@ -96,7 +96,7 @@ just ptyxis-shots    # the built RPM in a headless gnome-shell, light and dark
 just ptyxis-palette  # the built RPM: a palette rewritten under an open terminal
 ```
 
-`tests/ptyxis/lane.sh` builds `apex-lane` from a pinned apex-image commit and runs its
+`tests/lib/lane.sh ptyxis` builds `apex-lane` from a pinned apex-image commit and runs its
 container half, `apex-lane in-container build ptyxis`, as the builder VM does: the
 SRPM's signature, `spec-edit`, the series at fuzz 0, the exact-tree check,
 `rpmbuild -ba` with Fedora's `%check`, the lane checks and `check.sh`. It leaves out
@@ -106,7 +106,7 @@ what the VM adds, the signing and the store. The RPMs and logs land in
 `tests/ptyxis/shoot.sh` installs that RPM in a fedora:45 container and runs gnome-shell
 headless at scale 2 for the user `apex`, with apex-desktop's fonts and profile values,
 G2's `fixtures.py` on the system bus and its `clock.c` holding the wall clock, as
-`tests/shots/direct.sh` runs a case (`lib.sh`, shared with `palette-test.sh`).
+`tests/shots/direct.sh` runs a case (`tests/lib/headless.sh`, shared with `palette-test.sh` and the libadwaita test).
 Its automation script, `probe.js`, opens board 32's five sessions with `ptyxis --tab`,
 types each command with a virtual keyboard into bash with vte.sh, selects apex-image
 and captures the window (`light`, `dark`). The `split` scene (`split-light`,

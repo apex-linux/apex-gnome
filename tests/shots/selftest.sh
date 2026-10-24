@@ -340,6 +340,24 @@ REPORT_OF_A_DATE_MENU_DRAWN_FROM_TOKENS='
         padding: inset(($t.apex_events_padding_top | px); $ep; ($t.apex_events_padding_bottom | px); $ep)},
     eventsTitle: {font: {size: ($t.apex_font_events_title_size | px), weight: ($t.apex_font_heading_weight | tonumber)}, foreground: ($t.apex_fg_dim | hex)}}}}'
 # shellcheck disable=SC2016 # a jq program
+REPORT_OF_AN_OVERVIEW_DRAWN_FROM_TOKENS='
+($t.apex_surface_border | px) as $b | {top: $b, right: $b, bottom: $b, left: $b} as $border
+| {topBar: {accent: "#3584e4ff", panel: {height: 32}}, surfaces: {overview: {
+    group: {background: ($t.apex_scrim | hex), boxShadow: null},
+    search: {y: (32 + ($t.apex_search_top | px)), width: ($t.apex_search_width | px), height: ($t.apex_search_height | px), radius: 20,
+        background: ($t.apex_pill | hex), borderColor: ($t.apex_pill_border | hex), border: $border,
+        padding: {left: (($t.apex_search_padding | px) - $b)}, font: {size: ($t.apex_font_search_size | px)}, foreground: ($t.apex_fg | hex),
+        icon: ($t.apex_quick_settings_icon_size | px),
+        focus: {boxShadow: {inset: true, spread: ($t.apex_entry_focus_ring | px), color: "#3584e4ff"}}},
+    thumbnailsSpacing: ($t.apex_thumbnail_gap | px),
+    thumbnail: {radius: ($t.apex_radius_thumbnail | px), borderColor: ($t.apex_pill_border | hex), border: $border},
+    indicator: {radius: ($t.apex_radius_thumbnail | px), border: {top: ($t.apex_thumbnail_indicator | px)}, borderColor: "#3584e4ff"},
+    caption: {minHeight: (($t.apex_caption_height | px) - 2 * $b), border: $border, radius: 14, background: ($t.apex_pill | hex),
+        borderColor: ($t.apex_pill_border | hex), padding: {left: (($t.apex_caption_padding | px) - $b)}, foreground: ($t.apex_fg | hex),
+        font: {size: ($t.apex_font_caption_size | px), weight: ($t.apex_font_heading_weight | tonumber)}},
+    section: {background: ($t.apex_glass_card | hex), borderColor: ($t.apex_glass_card_border | hex),
+        radius: ($t.apex_radius_message | px), foreground: ($t.apex_fg | hex)}}}}'
+# shellcheck disable=SC2016 # a jq program
 HEX_DEF='def hex: rgba | map([., 16] | "0123456789abcdef"[(.[0] / .[1] | floor):(.[0] / .[1] | floor) + 1]
                                     + "0123456789abcdef"[(.[0] % .[1]):(.[0] % .[1]) + 1]) | "#" + join("");'
 
@@ -356,6 +374,7 @@ assert_run() {
     [[ $assertions == window_switcher ]] && report=$REPORT_OF_A_SWITCHER_DRAWN_FROM_TOKENS
     [[ $assertions == modal_dialog ]] && report=$REPORT_OF_A_DIALOG_DRAWN_FROM_TOKENS
     [[ $assertions == date_menu ]] && report=$REPORT_OF_A_DATE_MENU_DRAWN_FROM_TOKENS
+    [[ $assertions == overview_style ]] && report=$REPORT_OF_AN_OVERVIEW_DRAWN_FROM_TOKENS
     tokens=$(tokens_for "$variant")
     jq -nc --argjson t "$tokens" "$JQ_DEFS $HEX_DEF $report | $change" | sed 's/^/APEXG2-SCENES /' >"$T/top-bar.log"
     # shellcheck disable=SC2016 # expanded by the inner bash
@@ -619,6 +638,34 @@ test_date_menu() {
 CHANGES
 }
 
+test_overview_style() {
+    local variant change what passes failures open_gaps
+    for variant in light dark; do
+        read -r passes failures open_gaps <<<"$(assert_run overview_style "$variant")"
+        if ((failures == 0 && open_gaps == 0 && passes == 6)); then
+            ok "overview ($variant): drawn from the tokens it passes all $passes assertions"
+        else
+            not_ok "overview ($variant): drawn from the tokens it passes (passed/failed/gaps $passes/$failures/$open_gaps): $(grep -m3 '^FAIL' "$T/top-bar.out" | paste -sd'|' -)"
+        fi
+    done
+    while IFS='|' read -r change what; do
+        read -r passes failures open_gaps <<<"$(assert_run overview_style light "$change")"
+        if ((failures == 1)); then
+            ok "overview: $what fails one assertion"
+        else
+            not_ok "overview: $what fails one assertion (passed/failed/gaps $passes/$failures/$open_gaps)"
+        fi
+    done <<'CHANGES'
+.surfaces.overview.group.background = "#222226ff"|upstream's dark overview
+.surfaces.overview.search.width = 320|upstream's 24 em search field
+.surfaces.overview.search.y = 44|upstream's 12 px gap under the bar
+.surfaces.overview.search.focus.boxShadow.color = "#3584e4cc"|upstream's 80 % focus ring
+.surfaces.overview.indicator.border.top = 3|upstream's 3 px indicator
+.surfaces.overview.caption.background = "#000000e6"|upstream's dark tooltip caption
+.surfaces.overview.section.background = "#2e2e33ff"|upstream's dark search section
+CHANGES
+}
+
 test_today_pins() {
     local pin_count what change passes failures open_gaps
     read -r passes failures open_gaps <<<"$(assert_run top_bar_today light)"
@@ -801,7 +848,13 @@ import GnomeBluetooth from 'gi://GnomeBluetooth?version=3.0';
 
 const nm = NM.Client.new(null);
 const primary = nm.get_primary_connection();
-const ap = primary?.get_devices()[0]?.get_active_access_point();
+const device = primary?.get_devices()[0];
+const ap = device?.get_active_access_point();
+// network.js lists an access point only when one security type is valid for it.
+const securityTypes = Object.values(NM.UtilsSecurityType).filter(t => t !== NM.UtilsSecurityType.INVALID);
+const listed = (device?.get_access_points() ?? []).filter(a => securityTypes.some(t =>
+    NM.utils_security_valid(t, device.wireless_capabilities, true, false, a.flags, a.wpa_flags, a.rsn_flags)))
+    .map(a => NM.utils_ssid_to_utf8(a.get_ssid().get_data()));
 const upower = Gio.DBusProxy.new_for_bus_sync(Gio.BusType.SYSTEM, Gio.DBusProxyFlags.NONE, null,
     'org.freedesktop.UPower', '/org/freedesktop/UPower/devices/DisplayDevice', 'org.freedesktop.UPower.Device', null);
 const bluetooth = new GnomeBluetooth.Client();
@@ -814,7 +867,7 @@ GLib.timeout_add(GLib.PRIORITY_DEFAULT, 1000, () => {
             connected.push(devices.get_item(i).alias);
     }
     print(JSON.stringify({
-        wifi: {id: primary?.get_id() ?? null, strength: ap?.get_strength() ?? null,
+        wifi: {id: primary?.get_id() ?? null, strength: ap?.get_strength() ?? null, listed,
             full: nm.connectivity === NM.ConnectivityState.FULL, wireless: nm.wireless_enabled},
         battery: {present: upower.get_cached_property('IsPresent')?.unpack() ?? null,
             percentage: upower.get_cached_property('Percentage')?.unpack() ?? null},
@@ -842,15 +895,15 @@ EOF
 test_fixtures() {
     local passes failures address missing=()
     mkdir -p "$T/fixtures"
-    fixtures_report 'G2-FIXTURES {"battery": {"percentage": 87.0, "present": true, "onBattery": true}, "wifi": {"primary": "Apex-5G", "ssid": "Apex-5G", "strength": 90, "state": 70, "connectivity": 4}, "keyboard": {"alias": "Keychron K3", "connected": true, "icon": "input-keyboard"}}'
+    fixtures_report 'G2-FIXTURES {"battery": {"percentage": 87.0, "present": true, "onBattery": true}, "wifi": {"primary": "Apex-5G", "ssid": "Apex-5G", "strength": 90, "inRange": ["Apex-5G", "Apex-2.4G", "Library Guest"], "state": 70, "connectivity": 4}, "keyboard": {"alias": "Keychron K3", "connected": true, "icon": "input-keyboard"}}'
     read -r passes failures <<<"$(assertion_counts fixtures_on_the_bus "$T/fixtures")"
-    expect_eq "fixtures: what fixtures.py reports passes each part's three assertions" "9/0" "$passes/$failures"
-    fixtures_report 'G2-FIXTURES {"battery": {"percentage": 0.0, "present": false, "onBattery": false}, "wifi": {"primary": "Apex-5G", "ssid": "Apex-5G", "strength": 30, "state": 70, "connectivity": 4}, "keyboard": {"alias": "Keychron K3", "connected": false, "icon": "phone"}}'
+    expect_eq "fixtures: what fixtures.py reports passes each part's four assertions" "12/0" "$passes/$failures"
+    fixtures_report 'G2-FIXTURES {"battery": {"percentage": 0.0, "present": false, "onBattery": false}, "wifi": {"primary": "Apex-5G", "ssid": "Apex-5G", "strength": 30, "inRange": ["Apex-5G"], "state": 70, "connectivity": 4}, "keyboard": {"alias": "Keychron K3", "connected": false, "icon": "phone"}}'
     read -r passes failures <<<"$(assertion_counts fixtures_on_the_bus "$T/fixtures")"
-    expect_eq "fixtures: no battery, a weak signal and a keyboard left unconnected fail all three" "0/9" "$passes/$failures"
+    expect_eq "fixtures: no battery, a weak signal, one network in range and a keyboard left unconnected fail all four" "0/12" "$passes/$failures"
     fixtures_report 'fixtures.py: no owner for org.bluez after 20 s'
     read -r passes failures <<<"$(assertion_counts fixtures_on_the_bus "$T/fixtures")"
-    expect_eq "fixtures: a fixtures.py that failed fails them" "0/9" "$passes/$failures"
+    expect_eq "fixtures: a fixtures.py that failed fails them" "0/12" "$passes/$failures"
 
     command -v dbus-daemon >/dev/null 2>&1 || missing+=(dbus-daemon)
     python3 -c 'import dbusmock' >/dev/null 2>&1 || missing+=(python3-dbusmock)
@@ -867,10 +920,10 @@ test_fixtures() {
     cp "$T/fixtures/fixtures-main.txt" "$T/fixtures/fixtures-kernel.txt"
     cp "$T/fixtures/fixtures-main.txt" "$T/fixtures/fixtures-fedora.txt"
     read -r passes failures <<<"$(assertion_counts fixtures_on_the_bus "$T/fixtures")"
-    expect_eq "fixtures: fixtures.py on a private bus passes the fixture assertions" "9/0" "$passes/$failures"
+    expect_eq "fixtures: fixtures.py on a private bus passes the fixture assertions" "12/0" "$passes/$failures"
     write_fixture_reader
     expect_eq "fixtures: libnm, gnome-bluetooth and UPower's display device read them as the shell does" \
-        '{"wifi":{"id":"Apex-5G","strength":90,"full":true,"wireless":true},"battery":{"present":true,"percentage":87},"connectedBluetooth":["Keychron K3"]}' \
+        '{"wifi":{"id":"Apex-5G","strength":90,"listed":["Apex-5G","Apex-2.4G","Library Guest"],"full":true,"wireless":true},"battery":{"present":true,"percentage":87},"connectedBluetooth":["Keychron K3"]}' \
         "$(DBUS_SYSTEM_BUS_ADDRESS=$address gjs -m "$T/read-fixtures.js" 2>"$T/read-fixtures.err")"
     local -a pids
     mapfile -t pids < <(cat "$T/bus.pid" "$T"/fixtures/fixture-*.pid 2>/dev/null)
@@ -997,6 +1050,7 @@ test_quick_settings
 test_window_switcher
 test_modal_dialog
 test_date_menu
+test_overview_style
 test_today_pins
 test_known_gaps
 test_fixed_clock

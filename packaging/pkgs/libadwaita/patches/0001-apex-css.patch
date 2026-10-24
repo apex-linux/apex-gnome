@@ -1,0 +1,118 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Thuong Vo <66083331+SekiroKenjii@users.noreply.github.com>
+Date: Sat, 24 Oct 2026 12:00:00 +0000
+Subject: [PATCH] style-manager: load and follow the Apex window sheet
+
+Apex's Settings writes $XDG_CONFIG_HOME/gtk-4.0/apex.css, the window
+radius and its resets for maximised, tiled and fullscreen windows, and
+replaces it atomically on every change. GTK reads the user's gtk.css,
+which imports it, only at start, so open windows would keep the old
+radius.
+
+The style manager of a display that loads the Adwaita stylesheet now
+also loads apex.css at GTK_STYLE_PROVIDER_PRIORITY_USER + 1 and reloads
+it when the file is created, replaced or removed, through a monitor on
+its directory. Without the file there is no provider and no warning;
+with GTK_THEME set or Granite present nothing changes.
+---
+ src/adw-style-manager.c | 59 +++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 59 insertions(+)
+
+diff --git a/src/adw-style-manager.c b/src/adw-style-manager.c
+index daa4e8b..6e6cdd0 100644
+--- a/src/adw-style-manager.c
++++ b/src/adw-style-manager.c
+@@ -58,6 +58,8 @@
+ #define DEFAULT_DOCUMENT_FONT (DEFAULT_DOCUMENT_FONT_FAMILY " " DEFAULT_DOCUMENT_FONT_SIZE_STR)
+ #define DEFAULT_MONOSPACE_FONT (DEFAULT_MONOSPACE_FONT_FAMILY " " DEFAULT_MONOSPACE_FONT_SIZE_STR)
+ 
++#define APEX_CSS "gtk-4.0/apex.css"
++
+ struct _AdwStyleManager
+ {
+   GObject parent_instance;
+@@ -76,6 +78,9 @@ struct _AdwStyleManager
+ 
+   GtkCssProvider *animations_provider;
+   guint animation_timeout_id;
++
++  GtkCssProvider *apex_provider;
++  GFileMonitor *apex_monitor;
+ };
+ 
+ G_DEFINE_FINAL_TYPE (AdwStyleManager, adw_style_manager, G_TYPE_OBJECT);
+@@ -441,6 +446,56 @@ notify_high_contrast_cb (AdwStyleManager *self)
+   g_object_notify_by_pspec (G_OBJECT (self), props[PROP_HIGH_CONTRAST]);
+ }
+ 
++static void
++load_apex_css (AdwStyleManager *self)
++{
++  g_autofree char *path = g_build_filename (g_get_user_config_dir (), APEX_CSS, NULL);
++
++  if (!g_file_test (path, G_FILE_TEST_IS_REGULAR)) {
++    if (self->apex_provider)
++      gtk_style_context_remove_provider_for_display (self->display,
++                                                     GTK_STYLE_PROVIDER (self->apex_provider));
++    g_clear_object (&self->apex_provider);
++    return;
++  }
++
++  if (!self->apex_provider) {
++    self->apex_provider = gtk_css_provider_new ();
++    gtk_style_context_add_provider_for_display (self->display,
++                                                GTK_STYLE_PROVIDER (self->apex_provider),
++                                                GTK_STYLE_PROVIDER_PRIORITY_USER + 1);
++  }
++
++  gtk_css_provider_load_from_path (self->apex_provider, path);
++}
++
++static void
++apex_css_changed_cb (AdwStyleManager   *self,
++                     GFile             *file,
++                     GFile             *other_file,
++                     GFileMonitorEvent  event)
++{
++  g_autofree char *name = g_file_get_basename (file);
++  g_autofree char *other_name = other_file ? g_file_get_basename (other_file) : NULL;
++
++  if (event != G_FILE_MONITOR_EVENT_CHANGED &&
++      (!g_strcmp0 (name, "apex.css") || !g_strcmp0 (other_name, "apex.css")))
++    load_apex_css (self);
++}
++
++static void
++watch_apex_css (AdwStyleManager *self)
++{
++  g_autoptr (GFile) file = g_file_new_build_filename (g_get_user_config_dir (), APEX_CSS, NULL);
++  g_autoptr (GFile) dir = g_file_get_parent (file);
++
++  self->apex_monitor = g_file_monitor_directory (dir, G_FILE_MONITOR_WATCH_MOVES, NULL, NULL);
++  if (self->apex_monitor)
++    g_signal_connect_object (self->apex_monitor, "changed",
++                             G_CALLBACK (apex_css_changed_cb), self, G_CONNECT_SWAPPED);
++  load_apex_css (self);
++}
++
+ static void
+ adw_style_manager_constructed (GObject *object)
+ {
+@@ -470,6 +525,8 @@ adw_style_manager_constructed (GObject *object)
+       gtk_style_context_add_provider_for_display (self->display,
+                                                   GTK_STYLE_PROVIDER (self->fonts_provider),
+                                                   GTK_STYLE_PROVIDER_PRIORITY_THEME);
++
++      watch_apex_css (self);
+     }
+ 
+     self->animations_provider = gtk_css_provider_new ();
+@@ -546,6 +603,8 @@ adw_style_manager_dispose (GObject *object)
+   g_clear_object (&self->animations_provider);
+   g_clear_object (&self->accent_provider);
+   g_clear_object (&self->fonts_provider);
++  g_clear_object (&self->apex_monitor);
++  g_clear_object (&self->apex_provider);
+   g_clear_pointer (&self->document_font_name, g_free);
+   g_clear_pointer (&self->monospace_font_name, g_free);
+ 

@@ -12,7 +12,7 @@ usage: tests/control-center/run.sh [RPM_DIR]
 
 Opens the Apex Desktop panel ('gnome-control-center apex') in a headless gnome-shell at
 scale 2, as root in a throwaway fedora:$APEX_FEDORA container (just control-center-run).
-RPM_DIR holds the lane's built RPMs (_build/control-center/out); without it the installed
+RPM_DIR holds the lane's built RPMs (_build/gnome-control-center/out); without it the installed
 gnome-control-center runs. For a user '$USER_NAME', with apex-desktop's schema from
 tests/layer/fixtures, it captures board 11 at both scroll positions, light and dark, and
 checks every row against its key both ways through AT-SPI (bindings.py). Without the

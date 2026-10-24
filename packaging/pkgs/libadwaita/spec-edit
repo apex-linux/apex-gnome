@@ -1,0 +1,7 @@
+# Anchored edits to Fedora's libadwaita.spec; format and placeholders:
+# packaging/README.md. apex-lane adds the PatchNNNN lines itself.
+
+# %{autorelease} with braces sorts the suffix above Fedora's build (see gnome-shell's).
+replace ^Release:[[:space:]]+%autorelease$
+	Release:        %{autorelease}@APEX_RELEASE@
+end

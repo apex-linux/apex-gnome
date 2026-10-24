@@ -79,12 +79,13 @@ patch is the owner's.
 | `0002-window` | `src/nautilus-window.c` | +4 | the include; `apex_window_attach()` in `nautilus_window_init()` |
 | `0003-zoom` | `src/nautilus-enums.h`, `src/nautilus-grid-view.c`, `src/nautilus-ui-utilities.c`, `data/org.gnome.nautilus.gschema.xml` | +17 −5 | the 72 px size and level; its case in the size switch; the standard level; the empty-folder border's metrics at 72 px (the 64 px ones); the schema's enum, renumbered above it, and its default |
 | `0006-unfiltered` | `src/nautilus-view-model.c`, `src/nautilus-view-model.h` | +7 | `nautilus_view_model_get_unfiltered()`, the root store under the model's filter, for the chips' counts |
+| `0006-row-location` | `src/nautilus-name-cell.c` | +13 | the path and snippet setters update a bound cell's labels: the list view binds the item before it sets the path, so a row first bound under a chip's filter lost its location (an upstream bug the chips expose) |
 
 libnautilus is a static library: an object nothing calls is left out of the binary, so
 `main()` registers the resource itself rather than relying on a constructor.
 
 Budget (ADR 0014): at most 400 changed lines in upstream files, in hook hunks only; the
-added files under `src/apex/` do not count. In use: 36 lines in 9 files.
+added files under `src/apex/` do not count. In use: 49 lines in 10 files.
 
 Each feature and the upstream lines it takes. A feature with no upstream line can't fail a
 rebase, so it has no patch file; the lane holds the family as a whole either way.
@@ -96,7 +97,7 @@ rebase, so it has no patch file; the lane holds the family as a whole either way
 | 0003, the 72 px zoom level | `0003-zoom` |
 | 0004, the details pane | none: `0002-window`'s hook |
 | 0005, the recent strip | none: `0002-window`'s hook |
-| 0006, the search chips | `0006-unfiltered`, for the counts; the filter goes on the slot's existing `filter` |
+| 0006, the search chips | `0006-unfiltered`, for the counts; `0006-row-location`, so rows bound under the filter keep their location; the filter goes on the slot's existing `filter` |
 | 0007, the grid/list toggle group | none: `0002-window`'s hook |
 
 `0001-build` wires Source1 in for all of them.
@@ -118,7 +119,7 @@ just nautilus-lane   # podman or docker: apex-lane's container half in fedora:45
 just nautilus-shots  # podman or docker: that nautilus captured in a headless gnome-shell, light and dark
 ```
 
-`tests/nautilus/lane.sh` is `tests/ptyxis/lane.sh` for this recipe: it builds
+`tests/lib/lane.sh nautilus` builds
 `apex-lane` from a pinned apex-image commit and runs its container half,
 `apex-lane in-container build nautilus`, as the builder VM does: the SRPM's signature,
 `spec-edit`, the series at fuzz 0, the exact-tree check, `rpmbuild -ba` with Fedora's
@@ -143,15 +144,16 @@ captured. `check.py` then asserts, light and dark:
 |---|---|---|
 | `home` | 27, Home in grid view | "9 items"; Grid View on; Details off and the pane closed; "Recent" with the four recent files; no chips |
 | `documents` | 28, Documents in list view, the spec selected, `files-details-pane` on | "5 items · “Apex Fedora — Spec.odt” selected"; List View on; the pane open with "Document" and "~/Documents/Apex Fedora — Spec.odt"; no strip |
-| `search` | 29, "apex" searched from Home in list view | "11 results…"; the chips All 11, Folders 4, Documents 3, Images 4, Audio & Video 0, with All on |
-| `search-documents` (light) | 29, with the Documents chip pressed over AT-SPI | "3 results…"; the same five counts, Documents alone on |
+| `search` | 29, "apex" searched from Home in list view | "11 results…"; the chips All 11, Folders 4, Documents 3, Images 4, Audio & Video 0, with All on; every row's location |
+| `search-documents` (light) | 29, with the Documents chip pressed over AT-SPI | "3 results…"; the same five counts, Documents alone on; each row's location |
+| `search-again` (light) | 29, with the Documents chip and then All pressed | "11 results…"; All on; every one of the 11 rows names its location |
 | `noschema` (light) | 27 without the Apex schema | the pane closed and the strip shown |
 
 Every case also asserts the footer's text and its labelled meter. The Apex schema sits in
 its own directory (`GSETTINGS_SCHEMA_DIR`), so `noschema` leaves it out; each case starts
 from an empty dconf database and no gvfs metadata.
 `probe.js` types the search with a virtual keyboard (Ctrl+F, "apex"), and `a11y.py
-OUT PRESS` presses a chip by its accessible name before the dump.
+OUT PRESS...` presses chips by their accessible names, in order, before the dump.
 
 The footer's numbers are the container's filesystem, so `check.py` asserts their form
 and `format-test.c` the board's own "588 GB free of 1 TB". CI keeps the captures, trees

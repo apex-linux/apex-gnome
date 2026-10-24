@@ -1,36 +1,39 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: GPL-3.0-or-later
-# apex-lane's container half on packaging/pkgs/ptyxis, as the builder VM runs it, without signing or the store.
+# apex-lane's container half on a recipe of packaging/pkgs, as the builder VM runs it, without signing or the store.
 
 set -euo pipefail
 . "$(dirname "${BASH_SOURCE[0]}")/../../.github/scripts/lib.sh"
 
 readonly APEX_IMAGE_URL=https://github.com/apex-linux/apex-image
 readonly APEX_IMAGE_REV=3b1ba1ec31d424d9cc6d63918d60e0abf8ceebbc
-readonly PKG=ptyxis
-readonly SOURCE1_DIR=desktop/ptyxis
 readonly SOURCE1_MTIME=@946684800
 readonly LANE_PATHS=(/src /recipes /work /store)
 
 usage() {
     cat <<EOF
-usage: tests/ptyxis/lane.sh
+usage: tests/lib/lane.sh PKG
 
 Builds apex-lane from apex-image $APEX_IMAGE_REV (or APEX_IMAGE_SRC, a checkout) and
-runs 'apex-lane in-container build $PKG': Fedora 45's SRPM, spec-edit, the series with
-fuzz 0, the exact-tree check, rpmbuild -ba with %check, the lane checks and check.sh.
-Runs as root in a throwaway fedora:45 container, as the lane does: it creates
-${LANE_PATHS[*]}. The RPMs land in _build/ptyxis/out/.
+runs 'apex-lane in-container build PKG' on packaging/pkgs/PKG: Fedora 45's SRPM,
+spec-edit, the series with fuzz 0, the exact-tree check, rpmbuild -ba with %check, the
+lane checks and check.sh. Source1 is the working tree's source1= directory, so a local
+run needs no commit. Runs as root in a throwaway fedora:45 container, as the lane does:
+it creates ${LANE_PATHS[*]}. The RPMs land in _build/PKG/out/.
 EOF
 }
 
 case ${1:-} in
     -h | --help) usage; exit 0 ;;
-    "") ;;
-    *) usage >&2; exit 2 ;;
+    "" | -*) usage >&2; exit 2 ;;
 esac
+readonly PKG=$1
+readonly RECIPE=$APEX_ROOT/packaging/pkgs/$PKG
+[[ -f $RECIPE/pkg.env ]] || die "no $RECIPE/pkg.env"
+SOURCE1_DIR=$(sed -n 's/^source1=//p' "$RECIPE/pkg.env")
+readonly SOURCE1_DIR
 
-((EUID == 0)) || die "lane.sh runs as root in a fedora:$APEX_FEDORA container (just ptyxis-lane)"
+((EUID == 0)) || die "lane.sh runs as root in a fedora:$APEX_FEDORA container (just pkg-lane $PKG)"
 for p in "${LANE_PATHS[@]}"; do
     [[ ! -e $p || -L $p ]] || die "$p exists and is not a link; run lane.sh in a throwaway container"
 done
@@ -42,7 +45,7 @@ dnf5 -y -q --setopt=install_weak_deps=False --repo=fedora --repo=updates install
     rust cargo gcc git-core tar >/dev/null
 endgroup
 
-build=$APEX_ROOT/_build/ptyxis
+build=$APEX_ROOT/_build/$PKG
 mkdir -p -- "$build"
 
 src=${APEX_IMAGE_SRC:-$build/apex-image}
@@ -69,18 +72,21 @@ repos_base=$(containerfile_arg REPOS_BASE)
 ga_reached=$(containerfile_arg GA_REACHED)
 [[ -n $repos_base && $ga_reached =~ ^[01]$ ]] || die "cannot read REPOS_BASE and GA_REACHED from apex-image"
 
-# The working tree's desktop/ptyxis, so a local run needs no commit; CI's tree is HEAD's.
-index=$(mktemp)
-trap 'rm -f -- "$index"' EXIT
-GIT_INDEX_FILE=$index git_ -C "$APEX_ROOT" read-tree HEAD
-GIT_INDEX_FILE=$index git_ -C "$APEX_ROOT" add -A -- "$SOURCE1_DIR"
-tree=$(GIT_INDEX_FILE=$index git_ -C "$APEX_ROOT" write-tree --prefix="$SOURCE1_DIR/")
-archive=apex-${SOURCE1_DIR##*/}-${tree:0:12}.tar
-
 work=$build/work
 rm -rf -- "$work" "$build/store"
 mkdir -p -- "$work/in" "$build/store"
-git_ -C "$APEX_ROOT" archive --format=tar --mtime="$SOURCE1_MTIME" -o "$work/in/$archive" "$tree"
+source1_args=()
+if [[ -n $SOURCE1_DIR ]]; then
+    # The working tree's Source1 directory, so a local run needs no commit; CI's tree is HEAD's.
+    index=$(mktemp)
+    trap 'rm -f -- "$index"' EXIT
+    GIT_INDEX_FILE=$index git_ -C "$APEX_ROOT" read-tree HEAD
+    GIT_INDEX_FILE=$index git_ -C "$APEX_ROOT" add -A -- "$SOURCE1_DIR"
+    tree=$(GIT_INDEX_FILE=$index git_ -C "$APEX_ROOT" write-tree --prefix="$SOURCE1_DIR/")
+    archive=apex-${SOURCE1_DIR##*/}-${tree:0:12}.tar
+    git_ -C "$APEX_ROOT" archive --format=tar --mtime="$SOURCE1_MTIME" -o "$work/in/$archive" "$tree"
+    source1_args=(--source1 "$archive" --source1-tree "$tree")
+fi
 
 ln -sfn -- "$src" /src
 ln -sfn -- "$APEX_ROOT" /recipes
@@ -88,8 +94,7 @@ ln -sfn -- "$work" /work
 ln -sfn -- "$build/store" /store
 
 args=(in-container build "$PKG" --n 1 --tool "lane.sh-$APEX_IMAGE_REV"
-    --repos-base "$repos_base" --ga-reached "$ga_reached"
-    --source1 "$archive" --source1-tree "$tree")
+    --repos-base "$repos_base" --ga-reached "$ga_reached" "${source1_args[@]}")
 in_github_actions && args+=(--github)
 status=0
 "$lane" "${args[@]}" || status=$?
