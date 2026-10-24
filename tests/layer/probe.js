@@ -22,10 +22,10 @@ function newEmitter(props = {}) {
         disconnect(id) {
             signalHandlers.delete(id);
         },
-        emit(signal) {
+        emit(signal, ...args) {
             for (const [s, fn] of [...signalHandlers.values()]) {
                 if (s === signal)
-                    fn();
+                    fn(this, ...args);
             }
         },
         connectObject(...args) {
@@ -35,7 +35,29 @@ function newEmitter(props = {}) {
     };
 }
 
+globalThis._ = text => text;
+
+// mutter's DisplayConfig as the lock reads it, one cached PowerSaveMode; it answers, never
+// answers ('silent') or fails ('error'), as displayConfig.reply says.
+const displayConfig = newEmitter({powerSaveMode: 0, reply: 'answer'});
+displayConfig.get_cached_property = name =>
+    name === 'PowerSaveMode' ? new GLib.Variant('i', displayConfig.powerSaveMode) : null;
+displayConfig.connectObject = (signal, fn, owner) => {
+    const id = displayConfig.connect(signal, fn);
+    owner.connect('destroy', () => displayConfig.disconnect(id));
+};
+Gio.DBusProxy.new_for_bus = (_bus, _flags, _info, name, _path, _iface, cancellable) => new Promise((resolve, reject) => {
+    if (displayConfig.reply === 'silent')
+        return;
+    if (cancellable.is_cancelled())
+        reject(new GLib.Error(Gio.IOErrorEnum, Gio.IOErrorEnum.CANCELLED, 'cancelled'));
+    else if (displayConfig.reply === 'error' || name !== 'org.gnome.Mutter.DisplayConfig')
+        reject(new GLib.Error(Gio.DBusError, Gio.DBusError.SERVICE_UNKNOWN, `no ${name}`));
+    else
+        resolve(displayConfig);
+});
 const windows = [];
+const windowActors = [];
 const TOGGLE_KEYCODE = 65;
 let mainModule = null;
 globalThis.global = {
@@ -43,6 +65,8 @@ globalThis.global = {
         get_keybinding_action: keycode =>
             keycode === TOGGLE_KEYCODE ? mainModule?.wm.actionOf('toggle-spotlight') ?? 0 : 0,
     }),
+    window_group: newEmitter(),
+    get_window_actors: () => [...windowActors],
     stage: {width: 1440},
     pointer: [0, 0],
     get_pointer() {
@@ -487,6 +511,225 @@ async function exerciseMaximisedWindow() {
     global.display.emit('restacked');
 }
 
+// The parts of upstream's UnlockDialog the lock feature touches, with its prompt lifecycle:
+// destroying an AuthPrompt destroys its verifier, which cancels the PAM conversation.
+function newUnlockDialog(St) {
+    const clock = new St.BoxLayout({style_class: 'unlock-dialog-clock'});
+    for (const part of ['time', 'date', 'hint']) {
+        clock[`_${part}`] = new St.Label({name: part});
+        clock.add_child(clock[`_${part}`]);
+    }
+    const promptBox = new St.BoxLayout({name: 'prompt-box'});
+    const stack = new St.Widget({name: 'stack'});
+    stack.add_child(promptBox);
+    stack.add_child(clock);
+    const dialog = new St.Widget({style_class: 'unlock-dialog'});
+    Object.assign(dialog, {
+        _clock: clock, _promptBox: promptBox, _stack: stack, _authPrompt: null,
+        _backgroundGroup: new St.Widget({name: 'backgrounds'}), conversations: 0, cancelled: [],
+        _ensureAuthPrompt() {
+            if (this._authPrompt)
+                return;
+            const prompt = new St.Widget({name: `conversation-${++this.conversations}`});
+            prompt._userVerifier = {
+                destroy() {
+                    this.cancel();
+                },
+                cancel: () => this.cancelled.push(prompt.name),
+            };
+            prompt.connect('destroy', () => prompt._userVerifier.destroy());
+            this._authPrompt = prompt;
+            promptBox.add_child(prompt);
+            promptBox.emit('child-added', prompt);
+        },
+        _showPrompt() {
+            this._ensureAuthPrompt();
+            this.page = 'prompt';
+        },
+        _showClock() {
+            this.page = 'clock';
+        },
+        _maybeDestroyAuthPrompt() {
+            if (!this._authPrompt)
+                return;
+            promptBox.remove_child(this._authPrompt);
+            this._authPrompt.destroy();
+            this._authPrompt = null;
+        },
+    });
+    dialog.add_child(dialog._backgroundGroup);
+    dialog.add_child(stack);
+    return dialog;
+}
+
+const names = actors => actors.map(a => a.name ?? a.styleClasses?.[0] ?? '?').join(',');
+
+function lockState(dialog) {
+    return `page=${dialog.page ?? 'none'} prompt=${dialog._authPrompt?.name ?? 'none'} cancelled=${dialog.cancelled.join(',') || 'none'}`;
+}
+
+function setScreen(mode) {
+    displayConfig.powerSaveMode = mode;
+    displayConfig.emit('g-properties-changed');
+}
+
+async function exerciseLock() {
+    if (GLib.getenv('PROBE_LOCK') !== '1')
+        return;
+    const {default: St} = await import(`file://${GLib.path_get_dirname(shellDir)}/St.js`);
+    const PowerSave = {UNSUPPORTED: -1, ON: 0, STANDBY: 1, SUSPEND: 2, OFF: 3};
+
+    setScreen(PowerSave.ON);
+    const dialog = newUnlockDialog(St);
+    fact('lock.run', `${Hooks.run('unlock-dialog', dialog)}`);
+    await spin(50);
+    const stage = dialog._stack.children[0];
+    fact('lock.layout', `dialog=${dialog.styleClasses.join(' ')} stack=${names(dialog._stack.children)} ` +
+        `stage=${names(stage.children ?? [])} clock=${names(dialog._clock.children)} ` +
+        `hint=${dialog._clock._hint.visible} children=${names(dialog.children)}`);
+    fact('lock.open', lockState(dialog));
+    const promptBoxChildren = () => dialog._promptBox.children.map(c => c.text ?? c.name).join(',');
+    fact('lock.prompt-box', promptBoxChildren());
+    for (const [label, mode] of [['blank', PowerSave.OFF], ['wake', PowerSave.ON],
+        ['standby', PowerSave.STANDBY], ['wake-again', PowerSave.ON],
+        ['suspend', PowerSave.SUSPEND], ['unsupported', PowerSave.UNSUPPORTED]]) {
+        setScreen(mode);
+        fact(`lock.${label}`, lockState(dialog));
+    }
+    fact('lock.prompt-box.after-wake', promptBoxChildren());
+    dialog.emit('destroy');
+
+    setScreen(PowerSave.OFF);
+    const lockedWhileBlank = newUnlockDialog(St);
+    Hooks.run('unlock-dialog', lockedWhileBlank);
+    await spin(50);
+    fact('lock.open-blank', lockState(lockedWhileBlank));
+    setScreen(PowerSave.ON);
+    fact('lock.open-blank.wake', lockState(lockedWhileBlank));
+    lockedWhileBlank.emit('destroy');
+
+    for (const reply of ['silent', 'error']) {
+        displayConfig.reply = reply;
+        setScreen(PowerSave.OFF);
+        const unanswered = newUnlockDialog(St);
+        Hooks.run('unlock-dialog', unanswered);
+        // eslint-disable-next-line no-await-in-loop
+        await spin(50);
+        fact(`lock.display-config-${reply}`, lockState(unanswered));
+        unanswered.emit('destroy');
+    }
+    displayConfig.reply = 'answer';
+    setScreen(PowerSave.ON);
+
+    fact('lock.clock-progress', [0, 0.5, 1].map(p => Hooks.value('unlock-clock-progress', p)).join(' '));
+    fact('lock.blur', JSON.stringify(Hooks.value('unlock-blur', {brightness: 0.65, radius: 90})));
+    for (const question of ['Password:', 'Password: ', 'Verification code:', 'PIN', 'password:']) {
+        const stockText = question.startsWith('Password:') ? 'Password' : question.replace(/[:：] *$/, '').trim();
+        fact(`lock.question.${JSON.stringify(question)}`, JSON.stringify(Hooks.value('auth-prompt-question', stockText, question)));
+    }
+    const icon = new St.Icon({icon_name: 'avatar-default-symbolic'});
+    const user = (realName, userName) => ({get_real_name: () => realName, get_user_name: () => userName});
+    for (const [label, who] of [['real-name', user('Apex', 'apex')], ['user-name', user('', 'đức')],
+        ['spaces', user('  zoë', 'z')], ['nobody', user('', '')]]) {
+        const avatar = Hooks.value('avatar-fallback', icon, who, 96);
+        fact(`lock.avatar.${label}`, avatar === icon ? 'stock' : `${avatar.text} ${avatar.style_class} ${avatar.style}`);
+    }
+}
+
+function glassOf(actor) {
+    const effect = actor.get_effect('apex-glass');
+    if (!effect)
+        return `${actor.name}:none`;
+    const mode = effect.mode === 1 ? 'background' : 'actor';
+    return `${actor.name}:r${effect.radius}/s${effect.saturation}/c${effect.corner_radius}/${effect.enabled ? 'on' : 'paused'}` +
+        `${effect.fine && effect.follow_opacity ? '' : '/stock'}/${mode}`;
+}
+
+async function exerciseGlass() {
+    if (GLib.getenv('PROBE_GLASS') !== '1')
+        return;
+    const Main = await import(`file://${shellDir}/js/ui/main.js`);
+    const Registry = await import(`file://${shellDir}/js/ui/apex/glass/registry.js`);
+    const {default: St} = await import(`file://${GLib.path_get_dirname(shellDir)}/St.js`);
+    const {panel} = Main;
+    const {quickSettings, dateMenu} = panel.statusArea;
+    const surfaces = () => [panel, quickSettings.menu.box, dateMenu.menu.box, ...Main.messageTray._bannerBin.children];
+    const report = label => fact(`glass.${label}`, `${surfaces().map(glassOf).join(' ')} ` +
+        `solid=${Main.uiGroup.has_style_class_name('apex-solid')} redirects=${panel.redirect},${quickSettings.menu.box.parent.redirect}`);
+    report('enabled');
+    Main.messageTray.showBanner();
+    report('banner');
+
+    panel.add_style_class_name('apex-solid-bar');
+    report('solid-bar');
+    panel.remove_style_class_name('apex-solid-bar');
+    quickSettings.menu.box.mapped = false;
+    quickSettings.menu.box.emit('notify::mapped');
+    report('menu-closed');
+    quickSettings.menu.box.mapped = true;
+    quickSettings.menu.box.emit('notify::mapped');
+
+    const dock = new Main.StubActor('dock', {glass: {blur: 28, saturation: 1.8, radius: 22}, extents: [420, 820, 600, 62]});
+    Registry.register(dock, {name: 'dock'});
+    Registry.register(dock, {name: 'dock', paused: () => true});
+    fact('glass.registered-twice', `${glassOf(dock)} ${Registry.surfaces().filter(r => r.actor === dock).length}`);
+    Registry.register(dock, {name: 'dock'});
+    fact('glass.registered', glassOf(dock));
+    const window = Object.assign(new Main.StubActor('window', {extents: [100, 100, 400, 300]}), {get_meta_window: () => ({})});
+    windowActors.push(window);
+    global.window_group.emit('child-added', window);
+    const redraws = () => [panel, quickSettings.menu.box, dock].map(a => `${a.name}=${a.redraws}`).join(' ');
+    const before = redraws();
+    window.emit('damaged');
+    fact('glass.damage-elsewhere', `${before} -> ${redraws()}`);
+    window.box = [400, 0, 400, 300];
+    window.emit('notify::allocation');
+    fact('glass.moved-under-the-bar', redraws());
+    window.box = [400, 600, 400, 300];
+    window.emit('notify::allocation');
+    window.emit('damaged');
+    fact('glass.damage-under-the-dock', redraws());
+    global.display.emit('restacked');
+    fact('glass.restacked', redraws());
+
+    for (const [label, key, on, off] of [
+        ['reduce-transparency', 'reduce-transparency', true, false],
+        ['disabled', 'disabled-features', ['glass'], []],
+    ]) {
+        const set = value => Array.isArray(value) ? settings.set_strv(key, value) : settings.set_boolean(key, value);
+        set(on);
+        // eslint-disable-next-line no-await-in-loop
+        await spin(200);
+        report(label);
+        fact(`glass.${label}.dock`, glassOf(dock));
+        set(off);
+        // eslint-disable-next-line no-await-in-loop
+        await spin(200);
+    }
+    St.Settings.get().setHighContrast(true);
+    report('high-contrast');
+    St.Settings.get().setHighContrast(false);
+
+    settings.set_strv('disabled-features', ['glass']);
+    await spin(200);
+    const later = new Main.StubActor('later', {glass: {blur: 34, saturation: 1.8, radius: 26}});
+    Registry.register(later, {name: 'later'});
+    fact('glass.registered-while-disabled', glassOf(later));
+    settings.set_strv('disabled-features', []);
+    await spin(200);
+    fact('glass.registered-while-disabled.enabled', glassOf(later));
+
+    Registry.unregister(dock);
+    Registry.unregister(dock);
+    fact('glass.unregistered', glassOf(dock));
+    settings.set_boolean('layer-enabled', false);
+    await spin(200);
+    report('off');
+    settings.set_boolean('layer-enabled', true);
+    await spin(200);
+    report('on');
+}
+
 function newWorkspace(nWindows) {
     return {
         _background: {
@@ -728,6 +971,7 @@ if (layer && GLib.getenv('PROBE_ENABLE') === '1') {
     }
     mainModule = await import(`file://${shellDir}/js/ui/main.js`);
     await pressToggleSpotlight();
+    await exerciseLock();
     await exerciseSpotlight();
     await exerciseTopBar();
     await exerciseSolidBar();
@@ -737,6 +981,7 @@ if (layer && GLib.getenv('PROBE_ENABLE') === '1') {
     await exerciseOverview();
     await exerciseDock();
     await exerciseIntellihide();
+    await exerciseGlass();
     await setDisabledLive();
     await switchLayer();
     for (const [signal, fn] of [...handlers.values()]) {
@@ -749,4 +994,6 @@ if (layer && GLib.getenv('PROBE_ENABLE') === '1') {
 }
 if (!layer && settings)
     await switchLayer();
+if (!layer)
+    await exerciseLock();
 fact('done', 'yes');
