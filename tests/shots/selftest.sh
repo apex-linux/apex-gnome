@@ -204,6 +204,8 @@ REPORT_OF_A_BAR_DRAWN_FROM_TOKENS='
             {kind: "separator"},
             {kind: "show-apps", iconSize: ($t.apex_dock_icon_size | px), iconName: "view-app-grid"},
             {kind: "trash", iconSize: ($t.apex_dock_icon_size | px)}],
+    appMenu: {app: "Files", hasDualGpu: true,
+      items: ["Open Windows", "New Window", "Launch Using Discrete Graphics Card", "Unpin", "App Details"]},
     overviewDashVisible: false},
   scenes: {overview: {dockVisible: true, dockClearance: 12}}}'
 # shellcheck disable=SC2016 # a jq program
@@ -573,7 +575,7 @@ test_dock() {
     local variant change what passes failures open_gaps
     for variant in light dark; do
         read -r passes failures open_gaps <<<"$(assert_run dock_metrics "$variant")"
-        if ((failures == 0 && passes == 7)); then
+        if ((failures == 0 && passes == 8)); then
             ok "dock ($variant): a dock drawn from the tokens passes all $passes assertions"
         else
             not_ok "dock ($variant): a dock drawn from the tokens passes (passed/failed/gaps $passes/$failures/$open_gaps): $(grep -m3 '^FAIL' "$T/top-bar.out" | paste -sd'|' -)"
@@ -600,6 +602,7 @@ test_dock() {
 .dock.overviewDashVisible = true|the overview's own dash beside the dock
 .scenes.overview.dockVisible = false|no dock in the overview
 .scenes.overview.dockClearance = -15|workspaces under the dock in the overview
+.dock.appMenu.items -= ["Launch Using Discrete Graphics Card"]|an app menu without the discrete GPU
 CHANGES
     assert_run dock_metrics light 'del(.dock)' >/dev/null
     expect_eq "dock: a report without the dock passes none" 0 "$(grep -c '^PASS' "$T/top-bar.out")"
@@ -1105,8 +1108,8 @@ fixtures_report() {
     done
 }
 
-# What the shell's indicators read: network.js through libnm, bluetooth.js through
-# gnome-bluetooth, system.js the display device's properties.
+# What the shell reads: network.js through libnm, bluetooth.js through gnome-bluetooth,
+# system.js the display device's properties and appMenu.js switcheroo-control's.
 write_fixture_reader() {
     cat >"$T/read-fixtures.js" <<'EOF'
 import Gio from 'gi://Gio';
@@ -1125,6 +1128,8 @@ const listed = (device?.get_access_points() ?? []).filter(a => securityTypes.som
     .map(a => NM.utils_ssid_to_utf8(a.get_ssid().get_data()));
 const upower = Gio.DBusProxy.new_for_bus_sync(Gio.BusType.SYSTEM, Gio.DBusProxyFlags.NONE, null,
     'org.freedesktop.UPower', '/org/freedesktop/UPower/devices/DisplayDevice', 'org.freedesktop.UPower.Device', null);
+const switcheroo = Gio.DBusProxy.new_for_bus_sync(Gio.BusType.SYSTEM, Gio.DBusProxyFlags.NONE, null,
+    'net.hadess.SwitcherooControl', '/net/hadess/SwitcherooControl', 'net.hadess.SwitcherooControl', null);
 const bluetooth = new GnomeBluetooth.Client();
 const loop = new GLib.MainLoop(null, false);
 GLib.timeout_add(GLib.PRIORITY_DEFAULT, 1000, () => {
@@ -1140,6 +1145,7 @@ GLib.timeout_add(GLib.PRIORITY_DEFAULT, 1000, () => {
         battery: {present: upower.get_cached_property('IsPresent')?.unpack() ?? null,
             percentage: upower.get_cached_property('Percentage')?.unpack() ?? null},
         connectedBluetooth: connected,
+        hasDualGpu: switcheroo.get_cached_property('HasDualGpu')?.unpack() ?? null,
     }));
     loop.quit();
     return GLib.SOURCE_REMOVE;
@@ -1163,15 +1169,22 @@ EOF
 test_fixtures() {
     local passes failures address missing=()
     mkdir -p "$T/fixtures"
-    fixtures_report 'G2-FIXTURES {"battery": {"percentage": 87.0, "present": true, "onBattery": true}, "wifi": {"primary": "Apex-5G", "ssid": "Apex-5G", "strength": 90, "inRange": ["Apex-5G", "Apex-2.4G", "Library Guest"], "state": 70, "connectivity": 4}, "keyboard": {"alias": "Keychron K3", "connected": true, "icon": "input-keyboard"}}'
+    local report='G2-FIXTURES {"battery": {"percentage": 87.0, "present": true, "onBattery": true}, '
+    report+='"wifi": {"primary": "Apex-5G", "ssid": "Apex-5G", "strength": 90, "inRange": ["Apex-5G", "Apex-2.4G", "Library Guest"], '
+    report+='"state": 70, "connectivity": 4}, "keyboard": {"alias": "Keychron K3", "connected": true, "icon": "input-keyboard"}, '
+    report+='"gpus": {"hasDualGpu": true, "names": ["Intel Graphics", "NVIDIA GeForce RTX 4060"]}}'
+    fixtures_report "$report"
     read -r passes failures <<<"$(assertion_counts fixtures_on_the_bus "$T/fixtures")"
-    expect_eq "fixtures: what fixtures.py reports passes each part's four assertions" "12/0" "$passes/$failures"
-    fixtures_report 'G2-FIXTURES {"battery": {"percentage": 0.0, "present": false, "onBattery": false}, "wifi": {"primary": "Apex-5G", "ssid": "Apex-5G", "strength": 30, "inRange": ["Apex-5G"], "state": 70, "connectivity": 4}, "keyboard": {"alias": "Keychron K3", "connected": false, "icon": "phone"}}'
+    expect_eq "fixtures: what fixtures.py reports passes each part's five assertions" "15/0" "$passes/$failures"
+    report='G2-FIXTURES {"battery": {"percentage": 0.0, "present": false, "onBattery": false}, '
+    report+='"wifi": {"primary": "Apex-5G", "ssid": "Apex-5G", "strength": 30, "inRange": ["Apex-5G"], "state": 70, "connectivity": 4}, '
+    report+='"keyboard": {"alias": "Keychron K3", "connected": false, "icon": "phone"}, "gpus": {"hasDualGpu": false, "names": ["Intel Graphics"]}}'
+    fixtures_report "$report"
     read -r passes failures <<<"$(assertion_counts fixtures_on_the_bus "$T/fixtures")"
-    expect_eq "fixtures: no battery, a weak signal, one network in range and a keyboard left unconnected fail all four" "0/12" "$passes/$failures"
+    expect_eq "fixtures: no battery, a weak signal, one network in range, a keyboard left unconnected and one GPU fail all five" "0/15" "$passes/$failures"
     fixtures_report 'fixtures.py: no owner for org.bluez after 20 s'
     read -r passes failures <<<"$(assertion_counts fixtures_on_the_bus "$T/fixtures")"
-    expect_eq "fixtures: a fixtures.py that failed fails them" "0/12" "$passes/$failures"
+    expect_eq "fixtures: a fixtures.py that failed fails them" "0/15" "$passes/$failures"
 
     command -v dbus-daemon >/dev/null 2>&1 || missing+=(dbus-daemon)
     python3 -c 'import dbusmock' >/dev/null 2>&1 || missing+=(python3-dbusmock)
@@ -1188,10 +1201,10 @@ test_fixtures() {
     cp "$T/fixtures/fixtures-main.txt" "$T/fixtures/fixtures-kernel.txt"
     cp "$T/fixtures/fixtures-main.txt" "$T/fixtures/fixtures-fedora.txt"
     read -r passes failures <<<"$(assertion_counts fixtures_on_the_bus "$T/fixtures")"
-    expect_eq "fixtures: fixtures.py on a private bus passes the fixture assertions" "12/0" "$passes/$failures"
+    expect_eq "fixtures: fixtures.py on a private bus passes the fixture assertions" "15/0" "$passes/$failures"
     write_fixture_reader
-    expect_eq "fixtures: libnm, gnome-bluetooth and UPower's display device read them as the shell does" \
-        '{"wifi":{"id":"Apex-5G","strength":90,"listed":["Apex-5G","Apex-2.4G","Library Guest"],"full":true,"wireless":true},"battery":{"present":true,"percentage":87},"connectedBluetooth":["Keychron K3"]}' \
+    expect_eq "fixtures: libnm, gnome-bluetooth, UPower's display device and switcheroo-control read them as the shell does" \
+        '{"wifi":{"id":"Apex-5G","strength":90,"listed":["Apex-5G","Apex-2.4G","Library Guest"],"full":true,"wireless":true},"battery":{"present":true,"percentage":87},"connectedBluetooth":["Keychron K3"],"hasDualGpu":true}' \
         "$(DBUS_SYSTEM_BUS_ADDRESS=$address gjs -m "$T/read-fixtures.js" 2>"$T/read-fixtures.err")"
     local -a pids
     mapfile -t pids < <(cat "$T/bus.pid" "$T"/fixtures/fixture-*.pid 2>/dev/null)
@@ -1338,12 +1351,12 @@ test_glass() {
             "edge": {"max": [11.03, 6.23, 11.67], "mean": [1.4, 0.9, 1.3]}},
         "sameFrame": {"covered": true, "changed": 44893, "differingFromFull": 0},
         "clippedRedraw": {"covered": false, "differingFromLast": 0, "nextCovered": true, "nextDifferingFromFull": 0},
-        "stock": {"covered": false, "differingFromLast": 2304, "differingFromFull": 43927,
+        "stock": {"covered": false, "tries": 1, "differingFromLast": 2304, "differingFromFull": 43927,
             "box": {"max": [180, 150, 170], "mean": [9, 7, 8]}, "interior": {"max": [180, 150, 170], "mean": [9, 7, 8]}, "edge": {"max": [60, 50, 40], "mean": [5, 4, 4]}}}}'
     while IFS='|' read -r failures what change; do
         jq -c "$change" <<<"$good" | sed 's/^/APEXG2-GLASS /' >"$T/glass.log"
         read -r passes _ <<<"$(assertion_counts glass_frames glass "$T/glass.log")"
-        expect_eq "glass: $what fails $failures of 6" "$failures" $((6 - passes))
+        expect_eq "glass: $what fails $failures of 7" "$failures" $((7 - passes))
     done <<'CHANGES'
 0|a run within the tolerance, the frames as drawn|.
 0|the 4/255 the lead accepted inside|.pixels.reference.interior.max[2] = 4
@@ -1358,8 +1371,10 @@ test_glass() {
 1|a clipped frame never followed by its redraw|.pixels.clippedRedraw.nextCovered = false
 1|a stock control that sees nothing|.pixels.stock.differingFromFull = 0
 1|a stock control within the tolerances|.pixels.stock += (.pixels.reference | {box, interior, edge})
-6|Fedora's effect|{patched: false, pixels: null}
-6|a probe that failed|{error: "no frame within 2000 ms"}
+0|a stock control that needed 3 tries|.pixels.stock.tries = 3
+2|5 tries that never obtained a partial redraw|.pixels.stock += {covered: true, tries: 5, differingFromFull: 0}
+7|Fedora's effect|{patched: false, pixels: null}
+7|a probe that failed|{error: "no frame within 2000 ms"}
 CHANGES
 
     local on='{"radius": 96, "saturation": 1.6, "enabled": true, "fine": true, "followOpacity": true, "background": true}'

@@ -24,9 +24,11 @@ function _banners() {
 
 export function register() {
     const {quickSettings, dateMenu} = Main.panel.statusArea;
+    // Board 20: the lock screen and the unlock dialog (both isLocked) draw no bar band.
     Registry.register(Main.panel, {
         name: 'panel',
-        paused: () => Main.panel.has_style_class_name(SOLID_BAR_STYLE_CLASS),
+        paused: () => Main.panel.has_style_class_name(SOLID_BAR_STYLE_CLASS) || Main.sessionMode.isLocked,
+        pausedChanged: [[Main.sessionMode, 'updated']],
     });
     Registry.register(quickSettings.menu.box, {name: 'quick-settings'});
     Registry.register(dateMenu.menu.box, {name: 'calendar'});

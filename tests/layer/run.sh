@@ -516,6 +516,9 @@ fact "glass: the bar, Quick Settings and the calendar blur behind them: radius 2
 fact "glass: a banner blurs from the moment it is shown" "glass\.banner=$GLASS_ON $BANNER_ON solid=false redirects=0,0"
 fact "glass: the bar's glass pauses while the bar is solid" \
     "glass\.solid-bar=panel:r96/s1\.6/c0/paused/background quick-settings:r120/s1\.8/c52/on/background calendar:r120/s1\.8/c52/on/background $BANNER_ON solid=false redirects=0,0"
+fact "glass: the bar's glass pauses on the lock screen and in the unlock dialog (isLocked)" \
+    "glass\.locked=panel:r96/s1\.6/c0/paused/background quick-settings:r120/s1\.8/c52/on/background calendar:r120/s1\.8/c52/on/background $BANNER_ON solid=false redirects=0,0"
+fact "glass: and comes back on unlock" "glass\.unlocked=$GLASS_ON $BANNER_ON solid=false redirects=0,0"
 fact "glass: a closed popover's glass pauses" \
     "glass\.menu-closed=panel:r96/s1\.6/c0/on/background quick-settings:r120/s1\.8/c52/paused/background calendar:r120/s1\.8/c52/on/background $BANNER_ON solid=false redirects=0,0"
 fact "glass: a second register() replaces the first's opts, one surface per actor" 'glass\.registered-twice=dock:r112/s1\.8/c44/paused/background 1'

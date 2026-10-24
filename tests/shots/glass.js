@@ -37,6 +37,7 @@ const BACKGROUND_BRIGHTNESS = 0.8;
 const FRAME_TIMEOUT_MS = 2000;
 const APEX_SCHEMA = 'io.github.apex_linux.Apex.Desktop';
 const GLASS_EFFECT = 'apex-glass';
+const STOCK_TRIES = 5;
 const SOLID_STYLE_CLASS = 'apex-solid';
 
 function colourOf(column, row, generation = 0) {
@@ -115,8 +116,8 @@ async function fullFrame(group, scale) {
 }
 
 // Damage under the box that does not reach its edges: the redraw clip is the tile alone.
-function damage(tiles, generation) {
-    const [column, row] = DAMAGED_TILES[generation - 1];
+function damage(tiles, generation, index = generation) {
+    const [column, row] = DAMAGED_TILES[index - 1];
     const tile = tiles.get(`${column},${row}`);
     tile.colour = colourOf(column, row, generation);
     tile.style = `background-color: ${tile.colour};`;
@@ -176,12 +177,19 @@ async function pixelTests() {
         };
 
         effect.fine = false;
-        const stockLast = await fullFrame(group, scale);
-        damage(tiles, 4);
-        const stockClipped = await nextFrame(scale, 'stock clipped');
+        // Another redraw can land in the stock frame and cover the box: then it is a full
+        // redraw, which shows nothing, so the case damages again for a frame that misses it.
+        let stockLast, stockClipped, tries = 0;
+        do {
+            // eslint-disable-next-line no-await-in-loop
+            stockLast = await fullFrame(group, scale);
+            damage(tiles, 4 + tries, 4);
+            // eslint-disable-next-line no-await-in-loop
+            stockClipped = await nextFrame(scale, 'stock clipped');
+        } while (stockClipped.covered && ++tries < STOCK_TRIES);
         const stockFull = await fullFrame(group, scale);
         const stock = {
-            covered: stockClipped.covered,
+            covered: stockClipped.covered, tries: tries + 1,
             differingFromLast: BlurRef.differing(stockClipped.rgba, stockLast),
             differingFromFull: BlurRef.differing(stockClipped.rgba, stockFull),
             ...BlurRef.errors(stockClipped.rgba, BlurRef.glass(patternUnder(tiles, scale), width, height, options),

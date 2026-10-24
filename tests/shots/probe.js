@@ -486,6 +486,25 @@ function dockReport(unit) {
     };
 }
 
+// The menu a right click opens on the dock's first app: stock's AppMenu, which offers the
+// other GPU while switcheroo-control reports two.
+async function dockAppMenu() {
+    const icon = apexDock()?._box.get_children().find(item => item.child?._delegate?.app)?.child;
+    if (!icon)
+        return null;
+    icon.popupMenu();
+    await settle();
+    const items = icon._menu._getMenuItems()
+        .filter(item => item.visible && item.label?.text).map(item => item.label.text);
+    icon._menu.close(BoxPointer.PopupAnimation.NONE);
+    await settle();
+    return {
+        app: icon.app.get_name(),
+        hasDualGpu: global.get_switcheroo_control()?.get_cached_property('HasDualGpu')?.unpack() ?? null,
+        items,
+    };
+}
+
 async function settle() {
     let idle = false;
     await Promise.race([
@@ -1339,6 +1358,8 @@ async function scenes() {
     // After the capture: reading the hover and checked styles restyles the pills.
     const bar = topBar(unit);
     const dock = dockReport(unit);
+    if (dock)
+        dock.appMenu = await dockAppMenu();
     bar.withDot = await withUnreadNotification(unit);
     bar.dnd = await withDoNotDisturb();
     bar.opaque = await withOpaqueBar(unit);
