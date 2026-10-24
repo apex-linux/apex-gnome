@@ -9,6 +9,8 @@ import St from 'gi://St';
 
 import * as Hooks from '../hooks.js';
 
+import * as Fingerprint from './fingerprint.js';
+
 Gio._promisify(Gio.DBusProxy, 'new_for_bus');
 
 const CLOCK_ALWAYS_SHOWN = 0;
@@ -86,15 +88,29 @@ function _addOverlay(dialog) {
     dialog.insert_child_above(overlay, dialog._backgroundGroup);
 }
 
+const FINGERPRINT_GLYPH = 'auth-fingerprint-symbolic';
+
 function _addHint(dialog) {
-    const hint = new St.Label({
-        style_class: 'apex-lock-hint',
-        text: _('Press Enter to unlock'),
-        x_align: Clutter.ActorAlign.CENTER,
-    });
+    const hint = {
+        line: new St.BoxLayout({style_class: 'apex-lock-hint-line', x_align: Clutter.ActorAlign.CENTER}),
+        glyph: new St.Icon({style_class: 'apex-lock-hint-glyph', icon_name: FINGERPRINT_GLYPH, visible: false}),
+        label: new St.Label({style_class: 'apex-lock-hint', text: Fingerprint.hintText(Fingerprint.State.PASSWORD)}),
+    };
+    hint.line.add_child(hint.glyph);
+    hint.line.add_child(hint.label);
     const promptBox = dialog._promptBox;
-    promptBox.add_child(hint);
-    promptBox.connect('child-added', () => promptBox.set_child_above_sibling(hint, null));
+    promptBox.add_child(hint.line);
+    promptBox.connect('child-added', (_box, child) => {
+        promptBox.set_child_above_sibling(hint.line, null);
+        if (child !== dialog._authPrompt)
+            return;
+        // A fault here keeps the password's hint; the lock itself is not the fingerprint's.
+        try {
+            Fingerprint.followPrompt(dialog, child, hint);
+        } catch (e) {
+            console.error(`Apex: lock: no fingerprint states for this prompt: ${e}`);
+        }
+    });
 }
 
 async function _followDisplayConfig(dialog) {

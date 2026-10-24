@@ -27,6 +27,11 @@ class Widget {
         this._handlers[id - 1] = null;
     }
 
+    connectObject(...args) {
+        for (let i = 0; i + 1 < args.length; i += 2)
+            this.connect(args[i], args[i + 1]);
+    }
+
     emit(signal, ...args) {
         for (const handler of [...this._handlers]) {
             if (handler?.[0] === signal)
@@ -159,6 +164,13 @@ class Widget {
     hide() {
         this.visible = false;
     }
+
+    // No theme node here, so the glass feature only looks for an effect to remove.
+    get_effect() {
+        return null;
+    }
+
+    remove_effect() {}
 
     set_style(style) {
         this.style = style;

@@ -960,9 +960,50 @@ async function quickSettings(unit) {
     }
 }
 
+function findAll(actor, matches) {
+    return actor.get_children().flatMap(child => [...matches(child) ? [child] : [], ...findAll(child, matches)]);
+}
+
+// Board 17's Wi-Fi menu: the header subtitle's grid cell and each network row, the lock read
+// where it is, after the name or in the signal icon's box.
+async function wifiMenuRows(unit) {
+    const {menu} = Main.panel.statusArea.quickSettings;
+    const wifi = findDescendant(menu.box, a => a.constructor.name === 'NMWirelessToggle');
+    if (!wifi)
+        return null;
+    menu.open(BoxPointer.PopupAnimation.NONE);
+    wifi.menu.open(BoxPointer.PopupAnimation.NONE);
+    try {
+        await settle();
+        const {_header: header, _headerSubtitle: subtitle} = wifi.menu;
+        const meta = header.layout_manager.get_child_meta(header, subtitle);
+        const rows = findAll(wifi.menu.box, a => a.constructor.name === 'NMWirelessNetworkItem');
+        return {
+            subtitle: {column: meta.left_attach, row: meta.top_attach, xAlign: subtitle.x_align, end: Clutter.ActorAlign.END},
+            rows: rows.map(row => {
+                const lock = row._secureIcon;
+                const children = row.get_children();
+                return {
+                    ssid: row._label.text,
+                    active: row.network.is_active,
+                    checked: row.has_style_pseudo_class('checked'),
+                    secure: !!lock.icon_name,
+                    lockAfterName: children.indexOf(lock) === children.indexOf(row._label) + 1,
+                    lockSize: lengthOrNull(lock.get_theme_node(), 'icon-size', unit),
+                    lockColor: hex(lock.get_theme_node().get_foreground_color()),
+                };
+            }),
+        };
+    } finally {
+        wifi.menu.close(BoxPointer.PopupAnimation.NONE);
+        menu.close(BoxPointer.PopupAnimation.NONE);
+        await settle();
+    }
+}
+
 // The quick-settings feature: the toggles' order, Power Mode lit, On/Off subtitles; then two
 // clicks on Power Mode, which stock answers by switching to the last profile and back.
-async function quickSettingsLayer() {
+async function quickSettingsLayer(unit) {
     const indicator = Main.panel.statusArea.quickSettings;
     // Without a VPN connection the VPN toggle is hidden and has no title.
     const name = t => t.constructor.name === 'NMVpnToggle' ? 'VPN' : t.title;
@@ -990,6 +1031,7 @@ async function quickSettingsLayer() {
         pillShowsPower: indicator._powerProfiles?.get_parent() === indicator._indicators &&
             indicator._powerProfiles.visible,
         dndSubtitle: dnd?.subtitle ?? null,
+        wifiMenu: await wifiMenuRows(unit),
     };
     if (power?.visible) {
         state.switched = await clickPower();
@@ -1097,6 +1139,53 @@ async function windowSwitcher(unit) {
     }
 }
 
+// The shell's own power-off dialog, opened as gnome-session opens it, so that patch 0018's
+// hook runs: Cancel, the end-session feature's Restart, then Power Off.
+async function endSessionDialog(unit) {
+    try {
+        return await openEndSessionDialog(unit);
+    } catch (e) {
+        return {error: e.message};
+    }
+}
+
+async function openEndSessionDialog(unit) {
+    await Gio.DBus.session.call('org.gnome.Shell', '/org/gnome/SessionManager/EndSessionDialog',
+        'org.gnome.SessionManager.EndSessionDialog', 'Open', new GLib.Variant('(uuuao)', [1, 0, 60, []]),
+        null, Gio.DBusCallFlags.NONE, -1, null);
+    const dialog = Main.layoutManager.modalDialogGroup.get_children()
+        .find(c => c.dialogLayout?._dialog?.has_style_class_name('end-session-dialog'));
+    try {
+        await settle();
+        global.stage.set_key_focus(null);
+        const find = styleClass => findDescendant(dialog.contentLayout, a => a.has_style_class_name?.(styleClass));
+        const title = find('message-dialog-title');
+        const icon = find('apex-end-session-icon');
+        const row = dialog.buttonLayout;
+        return {
+            box: styleOf(dialog.dialogLayout._dialog, unit),
+            contentSpacing: lengthOrNull(dialog.contentLayout.get_theme_node(), 'spacing', unit),
+            icon: icon ? {
+                ...styleOf(icon, unit),
+                glyph: lengthOrNull(icon.child.get_theme_node(), 'icon-size', unit),
+                iconName: icon.child.icon_name,
+                above: icon.get_next_sibling() === find('message-dialog-content'),
+            } : null,
+            title: {...styleOf(title, unit), tracking: round(title.get_theme_node().get_letter_spacing() / unit.length)},
+            description: styleOf(find('message-dialog-description'), unit),
+            rowSpacing: round(row.layout_manager.spacing / unit.length),
+            buttons: row.get_children().filter(b => b.visible).map(b => ({
+                ...styleOf(b, unit),
+                text: b.label,
+                hover: underPseudoClass(b, 'hover', () => paint(b.get_theme_node(), unit)),
+            })),
+        };
+    } finally {
+        dialog?.cancel();
+        await settle();
+    }
+}
+
 // A stock ModalDialog shaped like polkit's: title, description, password entry, two buttons.
 async function modalDialog(unit) {
     const dialog = new ModalDialog.ModalDialog({styleClass: 'prompt-dialog'});
@@ -1119,8 +1208,6 @@ async function modalDialog(unit) {
         if (scene)
             delete scene.bytes;
         const find = styleClass => findDescendant(content, a => a.has_style_class_name?.(styleClass));
-        const endSession = withStyledActor(new St.BoxLayout({style_class: 'modal-dialog end-session-dialog'}),
-            node => lengthOrNull(node, 'width', unit));
         return {
             scene,
             box: styleOf(dialog.dialogLayout._dialog, unit),
@@ -1137,7 +1224,6 @@ async function modalDialog(unit) {
                 default: b.has_style_pseudo_class('default'),
                 hover: underPseudoClass(b, 'hover', () => paint(b.get_theme_node(), unit)),
             })),
-            endSessionWidth: endSession,
         };
     } finally {
         dialog.close();
@@ -1252,6 +1338,17 @@ function spotlightProviders() {
     }]));
 }
 
+// What the sheet asks of an actor's glass, and the blur the glass feature gave it.
+function glassOf(actor, unit) {
+    const node = actor.get_theme_node();
+    const [, saturation] = node.lookup_double('-apex-glass-saturation', false);
+    const effect = actor.get_effect('apex-glass');
+    return {
+        blur: lengthOrNull(node, '-apex-glass-blur', unit), saturation: round(saturation),
+        effect: effect ? {radius: effect.radius, saturation: round(effect.saturation), enabled: effect.enabled} : null,
+    };
+}
+
 async function spotlightScene(popup, name, text) {
     popup.panel.get_children()[0].get_children()[1].set_text(text);
     await settle();
@@ -1324,6 +1421,7 @@ async function spotlightStyle(unit) {
         captured.none = await spotlightScene(popup, 'none', 'zzz');
         measured.empty = styleOf(popup.panel.get_children()[2], unit);
         await spotlightScene(popup, null, '2880 / 1.5');
+        const panelBeforeCopy = glassOf(popup.panel, unit);
         popup.activateSelected();
         await settle();
         const scene = GLib.getenv('G2_SURFACE_SCENES') === '1' ? await capture('spotlight-copied') : null;
@@ -1341,6 +1439,7 @@ async function spotlightStyle(unit) {
             };
         }
         measured.closedOnCopy = !popup.isOpen;
+        measured.glass = {panelBeforeCopy, toast: pill ? glassOf(pill, unit) : null};
         return {scenes: captured, ...measured};
     } finally {
         popup.destroy();
@@ -1707,14 +1806,14 @@ async function scenes() {
     bar.largeText = await withLargeText();
     const surfaces = await shellSurfaces(unit);
     surfaces.quickSettings = await quickSettings(unit);
-    surfaces.quickSettingsLayer = await quickSettingsLayer();
+    surfaces.quickSettingsLayer = await quickSettingsLayer(unit);
     // Fedora's own shell, in smoke.sh, has no Apex layer to draw shadows.
     if (await apexHooks()) {
         surfaces.shadowLayers = await shadowLayers(unit);
         surfaces.idleRepaints = await idleRepaints();
     }
     surfaces.switcher = await windowSwitcher(unit);
-    surfaces.dialog = await modalDialog(unit);
+    surfaces.dialog = {...await modalDialog(unit), endSession: await endSessionDialog(unit)};
     surfaces.dateMenu = await calendarMenu(unit);
     surfaces.derived = derivedSurfaces(unit);
     surfaces.tilePreview = await tilePreview(unit);

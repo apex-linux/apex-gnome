@@ -31,8 +31,10 @@ readonly EMPTY_WORKSPACE_TEXT='No open windows'
 readonly LAUNCHER_COLUMNS=7
 readonly LAUNCHER_ROWS=4
 readonly LAUNCHER_ICON_SIZE=88
-readonly LAUNCHER_GRID_TOP=128
-readonly LAUNCHER_GRID_TOP_TOLERANCE=8
+readonly LAUNCHER_GRID_TOP=132
+# overviewControls.js: spacing is 2 % of the work area, the stock .search-entry keeps 6 px below it.
+readonly OVERVIEW_SPACING_RATIO=0.02
+readonly STOCK_SEARCH_MARGIN_BOTTOM=6
 readonly DIAMOND_SQUARE_PX=8
 readonly DIAMOND_STROKE_PX=2
 readonly DIAMOND_STROKE_AREA_PX=$((4 * DIAMOND_SQUARE_PX * DIAMOND_STROKE_PX))
@@ -476,7 +478,8 @@ shadow_layers() {
 
 # shellcheck disable=SC2016 # jq programs
 quick_settings_layer() {
-    local label=$1 log=$2 mode=$3 scenes q=.surfaces.quickSettingsLayer
+    local label=$1 log=$2 mode=$3 scenes q=.surfaces.quickSettingsLayer variant=light
+    [[ $label == *dark* ]] && variant=dark
     scenes=$(report_of "$log" APEXG2-SCENES)
     local order='([.order[].title]) as $t | ($t | index("VPN")) as $vpn | ($t | index("Airplane Mode")) as $airplane'
     if [[ $mode == apex ]]; then
@@ -490,6 +493,14 @@ quick_settings_layer() {
             "a click switches Power Mode from Balanced to the last profile, still lit"
         expect "$label Quick Settings" "$scenes" "$q.back | (.checked | not) and .lit and .subtitle == \"Balanced\"" \
             "and a second click back to Balanced"
+        expect "$label Quick Settings" "$scenes" "$q.wifiMenu.subtitle | .column == 3 and .row == 0 and .xAlign == .end" \
+            "the Wi-Fi menu's header subtitle ends the title's row, at its end (board 17)"
+        expect "$label Quick Settings" "$scenes" "$q.wifiMenu.rows | length > 1 and any(.active) and all(.checked == .active)" \
+            "the active network's row, and only it, is :checked"
+        top_bar_metric "$label Quick Settings" "$scenes" "$(tokens_for "$variant")" \
+            'a secure network'"'"'s lock follows its name, $apex_quick_menu_lock_size in $apex_fg at $apex_quick_menu_lock_opacity' \
+            "$q.wifiMenu.rows" '[.[] | select(.secure)] | length > 0 and all(.lockAfterName and (.lockSize | px_is($t.apex_quick_menu_lock_size))
+                and (.lockColor | colour_is(($t.apex_fg | rgba) as $f | "rgba(\($f[0]), \($f[1]), \($f[2]), \($t.apex_quick_menu_lock_opacity))")))'
     else
         expect "$label Quick Settings" "$scenes" "$q | $order | \$vpn != null and \$airplane != null and \$vpn < \$airplane" \
             "stock's order: VPN with the network toggles, before Airplane Mode"
@@ -497,6 +508,8 @@ quick_settings_layer() {
             "stock: Power Mode unlit at Balanced, no On/Off subtitles"
         expect "$label Quick Settings" "$scenes" "$q.switched.checked and ($q.back.checked | not)" \
             "stock: a click switches Power Mode to the last profile and back"
+        expect "$label Quick Settings" "$scenes" "$q.wifiMenu | (.subtitle | .column == 1 and .row == 1) and (.rows | length > 1 and all((.checked | not) and (.lockAfterName | not)))" \
+            "stock: the Wi-Fi menu's subtitle under its title, no row :checked, each lock by its signal icon"
     fi
 }
 
@@ -595,7 +608,7 @@ modal_dialog() {
 
     "${metric[@]}" 'a dialog is solid $apex_panel_solid, radius $apex_radius_dialog, $apex_dialog_width wide (polkit), $apex_end_session_dialog_width (end session)' \
         "$d" '(.box | (.background | colour_is($t.apex_panel_solid)) and (.radius | px_is($t.apex_radius_dialog)) and (.width | px_is($t.apex_dialog_width)))
-            and (.endSessionWidth + 2 * ($t.apex_dialog_padding | px) | px_is($t.apex_end_session_dialog_width))'
+            and (.endSession.box.width | px_is($t.apex_end_session_dialog_width))'
     "${metric[@]}" 'its ring is a $apex_surface_border border in $apex_panel_border, its shadow 0 $apex_shadow_y $apex_shadow_blur $apex_shadow' \
         "$d.box" '(.border.top | px_is($t.apex_surface_border)) and (.borderColor | colour_is($t.apex_panel_border))
             and (.boxShadow | .y == ($t.apex_shadow_y | px) and .blur == ($t.apex_shadow_blur | px) and (.color | colour_is($t.apex_shadow)))'
@@ -618,6 +631,22 @@ modal_dialog() {
     "${metric[@]}" 'a button is $apex_button ($apex_button_hover hovered); the default one the accent with its foreground' \
         "{b: $d.buttons, accent: .topBar.accent}" '.accent as $a | (.b | map(select(.default | not)) | length == 1 and all((.background | colour_is($t.apex_button)) and (.foreground | colour_is($t.apex_fg)) and (.hover.background | colour_is($t.apex_button_hover))))
             and (.b | map(select(.default)) | length == 1 and all((.background | colour_is($a)) and (.foreground | colour_is("#ffffff"))))'
+    "${metric[@]}" 'the end-session dialog has $apex_end_session_gap between its parts, its title tracked $apex_dialog_title_tracking, its countdown in tabular figures' \
+        "$d.endSession" '(.box.spacing | px_is($t.apex_end_session_gap)) and (.contentSpacing | px_is($t.apex_end_session_gap))
+            and (.title.tracking - ($t.apex_dialog_title_tracking | px) | fabs < 0.05) and (.description.font.features | test("tnum"))'
+    "${metric[@]}" 'above its title, stock'"'"'s system-shutdown-symbolic at $apex_end_session_icon_glyph_size in a $apex_end_session_icon_size circle of $apex_button' \
+        "$d.endSession.icon" '.iconName == "system-shutdown-symbolic" and .above and (.glyph | px_is($t.apex_end_session_icon_glyph_size))
+            and (.width | px_is($t.apex_end_session_icon_size)) and (.height | px_is($t.apex_end_session_icon_size))
+            and (.radius * 2 | px_is($t.apex_end_session_icon_size)) and (.background | colour_is($t.apex_button))'
+    "${metric[@]}" 'its row is Cancel, Restart, Power Off, $apex_end_session_button_gap apart, sharing it $apex_end_session_cancel_share : $apex_end_session_restart_share : $apex_end_session_confirm_share' \
+        "$d.endSession" '((($t.apex_end_session_dialog_width | px) - 2 * ($t.apex_dialog_padding | px) - 2 * ($t.apex_end_session_button_gap | px))
+            / (($t.apex_end_session_cancel_share | num) + ($t.apex_end_session_restart_share | num) + ($t.apex_end_session_confirm_share | num))) as $share
+            | (.buttons | map(.text)) == ["Cancel", "Restart", "Power Off"] and (.rowSpacing | px_is($t.apex_end_session_button_gap))
+            and ([.buttons[].width] | [.[0] / ($t.apex_end_session_cancel_share | num), .[1] / ($t.apex_end_session_restart_share | num), .[2] / ($t.apex_end_session_confirm_share | num)]
+                | all(. - $share | fabs <= 1))'
+    "${metric[@]}" 'Cancel and Restart are $apex_button ($apex_button_hover hovered); Power Off, which ends the session, $apex_destructive ($apex_destructive_hover hovered) with $apex_destructive_fg' \
+        "$d.endSession.buttons" '(.[:-1] | all((.background | colour_is($t.apex_button)) and (.hover.background | colour_is($t.apex_button_hover))))
+            and (.[-1] | (.background | colour_is($t.apex_destructive)) and (.foreground | colour_is($t.apex_destructive_fg)) and (.hover.background | colour_is($t.apex_destructive_hover)))'
 }
 
 # shellcheck disable=SC2016 # jq programs and token names, not shell expansions
@@ -751,8 +780,9 @@ overview_layer() {
         "$o.workspace.empty" '(.font.size | px_is($t.apex_font_workspace_empty_size)) and .font.weight == ($t.apex_font_heading_weight | tonumber) and (.foreground | colour_is($t.apex_fg_dim))'
     expect_report "$label" "$log" ".surfaces.appGrid.grid == {columns: $LAUNCHER_COLUMNS, rows: $LAUNCHER_ROWS, iconSize: $LAUNCHER_ICON_SIZE}" \
         "launcher: $LAUNCHER_COLUMNS columns of $LAUNCHER_ICON_SIZE px icons, $LAUNCHER_ROWS rows a page" APEXG2-SCENES
-    expect_report "$label" "$log" ".surfaces.appGrid | .strip == 0 and (.box.y - $LAUNCHER_GRID_TOP | fabs) <= $LAUNCHER_GRID_TOP_TOLERANCE" \
-        "launcher: no workspace strip above the grid, which starts at board 36's ${LAUNCHER_GRID_TOP} px (within $LAUNCHER_GRID_TOP_TOLERANCE)" APEXG2-SCENES
+    top_bar_metric "$label overview" "$scenes" "$tokens" "launcher: no workspace strip; the grid starts at the work area + \$apex_search_top + \$apex_search_height + $STOCK_SEARCH_MARGIN_BOTTOM + twice the spacing, board 36's $LAUNCHER_GRID_TOP px" \
+        "{g: .surfaces.appGrid, wa: .scenes.overview.workArea}" "(.wa.y + (\$t.apex_search_top | px) + (\$t.apex_search_height | px) + $STOCK_SEARCH_MARGIN_BOTTOM
+            + 2 * (.wa.height * $OVERVIEW_SPACING_RATIO | round)) as \$top | .g.strip == 0 and (.g.box.y - \$top | fabs) <= 1 and \$top == $LAUNCHER_GRID_TOP"
 }
 
 # shellcheck disable=SC2016 # jq programs and token names, not shell expansions
@@ -946,6 +976,21 @@ launcher_search() {
         "$l.empty" '(.top | px_is(0)) and (.padding.top | px_is($t.apex_launcher_empty_top)) and (.spacing | px_is($t.apex_launcher_empty_gap)) and (.title | .text == "No Results" and (.font.size | px_is($t.apex_font_launcher_empty_title_size))
             and .font.weight == ($t.apex_font_heading_weight | tonumber) and (.foreground | colour_is($t.apex_fg)))
             and (.hint | (.text | startswith("The launcher searches apps only")) and (.font.size | px_is($t.apex_font_launcher_empty_hint_size)) and (.foreground | colour_is($t.apex_fg_dim)))'
+}
+
+# shellcheck disable=SC2016 # jq programs and token names, not shell expansions
+spotlight_glass() {
+    local label=$1 log=$2 variant=$3 scenes tokens
+    scenes=$(report_of "$log" APEXG2-SCENES)
+    tokens=$(tokens_for "$variant")
+    local -a metric=(top_bar_metric "$label Spotlight glass" "$scenes" "$tokens")
+    local glass='(.blur | px_is($b | px)) and (.saturation == ($s | rtrimstr("%") | tonumber / 100))
+        and (.effect | . != null and .enabled and .radius == (2 * ($b | px) * $scale | round) and .saturation == ($s | rtrimstr("%") | tonumber / 100))'
+
+    "${metric[@]}" 'the panel blurs at $apex_spotlight_blur and $apex_spotlight_saturation, the toast at $apex_toast_blur and $apex_toast_saturation (radius 2 x sigma x the scale)' \
+        '{g: .surfaces.spotlight.glass, scale: .monitorScale}' ".scale as \$scale
+            | (.g.panelBeforeCopy | \$t.apex_spotlight_blur as \$b | \$t.apex_spotlight_saturation as \$s | $glass)
+            and (.g.toast | \$t.apex_toast_blur as \$b | \$t.apex_toast_saturation as \$s | $glass)"
 }
 
 scenes_captured() {
@@ -1176,6 +1221,7 @@ direct_cases() {
     tile_preview default "$f" light
     spotlight_style default "$f" light
     launcher_search default "$f" light
+    spotlight_glass default "$f" light
     screenshot_ui default "$f" light
 
     f=$run/default-scale1.log
@@ -1201,6 +1247,7 @@ direct_cases() {
     tile_preview default-scale1 "$f" light
     spotlight_style default-scale1 "$f" light
     launcher_search default-scale1 "$f" light
+    spotlight_glass default-scale1 "$f" light
     screenshot_ui default-scale1 "$f" light
 
     f=$run/dark-style.log
@@ -1229,6 +1276,7 @@ direct_cases() {
     tile_preview dark-style "$f" dark
     spotlight_style dark-style "$f" dark
     launcher_search dark-style "$f" dark
+    spotlight_glass dark-style "$f" dark
     screenshot_ui dark-style "$f" dark
     dark_style_off dark-style "$f"
 

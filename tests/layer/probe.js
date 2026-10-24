@@ -36,6 +36,7 @@ function newEmitter(props = {}) {
 }
 
 globalThis._ = text => text;
+globalThis.C_ = (_context, text) => text;
 
 // mutter's DisplayConfig as the lock reads it, one cached PowerSaveMode; it answers, never
 // answers ('silent') or fails ('error'), as displayConfig.reply says.
@@ -249,8 +250,12 @@ async function exerciseSpotlight() {
         return;
     }
 
+    const Glass = await import(`file://${shellDir}/js/ui/apex/glass/registry.js`);
+    const spotlightGlass = () => Glass.surfaces().map(surface => surface.name)
+        .filter(name => ['spotlight', 'toast'].includes(name)).join(',') || 'none';
     open();
     report('opened');
+    fact('spotlight.glass-open', spotlightGlass());
     fact('spotlight.focus', entry().focused === true);
     await type('disk', 'disk');
     fact('spotlight.tiles', tiles(popup));
@@ -281,8 +286,10 @@ async function exerciseSpotlight() {
     report('enter-on-the-sum');
     const toast = Toast.current();
     fact('spotlight.toast', toast ? `${toast.get_children()[0].accessible_name} in-ui-group=${Main.uiGroup.children.includes(toast)}` : 'none');
+    fact('spotlight.glass-copied', spotlightGlass());
     await spin(2300);
     fact('spotlight.toast-later', Toast.current() ? 'shown' : 'gone');
+    fact('spotlight.glass-later', spotlightGlass());
 
     open();
     await type('apex', 'apex');
@@ -467,6 +474,88 @@ function quickSettingsState(label, quickSettings) {
         `classes=${[...quickSettings.toggles.power.styleClasses].join(',') || 'none'}`);
 }
 
+// NMWirelessNetworkItem's and QuickToggleMenu's actors, as their constructors leave them.
+function networkRow(St, Clutter, active) {
+    const row = new St.Widget({name: 'row'});
+    row.network = new St.Widget({is_active: active});
+    const icons = new St.BoxLayout({name: 'icons'});
+    row._secureIcon = new St.Icon({name: 'lock', y_align: Clutter.ActorAlign.END});
+    [new St.Icon({name: 'signal'}), row._secureIcon].forEach(i => icons.add_child(i));
+    row._label = new St.Label({name: 'label'});
+    [icons, row._label, new St.Icon({name: 'check'})].forEach(c => row.add_child(c));
+    return row;
+}
+
+function toggleMenu(St, Clutter) {
+    const header = new St.Widget();
+    const cells = new Map();
+    const {LEFT, RIGHT, TOP, BOTTOM} = Clutter.GridPosition;
+    const steps = {[LEFT]: [-1, 0], [RIGHT]: [1, 0], [TOP]: [0, -1], [BOTTOM]: [0, 1]};
+    header.layout_manager = {
+        attach(child, column, row) {
+            header.add_child(child);
+            cells.set(child, [column, row]);
+        },
+        attach_next_to(child, sibling, side) {
+            const [column, row] = cells.get(sibling);
+            this.attach(child, column + steps[side][0], row + steps[side][1]);
+        },
+    };
+    const menu = new St.Widget();
+    menu.actor = new St.Widget({_delegate: menu, text_direction: Clutter.TextDirection.LTR});
+    menu.actor.add_child(header);
+    menu._header = header;
+    menu._headerIcon = new St.Icon();
+    menu._headerTitle = new St.Label();
+    menu._headerSubtitle = new St.Label({x_align: Clutter.ActorAlign.FILL});
+    menu._headerSpacer = new St.Widget();
+    header.layout_manager.attach(menu._headerIcon, 0, 0);
+    header.layout_manager.attach_next_to(menu._headerTitle, menu._headerIcon, Clutter.GridPosition.RIGHT);
+    header.layout_manager.attach_next_to(menu._headerSpacer, menu._headerTitle, Clutter.GridPosition.RIGHT);
+    header.layout_manager.attach_next_to(menu._headerSubtitle, menu._headerTitle, Clutter.GridPosition.BOTTOM);
+    menu.subtitleAt = () => `${cells.get(menu._headerSubtitle)} x_align=${menu._headerSubtitle.x_align}`;
+    return menu;
+}
+
+function rowState(row) {
+    const names = actor => actor.get_children().map(c => c.name).join(',');
+    const lock = row._secureIcon;
+    return `children=${names(row)} icons=${names(row.get_children()[0])} checked=${row.has_style_pseudo_class('checked')} ` +
+        `lock=${lock.y_align}/${lock.styleClasses.join(',') || 'none'}`;
+}
+
+async function exerciseSubmenus(Main) {
+    const {default: St} = await import(`file://${GLib.path_get_dirname(shellDir)}/St.js`);
+    const {default: Clutter} = await import(`file://${GLib.path_get_dirname(shellDir)}/Clutter.js`);
+    const {quickSettings} = Main.panel.statusArea;
+    const [active, other, menu] = [networkRow(St, Clutter, true), networkRow(St, Clutter, false), toggleMenu(St, Clutter)];
+    quickSettings.menu.actor.children.push(active, other, menu.actor);
+    Hooks.run('quick-settings-network-item', active);
+    Hooks.run('quick-settings-network-item', other);
+    Hooks.run('quick-settings-toggle-menu', menu);
+    fact('qs.row.active', rowState(active));
+    fact('qs.row.other', rowState(other));
+    fact('qs.menu', menu.subtitleAt());
+    active.network.is_active = false;
+    active.network.emit('notify::is-active');
+    other.network.is_active = true;
+    other.network.emit('notify::is-active');
+    fact('qs.row.switched', `${rowState(active)} | ${rowState(other)}`);
+    const gone = networkRow(St, Clutter, true);
+    Hooks.run('quick-settings-network-item', gone);
+    gone.destroy();
+    settings.set_boolean('layer-enabled', false);
+    await spin(200);
+    fact('qs.off.row', rowState(other));
+    fact('qs.off.menu', menu.subtitleAt());
+    other.network.emit('notify::is-active');
+    fact('qs.off.row-unfollowed', `checked=${other.has_style_pseudo_class('checked')}`);
+    settings.set_boolean('layer-enabled', true);
+    await spin(200);
+    fact('qs.on.row', rowState(other));
+    fact('qs.on.menu', menu.subtitleAt());
+}
+
 async function exerciseQuickSettings() {
     if (GLib.getenv('PROBE_QUICK_SETTINGS') !== '1')
         return;
@@ -480,12 +569,82 @@ async function exerciseQuickSettings() {
     toggles.bluetooth.subtitle = null;
     toggles.bluetooth.checked = true;
     fact('qs.own-subtitle-gone', `bluetooth=${toggles.bluetooth.subtitle}`);
+    await exerciseSubmenus(Main);
     settings.set_boolean('layer-enabled', false);
     await spin(200);
     quickSettingsState('qs.off', quickSettings);
     settings.set_boolean('layer-enabled', true);
     await spin(200);
     quickSettingsState('qs.on', quickSettings);
+}
+
+// endSessionDialog.js as patch 0018's hook sees it: a stock row of Cancel and the confirm
+// button, a theme spacing of 10 once the row is styled.
+function endSessionDialog(St) {
+    const buttonLayout = new St.BoxLayout({style_class: 'modal-dialog-button-box'});
+    buttonLayout.layout_manager = {spacing: 12, homogeneous: true};
+    buttonLayout.peek_theme_node = () => ({lookup_length: p => p === 'spacing' ? [true, 10] : [false, 0]});
+    const dialog = newEmitter({
+        contentLayout: new St.BoxLayout({child: new St.BoxLayout({style_class: 'message-dialog-content'})}),
+        buttonLayout,
+        addButton({label, action}) {
+            const button = new St.Button({style_class: 'modal-dialog-button', label});
+            button.action = action;
+            buttonLayout.add_child(button);
+            return button;
+        },
+        close() {
+            this.emit('closed');
+        },
+        _confirm(signal) {
+            fact('end-session.confirmed', signal);
+            return Promise.resolve();
+        },
+    });
+    dialog.open = content => {
+        buttonLayout.destroy_all_children();
+        dialog.addButton({label: 'Cancel', action: () => {}});
+        for (const {label} of content.confirmButtons)
+            dialog.addButton({label, action: () => {}});
+        Hooks.run('end-session-buttons', dialog, content);
+    };
+    return dialog;
+}
+
+function endSessionState(label, dialog) {
+    const row = dialog.buttonLayout;
+    const [first] = dialog.contentLayout.get_children();
+    const icon = first.has_style_class_name('apex-end-session-icon') ? first.child.icon_name : 'none';
+    fact(label, `buttons=${row.get_children().map(b => b.label).join(',')} icon=${icon} ` +
+        `spacing=${row.layout_manager.spacing} homogeneous=${row.layout_manager.homogeneous} ` +
+        `row=${row.has_style_class_name('apex-end-session-row')}`);
+}
+
+async function exerciseEndSession() {
+    if (GLib.getenv('PROBE_END_SESSION') !== '1')
+        return;
+    const {default: St} = await import(`file://${GLib.path_get_dirname(shellDir)}/St.js`);
+    const dialog = endSessionDialog(St);
+    const powerOff = {confirmButtons: [{signal: 'ConfirmedShutdown', label: 'Power Off'}], iconName: 'system-shutdown-symbolic'};
+    const restart = {confirmButtons: [{signal: 'ConfirmedReboot', label: 'Restart'}], iconName: 'view-refresh-symbolic'};
+    const logout = {confirmButtons: [{signal: 'ConfirmedLogout', label: 'Log Out'}]};
+    dialog.open(powerOff);
+    endSessionState('end-session.power-off', dialog);
+    dialog.buttonLayout.get_children()[1].action();
+    dialog.open(restart);
+    endSessionState('end-session.restart', dialog);
+    dialog.open(logout);
+    endSessionState('end-session.logout', dialog);
+    dialog.open(powerOff);
+    settings.set_boolean('layer-enabled', false);
+    await spin(200);
+    endSessionState('end-session.off', dialog);
+    dialog.open(powerOff);
+    endSessionState('end-session.off.reopened', dialog);
+    settings.set_boolean('layer-enabled', true);
+    await spin(200);
+    dialog.open(powerOff);
+    endSessionState('end-session.on', dialog);
 }
 
 // A surface two actors below the stage's child, its sheet naming one further layer.
@@ -721,6 +880,7 @@ function newUnlockDialog(St) {
     stack.add_child(promptBox);
     stack.add_child(clock);
     const dialog = new St.Widget({style_class: 'unlock-dialog'});
+    dialog._authIndicatorButton = new St.Widget({name: 'auth-indicator', visible: true});
     Object.assign(dialog, {
         _clock: clock, _promptBox: promptBox, _stack: stack, _authPrompt: null,
         _backgroundGroup: new St.Widget({name: 'backgrounds'}), conversations: 0, cancelled: [],
@@ -728,12 +888,14 @@ function newUnlockDialog(St) {
             if (this._authPrompt)
                 return;
             const prompt = new St.Widget({name: `conversation-${++this.conversations}`});
-            prompt._userVerifier = {
+            prompt._message = new St.Label({name: 'message', text: ''});
+            prompt._userVerifier = Object.assign(new St.Widget({name: 'verifier'}), {
+                currentMessage: null,
                 destroy() {
                     this.cancel();
                 },
                 cancel: () => this.cancelled.push(prompt.name),
-            };
+            });
             prompt.connect('destroy', () => prompt._userVerifier.destroy());
             this._authPrompt = prompt;
             promptBox.add_child(prompt);
@@ -761,6 +923,29 @@ function newUnlockDialog(St) {
 
 const names = actors => actors.map(a => a.name ?? a.styleClasses?.[0] ?? '?').join(',');
 
+// What upstream's AuthPrompt does with a queued message, before the lock hears it.
+function say(dialog, serviceName, text, error = false) {
+    const prompt = dialog._authPrompt;
+    if (!prompt)
+        return;
+    if (error)
+        prompt._message.add_style_class_name('login-dialog-message-warning');
+    else
+        prompt._message.remove_style_class_name('login-dialog-message-warning');
+    prompt._message.text = text ?? '';
+    prompt._userVerifier.currentMessage = text ? {serviceName, text} : null;
+    prompt._userVerifier.emit('show-message');
+}
+
+function hintState(dialog) {
+    const line = dialog._promptBox.children.find(c => c.has_style_class_name('apex-lock-hint-line'));
+    if (!line)
+        return 'none';
+    const [glyph, label] = line.children;
+    return `"${label.text}" glyph=${glyph.visible ? glyph.icon_name : 'none'} failed=${line.has_style_class_name('apex-lock-hint-failed')} ` +
+        `message=${dialog._authPrompt?._message.visible ?? 'none'} indicator=${dialog._authIndicatorButton.visible}`;
+}
+
 function lockState(dialog) {
     return `page=${dialog.page ?? 'none'} prompt=${dialog._authPrompt?.name ?? 'none'} cancelled=${dialog.cancelled.join(',') || 'none'}`;
 }
@@ -785,8 +970,20 @@ async function exerciseLock() {
         `stage=${names(stage.children ?? [])} clock=${names(dialog._clock.children)} ` +
         `hint=${dialog._clock._hint.visible} children=${names(dialog.children)}`);
     fact('lock.open', lockState(dialog));
-    const promptBoxChildren = () => dialog._promptBox.children.map(c => c.text ?? c.name).join(',');
+    const promptBoxChildren = () => dialog._promptBox.children
+        .map(c => c.text ?? c.name ?? c.children.map(part => part.text ?? '').join('')).join(',');
     fact('lock.prompt-box', promptBoxChildren());
+    fact('lock.hint.password', hintState(dialog));
+    for (const [label, service, text, error] of [
+        ['fingerprint-scan', 'gdm-fingerprint', '(or place finger on reader)', false],
+        ['fingerprint-failed', 'gdm-fingerprint', 'Failed to match fingerprint', true],
+        ['queue-done', null, null, false],
+        ['password-problem', 'gdm-password', "Sorry, that didn't work. Please try again.", true],
+        ['fingerprint-again', 'gdm-fingerprint', '(or place finger on reader)', false],
+    ]) {
+        say(dialog, service, text, error);
+        fact(`lock.hint.${label}`, hintState(dialog));
+    }
     for (const [label, mode] of [['blank', PowerSave.OFF], ['wake', PowerSave.ON],
         ['standby', PowerSave.STANDBY], ['wake-again', PowerSave.ON],
         ['suspend', PowerSave.SUSPEND], ['unsupported', PowerSave.UNSUPPORTED]]) {
@@ -794,6 +991,7 @@ async function exerciseLock() {
         fact(`lock.${label}`, lockState(dialog));
     }
     fact('lock.prompt-box.after-wake', promptBoxChildren());
+    fact('lock.hint.after-wake', hintState(dialog));
     dialog.emit('destroy');
 
     setScreen(PowerSave.OFF);
@@ -1178,6 +1376,7 @@ if (layer && GLib.getenv('PROBE_ENABLE') === '1') {
     await exerciseLock();
     await exerciseMotion();
     await exerciseQuickSettings();
+    await exerciseEndSession();
     await exerciseShadows();
     await exerciseSpotlight();
     await exerciseLauncher();
