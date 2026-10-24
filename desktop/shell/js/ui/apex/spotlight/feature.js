@@ -13,7 +13,7 @@ const TOGGLE_SPOTLIGHT = 'toggle-spotlight';
 
 let _keybindings = null;
 
-function _toggle() {
+export function toggleSpotlight() {
     if (Main.overview.visible)
         Main.overview.hide();
     else
@@ -31,7 +31,7 @@ export function enable() {
     const action = Main.wm.addKeybinding(TOGGLE_SPOTLIGHT, _keybindings,
         Meta.KeyBindingFlags.IGNORE_AUTOREPEAT,
         Shell.ActionMode.NORMAL | Shell.ActionMode.OVERVIEW,
-        _toggle);
+        toggleSpotlight);
     if (action === Meta.KeyBindingAction.NONE)
         throw new Error(`mutter refused the keybinding ${TOGGLE_SPOTLIGHT}`);
 }
