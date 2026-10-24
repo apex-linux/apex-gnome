@@ -19,7 +19,7 @@ readonly APEX_LIGHT_SHEET=resource:///org/gnome/shell/theme/gnome-shell-light.cs
 readonly APEX_DARK_SHEET=resource:///org/gnome/shell/theme/gnome-shell-dark.css
 readonly STOCK_SHEETS=resource:///org/gnome/shell/theme/stock
 readonly FEDORA_SHEETS=resource:///org/gnome/shell/theme
-readonly DIRECT_CASES=(default default-scale1 dark-style dock-intellihide dock-intellihide-dark dock-one-gpu stock-light stock-dark safe-env
+readonly DIRECT_CASES=(default default-scale1 dark-style high-contrast large-text dock-intellihide dock-intellihide-dark dock-one-gpu stock-light stock-dark safe-env
     layer-disabled layer-cycles motion idle fault-configure fault-enable fault-abort kernel-safe fedora-light fedora-dark glass fedora-glass
     indicators indicators-scale1 indicators-dark)
 readonly DIRECT_PARTS=(main kernel fedora)
@@ -33,6 +33,23 @@ readonly LAUNCHER_COLUMNS=7
 readonly LAUNCHER_ROWS=4
 readonly LAUNCHER_ICON_SIZE=88
 readonly LAUNCHER_GRID_TOP=132
+# WCAG 2.2 AA: 1.4.3 for text, 1.4.11 for the glyphs a control is known by.
+readonly A11Y_TEXT_RATIO=4.5
+readonly A11Y_ICON_RATIO=3
+readonly A11Y_SURFACES=(bar dock popupMenu osd banner quickSettings wifiMenu dateMenu switcher dialog endSession
+    spotlight.popup spotlight.toast overview appGrid)
+# The failures the checks found on landing, each until the fix its PR carries.
+# shellcheck disable=SC2016 # a token's name, not an expansion
+readonly A11Y_DIM='the accessibility token fixes: light $apex_fg_dim and the hint over glass'
+readonly A11Y_TOGGLE="the accessibility token fixes: white on the checked toggle's accent"
+readonly A11Y_WIDTH='the accessibility token fixes: Quick Settings as wide as Large Text needs'
+readonly A11Y_HC_SEARCH="upstream HC sheet: the overview search entry's glyph, white at .7 on the entry's white (1.01:1)"
+readonly A11Y_HC_TOGGLE="upstream HC sheet: Quick Settings' checked toggle, white on its accent (3.15:1), and its menu arrow (2.31:1)"
+declare -rA A11Y_GAPS=(
+    [default:banner]=$A11Y_DIM [default:spotlight.popup]=$A11Y_DIM [default:overview]=$A11Y_DIM
+    [default:quickSettings]=$A11Y_TOGGLE [dark-style:quickSettings]=$A11Y_TOGGLE [large-text:quickSettings]=$A11Y_WIDTH
+    [high-contrast:quickSettings]=$A11Y_HC_TOGGLE [high-contrast:overview]=$A11Y_HC_SEARCH
+)
 # overviewControls.js: spacing is 2 % of the work area, the stock .search-entry keeps 6 px below it.
 readonly OVERVIEW_SPACING_RATIO=0.02
 readonly STOCK_SEARCH_MARGIN_BOTTOM=6
@@ -1182,12 +1199,12 @@ overview_below_bar() {
 
 high_contrast_is_fedoras() {
     local run=$1 fedora
-    fedora=$(report_of "$run/fedora-light.log" | jq -r '.highContrastSheet.sha256WithoutStructureMarker // empty')
+    fedora=$(report_of "$run/fedora-light.log" | jq -r '.highContrastSheet.sha256BeforeStructure // empty')
     expect_report fedora-light "$run/fedora-light.log" '.highContrastSheet.structure == false' \
         "Fedora's high-contrast sheet has no Apex structure marker"
     expect_report stock-light "$run/stock-light.log" \
-        ".highContrastSheet | .structure and .sha256WithoutStructureMarker == \"${fedora:-none}\"" \
-        "the rebuilt high-contrast sheet, which safe mode keeps (it has no stock copy), is Fedora's apart from the structure marker"
+        ".highContrastSheet | .structure and .sha256BeforeStructure == \"${fedora:-none}\"" \
+        "the rebuilt high-contrast sheet, which safe mode keeps (it has no stock copy), is Fedora's up to the structure marker: Apex only appends"
 }
 
 fedora_baseline() {
@@ -1334,6 +1351,74 @@ motion_curve() {
             and (.[1].boxShadow | (.y | px_is($t.apex_preview_shadow_2_y)) and (.blur | px_is($t.apex_preview_shadow_2_blur)) and (.color | colour_is($t.apex_preview_shadow_2)))))'
     expect motion "$m" ".still.locatePointer.duration == $LOCATE_POINTER_RIPPLE_MS" \
         "and Locate Pointer's ripple, an animationRequired a11y aid, still takes stock's ${LOCATE_POINTER_RIPPLE_MS} ms"
+}
+
+# shellcheck disable=SC2016 # jq programs
+A11Y_SURFACE='(getpath($path | split("."))) as $s
+    | if $s == null then ["not measured"] elif $s.error then ["error: \($s.error)"]
+      elif ($s.targets | length) == 0 then ["no text or glyph found"] else empty end'
+# shellcheck disable=SC2016 # jq programs
+A11Y_LOW_CONTRAST='[.targets[] | select((.inactive | not) and (.offscreen | not) and (.ratio < (if .kind == "text" then $text else $icon end)))
+    | "\(.kind) \(.name | tojson) \(.ink) at \(.alpha) on \(.backdrop): \(.ratio)"]'
+# shellcheck disable=SC2016 # jq programs
+A11Y_LAYOUT='.box as $root | [.targets[] | select(.kind == "text" and (.offscreen | not)) as $t
+    | if $t.ellipsized and ($t.expandable | not) then "\($t.name | tojson) is cut short"
+      elif $t.box.x < $m.x - 1 or $t.box.y < $m.y - 1 or $t.box.x + $t.box.width > $m.x + $m.width + 1
+          or $t.box.y + $t.box.height > $m.y + $m.height + 1 then "\($t.name | tojson) leaves the screen"
+      elif $t.box.x < $root.x - 1 or $t.box.y < $root.y - 1 or $t.box.x + $t.box.width > $root.x + $root.width + 1
+          or $t.box.y + $t.box.height > $root.y + $root.height + 1 then "\($t.name | tojson) leaves its surface"
+      else empty end]
+    + [[.targets[] | select(.kind == "text" and (.offscreen | not))] | . as $a | range(0; length) as $i | range($i + 1; length) as $j | [$a[$i], $a[$j]]
+      | select(.[0].card == .[1].card and .[0].box.x < .[1].box.x + .[1].box.width - 1 and .[1].box.x < .[0].box.x + .[0].box.width - 1
+          and .[0].box.y < .[1].box.y + .[1].box.height - 1 and .[1].box.y < .[0].box.y + .[0].box.height - 1)
+      | "\(.[0].name | tojson) overlaps \(.[1].name | tojson)"] | unique'
+
+a11y_verdict() {
+    local desc=$1 problems=$2
+    if [[ -z $problems ]]; then pass "$desc"; else fail "$desc (${problems:0:600})"; fi
+}
+
+# Each surface's text at 4.5:1 and glyphs at 3:1, against the pixels the stage drew behind them.
+a11y_contrast() {
+    local label=$1 log=$2 report s problems
+    report=$(report_of "$log" APEXG2-A11Y)
+    if [[ -z $report ]]; then
+        fail "$label accessibility: no APEXG2-A11Y report"
+        return
+    fi
+    for s in "${A11Y_SURFACES[@]}"; do
+        problems=$(jq -r --arg path "$s" --argjson text "$A11Y_TEXT_RATIO" --argjson icon "$A11Y_ICON_RATIO" \
+            "[$A11Y_SURFACE] as \$e | if (\$e | length) > 0 then \$e else (getpath(\$path | split(\".\")) | $A11Y_LOW_CONTRAST) end | join(\"; \")" \
+            <<<"$report" 2>&1)
+        known_gap "${A11Y_GAPS[$label:$s]:-}" a11y_verdict "$label accessibility: $s: text $A11Y_TEXT_RATIO:1 and glyphs $A11Y_ICON_RATIO:1 against what is drawn behind them" "$problems"
+    done
+}
+
+# Large Text: each surface's text whole, on the screen, inside its surface and clear of the rest.
+a11y_layout() {
+    local label=$1 log=$2 report s problems
+    report=$(report_of "$log" APEXG2-A11Y)
+    expect "$label accessibility" "$report" '.textScalingFactor == 1.25' "text-scaling-factor is 1.25"
+    for s in "${A11Y_SURFACES[@]}"; do
+        problems=$(jq -r --arg path "$s" \
+            ".monitor as \$m | [$A11Y_SURFACE] as \$e | if (\$e | length) > 0 then \$e else (getpath(\$path | split(\".\")) | $A11Y_LAYOUT) end | join(\"; \")" \
+            <<<"$report" 2>&1)
+        known_gap "${A11Y_GAPS[$label:$s]:-}" a11y_verdict "$label accessibility: $s: no text cut short, off the screen, outside its surface or overlapping" "$problems"
+    done
+}
+
+# The light and dark captures, high contrast and Large Text, each with its own shell.
+a11y_cases() {
+    local run=$1 c
+    for c in high-contrast large-text; do
+        exits "$run" "$c" 0
+        no_js_error "$c" "$run/$c.log"
+        no_apex_failure "$c" "$run/$c.log"
+    done
+    a11y_contrast default "$run/default.log"
+    a11y_contrast dark-style "$run/dark-style.log"
+    a11y_contrast high-contrast "$run/high-contrast.log"
+    a11y_layout large-text "$run/large-text.log"
 }
 
 # The layer's features, in layer.js's own list, so a new feature is idle-tested at once.
@@ -1505,6 +1590,7 @@ direct_cases() {
     spotlight_keys dark-style "$f" dark
     screenshot_ui dark-style "$f" dark
     dark_style_off dark-style "$f"
+    a11y_cases "$run"
 
     for c in dock-intellihide dock-intellihide-dark; do
         exits "$run" "$c" 0

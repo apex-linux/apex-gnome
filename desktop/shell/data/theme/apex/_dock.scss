@@ -27,12 +27,12 @@ $_item_bottom: $apex_dock_dot_gap + $apex_dock_dot_size;
   }
 
   .overview-tile, .show-apps, .apex-dock-trash {
-    @extend %reset;
+    @include apex-reset;
     margin: 0 ($apex_dock_gap / 2);
     padding-bottom: $_item_bottom;
 
     .overview-icon {
-      @extend %reset;
+      @include apex-reset;
     }
 
     &:hover, &:focus, &:active, &:checked {
