@@ -882,7 +882,6 @@ async function quickSettings(unit) {
     }
 }
 
-// G2 opens no windows, so the switcher is a stock SwitcherList of AppIcon-shaped items.
 // The quick-settings feature: the toggles' order, Power Mode lit, On/Off subtitles; then two
 // clicks on Power Mode, which stock answers by switching to the last profile and back.
 async function quickSettingsLayer() {
@@ -921,6 +920,7 @@ async function quickSettingsLayer() {
     return state;
 }
 
+// G2 opens no windows, so the switcher is a stock SwitcherList of AppIcon-shaped items.
 async function windowSwitcher(unit) {
     const list = new SwitcherPopup.SwitcherList(true);
     const apps = SWITCHER_APPS.map(name => {
