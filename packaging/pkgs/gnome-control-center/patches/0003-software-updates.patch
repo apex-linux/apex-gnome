@@ -1,0 +1,64 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Thuong Vo <66083331+SekiroKenjii@users.noreply.github.com>
+Date: Sat, 24 Oct 2026 10:00:00 +0000
+Subject: [PATCH] system: open the Apex Software Updates page from the System
+ panel
+
+Apex updates the whole image through apex-updated, not through
+gnome-software, so System's Software Updates row opens the Apex page
+instead of spawning an updater: panels/apex/cc-apex-updates-page.c, a
+static subpage tagged "software-updates" that shows the Update1 service's
+state and calls its methods; polkit asks in the daemon. The row is always
+shown, since every Apex image runs apex-updated, and
+`gnome-control-center system software-updates` opens the page directly.
+---
+ panels/system/cc-system-panel.blp | 6 +++---
+ panels/system/cc-system-panel.c   | 3 +++
+ 2 files changed, 6 insertions(+), 3 deletions(-)
+
+diff --git a/panels/system/cc-system-panel.blp b/panels/system/cc-system-panel.blp
+index fa39bf6..d7deafa 100644
+--- a/panels/system/cc-system-panel.blp
++++ b/panels/system/cc-system-panel.blp
+@@ -73,13 +73,13 @@ template $CcSystemPanel: $CcPanel {
+           title: _("S_oftware Updates");
+           icon-name: "system-update-symbolic";
+           use-underline: true;
+-          activated => $cc_system_page_open_software_update(template);
+-          accessible-role: button;
++          action-name: "navigation.push";
++          action-target: "'software-updates'";
+ 
+           [suffix]
+           Image {
+             valign: center;
+-            icon-name: "adw-external-link-symbolic";
++            icon-name: "go-next-symbolic";
+           }
+         }
+       }
+diff --git a/panels/system/cc-system-panel.c b/panels/system/cc-system-panel.c
+index eb05669..8ba7485 100644
+--- a/panels/system/cc-system-panel.c
++++ b/panels/system/cc-system-panel.c
+@@ -34,6 +34,7 @@
+ #include "remote-desktop/cc-remote-desktop-page.h"
+ #include "secure-shell/cc-secure-shell-page.h"
+ #include "users/cc-users-page.h"
++#include "panels/apex/cc-apex-updates-page.h"
+ 
+ struct _CcSystemPanel {
+     CcPanel parent_instance;
+@@ -163,10 +164,12 @@ cc_system_panel_init (CcSystemPanel *self)
+     gtk_widget_set_visible (GTK_WIDGET (self->remote_desktop_row),
+                             service_state == CC_SERVICE_STATE_ENABLED || service_state == CC_SERVICE_STATE_DISABLED);
+     gtk_widget_set_visible (GTK_WIDGET (self->software_updates_group), show_software_updates_group (self));
++    gtk_widget_set_visible (GTK_WIDGET (self->software_updates_group), TRUE);
+ 
+     cc_panel_add_static_subpage (CC_PANEL (self), "about", CC_TYPE_ABOUT_PAGE);
+     cc_panel_add_static_subpage (CC_PANEL (self), "datetime", CC_TYPE_DATE_TIME_PAGE);
+     cc_panel_add_static_subpage (CC_PANEL (self), "region", CC_TYPE_REGION_PAGE);
+     cc_panel_add_static_subpage (CC_PANEL (self), "remote-desktop", CC_TYPE_REMOTE_DESKTOP_PAGE);
+     cc_panel_add_static_subpage (CC_PANEL (self), "users", CC_TYPE_USERS_PAGE);
++    cc_panel_add_static_subpage (CC_PANEL (self), "software-updates", CC_TYPE_APEX_UPDATES_PAGE);
+ }

@@ -9,6 +9,8 @@ readonly SOURCE1=$APEX_ROOT/desktop/control-center
 readonly RECIPE=$APEX_ROOT/packaging/pkgs/gnome-control-center
 readonly OWNER_FROM='From: Thuong Vo <66083331+SekiroKenjii@users.noreply.github.com>'
 readonly SPDX='SPDX-License-Identifier: GPL-2.0-or-later'
+# apex-system's interface, copied byte for byte (apex-image compares the two), so it carries no line of its own.
+readonly CONTRACTS=(panels/apex/io.github.apex_linux.Apex.Update1.xml)
 
 fails=0
 flunk() {
@@ -21,7 +23,7 @@ mapfile -t files < <(cd "$SOURCE1" && find . -type f -printf '%P\n' | LC_ALL=C s
 
 read -ra allowed <<<"$(sed -n 's/^source1_paths=//p' "$RECIPE/pkg.env")"
 for f in "${files[@]}"; do
-    [[ $(head -n 3 -- "$SOURCE1/$f") == *"$SPDX"* ]] ||
+    [[ " ${CONTRACTS[*]} " == *" $f "* || $(head -n 3 -- "$SOURCE1/$f") == *"$SPDX"* ]] ||
         flunk "desktop/control-center/$f has no GPL-2.0-or-later SPDX line, gnome-control-center's licence"
     inside=false
     for p in "${allowed[@]}"; do
