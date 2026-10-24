@@ -186,6 +186,19 @@ function shown(popup) {
     return parts.join(' | ');
 }
 
+// Each Settings row's tile: its colour, the accent, or neutral.
+function tiles(popup) {
+    const [, results] = popup.panel.get_children();
+    return results.get_children()
+        .filter(row => row.get_children?.()[0]?.has_style_class_name('apex-spotlight-tile'))
+        .map(row => {
+            const [tile, text] = row.get_children();
+            const colour = tile.has_style_class_name('apex-spotlight-tile-accent') ? 'accent'
+                : tile.style?.match(/#[0-9a-f]{6}/)?.[0] ?? 'neutral';
+            return `${text.get_children()[0].text}=${colour}`;
+        }).join(' ');
+}
+
 const SEARCH_SETTLE_MS = 300;
 
 async function exerciseSpotlight() {
@@ -244,6 +257,7 @@ async function exerciseSpotlight() {
     report('opened');
     fact('spotlight.focus', entry().focused === true);
     await type('disk', 'disk');
+    fact('spotlight.tiles', tiles(popup));
     for (let i = 0; i < 4; i++)
         key(Clutter.KEY_Down);
     report('down-4');
@@ -273,6 +287,11 @@ async function exerciseSpotlight() {
     fact('spotlight.toast', toast ? `${toast.get_children()[0].accessible_name} in-ui-group=${Main.uiGroup.children.includes(toast)}` : 'none');
     await spin(2300);
     fact('spotlight.toast-later', Toast.current() ? 'shown' : 'gone');
+
+    open();
+    await type('apex', 'apex');
+    fact('spotlight.tiles-apex', tiles(popup));
+    key(Clutter.KEY_Escape);
 
     open();
     await type('none', 'zzz');

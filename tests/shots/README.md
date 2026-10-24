@@ -306,7 +306,8 @@ find), types board 38's queries and, with `G2_SURFACE_SCENES=1`, captures each s
 `spotlight-none` for a query with no results). It
 reads the panel's width, its distance from the monitor's top edge, radius, tint, ring and
 shadow; the field, its glyph, text and hint; the results' line and inset; the section
-headers in board order; the rows, the selected row's accent tint, verb and Enter chip; the
+headers in board order; the rows, the selected row's accent tint, verb and Enter chip;
+the Settings rows' tiles, their colours read from `settings-tiles.json`; the
 calculator's result in tabular figures with Calculator as the first application; that an
 empty query shows only the field, and the row of a query with no results; and, after Enter on the result, that Spotlight closed and the toast's size, tint,
 inset, check circle, text and distance from the bottom edge. In the overview scene, after its capture, the probe
@@ -330,10 +331,10 @@ damages the tile alone:
 
 | Step | Asserts |
 |---|---|
-| a tile changes | the first frame's redraw clip leaves the box out and the effect redraws it on the next; that frame is `blur-ref.js`'s reference per channel within 4/255 inside, 12/255 in the band ds/2 px wide along the edges (ds the effect's own downscale) and 1/255 on average over the box. The first run fixed these (ROADMAP S2b): at ds 16 the edge band is the low-resolution blur's own clamping and upsampling, the interior's 4 is 8-bit intermediates times the saturation; llvmpipe is the reference renderer |
+| a tile changes | in each step below that needs a frame whose clip misses the box, another redraw can cover it (then a full redraw): the tile is damaged again, up to 5 times. The first frame's redraw clip leaves the box out and the effect redraws it on the next; that frame is `blur-ref.js`'s reference per channel within 4/255 inside, 12/255 in the band ds/2 px wide along the edges (ds the effect's own downscale) and 1/255 on average over the box. The first run fixed these (ROADMAP S2b): at ds 16 the edge band is the low-resolution blur's own clamping and upsampling, the interior's 4 is 8-bit intermediates times the saturation; llvmpipe is the reference renderer |
 | a tile changes and the box's redraw is queued, as the glass manager forwards damage | the same frame is the box a full redraw draws, pixel for pixel |
 | a tile changes, nothing forwarded | the frame draws the last result, pixel for pixel, and the next one is the full redraw's |
-| the same with `fine` off | stock's effect in that frame differs from the full redraw and misses the tolerances above: the stale sampling the redraw-clip rule prevents, so the case can see it. When another redraw covers the box in that frame (then a full redraw), it damages the tile again, up to 5 times |
+| the same with `fine` off | stock's effect in that frame differs from the full redraw and misses the tolerances above: the stale sampling the redraw-clip rule prevents, so the case can see it. |
 
 `blur-ref.js` is a clamp-to-edge Gaussian at full resolution, CSS `saturate()` and the
 rounded box's coverage, over the box alone; `blur-ref-test.js` tests it in `selftest.sh`.
