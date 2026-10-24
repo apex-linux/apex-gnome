@@ -1496,6 +1496,72 @@ CHANGES
         "$passes/$failures $(sed -n 's/^FAIL motion: //p' "$T/assertions.out")"
 }
 
+# shellcheck disable=SC2016 # a jq program
+readonly IDLE_REPORT='{windowMs: 10000,
+  settled: {startingUp: false, overview: false, dock: {visible: true, rested: true}, barGlass: true, dockGlass: true, easing: []},
+  idle: {afterPaints: 0, frames: [], relayouts: {}},
+  control: {afterPaints: 3, frames: [{atMs: 512, damage: {rectangles: 2, extents: {x: 1050, y: 36, width: 376, height: 418},
+    under: [["StBoxLayout.quick-settings", "StBoxLayout.popup-menu-content"]]}}]}}'
+# shellcheck disable=SC2016 # a jq program
+readonly IDLE_FRAME='{atMs: 4210, damage: {rectangles: 1, extents: {x: 600, y: 838, width: 240, height: 62},
+  under: [["StIcon.apex-dock-trash", "ApexDock#apexDock"]]}}'
+
+write_idle_run() {
+    local change=$1 dir=$T/idle feature
+    rm -rf "$dir" && mkdir -p "$dir"
+    {
+        printf 'APEXG2 %s\n' "$APEX_LIGHT_REPORT"
+        # shellcheck disable=SC2016 # expanded by the inner bash
+        for feature in $(bash -c '. "$1/assert.sh"; layer_features' _ "$HERE"); do
+            printf 'Gjs-Console-Message: 09:41:00.000: Apex: feature %s enabled\n' "$feature"
+        done
+        printf 'APEXG2-IDLE %s\n' "$(jq -nc --argjson frame "$(jq -nc "$IDLE_FRAME")" "$IDLE_REPORT | $change")"
+    } >"$dir/idle.log"
+    echo 'idle exit=0 secs=31 marker-after-exit=no' >"$dir/results-main.txt"
+}
+
+test_idle() {
+    local change what passes failures all
+    write_idle_run .
+    read -r all failures <<<"$(assertion_counts idle_desktop "$T/idle")"
+    if ((failures == 0 && all > 10)); then
+        ok "idle: no frame and no relayout over 10 s, every feature on, the counter checked, pass all $all assertions"
+    else
+        not_ok "idle: a clean run passes (passed/failed $all/$failures): $(grep -m3 '^FAIL' "$T/assertions.out" | paste -sd'|' -)"
+    fi
+    while IFS='|' read -r change what; do
+        write_idle_run "$change"
+        read -r passes failures <<<"$(assertion_counts idle_desktop "$T/idle")"
+        expect_eq "idle: $what fails one assertion" "$((all - 1))/1" "$passes/$failures"
+    done <<'CHANGES'
+.idle += {afterPaints: 1, frames: [$frame]}|a frame painted while idle
+.idle.afterPaints = 2|paints the counter saw but did not keep
+.idle.relayouts = {"StLabel.clock < StBin.clock-display": 10}|a relayout queued while idle
+.settled.easing = [{actor: ["ApexDock#apexDock"], properties: ["translation-y"]}]|an actor still easing when the window opens
+.settled.dock.rested = false|a dock that never came to rest
+.settled.overview = true|an overview left open
+.settled.barGlass = false|a bar without its glass
+.windowMs = 2000|a window shorter than 10 s
+.control.afterPaints = 0|a counter that counts nothing
+.control.frames[0].damage.under = []|a control frame whose actors went unnamed
+CHANGES
+    # shellcheck disable=SC2016 # a jq variable
+    write_idle_run '.idle += {afterPaints: 1, frames: [$frame]}'
+    assertion_counts idle_desktop "$T/idle" >/dev/null
+    expect_eq "idle: a painted frame is named, with its damage, the actors under it and their ui/apex/ files" \
+        "1 painted: at 4210 ms, 1 rectangle(s) in 600,838 240x62 under StIcon.apex-dock-trash < ApexDock#apexDock; from ApexDock in ui/apex/dock/dock.js; apex-dock-trash in ui/apex/dock/trash.js" \
+        "$(sed -n 's/^FAIL idle: over 10000 ms of an idle desktop the stage paints no frame (\(.*\))$/\1/p' "$T/assertions.out")"
+    write_idle_run .
+    sed -i '/feature polkit enabled/d' "$T/idle/idle.log"
+    read -r passes failures <<<"$(assertion_counts idle_desktop "$T/idle")"
+    expect_eq "idle: a feature of layer.js's list that did not enable fails one assertion" "$((all - 1))/1" "$passes/$failures"
+    write_idle_run '{error: "idle.js: settle never returned\nidle.js:150"}'
+    read -r passes failures <<<"$(assertion_counts idle_desktop "$T/idle")"
+    expect_eq "idle: a probe error fails once, with its message, not every assertion after it" \
+        "$((all - 5))/1 idle.js: settle never returned" \
+        "$passes/$failures $(sed -n 's/^FAIL idle: //p' "$T/assertions.out")"
+}
+
 fixtures_report() {
     local part
     for part in main kernel fedora; do
@@ -1853,6 +1919,7 @@ test_clock_c
 test_overview_below_bar
 test_layer_cycles
 test_motion
+test_idle
 test_spotlight_key
 test_fixtures
 test_glass

@@ -53,6 +53,7 @@ The direct cases:
 | `safe-env`, `layer-disabled`, `kernel-safe` | the three kill switches | upstream's dark sheet from `theme/stock/`, the stock colour scheme, every hook stock, no Super+Space binding, the reason logged; the same sheet in all three; `safe-env`: no search hint |
 | `layer-cycles` | the capture settings; the probe sets `layer-enabled` false, then true, three times | while off: upstream's dark sheet from `theme/stock/`, the stock colour scheme, every hook stock, no Super+Space binding; while on: the Apex light sheet, `prefer-light` and Super+Space; each time it is on the stage holds the same actors, type by type, as at startup, and each time it is off the same as the first time (the first count waits out main.js's 20 s timeout for deferred work, which fills the overview's hidden dash; an `St.Icon` counts, not the texture child St gives it once it is first styled, which a dash hidden since startup decides); the layer logs each switch |
 | `motion` | the capture settings with `enable-animations` true; the probe lifts the inhibit `main.js` puts on animations without hardware-accelerated rendering, starts `window.js`, a plain GTK 4 window, maximises and restores it once (mutter gives a first size change a 0 × 0 old frame, which stock never animates), maximises it and opens the overview, then sets `enable-animations` false, does both again and plays Locate Pointer | DESIGN's motion (ROADMAP S3c): the window actor's size-change transition and the overview's state transition are `CUBIC_BEZIER` with the control points (.2, .8) and (.2, 1), over 300 and 200 ms; with animations off, neither creates a transition, while Locate Pointer's ripple (`animationRequired`, an a11y aid) still takes stock's 830 ms |
+| `idle` | the capture settings without hot corners, every feature of `layer.js`'s `FEATURES_IN_ENABLE_ORDER` on; `idle.js` lets the session settle, then watches the stage for 10 s | ROADMAP S3c's exit: an idle desktop paints no frame and queues no relayout (below, "The idle desktop") |
 | `fault-configure`, `fault-enable` | `APEX_SHELL_TEST_FAULT` | only the fault feature is off; the `witness` feature after it still enables; the rest of the layer runs, Super+Space included, and the shell survives |
 | `fault-abort` | `abort-after-enable` | SIGABRT (exit 134) with the crash guard's marker left behind |
 | `fedora-light`, `fedora-dark` | Fedora's build, `prefer-light` or `prefer-dark` | no Apex module; upstream's sheet at its own path, byte for byte the one safe mode loads from `theme/stock/` |
@@ -401,6 +402,24 @@ Both shells capture `unlockDialog.js`'s blur (actor mode, radius 90 × scale, br
 .65) over a grid, with a background-mode blur over it, every property of 0003 at its
 default: `glass-unlock.png` against `fedora-glass-unlock.png` differs by 0 pixels.
 
+## The idle desktop
+
+ROADMAP S3c's last exit: an idle desktop shows no extra repaints. The `idle` case runs the
+patched shell with every feature `layer.js` lists in `FEATURES_IN_ENABLE_ORDER`, and
+`assert.sh` reads that list from the source, so a new feature is idle-tested as soon as it
+joins it. `idle.js` lets the session settle first: startup over, the overview hidden, the
+startup notifications dropped, the dock at rest (no transition on its box), the bar's and
+the dock's glass on, no actor easing, and the pointer left at 0,0 (hot corners off). Then it
+counts the stage's `after-paint` over 10 s, on the fixed clock, and expects none.
+
+A failure names what repainted. Each frame's `paint-view` hands over its redraw clip, an
+`MtkRegion`: the probe takes its extents by bisecting it with `intersect_rectangle`, since
+gjs cannot take the region's rectangles, which its getters return by value, and names the
+actors a pick finds inside it, innermost first. `queue-relayout`, which runs up the tree, is
+counted on every actor, so the innermost entry is the one that asked. `assert.sh` adds the
+`ui/apex/` file of each JS class and `apex-` style class among them. The control opens Quick
+Settings inside a window of the same counter: it must count frames and name their damage.
+
 ## Known gaps
 
 `top_bar_gaps` asserts the rest of the designed top bar ([docs/DESIGN.md](https://github.com/apex-linux/apex/blob/main/docs/DESIGN.md)),
@@ -442,6 +461,7 @@ it is at least 4.8:1), and what the goldens judge: the Apex Symbolic glyphs (S1b
 | `png.js`, `compare.js` | gjs | PNG with GLib's zlib only, and the masked comparison |
 | `glass.js`, `blur-ref.js` | the shell; gjs | the glass cases, and their CPU reference |
 | `indicators.js`, `sni-items.js` | the shell; gjs | the app-indicator part of `default`, `default-scale1` and `dark-style`, and the StatusNotifierItems it starts |
+| `idle.js` | the `idle` case's shell | the settled desktop, its paints and relayouts over 10 s, and the counter's control |
 | `frame.c`, `G2Frame-1.gir` | the glass cases' shells | `G2Frame.read()`, a region of the frame the shell drew |
 | `selftest.sh`, `png-test.js`, `blur-ref-test.js` | CI and the host | the tests of the above |
 

@@ -2319,6 +2319,17 @@ async function runProbe() {
         console.log(`APEXG2-CYCLES ${JSON.stringify(result)}`);
     }
 
+    if (GLib.getenv('G2_IDLE') === '1') {
+        let result;
+        try {
+            const Idle = await import('./idle.js');
+            result = await Idle.idleReport({settle, dropStartupNotifications, apexDock});
+        } catch (e) {
+            result = {error: `${e.message}\n${e.stack}`};
+        }
+        console.log(`APEXG2-IDLE ${JSON.stringify(result)}`);
+    }
+
     if (GLib.getenv('G2_DOCK') === '1') {
         let result;
         try {
