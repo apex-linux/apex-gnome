@@ -213,6 +213,11 @@ scrim, the search field at rest and focused and its gap under the bar, the thumb
 gap, radius and ring and the current one's ring, and, as stand-ins since G2 opens no
 windows and searches nothing, a window title and a search section.
 
+`app_grid` runs in the same cases. The probe turns the dash's Show Apps on, reads an app
+tile (at rest, hovered, focused) and the fixture image's System folder, opens the folder
+and reads its dialog, captures it with `G2_SURFACE_SCENES=1`, and reads the hidden
+running dot, page indicator and page hint from stand-ins.
+
 None of these surfaces is in a capture compared with Fedora, so the comparison with Fedora's build
 is unchanged: the Apex overview is compared only run to run, and safe mode's with Fedora's.
 
@@ -276,7 +281,7 @@ the captures against Fedora's and `rpm -V` stay with G2 in the builder VM. With
 It also asserts the shell surfaces of the same three cases (below). With
 `-e G2_SURFACE_SCENES=1`, `direct.sh` passes the variable to the shells, and the capture
 cases also save a scene per surface group (`surfaces`, `quick-settings`, `switcher`,
-`dialog`, `datemenu`), for placing beside the boards.
+`dialog`, `datemenu`, `appgrid`), for placing beside the boards.
 
 ## Not yet
 

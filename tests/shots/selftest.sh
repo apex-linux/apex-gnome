@@ -358,6 +358,27 @@ REPORT_OF_AN_OVERVIEW_DRAWN_FROM_TOKENS='
     section: {background: ($t.apex_glass_card | hex), borderColor: ($t.apex_glass_card_border | hex),
         radius: ($t.apex_radius_message | px), foreground: ($t.apex_fg | hex)}}}}'
 # shellcheck disable=SC2016 # a jq program
+REPORT_OF_A_LAUNCHER_DRAWN_FROM_TOKENS='
+($t.apex_surface_border | px) as $b | {top: $b, right: $b, bottom: $b, left: $b} as $border
+| ($t.apex_folder_dialog_padding | px) as $dp
+| {topBar: {accent: "#3584e4ff"}, surfaces: {appGrid: {
+    app: {background: "#00000000", radius: ($t.apex_radius_app_tile | px), padding: {top: ($t.apex_app_tile_padding | px)},
+        spacing: ($t.apex_app_tile_gap | px), foreground: ($t.apex_fg | hex),
+        labelFont: {size: ($t.apex_font_app_label_size | px), weight: ($t.apex_font_label_weight | tonumber)},
+        hover: {background: ($t.apex_button | hex)},
+        focus: {background: ($t.apex_button | hex), boxShadow: {inset: true, spread: ($t.apex_entry_focus_ring | px), color: "#3584e4ff"}}},
+    folder: {background: ($t.apex_folder | hex), borderColor: ($t.apex_pill_border | hex), border: $border},
+    dialog: {width: ($t.apex_folder_dialog_width | px), background: ($t.apex_folder_panel | hex), borderColor: ($t.apex_panel_border | hex),
+        radius: ($t.apex_radius_folder_dialog | px), border: $border,
+        padding: {left: ($dp - $b), bottom: (($t.apex_folder_dialog_padding_bottom | px) - $b)},
+        boxShadow: {color: ($t.apex_shadow | hex), y: ($t.apex_shadow_y | px), blur: ($t.apex_shadow_blur | px)},
+        title: {font: {size: ($t.apex_font_folder_title_size | px), weight: ($t.apex_font_heading_weight | tonumber)}, foreground: ($t.apex_fg | hex)},
+        button: {width: ($t.apex_folder_close_size | px), height: ($t.apex_folder_close_size | px), background: ($t.apex_button | hex)}},
+    runningDot: {width: ($t.apex_running_dot_size | px), height: ($t.apex_running_dot_size | px), radius: (($t.apex_running_dot_size | px) / 2),
+        background: (($t.apex_fg | rgba) as $c | "rgba(\($c[0]), \($c[1]), \($c[2]), \($t.apex_running_dot_opacity))" | hex)},
+    pageIndicator: {background: ($t.apex_fg | hex)},
+    pageHint: {gradient: 0}}}}'
+# shellcheck disable=SC2016 # a jq program
 HEX_DEF='def hex: rgba | map([., 16] | "0123456789abcdef"[(.[0] / .[1] | floor):(.[0] / .[1] | floor) + 1]
                                     + "0123456789abcdef"[(.[0] % .[1]):(.[0] % .[1]) + 1]) | "#" + join("");'
 
@@ -375,6 +396,7 @@ assert_run() {
     [[ $assertions == modal_dialog ]] && report=$REPORT_OF_A_DIALOG_DRAWN_FROM_TOKENS
     [[ $assertions == date_menu ]] && report=$REPORT_OF_A_DATE_MENU_DRAWN_FROM_TOKENS
     [[ $assertions == overview_style ]] && report=$REPORT_OF_AN_OVERVIEW_DRAWN_FROM_TOKENS
+    [[ $assertions == app_grid ]] && report=$REPORT_OF_A_LAUNCHER_DRAWN_FROM_TOKENS
     tokens=$(tokens_for "$variant")
     jq -nc --argjson t "$tokens" "$JQ_DEFS $HEX_DEF $report | $change" | sed 's/^/APEXG2-SCENES /' >"$T/top-bar.log"
     # shellcheck disable=SC2016 # expanded by the inner bash
@@ -663,6 +685,34 @@ test_overview_style() {
 .surfaces.overview.indicator.border.top = 3|upstream's 3 px indicator
 .surfaces.overview.caption.background = "#000000e6"|upstream's dark tooltip caption
 .surfaces.overview.section.background = "#2e2e33ff"|upstream's dark search section
+CHANGES
+}
+
+test_app_grid() {
+    local variant change what passes failures open_gaps
+    for variant in light dark; do
+        read -r passes failures open_gaps <<<"$(assert_run app_grid "$variant")"
+        if ((failures == 0 && open_gaps == 0 && passes == 6)); then
+            ok "launcher ($variant): drawn from the tokens it passes all $passes assertions"
+        else
+            not_ok "launcher ($variant): drawn from the tokens it passes (passed/failed/gaps $passes/$failures/$open_gaps): $(grep -m3 '^FAIL' "$T/top-bar.out" | paste -sd'|' -)"
+        fi
+    done
+    while IFS='|' read -r change what; do
+        read -r passes failures open_gaps <<<"$(assert_run app_grid light "$change")"
+        if ((failures == 1)); then
+            ok "launcher: $what fails one assertion"
+        else
+            not_ok "launcher: $what fails one assertion (passed/failed/gaps $passes/$failures/$open_gaps)"
+        fi
+    done <<'CHANGES'
+.surfaces.appGrid.app.radius = 24|upstream's tile radius
+.surfaces.appGrid.app.foreground = "#fafafbff"|upstream's white labels on the light scrim
+.surfaces.appGrid.app.focus.boxShadow.color = "#3584e4cc"|upstream's 80 % focus ring
+.surfaces.appGrid.folder.background = "#3a3a3eff"|upstream's raised dark folder
+.surfaces.appGrid.dialog.width = 720|upstream's 720 px folder
+.surfaces.appGrid.dialog.title.font.size = 26.667|upstream's title 1 folder name
+.surfaces.appGrid.pageHint.gradient = 1|upstream's gradient page hint
 CHANGES
 }
 
@@ -1051,6 +1101,7 @@ test_window_switcher
 test_modal_dialog
 test_date_menu
 test_overview_style
+test_app_grid
 test_today_pins
 test_known_gaps
 test_fixed_clock
