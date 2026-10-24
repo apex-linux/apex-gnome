@@ -1,0 +1,40 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+
+// Board 12 beyond what _lock.scss shares with the lock screen. The login dialog covers the
+// primary monitor only in gdm mode, so its background never reaches the lock screen.
+.login-dialog {
+  background-color: $apex_greeter_fallback;
+  background-image: url($apex_greeter_background);
+  background-size: cover;
+}
+
+// org.gnome.login-screen logo (apex-desktop) is the footer: wordmark and credit in one image.
+.login-dialog-logo-bin { margin: 0 0 $apex_greeter_bottom; }
+
+.login-dialog-bottom-button-group {
+  padding: $apex_greeter_bottom;
+  spacing: $apex_greeter_button_gap;
+}
+
+@mixin apex-greeter-button {
+  min-width: $apex_greeter_button_icon_size;
+  min-height: $apex_greeter_button_icon_size;
+  padding: ($apex_greeter_button_size - $apex_greeter_button_icon_size) / 2 - $apex_surface_border;
+  border: $apex_surface_border solid $apex_greeter_button_border;
+  border-radius: $apex_greeter_button_size / 2;
+  color: $apex_lock_fg;
+  background-color: $apex_greeter_button;
+  box-shadow: none;
+
+  StIcon { icon-size: $apex_greeter_button_icon_size; }
+  &:hover, &:focus, &:checked, &:active { color: $apex_lock_fg; background-color: $apex_lock_glass_strong; }
+}
+
+// Board 12's back button; the session and accessibility menus have no board and take its look.
+.login-dialog .login-dialog-button.cancel-button {
+  @include apex-greeter-button;
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
+.login-dialog-bottom-button-group .login-dialog-button { @include apex-greeter-button; }

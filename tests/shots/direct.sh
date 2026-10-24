@@ -39,10 +39,16 @@ readonly FRAME_DIR=/run/g2-frame
 readonly G2_CLOCK='2026-09-28 09:41:00'
 G2_CLOCK_EPOCH=$(date -u -d "$G2_CLOCK" +%s)
 readonly G2_CLOCK_EPOCH
-readonly FIXTURE_NAMES=(org.freedesktop.UPower org.freedesktop.NetworkManager org.bluez)
+readonly FIXTURE_NAMES=(org.freedesktop.UPower org.freedesktop.NetworkManager org.bluez net.hadess.SwitcherooControl
+    org.freedesktop.UPower.PowerProfiles io.github.apex_linux.Apex.Update1)
 # Two fixed workspaces: stock widens the active workspace dot by a factor that depends on
 # the count. A 24-hour clock: in 12 hours a one-digit hour adds a figure space.
+readonly NO_HOT_CORNER='org.gnome.desktop.interface enable-hot-corners false'
+readonly TWO_SOURCES="org.gnome.desktop.input-sources sources [('xkb', 'us'), ('xkb', 'fr')]"
 readonly CAPTURE_SETTINGS='org.gnome.desktop.interface enable-animations false;org.gnome.desktop.interface cursor-blink false;org.gnome.mutter dynamic-workspaces false;org.gnome.desktop.wm.preferences num-workspaces 2;org.gnome.desktop.interface clock-format 24h;org.gnome.desktop.interface show-battery-percentage true'
+
+# The motion case needs animations, which the captures turn off.
+readonly MOTION_SETTINGS=${CAPTURE_SETTINGS/enable-animations false/enable-animations true}
 
 cat /proc/cmdline >"/out/cmdline-$part.txt"
 # gnome-shell's loginManager.js takes its dummy manager only when /run/systemd/seats is
@@ -60,7 +66,8 @@ mkdir -p /etc/dbus-1
 } >/etc/dbus-1/system-local.conf
 dbus-daemon --system --fork || echo "no system bus"
 mkdir -p "/out/fixtures-$part"
-python3 /w/fixtures.py "/out/fixtures-$part" >"/out/fixtures-$part.txt" 2>&1 || echo "fixtures.py: exit $?"
+G2_POWER_PROFILES=1 python3 /w/fixtures.py "/out/fixtures-$part" >"/out/fixtures-$part.txt" 2>&1 || echo "fixtures.py: exit $?"
+setsid python3 /w/update1-mock.py "/out/update1-$part.log" >"/out/update1-$part.out" 2>&1 </dev/null &
 mkdir -p /tmp/.X11-unix && chmod 1777 /tmp/.X11-unix
 gcc -O2 -Wall -Werror -shared -fPIC -o "$CLOCK_LIB" /w/clock.c || { echo "direct.sh: cannot build clock.c" >&2; exit 1; }
 # ld.so only warns when a preload is missing, and the shells would keep the real clock.
@@ -87,7 +94,7 @@ run_case() {
         DBUS_SYSTEM_BUS_ADDRESS=unix:path=/run/dbus/system_bus_socket \
         G2_CASE="$name" G2_CAPTURES=/out/captures G2_SETTINGS="$gsettings_triples" \
         G2_SCALE=2 G2_MONITOR=2880x1800 TZ=UTC G2_CLOCK_LIB="$CLOCK_LIB" G2_CLOCK_EPOCH="$G2_CLOCK_EPOCH" \
-        G2_SURFACE_SCENES="${G2_SURFACE_SCENES:-0}" "$@" \
+        G2_SURFACE_SCENES="${G2_SURFACE_SCENES:-0}" G2_WAYLAND_DISPLAY=apex-g2 "$@" \
         timeout "$SHELL_TIMEOUT" dbus-run-session -- bash -c '
             set -u
             gsettings set org.gnome.desktop.interface scaling-factor "$G2_SCALE"
@@ -104,7 +111,7 @@ run_case() {
             # Only reads of the wall clock stand still: timers and frames keep the real clocks.
             exec env LD_PRELOAD="$G2_CLOCK_LIB" \
                 gnome-shell --headless --virtual-monitor "$G2_MONITOR" \
-                --wayland-display=apex-g2 --automation-script /w/probe.js
+                --wayland-display="$G2_WAYLAND_DISPLAY" --automation-script /w/probe.js
         ' >"/out/$name.log" 2>&1
     rc=$?
     [[ -e $run/apex-shell-starting ]] && left=yes
@@ -140,14 +147,28 @@ case $part in
         exit 0 ;;
 esac
 
-run_and_record_case default "$CAPTURE_SETTINGS" G2_SCENES=1
+run_and_record_case default "$CAPTURE_SETTINGS" G2_SCENES=1 G2_A11Y=1
 run_and_record_case default-scale1 "$CAPTURE_SETTINGS" G2_SCENES=1 G2_SCALE=1 G2_MONITOR=1440x900
-run_and_record_case dark-style "$CAPTURE_SETTINGS;org.gnome.desktop.interface color-scheme prefer-dark" G2_SCENES=1 G2_TURN_DARK_OFF=1
+run_and_record_case dark-style "$CAPTURE_SETTINGS;org.gnome.desktop.interface color-scheme prefer-dark" G2_SCENES=1 G2_A11Y=1 G2_TURN_DARK_OFF=1
+run_and_record_case high-contrast "$CAPTURE_SETTINGS;org.gnome.desktop.a11y.interface high-contrast true" G2_A11Y=1
+run_and_record_case large-text "$CAPTURE_SETTINGS;org.gnome.desktop.interface text-scaling-factor 1.25" G2_A11Y=1
+# The headless pointer starts at 0,0, in the hot corner, which its first motion would trip.
+run_and_record_case dock-intellihide "$CAPTURE_SETTINGS;$NO_HOT_CORNER" G2_DOCK=1
+run_and_record_case dock-intellihide-dark "$CAPTURE_SETTINGS;$NO_HOT_CORNER;org.gnome.desktop.interface color-scheme prefer-dark" G2_DOCK=1
+python3 /w/fixtures.py --gpus 1 >"/out/fixtures-one-gpu.txt" 2>&1 || echo "fixtures.py --gpus 1: exit $?"
+run_and_record_case dock-one-gpu "$CAPTURE_SETTINGS" G2_ONE_GPU=1
+python3 /w/fixtures.py --gpus 2 >>"/out/fixtures-one-gpu.txt" 2>&1 || echo "fixtures.py --gpus 2: exit $?"
+# The indicators get shells of their own, as default, default-scale1 and dark-style.
+run_and_record_case indicators "$CAPTURE_SETTINGS;$NO_HOT_CORNER;$TWO_SOURCES" G2_INDICATORS=1
+run_and_record_case indicators-scale1 "$CAPTURE_SETTINGS;$NO_HOT_CORNER;$TWO_SOURCES" G2_INDICATORS=1 G2_SCALE=1 G2_MONITOR=1440x900
+run_and_record_case indicators-dark "$CAPTURE_SETTINGS;$NO_HOT_CORNER;$TWO_SOURCES;org.gnome.desktop.interface color-scheme prefer-dark" G2_INDICATORS=1
 run_and_record_case stock-light "$CAPTURE_SETTINGS;org.gnome.desktop.interface color-scheme prefer-light" APEX_SHELL_SAFE=1 G2_SCENES=1
 run_and_record_case stock-dark "$CAPTURE_SETTINGS;org.gnome.desktop.interface color-scheme prefer-dark" APEX_SHELL_SAFE=1 G2_SCENES=1
 run_and_record_case safe-env '' APEX_SHELL_SAFE=1
 run_and_record_case layer-disabled 'io.github.apex_linux.Apex.Desktop layer-enabled false'
 run_and_record_case layer-cycles "$CAPTURE_SETTINGS" G2_CYCLES=3
+run_and_record_case motion "$MOTION_SETTINGS" G2_MOTION=1
+run_and_record_case idle "$CAPTURE_SETTINGS;$NO_HOT_CORNER" G2_IDLE=1
 run_and_record_case fault-configure '' APEX_SHELL_TEST_FAULT=configure
 run_and_record_case fault-enable '' APEX_SHELL_TEST_FAULT=enable PROBE_WAIT=10
 run_and_record_case fault-abort '' APEX_SHELL_TEST_FAULT=abort-after-enable PROBE_WAIT=20

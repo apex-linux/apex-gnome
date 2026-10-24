@@ -48,9 +48,15 @@ The direct cases:
 | `default` | `color-scheme` `'default'` | the Apex light sheet with its marker, `prefer-light`, no fault feature, the crash guard's marker created and removed; Super+Space (`toggle-spotlight`) registered in the normal and overview modes; the panel showed the one-time search hint (`search-hint-shown` true; until apex-desktop's schema has the key, the shell reports `no-key`); the top bar's, the dock's and the shell surfaces' metrics, light |
 | `default-scale1` | as `default`, on a 1440x900 virtual monitor at scale 1, as the desktop VM runs | the Apex light sheet; the top bar's, the dock's and the shell surfaces' metrics at scale 1 |
 | `dark-style` | `prefer-dark` | the Apex dark sheet; the top bar's, the dock's and the shell surfaces' metrics, dark; then the probe clicks Quick Settings' Dark Style toggle (its own `clicked` signal): the toggle turns off, writes `color-scheme` `'default'`, and the running shell loads the Apex light sheet |
-| `stock-light`, `stock-dark` | `APEX_SHELL_SAFE=1` with `prefer-light` or `prefer-dark` | upstream's sheet of that variant from `theme/stock/`; the overview's thumbnails at upstream's maximum scale 0.05 and at the effective scale of Fedora's build; the rebuilt high-contrast sheet, which safe mode keeps, is Fedora's apart from the structure marker; no Super+Space binding |
+| `high-contrast` | the capture settings with `org.gnome.desktop.a11y.interface high-contrast` true | every Apex surface's contrast in the high-contrast sheet (see "Accessibility") |
+| `large-text` | the capture settings with `text-scaling-factor` 1.25 | every Apex surface's text whole, on the screen, inside its surface and clear of the rest (see "Accessibility") |
+| `dock-intellihide`, `dock-intellihide-dark` | the capture settings, light or dark, without hot corners (the headless pointer starts at 0,0, in the corner); the probe starts `maximised-window.js`, one maximised GTK window | the dock shows, then hides behind the maximised window as the bar turns solid; a virtual pointer pushing against the bottom edge under it reveals it, under the pointer; moving away hides it; the overview shows it; with `dock-intellihide` off it stays, and hides again when it is back on; the window gone, it shows. The maximised and revealed scenes are captured beside board 37's |
+| `dock-one-gpu` | the capture settings, after `fixtures.py --gpus 1` (put back to two after it) | switcheroo-control reports one GPU, and the dock's first app's menu offers no "Launch Using Discrete Graphics Card" |
+| `stock-light`, `stock-dark` | `APEX_SHELL_SAFE=1` with `prefer-light` or `prefer-dark` | upstream's sheet of that variant from `theme/stock/`; the overview's thumbnails at upstream's maximum scale 0.05 and at the effective scale of Fedora's build; the rebuilt high-contrast sheet, which safe mode keeps, is Fedora's up to the structure marker (Apex only appends); no Super+Space binding |
 | `safe-env`, `layer-disabled`, `kernel-safe` | the three kill switches | upstream's dark sheet from `theme/stock/`, the stock colour scheme, every hook stock, no Super+Space binding, the reason logged; the same sheet in all three; `safe-env`: no search hint |
 | `layer-cycles` | the capture settings; the probe sets `layer-enabled` false, then true, three times | while off: upstream's dark sheet from `theme/stock/`, the stock colour scheme, every hook stock, no Super+Space binding; while on: the Apex light sheet, `prefer-light` and Super+Space; each time it is on the stage holds the same actors, type by type, as at startup, and each time it is off the same as the first time (the first count waits out main.js's 20 s timeout for deferred work, which fills the overview's hidden dash; an `St.Icon` counts, not the texture child St gives it once it is first styled, which a dash hidden since startup decides); the layer logs each switch |
+| `motion` | the capture settings with `enable-animations` true; the probe lifts the inhibit `main.js` puts on animations without hardware-accelerated rendering, starts `window.js`, a plain GTK 4 window, maximises and restores it once (mutter gives a first size change a 0 × 0 old frame, which stock never animates), maximises it and opens the overview, then sets `enable-animations` false, does both again and plays Locate Pointer | DESIGN's motion (ROADMAP S3c): the window actor's size-change transition and the overview's state transition are `CUBIC_BEZIER` with the control points (.2, .8) and (.2, 1), over 300 and 200 ms; with animations off, neither creates a transition, while Locate Pointer's ripple (`animationRequired`, an a11y aid) still takes stock's 830 ms |
+| `idle` | the capture settings without hot corners, every feature of `layer.js`'s `FEATURES_IN_ENABLE_ORDER` on; `idle.js` lets the session settle, then watches the stage for 10 s | ROADMAP S3c's exit: an idle desktop paints no frame and queues no relayout (below, "The idle desktop") |
 | `fault-configure`, `fault-enable` | `APEX_SHELL_TEST_FAULT` | only the fault feature is off; the `witness` feature after it still enables; the rest of the layer runs, Super+Space included, and the shell survives |
 | `fault-abort` | `abort-after-enable` | SIGABRT (exit 134) with the crash guard's marker left behind |
 | `fedora-light`, `fedora-dark` | Fedora's build, `prefer-light` or `prefer-dark` | no Apex module; upstream's sheet at its own path, byte for byte the one safe mode loads from `theme/stock/` |
@@ -59,17 +65,25 @@ The direct cases:
 Every case: the probe ran (so the static import graph loaded), from `startup-complete`, and no `JS ERROR`;
 the wall clock stands at the fixed time and the top bar's clock shows it (`Mon Sep 28`, EN SPACE, `09:41`).
 
+A probe that runs longer than 30 s keeps `gnome-shell-perf-helper` awake with a call every 10 s:
+the helper quits after 30 s without one, and `scripting.js`'s last call to it would then end the
+shell with exit 1.
+
 ## Fixtures and the clock
 
 Before the first case, `direct.sh` lets root own and call the fixtures' names on the
 container's system bus (`/etc/dbus-1/system-local.conf`) and runs `fixtures.py`, which
-starts python-dbusmock's `upower`, `networkmanager` and `bluez5` templates there:
+starts python-dbusmock's `upower`, `networkmanager` and `bluez5` templates there, a bare
+mock of switcheroo-control, which has no template, and (`G2_POWER_PROFILES=1`)
+`upower_power_profiles_daemon`:
 
 | Service | Fixture | The shell shows |
 |---|---|---|
 | UPower | a battery at 87 %, discharging (the display device) | `battery-level-80-symbolic` and, with `show-battery-percentage`, "87%" |
 | NetworkManager | the primary connection: Wi-Fi "Apex-5G" at signal 90, connected globally, with "Apex-2.4G" (72) and the open "Library Guest" (48) in range, each with WPA2's ciphers or none, as libnm needs to list a network | `network-wireless-signal-excellent-symbolic`, and three networks in the Wi-Fi menu |
 | BlueZ | the Bluetooth keyboard "Keychron K3", paired and connected | no glyph: the status pill shows network, volume and battery only (the `panel` feature) |
+| switcheroo-control | the laptop's two GPUs, "AMD Radeon Graphics" the default and "NVIDIA GeForce RTX 3050 Laptop GPU" (`HasDualGpu`); `fixtures.py --gpus 1` leaves the iGPU alone | "Launch Using Discrete Graphics Card" in an app's menu, the dock's included |
+| power-profiles-daemon | the Balanced profile, with Power Saver and Performance | the Power Mode toggle, lit at Balanced (the `quick-settings` feature); no glyph in the status pill |
 
 `fixtures-PART.txt` holds what the bus reports afterwards, and `assert.sh` checks it for
 each container. `direct.sh` builds `clock.c` and preloads it into each shell with
@@ -150,7 +164,7 @@ bar's glass, a `Shell.BlurEffect` of radius 2 × `$apex_bar_blur` × the monitor
 workspace dots' gap, height and radius, the active dot `$apex_bar_dot_active_width` wide and
 the others `$apex_bar_dot_size` square at .45; that the top-left pixel reaches the reactive
 4 × 4 hot-corner zone; "Desktop" at `$apex_font_bar_emphasis_weight` after the Activities pill,
-as nothing has focus; the search button just before the status pill, a
+as nothing has focus; the search button at the start of the right box and the status pill at its end, a
 `$apex_bar_search_width` × `$apex_bar_pill_height` pill named "Search (Super+Space)" (both
 the `panel` feature); the clock's unread-notification dot (the probe
 posts one low-urgency notification); that the diamond is drawn (at least a quarter of
@@ -170,8 +184,48 @@ and `$apex_dock_bottom_gap` above the bottom edge; its background's radius
 `$apex_radius_dock`; every icon `$apex_dock_icon_size` (`dock-icon-size` medium); the apps
 first, then the separator, Show Apps and Trash, with no separator among the apps; the
 full-colour Show Apps icon; and in the overview the dock shown, the overview's own dash
-hidden and its workspaces laid out above the dock. The safe-mode cases have no dock, and the Apex captures mask it, as they mask the
+hidden and its workspaces laid out above the dock. Its first app's menu, stock's app menu,
+offers "Launch Using Discrete Graphics Card" while the fixtures' switcheroo-control
+reports two GPUs. In `dock-one-gpu` it reports the iGPU alone, as on the laptop with
+`/apex/pair-mode` off, when no NVIDIA driver is bound and the dGPU has no DRM card, and the
+same menu offers no such item. The safe-mode cases have no dock, and the Apex captures mask it, as they mask the
 bar, against Fedora's, whose desktop has none.
+
+## App indicators
+
+The cases `indicators`, `indicators-scale1` and `indicators-dark` are shells of their own,
+set as `default`, `default-scale1` and `dark-style` are plus two input sources (US and
+French). `G2_INDICATORS=1` runs `indicators.js`, which starts `sni-items.js`, a gjs process that exports four
+StatusNotifierItems, each with a DBusMenu and on its own session-bus connection as separate
+apps are, and registers them with the shell's watcher. Every call an item gets lands in
+`<case>-sni.log`. `indicator_metrics` asserts, against the token file:
+
+- no indicators and no divider before any item registers, and none after the apps quit;
+- the four in the order they registered, then the divider, then the search button;
+- each a `$apex_indicator_width` × `$apex_bar_pill_height` pill, radius
+  `$apex_radius_bar_pill`, `$apex_bar_gap` apart, its glyph `$apex_bar_icon_size` in
+  `$apex_bar_fg` and centred, the theme's `-symbolic` icon for a named one;
+- the password manager's red pixmap drawn as a mask: the bar's colour, and no red left;
+- Chat's NeedsAttention dot: `$apex_indicator_dot_size`, the accent, at its offsets;
+- the divider's size, colour and its distance from both neighbours;
+- Chat's menu on a secondary click: radius `$apex_radius_menu`, at least
+  `$apex_indicator_menu_width` wide, the title as a `$apex_indicator_menu_header_height`
+  header in `$apex_fg_dim`, `$apex_menu_row_height` rows, its two toggles as switches in the
+  app's states, "Ctrl+Shift+C" dimmed; the opened, clicked and closed events in the log;
+- Activate on a primary click;
+- with a fifth item, three shown and "+2", and the overflow menu's two rows: glyph, title
+  and chevron;
+- board 39's "everything", with the camera and microphone indicators, the recording and
+  the sharing buttons shown by the probe: the right box's order (indicators, divider,
+  search, recording, input chip, sharing, status pill); the privacy group's size, colour,
+  glyphs and place in the status pill, whose start narrows for it and widens again once
+  nothing is in use; the recording pill's stop square and tabular timer; the sharing
+  pill's glyph, square, name and gap to the status pill; the input chip's "EN", font,
+  tracking and minimum width.
+
+The captures `<case>-indicators.png`, `<case>-indicators-everything.png`,
+`<case>-indicator-menu.png` and `<case>-indicator-overflow.png` show the bar, the bar in
+"everything", Chat's menu and the overflow menu.
 
 ## The shell surfaces' metrics
 
@@ -209,8 +263,15 @@ shadow, the tiles' gap, radius, padding and fills, and the names' type.
 `modal_dialog` runs in the same cases. The probe opens a stock `ModalDialog` shaped like
 polkit's (a `MessageDialogContent`, a password entry, Cancel and a default Authenticate),
 captures it with `G2_SURFACE_SCENES=1`, and reads the box's fill, radius, width, ring,
-shadow, inset and gaps, the title and text, the entry at rest and focused, and both buttons; the
-end-session width comes from a stand-in `.end-session-dialog` box.
+shadow, inset and gaps, the title and text, the entry at rest and focused, and both buttons.
+It then opens the shell's own power-off dialog over D-Bus, as gnome-session does, and reads
+its width and gaps, the end-session feature's icon circle, the title's tracking, the
+countdown's figures, and the row: the buttons' order, widths, gap and fills.
+Last, with `update1-mock.py` (python-dbusmock's Update1, started by `direct.sh`) moved to
+`staged` and then `ready-for-reboot`, it opens the restart dialog and reads board 14's
+update card: its place under the text, inset, radius, gap, fill and ring, the icon, the
+title and the versions, the switch (on, sensitive only when staged) and Restart's label,
+capturing `end-session-update` and `end-session-ready`.
 
 `date_menu` runs in the same cases. The probe posts two low-urgency notifications (no
 banner), opens the calendar menu at the fixed date, captures it with
@@ -237,6 +298,58 @@ and the threshold of one workspace, and the launcher's grid at 7 columns, 4 rows
 88 px icons. G2 opens no windows, so the `window-title-visible` hook's answer stands in for
 a title shown without hover.
 
+`tile_preview` runs in the same cases. G2 opens no window to drag, so a stand-in actor in
+the window group plays the window and the stock `TilePreview` opens over the left half of the
+work area, captured with `G2_SURFACE_SCENES=1`. It reads the preview's box against the tile, its
+clear inset border, the radius inside it, the accent fill and the inset accent ring.
+
+`screenshot_ui` runs in the same cases. The probe opens the stock screenshot UI in its
+selection mode, captures it with `G2_SURFACE_SCENES=1`, and reads the panel, the close button
+in the heading row, the area buttons (Window insensitive with no window), the pointer toggle,
+the capture button and its recording state, the screenshot/screencast switch, the selection's
+shade, outline and handles, then the screen mode's frame; a checked window frame is a stand-in.
+
+`quick_settings_layer` checks the `quick-settings` layer feature in the same cases, and
+stock in the stock cases. The probe reads the grid's toggles in order (the VPN toggle by
+its class: it has no title without a VPN connection), Power Mode, the status pill and Do
+Not Disturb's subtitle, then clicks Power Mode twice: VPN right after Airplane Mode, Power
+Mode lit through `apex-lit` with `checked` stock, the power-profile indicator out of the
+pill, "Off" under a toggle without a subtitle of its own, and the clicks switching to the
+last profile and back, still lit. Stock keeps VPN before Airplane Mode and nothing lit.
+It also opens the Wi-Fi menu (board 17): the header's subtitle in the grid's column 3, row 0,
+at its end; the fixtures' active network the only `:checked` row; each secure network's lock
+right after its name, `$apex_quick_menu_lock_size` in `$apex_fg` at
+`$apex_quick_menu_lock_opacity`. Stock keeps the subtitle under the title, no row checked
+and each lock by its signal icon.
+
+`shadow_layers` checks the `shadows` layer feature in the same cases. The probe opens
+Quick Settings, the calendar and a stock `ModalDialog`, and reads each one's layer: shown,
+on the surface's box, `0 $apex_shadow_2_y $apex_shadow_2_blur $apex_shadow_2`, Quick
+Settings' at its radius, and the dialog's beside its box (above the lightbox). It counts
+the stage's paints in the quieter of two idle 2 s windows with the feature on and with
+`shadows` in `disabled-features`: the layers add none. The `motion` case, which opens the overview with a
+window, checks the window preview's two layers and the `apex-window-preview` radius.
+
+The `motion` case also audits reduced motion. It opens and closes each Apex surface once,
+with animations on and then off: the dock's lift (a hovered icon) and intellihide (the window
+maximised), the overview with its thumbnails, Spotlight, Quick Settings, the calendar and a
+dialog with its shadow layer. Every ease goes through `environment.js`'s `ease`,
+`ease_property` and `St.Adjustment.ease` (and their async forms), which the probe wraps to
+read the transitions each call left, by the property's canonical name, and whether a
+`ui/apex/` frame called it. With animations on, the dock's own eases last: the control. Off,
+no ease, Apex's or stock's, leaves a transition above 0 ms but `animationRequired` ones, and a
+failure names each that did. St skips CSS transitions itself with animations off
+(`st-widget.c`), the top bar's `$apex_bar_transition` included.
+
+`notifications_layer` checks the `notifications` layer feature in the same cases, and stock
+in the stock cases. The probe posts three low-urgency notifications from one app, opens the
+calendar and reads the cards' boxes, the first card's header line, glyph and icon, and the
+footer; clicks Do Not Disturb; then empties the list. The feature lays the cards out one under
+another without a group header, the header reads "app · time" without the glyph, a card
+without an icon shows the app's, Do Not Disturb sits left of Clear, which ends at the footer's
+right edge, the click turns banners off, and Clear stays shown, insensitive, once the list is
+empty. Stock stacks the cards, keeps the glyph and hides Clear.
+
 `derived_surfaces` reads surfaces with no board, which G2 never opens, from nested
 stand-ins in the same cases: the workspace switcher and its dots, the resize popup, the
 input method's candidates and a candidate, the run dialog's entry, an audio device tile
@@ -248,10 +361,24 @@ find), types board 38's queries and, with `G2_SURFACE_SCENES=1`, captures each s
 `spotlight-none` for a query with no results). It
 reads the panel's width, its distance from the monitor's top edge, radius, tint, ring and
 shadow; the field, its glyph, text and hint; the results' line and inset; the section
-headers in board order; the rows, the selected row's accent tint, verb and Enter chip; the
+headers in board order; the rows, the selected row's accent tint, verb and Enter chip;
+the Settings rows' tiles, their colours read from `settings-tiles.json`; the
 calculator's result in tabular figures with Calculator as the first application; that an
 empty query shows only the field, and the row of a query with no results; and, after Enter on the result, that Spotlight closed and the toast's size, tint,
-inset, check circle, text and distance from the bottom edge.
+inset, check circle, text and distance from the bottom edge. `spotlight_glass` checks that the open panel and
+the toast carry their sheet's glass, σ 34 and σ 30 at 1.8, and that the glass feature gave each
+a blur of radius 2 × σ × the monitor's scale.
+`spotlight_keys` covers S3a's exit items in the real shell: with Settings answering only after the
+1 s budget, Applications and Files show at 300 ms and still at 1200 ms, once Settings is cancelled;
+Down ×4, Up ×1 and Down ×20, pressed through a virtual keyboard, move one selection across the
+sections and stop at the last row; Enter opens that file through its provider; Esc closes, and
+both pop Spotlight's modal.
+In the overview scene, after its capture, the probe types into the overview's search entry
+and checks that Spotlight opened with the text and the overview's own field emptied (patch 0013's hook).
+`launcher_search` then checks the app grid's
+pill: 400 px with "Search apps", "files" filtering the grid in its own box to apps with Files
+first and selected and Spotlight closed, and "No Results" with its hint where board 36 puts it
+(scenes `launcher` and `launcher-none`).
 
 None of these surfaces is in a capture compared with Fedora, so the comparison with Fedora's build
 is unchanged: the Apex overview is compared only run to run, and safe mode's with Fedora's.
@@ -270,10 +397,10 @@ damages the tile alone:
 
 | Step | Asserts |
 |---|---|
-| a tile changes | the first frame's redraw clip leaves the box out and the effect redraws it on the next; that frame is `blur-ref.js`'s reference per channel within 4/255 inside, 12/255 in the band ds/2 px wide along the edges (ds the effect's own downscale) and 1/255 on average over the box. The first run fixed these (ROADMAP S2b): at ds 16 the edge band is the low-resolution blur's own clamping and upsampling, the interior's 4 is 8-bit intermediates times the saturation; llvmpipe is the reference renderer |
+| a tile changes | in each step below that needs a frame whose clip misses the box, another redraw can cover it (then a full redraw): the tile is damaged again, up to 5 times. The first frame's redraw clip leaves the box out and the effect redraws it on the next; that frame is `blur-ref.js`'s reference per channel within 4/255 inside, 12/255 in the band ds/2 px wide along the edges (ds the effect's own downscale) and 1/255 on average over the box. The first run fixed these (ROADMAP S2b): at ds 16 the edge band is the low-resolution blur's own clamping and upsampling, the interior's 4 is 8-bit intermediates times the saturation; llvmpipe is the reference renderer |
 | a tile changes and the box's redraw is queued, as the glass manager forwards damage | the same frame is the box a full redraw draws, pixel for pixel |
 | a tile changes, nothing forwarded | the frame draws the last result, pixel for pixel, and the next one is the full redraw's |
-| the same with `fine` off | stock's effect in that frame differs from the full redraw and misses the tolerances above: the stale sampling the redraw-clip rule prevents, so the case can see it |
+| the same with `fine` off | stock's effect in that frame differs from the full redraw and misses the tolerances above: the stale sampling the redraw-clip rule prevents, so the case can see it. |
 
 `blur-ref.js` is a clamp-to-edge Gaussian at full resolution, CSS `saturate()` and the
 rounded box's coverage, over the box alone; `blur-ref-test.js` tests it in `selftest.sh`.
@@ -293,6 +420,15 @@ window's, the frame equals a full redraw; without, the blur's halo stays stale (
 OSD shown, an Alt+Tab list in a stand-in popup and the screenshot panel (styled while closed)
 each carry the popovers' `$apex_panel_blur` and `$apex_panel_saturation`.
 
+`shadows_under_glass` checks the `shadows` feature against the glass in the same case, light
+and dark: `glass.js` lays the tile grid under Quick Settings, a popup menu and a dialog and
+reads each box with `framePixels()`, once with the shadows on and once with `shadows` in
+`disabled-features`. The pixels the rounded box covers fully, 2 device px in from its edges,
+are the same in both frames; the 2 px rim's covered pixels are within 12/255; the reactive
+pick just inside the box is the same actor in both, never a layer; the menus draw no arrow.
+It writes `shadow-corners-light.png` and `shadow-corners-dark.png`, Quick Settings' four
+corners at 4×, for review.
+
 `G2_GLASS=1 G2_GLASS_STRESS=SECONDS` runs a stress instead, by hand: for that long a
 stand-in window moves and tiles change under the box, every other change forwarded. Each
 frame must have no black pixel; a frame whose clip misses the box must equal the last one
@@ -305,6 +441,53 @@ there: that run shows the damage, not the redraw-clip rule.
 Both shells capture `unlockDialog.js`'s blur (actor mode, radius 90 × scale, brightness
 .65) over a grid, with a background-mode blur over it, every property of 0003 at its
 default: `glass-unlock.png` against `fedora-glass-unlock.png` differs by 0 pixels.
+
+## Accessibility
+
+`G2_A11Y=1` (the `default`, `dark-style`, `high-contrast` and `large-text` cases) runs
+`a11y.js`, which opens each Apex surface in turn: the bar, the dock, a popup menu, the OSD,
+a banner, Quick Settings and its Wi-Fi menu, the date menu with two notifications, the
+window switcher, a polkit-shaped dialog, the shell's own power-off dialog, Spotlight with
+"disk" typed and its toast, the overview and the app grid. Its targets are the visible
+labels, entries and symbolic icons under the surface. Their ink is hidden while the shell
+draws the surface, so the capture holds what is behind them, glass and its blur included,
+with an icon's own fill put back over it. Each target's foreground colour, times its alpha
+and paint opacity, is composited over every sampled pixel of its box, and the pixel at the
+5th percentile counts, which drops an antialiased corner. `a11y_contrast` wants WCAG AA:
+4.5:1 for text and 3:1 for a glyph (1.4.3 and 1.4.11). A disabled button's content is exempt,
+and so is a target wholly outside the capture, another workspace's label. `a11y_layout`
+wants, at 1.25, no text cut short (a collapsed notification's body expands, so it may),
+none partly off the screen or outside its surface, and none overlapping text in the same
+filled box (a notification stack's cards overlap by design). The failures the checks found
+on landing are known gaps (`A11Y_GAPS`), each named after the fix that closes it. Those in
+upstream's high-contrast sheet stay gaps: restyling an upstream actor there would need a stock
+copy of the sheet for safe mode. A report for upstream, which is the owner's to file:
+
+> **High contrast: checked quick toggles fall below WCAG AA.** In gnome-shell 51.0's
+> high-contrast sheet, a checked quick toggle draws white text on the accent: 3.15:1 for the
+> default blue (WCAG 1.4.3 wants 4.5:1), and the menu arrow beside it 2.31:1 (1.4.11 wants
+> 3:1). Measured from the stage's pixels with the toggle's own colours.
+>
+> **High contrast: the overview search entry's glyph is invisible.** The search glyph draws
+> white at 70 % opacity on the entry's near-white fill: 1.01:1 (1.4.11 wants 3:1).
+
+## The idle desktop
+
+ROADMAP S3c's last exit: an idle desktop shows no extra repaints. The `idle` case runs the
+patched shell with every feature `layer.js` lists in `FEATURES_IN_ENABLE_ORDER`, and
+`assert.sh` reads that list from the source, so a new feature is idle-tested as soon as it
+joins it. `idle.js` lets the session settle first: startup over, the overview hidden, the
+startup notifications dropped, the dock at rest (no transition on its box), the bar's and
+the dock's glass on, no actor easing, and the pointer left at 0,0 (hot corners off). Then it
+counts the stage's `after-paint` over 10 s, on the fixed clock, and expects none.
+
+A failure names what repainted. Each frame's `paint-view` hands over its redraw clip, an
+`MtkRegion`: the probe takes its extents by bisecting it with `intersect_rectangle`, since
+gjs cannot take the region's rectangles, which its getters return by value, and names the
+actors a pick finds inside it, innermost first. `queue-relayout`, which runs up the tree, is
+counted on every actor, so the innermost entry is the one that asked. `assert.sh` adds the
+`ui/apex/` file of each JS class and `apex-` style class among them. The control opens Quick
+Settings inside a window of the same counter: it must count frames and name their damage.
 
 ## Known gaps
 
@@ -341,10 +524,14 @@ it is at least 4.8:1), and what the goldens judge: the Apex Symbolic glyphs (S1b
 | `clock.c` | the direct cases' shells (`LD_PRELOAD`) | the fixed wall clock |
 | `smoke.sh` | CI's Fedora 45 container | `direct.sh fedora` on Fedora's gnome-shell, and the assertions that need no Apex build |
 | `patched.sh` | a throwaway Fedora 45 container, by hand | the patched shell before a builder VM: rebuilds Fedora's SRPM with this checkout's recipe and `desktop/shell/`, runs `direct.sh main`, and asserts the logs and the top bar (below) |
+| `maximised-window.js` | the `dock-intellihide` cases' shells (gjs, GTK 4) | one maximised window, which the probe starts and stops |
 | `probe.js` | the shell (`--automation-script`) | prints `APEXG2 {…}` and, for the capture cases, `APEXG2-SCENES {…}` |
 | `assert.sh`, `stable.sh`, `lib.sh` | the builder VM | the assertions |
 | `png.js`, `compare.js` | gjs | PNG with GLib's zlib only, and the masked comparison |
 | `glass.js`, `blur-ref.js` | the shell; gjs | the glass cases, and their CPU reference |
+| `a11y.js` | the shell | the accessibility cases: contrast against what is drawn, and the Large Text layout |
+| `indicators.js`, `sni-items.js` | the shell; gjs | the app-indicator part of `default`, `default-scale1` and `dark-style`, and the StatusNotifierItems it starts |
+| `idle.js` | the `idle` case's shell | the settled desktop, its paints and relayouts over 10 s, and the counter's control |
 | `frame.c`, `G2Frame-1.gir` | the glass cases' shells | `G2Frame.read()`, a region of the frame the shell drew |
 | `selftest.sh`, `png-test.js`, `blur-ref-test.js` | CI and the host | the tests of the above |
 
@@ -369,8 +556,17 @@ It also asserts the shell surfaces of the same three cases (below). With
 cases also save a scene per surface group (`surfaces`, `quick-settings`, `switcher`,
 `dialog`, `datemenu`, `appgrid`), for placing beside the boards.
 
+## The authentication dialog
+
+G2 has no polkit case. `tests/shell/shoot.sh`'s polkit cases capture board 13 from the
+lane's RPMs: they call the shell's own polkit component's `_onInitiate()` with a stubbed
+`PolkitAgent.Session`, which asks for the password (and sends pam_fprintd's prompt in
+`polkit-fingerprint`) and is never answered. They are for captures and style checks only:
+PAM, polkit-agent-helper-1 and polkitd's verdict never run, and polkitd only describes the
+action. The real `pkexec` path is G4's.
+
 ## Not yet
 
 - A bar-text contrast check over the fixture wallpapers.
 - The metrics of the other surfaces (launcher, overview, notifications, windows, keys),
-  the dock's intellihide and edge reveal, and approved goldens.
+  and approved goldens.

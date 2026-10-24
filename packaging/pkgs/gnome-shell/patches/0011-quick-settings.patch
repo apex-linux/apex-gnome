@@ -1,0 +1,72 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Thuong Vo <66083331+SekiroKenjii@users.noreply.github.com>
+Date: Sat, 24 Oct 2026 12:30:00 +0000
+Subject: [PATCH] panel, quickSettings: hooks for the Apex Quick Settings
+
+A behaviour hook once Quick Settings has added its items, which the
+Apex layer's quick-settings feature provides (apex ROADMAP S3c): VPN
+after Airplane Mode, Power Mode lit at every profile and On/Off
+subtitles. 0010's status-indicators hook, at the same place, belongs
+to the panel feature, and a hook has one provider.
+
+Behaviour hooks once a toggle's menu and a Wi-Fi network's row are
+built, for board 17: the header's subtitle on the title's row, the
+active network's row checked and its lock after the name.
+---
+ js/ui/panel.js          | 1 +
+ js/ui/quickSettings.js  | 2 ++
+ js/ui/status/network.js | 2 ++
+ 3 files changed, 5 insertions(+)
+
+diff --git a/js/ui/panel.js b/js/ui/panel.js
+index 1e2eedd..f75e1b7 100644
+--- a/js/ui/panel.js
++++ b/js/ui/panel.js
+@@ -414,6 +414,7 @@ class QuickSettings extends PanelMenu.Button {
+             item => this.menu.addItem(item, N_QUICK_SETTINGS_COLUMNS));
+ 
+         ApexHooks.run('status-indicators', this);
++        ApexHooks.run('quick-settings', this);
+     }
+ 
+     _addItemsBefore(items, sibling, colSpan = 1) {
+diff --git a/js/ui/quickSettings.js b/js/ui/quickSettings.js
+index b73fe48..6dc24f2 100644
+--- a/js/ui/quickSettings.js
++++ b/js/ui/quickSettings.js
+@@ -10,6 +10,7 @@ import Pango from 'gi://Pango';
+ import St from 'gi://St';
+ 
+ import * as Main from './main.js';
++import * as ApexHooks from './apex/hooks.js';
+ import * as PopupMenu from './popupMenu.js';
+ import {Slider} from './slider.js';
+ 
+@@ -426,6 +427,7 @@ class QuickToggleMenu extends PopupMenu.PopupMenuBase {
+         sourceActor.connect('notify::checked',
+             () => this._syncChecked());
+         this._syncChecked();
++        ApexHooks.run('quick-settings-toggle-menu', this);
+     }
+ 
+     setHeader(icon, title, subtitle = '') {
+diff --git a/js/ui/status/network.js b/js/ui/status/network.js
+index afc9ed0..35a5288 100644
+--- a/js/ui/status/network.js
++++ b/js/ui/status/network.js
+@@ -15,6 +15,7 @@ import * as MessageTray from '../messageTray.js';
+ import * as ModemManager from '../../misc/modemManager.js';
+ import * as Signals from '../../misc/signals.js';
+ import * as Util from '../../misc/util.js';
++import * as ApexHooks from '../apex/hooks.js';
+ 
+ import {Spinner} from '../animation.js';
+ import {QuickMenuToggle, SystemIndicator} from '../quickSettings.js';
+@@ -1044,6 +1045,7 @@ class NMWirelessNetworkItem extends PopupMenu.PopupBaseMenuItem {
+             'notify::secure', () => this._updateAccessibleName(),
+             'notify::signal-strength', () => this._updateAccessibleName(),
+             this);
++        ApexHooks.run('quick-settings-network-item', this);
+     }
+ 
+     get network() {

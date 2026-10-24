@@ -7,7 +7,8 @@ import * as Hooks from './hooks.js';
 
 // Each <name>/feature.js exports configure(name), which may be async, and synchronous
 // enable() and disable().
-const FEATURES_IN_ENABLE_ORDER = ['spotlight', 'panel', 'glass', 'dock', 'overview'];
+const FEATURES_IN_ENABLE_ORDER = ['motion', 'shadows', 'spotlight', 'panel', 'glass', 'dock', 'overview', 'lock',
+    'quick-settings', 'end-session', 'indicators', 'polkit', 'notifications'];
 
 const TEST_FAULT_PHASES = ['configure', 'enable', 'abort-after-enable'];
 
@@ -22,6 +23,7 @@ const _features = new Map();
 const _failed = new Set();
 const _enabled = new Set();
 let _names = [];
+const _unknownDisabled = new Set();
 let _settings = null;
 let _on = false;
 let _queue = Promise.resolve();
@@ -43,8 +45,16 @@ function _featureNames() {
     return [...FEATURES_IN_ENABLE_ORDER, 'fault', 'witness'];
 }
 
+// A schema without <choices> takes any name: a typo would leave its feature on silently.
 function _disabledFeatures() {
-    return new Set(_settings.get_strv('disabled-features'));
+    const disabled = new Set(_settings.get_strv('disabled-features'));
+    for (const name of disabled) {
+        if (!_names.includes(name) && !_unknownDisabled.has(name)) {
+            _unknownDisabled.add(name);
+            console.warn(`Apex: disabled-features names no feature ${name}`);
+        }
+    }
+    return disabled;
 }
 
 function _offForTheSession(name, phase, e) {

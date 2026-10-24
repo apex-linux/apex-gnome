@@ -2,8 +2,6 @@
 
 $_diamond_svg_size: 16px;
 $_open_states: hover, focus, active, checked;
-$_upstream_panel_button_natural_hpadding: $base_padding * 2;
-$_upstream_panel_button_minimum_hpadding: $base_padding;
 
 // A pill is its button's only child: the button keeps the bar's full height, so a click
 // on the screen's top edge still reaches it.
@@ -14,7 +12,11 @@ $_upstream_panel_button_minimum_hpadding: $base_padding;
   .panel-button.clock-display#{$s} > .clock-display-box,
   .panel-button#{$s} > .panel-status-indicators-box,
   .panel-button#{$s} > .system-status-icon,
-  .panel-button.apex-search#{$s} > .apex-search-pill { @content; }
+  .panel-button.apex-search#{$s} > .apex-search-pill,
+  .panel-button.apex-indicator#{$s} > .apex-indicator-pill,
+  .panel-button.apex-indicators-overflow#{$s} > .apex-indicators-overflow-pill,
+  .panel-button.screen-recording-indicator#{$s} > StBoxLayout,
+  .panel-button.screen-sharing-indicator#{$s} > StBoxLayout { @content; }
 }
 
 #panel, #panel:overview {
@@ -128,13 +130,78 @@ $_upstream_panel_button_minimum_hpadding: $base_padding;
     font-size: apex-text-size($apex_font_bar_percentage_size);
   }
 
+  .panel-button > .panel-status-indicators-box.apex-privacy-in-use {
+    padding-left: $apex_bar_pill_padding_privacy;
+  }
+
+  .panel-button .apex-privacy-group {
+    height: $apex_privacy_height;
+    margin-right: $apex_privacy_margin;
+    padding: 0 $apex_privacy_padding;
+    border-radius: $apex_radius_privacy;
+    spacing: $apex_privacy_gap;
+    background-color: $apex_privacy;
+
+    .panel-status-indicators-box { spacing: $apex_privacy_gap; }
+
+    .system-status-icon, .system-status-icon.privacy-indicator {
+      margin: 0;
+      icon-size: $apex_privacy_icon_size;
+      color: $apex_privacy_fg;
+    }
+  }
+
   // keyboard.js sizes InputSourceIndicatorContainer from its labels alone: they take the padding.
-  .panel-button > .system-status-icon > StLabel { padding: 0 $apex_bar_pill_padding; }
+  .panel-button > .system-status-icon > StLabel {
+    min-width: $apex_input_chip_min_width - 2 * $apex_input_chip_padding;
+    padding: 0 $apex_input_chip_padding;
+    font-size: apex-text-size($apex_font_input_chip_size);
+    font-weight: $apex_font_input_chip_weight;
+    letter-spacing: $apex_font_input_chip_tracking;
+    text-align: center;
+  }
 
   .panel-button.screen-recording-indicator,
   .panel-button.screen-sharing-indicator {
-    -natural-hpadding: $_upstream_panel_button_natural_hpadding;
-    -minimum-hpadding: $_upstream_panel_button_minimum_hpadding;
+    &, &:hover, &:focus, &:active, &:checked, &:active:hover, &:checked:hover {
+      border-width: 0;
+      background-color: transparent;
+      box-shadow: none;
+    }
+  }
+
+  .panel-button.screen-recording-indicator > StBoxLayout {
+    padding: 0 $apex_recording_padding_end 0 $apex_recording_padding_start;
+    spacing: $apex_recording_gap;
+    color: $apex_recording_fg;
+    font-size: apex-text-size($apex_font_recording_size);
+    font-weight: $apex_font_recording_weight;
+    font-feature-settings: "tnum";
+  }
+
+  .panel-button.screen-sharing-indicator {
+    margin-right: $apex_sharing_margin;
+
+    > StBoxLayout {
+      padding: 0 $apex_sharing_padding_end 0 $apex_sharing_padding_start;
+      spacing: $apex_sharing_gap;
+      color: $apex_privacy_fg;
+    }
+
+    StIcon { icon-size: $apex_sharing_icon_size; }
+  }
+
+  @each $state in join(('',), $_open_states) {
+    $s: if($state == '', '', ':#{$state}');
+    .panel-button.screen-recording-indicator#{$s} > StBoxLayout { background-color: $apex_recording; }
+    .panel-button.screen-sharing-indicator#{$s} > StBoxLayout { background-color: $apex_privacy; }
+  }
+
+  .apex-screen-stop {
+    width: $apex_screen_stop_size;
+    height: $apex_screen_stop_size;
+    border-radius: $apex_radius_screen_stop;
+    background-color: $apex_recording_fg;
   }
 }
 
@@ -162,3 +229,5 @@ $_upstream_panel_button_minimum_hpadding: $base_padding;
   // Upstream fills the whole button here, so the status pill spans it and its glyphs centre.
   .panel-button > .panel-status-indicators-box { margin-right: 0; }
 }
+
+@import "indicators";

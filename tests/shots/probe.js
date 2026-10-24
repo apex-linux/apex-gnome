@@ -3,6 +3,7 @@
 import Clutter from 'gi://Clutter';
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
+import Mtk from 'gi://Mtk';
 import Shell from 'gi://Shell';
 import St from 'gi://St';
 
@@ -11,10 +12,12 @@ import * as Dialog from 'resource:///org/gnome/shell/ui/dialog.js';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import * as MessageTray from 'resource:///org/gnome/shell/ui/messageTray.js';
 import * as ModalDialog from 'resource:///org/gnome/shell/ui/modalDialog.js';
+import * as OverviewControls from 'resource:///org/gnome/shell/ui/overviewControls.js';
 import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 import * as Scripting from 'resource:///org/gnome/shell/ui/scripting.js';
 import * as Slider from 'resource:///org/gnome/shell/ui/slider.js';
 import * as SwitcherPopup from 'resource:///org/gnome/shell/ui/switcherPopup.js';
+import * as WindowManager from 'resource:///org/gnome/shell/ui/windowManager.js';
 import * as WorkspaceThumbnail from 'resource:///org/gnome/shell/ui/workspaceThumbnail.js';
 
 import * as Png from './png.js';
@@ -29,7 +32,9 @@ const CRASH_GUARD_MARKER = 'apex-shell-starting';
 const REPORT_AFTER_MS = 1500;
 const SETTLE_TIMEOUT_MS = 20000;
 const SETTLE_EXTRA_MS = 500;
+const PERF_HELPER_PING_S = 10;
 const DEFERRED_WORK_TIMEOUT_MS = 21000;
+const OSD_SETTLE_TIMEOUT_MS = 3000;
 const CALIBRATION_PX = 100;
 const INK_MAX_RGB_DISTANCE = 60;
 const TRANSLUCENT_BAR_KEY = 'translucent-top-bar';
@@ -39,12 +44,23 @@ const HIGH_CONTRAST_SHEET = 'resource:///org/gnome/shell/theme/gnome-shell-high-
 const STRUCTURE_MARKER = '/*! apex-shell-structure */';
 const LAYER_ENABLED_KEY = 'layer-enabled';
 const SEARCH_HINT_KEY = 'search-hint-shown';
+const DOCK_INTELLIHIDE_KEY = 'dock-intellihide';
+const G2_WINDOW_TITLE = 'G2 maximised window';
 const OSD_LEVEL = 0.62;
+const POWER_PROFILE_WAIT_MS = 3000;
+const IDLE_PAINT_MS = 2000;
+const SHADOW_REGISTRY = 'resource:///org/gnome/shell/ui/apex/shadows/registry.js';
+const SPOTLIGHT_FEATURE = 'resource:///org/gnome/shell/ui/apex/spotlight/feature.js';
+const MOTION_WINDOW_ID = 'io.github.apex_linux.G2Window';
+const MOTION_WAIT_MS = 10000;
+const MOTION_SETTLE_MS = 1000;
+const MOTION_WINDOW_SIZE = {width: 640, height: 400};
 const OSD_GLYPH = 'audio-volume-medium-symbolic';
 const SWITCHER_APPS = ['Text Editor', 'Terminal', 'Web', 'Files', 'Settings'];
 const SWITCHER_ICON_SIZE = 96;
 
 Gio._promisify(Shell.Screenshot.prototype, 'screenshot');
+Gio._promisify(Gio.Subprocess.prototype, 'communicate_utf8_async');
 
 function hex(color) {
     return `#${[color.red, color.green, color.blue, color.alpha]
@@ -95,7 +111,7 @@ function sheetInfo(uri) {
         const text = new TextDecoder().decode(bytes);
         return {
             sha256: GLib.compute_checksum_for_data(GLib.ChecksumType.SHA256, bytes),
-            sha256WithoutStructureMarker: sha256OfText(text.replace(STRUCTURE_MARKER, '').trimEnd()),
+            sha256BeforeStructure: sha256OfText(text.split(STRUCTURE_MARKER)[0].trimEnd()),
             bytes: bytes.length,
             markers: ['light', 'dark'].filter(v => text.includes(`/*! apex-shell-theme ${v} */`)),
             structure: text.includes(STRUCTURE_MARKER),
@@ -332,8 +348,9 @@ function clockTextGap(label, unit) {
     return round((timeStart - dateEnd) / logical.width * boxOf(label, unit).width);
 }
 
+// panel.js hides a button it has nothing to show for, not its container.
 function panelItems(boxActor, unit) {
-    return boxActor.get_children().filter(c => c.visible).map(container => {
+    return boxActor.get_children().filter(c => c.visible && c.get_first_child()?.visible !== false).map(container => {
         const item = container.get_first_child();
         const pill = item?.get_first_child();
         const label = item ? firstVisibleLabel(item) : null;
@@ -483,6 +500,25 @@ function dockReport(unit) {
         radius: round(dock._background.get_theme_node().get_border_radius(St.Corner.TOPLEFT) / unit.length),
         items: items.map(item => dockItem(item, dock)),
         overviewDashVisible: Main.overview.dash.visible,
+    };
+}
+
+// The menu a right click opens on the dock's first app: stock's AppMenu, which offers the
+// other GPU while switcheroo-control reports two, and builds its items once per icon.
+async function dockAppMenu() {
+    const icon = apexDock()?._box.get_children().find(item => item.child?._delegate?.app)?.child;
+    if (!icon)
+        return null;
+    icon.popupMenu();
+    await settle();
+    const items = icon._menu._getMenuItems()
+        .filter(item => item.visible && item.label?.text).map(item => item.label.text);
+    icon._menu.close(BoxPointer.PopupAnimation.NONE);
+    await settle();
+    return {
+        app: icon.app.get_name(),
+        hasDualGpu: global.get_switcheroo_control()?.get_cached_property('HasDualGpu')?.unpack() ?? null,
+        items,
     };
 }
 
@@ -685,6 +721,7 @@ function openPopupMenu() {
     [...rows, separator, iconRow].forEach(item => menu.addMenuItem(item));
     menu.open(BoxPointer.PopupAnimation.NONE);
     return {
+        root: menu.box,
         measure: unit => {
             const line = separator.get_children().find(c => c.has_style_class_name('popup-separator-menu-item-separator'));
             return {
@@ -705,12 +742,60 @@ function openPopupMenu() {
     };
 }
 
-function openOsd() {
+// Resolves at the stage's next painted frame, or false once the deadline (µs) passes.
+function nextFrame(deadline) {
+    return new Promise(resolve => {
+        const timeoutId = GLib.timeout_add(GLib.PRIORITY_DEFAULT,
+            Math.max(0, Math.ceil((deadline - GLib.get_monotonic_time()) / 1000)), () => {
+                global.stage.disconnect(paintId);
+                resolve(false);
+                return GLib.SOURCE_REMOVE;
+            });
+        const paintId = global.stage.connect('after-paint', () => {
+            global.stage.disconnect(paintId);
+            GLib.source_remove(timeoutId);
+            resolve(true);
+        });
+        global.stage.queue_redraw();
+    });
+}
+
+// Whether condition held and actor's allocation stayed the same, non-empty, over two frames.
+async function settledOverTwoFrames(actor, condition, timeoutMs) {
+    const deadline = GLib.get_monotonic_time() + timeoutMs * 1000;
+    let last = null;
+    // eslint-disable-next-line no-await-in-loop
+    while (await nextFrame(deadline)) {
+        const box = actor.get_allocation_box();
+        const now = condition() && box.get_width() > 0 && box.get_height() > 0
+            ? [box.x1, box.y1, box.x2, box.y2].join() : null;
+        if (now !== null && now === last)
+            return true;
+        last = now;
+    }
+    return false;
+}
+
+// An OSD still fading out from an earlier show resets itself, level and all, once the fade
+// ends: it goes first. The new one would hide 1.5 s on, often before settle() returns.
+async function openOsd() {
     const {primaryIndex, primaryMonitor} = Main.layoutManager;
-    Main.osdWindowManager.showOne(primaryIndex, Gio.ThemedIcon.new(OSD_GLYPH), null, OSD_LEVEL);
     const window = Main.osdWindowManager._osdWindows[primaryIndex];
+    window.cancel();
+    const gone = await settledOverTwoFrames(global.stage, () => !window.visible, OSD_SETTLE_TIMEOUT_MS);
+    Main.osdWindowManager.showOne(primaryIndex, Gio.ThemedIcon.new(OSD_GLYPH), null, OSD_LEVEL);
+    if (window._hideTimeoutId)
+        GLib.source_remove(window._hideTimeoutId);
+    window._hideTimeoutId = 0;
+    const settled = gone && await settledOverTwoFrames(window._hbox,
+        () => window.visible && window._hbox.mapped && window._level.visible, OSD_SETTLE_TIMEOUT_MS);
     return {
+        root: window._hbox,
         measure: unit => {
+            if (!settled)
+                return {error: 'the OSD never settled'};
+            if (!window.visible)
+                return {error: 'the OSD hid before it was measured'};
             const box = styleOf(window._hbox, unit);
             const levelNode = window._level.get_theme_node();
             return {
@@ -725,7 +810,7 @@ function openOsd() {
                 },
             };
         },
-        close: () => window.cancel(),
+        close: () => window._hide(),
     };
 }
 
@@ -767,7 +852,7 @@ function openBanner() {
 
 // Open together as on board 16; G2_SURFACE_SCENES=1 also captures them.
 async function shellSurfaces(unit) {
-    const opened = {popupMenu: openPopupMenu(), osd: openOsd(), banner: openBanner()};
+    const opened = {popupMenu: openPopupMenu(), osd: await openOsd(), banner: openBanner()};
     try {
         await settle();
         const scene = GLib.getenv('G2_SURFACE_SCENES') === '1' ? await capture('surfaces') : null;
@@ -868,6 +953,8 @@ async function quickSettings(unit) {
                 title: styleOf(find(header, 'title'), unit),
                 subtitle: styleOf(find(header, 'subtitle'), unit),
                 rows: wifi.menu._getMenuItems().filter(i => i.visible && i.label?.text).map(i => styleOf(i, unit)),
+                rowHover: (row => row && underPseudoClass(row, 'hover', () => paint(row.get_theme_node(), unit)))(
+                    wifi.menu._getMenuItems().find(i => i.visible && i.label?.text)),
                 separator: styleOf(wifi.menu._getMenuItems().find(i => i instanceof PopupMenu.PopupSeparatorMenuItem), unit),
             } : null,
         };
@@ -876,6 +963,150 @@ async function quickSettings(unit) {
         menu.close(BoxPointer.PopupAnimation.NONE);
         await settle();
     }
+}
+
+function findAll(actor, matches) {
+    return actor.get_children().flatMap(child => [...matches(child) ? [child] : [], ...findAll(child, matches)]);
+}
+
+// Board 17's Wi-Fi menu: the header subtitle's grid cell and each network row, the lock read
+// where it is, after the name or in the signal icon's box.
+async function wifiMenuRows(unit) {
+    const {menu} = Main.panel.statusArea.quickSettings;
+    const wifi = findDescendant(menu.box, a => a.constructor.name === 'NMWirelessToggle');
+    if (!wifi)
+        return null;
+    menu.open(BoxPointer.PopupAnimation.NONE);
+    wifi.menu.open(BoxPointer.PopupAnimation.NONE);
+    try {
+        await settle();
+        const {_header: header, _headerSubtitle: subtitle} = wifi.menu;
+        const meta = header.layout_manager.get_child_meta(header, subtitle);
+        const rows = findAll(wifi.menu.box, a => a.constructor.name === 'NMWirelessNetworkItem');
+        return {
+            subtitle: {column: meta.left_attach, row: meta.top_attach, xAlign: subtitle.x_align, end: Clutter.ActorAlign.END},
+            rows: rows.map(row => {
+                const lock = row._secureIcon;
+                const children = row.get_children();
+                return {
+                    ssid: row._label.text,
+                    active: row.network.is_active,
+                    checked: row.has_style_pseudo_class('checked'),
+                    secure: !!lock.icon_name,
+                    lockAfterName: children.indexOf(lock) === children.indexOf(row._label) + 1,
+                    lockSize: lengthOrNull(lock.get_theme_node(), 'icon-size', unit),
+                    lockColor: hex(lock.get_theme_node().get_foreground_color()),
+                };
+            }),
+        };
+    } finally {
+        wifi.menu.close(BoxPointer.PopupAnimation.NONE);
+        menu.close(BoxPointer.PopupAnimation.NONE);
+        await settle();
+    }
+}
+
+// The quick-settings feature: the toggles' order, Power Mode lit, On/Off subtitles; then two
+// clicks on Power Mode, which stock answers by switching to the last profile and back.
+async function quickSettingsLayer(unit) {
+    const indicator = Main.panel.statusArea.quickSettings;
+    // Without a VPN connection the VPN toggle is hidden and has no title.
+    const name = t => t.constructor.name === 'NMVpnToggle' ? 'VPN' : t.title;
+    const toggles = indicator.menu._grid.get_children().filter(t => 'checked' in t && name(t));
+    const power = indicator._powerProfiles?.quickSettingsItems[0] ?? null;
+    const dnd = toggles.find(t => t.constructor.name === 'DoNotDisturbToggle');
+    const powerState = () => power && {
+        lit: power.has_style_class_name('apex-lit'),
+        checked: power.checked,
+        subtitle: power.subtitle,
+        visible: power.visible,
+    };
+    const clickPower = async () => {
+        const before = power.checked;
+        power.emit('clicked', Clutter.BUTTON_PRIMARY);
+        for (let waited = 0; power.checked === before && waited < POWER_PROFILE_WAIT_MS; waited += 50)
+            // eslint-disable-next-line no-await-in-loop
+            await Scripting.sleep(50);
+        await settle();
+        return powerState();
+    };
+    const state = {
+        order: toggles.map(t => ({title: name(t), visible: t.visible})),
+        power: powerState(),
+        pillShowsPower: indicator._powerProfiles?.get_parent() === indicator._indicators &&
+            indicator._powerProfiles.visible,
+        dndSubtitle: dnd?.subtitle ?? null,
+        wifiMenu: await wifiMenuRows(unit),
+    };
+    if (power?.visible) {
+        state.switched = await clickPower();
+        state.back = await clickPower();
+    }
+    return state;
+}
+
+// The shadows feature's layers under a registered surface: each layer's shadow and box.
+function layerReport(Registry, surface, unit) {
+    const [sx, sy] = surface.get_transformed_position();
+    const [sw, sh] = surface.get_transformed_size();
+    return Registry.layersOf(surface).map(layer => {
+        const [lx, ly] = layer.get_transformed_position();
+        const [lw, lh] = layer.get_transformed_size();
+        return {
+            shown: layer.mapped,
+            boxShadow: shadow(layer.get_theme_node(), unit),
+            radius: round(layer.get_theme_node().get_border_radius(St.Corner.TOPLEFT) / unit.length),
+            sameBox: [lx - sx, ly - sy, lw - sw, lh - sh].every(d => Math.abs(d) <= 1),
+        };
+    });
+}
+
+async function shadowLayers(unit) {
+    const Registry = await import(SHADOW_REGISTRY);
+    const result = {};
+    for (const [name, menu] of [['quickSettings', Main.panel.statusArea.quickSettings.menu],
+        ['dateMenu', Main.panel.statusArea.dateMenu.menu]]) {
+        menu.open(BoxPointer.PopupAnimation.NONE);
+        // eslint-disable-next-line no-await-in-loop
+        await settle();
+        result[name] = layerReport(Registry, menu.box, unit);
+        menu.close(BoxPointer.PopupAnimation.NONE);
+        // eslint-disable-next-line no-await-in-loop
+        await settle();
+    }
+    // A ModalDialog keeps its lightbox right under its box's ancestor, so the layer must sit beside the box.
+    const dialog = new ModalDialog.ModalDialog();
+    dialog.contentLayout.add_child(new St.Label({text: 'Shadow'}));
+    dialog.open();
+    await settle();
+    const surface = dialog.dialogLayout._dialog;
+    result.dialog = layerReport(Registry, surface, unit)
+        .map((layer, i) => ({...layer, besideBox: Registry.layersOf(surface)[i].get_parent() === surface.get_parent()}));
+    dialog.close();
+    await settle();
+    return result;
+}
+
+async function stagePaints() {
+    let paints = 0;
+    const id = global.stage.connect('after-paint', () => paints++);
+    await Scripting.sleep(IDLE_PAINT_MS);
+    global.stage.disconnect(id);
+    return paints;
+}
+
+// An idle desktop repaints no more with the shadow layers than without them. A lone stray
+// paint lands in either state now and then, so each takes the quieter of two windows.
+async function idleRepaints() {
+    const apex = new Gio.Settings({schema_id: APEX_SCHEMA});
+    const disabled = apex.get_strv('disabled-features');
+    apex.set_strv('disabled-features', [...disabled, 'shadows']);
+    await settle();
+    const withoutShadows = Math.min(await stagePaints(), await stagePaints());
+    apex.set_strv('disabled-features', disabled);
+    await settle();
+    const withShadows = Math.min(await stagePaints(), await stagePaints());
+    return {withShadows, withoutShadows};
 }
 
 // G2 opens no windows, so the switcher is a stock SwitcherList of AppIcon-shaped items.
@@ -913,8 +1144,124 @@ async function windowSwitcher(unit) {
     }
 }
 
+// The shell's own power-off dialog, opened as gnome-session opens it, so that patch 0018's
+// hook runs: Cancel, the end-session feature's Restart, then Power Off.
+async function endSessionDialog(unit) {
+    try {
+        return await openEndSessionDialog(unit);
+    } catch (e) {
+        return {error: e.message};
+    }
+}
+
+async function openShellEndSession() {
+    await Gio.DBus.session.call('org.gnome.Shell', '/org/gnome/SessionManager/EndSessionDialog',
+        'org.gnome.SessionManager.EndSessionDialog', 'Open', new GLib.Variant('(uuuao)', [1, 0, 60, []]),
+        null, Gio.DBusCallFlags.NONE, -1, null);
+    return Main.layoutManager.modalDialogGroup.get_children()
+        .find(c => c.dialogLayout?._dialog?.has_style_class_name('end-session-dialog'));
+}
+
+async function openEndSessionDialog(unit) {
+    const dialog = await openShellEndSession();
+    try {
+        await settle();
+        global.stage.set_key_focus(null);
+        const find = styleClass => findDescendant(dialog.contentLayout, a => a.has_style_class_name?.(styleClass));
+        const title = find('message-dialog-title');
+        const icon = find('apex-end-session-icon');
+        const row = dialog.buttonLayout;
+        return {
+            box: styleOf(dialog.dialogLayout._dialog, unit),
+            contentSpacing: lengthOrNull(dialog.contentLayout.get_theme_node(), 'spacing', unit),
+            icon: icon ? {
+                ...styleOf(icon, unit),
+                glyph: lengthOrNull(icon.child.get_theme_node(), 'icon-size', unit),
+                iconName: icon.child.icon_name,
+                above: icon.get_next_sibling() === find('message-dialog-content'),
+            } : null,
+            title: {...styleOf(title, unit), tracking: round(title.get_theme_node().get_letter_spacing() / unit.length)},
+            description: styleOf(find('message-dialog-description'), unit),
+            rowSpacing: round(row.layout_manager.spacing / unit.length),
+            buttons: row.get_children().filter(b => b.visible).map(b => ({
+                ...styleOf(b, unit),
+                text: b.label,
+                hover: underPseudoClass(b, 'hover', () => paint(b.get_theme_node(), unit)),
+            })),
+        };
+    } finally {
+        dialog?.cancel();
+        await settle();
+    }
+}
+
+const UPDATE1 = ['io.github.apex_linux.Apex.Update1', '/io/github/apex_linux/Apex/Update1'];
+const STAGED_UPDATE = {
+    digest: new GLib.Variant('s', 'sha256:9e41aa07c3b2d1e0f9a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c80c2b'),
+    version: new GLib.Variant('s', '45.20261010.133'),
+    'download-only': new GLib.Variant('b', true),
+};
+const UPDATE_CARD_WAIT_MS = 2000;
+
+// update1-mock.py's state, through python-dbusmock's own interface.
+function setUpdateState(state, staged) {
+    return Gio.DBus.system.call(...UPDATE1, 'org.freedesktop.DBus.Mock', 'UpdateProperties',
+        new GLib.Variant('(sa{sv})', [UPDATE1[0], {State: new GLib.Variant('s', state), Staged: new GLib.Variant('a{sv}', staged)}]),
+        null, Gio.DBusCallFlags.NONE, -1, null);
+}
+
+function updateCardOf(dialog, unit) {
+    const card = findDescendant(dialog.contentLayout, a => a.has_style_class_name?.('apex-update-card'));
+    if (!card)
+        return null;
+    const find = styleClass => findDescendant(card, a => a.has_style_class_name?.(styleClass));
+    const icon = find('apex-update-card-icon');
+    const toggle = find('toggle-switch');
+    return {
+        ...styleOf(card, unit),
+        below: card.get_previous_sibling()?.has_style_class_name('message-dialog-content') ?? false,
+        icon: {iconName: icon.icon_name, size: lengthOrNull(icon.get_theme_node(), 'icon-size', unit)},
+        textSpacing: lengthOrNull(find('apex-update-card-text').get_theme_node(), 'spacing', unit),
+        title: {...styleOf(find('apex-update-card-title'), unit), text: find('apex-update-card-title').text},
+        subtitle: {...styleOf(find('apex-update-card-subtitle'), unit), text: find('apex-update-card-subtitle').text},
+        toggle: {
+            ...styleOf(toggle, unit), on: toggle.state, sensitive: toggle.get_parent().reactive,
+            knob: styleOf(find('handle'), unit),
+        },
+        buttons: dialog.buttonLayout.get_children().filter(b => b.visible).map(b => b.label),
+    };
+}
+
+// Board 14's update card in the restart dialog: staged, then ready-for-reboot, each captured.
+async function updateCard(unit) {
+    const open = async (state, scene) => {
+        await setUpdateState(state, STAGED_UPDATE);
+        await Gio.DBus.session.call('org.gnome.Shell', '/org/gnome/SessionManager/EndSessionDialog',
+            'org.gnome.SessionManager.EndSessionDialog', 'Open', new GLib.Variant('(uuuao)', [2, 0, 60, []]),
+            null, Gio.DBusCallFlags.NONE, -1, null);
+        const dialog = Main.layoutManager.modalDialogGroup.get_children()
+            .find(c => c.dialogLayout?._dialog?.has_style_class_name('end-session-dialog'));
+        try {
+            await Scripting.sleep(UPDATE_CARD_WAIT_MS);
+            await settle();
+            global.stage.set_key_focus(null);
+            return {...updateCardOf(dialog, unit), capture: withoutBytes(await capture(scene)).file};
+        } finally {
+            dialog?.cancel();
+            await settle();
+        }
+    };
+    try {
+        return {staged: await open('staged', 'end-session-update'), ready: await open('ready-for-reboot', 'end-session-ready')};
+    } catch (e) {
+        return {error: e.message};
+    } finally {
+        await setUpdateState('up-to-date', {}).catch(() => {});
+    }
+}
+
 // A stock ModalDialog shaped like polkit's: title, description, password entry, two buttons.
-async function modalDialog(unit) {
+function promptDialog() {
     const dialog = new ModalDialog.ModalDialog({styleClass: 'prompt-dialog'});
     const content = new Dialog.MessageDialogContent({
         title: 'Authentication Required',
@@ -927,6 +1274,23 @@ async function modalDialog(unit) {
         dialog.addButton({label: 'Cancel', action: () => {}, key: Clutter.KEY_Escape}),
         dialog.addButton({label: 'Authenticate', action: () => {}, default: true}),
     ];
+    return {dialog, content, entry, buttons};
+}
+
+function openPromptDialog() {
+    const {dialog} = promptDialog();
+    dialog.open();
+    return {
+        root: dialog.dialogLayout._dialog,
+        close: () => {
+            dialog.close();
+            dialog.destroy();
+        },
+    };
+}
+
+async function modalDialog(unit) {
+    const {dialog, content, entry, buttons} = promptDialog();
     dialog.open();
     try {
         await settle();
@@ -935,8 +1299,6 @@ async function modalDialog(unit) {
         if (scene)
             delete scene.bytes;
         const find = styleClass => findDescendant(content, a => a.has_style_class_name?.(styleClass));
-        const endSession = withStyledActor(new St.BoxLayout({style_class: 'modal-dialog end-session-dialog'}),
-            node => lengthOrNull(node, 'width', unit));
         return {
             scene,
             box: styleOf(dialog.dialogLayout._dialog, unit),
@@ -953,7 +1315,6 @@ async function modalDialog(unit) {
                 default: b.has_style_pseudo_class('default'),
                 hover: underPseudoClass(b, 'hover', () => paint(b.get_theme_node(), unit)),
             })),
-            endSessionWidth: endSession,
         };
     } finally {
         dialog.close();
@@ -1023,6 +1384,102 @@ async function calendarMenu(unit) {
     }
 }
 
+// The notifications feature: three notifications from one app, the footer, then an empty list.
+// A card's tree by each actor's first style class, down to the header, icon, text and actions.
+const CARD_LEAVES = ['message-header', 'message-icon', 'message-content', 'message-action-bin'];
+function cardTree(actor) {
+    const name = actor.get_style_class_name?.()?.split(' ')[0] || 'box';
+    if (CARD_LEAVES.includes(name))
+        return name;
+    const children = actor.get_children();
+    return children.length ? `${name}[${children.map(cardTree).join(',')}]` : name;
+}
+
+// Board 34's card, in boxes: the icon's column, the header over the title, the close button, the actions.
+function cardLayout(message, unit) {
+    const find = styleClass => findDescendant(message, a => a.has_style_class_name?.(styleClass));
+    return {
+        card: boxOf(message, unit), icon: boxOf(message._icon, unit), header: boxOf(find('message-header-content'), unit),
+        title: boxOf(message.titleLabel, unit), close: boxOf(find('message-close-button'), unit),
+        actions: message._actionBin.visible ? boxOf(message._actionBin, unit) : null,
+    };
+}
+
+async function notificationsLayer(unit) {
+    const source = new MessageTray.Source({title: 'G2 Chat', iconName: 'mail-unread-symbolic'});
+    Main.messageTray.add(source);
+    for (const title of ['Lunch?', 'Standup moved', 'Build passed']) {
+        const notification = new MessageTray.Notification({source, title, body: 'Just now.', urgency: MessageTray.Urgency.LOW});
+        notification.addAction('Reply', () => {});
+        source.addNotification(notification);
+    }
+    const {menu, _messageList: list} = Main.panel.statusArea.dateMenu;
+    const notifications = new Gio.Settings({schema_id: 'org.gnome.desktop.notifications'});
+    menu.open(BoxPointer.PopupAnimation.NONE);
+    try {
+        await settle();
+        const group = findDescendant(menu.box, a => a.constructor.name === 'NotificationMessageGroup');
+        const messages = group.get_children().map(c => c.child).filter(m => m?.constructor.name === 'NotificationMessage');
+        const footer = list._clearButton.get_parent();
+        const dnd = footer.get_children().find(c => c.has_style_class_name('apex-dnd-button')) ?? null;
+        const trees = messages.map(m => cardTree(m.get_child()));
+        const layout = {collapsed: cardLayout(messages[0], unit)};
+        // A stock stack would expand the whole group: only a flat group's card expands alone.
+        if (group.expanded) {
+            messages[0].expand(false);
+            await settle();
+            layout.expanded = {...cardLayout(messages[0], unit), tree: cardTree(messages[0].get_child())};
+            messages[0].unexpand(false);
+            await settle();
+            layout.collapsedAgain = {...cardLayout(messages[0], unit), tree: cardTree(messages[0].get_child())};
+        }
+        const header = findDescendant(messages[0], a => a.has_style_class_name?.('message-header'));
+        const line = findDescendant(header, a => a.has_style_class_name?.('message-header-content'));
+        const result = {
+            header: group._headerBox.visible,
+            cardHeader: {
+                sourceIcon: findDescendant(header, a => a.has_style_class_name?.('message-source-icon')).visible,
+                line: line.get_children().filter(c => c.visible).map(c => c.text).join(' '),
+            },
+            icon: messages[0].icon?.to_string() ?? null,
+            messages: messages.map(m => boxOf(m, unit)),
+            trees, layout,
+            footer: boxOf(footer, unit),
+            clear: {...boxOf(list._clearButton, unit), visible: list._clearButton.visible},
+            dnd: dnd && {...boxOf(dnd, unit), label: findDescendant(dnd, a => a instanceof St.Label)?.text ?? null},
+        };
+        const calendar = findDescendant(menu.box, a => a.has_style_class_name?.('calendar'));
+        const find = styleClass => findDescendant(calendar, a => a.has_style_class_name?.(styleClass));
+        const days = calendar.get_children().filter(a => a.has_style_class_name?.('calendar-day'));
+        const dots = days.map(d => findDescendant(d, a => a.has_style_class_name?.('apex-event-dot'))).filter(Boolean);
+        result.calendar = {
+            label: boxOf(find('calendar-month-label'), unit),
+            back: boxOf(find('calendar-change-month-back'), unit),
+            forward: boxOf(find('calendar-change-month-forward'), unit),
+            days: days.length,
+            dots: dots.map(d => boxOf(d, unit)),
+        };
+        if (dnd) {
+            dnd.emit('clicked', Clutter.BUTTON_PRIMARY);
+            result.dndClick = {showBanners: notifications.get_boolean('show-banners'), checked: dnd.checked};
+            dnd.emit('clicked', Clutter.BUTTON_PRIMARY);
+        }
+        Main.messageTray.getSources().filter(s => s === source).forEach(s => s.destroy());
+        await settle();
+        result.empty = {
+            placeholder: list._placeholder.visible,
+            clearVisible: list._clearButton.visible,
+            clearReactive: list._clearButton.reactive,
+        };
+        return result;
+    } finally {
+        menu.close(BoxPointer.PopupAnimation.NONE);
+        notifications.reset('show-banners');
+        Main.messageTray.getSources().filter(s => s === source).forEach(s => s.destroy());
+        await settle();
+    }
+}
+
 // Board 38's rows, from providers of the probe's own: G2's image has no files or settings
 // to find, so a real query would draw nothing to measure.
 const CALCULATOR = 'org.gnome.Calculator.desktop';
@@ -1036,8 +1493,8 @@ const SPOTLIGHT_ROWS = {
     'org.gnome.Settings.desktop': [
         {id: 'about', name: 'About', description: 'System · name, memory and disk capacity', icon: 'help-about-symbolic'},
         {id: 'privacy', name: 'File History & Trash', description: 'Privacy & Security', icon: 'user-trash-symbolic', keywords: 'disk'},
-        {id: 'removable', name: 'Removable Media', description: 'Apps · what happens when a disk is plugged in', icon: 'media-removable-symbolic'},
-        {id: 'storage', name: 'Disk Encryption', description: 'Privacy & Security', icon: 'drive-harddisk-symbolic'},
+        {id: 'removable-media', name: 'Removable Media', description: 'Apps · what happens when a disk is plugged in', icon: 'media-removable-symbolic'},
+        {id: 'disk-encryption', name: 'Disk Encryption', description: 'Privacy & Security', icon: 'drive-harddisk-symbolic'},
     ],
     'org.gnome.Nautilus.desktop': [
         {id: 'csv', name: 'disk-usage-2026-10.csv', description: '~/Documents', icon: 'text-x-generic'},
@@ -1066,6 +1523,17 @@ function spotlightProviders() {
         }))),
         activateResult: () => {},
     }]));
+}
+
+// What the sheet asks of an actor's glass, and the blur the glass feature gave it.
+function glassOf(actor, unit) {
+    const node = actor.get_theme_node();
+    const [, saturation] = node.lookup_double('-apex-glass-saturation', false);
+    const effect = actor.get_effect('apex-glass');
+    return {
+        blur: lengthOrNull(node, '-apex-glass-blur', unit), saturation: round(saturation),
+        effect: effect ? {radius: effect.radius, saturation: round(effect.saturation), enabled: effect.enabled} : null,
+    };
 }
 
 async function spotlightScene(popup, name, text) {
@@ -1102,8 +1570,10 @@ async function spotlightStyle(unit) {
         const row = actor => {
             const [icon, text, action] = actor.get_children();
             const [title, subtitle] = text.get_children();
+            const tile = icon.has_style_class_name('apex-spotlight-tile')
+                ? {...styleOf(icon, unit), glyph: lengthOrNull(icon.get_child().get_theme_node(), 'icon-size', unit)} : null;
             return {
-                ...styleOf(actor, unit), icon: styleOf(icon, unit), text: styleOf(text, unit),
+                ...styleOf(actor, unit), icon: styleOf(icon, unit), tile, text: styleOf(text, unit),
                 title: {...styleOf(title, unit), text: title.get_text()},
                 subtitle: {...styleOf(subtitle, unit), text: subtitle.get_text()},
                 action: {
@@ -1138,6 +1608,7 @@ async function spotlightStyle(unit) {
         captured.none = await spotlightScene(popup, 'none', 'zzz');
         measured.empty = styleOf(popup.panel.get_children()[2], unit);
         await spotlightScene(popup, null, '2880 / 1.5');
+        const panelBeforeCopy = glassOf(popup.panel, unit);
         popup.activateSelected();
         await settle();
         const scene = GLib.getenv('G2_SURFACE_SCENES') === '1' ? await capture('spotlight-copied') : null;
@@ -1155,9 +1626,203 @@ async function spotlightStyle(unit) {
             };
         }
         measured.closedOnCopy = !popup.isOpen;
+        measured.glass = {panelBeforeCopy, toast: pill ? glassOf(pill, unit) : null};
         return {scenes: captured, ...measured};
     } finally {
         popup.destroy();
+        await settle();
+    }
+}
+
+// S3a's exit items in the real shell: a provider past the budget holds back no section, and
+// real key presses move one selection across the sections, open a row and close the popup.
+const SLOW_SETTINGS_MS = 1600;
+const SECTIONS_EARLY_MS = 300;
+const SECTIONS_LATE_MS = 1200;
+const NO_KEYBINDING_ACTION = -1;
+
+function slowSpotlightProviders(started, settings) {
+    const providers = spotlightProviders();
+    const fast = providers.get('org.gnome.Settings.desktop');
+    providers.set('org.gnome.Settings.desktop', {
+        ...fast,
+        getInitialResultSet: (terms, cancellable) => new Promise(resolve => {
+            settings.askedMs = msSince(started.at);
+            cancellable?.connect(() => {
+                settings.cancelledMs = msSince(started.at);
+            });
+            GLib.timeout_add(GLib.PRIORITY_DEFAULT, SLOW_SETTINGS_MS, () => {
+                resolve(fast.getInitialResultSet(terms));
+                return GLib.SOURCE_REMOVE;
+            });
+        }),
+    });
+    for (const [id, provider] of providers)
+        provider.activateResult = (resultId, terms) => settings.activated.push({provider: id, id: resultId, terms});
+    return providers;
+}
+
+function msSince(start) {
+    return Math.round((GLib.get_monotonic_time() - start) / 1000);
+}
+
+function spotlightSections(popup) {
+    if (!popup.isOpen)
+        return {open: false, sections: [], rows: 0, selected: null};
+    const results = popup.panel.get_children()[1];
+    const headers = results.get_children().filter(a => a.has_style_class_name('apex-spotlight-header'));
+    const selected = popup.rows.find(r => r.selected);
+    return {
+        sections: headers.map(h => h.get_child().get_text()),
+        rows: popup.rows.length,
+        selected: selected ? selected.key : null,
+    };
+}
+
+async function pressKeys(keyboard, keyval, times) {
+    for (let i = 0; i < times; i++) {
+        keyboard.notify_keyval(GLib.get_monotonic_time(), keyval, Clutter.KeyState.PRESSED);
+        keyboard.notify_keyval(GLib.get_monotonic_time(), keyval, Clutter.KeyState.RELEASED);
+        // eslint-disable-next-line no-await-in-loop
+        await Scripting.sleep(20);
+    }
+    await settle();
+}
+
+async function spotlightKeys() {
+    if ((await apexHooks())?.safe() !== false)
+        return null;
+    let Popup, BUDGET_MS;
+    try {
+        ({Popup} = await import('resource:///org/gnome/shell/ui/apex/spotlight/popup.js'));
+        ({BUDGET_MS} = await import('resource:///org/gnome/shell/ui/apex/spotlight/search.js'));
+    } catch {
+        return null;
+    }
+    const started = {at: 0};
+    const settings = {askedMs: null, cancelledMs: null, activated: []};
+    // Unbound keys map to keybinding action 0, so the toggle action here must match none.
+    const popup = new Popup(() => slowSpotlightProviders(started, settings), NO_KEYBINDING_ACTION);
+    const seat = global.stage.context.get_backend().get_default_seat();
+    const keyboard = seat.create_virtual_device(Clutter.InputDeviceType.KEYBOARD_DEVICE);
+    const keys = {budgetMs: BUDGET_MS, slowMs: SLOW_SETTINGS_MS, modalBefore: Main.modalCount};
+    try {
+        popup.open();
+        keys.modalOpen = Main.modalCount;
+        started.at = GLib.get_monotonic_time();
+        popup.panel.get_children()[0].get_children()[1].set_text('disk');
+        await Scripting.sleep(SECTIONS_EARLY_MS);
+        keys.early = {ms: msSince(started.at), ...spotlightSections(popup)};
+        await Scripting.sleep(Math.max(0, SECTIONS_LATE_MS - msSince(started.at)));
+        keys.late = {ms: msSince(started.at), ...spotlightSections(popup)};
+        keys.settings = {askedMs: settings.askedMs, cancelledMs: settings.cancelledMs};
+        await pressKeys(keyboard, Clutter.KEY_Down, 4);
+        keys.down4 = spotlightSections(popup).selected;
+        await pressKeys(keyboard, Clutter.KEY_Up, 1);
+        keys.up1 = spotlightSections(popup).selected;
+        await pressKeys(keyboard, Clutter.KEY_Down, 20);
+        keys.down20 = spotlightSections(popup).selected;
+        await pressKeys(keyboard, Clutter.KEY_Return, 1);
+        keys.enter = {open: popup.isOpen, modal: Main.modalCount, activated: settings.activated};
+        popup.open();
+        popup.panel.get_children()[0].get_children()[1].set_text('disk');
+        await settle();
+        await pressKeys(keyboard, Clutter.KEY_Escape, 1);
+        keys.escape = {open: popup.isOpen, modal: Main.modalCount};
+        return keys;
+    } finally {
+        popup.destroy();
+        await settle();
+    }
+}
+
+// Spotlight's popup, and its toast once a calculation is copied, for G2_A11Y.
+async function withSpotlight(read) {
+    if ((await apexHooks())?.safe() !== false)
+        return null;
+    const {Popup} = await import('resource:///org/gnome/shell/ui/apex/spotlight/popup.js');
+    const Toast = await import('resource:///org/gnome/shell/ui/apex/spotlight/toast.js');
+    const popup = new Popup(spotlightProviders, 0);
+    popup.open();
+    try {
+        return await read(popup, async () => {
+            popup.panel.get_children()[0].get_children()[1].set_text('2880 / 1.5');
+            await settle();
+            popup.activateSelected();
+            await settle();
+            return Toast.current()?.get_first_child() ?? null;
+        });
+    } finally {
+        popup.destroy();
+        await settle();
+    }
+}
+
+// Text typed in the overview reaches its search entry; patch 0013 hands it to Spotlight.
+async function overviewSearch() {
+    const feature = await import(SPOTLIGHT_FEATURE).catch(() => null);
+    const popup = feature?.popup();
+    if (!popup)
+        return null;
+    const entry = Main.overview._overview.controls._searchEntry;
+    entry.set_text('disk');
+    await settle();
+    const result = {
+        opened: popup.isOpen,
+        text: popup.isOpen ? popup.panel.get_children()[0].get_children()[1].get_text() : null,
+        overviewText: entry.get_text(),
+    };
+    popup.close();
+    await settle();
+    return result;
+}
+
+// Board 36: in the app grid the overview's pill is the launcher's, which filters the grid.
+async function launcherSearch(unit) {
+    const feature = await import('resource:///org/gnome/shell/ui/apex/spotlight/feature.js').catch(() => null);
+    const popup = feature?.popup();
+    if (!popup)
+        return null;
+    const {controls} = Main.overview._overview;
+    const entry = controls._searchEntry;
+    const results = () => controls._appDisplay.get_children().find(a => a.name === 'apexLauncherResults');
+    const scene = async name => {
+        await settle();
+        global.stage.set_key_focus(null);
+        const captured = GLib.getenv('G2_SURFACE_SCENES') === '1' ? await capture(name) : null;
+        if (captured)
+            delete captured.bytes;
+        return captured;
+    };
+    // The overview is up already, where showApps() does nothing: the button is what a click sets.
+    Main.overview.dash.showAppsButton.checked = true;
+    try {
+        await settle();
+        const pill = {...styleOf(entry, unit), hint: entry.hint_text};
+        entry.set_text('files');
+        const filtered = await scene('launcher');
+        const icons = results()?.get_children()[0].get_children() ?? [];
+        const found = {
+            appDisplay: boxOf(controls._appDisplay, unit),
+            results: results() ? boxOf(results(), unit) : null,
+            gridHidden: !controls._appDisplay._box.visible,
+            names: icons.map(icon => icon.app.get_name()),
+            firstSelected: icons[0]?.has_style_pseudo_class('selected') ?? false,
+            spotlightOpen: popup.isOpen,
+        };
+        entry.set_text('zzzqx');
+        const none = await scene('launcher-none');
+        const empty = results()?.get_children()[1];
+        const [title, hint] = empty?.get_children() ?? [];
+        const emptyTop = empty ? round(empty.get_transformed_position()[1] / unit.length) - found.results.y : null;
+        return {
+            scenes: {filtered, none}, pill, found,
+            empty: empty ? {...styleOf(empty, unit), top: emptyTop, title: {...styleOf(title, unit), text: title.text}, hint: {...styleOf(hint, unit), text: hint.text}} : null,
+        };
+    } finally {
+        entry.set_text('');
+        Main.overview.dash.showAppsButton.checked = false;
+        popup.close();
         await settle();
     }
 }
@@ -1254,6 +1919,10 @@ async function appGrid(unit) {
                 focus: underPseudoClass(app, 'focus', () => paint(app.get_theme_node(), unit)),
             } : null,
             folder: folder ? styleOf(folder, unit) : null,
+            strip: round(Main.overview._overview.controls.layoutManager
+                .getWorkspacesBoxForState(OverviewControls.ControlsState.APP_GRID).get_height() / unit.length),
+            box: boxOf(appDisplay, unit),
+            searchBottom: (b => b.y + b.height)(boxOf(Main.overview._overview.controls._searchEntry, unit)),
             grid: {
                 columns: appDisplay._grid.layout_manager.columns_per_page,
                 rows: appDisplay._grid.layout_manager.rows_per_page,
@@ -1280,6 +1949,106 @@ async function appGrid(unit) {
     } finally {
         folder?._dialog?.popdown();
         showAppsButton.checked = false;
+        await settle();
+    }
+}
+
+// G2 opens no window to drag to an edge, so a stand-in actor in the window group plays the
+// window and the stock preview opens over the left half of the work area.
+async function tilePreview(unit) {
+    const {primaryIndex, primaryMonitor} = Main.layoutManager;
+    const area = Main.layoutManager.getWorkAreaForMonitor(primaryIndex);
+    const stand = new Clutter.Actor({x: area.x, y: area.y, width: area.width / 2, height: area.height});
+    global.window_group.add_child(stand);
+    const window = {
+        get_compositor_private: () => stand,
+        get_frame_rect: () => new Mtk.Rectangle({x: area.x + 100, y: area.y + 100, width: 600, height: 400}),
+    };
+    const preview = new WindowManager.TilePreview();
+    try {
+        preview.open(window, new Mtk.Rectangle({x: area.x, y: area.y, width: area.width / 2, height: area.height}), primaryIndex);
+        await settle();
+        const scene = GLib.getenv('G2_SURFACE_SCENES') === '1' ? await capture('tile-preview') : null;
+        if (scene)
+            delete scene.bytes;
+        return {
+            scene,
+            tile: {
+                x: round((area.x - primaryMonitor.x) / unit.length), y: round((area.y - primaryMonitor.y) / unit.length),
+                width: round(area.width / 2 / unit.length), height: round(area.height / unit.length),
+            },
+            preview: styleOf(preview, unit),
+        };
+    } finally {
+        preview.destroy();
+        stand.destroy();
+    }
+}
+
+// The stock screenshot UI in its selection mode, as board 19 opens it, then its screen
+// mode; G2 opens no windows, so a checked window frame is a stand-in.
+async function screenshotUI(unit) {
+    const ui = Main.screenshotUI;
+    await ui.open();
+    try {
+        await settle();
+        global.stage.set_key_focus(null);
+        const scene = GLib.getenv('G2_SURFACE_SCENES') === '1' ? await capture('screenshot') : null;
+        if (scene)
+            delete scene.bytes;
+        const types = [ui._selectionButton, ui._screenButton, ui._windowButton];
+        const typeContent = types[0].get_child();
+        const circle = ui._captureButton.get_child();
+        const area = ui._areaSelector;
+        const measured = {
+            scene,
+            monitorHeight: round(Main.layoutManager.primaryMonitor.height / unit.length),
+            panel: styleOf(ui._panel, unit),
+            close: styleOf(ui._closeButton, unit),
+            types: types.map(b => ({...styleOf(b, unit), checked: b.checked})),
+            typeContent: {
+                spacing: lengthOrNull(typeContent.get_theme_node(), 'spacing', unit),
+                icon: boxOf(typeContent.get_first_child(), unit),
+                labelFont: font(typeContent.get_last_child().get_theme_node(), unit),
+            },
+            checkedType: underPseudoClass(types[1], 'checked', () => paint(types[1].get_theme_node(), unit)),
+            pointer: {
+                ...styleOf(ui._showPointerButton, unit),
+                checked: underPseudoClass(ui._showPointerButton, 'checked', () => ({
+                    ...paint(ui._showPointerButton.get_theme_node(), unit),
+                    foreground: hex(ui._showPointerButton.get_theme_node().get_foreground_color()),
+                })),
+            },
+            capture: {
+                ...styleOf(ui._captureButton, unit),
+                circle: styleOf(circle, unit),
+                cast: underPseudoClass(ui._captureButton, 'cast', () => {
+                    const node = circle.get_theme_node();
+                    return {
+                        margin: lengthOrNull(node, 'margin', unit),
+                        radius: round(node.get_border_radius(St.Corner.TOPLEFT) / unit.length),
+                        background: hex(node.get_background_color()),
+                    };
+                }),
+            },
+            switcher: styleOf(ui._shotCastContainer, unit),
+            shot: {...styleOf(ui._shotButton, unit), checked: ui._shotButton.checked},
+            shade: styleOf(area._areaIndicator._topRect, unit),
+            selection: styleOf(area._areaIndicator._selectionRect, unit),
+            handle: styleOf(area._topLeftHandle, unit),
+        };
+        ui._screenButton.checked = true;
+        await settle();
+        const screen = ui._screenSelectors[Main.layoutManager.primaryIndex];
+        measured.screen = {...styleOf(screen, unit), checked: screen.checked};
+        measured.windowSelector = styleOf(ui._windowSelectors[Main.layoutManager.primaryIndex], unit);
+        const frame = new St.Widget({style_class: 'screenshot-ui-window-selector-window-border'});
+        const window = new St.Widget({style_class: 'screenshot-ui-window-selector-window'});
+        window.add_child(frame);
+        measured.windowFrame = withStyledActor(window, () => underPseudoClass(window, 'checked', () => styleOf(frame, unit)));
+        return measured;
+    } finally {
+        ui.close(true);
         await settle();
     }
 }
@@ -1339,6 +2108,8 @@ async function scenes() {
     // After the capture: reading the hover and checked styles restyles the pills.
     const bar = topBar(unit);
     const dock = dockReport(unit);
+    if (dock)
+        dock.appMenu = await dockAppMenu();
     bar.withDot = await withUnreadNotification(unit);
     bar.dnd = await withDoNotDisturb();
     bar.opaque = await withOpaqueBar(unit);
@@ -1346,11 +2117,21 @@ async function scenes() {
     bar.largeText = await withLargeText();
     const surfaces = await shellSurfaces(unit);
     surfaces.quickSettings = await quickSettings(unit);
+    surfaces.quickSettingsLayer = await quickSettingsLayer(unit);
+    // Fedora's own shell, in smoke.sh, has no Apex layer to draw shadows.
+    if (await apexHooks()) {
+        surfaces.shadowLayers = await shadowLayers(unit);
+        surfaces.idleRepaints = await idleRepaints();
+    }
     surfaces.switcher = await windowSwitcher(unit);
-    surfaces.dialog = await modalDialog(unit);
+    surfaces.dialog = {...await modalDialog(unit), endSession: await endSessionDialog(unit), updateCard: await updateCard(unit)};
     surfaces.dateMenu = await calendarMenu(unit);
+    surfaces.notificationsLayer = await notificationsLayer(unit);
     surfaces.derived = derivedSurfaces(unit);
+    surfaces.tilePreview = await tilePreview(unit);
     surfaces.spotlight = await spotlightStyle(unit);
+    surfaces.spotlightKeys = await spotlightKeys();
+    surfaces.screenshot = await screenshotUI(unit);
 
     Main.overview.show();
     await settle();
@@ -1363,6 +2144,8 @@ async function scenes() {
         dockClearance: dockClearance(unit),
     };
     surfaces.overview = overviewStyle(unit);
+    surfaces.overviewSearch = await overviewSearch();
+    surfaces.launcher = await launcherSearch(unit);
     surfaces.overviewLayer = await overviewLayer(unit);
     surfaces.appGrid = await appGrid(unit);
     delete overview.bytes;
@@ -1453,6 +2236,216 @@ async function withLayerCycles(cycles) {
 
 // main.js connects to startup-complete only after importing this module, so a startup that
 // completes during the import would never run the script and leave the shell up.
+function transitionInfo(transition) {
+    if (!transition)
+        return null;
+    const mode = transition.get_progress_mode();
+    const [, c1, c2] = transition.get_cubic_bezier_progress();
+    return {
+        mode: Object.keys(Clutter.AnimationMode).find(k => Clutter.AnimationMode[k] === mode) ?? mode,
+        duration: transition.get_duration(),
+        curve: [c1.x, c1.y, c2.x, c2.y].map(round),
+    };
+}
+
+// The transition the ease created, read right after the call; none when the ease took 0 ms.
+async function firstTransition(read) {
+    for (let waited = 0; waited < MOTION_SETTLE_MS; waited += 10) {
+        const transition = read();
+        if (transition)
+            return transitionInfo(transition);
+        // eslint-disable-next-line no-await-in-loop
+        await Scripting.sleep(10);
+    }
+    return null;
+}
+
+// A maximise animates only from a shown frame, so each one waits for the window to rest:
+// mapped, maximised or at window.js's size, no size change pending or easing, two still frames.
+async function restAt(window, maximised, failure) {
+    const actor = window.get_compositor_private();
+    const atRest = () => {
+        const {width, height} = window.get_frame_rect();
+        return actor.mapped && window.is_maximized() === maximised &&
+            (maximised || (width === MOTION_WINDOW_SIZE.width && height === MOTION_WINDOW_SIZE.height)) &&
+            !Main.wm._resizePending.has(actor) && !Main.wm._resizing.has(actor);
+    };
+    if (!await settledOverTwoFrames(actor, atRest, MOTION_WAIT_MS))
+        throw new Error(failure);
+}
+
+async function maximiseTransition(window) {
+    const actor = window.get_compositor_private();
+    window.maximize();
+    // _sizeChangedWindow marks the actor resizing just before it eases the size change.
+    const transition = await firstTransition(() =>
+        Main.wm._resizing.has(actor) ? actor.get_transition('scale-x') : null);
+    await restAt(window, true, 'the maximise never settled');
+    const maximised = window.is_maximized();
+    window.unmaximize();
+    await restAt(window, false, 'the restore never settled');
+    return {transition, maximised};
+}
+
+async function overviewTransition() {
+    const adjustment = Main.overview._overview._controls._stateAdjustment;
+    Main.overview.show();
+    const transition = await firstTransition(() => adjustment.get_transition('value'));
+    await Scripting.sleep(MOTION_SETTLE_MS);
+    const visible = Main.overview.visible;
+    Main.overview.hide();
+    await Scripting.sleep(MOTION_SETTLE_MS);
+    return {transition, visible};
+}
+
+async function previewShadows() {
+    const Registry = await import(SHADOW_REGISTRY);
+    const unit = cssUnit();
+    Main.overview.show();
+    await settle();
+    const find = actor => actor.get_children().flatMap(c => c.window_container !== undefined ? [c] : find(c));
+    const previews = find(Main.layoutManager.overviewGroup).map(preview => ({
+        styled: preview.has_style_class_name('apex-window-preview'),
+        layers: Registry.layersOf(preview).map(layer => ({
+            shown: layer.mapped,
+            boxShadow: shadow(layer.get_theme_node(), unit),
+            radius: round(layer.get_theme_node().get_border_radius(St.Corner.TOPLEFT) / unit.length),
+        })),
+    }));
+    Main.overview.hide();
+    await settle();
+    return previews;
+}
+
+const EASE_PARAMS = new Set(['duration', 'mode', 'delay', 'onComplete', 'onStopped', 'animationRequired',
+    'repeatCount', 'autoReverse']);
+
+// environment.js puts every ease on these prototypes: each call is recorded with the transitions
+// it left, named by the canonical property (translation-y), and whether a ui/apex/ frame made it.
+function recordEases(calls) {
+    const wrap = (proto, method, read) => {
+        const original = proto[method];
+        proto[method] = function (...args) {
+            const result = original.apply(this, args);
+            const {names, params} = read(args);
+            const frames = new Error().stack.split('\n').slice(1);
+            const apexFrame = frames.find(f => f.includes('/ui/apex/'));
+            calls.push({
+                apex: !!apexFrame,
+                where: (apexFrame ?? frames[1] ?? '').replace(/^.*@/, '').replace(/^resource:\/\/\/org\/gnome\/shell\//, ''),
+                required: params?.animationRequired === true,
+                durations: names.map(name => this.get_transition(name.replaceAll('_', '-'))?.get_duration() ?? 0),
+            });
+            return result;
+        };
+        return () => (proto[method] = original);
+    };
+    const actor = ([params]) => ({names: Object.keys(params ?? {}).filter(k => !EASE_PARAMS.has(k)), params});
+    const property = ([name, , params]) => ({names: [name], params});
+    const adjustment = ([, params]) => ({names: ['value'], params});
+    const restores = [
+        wrap(Clutter.Actor.prototype, 'ease', actor),
+        wrap(Clutter.Actor.prototype, 'easeAsync', actor),
+        wrap(Clutter.Actor.prototype, 'ease_property', property),
+        wrap(Clutter.Actor.prototype, 'ease_property_async', property),
+        wrap(St.Adjustment.prototype, 'ease', adjustment),
+        wrap(St.Adjustment.prototype, 'easeAsync', adjustment),
+    ];
+    return () => restores.forEach(restore => restore());
+}
+
+// Each Apex surface opened and closed once: the dock's lift and intellihide, the overview's
+// thumbnails, Spotlight, Quick Settings, the calendar and a dialog with its shadow layer.
+async function surfaceEases(window) {
+    const calls = [];
+    const steps = [];
+    const restore = recordEases(calls);
+    const step = async (name, open, close) => {
+        const before = calls.length;
+        await open();
+        await Scripting.sleep(MOTION_SETTLE_MS);
+        await close();
+        await Scripting.sleep(MOTION_SETTLE_MS);
+        steps.push({name, eases: calls.length - before, apexEases: calls.slice(before).filter(c => c.apex).length});
+    };
+    try {
+        const icon = findDescendant(apexDock() ?? new St.Widget(), a => a._delegate?.app && a.icon);
+        await step('dock-lift', () => icon && (icon.hover = true), () => icon && (icon.hover = false));
+        await step('intellihide', () => window.maximize(), () => window.unmaximize());
+        await step('overview', () => Main.overview.show(), () => Main.overview.hide());
+        const spotlight = (await import(SPOTLIGHT_FEATURE).catch(() => null))?.popup();
+        await step('spotlight', () => spotlight?.open(), () => spotlight?.close());
+        for (const [name, indicator] of [['quick-settings', 'quickSettings'], ['calendar', 'dateMenu']]) {
+            const {menu} = Main.panel.statusArea[indicator];
+            // eslint-disable-next-line no-await-in-loop
+            await step(name, () => menu.open(BoxPointer.PopupAnimation.FULL), () => menu.close(BoxPointer.PopupAnimation.FULL));
+        }
+        const dialog = new ModalDialog.ModalDialog();
+        await step('dialog', () => dialog.open(), () => dialog.close());
+        dialog.destroy();
+    } finally {
+        restore();
+    }
+    const lasting = calls.filter(c => !c.required && c.durations.some(d => d > 0));
+    return {
+        steps,
+        eases: calls.length,
+        apexEases: calls.filter(c => c.apex).length,
+        lasting: lasting.map(({apex, where, durations}) => ({apex, where, durations})),
+    };
+}
+
+async function motion() {
+    Main.overview.hide();
+    await Scripting.sleep(MOTION_SETTLE_MS);
+    const client = Gio.File.new_for_uri(import.meta.url).get_parent().get_child('window.js').get_path();
+    // The shell's environment names no display: the client gets the shell's own, on Wayland.
+    const launcher = new Gio.SubprocessLauncher({flags: Gio.SubprocessFlags.STDERR_PIPE});
+    launcher.setenv('WAYLAND_DISPLAY', GLib.getenv('G2_WAYLAND_DISPLAY') ?? 'apex-g2', true);
+    launcher.setenv('GDK_BACKEND', 'wayland', true);
+    const clientProcess = launcher.spawnv(['gjs', '-m', client]);
+    const find = () => global.get_window_actors().map(a => a.meta_window)
+        .find(w => w.get_gtk_application_id() === MOTION_WINDOW_ID);
+    let window;
+    for (let waited = 0; !(window = find()) && waited < MOTION_WAIT_MS; waited += 100)
+        // eslint-disable-next-line no-await-in-loop
+        await Scripting.sleep(100);
+    if (!window) {
+        clientProcess.force_exit();
+        const [, , stderr] = await clientProcess.communicate_utf8_async(null, null);
+        throw new Error(`the test client never mapped (${stderr?.trim() || `no ${MOTION_WINDOW_ID} window in ${MOTION_WAIT_MS} ms`})`);
+    }
+    // Mutter gives a window's first size change a 0 x 0 old frame, which stock never animates.
+    await restAt(window, false, 'the window never showed');
+    window.maximize();
+    await restAt(window, true, 'the warm-up maximise never settled');
+    window.unmaximize();
+    await restAt(window, false, 'the restore never settled');
+    const interfaceSettings = new Gio.Settings({schema_id: 'org.gnome.desktop.interface'});
+    // main.js inhibits animations without hardware-accelerated rendering, as G2's headless shell has.
+    const stSettings = St.Settings.get();
+    const uninhibited = interfaceSettings.get_boolean('enable-animations') && !stSettings.enable_animations;
+    if (uninhibited)
+        stSettings.uninhibit_animations();
+    const animated = {maximise: await maximiseTransition(window), overview: await overviewTransition()};
+    animated.surfaces = await surfaceEases(window);
+    const previews = await previewShadows();
+    interfaceSettings.set_boolean('enable-animations', false);
+    await Scripting.sleep(MOTION_SETTLE_MS);
+    const still = {maximise: await maximiseTransition(window), overview: await overviewTransition()};
+    still.surfaces = await surfaceEases(window);
+    // Locate Pointer's ripples are animationRequired: an a11y aid that animates regardless.
+    interfaceSettings.set_boolean('locate-pointer', true);
+    await Scripting.sleep(MOTION_SETTLE_MS);
+    Main.locatePointer.show();
+    still.locatePointer = transitionInfo(Main.locatePointer._ripples?._ripple1.get_transition('scale-x') ?? null);
+    interfaceSettings.set_boolean('locate-pointer', false);
+    const enableAnimations = stSettings.enable_animations;
+    if (uninhibited)
+        stSettings.inhibit_animations();
+    return {uninhibited, enableAnimations, animated, still, previews};
+}
+
 export function init() {
     if (Main.layoutManager._startingUp)
         return;
@@ -1460,7 +2453,117 @@ export function init() {
     import(import.meta.url).then(self => Scripting.runPerfScript(self, GLib.getenv('SHELL_PERF_OUTPUT')));
 }
 
+function withoutBytes(captured) {
+    delete captured.bytes;
+    return captured;
+}
+
+async function until(condition, timeoutMs = 10000) {
+    for (let waited = 0; waited < timeoutMs; waited += 100) {
+        if (condition())
+            return true;
+        // eslint-disable-next-line no-await-in-loop
+        await Scripting.sleep(100);
+    }
+    return condition();
+}
+
+function dockHidden() {
+    return (apexDock()?.get_parent().translation_y ?? 0) > 0;
+}
+
+function maximisedWindow() {
+    return global.display.list_all_windows().some(w => w.title === G2_WINDOW_TITLE && w.is_maximized());
+}
+
+// A window counts once its actor is mapped, which mutter does at its first frame.
+function maximisedWindowShown() {
+    return global.get_window_actors().some(a => a.mapped &&
+        a.meta_window.title === G2_WINDOW_TITLE && a.meta_window.is_maximized());
+}
+
+// The scripted case of ROADMAP S2a: a maximised window hides the dock, the bottom edge under
+// it reveals it, and leaving it hides it again.
+async function withDockIntellihide() {
+    const unit = cssUnit();
+    dropStartupNotifications();
+    Main.overview.hide();
+    await settle();
+    const steps = {initial: {hidden: dockHidden()}};
+    const here = GLib.path_get_dirname(GLib.filename_from_uri(import.meta.url)[0]);
+    const client = Gio.Subprocess.new(['gjs', '-m', GLib.build_filenamev([here, 'maximised-window.js'])],
+        Gio.SubprocessFlags.NONE);
+    try {
+        steps.maximised = {window: await until(maximisedWindowShown)};
+        await until(dockHidden, 3000);
+        await settle();
+        steps.maximised.hidden = dockHidden();
+        steps.maximised.barSolid = Main.panel.has_style_class_name('apex-solid-bar');
+        steps.maximised.capture = withoutBytes(await capture('maximised'));
+
+        const box = apexDock().get_parent();
+        const [boxX] = box.get_transformed_position();
+        const monitor = Main.layoutManager.primaryMonitor;
+        const seat = global.stage.context.get_backend().get_default_seat();
+        const pointer = seat.create_virtual_device(Clutter.InputDeviceType.POINTER_DEVICE);
+        const now = () => GLib.get_monotonic_time();
+        pointer.notify_absolute_motion(now(), boxX + box.width / 2, monitor.y + monitor.height - 1);
+        for (let push = 0; push < 5; push++) {
+            pointer.notify_relative_motion(now(), 0, 20);
+            // eslint-disable-next-line no-await-in-loop
+            await Scripting.sleep(50);
+        }
+        await until(() => !dockHidden(), 3000);
+        await settle();
+        const underPointer = global.stage.get_actor_at_pos(Clutter.PickMode.REACTIVE,
+            boxX + box.width / 2, monitor.y + monitor.height - 1);
+        steps.revealed = {hidden: dockHidden(), underPointer: box === underPointer || box.contains(underPointer)};
+        steps.revealed.capture = withoutBytes(await capture('revealed'));
+
+        pointer.notify_absolute_motion(now(), monitor.x + monitor.width / 2, monitor.y + monitor.height / 2);
+        await until(dockHidden, 3000);
+        steps.left = {hidden: dockHidden()};
+
+        Main.overview.show();
+        await settle();
+        steps.overview = {hidden: dockHidden()};
+        Main.overview.hide();
+        await settle();
+
+        const settings = new Gio.Settings({schema_id: APEX_SCHEMA});
+        settings.set_boolean(DOCK_INTELLIHIDE_KEY, false);
+        await until(() => !dockHidden(), 3000);
+        steps.intellihideOff = {hidden: dockHidden(), window: maximisedWindow()};
+        settings.reset(DOCK_INTELLIHIDE_KEY);
+        await until(dockHidden, 3000);
+        steps.intellihideOn = {hidden: dockHidden()};
+    } finally {
+        client.force_exit();
+    }
+    await until(() => !maximisedWindow() && !dockHidden(), 5000);
+    steps.closed = {hidden: dockHidden(), window: maximisedWindow()};
+    return {unit, steps};
+}
+
+// gnome-shell-perf-helper quits after 30 s without a call, and scripting.js's last call to it
+// then fails the shell: a probe that runs longer pings it.
+function keepPerfHelperAwake() {
+    return GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, PERF_HELPER_PING_S, () => {
+        Scripting._getPerfHelper().then(helper => helper.DestroyWindowsAsync()).catch(() => {});
+        return GLib.SOURCE_CONTINUE;
+    });
+}
+
 export async function run() {
+    const pingId = keepPerfHelperAwake();
+    try {
+        await runProbe();
+    } finally {
+        GLib.source_remove(pingId);
+    }
+}
+
+async function runProbe() {
     await Scripting.sleep(REPORT_AFTER_MS);
     console.log(`APEXG2 ${JSON.stringify(await report())}`);
 
@@ -1474,6 +2577,41 @@ export async function run() {
         console.log(`APEXG2-SCENES ${JSON.stringify(result)}`);
     }
 
+    if (GLib.getenv('G2_ONE_GPU') === '1') {
+        let result;
+        try {
+            result = await dockAppMenu();
+        } catch (e) {
+            result = {error: `${e.message}\n${e.stack}`};
+        }
+        console.log(`APEXG2-GPU ${JSON.stringify(result)}`);
+    }
+
+    if (GLib.getenv('G2_A11Y') === '1') {
+        let result;
+        try {
+            const A11y = await import('./a11y.js');
+            result = await A11y.a11yReport({
+                settle, unit: cssUnit(), apexDock, findDescendant, openPopupMenu, openOsd, openBanner,
+                openModalDialog: openPromptDialog, openEndSessionDialog: openShellEndSession, withSpotlight,
+            });
+        } catch (e) {
+            result = {error: `${e.message}\n${e.stack}`};
+        }
+        console.log(`APEXG2-A11Y ${JSON.stringify(result)}`);
+    }
+
+    if (GLib.getenv('G2_INDICATORS') === '1') {
+        let result;
+        try {
+            const Indicators = await import('./indicators.js');
+            result = await Indicators.indicatorsReport({cssUnit, settle, capture});
+        } catch (e) {
+            result = {error: `${e.message}\n${e.stack}`};
+        }
+        console.log(`APEXG2-INDICATORS ${JSON.stringify(result)}`);
+    }
+
     if (GLib.getenv('G2_TURN_DARK_OFF') === '1') {
         let toggled;
         try {
@@ -1482,6 +2620,16 @@ export async function run() {
             toggled = {error: `${e.message}\n${e.stack}`};
         }
         console.log(`APEXG2-TOGGLED ${JSON.stringify(toggled)}`);
+    }
+
+    if (GLib.getenv('G2_MOTION') === '1') {
+        let result;
+        try {
+            result = await motion();
+        } catch (e) {
+            result = {error: `${e.message}\n${e.stack}`};
+        }
+        console.log(`APEXG2-MOTION ${JSON.stringify(result)}`);
     }
 
     if (GLib.getenv('G2_GLASS') === '1') {
@@ -1504,6 +2652,27 @@ export async function run() {
             result = {error: `${e.message}\n${e.stack}`};
         }
         console.log(`APEXG2-CYCLES ${JSON.stringify(result)}`);
+    }
+
+    if (GLib.getenv('G2_IDLE') === '1') {
+        let result;
+        try {
+            const Idle = await import('./idle.js');
+            result = await Idle.idleReport({settle, dropStartupNotifications, apexDock});
+        } catch (e) {
+            result = {error: `${e.message}\n${e.stack}`};
+        }
+        console.log(`APEXG2-IDLE ${JSON.stringify(result)}`);
+    }
+
+    if (GLib.getenv('G2_DOCK') === '1') {
+        let result;
+        try {
+            result = await withDockIntellihide();
+        } catch (e) {
+            result = {error: `${e.message}\n${e.stack}`};
+        }
+        console.log(`APEXG2-DOCK ${JSON.stringify(result)}`);
     }
 
     const wait = Number(GLib.getenv('PROBE_WAIT') ?? '0');

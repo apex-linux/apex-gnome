@@ -1,0 +1,96 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+
+#panel {
+  .apex-indicators { spacing: $apex_bar_gap; }
+
+  .panel-button.apex-indicator > .apex-indicator-pill {
+    width: $apex_indicator_width;
+    padding: 0;
+  }
+
+  .apex-indicator-icon { icon-size: $apex_bar_icon_size; }
+
+  .apex-indicator-dot {
+    width: $apex_indicator_dot_size;
+    height: $apex_indicator_dot_size;
+    margin: $apex_indicator_dot_top $apex_indicator_dot_right 0 0;
+    border-radius: $apex_indicator_dot_size / 2;
+    background-color: $apex_accent;
+  }
+
+  .panel-button.apex-indicators-overflow > .apex-indicators-overflow-pill {
+    padding: 0 $apex_indicators_overflow_padding_end 0 $apex_indicators_overflow_padding_start;
+    spacing: $apex_indicators_overflow_gap;
+  }
+
+  .apex-indicators-overflow-count {
+    font-size: apex-text-size($apex_font_indicators_count_size);
+    font-weight: $apex_font_indicators_count_weight;
+  }
+
+  // Board 39 marks an open indicator with the surfaces' hover, not the bar's.
+  .panel-button.apex-indicator:checked > .apex-indicator-pill,
+  .panel-button.apex-indicators-overflow:checked > .apex-indicators-overflow-pill {
+    background-color: $apex_button_hover;
+  }
+
+  .apex-indicators-divider {
+    width: $apex_indicators_divider_width;
+    height: $apex_indicators_divider_height;
+    margin: 0 $apex_indicators_divider_margin;
+    background-color: transparentize($apex_bar_fg, 1 - $apex_indicators_divider_opacity);
+  }
+}
+
+.apex-indicator-menu .popup-menu-content { min-width: $apex_indicator_menu_width; }
+.apex-indicators-overflow-menu .popup-menu-content { min-width: $apex_indicators_overflow_menu_width; }
+
+.apex-indicator-menu {
+  .popup-menu-item {
+    padding: 0 $apex_indicator_menu_row_padding;
+    border-radius: $apex_radius_indicator_menu_row;
+  }
+
+  .popup-menu-item.apex-indicator-menu-header {
+    min-height: $apex_indicator_menu_header_height;
+    font-size: apex-text-size($apex_font_menu_secondary_size);
+    font-weight: $apex_font_heading_weight;
+    color: $apex_fg_dim;
+  }
+
+  .popup-separator-menu-item {
+    margin: $apex_indicator_menu_separator_margin $apex_indicator_menu_separator_inset;
+  }
+
+  .apex-indicator-menu-shortcut {
+    font-size: apex-text-size($apex_font_menu_secondary_size);
+    color: $apex_fg_dim;
+  }
+
+  .toggle-switch {
+    width: $apex_indicator_switch_width;
+    height: $apex_indicator_switch_height;
+    background-color: $apex_button_hover;
+
+    StIcon { color: transparent; }
+
+    .handle {
+      margin: $apex_indicator_switch_padding;
+      width: $apex_indicator_switch_knob;
+      height: $apex_indicator_switch_knob;
+    }
+
+    &:checked { background-color: $apex_accent; }
+  }
+}
+
+.apex-indicators-overflow-menu .popup-menu-item {
+  border-radius: $apex_radius_indicator_menu_row;
+
+  .apex-indicator-icon { icon-size: $apex_bar_icon_size; }
+
+  .apex-indicators-overflow-chevron {
+    icon-size: $apex_indicators_chevron_size;
+    color: transparentize($apex_fg, 1 - $apex_indicators_chevron_opacity);
+  }
+}

@@ -2,8 +2,11 @@
 //
 // run.sh installs this as js/ui/main.js: the parts of main.js the layer and its features use.
 
+import GLib from 'gi://GLib';
 import Meta from 'gi://Meta';
 import Shell from 'gi://Shell';
+
+import St from '../../../St.js';
 
 const fact = (key, value) => printerr(`probe: ${key}=${value}`);
 const handlers = new Map();
@@ -120,6 +123,7 @@ const POPOVER_GLASS = {blur: 30, saturation: 1.8, radius: 26};
 
 export const uiGroup = Object.assign(new StubActor('uiGroup', {extents: [0, 0, 1440, 900]}), {
     children: [],
+    get_stage: () => null,
     add_child(actor) {
         this.children.push(actor);
         actor._parent = this;
@@ -183,6 +187,16 @@ export const actionMode = Shell.ActionMode.NORMAL;
 function box(children) {
     return {
         children,
+        classes: new Set(),
+        add_style_class_name(name) {
+            this.classes.add(name);
+        },
+        remove_style_class_name(name) {
+            this.classes.delete(name);
+        },
+        has_style_class_name(name) {
+            return this.classes.has(name);
+        },
         get_children() {
             return [...this.children];
         },
@@ -191,6 +205,15 @@ function box(children) {
         },
         insert_child_at_index(child, index) {
             this.children.splice(index, 0, child);
+            child.connect?.('destroy', () => this.children.includes(child) && this.remove_child(child));
+        },
+        set_child_below_sibling(child, sibling) {
+            this.remove_child(child);
+            this.children.splice(this.children.indexOf(sibling), 0, child);
+        },
+        set_child_above_sibling(child, sibling) {
+            this.remove_child(child);
+            this.children.splice(this.children.indexOf(sibling) + 1, 0, child);
         },
     };
 }
@@ -201,18 +224,142 @@ const QUICK_SETTINGS_INDICATORS = ['_remoteAccess', '_camera', '_volumeInput', '
     '_backlight', '_bluetooth', '_rfkill', '_autoRotate', '_volumeOutput', '_unsafeMode',
     '_powerProfiles', '_system'];
 
+// A SystemIndicator shows only while one of its icons does: the privacy ones start hidden.
+const PRIVACY_INDICATORS = ['_remoteAccess', '_camera', '_volumeInput', '_location'];
+
 const rightBox = box([{name: 'a11y'}, {name: 'keyboard'}]);
+
+// remoteAccess.js's screen-recording and screen-sharing buttons, where panel.js puts them,
+// and keyboard.js's input-source labels.
+function newScreenButton(role, accessibleName, index, children) {
+    const content = new St.BoxLayout();
+    children.forEach(child => content.add_child(child));
+    const button = new St.Widget({name: role, accessible_name: accessibleName});
+    button.add_child(content);
+    button.container = {name: role, get_parent: () => rightBox};
+    rightBox.children.splice(index, 0, button.container);
+    return button;
+}
+
+function newInputSources() {
+    const keyboard = {_container: new St.Widget()};
+    for (const text of ['en', 'vi'])
+        keyboard._container.add_child(new St.Label({text}));
+    return keyboard;
+}
+
+// A QuickToggle's checked and subtitle notify, as GObject properties do.
+class Toggle {
+    constructor(name, {checked = false, subtitle = null} = {}) {
+        this.name = name;
+        this._checked = checked;
+        this._subtitle = subtitle;
+        this._handlers = new Map();
+        this._nextId = 1;
+        this.styleClasses = new Set();
+    }
+
+    get checked() {
+        return this._checked;
+    }
+
+    set checked(value) {
+        this._checked = value;
+        this._notify('checked');
+    }
+
+    get subtitle() {
+        return this._subtitle;
+    }
+
+    set subtitle(value) {
+        this._subtitle = value;
+        this._notify('subtitle');
+    }
+
+    _notify(property) {
+        for (const [signal, fn] of [...this._handlers.values()]) {
+            if (signal === `notify::${property}`)
+                fn();
+        }
+    }
+
+    connect(signal, fn) {
+        this._handlers.set(this._nextId, [signal, fn]);
+        return this._nextId++;
+    }
+
+    disconnect(id) {
+        this._handlers.delete(id);
+    }
+
+    add_style_class_name(name) {
+        this.styleClasses.add(name);
+    }
+
+    remove_style_class_name(name) {
+        this.styleClasses.delete(name);
+    }
+
+    get_parent() {
+        return this.grid;
+    }
+
+    get_next_sibling() {
+        return this.grid.children[this.grid.children.indexOf(this) + 1] ?? null;
+    }
+}
+
+// QuickSettingsMenu's grid lays its items out in child order.
+function quickSettingsGrid(toggles) {
+    const grid = box(toggles);
+    toggles.forEach(t => (t.grid = grid));
+    grid.set_child_above_sibling = (child, sibling) => {
+        grid.remove_child(child);
+        grid.children.splice(grid.children.indexOf(sibling) + 1, 0, child);
+    };
+    grid.set_child_below_sibling = (child, sibling) => {
+        grid.remove_child(child);
+        grid.children.splice(grid.children.indexOf(sibling), 0, child);
+    };
+    return grid;
+}
 
 export function newQuickSettings() {
     const quickSettings = {
         _indicators: box([]), container: {get_parent: () => rightBox},
-        menu: {box: new StubActor('quick-settings', {glass: POPOVER_GLASS, extents: [1056, 40, 376, 420], parent: boxPointer})},
+        menu: {
+            box: new StubActor('quick-settings', {glass: POPOVER_GLASS, extents: [1056, 40, 376, 420], parent: boxPointer}),
+            actor: {
+                children: [],
+                get_children() {
+                    return [...this.children];
+                },
+            },
+        },
     };
     rightBox.children.push(quickSettings.container);
     for (const field of QUICK_SETTINGS_INDICATORS) {
-        quickSettings[field] = {name: field.slice(1)};
+        quickSettings[field] = Object.assign(new StubActor(field.slice(1)),
+            {visible: !PRIVACY_INDICATORS.includes(field)});
         quickSettings._indicators.children.push(quickSettings[field]);
     }
+    const toggles = {
+        wifi: new Toggle('Wi-Fi', {checked: true, subtitle: 'Home'}),
+        vpn: new Toggle('VPN'),
+        bluetooth: new Toggle('Bluetooth'),
+        power: new Toggle('Power Mode', {subtitle: 'Balanced'}),
+        nightLight: new Toggle('Night Light'),
+        darkMode: new Toggle('Dark Style'),
+        doNotDisturb: new Toggle('Do Not Disturb'),
+        airplane: new Toggle('Airplane Mode'),
+        autoRotate: new Toggle('Auto Rotate'),
+    };
+    quickSettings.menu._grid = quickSettingsGrid(Object.values(toggles));
+    quickSettings._network._vpnToggle = toggles.vpn;
+    quickSettings._rfkill.quickSettingsItems = [toggles.airplane];
+    quickSettings._powerProfiles.quickSettingsItems = [toggles.power];
+    quickSettings.toggles = toggles;
     return quickSettings;
 }
 
@@ -241,11 +388,26 @@ export const panel = Object.assign(new StubActor('panel', {glass: PANEL_GLASS, e
         fact('panel.add', `${role} at ${position} in ${boxName}`);
         return indicator;
     },
+    menuManager: {
+        menus: [],
+        addMenu(menu) {
+            this.menus.push(menu);
+        },
+        removeMenu(menu) {
+            this.menus = this.menus.filter(m => m !== menu);
+        },
+    },
+    rightBox,
     statusArea: {
         activities: {
             get_first_child: () => ({get_children: () => [0, 1].map(() => workspaceDot)}),
         },
         quickSettings: newQuickSettings(),
+        screenRecording: newScreenButton('screenRecording', 'Stop Screencast', 0,
+            [new St.Label({text: '0:42'}), new St.Icon({icon_name: 'screencast-stop-symbolic'})]),
+        screenSharing: newScreenButton('screenSharing', 'Stop Screen Sharing', 1,
+            [new St.Icon({icon_name: 'screen-shared-symbolic'}), new St.Icon({icon_name: 'screencast-stop-symbolic'})]),
+        keyboard: newInputSources(),
         dateMenu: {menu: {box: new StubActor('calendar', {glass: POPOVER_GLASS, extents: [354, 40, 732, 468], parent: boxPointer})}},
     },
 });
@@ -256,6 +418,9 @@ export function notify(title) {
 
 // layout.js's chrome parameters: Params.parse throws on any other.
 const CHROME_PARAMS = ['trackFullscreen', 'affectsStruts'];
+
+// The containers the shadows feature scans: the probe registers its own actors.
+const emptyContainer = () => ({get_children: () => [], connect: () => 1, disconnect: () => {}});
 
 let modals = 0;
 
@@ -271,6 +436,7 @@ export function popModal() {
 }
 
 export const layoutManager = {
+    modalDialogGroup: emptyContainer(),
     ...emitter({}),
     primaryMonitor: {x: 0, y: 0, width: 1440, height: 900},
     chrome: [],
@@ -289,6 +455,25 @@ export const layoutManager = {
 const overviewHandlers = new Map();
 let nextOverviewHandler = 1;
 
+function searchEntry() {
+    const classes = new Set();
+    return {
+        hint_text: 'Type to search',
+        _text: '',
+        clutter_text: emitter({}),
+        get_text() {
+            return this._text;
+        },
+        set_text(text) {
+            this._text = text;
+            this.clutter_text.emit('text-changed');
+        },
+        add_style_class_name: name => classes.add(name),
+        remove_style_class_name: name => classes.delete(name),
+        has_style_class_name: name => classes.has(name),
+    };
+}
+
 // The parts of the overview's controls the overview feature changes, as stock leaves them.
 const controls = {
     _stateAdjustment: emitter({value: 1}),
@@ -297,7 +482,25 @@ const controls = {
         _updateShouldShow: () => {},
         queue_relayout: () => {},
     },
+    _searchEntry: searchEntry(),
     _appDisplay: {
+        _box: {
+            visible: true,
+            show() {
+                this.visible = true;
+            },
+            hide() {
+                this.visible = false;
+            },
+        },
+        children: [],
+        add_child(actor) {
+            this.children.push(actor);
+            actor._parent = this;
+        },
+        remove_child(actor) {
+            this.children = this.children.filter(a => a !== actor);
+        },
         _grid: {
             _gridModes: 'stock',
             _currentMode: 0,
@@ -308,6 +511,7 @@ const controls = {
             queue_relayout: () => {},
         },
     },
+    queue_relayout: () => printerr('probe: controls=relayout'),
 };
 
 function emitter(props) {
@@ -379,7 +583,7 @@ export const overview = {
 
 export const wm = {
     addKeybinding(name, settings, flags, modes, handler) {
-        if (handlers.has(name)) {
+        if (handlers.has(name) || GLib.getenv('PROBE_REFUSE_KEYBINDING') === name) {
             fact('keybinding.refused', name);
             return Meta.KeyBindingAction.NONE;
         }

@@ -1,5 +1,35 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 //
-// Imported last by the high-contrast entry file, which does not import the Apex tokens.
+// Safe mode keeps the high-contrast sheet: rules here match only Apex actors and append.
+// Upstream's high-contrast palette, captured before the tokens, maps onto them.
 
 /*! apex-shell-structure */
+
+$_hc_bg: $bg_color;
+$_hc_fg: $fg_color;
+$_hc_border: $borders_color;
+$_hc_hover: $hover_bg_color;
+
+@import "apex-tokens";
+@import "apex-base";
+
+$apex_panel: $_hc_bg;
+$apex_panel_solid: $_hc_bg;
+$apex_panel_border: $_hc_border;
+$apex_border: $_hc_border;
+$apex_shadow: transparent;
+$apex_fg: $_hc_fg;
+$apex_fg_dim: $_hc_fg;
+$apex_fg_hint: $_hc_fg;
+$apex_button: lighten($_hc_bg, 10%);
+$apex_button_hover: $_hc_hover;
+$apex_dock: $_hc_bg;
+$apex_dock_border: $_hc_border;
+
+@import "spotlight";
+@import "dock";
+@import "end-session-icon";
+
+// The lock blurs without darkening and leaves that to its overlay (lock/stage.js): without
+// this, high contrast's white text sits on the bright blurred wallpaper.
+.apex-lock-overlay { background-color: rgba(0, 0, 0, .55); }

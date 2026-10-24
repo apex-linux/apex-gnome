@@ -1,0 +1,144 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+
+// Board 19 with tints only: the panel's glass comes with 0017-derived-glass. Stock has no
+// heading, so the panel keeps the heading row's height for the close button alone.
+$apex_screenshot_heading_row: $apex_screenshot_close_size + $apex_screenshot_gap;
+
+.screenshot-ui-panel {
+  @include apex-surface($apex_panel);
+  width: $apex_screenshot_width - 2 * $apex_screenshot_padding;
+  padding: ($apex_screenshot_padding - $apex_surface_border);
+  padding-top: $apex_screenshot_padding + $apex_screenshot_heading_row - $apex_surface_border;
+  margin-bottom: $apex_screenshot_bottom;
+  border-radius: $apex_radius_screenshot;
+  spacing: $apex_screenshot_gap;
+}
+
+// Stock centres the button on the panel's top corner; margins of twice the inset it needs
+// bring it into the heading row.
+.screenshot-ui-close-button {
+  width: $apex_screenshot_icon_size;
+  height: $apex_screenshot_icon_size;
+  padding: ($apex_screenshot_close_size - $apex_screenshot_icon_size) / 2 !important;
+  margin-top: 2 * $apex_screenshot_padding + $apex_screenshot_close_size;
+  border: 0;
+  color: $apex_fg;
+  background-color: $apex_button;
+  box-shadow: none;
+
+  &:hover, &:focus { color: $apex_fg; background-color: $apex_button_hover; }
+  &.right { margin-right: $apex_screenshot_close_size + 2 * ($apex_screenshot_padding + $apex_screenshot_close_inset); }
+  &.left { margin-left: $apex_screenshot_close_size + 2 * ($apex_screenshot_padding + $apex_screenshot_close_inset); }
+}
+
+.screenshot-ui-type-button {
+  min-height: $apex_screenshot_type_height;
+  padding: 0;
+  border: 0;
+  border-radius: $apex_radius_screenshot_type;
+  color: $apex_fg;
+  background-color: $apex_button;
+  box-shadow: none;
+
+  &:hover, &:focus, &:checked, &:active { color: $apex_fg; background-color: $apex_button_hover; box-shadow: none; }
+  &:insensitive { color: $apex_fg_faint; background-color: $apex_button; }
+
+  .icon-label-button-container {
+    spacing: $apex_screenshot_type_label_gap;
+    font-size: apex-text-size($apex_font_screenshot_type_size);
+    font-weight: $apex_font_label_weight;
+
+    > StIcon { icon-size: $apex_screenshot_type_icon_size; }
+  }
+}
+
+.screenshot-ui-show-pointer-button {
+  min-width: $apex_screenshot_icon_size;
+  min-height: $apex_screenshot_icon_size;
+  padding: ($apex_screenshot_pointer_size - $apex_screenshot_icon_size) / 2;
+  border: 0;
+  color: $apex_fg;
+  background-color: $apex_button;
+  box-shadow: none;
+
+  StIcon { icon-size: $apex_screenshot_icon_size; }
+  &:hover, &:focus { color: $apex_fg; background-color: $apex_button_hover; box-shadow: none; }
+  &:checked { color: -st-accent-fg-color; background-color: $apex_accent; box-shadow: none; }
+}
+
+$apex_screenshot_capture_dot: $apex_screenshot_capture_size - 2 * ($apex_screenshot_capture_ring + $apex_screenshot_capture_gap);
+
+.screenshot-ui-capture-button {
+  width: $apex_screenshot_capture_dot;
+  height: $apex_screenshot_capture_dot;
+  padding: $apex_screenshot_capture_gap;
+  border: $apex_screenshot_capture_ring solid $apex_fg;
+
+  .screenshot-ui-capture-button-circle { background-color: $apex_fg; }
+
+  &:hover, &:focus, &:active {
+    .screenshot-ui-capture-button-circle { background-color: $apex_fg_dim; }
+  }
+
+  &:cast .screenshot-ui-capture-button-circle {
+    margin: ($apex_screenshot_capture_dot - $apex_screenshot_record_dot) / 2;
+    border-radius: $apex_radius_screenshot_record_dot;
+    background-color: $apex_screenshot_record;
+  }
+}
+
+.screenshot-ui-shot-cast-container {
+  padding: $apex_screenshot_switch_padding;
+  spacing: 0;
+  border-radius: $apex_screenshot_switch_button_height / 2 + $apex_screenshot_switch_padding;
+  background-color: $apex_button;
+}
+
+.screenshot-ui-shot-cast-button {
+  padding: ($apex_screenshot_switch_button_height - $apex_screenshot_icon_size) / 2
+    ($apex_screenshot_switch_button_width - $apex_screenshot_icon_size) / 2;
+  border-radius: $apex_screenshot_switch_button_height / 2;
+  color: $apex_fg;
+
+  > StIcon { icon-size: $apex_screenshot_icon_size; }
+  &:hover, &:focus { background-color: $apex_button_hover; }
+  &:checked {
+    color: $apex_fg;
+    background-color: $apex_panel_solid;
+    box-shadow: 0 $apex_screenshot_switch_shadow_y $apex_screenshot_switch_shadow_blur 0 $apex_screenshot_switch_shadow;
+  }
+}
+
+.screenshot-ui-area-selector {
+  .screenshot-ui-area-indicator-shade { background-color: $apex_screenshot_shade; }
+  .screenshot-ui-area-indicator-selection { border: $apex_screenshot_selection_border solid $apex_screenshot_selection; }
+}
+
+.screenshot-ui-area-selector-handle {
+  width: $apex_screenshot_handle_size;
+  height: $apex_screenshot_handle_size;
+  border-radius: $apex_screenshot_handle_size / 2;
+  background-color: white;
+  box-shadow: 0 $apex_screenshot_handle_shadow_y $apex_screenshot_handle_shadow_blur 0 $apex_screenshot_handle_shadow;
+}
+
+.screenshot-ui-window-selector { background-color: $apex_screenshot_shade; }
+
+.screenshot-ui-window-selector-window-border {
+  border: $apex_screenshot_frame solid transparent;
+  border-radius: $apex_radius_screenshot_window;
+}
+
+.screenshot-ui-window-selector-window:checked .screenshot-ui-window-selector-window-border {
+  border-color: $apex_accent;
+  background-color: transparent;
+}
+
+.screenshot-ui-screen-selector {
+  background-color: $apex_screenshot_shade;
+
+  &:checked {
+    border: $apex_screenshot_frame solid $apex_accent;
+    background-color: $apex_screenshot_screen_tint;
+  }
+}

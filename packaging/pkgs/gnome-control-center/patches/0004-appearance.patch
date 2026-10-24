@@ -1,0 +1,51 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Thuong Vo <66083331+SekiroKenjii@users.noreply.github.com>
+Date: Sat, 24 Oct 2026 12:15:00 +0000
+Subject: [PATCH] background: name the active wallpaper beside the Background
+ header
+
+Apex's Appearance (board 23) shows the active wallpaper's name beside
+the Background header and, under the chooser, whether it follows the
+style. The chooser hands the item it marks active to
+panels/apex/cc-apex-background.c, which owns both labels, and clears
+them when it is given a new active item.
+---
+ panels/background/cc-background-chooser.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/panels/background/cc-background-chooser.c b/panels/background/cc-background-chooser.c
+index c75a21f..ea1fa9b 100644
+--- a/panels/background/cc-background-chooser.c
++++ b/panels/background/cc-background-chooser.c
+@@ -30,6 +30,7 @@
+ #include "cc-background-chooser.h"
+ #include "cc-background-item.h"
+ #include "cc-background-paintable.h"
++#include "panels/apex/cc-apex-background.h"
+ 
+ #define THUMBNAIL_WIDTH 144
+ #define THUMBNAIL_HEIGHT (THUMBNAIL_WIDTH * 3 / 4)
+@@ -253,6 +254,7 @@ create_widget_func (gpointer model_item, gpointer user_data)
+ 
+     if (self->active_item && cc_background_item_compare (item, self->active_item)) {
+         gtk_widget_add_css_class (GTK_WIDGET (child), "active-item");
++        cc_apex_background_show (GTK_WIDGET (self), cc_background_item_get_name (item), cc_background_item_has_dark_version (item));
+         gtk_accessible_update_state (GTK_ACCESSIBLE (child), GTK_ACCESSIBLE_STATE_CHECKED, TRUE, -1);
+     } else
+         gtk_accessible_update_state (GTK_ACCESSIBLE (child), GTK_ACCESSIBLE_STATE_CHECKED, FALSE, -1);
+@@ -437,6 +439,7 @@ flow_box_set_active_item (GtkFlowBox *flowbox, CcBackgroundItem *active_item)
+ 
+         if (cc_background_item_compare (item, active_item)) {
+             gtk_widget_add_css_class (GTK_WIDGET (child), "active-item");
++            cc_apex_background_show (GTK_WIDGET (flowbox), cc_background_item_get_name (item), cc_background_item_has_dark_version (item));
+             gtk_accessible_update_state (GTK_ACCESSIBLE (child), GTK_ACCESSIBLE_STATE_CHECKED, TRUE, -1);
+         } else {
+             gtk_widget_remove_css_class (GTK_WIDGET (child), "active-item");
+@@ -452,6 +455,7 @@ cc_background_chooser_set_active_item (CcBackgroundChooser *self, CcBackgroundIt
+     g_return_if_fail (CC_IS_BACKGROUND_ITEM (active_item));
+ 
+     self->active_item = active_item;
++    cc_apex_background_show (GTK_WIDGET (self), NULL, FALSE);
+ 
+     flow_box_set_active_item (self->flowbox, active_item);
+     flow_box_set_active_item (self->recent_flowbox, active_item);

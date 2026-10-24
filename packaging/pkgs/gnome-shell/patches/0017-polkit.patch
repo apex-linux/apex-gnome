@@ -1,0 +1,40 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Thuong Vo <66083331+SekiroKenjii@users.noreply.github.com>
+Date: Sat, 24 Oct 2026 16:05:00 +0000
+Subject: [PATCH] polkit: a hook for the Apex authentication dialog
+
+A behaviour hook at the end of AuthenticationDialog._init(), through
+which the Apex layer's polkit feature lays out board 13 (ROADMAP S3b):
+the shield in the accent circle, the user row's "Administrator", the
+Details expander with the action id and its vendor, and the fingerprint
+line when PAM sends pam_fprintd's prompt. It changes what the dialog
+shows, never what it answers: the session, its responses and the
+'done' signal stay upstream's, and a hook that throws leaves the stock
+dialog.
+---
+ js/ui/components/polkitAgent.js | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/js/ui/components/polkitAgent.js b/js/ui/components/polkitAgent.js
+index 68ee8db..0a2d486 100644
+--- a/js/ui/components/polkitAgent.js
++++ b/js/ui/components/polkitAgent.js
+@@ -14,6 +14,7 @@ import * as ModalDialog from '../modalDialog.js';
+ import * as ShellEntry from '../shellEntry.js';
+ import * as UserWidget from '../userWidget.js';
+ import {wiggle} from '../../misc/animationUtils.js';
++import * as ApexHooks from '../apex/hooks.js';
+ 
+ /** @enum {number} */
+ const DialogMode = {
+@@ -171,6 +172,7 @@ const AuthenticationDialog = GObject.registerClass({
+             'notify::is-loaded', this._onUserChanged.bind(this),
+             'changed', this._onUserChanged.bind(this), this);
+         this._onUserChanged();
++        ApexHooks.run('polkit-dialog', this);
+     }
+ 
+     _initiateSession() {
+-- 
+2.43.0
+

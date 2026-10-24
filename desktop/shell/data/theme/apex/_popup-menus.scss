@@ -4,6 +4,7 @@
 
 .popup-menu-content {
   @include apex-surface($apex_panel_solid);
+  @include apex-shadow-layer;
   padding: $apex_menu_padding - $apex_surface_border;
   border-radius: $apex_radius_menu;
   font-size: apex-text-size($apex_font_size);
