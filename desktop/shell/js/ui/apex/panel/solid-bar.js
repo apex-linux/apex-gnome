@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 //
-// Translucent Top Bar off: the bar is $apex_bar_solid over a hairline (_top-bar.scss).
+// DESIGN: the bar is solid while Translucent Top Bar is off, or while a window on the
+// primary monitor is maximised and the overview is closed.
 
 import Gio from 'gi://Gio';
+import Meta from 'gi://Meta';
 
 import * as Main from '../../main.js';
 
@@ -11,13 +13,19 @@ const TRANSLUCENT_KEY = 'translucent-top-bar';
 const SOLID_STYLE_CLASS = 'apex-solid-bar';
 
 let _settings = null;
-let _changedId = 0;
+let _connections = [];
+
+function _maximisedOnPrimary() {
+    return global.workspace_manager.get_active_workspace().list_windows().some(w =>
+        w.is_on_primary_monitor() && w.showing_on_its_workspace() && w.is_maximized() &&
+        w.get_window_type() !== Meta.WindowType.DESKTOP);
+}
 
 function _sync() {
-    if (_settings.get_boolean(TRANSLUCENT_KEY))
-        Main.panel.remove_style_class_name(SOLID_STYLE_CLASS);
-    else
+    if (!_settings.get_boolean(TRANSLUCENT_KEY) || (!Main.overview.visible && _maximisedOnPrimary()))
         Main.panel.add_style_class_name(SOLID_STYLE_CLASS);
+    else
+        Main.panel.remove_style_class_name(SOLID_STYLE_CLASS);
 }
 
 export function configure() {
@@ -28,13 +36,22 @@ export function configure() {
 }
 
 export function enable() {
-    _changedId = _settings.connect(`changed::${TRANSLUCENT_KEY}`, _sync);
+    _connections = [
+        [_settings, `changed::${TRANSLUCENT_KEY}`],
+        [global.display, 'restacked'],
+        [global.window_manager, 'size-changed'],
+        [global.window_manager, 'minimize'],
+        [global.window_manager, 'unminimize'],
+        [global.workspace_manager, 'active-workspace-changed'],
+        [Main.overview, 'showing'],
+        [Main.overview, 'hidden'],
+    ].map(([emitter, signal]) => [emitter, emitter.connect(signal, _sync)]);
     _sync();
 }
 
 export function disable() {
-    if (_changedId)
-        _settings.disconnect(_changedId);
-    _changedId = 0;
+    for (const [emitter, id] of _connections)
+        emitter.disconnect(id);
+    _connections = [];
     Main.panel.remove_style_class_name(SOLID_STYLE_CLASS);
 }

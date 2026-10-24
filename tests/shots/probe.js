@@ -31,6 +31,7 @@ const LARGE_TEXT_SCALING_FACTOR = 1.25;
 const HIGH_CONTRAST_SHEET = 'resource:///org/gnome/shell/theme/gnome-shell-high-contrast.css';
 const STRUCTURE_MARKER = '/*! apex-shell-structure */';
 const LAYER_ENABLED_KEY = 'layer-enabled';
+const SEARCH_HINT_KEY = 'search-hint-shown';
 
 Gio._promisify(Shell.Screenshot.prototype, 'screenshot');
 
@@ -152,6 +153,8 @@ async function report() {
         variant: Main.getStyleVariant?.() ?? null,
         colorSchemeSetting: setting('org.gnome.desktop.interface', s => s.get_string('color-scheme')),
         layerEnabled: setting(APEX_SCHEMA, s => s.get_boolean('layer-enabled')),
+        searchHintShown: setting(APEX_SCHEMA, s => s.settings_schema.has_key(SEARCH_HINT_KEY)
+            ? s.get_boolean(SEARCH_HINT_KEY) : 'no-key'),
         apexHooks: hooks !== null,
         safe: hooks?.safe() ?? null,
         testFault: hooks?.value('test-fault', 'stock') ?? null,

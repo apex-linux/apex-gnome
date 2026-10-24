@@ -2,7 +2,7 @@
 
 set shell := ["bash", "-euo", "pipefail", "-c"]
 
-ptyxis_shots_packages := "gnome-shell mesa-dri-drivers dbus-daemon python3-dbusmock gcc util-linux jetbrains-mono-fonts-all adwaita-sans-fonts"
+ptyxis_shots_packages := "gnome-shell mesa-dri-drivers dbus-daemon python3-dbusmock gcc util-linux jq jetbrains-mono-fonts-all adwaita-sans-fonts"
 ptyxis_image := "registry.fedoraproject.org/fedora:45@sha256:1e13e11f63e147a40a935c9046c79d53a30b861a3cf05ebb023bb53c562382cb"
 
 # List the recipes.
@@ -41,6 +41,10 @@ ptyxis-lane:
 # The Ptyxis that ptyxis-lane built, captured in a headless gnome-shell, light and dark (podman or docker); in _build/ptyxis/shots.
 ptyxis-shots:
     engine=$(command -v podman || command -v docker) && "$engine" run --rm -v "{{justfile_directory()}}:/apex-gnome:z" -w /apex-gnome {{ptyxis_image}} bash -c 'dnf5 -y -q --setopt=install_weak_deps=False install {{ptyxis_shots_packages}} && tests/ptyxis/shoot.sh _build/ptyxis/out'
+
+# The Ptyxis that ptyxis-lane built: a user palette rewritten under an open terminal must show within 1 s (podman or docker).
+ptyxis-palette:
+    engine=$(command -v podman || command -v docker) && "$engine" run --rm -v "{{justfile_directory()}}:/apex-gnome:z" -w /apex-gnome {{ptyxis_image}} bash -c 'dnf5 -y -q --setopt=install_weak_deps=False install {{ptyxis_shots_packages}} && tests/ptyxis/palette-test.sh _build/ptyxis/out'
 
 nautilus_image := "registry.fedoraproject.org/fedora:45@sha256:1e13e11f63e147a40a935c9046c79d53a30b861a3cf05ebb023bb53c562382cb"
 
