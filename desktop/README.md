@@ -17,6 +17,7 @@ directory with `git archive` and unpacks it at the top of Fedora's gnome-shell t
 | `apex.gresource.xml` | the Apex resource: `/org/gnome/shell/ui/apex` (the layer), `/org/gnome/shell/theme/apex` (the sheets' assets) and `/org/gnome/shell/theme/stock` (upstream's compiled light and dark sheets, the safe-mode sheets). Patch 0001-build compiles it and links it into libshell next to upstream's JS resource. |
 | `js/ui/apex/hooks.js` | the only Apex module upstream files import: `safe()`, `value()`, `run()`, and `loadLayer()` for `main.js` |
 | `js/ui/apex/layer.js` | the layer: the configure and enable phases, one `try/catch` per feature, the session-mode colour hook, the crash guard's marker file |
+| `js/ui/apex/motion/feature.js` | DESIGN's motion (below): one curve and fixed durations through patch 0016's hooks |
 | `js/ui/apex/spotlight/` | Spotlight (below): `feature.js` (Super+Space), `search.js` (the sections, caps and budget), `providers.js` (the stock providers), `popup.js` and `toast.js` |
 | `js/ui/apex/panel/feature.js` | the top bar of S2a (below): its parts in `panel/`, one module each |
 | `js/ui/apex/glass/feature.js` | the glass manager of S2b (below), with `glass/surfaces.js`, the layer's own glass, and `glass/registry.js`, where any feature registers an actor |
@@ -129,6 +130,16 @@ Super+Space is its key. Hovered, it shows the tooltip "Search (Super+Space)" bel
 a stock transient notification, at the first enable of the panel outside the lock screen,
 and sets `search-hint-shown`. A schema without that key means no hint, logged once; the
 rest of the panel runs.
+
+`motion/feature.js` gives the shell DESIGN's one curve, `cubic-bezier(.2,.8,.2,1)`
+(ROADMAP S3c). Every ease passes through `environment.js`, where patch 0016's `ease` hook
+turns a curved mode (any but linear and stepped, and an actor's default EASE_OUT_CUBIC)
+into Clutter's `CUBIC_BEZIER`, and its `eased` hook sets the transitions' control points to
+(.2, .8) and (.2, 1). Its `motion-duration` hook, at the call sites, gives each role
+DESIGN's duration: `window` (the size change's two eases) .3 s, `overview` (the overview's
+state transitions in and out and to and from the app grid) .2 s, `popover` (a BoxPointer
+opening and closing) .18 s. The dock's .38 s is the dock's. `adjustAnimationTime` runs
+after the hooks, so `enable-animations=false` keeps stock's 0 ms.
 
 `glass` is ADR 0014's glass manager, on patch 0003's `ShellBlurEffect`. A surface is any
 actor in `glass/registry.js`: the top bar, Quick Settings, the calendar and each banner
