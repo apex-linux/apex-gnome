@@ -166,10 +166,6 @@ class Widget {
         return {x, y};
     }
 
-    get_effect() {
-        return null;
-    }
-
     add_style_class_name(name) {
         this._styleClasses.add(name);
         this.emit('style-changed');
@@ -184,8 +180,13 @@ class Widget {
         return [...this._styleClasses].join(' ');
     }
 
+    // A probe may set it, as a menu's box is mapped while it is open.
     get mapped() {
-        return this.visible && !this.destroyed;
+        return this._mapped ?? (this.visible && !this.destroyed);
+    }
+
+    set mapped(mapped) {
+        this._mapped = mapped;
     }
 
     get_effect(name) {
@@ -256,13 +257,6 @@ class Widget {
     hide() {
         this.visible = false;
     }
-
-    // No theme node here, so the glass feature only looks for an effect to remove.
-    get_effect() {
-        return null;
-    }
-
-    remove_effect() {}
 
     set_style(style) {
         this.style = style;
