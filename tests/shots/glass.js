@@ -409,6 +409,7 @@ function interiorMask(width, height, radius, band) {
 // How far in from the box's edges the frames differ, and by how much at most.
 function deepestDifference(a, b, width, height) {
     let depth = -1, max = 0;
+    const bins = [];
     for (let i = 0; i < a.length; i += 4) {
         const diff = Math.max(...[0, 1, 2].map(c => Math.abs(a[i + c] - b[i + c])));
         if (diff === 0)
@@ -416,8 +417,12 @@ function deepestDifference(a, b, width, height) {
         const x = (i / 4) % width, y = Math.floor(i / 4 / width);
         depth = Math.max(depth, Math.min(x, y, width - 1 - x, height - 1 - y));
         max = Math.max(max, diff);
+        const corner = Math.min(...[[0, 0], [width - 1, 0], [0, height - 1], [width - 1, height - 1]]
+            .map(([cx, cy]) => Math.hypot(x - cx, y - cy)));
+        const bin = Math.min(Math.floor(corner / 50), 9);
+        bins[bin] = (bins[bin] ?? 0) + 1;
     }
-    return {depth, max};
+    return {depth, max, byCornerDistance: bins};
 }
 
 // The shadows feature keeps its layers out from under glass: Quick Settings over the pattern
@@ -439,6 +444,15 @@ async function shadowsUnderGlass() {
     };
     try {
         const on = await withMenuOpen(menu, read);
+        const again = await withMenuOpen(menu, read);
+        const hidden = await withMenuOpen(menu, async box => {
+            const Registry = await import(SHADOW_REGISTRY);
+            const [x, y] = box.get_transformed_position();
+            group.set_position(Math.round(x) - PATTERN.x, Math.round(y) - PATTERN.y);
+            await Scripting.waitLeisure();
+            Registry.layersOf(box).forEach(l => (l.opacity = 0));
+            return framePixels(box);
+        });
         apex.set_strv('disabled-features', [...disabled, 'shadows']);
         await Scripting.waitLeisure();
         const off = await withMenuOpen(menu, read);
@@ -450,6 +464,10 @@ async function shadowsUnderGlass() {
             interiorDiffering: BlurRef.differing(on.rgba, off.rgba, interiorMask(width, height, radius, SHADOW_RIM)),
             edge: BlurRef.errors(on.rgba, BlurRef.rgbOf(off.rgba), width, height, SHADOW_RIM).edge,
             depth: deepestDifference(on.rgba, off.rgba, width, height),
+            control: {
+                again: BlurRef.differing(on.rgba, again.rgba), hiddenVsOff: BlurRef.differing(hidden.rgba, off.rgba),
+                onVsHidden: deepestDifference(on.rgba, hidden.rgba, width, height),
+            },
             layers: on.layers,
             box: on.box,
         };
