@@ -19,6 +19,7 @@ the Apex layer; libadwaita, Settings and Files patch series join it in S2.
 | `tests/s2c/` | S2c's live window radius end to end: apex-session-agent from the pinned apex-system (`agent.sh`), and Settings' Corner Radius pressed through AT-SPI under open Ptyxis, Files and Settings windows beside maximised, half-tiled and fullscreen ones (`radius-test.sh`) |
 | `desktop/nautilus/`, `packaging/pkgs/nautilus/` | nautilus rebuilt in the lane for Files, boards 27 to 29: its sources (`src/apex/`) and its recipe ([README](packaging/pkgs/nautilus/README.md)) |
 | `tests/nautilus/` | the checks of `desktop/nautilus/`, the texts' unit test, and the captures with board 27's home (`shoot.sh`) |
+| `tests/shell/` | the lock screen and the greeter of the lane's gnome-shell, boards 20 and 12, against a GDM mock that fails every answer (`gdm-mock.py`): captures and their assertions (`shoot.sh`) |
 
 [apex-image](https://github.com/apex-linux/apex-image) pins this repository by commit in
 `components.lock`, builds gnome-shell from the recipe in its builder VM, and runs G2 on the
@@ -53,6 +54,8 @@ just control-center-run  # podman or docker: that Settings in a headless gnome-s
 just s2c-radius     # podman or docker, after the three lanes: Settings' Corner Radius from 14 to 0 under open windows
 just nautilus-lane # podman or docker: nautilus rebuilt as the lane builds it, RPMs in _build/nautilus/out
 just nautilus-shots # podman or docker: that nautilus captured in a headless gnome-shell, light and dark
+just gnome-shell-lane # podman or docker: gnome-shell rebuilt as the lane builds it, RPMs in _build/gnome-shell/out
+just lock-shots  # podman or docker: its lock screen and greeter, light and dark, against a GDM mock
 ```
 
 `just eslint` lints `desktop/shell/js` and the gjs tests with gnome-shell's own
