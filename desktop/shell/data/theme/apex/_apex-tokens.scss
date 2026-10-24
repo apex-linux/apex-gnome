@@ -331,6 +331,17 @@ $apex_lock_list_item_padding: 12px;
 $apex_lock_list_avatar_size: 48px;
 $apex_font_lock_list_name_size: 15px;
 
+// apex-desktop renders board 12's blurred Facets at build time: gdm runs no JS to blur.
+$apex_greeter_background: 'file:///usr/share/backgrounds/apex/apex-greeter-light.png';
+// The mean of that render, for a greeter without the file.
+$apex_greeter_fallback: #8a909a;
+$apex_greeter_bottom: 44px;
+$apex_greeter_button: rgba(255, 255, 255, .12);
+$apex_greeter_button_border: rgba(255, 255, 255, .2);
+$apex_greeter_button_size: 38px;
+$apex_greeter_button_icon_size: 16px;
+$apex_greeter_button_gap: 8px;
+
 // Spotlight and its toast (board 38).
 $apex_fg_hint: if($variant == 'light', rgba(29, 29, 33, .45), rgba(244, 244, 246, .45));
 $apex_selection_opacity: .16;

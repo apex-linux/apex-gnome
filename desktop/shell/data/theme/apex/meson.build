@@ -16,6 +16,7 @@ theme_sources += files(
   '_overview.scss',
   '_app-grid.scss',
   '_lock.scss',
+  '_greeter.scss',
   '_derived.scss',
   '_dock.scss',
   '_tile-preview.scss',

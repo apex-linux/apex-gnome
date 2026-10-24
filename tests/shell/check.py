@@ -36,7 +36,38 @@ GREETER_CASES = ["greeter-light", "greeter-dark"]
 AUTH_ERROR = "Authentication error"
 WRONG_ANSWER = "not-the-password"
 
+TOKENS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../../desktop/shell/data/theme/apex/_apex-tokens.scss")
+LOGO = "/usr/share/pixmaps/apex-gdm-logo.svg"
+LOGO_HEIGHT = 48
+
 failed = 0
+
+
+def tokens():
+    found = {}
+    with open(TOKENS, encoding="utf-8") as f:
+        for line in f:
+            m = re.match(r"\$(apex_greeter_\w+):\s*(.+?);", line)
+            if m:
+                found[m.group(1)] = m.group(2).strip("'\"")
+    return found
+
+
+def px(value):
+    return float(value.removesuffix("px"))
+
+
+def rgba(value):
+    m = re.fullmatch(r"#([0-9a-f]{6})", value)
+    if m:
+        return [int(m.group(1)[i:i + 2], 16) for i in (0, 2, 4)] + [255]
+    m = re.fullmatch(r"rgba\((\d+), (\d+), (\d+), ([.\d]+)\)", value)
+    return [int(m.group(i)) for i in (1, 2, 3)] + [round(float(m.group(4)) * 255)]
+
+
+def same_colour(got, want):
+    got = [int(got[i:i + 2], 16) for i in (1, 3, 5, 7)]
+    return all(abs(a - b) <= 1 for a, b in zip(got, rgba(want)))
 
 
 def check(name, ok, detail=""):
@@ -166,6 +197,40 @@ def check_greeter(shots, case):
     prompt = f["prompt"]["prompt"] or {}
     check(f"{case}: upstream's question", prompt.get("question") == "Password", json.dumps(prompt))
     check(f"{case}: upstream's avatar icon", prompt.get("avatar") == "avatar-default-symbolic", json.dumps(prompt))
+    check_greeter_style(case, f["list"].get("style") or {}, tokens())
+    check_back_button(case, (f["prompt"].get("style") or {}).get("back"), tokens())
+
+
+def round_button(b, t):
+    size = px(t["apex_greeter_button_size"])
+    return (abs(b["height"] - size) <= 1 and abs(b["width"] - size) <= 1 and b["radius"] * 2 >= size and b["border"] == 1
+            and same_colour(b["background"], t["apex_greeter_button"]) and same_colour(b["borderColor"], t["apex_greeter_button_border"]))
+
+
+def check_back_button(case, back, t):
+    check(f"{case}: the prompt's back button is a {t['apex_greeter_button_size']} circle in {t['apex_greeter_button']}, "
+          f"ringed in {t['apex_greeter_button_border']}", back is not None and round_button(back, t), json.dumps(back))
+
+
+def check_greeter_style(case, style, t):
+    screen, background = style.get("screen") or {}, style.get("background") or {}
+    bottom = screen.get("y", 0) + screen.get("height", 0)
+    check(f"{case}: board 12's pre-blurred background, over a fallback of its mean colour",
+          background.get("image") == t["apex_greeter_background"] and same_colour(background.get("color", ""), t["apex_greeter_fallback"]),
+          json.dumps(background))
+    logo = style.get("logo") or {}
+    check(f"{case}: the footer is apex-desktop's logo, {LOGO_HEIGHT} px tall, centred "
+          f"{t['apex_greeter_bottom']} above the bottom edge",
+          logo.get("file") == LOGO and abs(logo.get("height", 0) - LOGO_HEIGHT) <= 1
+          and abs(bottom - logo.get("y", 0) - logo.get("height", 0) - px(t["apex_greeter_bottom"])) <= 1
+          and abs(logo.get("x", 0) + logo.get("width", 0) / 2 - screen.get("x", 0) - screen.get("width", 0) / 2) <= 1,
+          json.dumps({"logo": logo, "screen": screen}))
+    buttons = style.get("buttons") or []
+    check(f"{case}: the bottom buttons are {t['apex_greeter_button_size']} circles in {t['apex_greeter_button']}, "
+          f"ringed in {t['apex_greeter_button_border']}, {t['apex_greeter_bottom']} from the bottom edge",
+          len(buttons) > 0 and all(round_button(b, t) and abs(bottom - b["y"] - b["height"] - px(t["apex_greeter_bottom"])) <= 1
+                                   for b in buttons),
+          json.dumps(buttons))
 
 
 def main():
