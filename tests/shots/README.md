@@ -246,6 +246,14 @@ Mode lit through `apex-lit` with `checked` stock, the power-profile indicator ou
 pill, "Off" under a toggle without a subtitle of its own, and the clicks switching to the
 last profile and back, still lit. Stock keeps VPN before Airplane Mode and nothing lit.
 
+`shadow_layers` checks the `shadows` layer feature in the same cases. The probe opens
+Quick Settings, the calendar and a stock `ModalDialog`, and reads each one's layer: shown,
+on the surface's box, `0 $apex_shadow_2_y $apex_shadow_2_blur $apex_shadow_2`, Quick
+Settings' at its radius, and the dialog's beside its box (above the lightbox). It counts
+the stage's paints over two idle seconds with the feature on and with `shadows` in
+`disabled-features`: the layers add none. The `motion` case, which opens the overview with a
+window, checks the window preview's two layers and the `apex-window-preview` radius.
+
 `derived_surfaces` reads surfaces with no board, which G2 never opens, from nested
 stand-ins in the same cases: the workspace switcher and its dots, the resize popup, the
 input method's candidates and a candidate, the run dialog's entry, an audio device tile

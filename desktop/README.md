@@ -20,6 +20,7 @@ directory with `git archive` and unpacks it at the top of Fedora's gnome-shell t
 | `js/ui/apex/motion/feature.js` | DESIGN's motion (below): one curve and fixed durations through patch 0016's hooks |
 | `js/ui/apex/spotlight/` | Spotlight (below): `feature.js` (Super+Space), `search.js` (the sections, caps and budget), `providers.js` (the stock providers), `popup.js` and `toast.js` |
 | `js/ui/apex/quick-settings/feature.js` | DESIGN's Quick Settings (below): VPN after Airplane Mode, Power Mode lit, On/Off subtitles, through patch 0011's hook |
+| `js/ui/apex/shadows/feature.js`, `registry.js` | DESIGN's second shadow layer (below): a shadow-layer actor under each surface whose sheet names `-apex-shadow-layer`, and the window previews' two layers |
 | `js/ui/apex/panel/feature.js` | the top bar of S2a (below): its parts in `panel/`, one module each |
 | `js/ui/apex/dock/feature.js`, `dock.js`, `trash.js` | the dock of S2a (below): ApexDock, a subclass of upstream's `Dash`, and its Trash |
 | `js/ui/apex/fault/feature.js` | the fault-injection feature: loaded only when `APEX_SHELL_TEST_FAULT` names a phase, it fails in that phase (below) |
@@ -149,6 +150,22 @@ subtitle of its own reads "On" or "Off" from `checked`; one that sets its own (W
 network, Bluetooth's device, Power Mode's profile) keeps it, and gets ours back once it
 drops it. Disabled, the feature puts VPN back, unlights Power Mode and clears only the
 subtitles it wrote.
+
+`shadows/feature.js` draws DESIGN's two-layer shadows (ROADMAP S3c) without a hook. St
+draws one `box-shadow` per actor, so the sheet gives a surface its first layer and names the
+second as `-apex-shadow-layer` (the `apex-shadow-layer` mixin in `_apex.scss`: popovers,
+Quick Settings, the calendar, menus, the banner and dialogs). The feature scans `uiGroup`,
+`modalDialogGroup` and the banner bin, and their new children, for such surfaces;
+`shadows/registry.js` puts a transparent St widget under each, with the layer as its own
+`box-shadow` and the surface's radius, and keeps it on the surface's box, opacity and
+visibility through the ancestors' allocation and transform signals, so an idle desktop
+repaints nothing more. A dialog's layer goes inside the dialog, above the lightbox that
+ModalDialog keeps under its box. In the overview, each window preview gets the
+`apex-window-preview` class and two layers (`$apex_preview_shadow`, `$apex_preview_shadow_2`)
+on its window container. `register(actor, {name})` and `unregister(actor)` are the registry's
+API for features that draw their own surfaces (the dock, Spotlight): registrations persist
+while the feature is off and draw once it is on. Disabled, the feature removes every layer
+and the preview class.
 
 `dock` is the dock (DESIGN.md, "Dock"; board 37). `dock/dock.js`'s ApexDock is upstream's
 `Dash` (`js/ui/dash.js`) with the hooks of patch 0014-dash, which the feature provides:
