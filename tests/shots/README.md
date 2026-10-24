@@ -64,13 +64,15 @@ the wall clock stands at the fixed time and the top bar's clock shows it (`Mon S
 
 Before the first case, `direct.sh` lets root own and call the fixtures' names on the
 container's system bus (`/etc/dbus-1/system-local.conf`) and runs `fixtures.py`, which
-starts python-dbusmock's `upower`, `networkmanager` and `bluez5` templates there:
+starts python-dbusmock's `upower`, `networkmanager` and `bluez5` templates there, and
+(`G2_POWER_PROFILES=1`) `upower_power_profiles_daemon`:
 
 | Service | Fixture | The shell shows |
 |---|---|---|
 | UPower | a battery at 87 %, discharging (the display device) | `battery-level-80-symbolic` and, with `show-battery-percentage`, "87%" |
 | NetworkManager | the primary connection: Wi-Fi "Apex-5G" at signal 90, connected globally, with "Apex-2.4G" (72) and the open "Library Guest" (48) in range, each with WPA2's ciphers or none, as libnm needs to list a network | `network-wireless-signal-excellent-symbolic`, and three networks in the Wi-Fi menu |
 | BlueZ | the Bluetooth keyboard "Keychron K3", paired and connected | no glyph: the status pill shows network, volume and battery only (the `panel` feature) |
+| power-profiles-daemon | the Balanced profile, with Power Saver and Performance | the Power Mode toggle, lit at Balanced (the `quick-settings` feature); no glyph in the status pill |
 
 `fixtures-PART.txt` holds what the bus reports afterwards, and `assert.sh` checks it for
 each container. `direct.sh` builds `clock.c` and preloads it into each shell with
@@ -235,6 +237,14 @@ thumbnails at scale .081 (one drawn at .081 of the work area, 117 × 70 on 1440 
 and the threshold of one workspace, and the launcher's grid at 7 columns, 4 rows and
 88 px icons. G2 opens no windows, so the `window-title-visible` hook's answer stands in for
 a title shown without hover.
+
+`quick_settings_layer` checks the `quick-settings` layer feature in the same cases, and
+stock in the stock cases. The probe reads the grid's toggles in order (the VPN toggle by
+its class: it has no title without a VPN connection), Power Mode, the status pill and Do
+Not Disturb's subtitle, then clicks Power Mode twice: VPN right after Airplane Mode, Power
+Mode lit through `apex-lit` with `checked` stock, the power-profile indicator out of the
+pill, "Off" under a toggle without a subtitle of its own, and the clicks switching to the
+last profile and back, still lit. Stock keeps VPN before Airplane Mode and nothing lit.
 
 `derived_surfaces` reads surfaces with no board, which G2 never opens, from nested
 stand-ins in the same cases: the workspace switcher and its dots, the resize popup, the
