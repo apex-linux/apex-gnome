@@ -43,7 +43,7 @@ members=$(tar -tf "$SOURCE1") || cannot "cannot list $SOURCE1"
 n=0
 while IFS= read -r m; do
     [[ $m == "$SOURCE1_DIR"* && $m != */ ]] || continue
-    case ${m##*/} in meson.build | *.gresource.xml | *.[ch] | *.desktop.in) continue ;; esac
+    case ${m#"$SOURCE1_DIR"} in meson.build | *.gresource.xml | *.[ch] | *.blp | *.desktop.in | icons/*) continue ;; esac
     grep -Fxq -- "$APEX_PREFIX/${m#"$SOURCE1_DIR"}" <<<"$resources" ||
         fail "$m is in desktop/control-center but not in the resource (apex.gresource.xml)"
     n=$((n + 1))
@@ -55,6 +55,16 @@ css=$(gresource extract "$bin" "$APEX_PREFIX/apex.css") ||
     fail "gnome-control-center has no $APEX_PREFIX/apex.css"
 grep -Fq '/*! apex-control-center */' <<<"$css" || fail "$APEX_PREFIX/apex.css has no Apex marker"
 ok "$APEX_PREFIX/apex.css carries the Apex marker"
+
+grep -Fxq -- "$APEX_PREFIX/cc-apex-panel.ui" <<<"$resources" || fail "the resource has no cc-apex-panel.ui"
+apps=$root/usr/share/applications
+grep -Fxq 'Exec=gnome-control-center apex' "$apps/gnome-apex-panel.desktop" ||
+    fail "gnome-apex-panel.desktop is missing or does not open the panel"
+grep -Fxq 'Exec=gnome-control-center apex' "$apps/io.github.apex_linux.Apex.Tweaks.desktop" ||
+    fail "the Apex Tweaks entry is missing or does not open the panel"
+[[ -f $root/usr/share/icons/hicolor/scalable/apps/org.gnome.Settings-apex-symbolic.svg ]] ||
+    fail "the panel's icon is not installed"
+ok "the Apex Desktop panel, its desktop file, the Apex Tweaks entry and its icon are installed"
 
 for d in /usr/share/gnome-control-center/keybindings /usr/share/gnome/wm-properties; do
     [[ -d $root$d ]] || fail "gnome-control-center-filesystem has lost $d"
