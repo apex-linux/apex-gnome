@@ -20,7 +20,7 @@ directory with `git archive` and unpacks it at the top of Fedora's gnome-shell t
 | `js/ui/apex/motion/feature.js` | DESIGN's motion (below): one curve and fixed durations through patch 0016's hooks |
 | `js/ui/apex/spotlight/` | Spotlight (below): `feature.js` (Super+Space), `search.js` (the sections, caps and budget), `providers.js` (the stock providers), `popup.js` and `toast.js` |
 | `js/ui/apex/quick-settings/feature.js` | DESIGN's Quick Settings (below): VPN after Airplane Mode, Power Mode lit, On/Off subtitles, through patch 0011's hook |
-| `js/ui/apex/shadows/feature.js`, `registry.js` | DESIGN's second shadow layer (below): a shadow-layer actor under each surface whose sheet names `-apex-shadow-layer`, and the window previews' two layers |
+| `js/ui/apex/shadows/feature.js`, `registry.js`, `cutout.js` | DESIGN's second shadow layer (below): a shadow-layer actor under each surface whose sheet names `-apex-shadow-layer`, cut out under the surface, and the window previews' two layers |
 | `js/ui/apex/panel/feature.js` | the top bar of S2a (below): its parts in `panel/`, one module each |
 | `js/ui/apex/glass/feature.js` | the glass manager of S2b (below), with `glass/surfaces.js`, the layer's own glass, and `glass/registry.js`, where any feature registers an actor |
 | `js/ui/apex/dock/feature.js`, `dock.js`, `trash.js` | the dock of S2a (below): ApexDock, a subclass of upstream's `Dash`, and its Trash |
@@ -166,7 +166,10 @@ layer as its own `box-shadow` and the surface's radius, and keeps it on the surf
 opacity through the ancestors' allocation and transform signals. It adds and removes layers
 before the next frame, never inside Clutter's or St's walk over the parent's children, and a
 closed menu or dialog keeps none, so an idle desktop repaints nothing more. A dialog's layer
-goes inside the dialog, above the lightbox that ModalDialog keeps under its box. In the overview, each window preview gets the
+goes inside the dialog, above the lightbox that ModalDialog keeps under its box. St draws a
+`box-shadow` from the whole silhouette, so `shadows/cutout.js`, a shader effect on each layer,
+clears it inside the surface's rounded box: a glass surface's blur samples the same pixels
+with or without shadows. In the overview, each window preview gets the
 `apex-window-preview` class and two layers (`$apex_preview_shadow`, `$apex_preview_shadow_2`)
 on its window container. `register(actor, {name})` and `unregister(actor)` are the registry's
 API for features that draw their own surfaces (the dock, Spotlight): registrations persist

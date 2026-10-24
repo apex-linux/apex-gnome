@@ -314,6 +314,12 @@ actor on the stage carries a `Shell.BlurEffect` and the root carries `apex-solid
 with `disabled-features=['glass']` no actor carries one and the tints stay; and that the
 glass comes back after each.
 
+`shadows_under_glass` checks the `shadows` feature against the glass in the same case:
+`glass.js` lays the tile grid under Quick Settings and reads its box with `framePixels()`,
+once with the shadows on and once with `shadows` in `disabled-features`. The pixels the
+rounded box covers fully, 2 device px in from its edges, are the same in both frames, and
+that 2 px rim is within 12/255.
+
 `G2_GLASS=1 G2_GLASS_STRESS=SECONDS` runs a stress instead, by hand: for that long a
 stand-in window moves and tiles change under the box, every other change forwarded. Each
 frame must have no black pixel; a frame whose clip misses the box must equal the last one
