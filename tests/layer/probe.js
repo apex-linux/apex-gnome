@@ -5,6 +5,8 @@
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 
+import * as Sni from './sni.js';
+
 const shellDir = GLib.getenv('APEX_SHELL_DIR');
 const fact = (key, value) => printerr(`probe: ${key}=${value}`);
 
@@ -100,6 +102,11 @@ if (settings) {
         fact('disabled-features', settings.get_strv('disabled-features').join(','));
     }
 }
+
+// Another process's watcher, there before the shell starts.
+const remoteWatcher = GLib.getenv('PROBE_REMOTE_WATCHER') === '1' ? new Sni.FakeWatcher([]) : null;
+if (remoteWatcher)
+    fact('fake-watcher.owned', await remoteWatcher.owned);
 
 const Hooks = await import(`file://${shellDir}/js/ui/apex/hooks.js`);
 fact('safe', Hooks.safe());
@@ -349,6 +356,56 @@ async function exerciseSpotlight() {
     Main.wm.press('toggle-spotlight');
     fact('spotlight.live-enabled', shown(await spotlightPopup()));
     Main.wm.press('toggle-spotlight');
+}
+
+// The launcher's pill and what the app display shows: the grid, or its results.
+function launcherState(Main) {
+    const controls = Main.overview._overview._controls;
+    const {_searchEntry: entry, _appDisplay: appDisplay} = controls;
+    const results = appDisplay.children.find(a => a.name === 'apexLauncherResults' && !a.destroyed);
+    let display = 'grid';
+    if (!appDisplay._box.visible) {
+        const [grid, empty] = results.get_children();
+        display = empty.visible
+            ? empty.get_children().map(label => label.text).join(' / ')
+            : grid.items.map(icon => `${icon.app.get_name()}${icon.pseudoClasses.has('selected') ? '*' : ''}`).join(', ');
+    }
+    return `hint=${entry.hint_text} pill=${entry.has_style_class_name('apex-launcher-search')} ${display}`;
+}
+
+async function exerciseLauncher() {
+    if (GLib.getenv('PROBE_LAUNCHER') !== '1')
+        return;
+    const Main = await import(`file://${shellDir}/js/ui/main.js`);
+    const entry = Main.overview._overview._controls._searchEntry;
+    const button = Main.overview.dash.showAppsButton;
+    const report = label => fact(`launcher.${label}`, launcherState(Main));
+    report('desktop');
+    Main.overview.showApps();
+    report('app-grid');
+    fact('launcher.hook-text', Hooks.run('overview-search', 'text', 'dis', () => fact('launcher.reset', 'yes')));
+    fact('launcher.hook-focus', Hooks.run('overview-search', 'focus', 'dis', () => fact('launcher.reset', 'yes')));
+    entry.set_text('dis');
+    report('dis');
+    fact('launcher.spotlight', (await spotlightPopup())?.isOpen ?? false);
+    entry.clutter_text.emit('activate');
+    entry.set_text('zzz');
+    report('zzz');
+    entry.set_text('');
+    report('cleared');
+    entry.set_text('char');
+    report('folder-app');
+    button.checked = false;
+    button.emit('notify::checked');
+    report('left');
+    fact('launcher.left-text', JSON.stringify(entry.get_text()));
+    Main.overview.showApps();
+    settings.set_strv('disabled-features', ['spotlight']);
+    await spin(200);
+    report('disabled');
+    settings.set_strv('disabled-features', []);
+    await spin(200);
+    report('enabled-again');
 }
 
 function pillNames(quickSettings) {
@@ -981,6 +1038,127 @@ async function exerciseLock() {
     }
 }
 
+// The parts of upstream's AuthenticationDialog the polkit feature touches, as _init() leaves them.
+function newAuthenticationDialog(St, {
+    userName = 'apex', accountType = 1, loaded = true, actionId = 'io.github.apex-linux.apex.update.rollback',
+} = {}) {
+    const root = userName === 'root';
+    const userBox = new St.BoxLayout({style_class: 'polkit-dialog-user-layout', orientation: 1});
+    const avatar = new St.Bin({style_class: 'user-icon', name: 'avatar'});
+    const userLabel = new St.Label({
+        style_class: root ? 'polkit-dialog-user-root-label' : 'polkit-dialog-user-label',
+        text: root ? 'Administrator' : 'Apex',
+    });
+    userBox.add_child(avatar);
+    userBox.add_child(userLabel);
+    const info = new St.Label({style_class: 'prompt-dialog-info-label', visible: false, text: ''});
+    const warnings = new St.BoxLayout({name: 'warnings'});
+    for (const label of [new St.Label({name: 'caps-lock'}), new St.Label({name: 'error', visible: false}),
+        info, new St.Label({name: 'null'})])
+        warnings.add_child(label);
+    const body = new St.BoxLayout({name: 'body'});
+    for (const part of [userBox, new St.Entry({name: 'password'}), warnings])
+        body.add_child(part);
+    const contentLayout = new St.BoxLayout({name: 'content'});
+    contentLayout.add_child(new St.BoxLayout({name: 'header'}));
+    contentLayout.add_child(body);
+    const user = new St.Widget({name: 'user'});
+    Object.assign(user, {is_loaded: loaded, get_user_name: () => userName, get_account_type: () => accountType});
+    const dialog = new St.Widget({style_class: 'prompt-dialog'});
+    Object.assign(dialog, {
+        actionId, contentLayout, _userAvatar: avatar, _userLabel: userLabel, _user: user, _infoMessageLabel: info, warnings,
+    });
+    return dialog;
+}
+
+function polkitLayout(dialog) {
+    const row = dialog._userAvatar.get_parent();
+    const column = row.children.find(c => c.has_style_class_name('apex-polkit-names'));
+    return `dialog=${dialog.styleClasses.join(' ')} content=${names(dialog.contentLayout.children)} ` +
+        `user=${row.orientation === 0 ? 'row' : 'column'}:${names(row.children)} ` +
+        `names=${column?.children?.map(c => `${c.text}${c.visible ? '' : '(hidden)'}`).join('/') ?? 'none'}`;
+}
+
+function polkitInfo(dialog) {
+    const line = dialog._infoMessageLabel.get_parent();
+    if (line === dialog.warnings)
+        return `stock visible=${dialog._infoMessageLabel.visible}`;
+    const glyph = line.children[0];
+    return `${line.styleClasses.join(' ')} visible=${line.visible} glyph=${glyph.visible ? glyph.icon_name : 'none'}`;
+}
+
+function polkitDetails(dialog) {
+    const details = dialog.contentLayout.children.find(c => c.has_style_class_name?.('apex-polkit-details'));
+    if (!details)
+        return 'none';
+    const [toggle, grid] = details.children;
+    const rows = !grid.visible ? '' : grid.children.filter(r => r.visible).map(r => r.children.map(c => c.text).join('=')).join(' ');
+    const chevron = toggle.child.children[0].icon_name;
+    return `open=${grid.visible} checked=${toggle.has_style_pseudo_class('checked')} chevron=${chevron} rows=${rows}`;
+}
+
+async function exercisePolkit() {
+    if (GLib.getenv('PROBE_POLKIT') !== '1')
+        return;
+    const dir = GLib.path_get_dirname(shellDir);
+    const {default: St} = await import(`file://${dir}/St.js`);
+    const {default: Polkit} = await import(`file://${dir}/Polkit.js`);
+
+    const dialog = newAuthenticationDialog(St);
+    fact('polkit.run', `${Hooks.run('polkit-dialog', dialog)}`);
+    fact('polkit.layout', polkitLayout(dialog));
+    fact('polkit.details.open', polkitDetails(dialog));
+    await spin(50);
+    fact('polkit.details.vendor', polkitDetails(dialog));
+    const toggle = dialog.contentLayout.children.find(c => c.has_style_class_name('apex-polkit-details'))?.children[0];
+    toggle?.emit('clicked');
+    fact('polkit.details.closed', polkitDetails(dialog));
+    toggle?.emit('clicked');
+    fact('polkit.details.reopened', polkitDetails(dialog));
+
+    const info = dialog._infoMessageLabel;
+    const {PROMPT_MSGIDS} = await import(`file://${shellDir}/js/ui/apex/polkit/fingerprint.js`);
+    fact('polkit.prompt-msgids', `${PROMPT_MSGIDS.length} ${PROMPT_MSGIDS[1]} | ${PROMPT_MSGIDS.at(-1)}`);
+    fact('polkit.info.none', polkitInfo(dialog));
+    for (const [label, text] of [['generic', 'Place your finger on the fingerprint reader'],
+        ['swipe-reader', 'Swipe your right index finger across Goodix MOC Fingerprint Sensor'],
+        ['timed-out', 'Verification timed out'], ['other-module', 'Place your coffee on the table']]) {
+        info.text = text;
+        info.visible = true;
+        fact(`polkit.info.${label}`, polkitInfo(dialog));
+    }
+    info.text = 'Place your left thumb on the fingerprint reader';
+    info.visible = false;
+    fact('polkit.info.hidden', polkitInfo(dialog));
+
+    for (const [label, who] of [['standard', {accountType: 0}], ['root', {userName: 'root', accountType: 1}]]) {
+        const other = newAuthenticationDialog(St, who);
+        Hooks.run('polkit-dialog', other);
+        fact(`polkit.role.${label}`, polkitLayout(other));
+    }
+    const loading = newAuthenticationDialog(St, {loaded: false});
+    Hooks.run('polkit-dialog', loading);
+    fact('polkit.role.loading', polkitLayout(loading));
+    loading._user.is_loaded = true;
+    loading._user.emit('notify::is-loaded');
+    fact('polkit.role.loaded', polkitLayout(loading));
+
+    const unknown = newAuthenticationDialog(St, {actionId: 'org.example.unregistered'});
+    Hooks.run('polkit-dialog', unknown);
+    await spin(50);
+    fact('polkit.details.unknown-action', polkitDetails(unknown));
+    for (const reply of ['error', 'cancel']) {
+        Polkit.stub.reply = reply;
+        const failed = newAuthenticationDialog(St);
+        Hooks.run('polkit-dialog', failed);
+        // eslint-disable-next-line no-await-in-loop
+        await spin(50);
+        fact(`polkit.details.${reply}`, polkitDetails(failed));
+    }
+    Polkit.stub.reply = 'answer';
+    fact('polkit.authority-calls', Polkit.stub.calls);
+}
+
 function glassOf(actor) {
     const effect = actor.get_effect('apex-glass');
     if (!effect)
@@ -1162,6 +1340,218 @@ function dockState(Main) {
         `dash=${Main.overview.dash.visible} dash-height=${Main.overview.dash.height}`;
 }
 
+async function until(condition, ms = 3000) {
+    for (let waited = 0; !condition() && waited < ms; waited += 50)
+        // eslint-disable-next-line no-await-in-loop
+        await spin(50);
+    return condition();
+}
+
+function indicatorBox(Main) {
+    return Main.panel.rightBox.children.find(c => c.name === 'apexIndicators') ?? null;
+}
+
+// The box holds each PanelMenu.Button's container, the overflow button's last.
+function indicatorButton(Main, name) {
+    return indicatorBox(Main)?.get_children().map(c => c.child).find(b => b.accessible_name === name) ?? null;
+}
+
+function overflowButton(Main) {
+    return indicatorBox(Main).get_children().at(-1).child;
+}
+
+function clickGesture(button) {
+    return button.actions.find(a => a.click);
+}
+
+function indicatorBar(Main) {
+    const box = indicatorBox(Main);
+    if (!box)
+        return 'none';
+    const containers = box.get_children();
+    const overflow = containers.at(-1);
+    const inBar = containers.slice(0, -1).filter(c => c.visible).map(({child: b}) => {
+        const [glyph, dot] = b.children[0].get_children();
+        return `${b.accessible_name}:${glyph.kind}${dot.visible ? '+dot' : ''}`;
+    });
+    const divider = Main.panel.rightBox.children.find(c => c.has_style_class_name?.('apex-indicators-divider'));
+    const count = overflow.visible ? overflow.child.children[0].get_children()[1].text : 'none';
+    return `${box.visible ? inBar.join(',') : 'hidden'} overflow=${count} divider=${divider.visible}`;
+}
+
+function rightBoxOrder(Main) {
+    const {quickSettings} = Main.panel.statusArea;
+    return Main.panel.rightBox.children.map(c => {
+        if (c.name === 'apexIndicators')
+            return 'indicators';
+        if (c.has_style_class_name?.('apex-indicators-divider'))
+            return 'divider';
+        return c === quickSettings.container ? 'quickSettings' : c.name;
+    }).join(',');
+}
+
+function menuItem(item) {
+    const kind = item.constructor.name;
+    const label = item.label?.text ?? '';
+    const flags = `${item.visible ? '' : '(hidden)'}${item.sensitive === false ? '(off)' : ''}`;
+    if (item.has_style_class_name('apex-indicator-menu-header'))
+        return `[${label}]`;
+    if (kind === 'PopupSeparatorMenuItem')
+        return '|';
+    if (kind === 'PopupSubMenuMenuItem')
+        return `${label}>(${item.menu.items.map(menuItem).join(' ')})`;
+    if (kind === 'PopupSwitchMenuItem')
+        return `${label}=switch:${item.state}${flags}`;
+    const shortcut = item.get_children()[1]?.text;
+    const radio = {1: '=radio:on', 4: '=radio:off'}[item.ornament] ?? '';
+    return `${label}${radio}${shortcut ? `<${shortcut}>` : ''}${flags}`;
+}
+
+function openMenus(Main) {
+    return Main.panel.menuManager.menus.filter(m => m.isOpen);
+}
+
+const STATUS_SUBMENU = [
+    {id: 5, props: {label: 'Online', 'toggle-type': 'radio', 'toggle-state': 1}},
+    {id: 6, props: {label: 'Away', 'toggle-type': 'radio', 'toggle-state': 0}},
+];
+const CHAT_MENU = {
+    id: 0,
+    props: {},
+    children: [
+        {id: 1, props: {label: '_Show Chat', shortcut: [['Control', 'Shift', 'c']]}},
+        {id: 2, props: {label: 'Do Not Disturb', 'toggle-type': 'checkmark', 'toggle-state': 0}},
+        {id: 3, props: {type: 'separator'}},
+        {id: 4, props: {label: 'Status', 'children-display': 'submenu'}, children: STATUS_SUBMENU},
+        {id: 7, props: {label: 'Hidden', visible: false}},
+        {id: 8, props: {label: 'Quit Chat', enabled: false}},
+    ],
+};
+const GAMES_MENU = {id: 0, props: {}, children: [{id: 1, props: {label: 'Library'}}]};
+// 16 x 16 pixels of ARGB 255,10,20,30, as an item sends a pixmap.
+const PIXMAP = [[16, 16, new Uint8Array(16 * 16 * 4).map((_, i) => [255, 10, 20, 30][i % 4])]];
+
+async function clickIndicator(Main, name, mouseButton) {
+    clickGesture(indicatorButton(Main, name)).click(mouseButton);
+    await spin(100);
+}
+
+async function exerciseIndicatorMenus(Main, chat) {
+    await clickIndicator(Main, 'Chat', 3);
+    await until(() => openMenus(Main).length > 0 && openMenus(Main)[0].items.length > 1);
+    const [menu] = openMenus(Main);
+    fact('indicators.menu', menu.items.map(menuItem).join(' '));
+    fact('indicators.menu.button-checked', indicatorButton(Main, 'Chat').pseudoClasses.has('checked'));
+    chat.updateMenuProperties([[2, {'toggle-state': 1}], [1, {label: 'Show _Chat Window'}]]);
+    await spin(200);
+    fact('indicators.menu.updated', menu.items.map(menuItem).join(' '));
+    menu.items.find(i => i.label?.text === 'Do Not Disturb').activate();
+    menu.items.find(i => i.label?.text === 'Status').menu.open();
+    await spin(200);
+    menu.close();
+    await spin(200);
+    fact('indicators.menu.closed',
+        `open=${menu.isOpen} button-checked=${indicatorButton(Main, 'Chat').pseudoClasses.has('checked')}`);
+    await clickIndicator(Main, 'Game launcher', 1);
+    fact('indicators.item-is-menu', openMenus(Main).map(m => m.items.map(menuItem).join(' ')).join(';'));
+    openMenus(Main).forEach(m => m.close());
+}
+
+async function exerciseIndicatorOverflow(Main) {
+    const overflow = overflowButton(Main);
+    clickGesture(overflow).click(1);
+    await spin(100);
+    const [menu] = openMenus(Main);
+    fact('indicators.overflow.rows', menu.items.map(row => {
+        const [glyph, label, chevron] = row.get_children();
+        return `${glyph.kind}:${label.text}:${chevron.icon_name}`;
+    }).join(' '));
+    menu.items[0].activate();
+    await spin(200);
+    fact('indicators.overflow.after-row', `open=${menu.isOpen} ` +
+        `item-menu-under=${openMenus(Main).map(m => m.sourceActor === overflow ? 'overflow' : 'other').join(',')}`);
+    openMenus(Main).forEach(m => m.close());
+}
+
+async function exerciseIndicators() {
+    if (GLib.getenv('PROBE_INDICATORS') !== '1')
+        return;
+    const Main = await import(`file://${shellDir}/js/ui/main.js`);
+    const bus = Gio.DBus.session;
+    const watcher = () => Sni.watcherOwner(bus) === bus.get_unique_name() ? 'shell' : Sni.watcherOwner(bus);
+    fact('indicators.watcher', watcher());
+    fact('indicators.empty', `${indicatorBar(Main)} order=${rightBoxOrder(Main)}`);
+    const sync = new Sni.FakeItem('File sync', {IconName: 'apex-sync'});
+    const chat = new Sni.FakeItem('Chat', {IconName: 'apex-chat-symbolic'}, CHAT_MENU, {byName: true});
+    const games = new Sni.FakeItem('Game launcher', {IconName: 'apex-games', ItemIsMenu: true}, GAMES_MENU);
+    const keys = new Sni.FakeItem('Password manager', {IconPixmap: PIXMAP});
+    await until(() => indicatorBar(Main).split(':').length === 5);
+    fact('indicators.four', `${indicatorBar(Main)} order=${rightBoxOrder(Main)}`);
+    const music = new Sni.FakeItem('Media player', {IconName: 'apex-missing'});
+    await until(() => indicatorBar(Main).includes('overflow=+'));
+    fact('indicators.five', indicatorBar(Main));
+    const {gicon} = indicatorButton(Main, 'Password manager').children[0].get_children()[0];
+    fact('indicators.pixmap', `${gicon.pixmap} alpha=${gicon.hasAlpha} first-pixel-rgba=${gicon.firstPixel}`);
+    await exerciseIndicatorOverflow(Main);
+
+    music.set({Status: 'Passive'});
+    await until(() => indicatorBar(Main).includes('overflow=none'));
+    fact('indicators.passive', indicatorBar(Main));
+    chat.set({Status: 'NeedsAttention'});
+    await until(() => indicatorBar(Main).includes('+dot'));
+    fact('indicators.attention', indicatorBar(Main));
+
+    await clickIndicator(Main, 'File sync', 1);
+    await clickIndicator(Main, 'File sync', 2);
+    await clickIndicator(Main, 'File sync', 3);
+    const scroll = indicatorButton(Main, 'File sync').actions.find(a => a.scroll);
+    scroll.scroll(0, 1);
+    scroll.scroll(1, 0);
+    await clickIndicator(Main, 'Chat', 1);
+    await exerciseIndicatorMenus(Main, chat);
+
+    sync.quit();
+    await until(() => !indicatorBar(Main).includes('File sync'));
+    fact('indicators.vanished', indicatorBar(Main));
+
+    settings.set_strv('disabled-features', ['indicators']);
+    await spin(300);
+    fact('indicators.disabled', `${indicatorBar(Main)} watcher=${watcher()} order=${rightBoxOrder(Main)}`);
+    settings.set_strv('disabled-features', []);
+    await until(() => indicatorBar(Main).split(':').length === 4);
+    fact('indicators.re-enabled', `${indicatorBar(Main)} watcher=${watcher()}`);
+    settings.set_boolean('layer-enabled', false);
+    await spin(300);
+    fact('indicators.layer-off', `${indicatorBar(Main)} watcher=${watcher()}`);
+    settings.set_boolean('layer-enabled', true);
+    await until(() => indicatorBar(Main).split(':').length === 4);
+    fact('indicators.layer-on', indicatorBar(Main));
+    [chat, games, keys, music].forEach(item => item.quit());
+}
+
+async function exerciseRemoteWatcher() {
+    if (!remoteWatcher)
+        return;
+    const Main = await import(`file://${shellDir}/js/ui/main.js`);
+    const bus = Gio.DBus.session;
+    const early = new Sni.FakeItem('Early', {IconName: 'apex-sync'});
+    remoteWatcher.items.push(`${early.conn.get_unique_name()}/StatusNotifierItem`);
+    settings.set_boolean('layer-enabled', false);
+    await spin(200);
+    settings.set_boolean('layer-enabled', true);
+    await until(() => indicatorBar(Main).includes('Early'));
+    fact('remote.listed', indicatorBar(Main));
+    const late = new Sni.FakeItem('Late', {IconName: 'apex-sync'});
+    remoteWatcher.announce(`${late.conn.get_unique_name()}/StatusNotifierItem`);
+    await until(() => indicatorBar(Main).includes('Late'));
+    fact('remote.announced', indicatorBar(Main));
+    remoteWatcher.quit();
+    await until(() => Sni.watcherOwner(bus) === bus.get_unique_name());
+    await until(() => indicatorBar(Main).split(':').length === 3);
+    fact('remote.gone', `${indicatorBar(Main)} watcher=${Sni.watcherOwner(bus) === bus.get_unique_name() ? 'shell' : 'other'}`);
+    [early, late].forEach(item => item.quit());
+}
+
 async function exerciseDock() {
     if (GLib.getenv('PROBE_DOCK') !== '1')
         return;
@@ -1324,11 +1714,13 @@ if (layer && GLib.getenv('PROBE_ENABLE') === '1') {
     await pressToggleSpotlight();
     overviewSearchWithoutSpotlight();
     await exerciseLock();
+    await exercisePolkit();
     await exerciseMotion();
     await exerciseQuickSettings();
     await exerciseEndSession();
     await exerciseShadows();
     await exerciseSpotlight();
+    await exerciseLauncher();
     await exerciseTopBar();
     await exerciseSolidBar();
     await exerciseFocusedApp();
@@ -1338,6 +1730,8 @@ if (layer && GLib.getenv('PROBE_ENABLE') === '1') {
     await exerciseDock();
     await exerciseIntellihide();
     await exerciseGlass();
+    await exerciseIndicators();
+    await exerciseRemoteWatcher();
     await setDisabledLive();
     await switchLayer();
     for (const [signal, fn] of [...handlers.values()]) {
@@ -1350,6 +1744,12 @@ if (layer && GLib.getenv('PROBE_ENABLE') === '1') {
 }
 if (!layer && settings)
     await switchLayer();
-if (!layer)
+if (!layer) {
     await exerciseLock();
+    await exercisePolkit();
+}
+if (GLib.getenv('PROBE_WATCHER_OWNER') === '1') {
+    const bus = Gio.DBus.session;
+    fact('watcher-owner', Sni.watcherOwner(bus) === bus.get_unique_name() ? 'shell' : Sni.watcherOwner(bus));
+}
 fact('done', 'yes');

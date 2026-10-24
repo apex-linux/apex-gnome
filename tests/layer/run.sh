@@ -31,7 +31,7 @@ skip() {
 }
 
 GI_COMPILER=$(command -v gi-compile-repository || command -v g-ir-compiler || true)
-for tool in gjs glib-compile-schemas "${GI_COMPILER:-gi-compile-repository}"; do
+for tool in gjs glib-compile-schemas "${GI_COMPILER:-gi-compile-repository}" dbus-run-session; do
     if ! command -v "$tool" >/dev/null 2>&1; then
         if [[ $NO_SKIP == 1 ]]; then
             printf 'not ok 1 - %s not found, but APEX_LAYER_TESTS_NO_SKIP=1\n1..1\n' "$tool"
@@ -55,14 +55,18 @@ done
 cp "$HERE"/stubs/appDisplay.js "$HERE"/stubs/remoteSearch.js "$HERE"/stubs/searchProviders.js "$T/shell/js/ui/"
 mkdir -p "$T/shell/js/misc"
 cp "$HERE/stubs/systemActions.js" "$T/shell/js/misc/"
-cp "$HERE"/stubs/St.js "$HERE"/stubs/Clutter.js "$HERE"/stubs/Shell.js "$HERE"/stubs/Meta.js "$HERE"/stubs/Graphene.js "$T/"
-# The shadow cutout is a GObject subclass of Clutter.ShaderEffect, which the stubs cannot be.
+cp "$HERE"/stubs/St.js "$HERE"/stubs/Clutter.js "$HERE"/stubs/Shell.js "$HERE"/stubs/Meta.js "$HERE"/stubs/Graphene.js \
+    "$HERE"/stubs/GdkPixbuf.js "$HERE"/stubs/Polkit.js "$HERE"/stubs/AccountsService.js "$T/"
+# The shadow cutout and the indicators' mask are GObject subclasses of Clutter.ShaderEffect, which the stubs cannot be.
 cp "$HERE/stubs/cutout.js" "$T/shell/js/ui/apex/shadows/cutout.js"
-# gjs outside the shell has no St or Clutter typelib, and the fixtures' Shell and Meta no
-# WindowTracker or Barrier: the features get stubs instead.
+cp "$HERE/stubs/indicator-mask.js" "$T/shell/js/ui/apex/indicators/mask.js"
+# gjs outside the shell has no St or Clutter typelib, the job no gdk-pixbuf, and the fixtures'
+# Shell and Meta no WindowTracker or Barrier: the features get stubs instead.
 find "$T/shell/js/ui/apex" -name '*.js' -exec sed -i -e "s|'gi://St'|'file://$T/St.js'|" \
     -e "s|'gi://Clutter'|'file://$T/Clutter.js'|" -e "s|'gi://Shell'|'file://$T/Shell.js'|" \
-    -e "s|'gi://Meta'|'file://$T/Meta.js'|" -e "s|'gi://Graphene'|'file://$T/Graphene.js'|" {} +
+    -e "s|'gi://Meta'|'file://$T/Meta.js'|" -e "s|'gi://Graphene'|'file://$T/Graphene.js'|" \
+    -e "s|'gi://GdkPixbuf'|'file://$T/GdkPixbuf.js'|" -e "s|'gi://Polkit'|'file://$T/Polkit.js'|" \
+    -e "s|'gi://AccountsService'|'file://$T/AccountsService.js'|" {} +
 for gir in "$HERE"/fixtures/*.gir; do
     gir_name=${gir##*/}
     "$GI_COMPILER" "$gir" -o "$T/typelib/${gir_name%.gir}.typelib"
@@ -114,7 +118,7 @@ if command -v bwrap >/dev/null 2>&1 &&
 fi
 
 # A case's runtime and config directories outlive it, so the guard and a later case of
-# the same name see what its shell left there.
+# the same name see what its shell left there. Each case has its own session bus.
 probe() {
     local name=$1 cmdline=$2
     shift 2
@@ -125,7 +129,7 @@ probe() {
     local -a cmd=(env -i PATH="$PATH" HOME="$T/home" LANG=C.UTF-8
         XDG_RUNTIME_DIR="$dir/run" XDG_CONFIG_HOME="$dir/config" XDG_DATA_DIRS="$T/data"
         GSETTINGS_BACKEND=memory GSETTINGS_SCHEMA_DIR="$T/schemas" GI_TYPELIB_PATH="$T/typelib"
-        APEX_SHELL_DIR="$T/shell" "$@" gjs -m "$HERE/probe.js")
+        APEX_SHELL_DIR="$T/shell" "$@" dbus-run-session -- gjs -m "$HERE/probe.js")
     if ((sandbox)); then
         cmd=(bwrap --dev-bind / / --ro-bind "$dir/cmdline" /proc/cmdline "${cmd[@]}")
     fi
@@ -543,6 +547,27 @@ fact "spotlight: no rows yet and the query not done: only the field, no 'No resu
 fact "spotlight: a late sum still puts Calculator first among the applications" \
     'spotlight\.late-sum\.at-900ms=CALCULATOR: 1920\(2880 / 1\.5\)\*Copy \| APPLICATIONS: Calculator'
 
+probe launcher "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_LAUNCHER=1
+rc_is "launcher: the probe runs" 0
+fact "launcher: outside the app grid the overview's pill is stock" 'launcher\.desktop=hint=Type to search pill=false grid'
+fact "launcher: in the app grid it is the launcher's own, \"Search apps\"" 'launcher\.app-grid=hint=Search apps pill=true grid'
+fact "launcher: there 0013's hook keeps typed text from the stock search" 'launcher\.hook-text=true'
+fact "launcher: and leaves the focus to the stock entry" 'launcher\.hook-focus=false'
+lacks "launcher: without resetting the pill" 'launcher\.reset='
+fact "launcher: apps only, by name, the grid filtered in place, the first match selected" \
+    'launcher\.dis=hint=Search apps pill=true Disk Usage Analyzer\*, Disks'
+fact "launcher: Spotlight stays closed" 'launcher\.spotlight=false'
+fact "launcher: Enter launches the first match" 'launcher\.launched=disk-usage-analyzer\.desktop'
+fact "launcher: no match says so, and that Super+Space searches everything" \
+    'launcher\.zzz=hint=Search apps pill=true No Results / The launcher searches apps only\. Super\+Space searches everything\.'
+fact "launcher: an empty pill shows the grid again" 'launcher\.cleared=hint=Search apps pill=true grid'
+fact "launcher: apps inside folders are found too" 'launcher\.folder-app=hint=Search apps pill=true Characters\*'
+fact "launcher: leaving the app grid gives the stock pill and grid back" 'launcher\.left=hint=Type to search pill=false grid'
+fact "launcher: and empties it" 'launcher\.left-text=""'
+fact "launcher: with spotlight in disabled-features the app grid keeps the stock pill" 'launcher\.disabled=hint=Type to search pill=false grid'
+fact "launcher: taken out again, the launcher's pill is back" 'launcher\.enabled-again=hint=Search apps pill=true grid'
+lacks "launcher: nothing fails" 'off for this session|did not disable cleanly|JS ERROR'
+
 readonly KEPT_PILL='remoteAccess,camera,volumeInput,location,network,volumeOutput,unsafeMode,system'
 readonly STOCK_PILL='remoteAccess,camera,volumeInput,location,brightness,thunderbolt,nightLight,network,darkMode,doNotDisturb,backlight,bluetooth,rfkill,autoRotate,volumeOutput,unsafeMode,powerProfiles,system'
 probe top-bar "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_TOP_BAR=1 PROBE_SCALE=2
@@ -804,6 +829,83 @@ probe lock-gdm "$CMDLINE_PLAIN" PROBE_MODE=gdm PROBE_LOCK=1
 fact "gdm mode: no layer" 'layer=null'
 lock_is_stock "gdm mode"
 
+readonly ROLLBACK=io\.github\.apex-linux\.apex\.update\.rollback
+readonly POLKIT_ON="dialog=prompt-dialog apex-polkit content=apex-polkit-icon,header,body,apex-polkit-details user=row:avatar,apex-polkit-names"
+readonly POLKIT_DETAILS_OPEN='open=true checked=true chevron=pan-down-symbolic'
+readonly POLKIT_FINGERPRINT='apex-polkit-info apex-polkit-fingerprint visible=true glyph=auth-fingerprint-symbolic'
+polkit_is_stock() {
+    local why=$1
+    fact "$why: the polkit-dialog hook gives the stock code" 'polkit\.run=undefined'
+    fact "$why: upstream's dialog: no shield, the avatar over the name, no Details" \
+        'polkit\.layout=dialog=prompt-dialog content=header,body user=column:avatar,polkit-dialog-user-label names=none'
+    fact "$why: upstream's info line" 'polkit\.info\.generic=stock visible=true'
+    fact "$why: no polkit lookup" 'polkit\.authority-calls=0'
+}
+
+probe polkit "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_POLKIT=1
+has "polkit: the feature enables" 'Apex: feature polkit enabled'
+fact "polkit: the polkit-dialog hook gives the stock code" 'polkit\.run=undefined'
+fact "polkit: the shield above the title, Details under the field; the avatar beside the name, \"Administrator\" under it" \
+    "polkit\.layout=$POLKIT_ON names=Apex/Administrator"
+fact "polkit: Details open, with the action's id" "polkit\.details\.open=$POLKIT_DETAILS_OPEN rows=Action=$ROLLBACK"
+fact "polkit: and its vendor, from polkit's own description" "polkit\.details\.vendor=$POLKIT_DETAILS_OPEN rows=Action=$ROLLBACK Vendor=Apex"
+fact "polkit: Details closes" "polkit\.details\.closed=open=false checked=false chevron=pan-end-symbolic rows="
+fact "polkit: and opens again" "polkit\.details\.reopened=$POLKIT_DETAILS_OPEN rows=Action=$ROLLBACK Vendor=Apex"
+fact "polkit: an action polkit does not describe shows no vendor" \
+    "polkit\.details\.unknown-action=$POLKIT_DETAILS_OPEN rows=Action=org\.example\.unregistered"
+fact "polkit: nor when polkitd fails" "polkit\.details\.error=$POLKIT_DETAILS_OPEN rows=Action=$ROLLBACK"
+has "polkit: and says why" "Apex: polkit: no vendor for $ROLLBACK: polkitd is not running"
+fact "polkit: a cancelled lookup shows none either" "polkit\.details\.cancel=$POLKIT_DETAILS_OPEN rows=Action=$ROLLBACK"
+count_is "polkit: silently" 'Apex: polkit: no vendor' 1
+fact "polkit: pam_fprintd's 44 prompt msgids, matched through the fprintd domain" \
+    'polkit\.prompt-msgids=44 Place your finger on %s \| Swipe your right little finger across %s'
+fact "polkit: no line until PAM sends one" 'polkit\.info\.none=apex-polkit-info visible=false glyph=none'
+fact "polkit: pam_fprintd's prompt is the fingerprint line" "polkit\.info\.generic=$POLKIT_FINGERPRINT"
+fact "polkit: for a named finger and reader too" "polkit\.info\.swipe-reader=$POLKIT_FINGERPRINT"
+fact "polkit: pam_fprintd's other info stays upstream's line" 'polkit\.info\.timed-out=apex-polkit-info visible=true glyph=none'
+fact "polkit: as does another module's" 'polkit\.info\.other-module=apex-polkit-info visible=true glyph=none'
+fact "polkit: and the line goes with upstream's label" 'polkit\.info\.hidden=apex-polkit-info apex-polkit-fingerprint visible=false glyph=auth-fingerprint-symbolic'
+fact "polkit: a standard account gets no role" "polkit\.role\.standard=$POLKIT_ON names=Apex/Administrator\(hidden\)"
+fact "polkit: root keeps upstream's \"Administrator\" in the name's place" \
+    "polkit\.role\.root=$POLKIT_ON names=Administrator/Administrator\(hidden\)"
+fact "polkit: no role before AccountsService loads the user" "polkit\.role\.loading=$POLKIT_ON names=Apex/Administrator\(hidden\)"
+fact "polkit: and the role once it has" "polkit\.role\.loaded=$POLKIT_ON names=Apex/Administrator"
+lacks "polkit: nothing turns the feature off" 'feature polkit off|hook polkit-dialog threw'
+
+probe polkit-disabled "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_POLKIT=1 PROBE_DISABLED=polkit
+has "disabled-features=['polkit']: skips the feature" 'Apex: feature polkit is in disabled-features'
+polkit_is_stock "disabled-features=['polkit']"
+probe polkit-safe "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_POLKIT=1 APEX_SHELL_SAFE=1
+polkit_is_stock "APEX_SHELL_SAFE=1"
+
+# Polkit's verdict is polkitd's, after PAM: no Apex file may answer the agent, end its session or
+# follow the session's signals.
+readonly POLKIT_ROUTES=(".response(" "_emitDone" "emit('done'" ".complete(" "_onSessionCompleted" "_initiateSession" "._session")
+polkit_routes() {
+    local -a args=()
+    local route
+    for route in "${POLKIT_ROUTES[@]}"; do args+=(-e "$route"); done
+    grep -rnF "${args[@]}" -- "$1" || true
+}
+found=$(polkit_routes "$APEX_JS")
+if [[ -z $found && -f $APEX_JS/polkit/feature.js ]]; then
+    ok "polkit guard: nothing under js/ui/apex/ answers polkit or ends its session"
+else
+    not_ok "polkit guard: nothing under js/ui/apex/ answers polkit or ends its session"
+    printf '#   %s\n' "$found"
+fi
+for i in "${!POLKIT_ROUTES[@]}"; do
+    copy=$T/polkit-guard-$i
+    cp -R "$APEX_JS" "$copy"
+    printf 'dialog%s\n' "${POLKIT_ROUTES[$i]}" >>"$copy/polkit/feature.js"
+    found=$(polkit_routes "$copy")
+    if [[ $found == "$copy/polkit/feature.js:"*"${POLKIT_ROUTES[$i]}"* && $(wc -l <<<"$found") == 1 ]]; then
+        ok "polkit guard: catches ${POLKIT_ROUTES[$i]} injected into a copy"
+    else
+        not_ok "polkit guard: catches ${POLKIT_ROUTES[$i]} injected into a copy (found: ${found:-nothing})"
+    fi
+done
+
 readonly OVERVIEW_ON='title-visible=true overlay=close scale=0\.081 threshold=1 box=0\.081 grid=\[\{"rows":4,"columns":7\}\] icon=88 strip=0'
 readonly OVERVIEW_STOCK='title-visible=false overlay=title\+close scale=0\.05 threshold=2 box=0\.05 grid="stock" icon=-1 strip=130'
 readonly EMPTY_LABEL='"No open windows" \.apex-workspace-empty'
@@ -878,6 +980,67 @@ probe dock-nokey "$CMDLINE_PLAIN" GSETTINGS_SCHEMA_DIR="$T/nodock" PROBE_ENABLE=
 has "a schema without dock-show-trash: only the dock is off, and says why" \
     'Apex: feature dock off for this session \(configure: Error: io\.github\.apex_linux\.Apex\.Desktop has no key dock-show-trash\)'
 has "and the rest of the layer runs" 'Apex: feature panel enabled'
+
+probe indicators "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_INDICATORS=1 \
+    PROBE_THEME_ICONS=apex-sync-symbolic,apex-chat-symbolic,apex-games
+has "indicators: the feature enables" 'Apex: feature indicators enabled'
+fact "indicators: the shell owns org.kde.StatusNotifierWatcher while nobody else does" 'indicators\.watcher=shell'
+fact "indicators: with no items, no indicators and no divider; both sit before the status pill" \
+    'indicators\.empty=hidden overflow=none divider=false order=a11y,keyboard,indicators,divider,quickSettings'
+fact "indicators: four items show in the order they registered: the theme's -symbolic icon, or a full-colour icon or a pixmap as a mask" \
+    'indicators\.four=File sync:symbolic,Game launcher:mask,Password manager:pixmap,Chat:symbolic overflow=none divider=true order=a11y,keyboard,indicators,divider,quickSettings'
+fact "indicators: a fifth moves two to the overflow: three show, and +2" \
+    'indicators\.five=File sync:symbolic,Game launcher:mask,Password manager:pixmap overflow=\+2 divider=true'
+fact "indicators: a pixmap's network-order ARGB becomes RGBA" 'indicators\.pixmap=16x16 alpha=true first-pixel-rgba=10,20,30,255'
+fact "indicators: the overflow menu has a row per hidden item: glyph, title, chevron; an icon the theme lacks gets the fallback" \
+    'indicators\.overflow\.rows=symbolic:Chat:go-next-symbolic fallback:Media player:go-next-symbolic'
+fact "indicators: a row closes the overflow menu and opens that item's menu under the overflow button" \
+    'indicators\.overflow\.after-row=open=false item-menu-under=overflow'
+fact "indicators: a Passive item is hidden, and four show again" \
+    'indicators\.passive=File sync:symbolic,Game launcher:mask,Password manager:pixmap,Chat:symbolic overflow=none divider=true'
+fact "indicators: NeedsAttention adds the dot" 'indicators\.attention=.*,Chat:symbolic\+dot overflow=none divider=true'
+fact "indicators: primary click calls Activate, under the button" 'sni\.File sync\.Activate=1316 32'
+fact "indicators: middle click calls SecondaryActivate" 'sni\.File sync\.SecondaryActivate=1316 32'
+fact "indicators: secondary click on an item without a menu calls ContextMenu" 'sni\.File sync\.ContextMenu=1316 32'
+fact "indicators: scrolling calls Scroll, vertically" 'sni\.File sync\.Scroll=-120 vertical'
+fact "indicators: and horizontally" 'sni\.File sync\.Scroll=-120 horizontal'
+fact "indicators: primary click on an item with a menu, not only a menu, activates it" 'sni\.Chat\.Activate=1316 32'
+fact "indicators: secondary click opens the DBusMenu: the title as header, a shortcut, a switch, a separator, a submenu of radio items; hidden and disabled rows" \
+    'indicators\.menu=\[Chat\] Show Chat<Ctrl\+Shift\+C> Do Not Disturb=switch:false \| Status>\(Online=radio:on Away=radio:off\) Hidden\(hidden\) Quit Chat\(off\)'
+fact "indicators: the open menu's button shows as checked" 'indicators\.menu\.button-checked=true'
+fact "indicators: ItemsPropertiesUpdated changes the open menu in place" \
+    'indicators\.menu\.updated=\[Chat\] Show Chat Window<Ctrl\+Shift\+C> Do Not Disturb=switch:true .*'
+fact "indicators: opening the menu sends opened" 'menu\.Chat\.event=0 opened'
+fact "indicators: a row sends clicked" 'menu\.Chat\.event=2 clicked'
+fact "indicators: a submenu sends opened" 'menu\.Chat\.event=4 opened'
+fact "indicators: closing sends closed" 'menu\.Chat\.event=0 closed'
+fact "indicators: and the button is no longer checked" 'indicators\.menu\.closed=open=false button-checked=false'
+fact "indicators: primary click on an item that is only a menu opens it" 'indicators\.item-is-menu=\[Game launcher\] Library'
+fact "indicators: an item whose app leaves the bus goes" \
+    'indicators\.vanished=Game launcher:mask,Password manager:pixmap,Chat:symbolic\+dot overflow=none divider=true'
+fact "indicators: disabled-features=['indicators'] takes them, the divider and the watcher away" \
+    'indicators\.disabled=none watcher=none order=a11y,keyboard,quickSettings'
+readonly REREGISTERED='(Password manager:pixmap|Chat:symbolic\+dot|Game launcher:mask)(,(Password manager:pixmap|Chat:symbolic\+dot|Game launcher:mask)){2} overflow=none divider=true'
+fact "indicators: back out of it, the shell owns the watcher again and the items register again" \
+    "indicators\.re-enabled=$REREGISTERED watcher=shell"
+fact "indicators: layer-enabled=false takes them away" 'indicators\.layer-off=none watcher=none'
+fact "indicators: layer-enabled=true brings them back" "indicators\.layer-on=$REREGISTERED"
+lacks "indicators: the feature disables cleanly" 'off for this session|did not disable cleanly|cannot restyle'
+
+probe indicators-remote "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_REMOTE_WATCHER=1 PROBE_THEME_ICONS=apex-sync-symbolic
+fact "another process's watcher: the shell registers as a host with it" \
+    'fake-watcher\.host=org\.kde\.StatusNotifierHost-apex-[0-9]+'
+fact "another process's watcher: the items it lists show" 'remote\.listed=Early:symbolic overflow=none divider=true'
+fact "another process's watcher: and the items it announces" 'remote\.announced=Early:symbolic,Late:symbolic overflow=none divider=true'
+fact "another process's watcher: once it leaves, the shell owns the name and the items register with it" \
+    'remote\.gone=(Early|Late):symbolic,(Early|Late):symbolic overflow=none divider=true watcher=shell'
+
+probe indicators-disabled "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_DISABLED=indicators PROBE_WATCHER_OWNER=1
+has "disabled-features=['indicators']: skips the feature" 'Apex: feature indicators is in disabled-features'
+fact "disabled-features=['indicators']: nobody owns the watcher" 'watcher-owner=none'
+
+probe indicators-safe "$CMDLINE_PLAIN" APEX_SHELL_SAFE=1 PROBE_ENABLE=1 PROBE_WATCHER_OWNER=1
+fact "safe mode: no indicators, and nobody owns the watcher" 'watcher-owner=none'
 
 printf '1..%d\n' "$tests"
 ((failed == 0))

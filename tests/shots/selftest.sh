@@ -535,6 +535,54 @@ REPORT_OF_A_SPOTLIGHT_DRAWN_FROM_TOKENS='
         label: {text: "Copied 1920"}}},
     overviewSearch: {opened: true, text: "disk", overviewText: ""}}}'
 # shellcheck disable=SC2016 # a jq program
+REPORT_OF_A_LAUNCHER_SEARCH_FROM_TOKENS='
+{surfaces: {launcher: {
+    pill: {width: ($t.apex_launcher_search_width | px), hint: "Search apps"},
+    found: {gridHidden: true, names: ["Files"], firstSelected: true, spotlightOpen: false,
+        appDisplay: {x: 0, y: 262, width: 1440, height: 541}, results: {x: 0, y: 262, width: 1440, height: 541}},
+    empty: {top: 0, padding: {top: ($t.apex_launcher_empty_top | px)}, spacing: ($t.apex_launcher_empty_gap | px),
+        title: {text: "No Results", font: {size: ($t.apex_font_launcher_empty_title_size | px), weight: ($t.apex_font_heading_weight | tonumber)}, foreground: ($t.apex_fg | hex)},
+        hint: {text: "The launcher searches apps only. Super+Space searches everything.", font: {size: ($t.apex_font_launcher_empty_hint_size | px)},
+            foreground: ($t.apex_fg_dim | hex)}}}}}'
+# shellcheck disable=SC2016 # a jq program
+REPORT_OF_INDICATORS_DRAWN_FROM_TOKENS='
+($t.apex_indicator_width | px) as $w | ($t.apex_bar_pill_height | px) as $h | ($t.apex_bar_gap | px) as $g
+| ($t.apex_bar_icon_size | px) as $i | ($t.apex_radius_bar_pill | px) as $r | ($t.apex_indicator_dot_size | px) as $ds
+| ($t.apex_menu_row_height | px) as $row | ($t.apex_fg_dim | hex) as $dim | ($t.apex_bar_fg | rgba) as $fg
+| ["File sync", "Chat", "Game launcher", "Password manager"] as $names
+| [range(4) as $k | {x: (1000 + $k * ($w + $g)), y: 4, width: $w, height: $h, radius: $r}] as $pills
+| [range(4) as $k | {name: $names[$k], pill: $pills[$k],
+    glyph: {x: ($pills[$k].x + ($w - $i) / 2), y: (4 + ($h - $i) / 2), width: $i, height: $i, colour: ($t.apex_bar_fg | hex),
+      iconName: (if $k == 3 then null else "folder-remote-symbolic" end), mask: ($k == 3)},
+    dot: null}] as $items
+| ($items | .[1].dot = {x: (.[1].pill.x + $w - ($t.apex_indicator_dot_right | px) - $ds), y: (4 + ($t.apex_indicator_dot_top | px)),
+    width: $ds, height: $ds, radius: ($ds / 2), colour: "#3584e4ff"}) as $items
+| (($t.apex_indicators_divider_margin | px) + $g) as $around
+| ($pills[3].x + $w + $around) as $dx
+| {x: $dx, y: 9, width: ($t.apex_indicators_divider_width | px), height: ($t.apex_indicators_divider_height | px),
+   colour: ("rgba(\($fg[0]), \($fg[1]), \($fg[2]), \($t.apex_indicators_divider_opacity))" | hex)} as $divider
+| {width: ($t.apex_indicator_switch_width | px), height: ($t.apex_indicator_switch_height | px), radius: 9} as $switch
+| {empty: {visible: false, divider: null}, accent: "#3584e4ff",
+   four: {visible: true, order: ["indicators", "divider", "apex-search", "quickSettings"], items: $items, divider: $divider,
+     search: {x: ($dx + $divider.width + $around), y: 4, width: 32, height: $h},
+     mask: {colour: ($t.apex_bar_fg | hex), inkPixels: 64, redPixels: 0}},
+   menu: {open: true, closed: true, content: {x: 900, y: 32, width: ($t.apex_indicator_menu_width | px), height: 260, radius: ($t.apex_radius_menu | px)},
+     rows: [{kind: "PopupMenuItem", label: "Chat", header: true, height: ($t.apex_indicator_menu_header_height | px), colour: $dim},
+       {kind: "PopupMenuItem", label: "Show Chat", height: $row, shortcut: {text: "Ctrl+Shift+C", colour: $dim}},
+       {kind: "PopupSwitchMenuItem", label: "Do Not Disturb", height: $row, switch: ($switch + {checked: false})},
+       {kind: "PopupSwitchMenuItem", label: "Start at Login", height: $row, switch: ($switch + {checked: true})},
+       {kind: "PopupSeparatorMenuItem", label: "", height: 1},
+       {kind: "PopupMenuItem", label: "Mute for 1 Hour", height: $row},
+       {kind: "PopupSeparatorMenuItem", label: "", height: 1},
+       {kind: "PopupMenuItem", label: "Quit Chat", height: $row}]},
+   five: {items: $items[:3], overflow: {text: "+2", pill: {x: 1096, y: 4, width: 40, height: $h, radius: $r}}},
+   overflowMenu: {open: true, content: {x: 900, y: 32, width: ($t.apex_indicators_overflow_menu_width | px), height: 80, radius: ($t.apex_radius_menu | px)},
+     rows: [{label: "Password manager", height: $row, glyph: $i, chevron: "go-next-symbolic"},
+       {label: "Media player", height: $row, glyph: $i, chevron: "go-next-symbolic"}]},
+   gone: {visible: false, divider: null},
+   log: ["File sync registered", "Chat registered", "Chat Event 0 opened", "Chat Event 5 clicked", "Chat Event 0 closed",
+     "File sync Activate 1215 32"]}'
+
 # shellcheck disable=SC2016 # a jq program
 REPORT_OF_SPOTLIGHT_GLASS_FROM_TOKENS='
 def glass($b; $s): {blur: ($b | px), saturation: ($s | rtrimstr("%") | tonumber / 100),
@@ -542,6 +590,15 @@ def glass($b; $s): {blur: ($b | px), saturation: ($s | rtrimstr("%") | tonumber 
 {monitorScale: 2, surfaces: {spotlight: {glass: {
     panelBeforeCopy: glass($t.apex_spotlight_blur; $t.apex_spotlight_saturation),
     toast: glass($t.apex_toast_blur; $t.apex_toast_saturation)}}}}'
+# shellcheck disable=SC2016 # a jq program
+REPORT_OF_SPOTLIGHT_KEYS='
+{surfaces: {spotlightKeys: {budgetMs: 1000, slowMs: 1600, modalBefore: 0, modalOpen: 1,
+    early: {ms: 301, sections: ["APPLICATIONS", "FILES"], rows: 6, selected: "Applications/org.gnome.DiskUtility.desktop"},
+    late: {ms: 1201, sections: ["APPLICATIONS", "FILES"], rows: 6, selected: "Applications/org.gnome.DiskUtility.desktop"},
+    settings: {askedMs: 52, cancelledMs: 1053},
+    down4: "Files/images", up1: "Files/png", down20: "Files/md",
+    enter: {open: false, modal: 0, activated: [{provider: "org.gnome.Nautilus.desktop", id: "md", terms: ["disk"]}]},
+    escape: {open: false, modal: 0}}}}'
 # shellcheck disable=SC2016 # a jq program
 HEX_DEF='def hex: rgba | map([., 16] | "0123456789abcdef"[(.[0] / .[1] | floor):(.[0] / .[1] | floor) + 1]
                                     + "0123456789abcdef"[(.[0] % .[1]):(.[0] % .[1]) + 1]) | "#" + join("");'
@@ -552,7 +609,7 @@ the clock pill without the pad|.topBar.withDot.pillWidth -= ($t.apex_bar_clock_g
 the raw accent dot|.topBar.withDot.dot.background = .topBar.accent'
 
 assert_run() {
-    local assertions=$1 variant=$2 change=${3:-.} tokens report=$REPORT_OF_A_BAR_DRAWN_FROM_TOKENS
+    local assertions=$1 variant=$2 change=${3:-.} tokens report=$REPORT_OF_A_BAR_DRAWN_FROM_TOKENS prefix=APEXG2-SCENES
     [[ $assertions == shell_surfaces ]] && report=$REPORT_OF_SURFACES_DRAWN_FROM_TOKENS
     [[ $assertions == quick_settings ]] && report=$REPORT_OF_QUICK_SETTINGS_DRAWN_FROM_TOKENS
     [[ $assertions == window_switcher ]] && report=$REPORT_OF_A_SWITCHER_DRAWN_FROM_TOKENS
@@ -565,10 +622,13 @@ assert_run() {
     [[ $assertions == screenshot_ui ]] && report=$REPORT_OF_A_SCREENSHOT_UI_DRAWN_FROM_TOKENS
     [[ $assertions == overview_layer ]] && report=$REPORT_OF_AN_OVERVIEW_LAYER_FROM_TOKENS
     [[ $assertions == spotlight_style ]] && report=$REPORT_OF_A_SPOTLIGHT_DRAWN_FROM_TOKENS
+    [[ $assertions == launcher_search ]] && report=$REPORT_OF_A_LAUNCHER_SEARCH_FROM_TOKENS
     [[ $assertions == spotlight_glass ]] && report=$REPORT_OF_SPOTLIGHT_GLASS_FROM_TOKENS
+    [[ $assertions == spotlight_keys ]] && report=$REPORT_OF_SPOTLIGHT_KEYS
     [[ $assertions == shadow_layers ]] && report=$REPORT_OF_SHADOW_LAYERS_FROM_TOKENS
+    [[ $assertions == indicator_metrics ]] && report=$REPORT_OF_INDICATORS_DRAWN_FROM_TOKENS prefix=APEXG2-INDICATORS
     tokens=$(tokens_for "$variant")
-    jq -nc --argjson t "$tokens" "$JQ_DEFS $HEX_DEF $report | $change" | sed 's/^/APEXG2-SCENES /' >"$T/top-bar.log"
+    jq -nc --argjson t "$tokens" "$JQ_DEFS $HEX_DEF $report | $change" | sed "s/^/$prefix /" >"$T/top-bar.log"
     # shellcheck disable=SC2016 # expanded by the inner bash
     bash -c '. "$1/assert.sh"; "$2" case "$3" "$4" >"$5" 2>&1; summary >>"$5"; echo "$npass $nfail $ngap"' \
         _ "$HERE" "$assertions" "$T/top-bar.log" "$variant" "$T/top-bar.out"
@@ -743,6 +803,51 @@ test_dock() {
 CHANGES
     assert_run dock_metrics light 'del(.dock)' >/dev/null
     expect_eq "dock: a report without the dock passes none" 0 "$(grep -c '^PASS' "$T/top-bar.out")"
+}
+
+test_indicators() {
+    local variant change what passes failures open_gaps
+    for variant in light dark; do
+        read -r passes failures open_gaps <<<"$(assert_run indicator_metrics "$variant")"
+        if ((failures == 0 && passes == 18)); then
+            ok "indicators ($variant): indicators drawn from the tokens pass all $passes assertions"
+        else
+            not_ok "indicators ($variant): indicators drawn from the tokens pass (passed/failed/gaps $passes/$failures/$open_gaps): $(grep -m3 '^FAIL' "$T/top-bar.out" | paste -sd'|' -)"
+        fi
+    done
+    while IFS='|' read -r change what; do
+        read -r passes failures open_gaps <<<"$(assert_run indicator_metrics light "$change")"
+        if ((failures == 1)); then
+            ok "indicators: $what fails one assertion"
+        else
+            not_ok "indicators: $what fails one assertion (passed/failed/gaps $passes/$failures/$open_gaps)"
+        fi
+    done <<'CHANGES'
+.empty.visible = true|indicators before any item registers
+.four.order = ["divider", "indicators", "apex-search", "quickSettings"]|the divider before the indicators
+.four.items[2].pill.radius = 4|a pill with a square's corners
+(.four.items[2].pill.x, .four.items[2].glyph.x) += 1|a wider gap
+.four.items[0].glyph.colour = "#ffffffff"|a glyph not in the bar's colour
+.four.items[0].glyph.mask = true|a named icon drawn as a mask
+.four.mask.redPixels = 40|a pixmap drawn in its own colours
+.four.items[1].dot = null|no attention dot
+.four.items[1].dot.colour = "#ff0000ff"|a dot not in the accent
+.four.divider.height = 24|a divider the pill's height
+.four.search.x += 4|the search button further from the divider
+.menu.content.radius = 8|a menu with a row's radius
+.menu.rows[0].header = false|no title header
+.menu.rows[1].height = 30|a row at the header's height
+.menu.rows[2].switch.width = 46|upstream's switch
+.menu.rows[3].switch.checked = false|a toggle not in the app's state
+.menu.rows[1].shortcut.colour = "#ffffffff"|a shortcut not dimmed
+.log -= ["Chat Event 5 clicked"]|no clicked event
+.log = .log[:5]|no Activate
+.five.overflow.text = "+1"|the wrong overflow count
+.overflowMenu.rows[1].chevron = null|a row without its chevron
+.gone.visible = true|indicators left after the apps quit
+CHANGES
+    assert_run indicator_metrics light 'del(.four, .menu, .five, .overflowMenu, .gone, .empty, .log)' >/dev/null
+    expect_eq "indicators: a report without them passes none" 0 "$(grep -c '^PASS' "$T/top-bar.out")"
 }
 
 test_shell_surfaces() {
@@ -1174,6 +1279,36 @@ test_spotlight_style() {
 CHANGES
 }
 
+test_launcher_search() {
+    local variant change what passes failures open_gaps
+    for variant in light dark; do
+        read -r passes failures open_gaps <<<"$(assert_run launcher_search "$variant")"
+        if ((failures == 0 && open_gaps == 0 && passes == 3)); then
+            ok "launcher search ($variant): drawn from the tokens it passes all $passes assertions"
+        else
+            not_ok "launcher search ($variant): drawn from the tokens it passes (passed/failed/gaps $passes/$failures/$open_gaps): $(grep -m3 '^FAIL' "$T/top-bar.out" | paste -sd'|' -)"
+        fi
+    done
+    while IFS='|' read -r change what; do
+        read -r passes failures open_gaps <<<"$(assert_run launcher_search light "$change")"
+        if ((failures == 1)); then
+            ok "launcher search: $what fails one assertion"
+        else
+            not_ok "launcher search: $what fails one assertion (passed/failed/gaps $passes/$failures/$open_gaps)"
+        fi
+    done <<'CHANGES'
+.surfaces.launcher.pill.width = 440|the overview's 440 px pill
+.surfaces.launcher.pill.hint = "Type to search"|upstream's hint
+.surfaces.launcher.found.spotlightOpen = true|Spotlight opened instead
+.surfaces.launcher.found.names = []|no app found for "files"
+.surfaces.launcher.found.gridHidden = false|results under the full grid
+.surfaces.launcher.found.results.y = 422|results centred in the grid's box instead of filling it
+.surfaces.launcher.empty.top = 160|"No Results" centred instead of at its place
+.surfaces.launcher.empty.title.font.weight = 600|a lighter "No Results"
+.surfaces.launcher.empty.hint.foreground = "#1d1d21ff"|a hint at full strength
+CHANGES
+}
+
 test_spotlight_glass() {
     local variant change what passes failures open_gaps
     for variant in light dark; do
@@ -1196,6 +1331,36 @@ test_spotlight_glass() {
 .surfaces.spotlight.glass.toast.blur = 34|the toast at the panel's sigma 34
 .surfaces.spotlight.glass.panelBeforeCopy.effect.radius = 68|a radius not scaled to the monitor
 .surfaces.spotlight.glass.toast.effect.enabled = false|a toast whose blur is off
+CHANGES
+}
+
+test_spotlight_keys() {
+    local variant change what passes failures open_gaps
+    for variant in light dark; do
+        read -r passes failures open_gaps <<<"$(assert_run spotlight_keys "$variant")"
+        if ((failures == 0 && open_gaps == 0 && passes == 5)); then
+            ok "Spotlight keys ($variant): a slow provider and real key presses pass all $passes assertions"
+        else
+            not_ok "Spotlight keys ($variant): a slow provider and real key presses pass (passed/failed/gaps $passes/$failures/$open_gaps): $(grep -m3 '^FAIL' "$T/top-bar.out" | paste -sd'|' -)"
+        fi
+    done
+    while IFS='|' read -r change what; do
+        read -r passes failures open_gaps <<<"$(assert_run spotlight_keys light "$change")"
+        if ((failures == 1)); then
+            ok "Spotlight keys: $what fails one assertion"
+        else
+            not_ok "Spotlight keys: $what fails one assertion (passed/failed/gaps $passes/$failures/$open_gaps)"
+        fi
+    done <<'CHANGES'
+.surfaces.spotlightKeys.early.sections = ["APPLICATIONS"]|Files held back by the slow Settings
+.surfaces.spotlightKeys.early.ms = 1100|the sections seen only past the budget
+.surfaces.spotlightKeys.late.rows = 0|every section hidden once the budget runs out
+.surfaces.spotlightKeys.settings.cancelledMs = null|Settings never cancelled
+.surfaces.spotlightKeys.down4 = "Applications/org.gnome.baobab.desktop"|Down kept inside its section
+.surfaces.spotlightKeys.down20 = null|Down past the last row
+.surfaces.spotlightKeys.enter.activated = []|Enter opening nothing
+.surfaces.spotlightKeys.enter.modal += 1|a modal left behind after Enter
+.surfaces.spotlightKeys.escape.open = true|Esc ignored
 CHANGES
 }
 
@@ -1369,6 +1534,12 @@ readonly MOTION_REPORT='{enableAnimations: false,
              overview: {visible: true, transition: {mode: "CUBIC_BEZIER", duration: 200, curve: [0.2, 0.8, 0.2, 1]}}},
   still: {maximise: {maximised: true, transition: null}, overview: {visible: true, transition: null},
          locatePointer: {mode: "CUBIC_BEZIER", duration: 830, curve: [0.2, 0.8, 0.2, 1]}},
+  surfaces: (["dock-lift", "intellihide", "overview", "spotlight", "quick-settings", "calendar", "dialog"]
+    | map({name: ., eases: 2, apexEases: 1}) as $steps
+    | {animated: {steps: $steps, eases: 14, apexEases: 6,
+                  lasting: [{apex: true, where: "ui/apex/dock/dock.js:71:23", durations: [180]},
+                            {apex: false, where: "ui/popupMenu.js:1132:26", durations: [180, 0]}]},
+       still: {steps: $steps, eases: 14, apexEases: 6, lasting: []}}),
   previews: [{styled: true, layers: [
     {shown: true, radius: 14, boxShadow: {color: "#141e3c33", inset: false, x: 0, y: 12, blur: 32, spread: 0}},
     {shown: true, radius: 14, boxShadow: {color: "#141e3c1a", inset: false, x: 0, y: 1, blur: 4, spread: 0}}]}]}'
@@ -1378,7 +1549,7 @@ write_motion_run() {
     rm -rf "$dir" && mkdir -p "$dir"
     {
         printf 'APEXG2 %s\n' "$APEX_LIGHT_REPORT"
-        printf 'APEXG2-MOTION %s\n' "$(jq -nc "$MOTION_REPORT | $change")"
+        printf 'APEXG2-MOTION %s\n' "$(jq -nc "$MOTION_REPORT | .animated.surfaces = .surfaces.animated | .still.surfaces = .surfaces.still | del(.surfaces) | $change")"
     } >"$dir/motion.log"
     echo 'motion exit=0 secs=24 marker-after-exit=no' >"$dir/results-main.txt"
 }
@@ -1405,11 +1576,16 @@ test_motion() {
 .animated.maximise.maximised = false|a window that did not maximise
 .still.locatePointer = null|a Locate Pointer ripple that no longer animates with animations off
 .previews[0].layers = [.previews[0].layers[0]]|a window preview with one shadow layer
+.animated.surfaces.lasting = []|a control in which no Apex ease lasts
+.still.surfaces.lasting = [{apex: true, where: "ui/apex/dock/intellihide.js:74:19", durations: [380]}]|an Apex ease left at 380 ms with animations off
+.still.surfaces.lasting = [{apex: false, where: "ui/boxpointer.js:1:1", durations: [180]}]|a stock ease left at 180 ms with animations off
+.still.surfaces.steps = .still.surfaces.steps[:-1]|a surface the probe never opened
+.still.surfaces.apexEases = 0|a run in which no Apex code eased
 CHANGES
     write_motion_run '{error: "the test client never mapped (Gtk-WARNING: Failed to open display)\nprobe.js:1700"}'
     read -r passes failures <<<"$(assertion_counts motion_curve "$T/motion")"
     expect_eq "motion: a client that never mapped fails once, with its stderr, not every assertion after it" \
-        "$((all - 7))/1 the test client never mapped (Gtk-WARNING: Failed to open display)" \
+        "$((all - 9))/1 the test client never mapped (Gtk-WARNING: Failed to open display)" \
         "$passes/$failures $(sed -n 's/^FAIL motion: //p' "$T/assertions.out")"
 }
 
@@ -1747,6 +1923,7 @@ test_incomplete_compare
 test_token_file
 test_top_bar
 test_dock
+test_indicators
 test_shell_surfaces
 test_quick_settings
 test_window_switcher
@@ -1760,7 +1937,9 @@ test_shadow_layers
 test_derived_surfaces
 test_tile_preview
 test_spotlight_style
+test_launcher_search
 test_spotlight_glass
+test_spotlight_keys
 test_screenshot_ui
 test_today_pins
 test_known_gaps

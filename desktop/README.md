@@ -23,10 +23,12 @@ directory with `git archive` and unpacks it at the top of Fedora's gnome-shell t
 | `js/ui/apex/quick-settings/feature.js`, `submenu.js` | DESIGN's Quick Settings (below): VPN after Airplane Mode, Power Mode lit, On/Off subtitles, and board 17's submenus, through patch 0011's hooks |
 | `js/ui/apex/shadows/feature.js`, `registry.js`, `cutout.js` | DESIGN's second shadow layer (below): a shadow-layer actor under each surface whose sheet names `-apex-shadow-layer`, cut out under the surface, and the window previews' two layers |
 | `js/ui/apex/end-session/feature.js` | DESIGN's end-session dialog (board 14, below): stock's icon in a circle, Restart in the power-off dialog, the theme's gap and widths for the buttons, through patch 0018's hook |
+| `js/ui/apex/polkit/` | board 13's authentication dialog (below), through patch 0017's hook: `header.js` the shield and the user's role, `fingerprint.js` the fingerprint line, `details.js` Details |
 | `js/ui/apex/panel/feature.js` | the top bar of S2a (below): its parts in `panel/`, one module each |
 | `js/ui/apex/glass/feature.js` | the glass manager of S2b (below), with `glass/surfaces.js`, the layer's own glass, and `glass/registry.js`, where any feature registers an actor |
 | `js/ui/apex/dock/feature.js`, `dock.js`, `trash.js`, `intellihide.js` | the dock of S2a (below): ApexDock, a subclass of upstream's `Dash`, its Trash and its intellihide |
 | `js/ui/apex/windows.js` | whether a window on the primary monitor is maximised, and the signals that change it: the solid bar and the dock's intellihide |
+| `js/ui/apex/indicators/` | the app indicators of S2a (below): `watcher.js` (the StatusNotifierWatcher and host), `item.js`, `icon.js` and `mask.js` (the glyph), `dbusmenu.js` (the menus), `indicator.js` (one button) and `bar.js` (their place and the overflow) |
 | `js/ui/apex/fault/feature.js` | the fault-injection feature: loaded only when `APEX_SHELL_TEST_FAULT` names a phase, it fails in that phase (below) |
 | `data/theme/apex/_apex-tokens.scss` | the design tokens as SCSS variables, imported after upstream's `_colors` |
 | `data/theme/apex/_apex.scss` | the Apex sheet, imported last by the light and dark entry files: `apex-text-size()`, the `apex-surface()` mixin of the shell's own surfaces, and the partials |
@@ -38,7 +40,7 @@ directory with `git archive` and unpacks it at the top of Fedora's gnome-shell t
 | `data/theme/apex/_notification-banner.scss` | the notification banner (board 16) on stock structure: 460 px, tinted `$apex_panel`, 12 px below the bar. Stock shows the action buttons only once a banner expands; they are the board's 32 px pills. The OSD and the banner are glass: the tint now, S2b's glass manager blurs behind it |
 | `data/theme/apex/_quick-settings.scss` | Quick Settings and its stock submenus (board 17): a 376 px glass panel, radius 26, 14 px inset; 36 px round buttons and battery pill; 54 px toggles, the accent when checked, the menu arrow shaded 12 % with black; accent sliders with a white 20 px handle; submenus as `$apex_card` cards with 38 px rows. BoxPointer's one `-arrow-rise` sets both the 6 px gap under the bar and the side clamp, so the panel sits 6 px from the right edge, not the board's 8 Submenu rows hover in board 17's lighter `$apex_quick_menu_row_hover` (popup menus elsewhere keep `$apex_button_hover`),. |
 | `data/theme/apex/_switcher.scss` | the window and app switcher (board 15): a glass list, radius 26, 14 px inset, tiles 6 px apart with radius 16, the selected tile in `$apex_button_hover`, names at 13.5/600. `altTab.js` sizes the icons (96 px at most) and labels every tile, so the tiles are larger than the board's 120 × 116 with 84 px icons, the window dots and the one name under the list; those need a hook |
-| `data/theme/apex/_dialogs.scss` | modal dialogs (boards 13 and 14): solid `$apex_panel_solid`, radius 26, inset 28 (22 at the bottom), 18 px between parts; a 20/700 title over `$apex_fg_dim` text; 36 px round buttons, the default one in the accent; polkit's password entry a 38 px round field with a 2 px accent ring when focused; 440 px polkit and 460 px end-session widths. The end-session dialog puts 20 px between its parts, tracks its title -.2px, sets its countdown in tabular figures and draws its last button, the one that ends the session, in Adwaita red #c01c28 (#a51d2d hovered); the end-session feature's 56 px icon circle and its power-off row, 10 px apart at 1 : 1.4 : 1.2. Elsewhere `dialog.js` keeps its 12 px gap between buttons, and the lightbox its 0.4 dim |
+| `data/theme/apex/_dialogs.scss` | modal dialogs (boards 13 and 14): solid `$apex_panel_solid`, radius 26, inset 28 (22 at the bottom), 18 px between parts; a 20/700 title over `$apex_fg_dim` text; 36 px round buttons, the default one in the accent; polkit's password entry a 38 px round field with a 2 px accent ring when focused; 440 px polkit and 460 px end-session widths. The end-session dialog puts 20 px between its parts, tracks its title -.2px, sets its countdown in tabular figures and draws its last button, the one that ends the session, in Adwaita red #c01c28 (#a51d2d hovered); the end-session feature's 56 px icon circle and its power-off row, 10 px apart at 1 : 1.4 : 1.2. Board 13's parts under `.apex-polkit`: a 56 px accent circle at 16 % behind the 28 px shield, a 32 px accent avatar beside the name with "Administrator" at 11.5 px in `$apex_fg_dim`, the fingerprint line at 12.5 px in `$apex_fg_dim` with a 16 px glyph, and Details in a 1 px `$apex_border` box of radius 12 with a 38 px heading and the action id in JetBrains Mono at 11.5 px. Elsewhere `dialog.js` keeps its 12 px gap between buttons, and the lightbox its 0.4 dim |
 | `data/theme/apex/_date-menu.scss` | the calendar and notifications popover (board 34) on stock structure: glass like Quick Settings, a 400 px list beside a 318 px column 14 px apart; notification cards radius 18 (opaque `$apex_message_card`, since a group stacks its cards), a 40 px footer with a 32 px Clear pill; the weekday over a 20/800 date; the month, events, World Clocks and Weather as `$apex_glass_card` cards; 36 px round days filling seven columns, the accent today, `$apex_fg_faint` other months. Stock keeps the Do Not Disturb switch in Quick Settings, Clear on the left, grouped notifications, the month name between the pagers and its event-dot asset |
 | `data/theme/apex/_overview.scss` | the overview (board 35): the `$apex_scrim` tint over everything (S2b's glass manager blurs behind it with `$apex_scrim_blur`), the search field a 440 × 40 `$apex_pill` 20 px under the bar with a 2 px accent focus ring, workspace thumbnails in an unpadded box (`$apex_thumbnails_padding`, so they keep the full .081), radius 8 and 10 px apart in a `$apex_pill_border` ring with the current one in a 2 px accent ring, window titles 28 px pills at 12.5/700; search sections, which have no board until Spotlight, as glass cards. "No open windows" (`.apex-workspace-empty`) at 18/700 in `$apex_fg_dim`. The workspace background cards and always-visible window titles are the `overview` feature's |
 | `data/theme/apex/_app-grid.scss` | the launcher (board 36): unfilled app tiles radius 22, padded 12, names at 13/600 in `$apex_fg` 8 px under the icon, `$apex_button` when hovered and an accent ring when focused; folders filled `$apex_folder` (stock fills the whole tile, the board only the icon); the folder dialog 600 px of `$apex_folder_panel` glass, radius 26, a 16/700 title and a 28 px button; 4 px running dots; and flat page hints, without upstream's gradients. `appDisplay.js` sets the grid's columns and icon sizes and the dialog's 720 px height |
@@ -48,6 +50,7 @@ directory with `git archive` and unpacks it at the top of Fedora's gnome-shell t
 | `data/theme/apex/_lock.scss` | the lock screen (board 20) and what the greeter (board 12) shares with it, white on the blurred wallpaper in both variants: the date at 22/600 over the time at 118/700, 128 px down; the 92 px avatar circle and its initial; the 250 × 38 glass field with its 38 px round button beside it; "Press Enter to unlock" at 12.5 px, and in its line the fingerprint states with a 16 px print glyph 8 px before the text, the failure in full white; the `$apex_lock_overlay` darkening; the greeter's 380 px glass user list with 48 px avatars |
 | `data/theme/apex/_greeter.scss` | the greeter (board 12) beyond `_lock.scss`: the login dialog over apex-desktop's pre-blurred Facets (`$apex_greeter_background`, rendered at build time since gdm runs no JS), `$apex_greeter_fallback` without the file; the footer is apex-desktop's `org.gnome.login-screen logo`, `$apex_greeter_bottom` above the bottom edge; the back button and the bottom row's session and accessibility buttons are 38 px `$apex_greeter_button` circles ringed in `$apex_greeter_button_border`. Stock lacks the board's "Choose a user" heading, the rows' account type and chevron, the avatars' initials (the lock's JS) and the clock on the left; each needs JS gdm does not run |
 | `data/theme/apex/_screenshot.scss` | the screenshot UI (board 19), tints only (the panel's glass comes with 0017-derived-glass): a 440 px `$apex_panel` panel, radius 26, inset 14, 48 px above the bottom edge, with the board's heading row kept for the close button (a 30 px `$apex_button` circle); 64 px area buttons in `$apex_button` (`$apex_button_hover` checked), radius 16, a 20 px glyph over a 12.5/600 name; a 38 px pointer toggle, the accent when on; a 64 px capture button, a 4 px `$apex_fg` ring round a `$apex_fg` dot (a 26 px `$apex_screenshot_record` square while recording); the screenshot/screencast switch in `$apex_button`, the checked button `$apex_panel_solid`; the selection shaded `$apex_screenshot_shade` with 14 px white handles; the chosen screen and window ringed 3 px in the accent. Stock lacks the board's heading text, its 8 px gap between the area buttons (12 px, set in JS), the pointer toggle on the left and the switch on the right (swapped, set in JS), the selection's size label, and the window selector's windows in place (stock lays them out); each needs a hook |
+| `data/theme/apex/_indicators.scss` | the app indicators (board 39): 30 × 24 pills, radius 12, 2 px apart, their 16 px glyphs in `$apex_bar_fg`; the 6 px accent dot 3 px from the top and 5 px from the right; the 1 × 14 divider in `$apex_bar_fg` at .2, 6 px each side; "‹ +N"; an open one in `$apex_button_hover`. Their menus at least 280 px (the overflow's 240), rows padded 12 with radius 9, the title as a 30 px header in `$apex_fg_dim`, separators 5 px from rows and 10 from the sides, shortcuts in `$apex_fg_dim`, 30 × 18 switches with a 14 px knob |
 | `data/theme/apex/_apex-structure.scss` | Apex actors' geometry for the high-contrast sheet, and the lock overlay's darkening there (black at .55), since the lock's blur leaves that to it |
 | `data/theme/apex/meson.build` | adds the partials to upstream's `theme_sources`, so an edit recompiles the sheets |
 
@@ -67,8 +70,10 @@ Rules, which the lane and `.github/scripts/selftest.sh` enforce:
 
 ### The layer
 
-`FEATURES_IN_ENABLE_ORDER` in `layer.js` lists `spotlight` (S1b), `panel` (S2a), `glass`
-(S2b), `dock` (S2a) and `overview` (S3a), by the names DESIGN's `disabled-features` uses.
+`FEATURES_IN_ENABLE_ORDER` in `layer.js` lists `motion` (S3c), `shadows` (S3c), `spotlight`
+(S1b), `panel` (S2a), `glass` (S2b), `dock` (S2a), `overview` (S3a), `lock` (S3b),
+`quick-settings` (S3c), `end-session` (S3c) and `indicators` (S2a), by the names DESIGN's
+`disabled-features` uses.
 A name in `disabled-features` that is no feature is logged once (`Apex: disabled-features
 names no feature NAME`); a schema whose key lists `<choices>` refuses it outright.
 `spotlight`
@@ -86,6 +91,14 @@ DESIGN's one engine: text typed in the overview, or its search pill taking the k
 opens Spotlight with that text through patch 0013's `overview-search` hook, and the overview's
 own search resets; activating a result hides the overview. With `spotlight` off the hook gives
 stock, and the overview searches as upstream does.
+
+While the app grid shows, the same pill is the launcher's own (board 36, `launcher-search.js`):
+400 px wide with "Search apps", it searches apps only, through `Shell.AppSystem.search`, folders
+flattened and sorted by name, and filters the grid in place: the grid's own box shows the
+matching apps' icons, the first selected, and Enter launches it. Without a match it says "No
+Results" and that Super+Space searches everything. The hook keeps typed text from the stock
+search there and leaves the focus stock; leaving the app grid gives the stock pill and grid
+back. With `spotlight` off the app grid searches as upstream does.
 
 Spotlight draws its own rows over the stock search providers: upstream's app search
 (`AppSearchProvider`), then the remote providers `remoteSearch.js` loads, of which it keeps
@@ -158,6 +171,17 @@ DESIGN's duration: `window` (the size change's two eases) .3 s, `overview` (the 
 state transitions in and out and to and from the app grid) .2 s, `popover` (a BoxPointer
 opening and closing) .18 s. The dock's .38 s is the dock's. `adjustAnimationTime` runs
 after the hooks, so `enable-animations=false` keeps stock's 0 ms.
+
+`polkit/feature.js` lays out board 13 (ROADMAP S3b) once patch 0017's `polkit-dialog`
+hook says the authentication dialog is built. It adds the shield (`dialog-password-symbolic`) above the title, sets the
+user beside the avatar, and shows "Administrator" under the name when AccountsService has
+the identity as an administrator; upstream labels only root, in the name's place, and root
+keeps that. Details, open as on the board, holds the action id and the vendor that polkit's
+`enumerate_actions` gives for it; without one the Vendor row stays hidden. The fingerprint
+line is upstream's info line, given the print glyph and the hint's style only when its text
+is pam_fprintd's prompt, so the line appears only when PAM sends it; its text is PAM's ("Place your finger on the fingerprint reader"),
+not the board's "Or touch the fingerprint reader". Nothing in the feature touches the
+session, its answers or the dialog's `done`, which the layer tests' polkit guard enforces.
 
 `quick-settings/feature.js` follows DESIGN's Quick Settings (ROADMAP S3c) once patch 0011's
 `quick-settings` hook says the items are in the grid. It moves the VPN toggle right after
@@ -273,6 +297,34 @@ A schema without `reduce-transparency` turns off the `glass` feature, logged.
 
 A schema without one of the keys turns off only this feature, logged.
 
+`indicators` is the app indicators (DESIGN.md, "Top bar"; board 39): a StatusNotifierItem
+host with DBusMenu menus, and no XEmbed tray. It needs no hook.
+
+- `indicators/watcher.js` owns `org.kde.StatusNotifierWatcher` while nobody else does. It
+  takes an item's bus name, or its object path from the sender, as Flatpak apps send it,
+  and drops the item when its name leaves the bus. While another process owns the
+  watcher, the shell registers `org.kde.StatusNotifierHost-apex-<pid>` with it and follows
+  its items; its name request stays queued, so when that watcher leaves, the shell takes
+  over and the apps register again.
+- `indicators/item.js` reads Title, Status, IconName, IconPixmap, AttentionIconName,
+  IconThemePath, ToolTip, ItemIsMenu and Menu, again on each New* signal.
+- `indicators/icon.js`: the item's `-symbolic` icon when the theme has one, which St
+  recolours; otherwise its icon, from `IconThemePath` too, or its pixmap (ARGB32 to RGBA),
+  drawn through `mask.js` as a one-colour mask in the bar's colour.
+- `indicators/bar.js` puts them left of the search button after a thin divider, in the
+  order the items registered, and hides the lot on the lock screen. `Passive` items are
+  hidden and `NeedsAttention` adds the dot. Up to four show; with more, three show and
+  "‹ +N" opens a menu with a row (glyph, title, chevron) per hidden item, which opens that
+  item's menu under the overflow button.
+- `indicators/indicator.js`: primary click calls Activate, or opens the menu when
+  ItemIsMenu; secondary click opens the menu (ContextMenu without one); middle click calls
+  SecondaryActivate; scrolling calls Scroll (120 a step).
+- `indicators/dbusmenu.js` renders the item's menu as a popup menu, titled with the item's
+  name: separators, toggles as switches, radio items, shortcuts on the right, submenus,
+  hidden and disabled rows. It follows LayoutUpdated and ItemsPropertiesUpdated (label,
+  enabled, visible and toggle state in place) and sends AboutToShow and the opened,
+  clicked and closed events.
+
 `overview` is the overview and the launcher (ROADMAP S3a, without Spotlight, the launcher's
 own search pill or the glass). Its parts provide the hooks of patch 0013-overview and follow
 the kill switches and `disabled-features=['overview']` as a whole:
@@ -320,10 +372,12 @@ gjs outside the shell: every kill switch, `apex.safe=1` through a bubblewrap bin
 aborted shell, and Super+Space: its registration and removal through enable, the kill
 switches, `layer-enabled` and `disabled-features` cycles and a missing Keybindings schema,
 the top bar's hooks with stub dots, indicators and hot corners, and the dock's keys,
-order, Show Apps binding and hooks against a stub `Dash`, against
+order, Show Apps binding and hooks against a stub `Dash`, and the app indicators against
+fake items and a fake watcher on each case's own session bus (`dbus-run-session`), against
 `tests/layer/main-stub.js` for `main.js`, fixture typelibs for Meta and Shell, and
-`tests/layer/stubs/` for `panelMenu.js`, `dash.js`, `iconGrid.js`, `popupMenu.js` and the features' St, Clutter and Shell imports
-(gjs outside the shell has no St or Clutter, and the fixture's Shell no WindowTracker).
+`tests/layer/stubs/` for `panelMenu.js`, `dash.js`, `iconGrid.js`, `popupMenu.js`, the
+indicators' `mask.js` and the features' St, Clutter, Shell and GdkPixbuf imports (gjs
+outside the shell has no St or Clutter, and the fixture's Shell no WindowTracker).
 
 For the fault injection in the VM, the variable goes into the shell's environment with
 a user drop-in on its unit, which the image never ships:

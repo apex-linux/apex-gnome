@@ -187,6 +187,33 @@ offers "Launch Using Discrete Graphics Card" while the fixtures' switcheroo-cont
 reports two GPUs. The safe-mode cases have no dock, and the Apex captures mask it, as they mask the
 bar, against Fedora's, whose desktop has none.
 
+## App indicators
+
+In `default`, `default-scale1` and `dark-style`, `G2_INDICATORS=1` runs `indicators.js`
+after the scenes. It starts `sni-items.js`, a gjs process that exports four
+StatusNotifierItems, each with a DBusMenu and on its own session-bus connection as separate
+apps are, and registers them with the shell's watcher. Every call an item gets lands in
+`<case>-sni.log`. `indicator_metrics` asserts, against the token file:
+
+- no indicators and no divider before any item registers, and none after the apps quit;
+- the four in the order they registered, then the divider, then the search button;
+- each a `$apex_indicator_width` × `$apex_bar_pill_height` pill, radius
+  `$apex_radius_bar_pill`, `$apex_bar_gap` apart, its glyph `$apex_bar_icon_size` in
+  `$apex_bar_fg` and centred, the theme's `-symbolic` icon for a named one;
+- the password manager's red pixmap drawn as a mask: the bar's colour, and no red left;
+- Chat's NeedsAttention dot: `$apex_indicator_dot_size`, the accent, at its offsets;
+- the divider's size, colour and its distance from both neighbours;
+- Chat's menu on a secondary click: radius `$apex_radius_menu`, at least
+  `$apex_indicator_menu_width` wide, the title as a `$apex_indicator_menu_header_height`
+  header in `$apex_fg_dim`, `$apex_menu_row_height` rows, its two toggles as switches in the
+  app's states, "Ctrl+Shift+C" dimmed; the opened, clicked and closed events in the log;
+- Activate on a primary click;
+- with a fifth item, three shown and "+2", and the overflow menu's two rows: glyph, title
+  and chevron.
+
+The captures `<case>-indicators.png`, `<case>-indicator-menu.png` and
+`<case>-indicator-overflow.png` show the bar, Chat's menu and the overflow menu.
+
 ## The shell surfaces' metrics
 
 `assert.sh`'s `shell_surfaces` runs in `default`, `default-scale1` and `dark-style`. In
@@ -285,6 +312,17 @@ the stage's paints in the quieter of two idle 2 s windows with the feature on an
 `shadows` in `disabled-features`: the layers add none. The `motion` case, which opens the overview with a
 window, checks the window preview's two layers and the `apex-window-preview` radius.
 
+The `motion` case also audits reduced motion. It opens and closes each Apex surface once,
+with animations on and then off: the dock's lift (a hovered icon) and intellihide (the window
+maximised), the overview with its thumbnails, Spotlight, Quick Settings, the calendar and a
+dialog with its shadow layer. Every ease goes through `environment.js`'s `ease`,
+`ease_property` and `St.Adjustment.ease` (and their async forms), which the probe wraps to
+read the transitions each call left, by the property's canonical name, and whether a
+`ui/apex/` frame called it. With animations on, the dock's own eases last: the control. Off,
+no ease, Apex's or stock's, leaves a transition above 0 ms but `animationRequired` ones, and a
+failure names each that did. St skips CSS transitions itself with animations off
+(`st-widget.c`), the top bar's `$apex_bar_transition` included.
+
 `derived_surfaces` reads surfaces with no board, which G2 never opens, from nested
 stand-ins in the same cases: the workspace switcher and its dots, the resize popup, the
 input method's candidates and a candidate, the run dialog's entry, an audio device tile
@@ -303,8 +341,17 @@ empty query shows only the field, and the row of a query with no results; and, a
 inset, check circle, text and distance from the bottom edge. `spotlight_glass` checks that the open panel and
 the toast carry their sheet's glass, σ 34 and σ 30 at 1.8, and that the glass feature gave each
 a blur of radius 2 × σ × the monitor's scale.
+`spotlight_keys` covers S3a's exit items in the real shell: with Settings answering only after the
+1 s budget, Applications and Files show at 300 ms and still at 1200 ms, once Settings is cancelled;
+Down ×4, Up ×1 and Down ×20, pressed through a virtual keyboard, move one selection across the
+sections and stop at the last row; Enter opens that file through its provider; Esc closes, and
+both pop Spotlight's modal.
 In the overview scene, after its capture, the probe types into the overview's search entry
 and checks that Spotlight opened with the text and the overview's own field emptied (patch 0013's hook).
+`launcher_search` then checks the app grid's
+pill: 400 px with "Search apps", "files" filtering the grid in its own box to apps with Files
+first and selected and Spotlight closed, and "No Results" with its hint where board 36 puts it
+(scenes `launcher` and `launcher-none`).
 
 None of these surfaces is in a capture compared with Fedora, so the comparison with Fedora's build
 is unchanged: the Apex overview is compared only run to run, and safe mode's with Fedora's.
@@ -377,7 +424,14 @@ and so is a target wholly outside the capture, another workspace's label. `a11y_
 wants, at 1.25, no text cut short (a collapsed notification's body expands, so it may),
 none partly off the screen or outside its surface, and none overlapping text in the same
 filled box (a notification stack's cards overlap by design). The failures the checks found
-on landing are known gaps (`A11Y_GAPS`), each named after the fix that closes it.
+on landing are known gaps (`A11Y_GAPS`), each named after the fix that closes it. Those in
+upstream's high-contrast sheet stay gaps: restyling an upstream actor there would need a stock
+copy of the sheet for safe mode. A report for upstream, which is the owner's to file:
+
+> **High contrast: checked quick toggles fall below WCAG AA.** In gnome-shell 51.0's
+> high-contrast sheet, a checked quick toggle draws white text on the accent: 3.15:1 for the
+> default blue (WCAG 1.4.3 wants 4.5:1), and the menu arrow beside it 2.31:1 (1.4.11 wants
+> 3:1). Measured from the stage's pixels with the toggle's own colours.
 
 ## Known gaps
 
@@ -420,6 +474,7 @@ it is at least 4.8:1), and what the goldens judge: the Apex Symbolic glyphs (S1b
 | `png.js`, `compare.js` | gjs | PNG with GLib's zlib only, and the masked comparison |
 | `glass.js`, `blur-ref.js` | the shell; gjs | the glass cases, and their CPU reference |
 | `a11y.js` | the shell | the accessibility cases: contrast against what is drawn, and the Large Text layout |
+| `indicators.js`, `sni-items.js` | the shell; gjs | the app-indicator part of `default`, `default-scale1` and `dark-style`, and the StatusNotifierItems it starts |
 | `frame.c`, `G2Frame-1.gir` | the glass cases' shells | `G2Frame.read()`, a region of the frame the shell drew |
 | `selftest.sh`, `png-test.js`, `blur-ref-test.js` | CI and the host | the tests of the above |
 
@@ -443,6 +498,15 @@ It also asserts the shell surfaces of the same three cases (below). With
 `-e G2_SURFACE_SCENES=1`, `direct.sh` passes the variable to the shells, and the capture
 cases also save a scene per surface group (`surfaces`, `quick-settings`, `switcher`,
 `dialog`, `datemenu`, `appgrid`), for placing beside the boards.
+
+## The authentication dialog
+
+G2 has no polkit case. `tests/shell/shoot.sh`'s polkit cases capture board 13 from the
+lane's RPMs: they call the shell's own polkit component's `_onInitiate()` with a stubbed
+`PolkitAgent.Session`, which asks for the password (and sends pam_fprintd's prompt in
+`polkit-fingerprint`) and is never answered. They are for captures and style checks only:
+PAM, polkit-agent-helper-1 and polkitd's verdict never run, and polkitd only describes the
+action. The real `pkexec` path is G4's.
 
 ## Not yet
 

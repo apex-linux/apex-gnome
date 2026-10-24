@@ -10,6 +10,7 @@ import Shell from 'gi://Shell';
 import * as Hooks from '../hooks.js';
 import * as Main from '../../main.js';
 import * as Providers from './providers.js';
+import {LauncherSearch} from './launcher-search.js';
 import {Popup} from './popup.js';
 
 const KEYBINDINGS_SCHEMA = 'io.github.apex_linux.Apex.Desktop.Keybindings';
@@ -18,6 +19,7 @@ const TOGGLE_SPOTLIGHT = 'toggle-spotlight';
 let _featureName = null;
 let _keybindings = null;
 let _popup = null;
+const _launcher = new LauncherSearch();
 
 export function toggleSpotlight() {
     if (_popup)
@@ -32,8 +34,11 @@ export function popup() {
     return _popup;
 }
 
-// Patch 0013's hook: text typed in the overview, or its focused search pill, opens Spotlight.
-function _overviewSearch(_reason, text, resetOverviewSearch) {
+// Patch 0013's hook: overview text or a focused pill opens Spotlight. In the app grid the pill
+// is the launcher's, which keeps the typed text and leaves the focus stock.
+function _overviewSearch(reason, text, resetOverviewSearch) {
+    if (_launcher.active)
+        return reason === 'text';
     if (!_popup || _popup.isOpen)
         return false;
     resetOverviewSearch();
@@ -59,11 +64,13 @@ export function enable() {
     if (action === Meta.KeyBindingAction.NONE)
         throw new Error(`mutter refused the keybinding ${TOGGLE_SPOTLIGHT}`);
     _popup = new Popup(Providers.load, action);
+    _launcher.enable();
     Hooks.provide(_featureName, 'overview-search', _overviewSearch);
 }
 
 export function disable() {
     Hooks.withdraw(_featureName);
+    _launcher.disable();
     _popup?.destroy();
     _popup = null;
     Main.wm.removeKeybinding(TOGGLE_SPOTLIGHT);

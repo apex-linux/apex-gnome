@@ -213,7 +213,9 @@ for c in default:light default-scale1:light dark-style:dark; do
     derived_surfaces "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
     tile_preview "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
     spotlight_style "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
+    launcher_search "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
     spotlight_glass "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
+    spotlight_keys "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
     screenshot_ui "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
 done
 for c in stock-light stock-dark; do
@@ -227,5 +229,6 @@ glass_frames glass "$run/glass.log"
 shadows_under_glass glass "$run/glass.log"
 glass_manager glass "$run/glass.log" light
 glass_unlock_vs_fedora "$run"
+indicator_cases "$run"
 echo "# logs and captures: $run"
 summary
