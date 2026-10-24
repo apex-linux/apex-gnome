@@ -11,7 +11,8 @@ shots-smoke job): direct.sh's fedora part with clock.c, fixtures.py and probe.js
 assertions that need no Apex build. A harness change that keeps the shell from starting or
 reporting fails here in minutes, before a builder VM spends a G2 run on it.
 
-It needs gnome-shell, mesa-dri-drivers, dbus-daemon, python3-dbusmock, gcc, gjs and jq.
+It needs gnome-shell, mesa-dri-drivers, dbus-daemon, python3-dbusmock, gcc, glib2-devel, gjs
+and jq.
 EOF
 }
 
@@ -48,6 +49,8 @@ for variant in light dark; do
     scenes_captured "$out" "$c"
     overview_below_bar "$c" "$out/$c.log"
 done
+no_js_error fedora-glass "$out/fedora-glass.log"
+fedora_glass "$out"
 fixtures_on_the_bus "$out" fedora
 if ! summary; then
     for log in "$out"/fedora-*.log; do

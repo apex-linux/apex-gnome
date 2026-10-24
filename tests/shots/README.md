@@ -54,6 +54,7 @@ The direct cases:
 | `fault-configure`, `fault-enable` | `APEX_SHELL_TEST_FAULT` | only the fault feature is off; the `witness` feature after it still enables; the rest of the layer runs, Super+Space included, and the shell survives |
 | `fault-abort` | `abort-after-enable` | SIGABRT (exit 134) with the crash guard's marker left behind |
 | `fedora-light`, `fedora-dark` | Fedora's build, `prefer-light` or `prefer-dark` | no Apex module; upstream's sheet at its own path, byte for byte the one safe mode loads from `theme/stock/` |
+| `glass`, `fedora-glass` | the capture settings, `G2_GLASS=1` | patch 0003's glass in the frames the shell drew; the stock unlock blur captured in both shells (see "Glass") |
 
 Every case: the probe ran (so the static import graph loaded), from `startup-complete`, and no `JS ERROR`;
 the wall clock stands at the fixed time and the top bar's clock shows it (`Mon Sep 28`, EN SPACE, `09:41`).
@@ -254,6 +255,31 @@ inset, check circle, text and distance from the bottom edge.
 None of these surfaces is in a capture compared with Fedora, so the comparison with Fedora's build
 is unchanged: the Apex overview is compared only run to run, and safe mode's with Fedora's.
 
+## Glass
+
+`glass.js` runs in the `glass` case on the Apex build and in `fedora-glass` on Fedora's.
+It reads the frames the shell drew, as they went out, at the stage's `after-paint`: Cogl's
+`read_pixels` writes to a caller's buffer, which gjs cannot pass, so `frame.c` wraps it
+and `G2Frame-1.gir` declares it. `direct.sh` builds both into `/run/g2-frame` with gcc
+and glib2-devel's `gi-compile-repository`; `paint-view` gives each frame's redraw clip.
+
+A grid of 24 px tiles lies under a 320×80 glass box with the top bar's glass (ADR 0014:
+σ 24, saturation 1.6, corners 18), `fine` on. Tiles under the box change colour, which
+damages the tile alone:
+
+| Step | Asserts |
+|---|---|
+| a tile changes | the first frame's redraw clip leaves the box out and the effect redraws it on the next; that frame is `blur-ref.js`'s reference per channel within 4/255 inside, 12/255 in the band ds/2 px wide along the edges (ds the effect's own downscale) and 1/255 on average over the box. The first run fixed these (ROADMAP S2b): at ds 16 the edge band is the low-resolution blur's own clamping and upsampling, the interior's 4 is 8-bit intermediates times the saturation; llvmpipe is the reference renderer |
+| a tile changes and the box's redraw is queued, as the glass manager forwards damage | the same frame is the box a full redraw draws, pixel for pixel |
+| a tile changes, nothing forwarded | the frame draws the last result, pixel for pixel, and the next one is the full redraw's |
+| the same with `fine` off | stock's effect in that frame differs from the full redraw and misses the tolerances above: the stale sampling the redraw-clip rule prevents, so the case can see it |
+
+`blur-ref.js` is a clamp-to-edge Gaussian at full resolution, CSS `saturate()` and the
+rounded box's coverage, over the box alone; `blur-ref-test.js` tests it in `selftest.sh`.
+Both shells capture `unlockDialog.js`'s blur (actor mode, radius 90 × scale, brightness
+.65) over a grid, with a background-mode blur over it, every property of 0003 at its
+default: `glass-unlock.png` against `fedora-glass-unlock.png` differs by 0 pixels.
+
 ## Known gaps
 
 `top_bar_gaps` asserts the rest of the designed top bar ([docs/DESIGN.md](https://github.com/apex-linux/apex/blob/main/docs/DESIGN.md)),
@@ -293,7 +319,9 @@ it is at least 4.8:1), and what the goldens judge: the Apex Symbolic glyphs (S1b
 | `probe.js` | the shell (`--automation-script`) | prints `APEXG2 {…}` and, for the capture cases, `APEXG2-SCENES {…}` |
 | `assert.sh`, `stable.sh`, `lib.sh` | the builder VM | the assertions |
 | `png.js`, `compare.js` | gjs | PNG with GLib's zlib only, and the masked comparison |
-| `selftest.sh`, `png-test.js` | CI and the host | the tests of the above |
+| `glass.js`, `blur-ref.js` | the shell; gjs | the glass cases, and their CPU reference |
+| `frame.c`, `G2Frame-1.gir` | the glass cases' shells | `G2Frame.read()`, a region of the frame the shell drew |
+| `selftest.sh`, `png-test.js`, `blur-ref-test.js` | CI and the host | the tests of the above |
 
 ## The patched shell without a VM
 

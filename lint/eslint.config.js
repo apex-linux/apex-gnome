@@ -37,6 +37,7 @@ export default defineConfig([
             'desktop/shell/js/**',
             'tests/layer/probe.js',
             'tests/shots/probe.js',
+            'tests/shots/glass.js',
         ],
         languageOptions: {
             globals: {
