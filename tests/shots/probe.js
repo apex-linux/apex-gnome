@@ -348,8 +348,9 @@ function clockTextGap(label, unit) {
     return round((timeStart - dateEnd) / logical.width * boxOf(label, unit).width);
 }
 
+// panel.js hides a button it has nothing to show for, not its container.
 function panelItems(boxActor, unit) {
-    return boxActor.get_children().filter(c => c.visible).map(container => {
+    return boxActor.get_children().filter(c => c.visible && c.get_first_child()?.visible !== false).map(container => {
         const item = container.get_first_child();
         const pill = item?.get_first_child();
         const label = item ? firstVisibleLabel(item) : null;
@@ -1360,6 +1361,67 @@ async function calendarMenu(unit) {
     }
 }
 
+// The notifications feature: three notifications from one app, the footer, then an empty list.
+async function notificationsLayer(unit) {
+    const source = new MessageTray.Source({title: 'G2 Chat', iconName: 'mail-unread-symbolic'});
+    Main.messageTray.add(source);
+    for (const title of ['Lunch?', 'Standup moved', 'Build passed'])
+        source.addNotification(new MessageTray.Notification({source, title, body: 'Just now.', urgency: MessageTray.Urgency.LOW}));
+    const {menu, _messageList: list} = Main.panel.statusArea.dateMenu;
+    const notifications = new Gio.Settings({schema_id: 'org.gnome.desktop.notifications'});
+    menu.open(BoxPointer.PopupAnimation.NONE);
+    try {
+        await settle();
+        const group = findDescendant(menu.box, a => a.constructor.name === 'NotificationMessageGroup');
+        const messages = group.get_children().map(c => c.child).filter(m => m?.constructor.name === 'NotificationMessage');
+        const footer = list._clearButton.get_parent();
+        const dnd = footer.get_children().find(c => c.has_style_class_name('apex-dnd-button')) ?? null;
+        const header = findDescendant(messages[0], a => a.has_style_class_name?.('message-header'));
+        const line = findDescendant(header, a => a.has_style_class_name?.('message-header-content'));
+        const result = {
+            header: group._headerBox.visible,
+            cardHeader: {
+                sourceIcon: findDescendant(header, a => a.has_style_class_name?.('message-source-icon')).visible,
+                line: line.get_children().filter(c => c.visible).map(c => c.text).join(' '),
+            },
+            icon: messages[0].icon?.to_string() ?? null,
+            messages: messages.map(m => boxOf(m, unit)),
+            footer: boxOf(footer, unit),
+            clear: {...boxOf(list._clearButton, unit), visible: list._clearButton.visible},
+            dnd: dnd && {...boxOf(dnd, unit), label: findDescendant(dnd, a => a instanceof St.Label)?.text ?? null},
+        };
+        const calendar = findDescendant(menu.box, a => a.has_style_class_name?.('calendar'));
+        const find = styleClass => findDescendant(calendar, a => a.has_style_class_name?.(styleClass));
+        const days = calendar.get_children().filter(a => a.has_style_class_name?.('calendar-day'));
+        const dots = days.map(d => findDescendant(d, a => a.has_style_class_name?.('apex-event-dot'))).filter(Boolean);
+        result.calendar = {
+            label: boxOf(find('calendar-month-label'), unit),
+            back: boxOf(find('calendar-change-month-back'), unit),
+            forward: boxOf(find('calendar-change-month-forward'), unit),
+            days: days.length,
+            dots: dots.map(d => boxOf(d, unit)),
+        };
+        if (dnd) {
+            dnd.emit('clicked', Clutter.BUTTON_PRIMARY);
+            result.dndClick = {showBanners: notifications.get_boolean('show-banners'), checked: dnd.checked};
+            dnd.emit('clicked', Clutter.BUTTON_PRIMARY);
+        }
+        Main.messageTray.getSources().filter(s => s === source).forEach(s => s.destroy());
+        await settle();
+        result.empty = {
+            placeholder: list._placeholder.visible,
+            clearVisible: list._clearButton.visible,
+            clearReactive: list._clearButton.reactive,
+        };
+        return result;
+    } finally {
+        menu.close(BoxPointer.PopupAnimation.NONE);
+        notifications.reset('show-banners');
+        Main.messageTray.getSources().filter(s => s === source).forEach(s => s.destroy());
+        await settle();
+    }
+}
+
 // Board 38's rows, from providers of the probe's own: G2's image has no files or settings
 // to find, so a real query would draw nothing to measure.
 const CALCULATOR = 'org.gnome.Calculator.desktop';
@@ -1508,6 +1570,108 @@ async function spotlightStyle(unit) {
         measured.closedOnCopy = !popup.isOpen;
         measured.glass = {panelBeforeCopy, toast: pill ? glassOf(pill, unit) : null};
         return {scenes: captured, ...measured};
+    } finally {
+        popup.destroy();
+        await settle();
+    }
+}
+
+// S3a's exit items in the real shell: a provider past the budget holds back no section, and
+// real key presses move one selection across the sections, open a row and close the popup.
+const SLOW_SETTINGS_MS = 1600;
+const SECTIONS_EARLY_MS = 300;
+const SECTIONS_LATE_MS = 1200;
+const NO_KEYBINDING_ACTION = -1;
+
+function slowSpotlightProviders(started, settings) {
+    const providers = spotlightProviders();
+    const fast = providers.get('org.gnome.Settings.desktop');
+    providers.set('org.gnome.Settings.desktop', {
+        ...fast,
+        getInitialResultSet: (terms, cancellable) => new Promise(resolve => {
+            settings.askedMs = msSince(started.at);
+            cancellable?.connect(() => {
+                settings.cancelledMs = msSince(started.at);
+            });
+            GLib.timeout_add(GLib.PRIORITY_DEFAULT, SLOW_SETTINGS_MS, () => {
+                resolve(fast.getInitialResultSet(terms));
+                return GLib.SOURCE_REMOVE;
+            });
+        }),
+    });
+    for (const [id, provider] of providers)
+        provider.activateResult = (resultId, terms) => settings.activated.push({provider: id, id: resultId, terms});
+    return providers;
+}
+
+function msSince(start) {
+    return Math.round((GLib.get_monotonic_time() - start) / 1000);
+}
+
+function spotlightSections(popup) {
+    if (!popup.isOpen)
+        return {open: false, sections: [], rows: 0, selected: null};
+    const results = popup.panel.get_children()[1];
+    const headers = results.get_children().filter(a => a.has_style_class_name('apex-spotlight-header'));
+    const selected = popup.rows.find(r => r.selected);
+    return {
+        sections: headers.map(h => h.get_child().get_text()),
+        rows: popup.rows.length,
+        selected: selected ? selected.key : null,
+    };
+}
+
+async function pressKeys(keyboard, keyval, times) {
+    for (let i = 0; i < times; i++) {
+        keyboard.notify_keyval(GLib.get_monotonic_time(), keyval, Clutter.KeyState.PRESSED);
+        keyboard.notify_keyval(GLib.get_monotonic_time(), keyval, Clutter.KeyState.RELEASED);
+        // eslint-disable-next-line no-await-in-loop
+        await Scripting.sleep(20);
+    }
+    await settle();
+}
+
+async function spotlightKeys() {
+    if ((await apexHooks())?.safe() !== false)
+        return null;
+    let Popup, BUDGET_MS;
+    try {
+        ({Popup} = await import('resource:///org/gnome/shell/ui/apex/spotlight/popup.js'));
+        ({BUDGET_MS} = await import('resource:///org/gnome/shell/ui/apex/spotlight/search.js'));
+    } catch {
+        return null;
+    }
+    const started = {at: 0};
+    const settings = {askedMs: null, cancelledMs: null, activated: []};
+    // Unbound keys map to keybinding action 0, so the toggle action here must match none.
+    const popup = new Popup(() => slowSpotlightProviders(started, settings), NO_KEYBINDING_ACTION);
+    const seat = global.stage.context.get_backend().get_default_seat();
+    const keyboard = seat.create_virtual_device(Clutter.InputDeviceType.KEYBOARD_DEVICE);
+    const keys = {budgetMs: BUDGET_MS, slowMs: SLOW_SETTINGS_MS, modalBefore: Main.modalCount};
+    try {
+        popup.open();
+        keys.modalOpen = Main.modalCount;
+        started.at = GLib.get_monotonic_time();
+        popup.panel.get_children()[0].get_children()[1].set_text('disk');
+        await Scripting.sleep(SECTIONS_EARLY_MS);
+        keys.early = {ms: msSince(started.at), ...spotlightSections(popup)};
+        await Scripting.sleep(Math.max(0, SECTIONS_LATE_MS - msSince(started.at)));
+        keys.late = {ms: msSince(started.at), ...spotlightSections(popup)};
+        keys.settings = {askedMs: settings.askedMs, cancelledMs: settings.cancelledMs};
+        await pressKeys(keyboard, Clutter.KEY_Down, 4);
+        keys.down4 = spotlightSections(popup).selected;
+        await pressKeys(keyboard, Clutter.KEY_Up, 1);
+        keys.up1 = spotlightSections(popup).selected;
+        await pressKeys(keyboard, Clutter.KEY_Down, 20);
+        keys.down20 = spotlightSections(popup).selected;
+        await pressKeys(keyboard, Clutter.KEY_Return, 1);
+        keys.enter = {open: popup.isOpen, modal: Main.modalCount, activated: settings.activated};
+        popup.open();
+        popup.panel.get_children()[0].get_children()[1].set_text('disk');
+        await settle();
+        await pressKeys(keyboard, Clutter.KEY_Escape, 1);
+        keys.escape = {open: popup.isOpen, modal: Main.modalCount};
+        return keys;
     } finally {
         popup.destroy();
         await settle();
@@ -1882,9 +2046,11 @@ async function scenes() {
     surfaces.switcher = await windowSwitcher(unit);
     surfaces.dialog = {...await modalDialog(unit), endSession: await endSessionDialog(unit), updateCard: await updateCard(unit)};
     surfaces.dateMenu = await calendarMenu(unit);
+    surfaces.notificationsLayer = await notificationsLayer(unit);
     surfaces.derived = derivedSurfaces(unit);
     surfaces.tilePreview = await tilePreview(unit);
     surfaces.spotlight = await spotlightStyle(unit);
+    surfaces.spotlightKeys = await spotlightKeys();
     surfaces.screenshot = await screenshotUI(unit);
 
     Main.overview.show();
@@ -2382,6 +2548,17 @@ async function runProbe() {
             result = {error: `${e.message}\n${e.stack}`};
         }
         console.log(`APEXG2-CYCLES ${JSON.stringify(result)}`);
+    }
+
+    if (GLib.getenv('G2_IDLE') === '1') {
+        let result;
+        try {
+            const Idle = await import('./idle.js');
+            result = await Idle.idleReport({settle, dropStartupNotifications, apexDock});
+        } catch (e) {
+            result = {error: `${e.message}\n${e.stack}`};
+        }
+        console.log(`APEXG2-IDLE ${JSON.stringify(result)}`);
     }
 
     if (GLib.getenv('G2_DOCK') === '1') {

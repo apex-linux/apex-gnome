@@ -27,6 +27,9 @@
     <file alias="panel/focused-app.js">js/ui/apex/panel/focused-app.js</file>
     <file alias="panel/search-button.js">js/ui/apex/panel/search-button.js</file>
     <file alias="panel/search-hint.js">js/ui/apex/panel/search-hint.js</file>
+    <file alias="panel/privacy-group.js">js/ui/apex/panel/privacy-group.js</file>
+    <file alias="panel/screen-pills.js">js/ui/apex/panel/screen-pills.js</file>
+    <file alias="panel/input-chip.js">js/ui/apex/panel/input-chip.js</file>
     <file alias="dock/feature.js">js/ui/apex/dock/feature.js</file>
     <file alias="dock/dock.js">js/ui/apex/dock/dock.js</file>
     <file alias="dock/trash.js">js/ui/apex/dock/trash.js</file>
@@ -62,6 +65,11 @@
     <file alias="indicators/dbusmenu.js">js/ui/apex/indicators/dbusmenu.js</file>
     <file alias="indicators/indicator.js">js/ui/apex/indicators/indicator.js</file>
     <file alias="indicators/bar.js">js/ui/apex/indicators/bar.js</file>
+    <file alias="polkit/feature.js">js/ui/apex/polkit/feature.js</file>
+    <file alias="polkit/header.js">js/ui/apex/polkit/header.js</file>
+    <file alias="polkit/fingerprint.js">js/ui/apex/polkit/fingerprint.js</file>
+    <file alias="polkit/details.js">js/ui/apex/polkit/details.js</file>
+    <file alias="notifications/feature.js">js/ui/apex/notifications/feature.js</file>
   </gresource>
   <gresource prefix="/org/gnome/shell/theme/apex">
     <file alias="diamond-light.svg">data/theme/apex/diamond-light.svg</file>

@@ -573,7 +573,34 @@ REPORT_OF_INDICATORS_DRAWN_FROM_TOKENS='
 | {x: $dx, y: 9, width: ($t.apex_indicators_divider_width | px), height: ($t.apex_indicators_divider_height | px),
    colour: ("rgba(\($fg[0]), \($fg[1]), \($fg[2]), \($t.apex_indicators_divider_opacity))" | hex)} as $divider
 | {width: ($t.apex_indicator_switch_width | px), height: ($t.apex_indicator_switch_height | px), radius: 9} as $switch
+| ($t.apex_privacy_height | px) as $ph | ($t.apex_privacy_icon_size | px) as $pi | ($t.apex_privacy_padding | px) as $pp
+| ($t.apex_privacy_gap | px) as $pg | ($t.apex_screen_stop_size | px) as $ss
+| {x: 1240, y: 4, width: 160, height: $h, paddingLeft: ($t.apex_bar_pill_padding_privacy | px)} as $pill
+| ($pill.x + $pill.paddingLeft) as $gx
+| {x: $gx, y: (4 + ($h - $ph) / 2), width: (2 * $pp + 2 * $pi + $pg), height: $ph, radius: ($t.apex_radius_privacy | px),
+   colour: ($t.apex_privacy | hex)} as $group
+| ($group + {next: {x: ($gx + $group.width + ($t.apex_privacy_margin | px) + ($t.apex_bar_status_gap | px)), y: 8, width: $i, height: $i},
+   glyphs: [range(2) as $k | {x: ($gx + $pp + $k * ($pi + $pg)), y: (4 + ($h - $pi) / 2), width: $pi, height: $pi,
+     iconName: "camera-web-symbolic", colour: ($t.apex_privacy_fg | hex)}]}) as $privacy
+| (1100 + ($t.apex_recording_padding_start | px)) as $sx | ($sx + $ss + ($t.apex_recording_gap | px)) as $tx
+| {x: 1100, y: 4, width: ($tx + 26 + ($t.apex_recording_padding_end | px) - 1100), height: $h, radius: $r, colour: ($t.apex_recording | hex),
+   stop: {x: $sx, y: (4 + ($h - $ss) / 2), width: $ss, height: $ss, radius: ($t.apex_radius_screen_stop | px), colour: ($t.apex_recording_fg | hex)},
+   timer: {x: $tx, y: 8, width: 26, height: 16, text: "0:42", size: ($t.apex_font_recording_size | px),
+     weight: ($t.apex_font_recording_weight | tonumber), tracking: 0, features: "tnum", colour: ($t.apex_recording_fg | hex)}} as $recording
+| {pill: {x: 1190, y: 4, width: ($t.apex_input_chip_min_width | px), height: $h, radius: $r}, text: "EN",
+   size: ($t.apex_font_input_chip_size | px), weight: ($t.apex_font_input_chip_weight | tonumber),
+   tracking: (($t.apex_font_input_chip_tracking | rtrimstr("em") | num) * ($t.apex_font_input_chip_size | px)), features: "",
+   colour: ($t.apex_bar_fg | hex)} as $input
+| ($t.apex_sharing_icon_size | px) as $si | (1240 - ($t.apex_sharing_margin | px) - $g) as $se
+| ($se - ($t.apex_sharing_padding_end | px) - $ss) as $qx | ($qx - ($t.apex_sharing_gap | px) - $si) as $gx2
+| ($gx2 - ($t.apex_sharing_padding_start | px)) as $sx2
+| {x: $sx2, y: 4, width: ($se - $sx2), height: $h, radius: $r, colour: ($t.apex_privacy | hex), name: "Stop screen sharing",
+   next: $pill, glyph: {x: $gx2, y: (4 + ($h - $si) / 2), width: $si, height: $si, iconName: "screen-shared-symbolic", colour: ($t.apex_privacy_fg | hex)},
+   stop: {x: $qx, y: (4 + ($h - $ss) / 2), width: $ss, height: $ss, radius: ($t.apex_radius_screen_stop | px), colour: ($t.apex_privacy_fg | hex)}} as $sharing
 | {empty: {visible: false, divider: null}, accent: "#3584e4ff",
+   everything: {order: ["indicators", "divider", "apex-search", "screenRecording", "keyboard", "screenSharing", "quickSettings"], pill: $pill,
+     privacy: $privacy, recording: $recording, input: $input, sharing: $sharing, search: {x: 1060, y: 4, width: 32, height: $h},
+     after: {privacy: false, paddingLeft: ($t.apex_bar_pill_padding | px)}},
    four: {visible: true, order: ["indicators", "divider", "apex-search", "quickSettings"], items: $items, divider: $divider,
      search: {x: ($dx + $divider.width + $around), y: 4, width: 32, height: $h},
      mask: {colour: ($t.apex_bar_fg | hex), inkPixels: 64, redPixels: 0}},
@@ -602,6 +629,15 @@ def glass($b; $s): {blur: ($b | px), saturation: ($s | rtrimstr("%") | tonumber 
     panelBeforeCopy: glass($t.apex_spotlight_blur; $t.apex_spotlight_saturation),
     toast: glass($t.apex_toast_blur; $t.apex_toast_saturation)}}}}'
 # shellcheck disable=SC2016 # a jq program
+REPORT_OF_SPOTLIGHT_KEYS='
+{surfaces: {spotlightKeys: {budgetMs: 1000, slowMs: 1600, modalBefore: 0, modalOpen: 1,
+    early: {ms: 301, sections: ["APPLICATIONS", "FILES"], rows: 6, selected: "Applications/org.gnome.DiskUtility.desktop"},
+    late: {ms: 1201, sections: ["APPLICATIONS", "FILES"], rows: 6, selected: "Applications/org.gnome.DiskUtility.desktop"},
+    settings: {askedMs: 52, cancelledMs: 1053},
+    down4: "Files/images", up1: "Files/png", down20: "Files/md",
+    enter: {open: false, modal: 0, activated: [{provider: "org.gnome.Nautilus.desktop", id: "md", terms: ["disk"]}]},
+    escape: {open: false, modal: 0}}}}'
+# shellcheck disable=SC2016 # a jq program
 HEX_DEF='def hex: rgba | map([., 16] | "0123456789abcdef"[(.[0] / .[1] | floor):(.[0] / .[1] | floor) + 1]
                                     + "0123456789abcdef"[(.[0] % .[1]):(.[0] % .[1]) + 1]) | "#" + join("");'
 
@@ -626,6 +662,7 @@ assert_run() {
     [[ $assertions == spotlight_style ]] && report=$REPORT_OF_A_SPOTLIGHT_DRAWN_FROM_TOKENS
     [[ $assertions == launcher_search ]] && report=$REPORT_OF_A_LAUNCHER_SEARCH_FROM_TOKENS
     [[ $assertions == spotlight_glass ]] && report=$REPORT_OF_SPOTLIGHT_GLASS_FROM_TOKENS
+    [[ $assertions == spotlight_keys ]] && report=$REPORT_OF_SPOTLIGHT_KEYS
     [[ $assertions == shadow_layers ]] && report=$REPORT_OF_SHADOW_LAYERS_FROM_TOKENS
     [[ $assertions == indicator_metrics ]] && report=$REPORT_OF_INDICATORS_DRAWN_FROM_TOKENS prefix=APEXG2-INDICATORS
     tokens=$(tokens_for "$variant")
@@ -757,7 +794,7 @@ test_indicators() {
     local variant change what passes failures open_gaps
     for variant in light dark; do
         read -r passes failures open_gaps <<<"$(assert_run indicator_metrics "$variant")"
-        if ((failures == 0 && passes == 18)); then
+        if ((failures == 0 && passes == 30)); then
             ok "indicators ($variant): indicators drawn from the tokens pass all $passes assertions"
         else
             not_ok "indicators ($variant): indicators drawn from the tokens pass (passed/failed/gaps $passes/$failures/$open_gaps): $(grep -m3 '^FAIL' "$T/top-bar.out" | paste -sd'|' -)"
@@ -793,8 +830,23 @@ test_indicators() {
 .five.overflow.text = "+1"|the wrong overflow count
 .overflowMenu.rows[1].chevron = null|a row without its chevron
 .gone.visible = true|indicators left after the apps quit
+.everything.order = ["indicators", "divider", "screenRecording", "keyboard", "screenSharing", "apex-search", "quickSettings"]|the search button after the stock items
+.everything.order = ["indicators", "divider", "apex-search", "screenRecording", "screenSharing", "keyboard", "quickSettings"]|the sharing pill before the input chip
+.everything.sharing.name = "Stop Screen Sharing"|the sharing pill under stock's name
+.everything.sharing.stop.radius = 4|a sharing stop dot instead of a square
+.everything.privacy.colour = "#c01c28ff"|a privacy group in the recording's red
+.everything.pill.paddingLeft = 10|the pill's stock start beside the group
+.everything.privacy.glyphs[0].colour = "#c64600ff"|a privacy glyph in the group's orange
+.everything.privacy.next.x += 4|the next status glyph further from the group
+.everything.after.privacy = true|a privacy group left once nothing is in use
+.everything.recording.radius = 4|a recording pill with a square's corners
+.everything.recording.stop.radius = 4|a stop dot instead of a square
+.everything.recording.timer.features = ""|a timer in proportional figures
+.everything.input.text = "en"|the source's short name in lower case
+.everything.input.tracking = 0|an untracked input chip
+.everything.input.pill.width = 24|an input chip under the board's minimum width
 CHANGES
-    assert_run indicator_metrics light 'del(.four, .menu, .five, .overflowMenu, .gone, .empty, .log)' >/dev/null
+    assert_run indicator_metrics light 'del(.four, .menu, .five, .overflowMenu, .gone, .empty, .log, .everything)' >/dev/null
     expect_eq "indicators: a report without them passes none" 0 "$(grep -c '^PASS' "$T/top-bar.out")"
 }
 
@@ -1020,6 +1072,43 @@ test_overview_style() {
 .surfaces.overview.caption.background = "#000000e6"|upstream's dark tooltip caption
 .surfaces.overview.section.background = "#2e2e33ff"|upstream's dark search section
 CHANGES
+}
+
+# shellcheck disable=SC2016 # a jq program
+readonly NOTIFICATIONS_REPORT='{surfaces: {notificationsLayer: {header: false, cardHeader: {sourceIcon: false, line: "G2 Chat · now"}, icon: "mail-unread-symbolic",
+  messages: [{x: 0, y: 0, width: 400, height: 80}, {x: 0, y: 88, width: 400, height: 80}, {x: 0, y: 176, width: 400, height: 80}],
+  footer: {x: 0, y: 600, width: 400, height: 40}, clear: {x: 310, y: 604, width: 86, height: 32, visible: true},
+  dnd: {x: 4, y: 604, width: 180, height: 32, label: "Do Not Disturb"}, dndClick: {showBanners: false, checked: true},
+  empty: {placeholder: true, clearVisible: true, clearReactive: false},
+  calendar: {label: {x: 8, y: 60, width: 90, height: 20}, back: {x: 230, y: 56, width: 32, height: 32},
+    forward: {x: 266, y: 56, width: 32, height: 32}, days: 2, dots: [{x: 20, y: 120, width: 4, height: 4}, {x: 60, y: 120, width: 4, height: 4}]}}}}'
+
+test_notifications_layer() {
+    local change what passes failures
+    jq -nc "$NOTIFICATIONS_REPORT" | sed 's/^/APEXG2-SCENES /' >"$T/notifications.log"
+    read -r passes failures <<<"$(assertion_counts notifications_layer case "$T/notifications.log" apex)"
+    expect_eq "notifications: the feature's list, cards, footer and calendar pass all six assertions" "6/0" "$passes/$failures"
+    while IFS='|' read -r change what; do
+        jq -nc "$NOTIFICATIONS_REPORT | .surfaces.notificationsLayer |= ($change)" | sed 's/^/APEXG2-SCENES /' >"$T/notifications.log"
+        read -r passes failures <<<"$(assertion_counts notifications_layer case "$T/notifications.log" apex)"
+        expect_eq "notifications: $what fails one assertion" "5/1" "$passes/$failures"
+    done <<'CHANGES'
+.messages[1].y = 10|a stacked group
+.header = true|a group header
+.cardHeader.sourceIcon = true|a card header with the source glyph
+.icon = null|a card without the app's icon
+.dnd = null|a footer without Do Not Disturb
+.clear.x = 200|Clear off the right edge
+.dndClick.showBanners = true|a click that left banners on
+.empty.clearVisible = false|Clear hidden with nothing to clear
+.calendar.label.x = 250|the month between its chevrons
+.calendar.dots = [.calendar.dots[0]]|a day without its dot
+CHANGES
+    jq -nc "$NOTIFICATIONS_REPORT | .surfaces.notificationsLayer |= (.messages[1].y = 10 | .dnd = null | .empty.clearVisible = false
+        | .cardHeader.sourceIcon = true | .icon = null | .calendar.label.x = 250 | .calendar.dots = [])" |
+        sed 's/^/APEXG2-SCENES /' >"$T/notifications.log"
+    read -r passes failures <<<"$(assertion_counts notifications_layer case "$T/notifications.log" stock)"
+    expect_eq "notifications: stock's stacked list, lone Clear and centred month pass all three stock assertions" "3/0" "$passes/$failures"
 }
 
 test_shadow_layers() {
@@ -1290,6 +1379,36 @@ test_spotlight_glass() {
 CHANGES
 }
 
+test_spotlight_keys() {
+    local variant change what passes failures open_gaps
+    for variant in light dark; do
+        read -r passes failures open_gaps <<<"$(assert_run spotlight_keys "$variant")"
+        if ((failures == 0 && open_gaps == 0 && passes == 5)); then
+            ok "Spotlight keys ($variant): a slow provider and real key presses pass all $passes assertions"
+        else
+            not_ok "Spotlight keys ($variant): a slow provider and real key presses pass (passed/failed/gaps $passes/$failures/$open_gaps): $(grep -m3 '^FAIL' "$T/top-bar.out" | paste -sd'|' -)"
+        fi
+    done
+    while IFS='|' read -r change what; do
+        read -r passes failures open_gaps <<<"$(assert_run spotlight_keys light "$change")"
+        if ((failures == 1)); then
+            ok "Spotlight keys: $what fails one assertion"
+        else
+            not_ok "Spotlight keys: $what fails one assertion (passed/failed/gaps $passes/$failures/$open_gaps)"
+        fi
+    done <<'CHANGES'
+.surfaces.spotlightKeys.early.sections = ["APPLICATIONS"]|Files held back by the slow Settings
+.surfaces.spotlightKeys.early.ms = 1100|the sections seen only past the budget
+.surfaces.spotlightKeys.late.rows = 0|every section hidden once the budget runs out
+.surfaces.spotlightKeys.settings.cancelledMs = null|Settings never cancelled
+.surfaces.spotlightKeys.down4 = "Applications/org.gnome.baobab.desktop"|Down kept inside its section
+.surfaces.spotlightKeys.down20 = null|Down past the last row
+.surfaces.spotlightKeys.enter.activated = []|Enter opening nothing
+.surfaces.spotlightKeys.enter.modal += 1|a modal left behind after Enter
+.surfaces.spotlightKeys.escape.open = true|Esc ignored
+CHANGES
+}
+
 test_today_pins() {
     local pin_count what change passes failures open_gaps
     read -r passes failures open_gaps <<<"$(assert_run top_bar_today light)"
@@ -1513,6 +1632,72 @@ CHANGES
     expect_eq "motion: a client that never mapped fails once, with its stderr, not every assertion after it" \
         "$((all - 9))/1 the test client never mapped (Gtk-WARNING: Failed to open display)" \
         "$passes/$failures $(sed -n 's/^FAIL motion: //p' "$T/assertions.out")"
+}
+
+# shellcheck disable=SC2016 # a jq program
+readonly IDLE_REPORT='{windowMs: 10000,
+  settled: {startingUp: false, overview: false, dock: {visible: true, rested: true}, barGlass: true, dockGlass: true, easing: []},
+  idle: {afterPaints: 0, frames: [], relayouts: {}},
+  control: {afterPaints: 3, frames: [{atMs: 512, damage: {rectangles: 2, extents: {x: 1050, y: 36, width: 376, height: 418},
+    under: [["StBoxLayout.quick-settings", "StBoxLayout.popup-menu-content"]]}}]}}'
+# shellcheck disable=SC2016 # a jq program
+readonly IDLE_FRAME='{atMs: 4210, damage: {rectangles: 1, extents: {x: 600, y: 838, width: 240, height: 62},
+  under: [["StIcon.apex-dock-trash", "ApexDock#apexDock"]]}}'
+
+write_idle_run() {
+    local change=$1 dir=$T/idle feature
+    rm -rf "$dir" && mkdir -p "$dir"
+    {
+        printf 'APEXG2 %s\n' "$APEX_LIGHT_REPORT"
+        # shellcheck disable=SC2016 # expanded by the inner bash
+        for feature in $(bash -c '. "$1/assert.sh"; layer_features' _ "$HERE"); do
+            printf 'Gjs-Console-Message: 09:41:00.000: Apex: feature %s enabled\n' "$feature"
+        done
+        printf 'APEXG2-IDLE %s\n' "$(jq -nc --argjson frame "$(jq -nc "$IDLE_FRAME")" "$IDLE_REPORT | $change")"
+    } >"$dir/idle.log"
+    echo 'idle exit=0 secs=31 marker-after-exit=no' >"$dir/results-main.txt"
+}
+
+test_idle() {
+    local change what passes failures all
+    write_idle_run .
+    read -r all failures <<<"$(assertion_counts idle_desktop "$T/idle")"
+    if ((failures == 0 && all > 10)); then
+        ok "idle: no frame and no relayout over 10 s, every feature on, the counter checked, pass all $all assertions"
+    else
+        not_ok "idle: a clean run passes (passed/failed $all/$failures): $(grep -m3 '^FAIL' "$T/assertions.out" | paste -sd'|' -)"
+    fi
+    while IFS='|' read -r change what; do
+        write_idle_run "$change"
+        read -r passes failures <<<"$(assertion_counts idle_desktop "$T/idle")"
+        expect_eq "idle: $what fails one assertion" "$((all - 1))/1" "$passes/$failures"
+    done <<'CHANGES'
+.idle += {afterPaints: 1, frames: [$frame]}|a frame painted while idle
+.idle.afterPaints = 2|paints the counter saw but did not keep
+.idle.relayouts = {"StLabel.clock < StBin.clock-display": 10}|a relayout queued while idle
+.settled.easing = [{actor: ["ApexDock#apexDock"], properties: ["translation-y"]}]|an actor still easing when the window opens
+.settled.dock.rested = false|a dock that never came to rest
+.settled.overview = true|an overview left open
+.settled.barGlass = false|a bar without its glass
+.windowMs = 2000|a window shorter than 10 s
+.control.afterPaints = 0|a counter that counts nothing
+.control.frames[0].damage.under = []|a control frame whose actors went unnamed
+CHANGES
+    # shellcheck disable=SC2016 # a jq variable
+    write_idle_run '.idle += {afterPaints: 1, frames: [$frame]}'
+    assertion_counts idle_desktop "$T/idle" >/dev/null
+    expect_eq "idle: a painted frame is named, with its damage, the actors under it and their ui/apex/ files" \
+        "1 painted: at 4210 ms, 1 rectangle(s) in 600,838 240x62 under StIcon.apex-dock-trash < ApexDock#apexDock; from ApexDock in ui/apex/dock/dock.js; apex-dock-trash in ui/apex/dock/trash.js" \
+        "$(sed -n 's/^FAIL idle: over 10000 ms of an idle desktop the stage paints no frame (\(.*\))$/\1/p' "$T/assertions.out")"
+    write_idle_run .
+    sed -i '/feature polkit enabled/d' "$T/idle/idle.log"
+    read -r passes failures <<<"$(assertion_counts idle_desktop "$T/idle")"
+    expect_eq "idle: a feature of layer.js's list that did not enable fails one assertion" "$((all - 1))/1" "$passes/$failures"
+    write_idle_run '{error: "idle.js: settle never returned\nidle.js:150"}'
+    read -r passes failures <<<"$(assertion_counts idle_desktop "$T/idle")"
+    expect_eq "idle: a probe error fails once, with its message, not every assertion after it" \
+        "$((all - 5))/1 idle.js: settle never returned" \
+        "$passes/$failures $(sed -n 's/^FAIL idle: //p' "$T/assertions.out")"
 }
 
 fixtures_report() {
@@ -1858,12 +2043,14 @@ test_date_menu
 test_overview_style
 test_app_grid
 test_overview_layer
+test_notifications_layer
 test_shadow_layers
 test_derived_surfaces
 test_tile_preview
 test_spotlight_style
 test_launcher_search
 test_spotlight_glass
+test_spotlight_keys
 test_screenshot_ui
 test_today_pins
 test_known_gaps
@@ -1872,6 +2059,7 @@ test_clock_c
 test_overview_below_bar
 test_layer_cycles
 test_motion
+test_idle
 test_spotlight_key
 test_fixtures
 test_glass

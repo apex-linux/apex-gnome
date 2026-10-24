@@ -1,14 +1,17 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// gnome-shell's automation script for shoot.sh: the lock screen, the greeter or the end-session
-// dialog's update card, captured and described.
+// gnome-shell's automation script for shoot.sh: the lock screen, the greeter, the date menu or the
+// end-session dialog's update card, captured and described.
 
 import Clutter from 'gi://Clutter';
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
+import GObject from 'gi://GObject';
+import PolkitAgent from 'gi://PolkitAgent';
 import Shell from 'gi://Shell';
 import St from 'gi://St';
 
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
+import * as ModalDialog from 'resource:///org/gnome/shell/ui/modalDialog.js';
 import * as Scripting from 'resource:///org/gnome/shell/ui/scripting.js';
 
 Gio._promisify(Shell.Screenshot.prototype, 'screenshot_area');
@@ -22,6 +25,11 @@ const POWER_SAVE_ON = 0;
 const POWER_SAVE_OFF = 3;
 
 const POINTER_NUDGE = 4;
+
+// Board 13's request; tests/shell/apex-test.policy describes the action for polkitd.
+const POLKIT_ACTION = 'io.github.apex-linux.apex.update.rollback';
+const POLKIT_MESSAGE = 'Booting the previous version of Apex at the next restart needs an administrator password.';
+const PAM_FPRINTD_PROMPT = 'Place your finger on the fingerprint reader';
 
 let keyboard;
 let pointer;
@@ -177,6 +185,98 @@ async function shootLock() {
     fact('key-after-escape', describeLock(dialog));
     await Scripting.sleep(SETTLE_MS);
     fact('end', {locked: Main.screenShield.locked});
+}
+
+// What polkit-agent-helper-1 would send, without the helper: PAM never runs, so nothing the
+// dialog does can authorise. Its answers are only counted.
+function stubSession(sessions, info) {
+    return GObject.registerClass({
+        Properties: {
+            'identity': GObject.ParamSpec.object('identity', null, null,
+                GObject.ParamFlags.READWRITE | GObject.ParamFlags.CONSTRUCT_ONLY, GObject.Object),
+            'cookie': GObject.ParamSpec.string('cookie', null, null,
+                GObject.ParamFlags.READWRITE | GObject.ParamFlags.CONSTRUCT_ONLY, null),
+        },
+        Signals: {
+            'completed': {param_types: [GObject.TYPE_BOOLEAN]},
+            'request': {param_types: [GObject.TYPE_STRING, GObject.TYPE_BOOLEAN]},
+            'show-error': {param_types: [GObject.TYPE_STRING]},
+            'show-info': {param_types: [GObject.TYPE_STRING]},
+        },
+    }, class StubSession extends GObject.Object {
+        initiate() {
+            sessions.push({responses: 0, cancelled: false});
+            GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
+                if (info)
+                    this.emit('show-info', info);
+                this.emit('request', 'Password:', false);
+                return GLib.SOURCE_REMOVE;
+            });
+        }
+
+        response() {
+            sessions.at(-1).responses++;
+        }
+
+        cancel() {
+            sessions.at(-1).cancelled = true;
+        }
+    });
+}
+
+function visibleText(actor) {
+    return actor?.mapped && actor.opacity > 0 ? actor.text : null;
+}
+
+function describePolkit(dialog) {
+    const content = dialog.contentLayout;
+    const find = name => content.get_children().find(c => c.has_style_class_name?.(name));
+    const shield = find('apex-polkit-icon');
+    const header = content.get_children().find(c => c.has_style_class_name?.('message-dialog-content'));
+    const role = dialog._userLabel.get_parent()?.get_children().find(c => c.has_style_class_name?.('apex-polkit-role'));
+    const info = dialog._infoMessageLabel;
+    const line = info.get_parent();
+    const details = find('apex-polkit-details');
+    const grid = details?.get_children()[1];
+    return {
+        opened: dialog.state === ModalDialog.State.OPENED,
+        classes: dialog.style_class,
+        box: box(dialog.dialogLayout._dialog),
+        shield: shield ? {...box(shield), icon: shield.child.icon_name, background: color(shield.get_theme_node().get_background_color())} : null,
+        title: header?.title ?? null,
+        description: header?.description ?? null,
+        avatar: box(dialog._userAvatar),
+        initial: dialog._userAvatar.child instanceof St.Label ? dialog._userAvatar.child.text : null,
+        name: {...box(dialog._userLabel), text: visibleText(dialog._userLabel)},
+        role: role ? {...box(role), text: visibleText(role)} : null,
+        field: {
+            ...box(dialog._passwordEntry), hint: dialog._passwordEntry.hint_text,
+            focused: [dialog._passwordEntry, dialog._passwordEntry.clutter_text].includes(global.stage.key_focus),
+            focus: global.stage.key_focus?.constructor.name ?? null,
+        },
+        info: {text: visibleText(info), line: line.style_class, glyph: line.get_children().find(c => c instanceof St.Icon && c.visible)?.icon_name ?? null},
+        details: details ? {
+            ...box(details),
+            open: grid.visible,
+            rows: grid.get_children().filter(r => r.visible).map(r => r.get_children().map(c => c.text)),
+        } : null,
+        buttons: [dialog._cancelButton, dialog._okButton].map(b => ({...button(b), label: b.label})),
+    };
+}
+
+async function shootPolkit() {
+    await Scripting.sleep(SETTLE_MS);
+    Main.overview.hide();
+    await Scripting.sleep(STEP_MS);
+    const sessions = [];
+    PolkitAgent.Session = stubSession(sessions, GLib.getenv('APEX_POLKIT_INFO') === 'fingerprint' ? PAM_FPRINTD_PROMPT : null);
+    const agent = Main.componentManager._allComponents.polkitAgent;
+    agent._onInitiate(agent, POLKIT_ACTION, POLKIT_MESSAGE, '', 'apex-shell-test', [GLib.getenv('APEX_USER')]);
+    await Scripting.sleep(SETTLE_MS);
+    const dialog = agent._currentDialog;
+    fact('polkit', describePolkit(dialog));
+    await capture('open');
+    fact('polkit-sessions', sessions);
 }
 
 function scale() {
@@ -386,6 +486,103 @@ async function shootEndSessionCases() {
     await endSessionStep('countdown-failed', dialog);
 }
 
+// Board 34's notification list, from fdo Notify calls to the shell's own notification daemon.
+const NOTIFICATIONS = [
+    ['Settings', 'preferences-system-symbolic', 'Update ready', 'Apex 45.20261024.141 starts after the next restart.'],
+    ['Calendar', 'x-office-calendar-symbolic', 'Design review at 14:00', 'Canvas boards 34 to 36, in 15 minutes.'],
+    ['Terminal', 'utilities-terminal-symbolic', 'Command finished', 'just vm-image exited 0 after 18 min in apex-image.'],
+    ['Terminal', 'utilities-terminal-symbolic', 'Command failed', 'just lint exited 1 in apex-gnome.'],
+    ['Files', 'folder-symbolic', 'Copied 4 items', 'To Projects.'],
+];
+
+function notify([app, icon, title, body]) {
+    return Gio.DBus.session.call('org.freedesktop.Notifications', '/org/freedesktop/Notifications',
+        'org.freedesktop.Notifications', 'Notify',
+        new GLib.Variant('(susssasa{sv}i)', [app, 0, icon, title, body, [], {}, -1]),
+        null, Gio.DBusCallFlags.NONE, -1, null);
+}
+
+function describeCard(message) {
+    const [glyph, content] = message._header.get_children();
+    const line = content.get_children().filter(c => c instanceof St.Label && c.visible).map(c => c.text).join(' ');
+    return {
+        title: message.titleLabel.text, glyph: glyph.visible, line,
+        icon: message._icon.visible
+            ? {...box(message._icon), size: message._icon.get_theme_node().get_length('icon-size')} : null,
+        text: box(message.titleLabel), card: box(message),
+    };
+}
+
+function describeDateMenu(list) {
+    const view = list._messageView;
+    const controls = list._clearButton.get_parent();
+    const dnd = controls.get_children().find(c => c.has_style_class_name('apex-dnd-button'));
+    const groups = view.get_children().map(item => item.child ?? item)
+        .filter(g => g?._notificationToMessage);
+    return {
+        empty: list._placeholder.visible,
+        footer: {...box(controls), children: controls.get_children().map(c => c.style_class)},
+        clear: {...box(list._clearButton), visible: list._clearButton.visible, reactive: list._clearButton.reactive},
+        dnd: dnd ? {checked: dnd.checked, label: dnd.accessible_name, ...box(dnd)} : null,
+        banners: new Gio.Settings({schema_id: 'org.gnome.desktop.notifications'}).get_boolean('show-banners'),
+        groups: groups.map(g => ({
+            app: g.source.title, expanded: g.expanded, header: g._headerBox.visible,
+            cards: [...g._notificationToMessage.values()].map(describeCard),
+        })),
+    };
+}
+
+async function click(actor) {
+    // The virtual pointer moves in the layout's logical pixels.
+    const {x, y, width, height} = box(actor);
+    const now = () => GLib.get_monotonic_time();
+    // The seat drops the first motion's x: the pointer moves twice.
+    for (let i = 0; i < 2; i++) {
+        pointer.notify_absolute_motion(now(), x + width / 2, y + height / 2);
+        await Scripting.sleep(KEY_MS * 4); // eslint-disable-line no-await-in-loop
+    }
+    pointer.notify_button(now(), Clutter.BUTTON_PRIMARY, Clutter.ButtonState.PRESSED);
+    pointer.notify_button(now(), Clutter.BUTTON_PRIMARY, Clutter.ButtonState.RELEASED);
+    await Scripting.sleep(STEP_MS);
+}
+
+async function shootDateMenu() {
+    await Scripting.sleep(SETTLE_MS);
+    const {dateMenu} = Main.panel.statusArea;
+    const list = dateMenu._messageList;
+    // The session's own notifications (the search hint) would only blur the counts.
+    Main.messageTray.getSources().forEach(source => source.destroy());
+    dateMenu.menu.open();
+    await Scripting.sleep(STEP_MS);
+    fact('none', describeDateMenu(list));
+    await capture('none');
+    await notify(NOTIFICATIONS[0]);
+    await Scripting.sleep(STEP_MS);
+    fact('one', describeDateMenu(list));
+    for (const n of NOTIFICATIONS.slice(1))
+        await notify(n);  // eslint-disable-line no-await-in-loop
+    await Scripting.sleep(STEP_MS);
+    fact('many', describeDateMenu(list));
+    await capture('many');
+    const dnd = list._clearButton.get_parent().get_children().find(c => c.has_style_class_name('apex-dnd-button'));
+    if (dnd) {
+        await click(dnd);
+        fact('dnd-clicked', describeDateMenu(list));
+        await click(dnd);
+        fact('dnd-clicked-again', describeDateMenu(list));
+    }
+    // A new stylesheet closes the menu.
+    new Gio.Settings({schema_id: 'org.gnome.desktop.interface'}).set_string('color-scheme', 'prefer-dark');
+    await Scripting.sleep(SETTLE_MS);
+    dateMenu.menu.open();
+    await Scripting.sleep(STEP_MS);
+    await capture('many-dark');
+    await click(list._clearButton);
+    await Scripting.sleep(STEP_MS);
+    fact('cleared', describeDateMenu(list));
+    await capture('cleared');
+}
+
 // main.js connects to startup-complete only after importing this module, so a startup that
 // completes during the import would never run the script and leave the shell up.
 export function init() {
@@ -400,10 +597,16 @@ export async function run() {
         const seat = global.stage.context.get_backend().get_default_seat();
         keyboard = seat.create_virtual_device(Clutter.InputDeviceType.KEYBOARD_DEVICE);
         pointer = seat.create_virtual_device(Clutter.InputDeviceType.POINTER_DEVICE);
-        if (GLib.getenv('APEX_END_SESSION') === '1')
+        if (Main.sessionMode.isGreeter)
+            await shootGreeter();
+        else if (GLib.getenv('APEX_POLKIT') === '1')
+            await shootPolkit();
+        else if (GLib.getenv('APEX_DATE_MENU') === '1')
+            await shootDateMenu();
+        else if (GLib.getenv('APEX_END_SESSION') === '1')
             await shootEndSession();
         else
-            await (Main.sessionMode.isGreeter ? shootGreeter() : shootLock());
+            await shootLock();
     } catch (e) {
         console.log(`APEXLOCK-ERROR ${e.message}\n${e.stack}`);
     }

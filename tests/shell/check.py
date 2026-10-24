@@ -6,8 +6,10 @@ Asserts each shoot.sh case from its log's APEXLOCK lines and gdm-mock.py's log: 
 boards 20 and 12 show, that no case unlocks, that a wrong answer leaves the screen
 locked, that a GDM refusing to reauthenticate leaves it locked, that the fingerprint
 conversation stops while the screen is blank, that blanking cancels the conversation and waking starts a new one, that
-stock and safe mode keep upstream's lock, that the greeter runs no Apex JS, and what the
-end-session dialog's update card does with update1-mock.py's Apply.
+stock and safe mode keep upstream's lock, and that the greeter runs no Apex JS; what board 13's
+authentication dialog shows, from a stubbed polkit session that is never answered; and board 34's
+date menu: flat cards headed "app · time" with the app's icon, Clear on the right, Do Not Disturb;
+and what the end-session dialog's update card does with update1-mock.py's Apply.
 Prints one line per assertion and exits 1 when one fails.
 """
 
@@ -38,6 +40,23 @@ LOCK_CASES = {
     "lock-safe": {"apex": False, "question": "Password", "layer": False},
 }
 GREETER_CASES = ["greeter-light", "greeter-dark"]
+# Per polkit case: board 13's dialog or upstream's, and the info line PAM sent.
+POLKIT_CASES = {
+    "polkit-light": {"apex": True, "info": None},
+    "polkit-dark": {"apex": True, "info": None},
+    "polkit-fingerprint": {"apex": True, "info": "Place your finger on the fingerprint reader"},
+    "polkit-disabled": {"apex": False, "info": None},
+}
+POLKIT_ACTION = "io.github.apex-linux.apex.update.rollback"
+POLKIT_MESSAGE = "Booting the previous version of Apex at the next restart needs an administrator password."
+POLKIT_TITLE = "Authentication Required"
+POLKIT_WIDTH = 440
+POLKIT_SHIELD = 56
+POLKIT_SHIELD_TINT = 0.16
+POLKIT_AVATAR = 32
+STOCK_POLKIT_AVATAR = 64  # upstream sheet's .user-icon, not polkitAgent.js's 96
+POLKIT_FIELD = 38
+POLKIT_BUTTON = 36
 AUTH_ERROR = "Authentication error"
 WRONG_ANSWER = "not-the-password"
 
@@ -368,6 +387,148 @@ def check_end_session(shots, case):
           detail("countdown-failed"))
 
 
+def near(got, want):
+    return abs(got - want) <= 1
+
+
+def check_polkit(shots, case, want):
+    log = read(shots, f"{case}.log")
+    f = facts(log)
+    check(f"{case}: the dialog and its sessions are reported", "polkit" in f and "polkit-sessions" in f)
+    check(f"{case}: no JS error", "JS ERROR" not in until(log, "polkit-sessions") and "APEXLOCK-ERROR" not in log)
+    if "polkit" not in f or "polkit-sessions" not in f:
+        return
+    d, sessions = f["polkit"], f["polkit-sessions"]
+    check(f"{case}: the dialog opens on the session's request", d["opened"], json.dumps(d))
+    check(f"{case}: one session, never answered, so nothing is authorised",
+          sessions == [{"responses": 0, "cancelled": False}], json.dumps(sessions))
+    check(f"{case}: upstream's title and polkit's message", d["title"] == POLKIT_TITLE and d["description"] == POLKIT_MESSAGE,
+          json.dumps([d["title"], d["description"]]))
+    check(f"{case}: the field asks for the password, focused", d["field"]["hint"] == "Password" and d["field"]["focused"],
+          json.dumps(d["field"]))
+    check(f"{case}: Cancel and Authenticate", [b["label"] for b in d["buttons"]] == ["Cancel", "Authenticate"],
+          json.dumps(d["buttons"]))
+    if not want["apex"]:
+        check(f"{case}: upstream's dialog: no shield, no role, no Details",
+              "apex-polkit" not in (d["classes"] or "") and d["shield"] is None and d["role"] is None and d["details"] is None,
+              json.dumps(d))
+        check(f"{case}: upstream's {STOCK_POLKIT_AVATAR} px avatar over the name",
+              near(d["avatar"]["height"], STOCK_POLKIT_AVATAR) and d["avatar"]["y"] + d["avatar"]["height"] <= d["name"]["y"] + 1,
+              json.dumps([d["avatar"], d["name"]]))
+        return
+    box, shield = d["box"], d["shield"] or {}
+    check(f"{case}: board 13's {POLKIT_WIDTH} px dialog", "apex-polkit" in (d["classes"] or "") and near(box["width"], POLKIT_WIDTH),
+          json.dumps(box))
+    check(f"{case}: the shield in a {POLKIT_SHIELD} px accent circle, centred",
+          shield.get("icon") == "dialog-password-symbolic" and near(shield.get("width", 0), POLKIT_SHIELD)
+          and near(shield.get("height", 0), POLKIT_SHIELD)
+          and near(shield.get("x", 0) + POLKIT_SHIELD / 2, box["x"] + box["width"] / 2)
+          and abs(int(shield.get("background", "#00000000")[-2:], 16) - POLKIT_SHIELD_TINT * 255) <= 1,
+          json.dumps(shield))
+    avatar, name, role = d["avatar"], d["name"], d["role"] or {}
+    check(f"{case}: the user row: a {POLKIT_AVATAR} px avatar with the initial, the name beside it",
+          near(avatar["width"], POLKIT_AVATAR) and d["initial"] == "A" and name["text"] == "Apex"
+          and name["x"] >= avatar["x"] + avatar["width"], json.dumps([avatar, name]))
+    check(f"{case}: \"Administrator\" under the name", role.get("text") == "Administrator" and role.get("y", 0) >= name["y"] + name["height"] - 1,
+          json.dumps(role))
+    field, details = d["field"], d["details"] or {}
+    check(f"{case}: a {POLKIT_FIELD} px field", near(field["height"], POLKIT_FIELD), json.dumps(field))
+    check(f"{case}: Details open, with the action and polkit's vendor",
+          details.get("open") and details.get("rows") == [["Action", POLKIT_ACTION], ["Vendor", "Apex"]], json.dumps(details))
+    check(f"{case}: polkitd answered the vendor lookup", "Apex: polkit: no vendor" not in log)
+    buttons = d["buttons"]
+    check(f"{case}: top to bottom: shield, user, field, Details, buttons",
+          shield.get("y", 0) < avatar["y"] < field["y"] < details.get("y", 0) < buttons[0]["y"], json.dumps(d))
+    check(f"{case}: {POLKIT_BUTTON} px buttons", all(near(b["height"], POLKIT_BUTTON) for b in buttons), json.dumps(buttons))
+    info = d["info"]
+    if want["info"]:
+        check(f"{case}: pam_fprintd's prompt is board 13's fingerprint line",
+              info["text"] == want["info"] and "apex-polkit-fingerprint" in info["line"] and info["glyph"] == "auth-fingerprint-symbolic",
+              json.dumps(info))
+    else:
+        check(f"{case}: no fingerprint line when PAM sends none", info["text"] is None and info["glyph"] is None, json.dumps(info))
+
+
+DND_LABEL = "Do Not Disturb"
+ICON_SIZE = 32
+MESSAGE_GAP = 8  # $apex_message_gap
+FOOTER_INSET = 8
+DATE_MENU_STEPS = ("none", "one", "many", "cleared")
+DATE_MENU_APPS = ["Settings", "Calendar", "Terminal", "Files"]
+
+
+def check_footer(case, step, menu, apex):
+    clear, footer, dnd = menu["clear"], menu["footer"], menu["dnd"]
+    empty = not menu["groups"]
+    check(f"{case}: {step}: the placeholder {'shows' if empty else 'hides'}", menu["empty"] is empty)
+    if apex:
+        check(f"{case}: {step}: Clear is shown, and works only with cards",
+              clear["visible"] is True and clear["reactive"] is (not empty), json.dumps(clear))
+        check(f"{case}: {step}: Clear sits at the footer's right",
+              0 <= footer["x"] + footer["width"] - clear["x"] - clear["width"] <= FOOTER_INSET,
+              json.dumps({"clear": clear, "footer": footer}))
+        check(f"{case}: {step}: Do Not Disturb comes first, labelled",
+              dnd is not None and "apex-dnd-button" in (footer["children"][0] or "") and dnd["label"] == DND_LABEL,
+              json.dumps(dnd))
+        check(f"{case}: {step}: and shows show-banners inverted", dnd is not None and dnd["checked"] is (not menu["banners"]))
+    else:
+        check(f"{case}: {step}: upstream's Clear, shown only with cards", clear["visible"] is (not empty), json.dumps(clear))
+        check(f"{case}: {step}: no Do Not Disturb switch", dnd is None)
+        if not empty:
+            check(f"{case}: {step}: Clear sits at the footer's left", 0 <= clear["x"] - footer["x"] <= FOOTER_INSET,
+                  json.dumps({"clear": clear, "footer": footer}))
+
+
+def check_cards(case, step, menu, apex):
+    cards = [c for g in menu["groups"] for c in g["cards"]]
+    if apex:
+        check(f"{case}: {step}: groups are flat: expanded, no header",
+              all(g["expanded"] and not g["header"] for g in menu["groups"]), json.dumps(menu["groups"]))
+        check(f"{case}: {step}: each card's header reads app · time, without the source glyph",
+              all(not c["glyph"] and " · " in c["line"] for c in cards), json.dumps(cards))
+        check(f"{case}: {step}: each card shows its app's plain {ICON_SIZE} px icon, no tile, left of its text",
+              all(c["icon"] and abs(c["icon"]["size"] - ICON_SIZE) <= 1 and abs(c["icon"]["width"] - ICON_SIZE) <= 1
+                  and c["icon"]["x"] + c["icon"]["width"] <= c["text"]["x"]
+                  for c in cards), json.dumps(cards))
+        boxes = sorted((c["card"] for c in cards), key=lambda b: b["y"])
+        gaps = [b["y"] - a["y"] - a["height"] for a, b in zip(boxes, boxes[1:])]
+        check(f"{case}: {step}: the cards follow one another, {MESSAGE_GAP} px apart",
+              all(abs(g - MESSAGE_GAP) <= 1 for g in gaps), str(gaps))
+    else:
+        check(f"{case}: {step}: upstream stacks a group of more than one card",
+              all(not g["expanded"] for g in menu["groups"] if len(g["cards"]) > 1), json.dumps(menu["groups"]))
+        check(f"{case}: {step}: upstream's headers, with the source glyph", all(c["glyph"] for c in cards), json.dumps(cards))
+
+
+def check_date_menu(shots, case, apex):
+    log = read(shots, f"{case}.log")
+    f = facts(log)
+    steps = DATE_MENU_STEPS + (("dnd-clicked", "dnd-clicked-again") if apex else ())
+    for step in steps:
+        check(f"{case}: {step} is reported", step in f)
+    check(f"{case}: no JS error", "JS ERROR" not in until(log, "cleared") and "APEXLOCK-ERROR" not in log)
+    check(f"{case}: the layer loaded", LOAD_WITNESS in log)
+    if not all(step in f for step in steps):
+        return
+    for step in DATE_MENU_STEPS:
+        check_footer(case, step, f[step], apex)
+        check_cards(case, step, f[step], apex)
+    apps = [g["app"] for g in f["many"]["groups"]]
+    check(f"{case}: one: one card", [len(g["cards"]) for g in f["one"]["groups"]] == [1], json.dumps(f["one"]["groups"]))
+    check(f"{case}: many: five cards from four apps", sorted(apps) == sorted(DATE_MENU_APPS)
+          and sum(len(g["cards"]) for g in f["many"]["groups"]) == 5, str(apps))
+    check(f"{case}: Clear removes every card", f["cleared"]["groups"] == [], json.dumps(f["cleared"]["groups"]))
+    if apex:
+        # shoot.sh's capture settings turn banners off: Do Not Disturb starts on.
+        before, once, twice = f["many"], f["dnd-clicked"], f["dnd-clicked-again"]
+        check(f"{case}: a click turns Do Not Disturb {'off' if before['dnd']['checked'] else 'on'}, and banners with it",
+              once["dnd"]["checked"] is (not before["dnd"]["checked"]) and once["banners"] is (not before["banners"]),
+              json.dumps(once["dnd"]))
+        check(f"{case}: another turns it back", twice["dnd"]["checked"] is before["dnd"]["checked"]
+              and twice["banners"] is before["banners"], json.dumps(twice["dnd"]))
+        check_footer(case, "dnd-clicked", once, apex)
+
+
 def main():
     if len(sys.argv) != 2:
         print(__doc__, file=sys.stderr)
@@ -379,6 +540,10 @@ def main():
     check_fingerprint(shots, "lock-fingerprint")
     for case in GREETER_CASES:
         check_greeter(shots, case)
+    for case, want in POLKIT_CASES.items():
+        check_polkit(shots, case, want)
+    check_date_menu(shots, "date-menu", True)
+    check_date_menu(shots, "date-menu-disabled", False)
     for case in END_SESSION_CASES:
         check_end_session(shots, case)
     return 1 if failed else 0

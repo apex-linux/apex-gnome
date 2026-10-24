@@ -2,8 +2,11 @@
 //
 // run.sh installs this as js/ui/main.js: the parts of main.js the layer and its features use.
 
+import GLib from 'gi://GLib';
 import Meta from 'gi://Meta';
 import Shell from 'gi://Shell';
+
+import St from '../../../St.js';
 
 const fact = (key, value) => printerr(`probe: ${key}=${value}`);
 const handlers = new Map();
@@ -169,6 +172,16 @@ export const actionMode = Shell.ActionMode.NORMAL;
 function box(children) {
     return {
         children,
+        classes: new Set(),
+        add_style_class_name(name) {
+            this.classes.add(name);
+        },
+        remove_style_class_name(name) {
+            this.classes.delete(name);
+        },
+        has_style_class_name(name) {
+            return this.classes.has(name);
+        },
         get_children() {
             return [...this.children];
         },
@@ -179,6 +192,14 @@ function box(children) {
             this.children.splice(index, 0, child);
             child.connect?.('destroy', () => this.children.includes(child) && this.remove_child(child));
         },
+        set_child_below_sibling(child, sibling) {
+            this.remove_child(child);
+            this.children.splice(this.children.indexOf(sibling), 0, child);
+        },
+        set_child_above_sibling(child, sibling) {
+            this.remove_child(child);
+            this.children.splice(this.children.indexOf(sibling) + 1, 0, child);
+        },
     };
 }
 
@@ -188,7 +209,29 @@ const QUICK_SETTINGS_INDICATORS = ['_remoteAccess', '_camera', '_volumeInput', '
     '_backlight', '_bluetooth', '_rfkill', '_autoRotate', '_volumeOutput', '_unsafeMode',
     '_powerProfiles', '_system'];
 
+// A SystemIndicator shows only while one of its icons does: the privacy ones start hidden.
+const PRIVACY_INDICATORS = ['_remoteAccess', '_camera', '_volumeInput', '_location'];
+
 const rightBox = box([{name: 'a11y'}, {name: 'keyboard'}]);
+
+// remoteAccess.js's screen-recording and screen-sharing buttons, where panel.js puts them,
+// and keyboard.js's input-source labels.
+function newScreenButton(role, accessibleName, index, children) {
+    const content = new St.BoxLayout();
+    children.forEach(child => content.add_child(child));
+    const button = new St.Widget({name: role, accessible_name: accessibleName});
+    button.add_child(content);
+    button.container = {name: role, get_parent: () => rightBox};
+    rightBox.children.splice(index, 0, button.container);
+    return button;
+}
+
+function newInputSources() {
+    const keyboard = {_container: new St.Widget()};
+    for (const text of ['en', 'vi'])
+        keyboard._container.add_child(new St.Label({text}));
+    return keyboard;
+}
 
 // A QuickToggle's checked and subtitle notify, as GObject properties do.
 class Toggle {
@@ -282,7 +325,8 @@ export function newQuickSettings() {
     };
     rightBox.children.push(quickSettings.container);
     for (const field of QUICK_SETTINGS_INDICATORS) {
-        quickSettings[field] = {name: field.slice(1)};
+        quickSettings[field] = Object.assign(new StubActor(field.slice(1)),
+            {visible: !PRIVACY_INDICATORS.includes(field)});
         quickSettings._indicators.children.push(quickSettings[field]);
     }
     const toggles = {
@@ -344,6 +388,11 @@ export const panel = Object.assign(new StubActor('panel', {glass: PANEL_GLASS, e
             get_first_child: () => ({get_children: () => [0, 1].map(() => workspaceDot)}),
         },
         quickSettings: newQuickSettings(),
+        screenRecording: newScreenButton('screenRecording', 'Stop Screencast', 0,
+            [new St.Label({text: '0:42'}), new St.Icon({icon_name: 'screencast-stop-symbolic'})]),
+        screenSharing: newScreenButton('screenSharing', 'Stop Screen Sharing', 1,
+            [new St.Icon({icon_name: 'screen-shared-symbolic'}), new St.Icon({icon_name: 'screencast-stop-symbolic'})]),
+        keyboard: newInputSources(),
         dateMenu: {menu: {box: new StubActor('calendar', {glass: POPOVER_GLASS, extents: [354, 40, 732, 468], parent: boxPointer})}},
     },
 });
@@ -518,7 +567,7 @@ export const overview = {
 
 export const wm = {
     addKeybinding(name, settings, flags, modes, handler) {
-        if (handlers.has(name)) {
+        if (handlers.has(name) || GLib.getenv('PROBE_REFUSE_KEYBINDING') === name) {
             fact('keybinding.refused', name);
             return Meta.KeyBindingAction.NONE;
         }

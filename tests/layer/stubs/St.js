@@ -83,14 +83,42 @@ class Widget {
         this.get_children().forEach(child => child.destroy());
     }
 
+    get_child() {
+        return this._children[0] ?? null;
+    }
+
+    set_child(child) {
+        this._children.forEach(c => (c._parent = null));
+        this._children = [];
+        this.add_child(child);
+    }
+
+    set_child_at_index(child, index) {
+        this._children.splice(this._children.indexOf(child), 1);
+        this._children.splice(index, 0, child);
+    }
+
+    insert_child_at_index(child, index) {
+        this._children.splice(index, 0, child);
+        child._parent = this;
+    }
+
     insert_child_below(child, sibling) {
         const index = this._children.indexOf(sibling);
         this._children.splice(index < 0 ? 0 : index, 0, child);
         child._parent = this;
     }
 
+    get_first_child() {
+        return this._children[0] ?? null;
+    }
+
     get_children() {
         return [...this._children];
+    }
+
+    get_first_child() {
+        return this._children[0] ?? null;
     }
 
     get_parent() {
@@ -208,7 +236,26 @@ class Widget {
     }
 }
 
-class Label extends Widget {}
+// The polkit feature follows upstream's info label through its notify signals.
+class Label extends Widget {
+    get visible() {
+        return this._visible;
+    }
+
+    set visible(visible) {
+        this._visible = visible;
+        this.emit('notify::visible');
+    }
+
+    get text() {
+        return this._text;
+    }
+
+    set text(text) {
+        this._text = text;
+        this.emit('notify::text');
+    }
+}
 class Bin extends Widget {}
 class BoxLayout extends Widget {
     insert_child_at_index(child, index) {
