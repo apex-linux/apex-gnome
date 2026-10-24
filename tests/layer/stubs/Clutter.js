@@ -95,6 +95,7 @@ export default {
     ScrollControllerFlags: {DISCRETE: 1, SCROLL_VERTICAL: 2, SCROLL_HORIZONTAL: 4},
     get_current_event_time: () => 0,
     ActorAlign: {FILL: 0, START: 1, CENTER: 2, END: 3},
+    GridPosition: {LEFT: 0, RIGHT: 1, TOP: 2, BOTTOM: 3},
     TextDirection,
     EVENT_PROPAGATE: false,
     EVENT_STOP: true,

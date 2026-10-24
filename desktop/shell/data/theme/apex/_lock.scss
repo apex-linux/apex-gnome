@@ -105,6 +105,11 @@
   }
 
   .login-dialog-message-warning { color: $apex_lock_fg; }
+
+  // Board 20's fingerprint states share the hint's line, the print glyph before the text.
+  .apex-lock-hint-line { spacing: $apex_lock_hint_glyph_gap; }
+  .apex-lock-hint-glyph { color: $apex_lock_fg_dim; icon-size: $apex_lock_hint_glyph_size; }
+  .apex-lock-hint-failed .apex-lock-hint, .apex-lock-hint-failed .apex-lock-hint-glyph { color: $apex_lock_fg; }
 }
 
 .apex-lock-overlay { background-color: $apex_lock_overlay; }

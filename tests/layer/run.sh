@@ -373,6 +373,15 @@ fact "quick-settings: On or Off under a toggle without a subtitle; a toggle's ow
 fact "quick-settings: Power Mode lit at Balanced, its checked state stock" 'qs\.power=checked=false classes=apex-lit'
 fact "quick-settings: the state follows checked; a subtitle the toggle sets wins" 'qs\.live=dnd=On bluetooth=Headphones'
 fact "quick-settings: once the toggle drops its own, ours follows again" 'qs\.own-subtitle-gone=bluetooth=On'
+fact "quick-settings: the active network's row is :checked, its lock after the name" 'qs\.row\.active=children=icons,label,lock,check icons=signal checked=true lock=2/apex-network-lock'
+fact "quick-settings: another network's row is not" 'qs\.row\.other=children=icons,label,lock,check icons=signal checked=false lock=2/apex-network-lock'
+fact "quick-settings: a submenu header's subtitle ends the title's row" 'qs\.menu=3,0 x_align=3'
+fact "quick-settings: :checked follows is-active" 'qs\.row\.switched=children=icons,label,lock,check icons=signal checked=false lock=2/apex-network-lock \| children=icons,label,lock,check icons=signal checked=true lock=2/apex-network-lock'
+fact "quick-settings: layer off: the row stock again" 'qs\.off\.row=children=icons,label,check icons=signal,lock checked=false lock=3/none'
+fact "quick-settings: layer off: the subtitle under the title" 'qs\.off\.menu=1,1 x_align=0'
+fact "quick-settings: layer off: :checked no longer follows" 'qs\.off\.row-unfollowed=checked=false'
+fact "quick-settings: layer back on: rows and menus built before it change again" 'qs\.on\.row=children=icons,label,lock,check icons=signal checked=true lock=2/apex-network-lock'
+fact "quick-settings: layer back on: the subtitle on the title's row" 'qs\.on\.menu=3,0 x_align=3'
 fact "quick-settings: layer off: stock order" \
     'qs\.off\.order=Wi-Fi,VPN,Bluetooth,Power Mode,Night Light,Dark Style,Do Not Disturb,Airplane Mode,Auto Rotate'
 fact "quick-settings: layer off: only the toggles' own subtitles" \
@@ -387,6 +396,8 @@ has "disabled-features=['quick-settings']: skips the feature" 'Apex: feature qui
 fact "disabled-features=['quick-settings']: stock order" \
     'qs\.order=Wi-Fi,VPN,Bluetooth,Power Mode,Night Light,Dark Style,Do Not Disturb,Airplane Mode,Auto Rotate'
 fact "disabled-features=['quick-settings']: Power Mode unlit" 'qs\.power=checked=false classes=none'
+fact "disabled-features=['quick-settings']: a network row stays stock" 'qs\.row\.active=children=icons,label,check icons=signal,lock checked=false lock=3/none'
+fact "disabled-features=['quick-settings']: the subtitle stays under the title" 'qs\.menu=1,1 x_align=0'
 
 probe shadows "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_SHADOWS=1
 has "shadows: the feature enables" 'Apex: feature shadows enabled'
@@ -719,6 +730,18 @@ fact "lock: one stage, the clock over the prompt box, date above time, upstream'
     'lock\.layout=dialog=unlock-dialog apex-lock stack=apex-lock-stage stage=unlock-dialog-clock,prompt-box clock=date,time,hint hint=false children=backgrounds,apex-lock-overlay,stack'
 fact "lock: opens on the prompt with a conversation" 'lock\.open=page=prompt prompt=conversation-1 cancelled=none'
 fact "lock: the unlock hint follows the prompt" 'lock\.prompt-box=conversation-1,Press Enter to unlock'
+readonly HINT_PASSWORD='"Press Enter to unlock" glyph=none failed=false'
+readonly HINT_SCAN='"Or touch the fingerprint reader" glyph=auth-fingerprint-symbolic failed=false'
+readonly HINT_FAILED='"Fingerprint not recognized\. Try again\." glyph=auth-fingerprint-symbolic failed=true'
+fact "lock: the password's hint, upstream's message line and indicator" "lock\.hint\.password=$HINT_PASSWORD message=true indicator=true"
+fact "lock: gdm-fingerprint's prompt is board 20's line with the print, in place of upstream's message and indicator" \
+    "lock\.hint\.fingerprint-scan=$HINT_SCAN message=false indicator=false"
+fact "lock: a failed scan swaps the line's text" "lock\.hint\.fingerprint-failed=$HINT_FAILED message=false indicator=false"
+fact "lock: and keeps it when upstream's queue empties" "lock\.hint\.queue-done=$HINT_FAILED message=true indicator=false"
+fact "lock: the password's own problem stays in upstream's message line" \
+    "lock\.hint\.password-problem=$HINT_FAILED message=true indicator=false"
+fact "lock: the reader's next prompt brings the line back" "lock\.hint\.fingerprint-again=$HINT_SCAN message=false indicator=false"
+fact "lock: a prompt rebuilt after blank starts on the password's hint" "lock\.hint\.after-wake=$HINT_PASSWORD message=true indicator=true"
 fact "lock: blanking tears the prompt down and cancels its verifier" 'lock\.blank=page=clock prompt=none cancelled=conversation-1'
 fact "lock: waking builds a new conversation" 'lock\.wake=page=prompt prompt=conversation-2 cancelled=conversation-1'
 fact "lock: standby is blank too" 'lock\.standby=page=clock prompt=none cancelled=conversation-1,conversation-2'
