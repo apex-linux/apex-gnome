@@ -15,6 +15,7 @@ readonly CLOCK_LIB=/run/apex-control-center-clock.so
 readonly CLOCK='2026-10-21 14:02:00'
 readonly FIXTURE_NAMES=(org.freedesktop.UPower org.freedesktop.NetworkManager org.bluez)
 readonly UPDATE1_NAME=io.github.apex_linux.Apex.Update1
+readonly POWER_PROFILES_NAME=org.freedesktop.UPower.PowerProfiles
 readonly APEX_SCHEMA_FIXTURE=$CC_TESTS/../layer/fixtures/io.github.apex_linux.Apex.Desktop.gschema.xml
 readonly APEX_SCHEMA_DIR=/usr/share/glib-2.0/schemas
 readonly MANIFEST=/usr/share/apex/manifest.json
@@ -81,10 +82,15 @@ headless_bus() {
         done
         echo '</policy></busconfig>'
     } >/etc/dbus-1/system-local.conf
-    printf '<busconfig><policy user="root"><allow own="%s"/></policy><policy context="default"><allow send_destination="%s"/></policy></busconfig>\n' \
-        "$UPDATE1_NAME" "$UPDATE1_NAME" >/etc/dbus-1/system.d/apex-update1-fixture.conf
+    for name in "$UPDATE1_NAME" "$POWER_PROFILES_NAME"; do
+        printf '<busconfig><policy user="root"><allow own="%s"/></policy><policy context="default"><allow send_destination="%s"/></policy></busconfig>\n' \
+            "$name" "$name" >"/etc/dbus-1/system.d/apex-fixture-$name.conf"
+    done
     [[ -S /run/dbus/system_bus_socket ]] || dbus-daemon --system --fork || log "no system bus"
     python3 "$SHOTS/fixtures.py" "$log_dir" >"$log_dir/fixtures.txt" 2>&1 || log "fixtures.py: exit $?"
+    # power-profiles-daemon for Power's Power Mode group; fixtures.py has no template for it.
+    python3 -m dbusmock --system --template upower_power_profiles_daemon >"$log_dir/fixture-power-profiles.log" 2>&1 &
+    headless_wait_name "$POWER_PROFILES_NAME" || die "dbusmock did not take $POWER_PROFILES_NAME"
     gcc -O2 -Wall -Werror -shared -fPIC -o "$CLOCK_LIB" "$SHOTS/clock.c" || die "cannot build tests/shots/clock.c"
     CLOCK_EPOCH=$(date -u -d "$CLOCK" +%s)
     held=$(env LD_PRELOAD="$CLOCK_LIB" G2_CLOCK_EPOCH="$CLOCK_EPOCH" date -u '+%F %T' 2>&1)
@@ -119,11 +125,59 @@ headless_update1() {
     rm -f -- "$2"
     python3 "$CC_TESTS/update1.py" "$1" "$2" >>"${2%.*}.out" 2>&1 &
     HEADLESS_UPDATE1_PID=$!
+    headless_wait_name "$UPDATE1_NAME" || die "update1.py did not take $UPDATE1_NAME"
+}
+
+# headless_dgpu FILE: umockdev's testbed of the M7400QC's graphics, written at run time since the privacy guard bars
+# *.umockdev from the repository: the AMD iGPU, the NVIDIA dGPU asleep, and the dGPU's audio function.
+headless_dgpu() {
+    cat >"$1" <<'DEVICES'
+P: /devices/pci0000:00/0000:00:08.1/0000:05:00.0
+E: SUBSYSTEM=pci
+E: DRIVER=amdgpu
+E: PCI_CLASS=30000
+E: PCI_ID=1002:1638
+E: ID_VENDOR_FROM_DATABASE=Advanced Micro Devices, Inc. [AMD/ATI]
+E: ID_MODEL_FROM_DATABASE=Cezanne [Radeon Vega Series / Radeon Vega Mobile Series]
+A: class=0x030000
+A: vendor=0x1002
+A: device=0x1638
+A: power/runtime_status=active
+
+P: /devices/pci0000:00/0000:00:01.1/0000:01:00.1
+E: SUBSYSTEM=pci
+E: DRIVER=snd_hda_intel
+E: PCI_CLASS=40300
+E: PCI_ID=10DE:2291
+E: ID_VENDOR_FROM_DATABASE=NVIDIA Corporation
+E: ID_MODEL_FROM_DATABASE=GA107 High Definition Audio Controller
+A: class=0x040300
+A: vendor=0x10de
+A: device=0x2291
+A: power/runtime_status=suspended
+
+P: /devices/pci0000:00/0000:00:01.1/0000:01:00.0
+E: SUBSYSTEM=pci
+E: DRIVER=nvidia
+E: PCI_CLASS=30000
+E: PCI_ID=10DE:25A2
+E: ID_VENDOR_FROM_DATABASE=NVIDIA Corporation
+E: ID_MODEL_FROM_DATABASE=GA107M [GeForce RTX 3050 Mobile]
+A: class=0x030000
+A: vendor=0x10de
+A: device=0x25a2
+A: power/runtime_status=suspended
+DEVICES
+    chmod 644 "$1"
+}
+
+# headless_wait_name NAME: waits up to 5 s for NAME on the system bus.
+headless_wait_name() {
     for _ in {1..50}; do
-        busctl --system status "$UPDATE1_NAME" >/dev/null 2>&1 && return 0
+        busctl --system status "$1" >/dev/null 2>&1 && return 0
         sleep 0.1
     done
-    die "update1.py did not take $UPDATE1_NAME"
+    return 1
 }
 
 headless_update1_stop() {

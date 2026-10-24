@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: GPL-3.0-or-later
-# The Software Updates page's logic (cc-apex-updates-state.c) under GLib's test framework.
+# The Software Updates page's and the Power group's logic (cc-apex-updates-state.c, cc-apex-power-state.c) under
+# GLib's test framework.
 set -euo pipefail
 . "$(dirname "${BASH_SOURCE[0]}")/../../.github/scripts/lib.sh"
 
@@ -16,6 +17,7 @@ trap 'rm -rf -- "$work"' EXIT
 printf '#define GETTEXT_PACKAGE "gnome-control-center-2.0"\n' >"$work/config.h"
 # shellcheck disable=SC2046 # pkg-config prints separate flags
 gcc -std=gnu11 -Wall -Wextra -Werror -Wno-unused-parameter -o "$work/state-test" \
-    "$APEX_ROOT/tests/control-center/state-test.c" "$src/cc-apex-updates-state.c" -I"$src" -I"$work" \
+    "$APEX_ROOT/tests/control-center/state-test.c" "$src/cc-apex-updates-state.c" "$src/cc-apex-power-state.c" \
+    -I"$src" -I"$work" -lm \
     $(pkg-config --cflags --libs glib-2.0)
 TZ=UTC "$work/state-test"

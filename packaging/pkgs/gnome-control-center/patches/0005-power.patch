@@ -1,0 +1,35 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Thuong Vo <66083331+SekiroKenjii@users.noreply.github.com>
+Date: Sat, 24 Oct 2026 13:00:00 +0000
+Subject: [PATCH] power: add Apex's Graphics and Display group after Power Mode
+
+Board 24 adds a Graphics and Display group to Power's General page:
+the NVIDIA graphics card's power state, read from power/runtime_status,
+and a switch for apex-desktop's lower-refresh-rate-on-battery key, with
+the built-in display's rates from Mutter's DisplayConfig. The group is
+panels/apex/cc-apex-power.c; the panel only hands it the page and the
+group to follow. Stock's rows and pages stay as they are.
+---
+ panels/power/cc-power-panel.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/panels/power/cc-power-panel.c b/panels/power/cc-power-panel.c
+index 8d7cbe7..8b6b22f 100644
+--- a/panels/power/cc-power-panel.c
++++ b/panels/power/cc-power-panel.c
+@@ -34,6 +34,7 @@
+ #include "cc-power-profile-row.h"
+ #include "cc-power-resources.h"
+ #include "cc-ui-util.h"
++#include "panels/apex/cc-apex-power.h"
+ #include "shell/cc-object-storage.h"
+ 
+ /* This enum represents the availability of power actions, ordered from least
+@@ -1232,6 +1233,7 @@ cc_power_panel_init (CcPowerPanel *self)
+                      "active", G_SETTINGS_BIND_DEFAULT);
+ 
+     setup_general_section (self);
++    cc_apex_power_add (self->general_page, GTK_WIDGET (self->power_profile_section));
+ 
+     /* populate batteries */
+     if (self->up_client) {

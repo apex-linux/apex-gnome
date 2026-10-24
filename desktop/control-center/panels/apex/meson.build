@@ -40,13 +40,15 @@ panels_libs += static_library(
     'cc-apex-background.c',
     'cc-apex-header.c',
     'cc-apex-panel.c',
+    'cc-apex-power-state.c',
+    'cc-apex-power.c',
     'cc-apex-sidebar.c',
     'cc-apex-tile.c',
     'cc-apex-updates-page.c',
     'cc-apex-updates-state.c',
   ) + apex_update1,
   include_directories: [top_inc, common_inc],
-  dependencies: common_deps + [json_glib_dep],
+  dependencies: common_deps + [gudev_dep, json_glib_dep, m_dep],
   c_args: ['-DG_LOG_DOMAIN="cc-apex-panel"', '-DPANEL_ID="apex"'],
 )
 
