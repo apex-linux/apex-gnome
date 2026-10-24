@@ -1031,6 +1031,41 @@ async function windowSwitcher(unit) {
     }
 }
 
+// Shaped like endSessionDialog.js's power-off dialog: Cancel, then the confirm button.
+async function endSessionDialog(unit) {
+    const dialog = new ModalDialog.ModalDialog({styleClass: 'end-session-dialog'});
+    const content = new Dialog.MessageDialogContent({
+        title: 'Power Off',
+        description: 'The system will power off automatically in 54 seconds',
+    });
+    dialog.contentLayout.add_child(content);
+    const buttons = [
+        dialog.addButton({label: 'Cancel', action: () => {}, key: Clutter.KEY_Escape}),
+        dialog.addButton({label: 'Power Off', action: () => {}}),
+    ];
+    dialog.open();
+    try {
+        await settle();
+        global.stage.set_key_focus(null);
+        const find = styleClass => findDescendant(content, a => a.has_style_class_name?.(styleClass));
+        const title = find('message-dialog-title');
+        return {
+            box: styleOf(dialog.dialogLayout._dialog, unit),
+            contentSpacing: lengthOrNull(dialog.contentLayout.get_theme_node(), 'spacing', unit),
+            title: {...styleOf(title, unit), tracking: round(title.get_theme_node().get_letter_spacing() / unit.length)},
+            description: styleOf(find('message-dialog-description'), unit),
+            buttons: buttons.map(b => ({
+                ...styleOf(b, unit),
+                hover: underPseudoClass(b, 'hover', () => paint(b.get_theme_node(), unit)),
+            })),
+        };
+    } finally {
+        dialog.close();
+        dialog.destroy();
+        await settle();
+    }
+}
+
 // A stock ModalDialog shaped like polkit's: title, description, password entry, two buttons.
 async function modalDialog(unit) {
     const dialog = new ModalDialog.ModalDialog({styleClass: 'prompt-dialog'});
@@ -1053,8 +1088,6 @@ async function modalDialog(unit) {
         if (scene)
             delete scene.bytes;
         const find = styleClass => findDescendant(content, a => a.has_style_class_name?.(styleClass));
-        const endSession = withStyledActor(new St.BoxLayout({style_class: 'modal-dialog end-session-dialog'}),
-            node => lengthOrNull(node, 'width', unit));
         return {
             scene,
             box: styleOf(dialog.dialogLayout._dialog, unit),
@@ -1071,7 +1104,6 @@ async function modalDialog(unit) {
                 default: b.has_style_pseudo_class('default'),
                 hover: underPseudoClass(b, 'hover', () => paint(b.get_theme_node(), unit)),
             })),
-            endSessionWidth: endSession,
         };
     } finally {
         dialog.close();
@@ -1591,7 +1623,7 @@ async function scenes() {
     surfaces.quickSettings = await quickSettings(unit);
     surfaces.quickSettingsLayer = await quickSettingsLayer();
     surfaces.switcher = await windowSwitcher(unit);
-    surfaces.dialog = await modalDialog(unit);
+    surfaces.dialog = {...await modalDialog(unit), endSession: await endSessionDialog(unit)};
     surfaces.dateMenu = await calendarMenu(unit);
     surfaces.derived = derivedSurfaces(unit);
     surfaces.tilePreview = await tilePreview(unit);

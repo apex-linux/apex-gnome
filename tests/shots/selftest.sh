@@ -303,7 +303,11 @@ REPORT_OF_A_DIALOG_DRAWN_FROM_TOKENS='
         border: {top: $b, right: $b, bottom: $b, left: $b}, borderColor: ($t.apex_panel_border | hex),
         boxShadow: {color: ($t.apex_shadow | hex), y: ($t.apex_shadow_y | px), blur: ($t.apex_shadow_blur | px)},
         padding: {top: ($p - $b), right: ($p - $b), bottom: (($t.apex_dialog_padding_bottom | px) - $b), left: ($p - $b)}, spacing: ($t.apex_dialog_gap | px)},
-    endSessionWidth: (($t.apex_end_session_dialog_width | px) - 2 * $p),
+    endSession: {box: {width: ($t.apex_end_session_dialog_width | px), spacing: ($t.apex_end_session_gap | px)},
+        contentSpacing: ($t.apex_end_session_gap | px), title: {tracking: ($t.apex_dialog_title_tracking | px)},
+        description: {font: {features: "\"tnum\""}},
+        buttons: [{background: ($t.apex_button | hex), hover: {background: ($t.apex_button_hover | hex)}},
+            {background: ($t.apex_destructive | hex), foreground: ($t.apex_destructive_fg | hex), hover: {background: ($t.apex_destructive_hover | hex)}}]},
     contentSpacing: ($t.apex_dialog_gap | px), textSpacing: ($t.apex_dialog_text_gap | px),
     title: {font: {size: ($t.apex_font_dialog_title_size | px), weight: ($t.apex_font_heading_weight | tonumber)}},
     description: {font: {size: ($t.apex_font_size | px)}, foreground: ($t.apex_fg_dim | hex)},
@@ -779,7 +783,7 @@ test_modal_dialog() {
     local variant change what passes failures open_gaps
     for variant in light dark; do
         read -r passes failures open_gaps <<<"$(assert_run modal_dialog "$variant")"
-        if ((failures == 0 && open_gaps == 0 && passes == 8)); then
+        if ((failures == 0 && open_gaps == 0 && passes == 10)); then
             ok "modal dialog ($variant): drawn from the tokens it passes all $passes assertions"
         else
             not_ok "modal dialog ($variant): drawn from the tokens it passes (passed/failed/gaps $passes/$failures/$open_gaps): $(grep -m3 '^FAIL' "$T/top-bar.out" | paste -sd'|' -)"
@@ -798,6 +802,12 @@ test_modal_dialog() {
 .surfaces.dialog.box.padding.bottom = 23|upstream's even padding
 .surfaces.dialog.title.font.weight = 800|upstream's title weight
 .surfaces.dialog.entry.height = 41|upstream's entry padding
+.surfaces.dialog.endSession.box.width = 384|upstream's 24em end-session dialog
+.surfaces.dialog.endSession.contentSpacing = 18|the plain dialog gap in the end-session dialog
+.surfaces.dialog.endSession.title.tracking = 0|an untracked end-session title
+.surfaces.dialog.endSession.description.font.features = null|a countdown in proportional figures
+.surfaces.dialog.endSession.buttons[1].background = "#ebebedff"|a plain Power Off button
+.surfaces.dialog.endSession.buttons[1].hover.background = "#c01c28ff"|a Power Off button without hover feedback
 .surfaces.dialog.entry.focus.boxShadow.color = "#3584e4cc"|upstream's 80 % focus ring
 .surfaces.dialog.buttons[0].radius = 12|upstream's square-ish buttons
 .surfaces.dialog.buttons[1].background = "#00000a10"|a default button without the accent
