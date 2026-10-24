@@ -79,6 +79,10 @@ export class Popup {
         this._selected = -1;
     }
 
+    activateSelected() {
+        this._activate(this._selected);
+    }
+
     destroy() {
         this.close();
         Toast.hide();
@@ -163,7 +167,7 @@ export class Popup {
             const step = symbol === Clutter.KEY_Down ? 1 : -1;
             this._select(Math.max(0, Math.min(this._rows.length - 1, this._selected + step)));
         } else if (ENTER_KEYS.includes(symbol)) {
-            this._activate(this._selected);
+            this.activateSelected();
         } else {
             return Clutter.EVENT_PROPAGATE;
         }
