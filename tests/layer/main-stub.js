@@ -110,8 +110,24 @@ export const layoutManager = {
     },
 };
 
+const overviewHandlers = new Map();
+let nextOverviewHandler = 1;
+
 export const overview = {
     visible: false,
+    connect(signal, fn) {
+        overviewHandlers.set(nextOverviewHandler, [signal, fn]);
+        return nextOverviewHandler++;
+    },
+    disconnect(id) {
+        overviewHandlers.delete(id);
+    },
+    emit(signal) {
+        for (const [s, fn] of [...overviewHandlers.values()]) {
+            if (s === signal)
+                fn();
+        }
+    },
     focusSearch() {
         this.visible = true;
         fact('overview', 'shown, search focused');

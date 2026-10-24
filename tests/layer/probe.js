@@ -10,7 +10,32 @@ const fact = (key, value) => printerr(`probe: ${key}=${value}`);
 
 const handlers = new Map();
 let nextId = 1;
+function newEmitter(props = {}) {
+    const signalHandlers = new Map();
+    let nextSignalId = 1;
+    return {
+        ...props,
+        connect(signal, fn) {
+            signalHandlers.set(nextSignalId, [signal, fn]);
+            return nextSignalId++;
+        },
+        disconnect(id) {
+            signalHandlers.delete(id);
+        },
+        emit(signal) {
+            for (const [s, fn] of [...signalHandlers.values()]) {
+                if (s === signal)
+                    fn();
+            }
+        },
+    };
+}
+
+const windows = [];
 globalThis.global = {
+    display: newEmitter(),
+    window_manager: newEmitter(),
+    workspace_manager: newEmitter({get_active_workspace: () => ({list_windows: () => windows})}),
     session_mode: GLib.getenv('PROBE_MODE') ?? 'user',
     connect(signal, fn) {
         handlers.set(nextId, [signal, fn]);
@@ -221,6 +246,57 @@ async function exerciseSearchButton() {
     report('on');
 }
 
+function newWindow() {
+    return {
+        primary: true, showing: true, maximized: true, type: 0,
+        is_on_primary_monitor() {
+            return this.primary;
+        },
+        showing_on_its_workspace() {
+            return this.showing;
+        },
+        is_maximized() {
+            return this.maximized;
+        },
+        get_window_type() {
+            return this.type;
+        },
+    };
+}
+
+async function exerciseMaximisedWindow() {
+    if (GLib.getenv('PROBE_MAXIMISED') !== '1')
+        return;
+    const Main = await import(`file://${shellDir}/js/ui/main.js`);
+    const win = newWindow();
+    const steps = [
+        ['maximised', () => windows.push(win), global.window_manager, 'size-changed'],
+        ['overview', () => (Main.overview.visible = true), Main.overview, 'showing'],
+        ['no-overview', () => (Main.overview.visible = false), Main.overview, 'hidden'],
+        ['minimised', () => (win.showing = false), global.window_manager, 'minimize'],
+        ['unminimised', () => (win.showing = true), global.window_manager, 'unminimize'],
+        ['unmaximised', () => (win.maximized = false), global.window_manager, 'size-changed'],
+        ['other-monitor', () => Object.assign(win, {maximized: true, primary: false}), global.display, 'restacked'],
+        ['desktop-window', () => Object.assign(win, {primary: true, type: 1}), global.display, 'restacked'],
+        ['workspace', () => Object.assign(win, {type: 0}), global.workspace_manager, 'active-workspace-changed'],
+        ['closed', () => windows.pop(), global.display, 'restacked'],
+    ];
+    for (const [label, change, emitter, signal] of steps) {
+        printerr(`probe: set ${label}`);
+        change();
+        emitter.emit(signal);
+    }
+    windows.push(win);
+    printerr('probe: set translucent-top-bar=false');
+    settings.set_boolean('translucent-top-bar', false);
+    await spin(100);
+    printerr('probe: set layer-enabled=false');
+    settings.set_boolean('layer-enabled', false);
+    await spin(200);
+    printerr('probe: set restacked');
+    global.display.emit('restacked');
+}
+
 async function switchLayer() {
     const cycles = Number(GLib.getenv('PROBE_SWITCH') ?? '0');
     for (let cycle = 1; cycle <= cycles; cycle++) {
@@ -269,6 +345,7 @@ if (layer && GLib.getenv('PROBE_ENABLE') === '1') {
     await exerciseSolidBar();
     await exerciseFocusedApp();
     await exerciseSearchButton();
+    await exerciseMaximisedWindow();
     await setDisabledLive();
     await switchLayer();
     for (const [signal, fn] of [...handlers.values()]) {

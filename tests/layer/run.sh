@@ -395,5 +395,10 @@ probe search-disabled "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_SEARCH_BUTTON=1 PROB
 fact "disabled-features=['panel']: no search button" 'search\.enabled=none'
 fact "disabled-features=['panel']: and Super+Space stays" 'keybinding\.add=toggle-spotlight .*'
 
+probe maximised "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_MAXIMISED=1
+panel_classes_are "solid-bar: solid while a window on the primary monitor is maximised and the overview is closed" \
+    'none [maximised] apex-solid-bar [overview] none [no-overview] apex-solid-bar [minimised] none [unminimised] apex-solid-bar [unmaximised] none [other-monitor] none [desktop-window] none [workspace] apex-solid-bar [closed] none [translucent-top-bar=false] apex-solid-bar [layer-enabled=false] none [restacked]'
+lacks "solid-bar: the maximised-window trigger disables cleanly" 'off for this session|did not disable cleanly|cannot restyle'
+
 printf '1..%d\n' "$tests"
 ((failed == 0))
