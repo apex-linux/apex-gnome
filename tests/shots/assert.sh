@@ -31,8 +31,10 @@ readonly EMPTY_WORKSPACE_TEXT='No open windows'
 readonly LAUNCHER_COLUMNS=7
 readonly LAUNCHER_ROWS=4
 readonly LAUNCHER_ICON_SIZE=88
-readonly LAUNCHER_GRID_TOP=128
-readonly LAUNCHER_GRID_TOP_TOLERANCE=8
+readonly LAUNCHER_GRID_TOP=132
+# overviewControls.js: spacing is 2 % of the work area, the stock .search-entry keeps 6 px below it.
+readonly OVERVIEW_SPACING_RATIO=0.02
+readonly STOCK_SEARCH_MARGIN_BOTTOM=6
 readonly DIAMOND_SQUARE_PX=8
 readonly DIAMOND_STROKE_PX=2
 readonly DIAMOND_STROKE_AREA_PX=$((4 * DIAMOND_SQUARE_PX * DIAMOND_STROKE_PX))
@@ -476,7 +478,8 @@ shadow_layers() {
 
 # shellcheck disable=SC2016 # jq programs
 quick_settings_layer() {
-    local label=$1 log=$2 mode=$3 scenes q=.surfaces.quickSettingsLayer
+    local label=$1 log=$2 mode=$3 scenes q=.surfaces.quickSettingsLayer variant=light
+    [[ $label == *dark* ]] && variant=dark
     scenes=$(report_of "$log" APEXG2-SCENES)
     local order='([.order[].title]) as $t | ($t | index("VPN")) as $vpn | ($t | index("Airplane Mode")) as $airplane'
     if [[ $mode == apex ]]; then
@@ -490,6 +493,14 @@ quick_settings_layer() {
             "a click switches Power Mode from Balanced to the last profile, still lit"
         expect "$label Quick Settings" "$scenes" "$q.back | (.checked | not) and .lit and .subtitle == \"Balanced\"" \
             "and a second click back to Balanced"
+        expect "$label Quick Settings" "$scenes" "$q.wifiMenu.subtitle | .column == 3 and .row == 0 and .xAlign == .end" \
+            "the Wi-Fi menu's header subtitle ends the title's row, at its end (board 17)"
+        expect "$label Quick Settings" "$scenes" "$q.wifiMenu.rows | length > 1 and any(.active) and all(.checked == .active)" \
+            "the active network's row, and only it, is :checked"
+        top_bar_metric "$label Quick Settings" "$scenes" "$(tokens_for "$variant")" \
+            'a secure network'"'"'s lock follows its name, $apex_quick_menu_lock_size in $apex_fg at $apex_quick_menu_lock_opacity' \
+            "$q.wifiMenu.rows" '[.[] | select(.secure)] | length > 0 and all(.lockAfterName and (.lockSize | px_is($t.apex_quick_menu_lock_size))
+                and (.lockColor | colour_is(($t.apex_fg | rgba) as $f | "rgba(\($f[0]), \($f[1]), \($f[2]), \($t.apex_quick_menu_lock_opacity))")))'
     else
         expect "$label Quick Settings" "$scenes" "$q | $order | \$vpn != null and \$airplane != null and \$vpn < \$airplane" \
             "stock's order: VPN with the network toggles, before Airplane Mode"
@@ -497,6 +508,8 @@ quick_settings_layer() {
             "stock: Power Mode unlit at Balanced, no On/Off subtitles"
         expect "$label Quick Settings" "$scenes" "$q.switched.checked and ($q.back.checked | not)" \
             "stock: a click switches Power Mode to the last profile and back"
+        expect "$label Quick Settings" "$scenes" "$q.wifiMenu | (.subtitle | .column == 1 and .row == 1) and (.rows | length > 1 and all((.checked | not) and (.lockAfterName | not)))" \
+            "stock: the Wi-Fi menu's subtitle under its title, no row :checked, each lock by its signal icon"
     fi
 }
 
@@ -751,8 +764,9 @@ overview_layer() {
         "$o.workspace.empty" '(.font.size | px_is($t.apex_font_workspace_empty_size)) and .font.weight == ($t.apex_font_heading_weight | tonumber) and (.foreground | colour_is($t.apex_fg_dim))'
     expect_report "$label" "$log" ".surfaces.appGrid.grid == {columns: $LAUNCHER_COLUMNS, rows: $LAUNCHER_ROWS, iconSize: $LAUNCHER_ICON_SIZE}" \
         "launcher: $LAUNCHER_COLUMNS columns of $LAUNCHER_ICON_SIZE px icons, $LAUNCHER_ROWS rows a page" APEXG2-SCENES
-    expect_report "$label" "$log" ".surfaces.appGrid | .strip == 0 and (.box.y - $LAUNCHER_GRID_TOP | fabs) <= $LAUNCHER_GRID_TOP_TOLERANCE" \
-        "launcher: no workspace strip above the grid, which starts at board 36's ${LAUNCHER_GRID_TOP} px (within $LAUNCHER_GRID_TOP_TOLERANCE)" APEXG2-SCENES
+    top_bar_metric "$label overview" "$scenes" "$tokens" "launcher: no workspace strip; the grid starts at the work area + \$apex_search_top + \$apex_search_height + $STOCK_SEARCH_MARGIN_BOTTOM + twice the spacing, board 36's $LAUNCHER_GRID_TOP px" \
+        "{g: .surfaces.appGrid, wa: .scenes.overview.workArea}" "(.wa.y + (\$t.apex_search_top | px) + (\$t.apex_search_height | px) + $STOCK_SEARCH_MARGIN_BOTTOM
+            + 2 * (.wa.height * $OVERVIEW_SPACING_RATIO | round)) as \$top | .g.strip == 0 and (.g.box.y - \$top | fabs) <= 1 and \$top == $LAUNCHER_GRID_TOP"
 }
 
 # shellcheck disable=SC2016 # jq programs and token names, not shell expansions
