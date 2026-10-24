@@ -365,7 +365,7 @@ function describeCard(message) {
         title: message.titleLabel.text, glyph: glyph.visible, line,
         icon: message._icon.visible
             ? {...box(message._icon), size: message._icon.get_theme_node().get_length('icon-size')} : null,
-        text: box(message.titleLabel), card: box(message),
+        header: box(content), text: box(message.titleLabel), card: box(message),
     };
 }
 
