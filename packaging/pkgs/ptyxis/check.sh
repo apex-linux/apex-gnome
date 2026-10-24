@@ -47,7 +47,8 @@ ok "every resource file of Source1 ($n) is in $APEX_PREFIX"
 
 css=$(gresource extract "$bin" "$APEX_PREFIX/apex.css") || fail "ptyxis has no $APEX_PREFIX/apex.css"
 grep -Fq '/*! apex-ptyxis */' <<<"$css" || fail "$APEX_PREFIX/apex.css has no Apex marker"
-ok "$APEX_PREFIX/apex.css carries the Apex marker"
+grep -Fq '.apex-sessions' <<<"$css" || fail "$APEX_PREFIX/apex.css has no sessions sidebar"
+ok "$APEX_PREFIX/apex.css carries the Apex marker and the sidebar's sheet"
 
 override=$root/usr/share/glib-2.0/schemas/org.gnome.Ptyxis.fedora.gschema.override
 [[ -f $override ]] || fail "Fedora's gschema override (its Source1) is missing"

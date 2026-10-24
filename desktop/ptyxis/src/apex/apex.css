@@ -1,2 +1,180 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 /*! apex-ptyxis */
+
+window.apex {
+  --apex-side: #f1f1f4;
+  --apex-head: #fafafb;
+  --apex-fg: #1d1d21;
+  --apex-dim: rgb(29 29 33 / 62%);
+  --apex-border: rgb(0 0 10 / 9%);
+  --apex-btn: rgb(0 0 10 / 6.5%);
+  --apex-btn-hover: rgb(0 0 10 / 12%);
+  --apex-selected: rgb(0 0 10 / 8%);
+  --apex-needs-you: #b04000;
+  --apex-failed: #c01c28;
+}
+
+window.apex.apex-dark {
+  --apex-side: #2b2b2f;
+  --apex-head: #242428;
+  --apex-fg: #f4f4f6;
+  --apex-dim: rgb(244 244 246 / 64%);
+  --apex-border: rgb(255 255 255 / 8%);
+  --apex-btn: rgb(255 255 255 / 9%);
+  --apex-btn-hover: rgb(255 255 255 / 16%);
+  --apex-selected: rgb(255 255 255 / 10%);
+  --apex-needs-you: #ffa348;
+  --apex-failed: #ff7b7b;
+}
+
+overlay-split-view > .sidebar-pane {
+  color: var(--apex-fg);
+  background-color: var(--apex-side);
+  border-right: 1px solid var(--apex-border);
+  box-shadow: none;
+}
+
+.apex-sidebar headerbar {
+  padding: 0 2px 0 8px;
+}
+
+.apex-sidebar-title {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.apex-sessions {
+  background: none;
+  padding: 2px 8px 8px;
+}
+
+.apex-sessions > row.apex-session {
+  min-height: 52px;
+  margin-top: 2px;
+  padding: 0;
+  border-radius: 9px;
+}
+
+.apex-sessions > row.apex-session:selected {
+  background-color: var(--apex-selected);
+  color: inherit;
+}
+
+.apex-session .content {
+  padding: 8px 10px;
+}
+
+.apex-session .apex-row-title {
+  color: var(--apex-fg);
+  font-size: 13.5px;
+  font-weight: 600;
+}
+
+.apex-session.needs-you .apex-row-title {
+  font-weight: 800;
+}
+
+.apex-session .apex-row-subtitle {
+  font-size: 12px;
+  color: var(--apex-dim);
+}
+
+.apex-session .apex-row-when {
+  font-size: 11.5px;
+  font-feature-settings: "tnum";
+  color: var(--apex-dim);
+}
+
+.apex-session progressbar {
+  margin: 0 10px 3px;
+}
+
+.apex-session progressbar > trough {
+  min-height: 2px;
+  border-radius: 1px;
+  background-color: var(--apex-btn-hover);
+}
+
+.apex-session progressbar > trough > progress {
+  min-height: 2px;
+  border-radius: 1px;
+  background-color: var(--accent-bg-color);
+}
+
+apex-glyph.running {
+  color: var(--accent-bg-color);
+}
+
+apex-glyph.done,
+apex-glyph.host,
+apex-glyph.container,
+apex-glyph.remote {
+  color: var(--apex-dim);
+}
+
+apex-glyph.failed {
+  color: var(--apex-failed);
+}
+
+apex-glyph.needs-you {
+  color: var(--apex-needs-you);
+}
+
+.apex-group {
+  padding: 18px 10px 6px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--apex-dim);
+}
+
+.apex-group.first {
+  padding-top: 6px;
+}
+
+.apex-group .needs-you {
+  font-size: 11.5px;
+  color: var(--apex-needs-you);
+}
+
+.apex-tag {
+  padding: 1px 7px;
+  border-radius: 6px;
+  background-color: var(--apex-btn);
+  font-family: "JetBrains Mono", monospace;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.apex-sessions-footer {
+  padding: 12px 18px 14px;
+  border-top: 1px solid var(--apex-border);
+  font-size: 12px;
+  font-weight: 600;
+  font-feature-settings: "tnum";
+  color: var(--apex-dim);
+}
+
+.apex-session-header {
+  color: var(--apex-fg);
+  background-color: var(--apex-head);
+}
+
+.apex-session-title {
+  margin-left: 4px;
+}
+
+.apex-session-title .apex-title {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.apex-session-title .apex-path {
+  font-size: 12.5px;
+  color: var(--apex-dim);
+}
+
+.apex-session-title .apex-tag {
+  padding: 2px 8px;
+  font-size: 11.5px;
+  color: var(--apex-dim);
+}
