@@ -343,7 +343,7 @@ def check_cards(case, step, menu, apex):
         check(f"{case}: {step}: each card's header reads app · time, without the source glyph",
               all(not c["glyph"] and " · " in c["line"] for c in cards), json.dumps(cards))
         check(f"{case}: {step}: each card shows its app's {ICON_SIZE} px icon left of its text",
-              all(c["icon"] and abs(c["icon"]["width"] - ICON_SIZE) <= 1 and c["icon"]["x"] + c["icon"]["width"] <= c["text"]["x"]
+              all(c["icon"] and abs(c["icon"]["size"] - ICON_SIZE) <= 1 and c["icon"]["x"] + c["icon"]["width"] <= c["text"]["x"]
                   for c in cards), json.dumps(cards))
         boxes = sorted((c["card"] for c in cards), key=lambda b: b["y"])
         gaps = [b["y"] - a["y"] - a["height"] for a, b in zip(boxes, boxes[1:])]

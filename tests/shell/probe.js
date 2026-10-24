@@ -238,17 +238,17 @@ async function shootGreeter() {
 
 // Board 34's notification list, from fdo Notify calls to the shell's own notification daemon.
 const NOTIFICATIONS = [
-    ['Settings', 'Update ready', 'Apex 45.20261024.141 starts after the next restart.'],
-    ['Calendar', 'Design review at 14:00', 'Canvas boards 34 to 36, in 15 minutes.'],
-    ['Terminal', 'Command finished', 'just vm-image exited 0 after 18 min in apex-image.'],
-    ['Terminal', 'Command failed', 'just lint exited 1 in apex-gnome.'],
-    ['Files', 'Copied 4 items', 'To Projects.'],
+    ['Settings', 'preferences-system-symbolic', 'Update ready', 'Apex 45.20261024.141 starts after the next restart.'],
+    ['Calendar', 'x-office-calendar-symbolic', 'Design review at 14:00', 'Canvas boards 34 to 36, in 15 minutes.'],
+    ['Terminal', 'utilities-terminal-symbolic', 'Command finished', 'just vm-image exited 0 after 18 min in apex-image.'],
+    ['Terminal', 'utilities-terminal-symbolic', 'Command failed', 'just lint exited 1 in apex-gnome.'],
+    ['Files', 'folder-symbolic', 'Copied 4 items', 'To Projects.'],
 ];
 
-function notify([app, title, body]) {
+function notify([app, icon, title, body]) {
     return Gio.DBus.session.call('org.freedesktop.Notifications', '/org/freedesktop/Notifications',
         'org.freedesktop.Notifications', 'Notify',
-        new GLib.Variant('(susssasa{sv}i)', [app, 0, '', title, body, [], {}, -1]),
+        new GLib.Variant('(susssasa{sv}i)', [app, 0, icon, title, body, [], {}, -1]),
         null, Gio.DBusCallFlags.NONE, -1, null);
 }
 
@@ -257,7 +257,9 @@ function describeCard(message) {
     const line = content.get_children().filter(c => c instanceof St.Label && c.visible).map(c => c.text).join(' ');
     return {
         title: message.titleLabel.text, glyph: glyph.visible, line,
-        icon: message._icon.visible ? box(message._icon) : null, text: box(message.titleLabel), card: box(message),
+        icon: message._icon.visible
+            ? {...box(message._icon), size: message._icon.get_theme_node().get_length('icon-size')} : null,
+        text: box(message.titleLabel), card: box(message),
     };
 }
 
