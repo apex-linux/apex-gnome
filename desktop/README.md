@@ -72,11 +72,13 @@ stock bar when it is disabled:
   indicators, unsafe mode and other panel buttons (input source, accessibility,
   recording) stay. Their Quick Settings toggles stay too.
 
-`panel/solid-bar.js` follows `translucent-top-bar` live: while it is off the panel carries the
-style class `apex-solid-bar`, which `_top-bar.scss` draws as `$apex_bar_solid` over a
-`0 1px 0 $apex_border` line, in the overview too; the lock screen and the greeter keep
-their transparent panel. A schema without the key turns off the `panel` feature, logged.
-The maximised-window trigger comes in its own change.
+`panel/solid-bar.js` makes the bar solid while `translucent-top-bar` is off (live), or while
+a window on the primary monitor's active workspace is maximised, showing and not the
+desktop, and the overview is closed. It follows restacking, size changes, minimising,
+the workspace and the overview. The panel then carries the style class `apex-solid-bar`,
+which `_top-bar.scss` draws as `$apex_bar_solid` over a `0 1px 0 $apex_border` line; the
+lock screen and the greeter keep their transparent panel. A schema without the key turns
+off the `panel` feature, logged.
 
 `panel/focused-app.js` adds an item after the Activities pill (status-area role `apex-focused-app`):
 the name of `Shell.WindowTracker`'s focus app, or "Desktop" while nothing has focus, at

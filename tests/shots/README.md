@@ -183,7 +183,7 @@ removes its pin.
 | no step yet (a clock hook, or the owner accepts it) | with the dot, the clock pill is padding + text + gap + dot + padding wide | 13 px wider: upstream's invisible pad left of the text |
 
 Not asserted here: the maximised-window trigger of the solid bar (G2 opens no window
-yet), the volume glyph (the container has no audio server), Reduce Transparency (S2b), the bar
+yet; the layer tests cover it), the volume glyph (the container has no audio server), Reduce Transparency (S2b), the bar
 text's contrast over other wallpapers (S2b's solid fallback; over the fixture wallpaper
 it is at least 4.8:1), and what the goldens judge: the Apex Symbolic glyphs (S1b), `ss03`
 (S1b, fontconfig) and the light bar over the still-dark overview (S1b).
