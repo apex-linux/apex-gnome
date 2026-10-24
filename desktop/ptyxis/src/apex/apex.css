@@ -178,3 +178,45 @@ apex-glyph.needs-you {
   font-size: 11.5px;
   color: var(--apex-dim);
 }
+
+apex-panes paned > separator {
+  min-width: 1px;
+  min-height: 1px;
+  background: var(--apex-border);
+}
+
+.apex-pane-header {
+  min-height: 34px;
+  padding: 0 6px 0 14px;
+  border-bottom: 1px solid var(--apex-border);
+  background-color: var(--apex-head);
+  color: var(--apex-fg);
+  font-size: 12.5px;
+}
+
+.apex-pane-header .apex-pane-title {
+  font-weight: 700;
+}
+
+.apex-pane-header .apex-path {
+  color: var(--apex-dim);
+}
+
+.apex-pane-header .apex-tag {
+  color: var(--apex-dim);
+}
+
+.apex-pane-header button {
+  min-width: 28px;
+  min-height: 28px;
+  padding: 0;
+  border-radius: 7px;
+}
+
+.apex-pane.dimmed > .apex-pane-header {
+  opacity: 0.7;
+}
+
+.apex-pane.dimmed > .apex-pane-body {
+  opacity: 0.62;
+}

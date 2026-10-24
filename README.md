@@ -12,6 +12,10 @@ the Apex layer; libadwaita, Settings and Files patch series join it in S2.
 | `tests/shots/` | G2, the headless shell of a built image, and its self-test |
 | `desktop/ptyxis/`, `packaging/pkgs/ptyxis/` | Ptyxis rebuilt in the lane with the Apex terminal, the sessions sidebar and split panes of boards 32 and 33: its sources (`src/apex/`) and its recipe ([README](packaging/pkgs/ptyxis/README.md)) |
 | `tests/ptyxis/` | the ptyxis recipe through apex-lane's container half (`lane.sh`), the checks of `desktop/ptyxis/`, the status logic's unit test, and the captures (`shoot.sh`) |
+| `desktop/control-center/`, `packaging/pkgs/gnome-control-center/` | gnome-control-center rebuilt in the lane for the Apex Settings, boards 11, 18, 23, 24 and 26: its sources (`panels/apex/`) and its recipe ([README](packaging/pkgs/gnome-control-center/README.md)) |
+| `tests/control-center/` | the gnome-control-center recipe through apex-lane's container half (`lane.sh`), and the checks of `desktop/control-center/` |
+| `desktop/nautilus/`, `packaging/pkgs/nautilus/` | nautilus rebuilt in the lane for Files, boards 27 to 29: its sources (`src/apex/`) and its recipe ([README](packaging/pkgs/nautilus/README.md)) |
+| `tests/nautilus/` | the nautilus recipe through apex-lane's container half (`lane.sh`), and the checks of `desktop/nautilus/` |
 
 [apex-image](https://github.com/apex-linux/apex-image) pins this repository by commit in
 `components.lock`, builds gnome-shell from the recipe in its builder VM, and runs G2 on the
@@ -39,6 +43,8 @@ just eslint       # node, npm and git: gnome-shell 51.0's eslint rules, pinned i
 just theme        # sassc and git; dnf5, rpm2cpio, cpio and xz for Fedora's gnome-shell SRPM
 just ptyxis-lane  # podman or docker: Ptyxis rebuilt as the lane builds it, RPMs in _build/ptyxis/out
 just ptyxis-shots # podman or docker: that Ptyxis captured in a headless gnome-shell, light and dark
+just control-center-lane # podman or docker: gnome-control-center rebuilt as the lane builds it, RPMs in _build/control-center/out
+just nautilus-lane # podman or docker: nautilus rebuilt as the lane builds it, RPMs in _build/nautilus/out
 ```
 
 `just eslint` lints `desktop/shell/js` and the gjs tests with gnome-shell's own
@@ -57,6 +63,7 @@ explains itself, and comments say only why
 ## License
 
 `desktop/shell/` and the patches are GPL-2.0-or-later, as gnome-shell is
-(`LICENSE.GPL-2.0`). `lint/eslint.config.js` keeps gnome-shell's MIT OR
-LGPL-2.1-or-later. Everything else, `desktop/ptyxis/` and the Ptyxis patches included
-(Ptyxis is GPL-3.0-or-later), is GPL-3.0-or-later (`LICENSE`).
+(`LICENSE.GPL-2.0`); so are `desktop/control-center/` and the gnome-control-center
+patches, gnome-control-center's licence. `lint/eslint.config.js` keeps gnome-shell's MIT OR
+LGPL-2.1-or-later. Everything else, `desktop/ptyxis/`, `desktop/nautilus/` and their patches
+included (Ptyxis and nautilus are GPL-3.0-or-later), is GPL-3.0-or-later (`LICENSE`).

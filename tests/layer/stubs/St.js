@@ -8,7 +8,23 @@ const scaleFactor = Number(GLib.getenv('PROBE_SCALE') ?? '1');
 
 class Label {
     constructor(params) {
-        Object.assign(this, params);
+        Object.assign(this, {visible: true, width: 120}, params);
+    }
+
+    show() {
+        this.visible = true;
+    }
+
+    hide() {
+        this.visible = false;
+    }
+
+    set_position(x, y) {
+        Object.assign(this, {x, y});
+    }
+
+    destroy() {
+        this.destroyed = true;
     }
 }
 
