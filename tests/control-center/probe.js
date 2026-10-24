@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// gnome-shell's automation script for run.sh: opens the Apex Desktop panel, captures it, checks its rows.
+// gnome-shell's automation script for run.sh: opens a Settings page (APEX_OPEN), captures it, runs a checker (APEX_CHECK).
 
 import Clutter from 'gi://Clutter';
 import Gio from 'gi://Gio';
@@ -53,8 +53,9 @@ async function scrollToEnd(window) {
     }
 }
 
-async function check(mode) {
-    const proc = Gio.Subprocess.new(['python3', GLib.build_filenamev([GLib.getenv('CC_TESTS'), 'bindings.py']), mode],
+async function check(command) {
+    const [script, ...args] = command.split(' ');
+    const proc = Gio.Subprocess.new(['python3', GLib.build_filenamev([GLib.getenv('CC_TESTS'), script]), ...args],
         Gio.SubprocessFlags.NONE);
     try {
         await proc.wait_check_async(null);
@@ -68,27 +69,28 @@ async function probe() {
     Main.overview.hide();
     await Scripting.sleep(500);
     const launcher = new Gio.SubprocessLauncher({flags: Gio.SubprocessFlags.NONE});
-    launcher.spawnv(['gnome-control-center', 'apex']);
+    const page = (GLib.getenv('APEX_OPEN') ?? 'apex').split(' ');
+    launcher.spawnv(['gnome-control-center', ...page]);
     for (let i = 0; i < WINDOW_WAIT_MS / 100 && settingsWindows().length === 0; i++)
         await Scripting.sleep(100);
     const [window] = settingsWindows();
     if (!window)
-        throw new Error(`no Settings window ${WINDOW_WAIT_MS} ms after gnome-control-center apex`);
+        throw new Error(`no Settings window ${WINDOW_WAIT_MS} ms after gnome-control-center ${page.join(' ')}`);
     // The first resize can land before the window is mapped, so the second makes the size stick.
     for (let i = 0; i < 2; i++) {
         window.move_resize_frame(false, WINDOW.x, WINDOW.y, WINDOW.width, WINDOW.height);
         await Scripting.sleep(SETTLE_MS);
     }
 
-    const mode = GLib.getenv('APEX_CHECK');
+    const command = GLib.getenv('APEX_CHECK');
     const result = {top: await capture(window, '')};
     if (GLib.getenv('APEX_SCROLL')) {
         await scrollToEnd(window);
         await Scripting.sleep(SETTLE_MS);
         result.scrolled = await capture(window, '-scrolled');
     }
-    if (mode)
-        result.check = await check(mode);
+    if (command)
+        result.check = await check(command);
     const r = window.get_frame_rect();
     result.frame = [r.x, r.y, r.width, r.height];
     console.log(`APEXCC ${JSON.stringify(result)}`);

@@ -4,5 +4,6 @@
   <gresource prefix="/org/gnome/Settings/apex">
     <file>apex.css</file>
     <file preprocess="xml-stripblanks">cc-apex-panel.ui</file>
+    <file preprocess="xml-stripblanks">cc-apex-updates-page.ui</file>
   </gresource>
 </gresources>

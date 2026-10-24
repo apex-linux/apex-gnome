@@ -6,6 +6,11 @@ replace ^Release:[[:space:]]+%autorelease$
 	Release:	%{autorelease}@APEX_RELEASE@
 end
 
+# The Software Updates page's proxy is generated from apex-system's GPL-3.0-or-later interface.
+replace ^License:[[:space:]]+GPL-2\.0-or-later AND CC0-1\.0$
+	License:        GPL-2.0-or-later AND GPL-3.0-or-later AND CC0-1.0
+end
+
 after ^Source0:[[:space:]]
 	Source1:	@SOURCE1@
 end
