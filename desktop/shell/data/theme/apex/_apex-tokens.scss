@@ -281,3 +281,56 @@ $apex_folder_dialog_padding: 18px;
 $apex_folder_dialog_padding_bottom: 22px;
 $apex_folder_close_size: 28px;
 $apex_font_folder_title_size: 16px;
+// Spotlight and its toast (board 38).
+$apex_fg_hint: if($variant == 'light', rgba(29, 29, 33, .45), rgba(244, 244, 246, .45));
+$apex_selection_opacity: .16;
+
+// St draws no backdrop filter: the glass manager of S2b reads these.
+$apex_spotlight_blur: 34px;
+$apex_spotlight_saturation: 180%;
+$apex_toast_blur: 30px;
+$apex_toast_saturation: 180%;
+
+$apex_radius_spotlight: 24px;
+$apex_spotlight_width: 680px;
+$apex_spotlight_top: 96px;
+$apex_spotlight_field_height: 60px;
+$apex_spotlight_field_padding: 20px;
+$apex_spotlight_field_gap: 14px;
+$apex_spotlight_glyph_size: 20px;
+$apex_font_spotlight_field_size: 20px;
+$apex_font_spotlight_field_weight: 500;
+$apex_spotlight_clear_size: 24px;
+$apex_spotlight_clear_icon_size: 10px;
+$apex_spotlight_results_padding_top: 6px;
+$apex_spotlight_results_padding: 8px;
+$apex_spotlight_header_height: 30px;
+$apex_spotlight_header_padding: 12px;
+$apex_spotlight_header_padding_bottom: 6px;
+$apex_font_spotlight_header_size: 11.5px;
+$apex_spotlight_header_tracking: .04em;
+$apex_radius_spotlight_row: 12px;
+$apex_spotlight_row_height: 48px;
+$apex_spotlight_row_padding: 12px;
+$apex_spotlight_row_gap: 12px;
+$apex_spotlight_icon_size: 32px;
+$apex_spotlight_text_gap: 1px;
+$apex_font_spotlight_title_size: 14px;
+$apex_font_spotlight_subtitle_size: 12.5px;
+$apex_font_spotlight_result_size: 18px;
+$apex_spotlight_action_gap: 6px;
+$apex_font_spotlight_action_size: 12px;
+$apex_radius_spotlight_chip: 6px;
+$apex_spotlight_chip_height: 20px;
+$apex_spotlight_chip_padding: 6px;
+$apex_font_spotlight_chip_size: 11px;
+$apex_spotlight_empty_height: 72px;
+
+$apex_radius_toast: 20px;
+$apex_toast_height: 40px;
+$apex_toast_padding_start: 12px;
+$apex_toast_padding_end: 16px;
+$apex_toast_gap: 10px;
+$apex_toast_check_size: 22px;
+$apex_toast_check_icon_size: 12px;
+$apex_toast_bottom: 92px;
