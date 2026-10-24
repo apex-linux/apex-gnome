@@ -13,6 +13,8 @@ readonly APEX_SCHEMA_FIXTURE=$S2C_TESTS/../layer/fixtures/io.github.apex_linux.A
 readonly SCHEMA_DIR=/usr/share/glib-2.0/schemas
 readonly AGENT=/usr/libexec/apex/apex-session-agent
 readonly RED='#ff0000'
+readonly RED_UUID=5e2c0000000000000000000000000ed0
+readonly RED_SCHEMA=org.gnome.Ptyxis.Profile:/org/gnome/Ptyxis/Profiles/$RED_UUID/
 
 usage() {
     cat <<EOF
@@ -35,7 +37,7 @@ case ${1:-} in
 esac
 (($# == 2)) || { usage >&2; exit 2; }
 headless_require_container radius-test.sh
-for program in ptyxis nautilus gnome-control-center dconf python3 jq; do
+for program in ptyxis dconf python3 jq; do
     command -v "$program" >/dev/null || die "radius-test.sh: no $program"
 done
 [[ -x $2 ]] || die "radius-test.sh: no agent at $2 (tests/s2c/agent.sh)"
@@ -64,20 +66,22 @@ home=$HEADLESS_HOME
 palettes=$home/.local/share/org.gnome.Ptyxis/palettes
 install -d -o "$USER_NAME" "$home/.local" "$home/.local/share" "$home/.local/share/org.gnome.Ptyxis" "$palettes"
 {
-    printf '[Palette]\nName=Apex\nBackground=%s\nForeground=%s\nCursor=%s\n' "$RED" "$RED" "$RED"
+    printf '[Palette]\nName=S2c Red\nBackground=%s\nForeground=%s\nCursor=%s\n' "$RED" "$RED" "$RED"
     for i in $(seq 0 15); do printf 'Color%d=%s\n' "$i" "$RED"; done
-} >"$palettes/apex.palette"
+} >"$palettes/s2c-red.palette"
 chown -R "$USER_NAME:" "$home"
 headless_bus "$out"
 
 # The container has no settings portal for libadwaita to read color-scheme from.
 headless_run "$out/s2c.log" "$S2C_TESTS/probe.js" "$SHELL_TIMEOUT" \
     "org.gnome.Ptyxis interface-style 'light'
-$PROFILE_SCHEMA palette 'apex'
+org.gnome.Ptyxis profile-uuids ['$PROFILE_UUID', '$RED_UUID']
+$RED_SCHEMA label 'S2c Red'
+$RED_SCHEMA palette 's2c-red'
 io.github.apex_linux.Apex.Desktop window-corner-radius 14" \
     XDG_SESSION_TYPE=wayland XDG_CURRENT_DESKTOP=GNOME ADW_DEBUG_COLOR_SCHEME=default \
     RUST_LOG=info APEX_SHELL_GUARD_MARKER=/tmp/apex-s2c-guard APEX_AGENT="$AGENT" \
-    APEX_AGENT_LOG="$out/agent.log" APEX_CLICK="$S2C_TESTS/click.py" APEX_SHOTS="$out" \
+    APEX_AGENT_LOG="$out/agent.log" APEX_CLICK="$S2C_TESTS/click.py" APEX_RED_PROFILE="$RED_UUID" APEX_SHOTS="$out" \
     APEX_CSS_FILE="$home/.config/gtk-4.0/apex.css"
 log "radius-test.sh: shell exit $?"
 

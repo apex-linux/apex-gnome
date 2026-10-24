@@ -38,7 +38,8 @@ def radius_toggle(app, label):
         if node.get_role() != Atspi.Role.RADIO_BUTTON or node.get_name() != label:
             continue
         group = node.get_parent()
-        names = {group.get_child_at_index(i).get_name() for i in range(group.get_child_count())}
+        kids = (group.get_child_at_index(i) for i in range(group.get_child_count()))
+        names = {k.get_name() for k in kids if k is not None and k.get_role() == Atspi.Role.RADIO_BUTTON}
         if names == TOGGLES:
             return node
     sys.exit(f"click.py: no Corner Radius toggle {label}")

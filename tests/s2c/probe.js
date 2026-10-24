@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // gnome-shell's automation script for radius-test.sh: Settings' Corner Radius pressed under open libadwaita windows.
 
+import Clutter from 'gi://Clutter';
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import Shell from 'gi://Shell';
@@ -21,11 +22,11 @@ const GIVE_UP_MS = 3000;
 const CORNER = {x: 3, y: 3};
 const REFERENCE = {x: 60, y: 3};
 const TOLERANCE = 6;
-// Each later window keeps clear of the earlier ones' corners; behind them is the maximised terminal's red.
+// Side by side over the maximised terminal, whose red (its own profile) is what a rounded corner shows.
 const LAYOUT = {
-    ptyxis: {x: 40, y: 120, width: 560, height: 420},
-    files: {x: 320, y: 220, width: 640, height: 460},
-    settings: {x: 640, y: 320, width: 780, height: 560},
+    ptyxis: {x: 16, y: 120, width: 450, height: 640},
+    files: {x: 490, y: 120, width: 450, height: 640},
+    settings: {x: 964, y: 120, width: 460, height: 740},
 };
 
 const appWindows = id => global.get_window_actors().map(a => a.meta_window)
@@ -98,6 +99,26 @@ async function waitForAgent(agent) {
     throw new Error(`the agent wrote no 14px apex.css in ${AGENT_WAIT_MS} ms (running: ${agent.running})`);
 }
 
+// GTK leaves rows scrolled out of view off the accessibility tree, so the Corner Radius row is brought in.
+async function scrollToEnd(window) {
+    const pointer = global.stage.context.get_backend().get_default_seat()
+        .create_virtual_device(Clutter.InputDeviceType.POINTER_DEVICE);
+    const r = window.get_frame_rect();
+    const now = () => GLib.get_monotonic_time();
+    pointer.notify_absolute_motion(now(), r.x + r.width / 2, r.y + r.height / 2);
+    await Scripting.sleep(500);
+    // A new virtual pointer starts in the top-left corner, so its first motion can trip the hot corner.
+    Main.overview.hide();
+    await Scripting.sleep(1000);
+    pointer.notify_absolute_motion(now(), r.x + r.width / 2 + 4, r.y + r.height / 2 + 4);
+    await Scripting.sleep(300);
+    for (let i = 0; i < 40; i++) {
+        pointer.notify_discrete_scroll(now(), Clutter.ScrollDirection.DOWN, Clutter.ScrollSource.WHEEL);
+        await Scripting.sleep(30);
+    }
+    await Scripting.sleep(1000);
+}
+
 async function click(label) {
     const proc = Gio.Subprocess.new(['python3', GLib.getenv('APEX_CLICK'), label],
         Gio.SubprocessFlags.STDOUT_PIPE);
@@ -114,7 +135,8 @@ async function measure() {
     await waitForAgent(agent);
 
     const windows = {};
-    windows.maximised = await open(['ptyxis', '--new-window'], 'Ptyxis');
+    windows.maximised = await open(['ptyxis', '--new-window', `--tab-with-profile=${GLib.getenv('APEX_RED_PROFILE')}`],
+        'Ptyxis');
     windows.maximised.maximize();
     windows.ptyxis = await open(['ptyxis', '--new-window'], 'Ptyxis', 2);
     windows.files = await open(['nautilus', '--new-window', GLib.get_home_dir()], 'org.gnome.Nautilus');
@@ -125,6 +147,9 @@ async function measure() {
             windows[name].move_resize_frame(false, r.x, r.y, r.width, r.height);
         await Scripting.sleep(SETTLE_MS);
     }
+    for (const name of Object.keys(LAYOUT))
+        windows[name].raise();
+    await scrollToEnd(windows.settings);
 
     const result = {windows: {}, maximised: windows.maximised.is_maximized(), agent_running: agent.running};
     for (const [name, w] of Object.entries(windows))
