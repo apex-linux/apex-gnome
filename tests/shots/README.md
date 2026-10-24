@@ -45,12 +45,12 @@ The direct cases:
 
 | Case | Settings | Asserts |
 |---|---|---|
-| `default` | `color-scheme` `'default'` | the Apex light sheet with its marker, `prefer-light`, no fault feature, the crash guard's marker created and removed; Super+Space (`toggle-spotlight`) registered in the normal and overview modes; the panel showed the one-time search hint (`search-hint-shown` true; until apex-desktop's schema has the key, the shell reports `no-key`); the top bar's and the shell surfaces' metrics, light |
-| `default-scale1` | as `default`, on a 1440x900 virtual monitor at scale 1, as the desktop VM runs | the Apex light sheet; the top bar's and the shell surfaces' metrics at scale 1 |
-| `dark-style` | `prefer-dark` | the Apex dark sheet; the top bar's and the shell surfaces' metrics, dark; then the probe clicks Quick Settings' Dark Style toggle (its own `clicked` signal): the toggle turns off, writes `color-scheme` `'default'`, and the running shell loads the Apex light sheet |
+| `default` | `color-scheme` `'default'` | the Apex light sheet with its marker, `prefer-light`, no fault feature, the crash guard's marker created and removed; Super+Space (`toggle-spotlight`) registered in the normal and overview modes; the panel showed the one-time search hint (`search-hint-shown` true; until apex-desktop's schema has the key, the shell reports `no-key`); the top bar's, the dock's and the shell surfaces' metrics, light |
+| `default-scale1` | as `default`, on a 1440x900 virtual monitor at scale 1, as the desktop VM runs | the Apex light sheet; the top bar's, the dock's and the shell surfaces' metrics at scale 1 |
+| `dark-style` | `prefer-dark` | the Apex dark sheet; the top bar's, the dock's and the shell surfaces' metrics, dark; then the probe clicks Quick Settings' Dark Style toggle (its own `clicked` signal): the toggle turns off, writes `color-scheme` `'default'`, and the running shell loads the Apex light sheet |
 | `stock-light`, `stock-dark` | `APEX_SHELL_SAFE=1` with `prefer-light` or `prefer-dark` | upstream's sheet of that variant from `theme/stock/`; the overview's thumbnails at upstream's maximum scale 0.05 and at the effective scale of Fedora's build; the rebuilt high-contrast sheet, which safe mode keeps, is Fedora's apart from the structure marker; no Super+Space binding |
 | `safe-env`, `layer-disabled`, `kernel-safe` | the three kill switches | upstream's dark sheet from `theme/stock/`, the stock colour scheme, every hook stock, no Super+Space binding, the reason logged; the same sheet in all three; `safe-env`: no search hint |
-| `layer-cycles` | the capture settings; the probe sets `layer-enabled` false, then true, three times | while off: upstream's dark sheet from `theme/stock/`, the stock colour scheme, every hook stock, no Super+Space binding; while on: the Apex light sheet, `prefer-light` and Super+Space; each time it is on the stage holds the same actors, type by type, as at startup, and each time it is off the same as the first time; the layer logs each switch |
+| `layer-cycles` | the capture settings; the probe sets `layer-enabled` false, then true, three times | while off: upstream's dark sheet from `theme/stock/`, the stock colour scheme, every hook stock, no Super+Space binding; while on: the Apex light sheet, `prefer-light` and Super+Space; each time it is on the stage holds the same actors, type by type, as at startup, and each time it is off the same as the first time (the first count waits out main.js's 20 s timeout for deferred work, which fills the overview's hidden dash; an `St.Icon` counts, not the texture child St gives it once it is first styled, which a dash hidden since startup decides); the layer logs each switch |
 | `fault-configure`, `fault-enable` | `APEX_SHELL_TEST_FAULT` | only the fault feature is off; the `witness` feature after it still enables; the rest of the layer runs, Super+Space included, and the shell survives |
 | `fault-abort` | `abort-after-enable` | SIGABRT (exit 134) with the crash guard's marker left behind |
 | `fedora-light`, `fedora-dark` | Fedora's build, `prefer-light` or `prefer-dark` | no Apex module; upstream's sheet at its own path, byte for byte the one safe mode loads from `theme/stock/` |
@@ -121,7 +121,7 @@ masks, and writes a difference image to `compare/` when they differ.
 
 | Pair | Masks | Why |
 |---|---|---|
-| Apex light (`default`) against `fedora-light`; Apex dark against `fedora-dark`, the desktop scene | `panel`: the top bar's box in either capture | ROADMAP S1a: the captures equal Fedora's stock shell outside the masks; S1a restyles only the top bar |
+| Apex light (`default`) against `fedora-light`; Apex dark against `fedora-dark`, the desktop scene | `panel` and `dock`: the top bar's and the dock's boxes in either capture | ROADMAP S1a: the captures equal Fedora's stock shell outside the masks; S1a and S2a restyle the top bar and add the dock |
 | `stock-light` against `fedora-light`; `stock-dark` against `fedora-dark`, each scene | none | safe mode draws exactly Fedora's shell, its clock and status glyphs included |
 | each capture case of run 2 against run 1 | none | the clock stands still |
 
@@ -161,6 +161,14 @@ fill of the status button is centred on its pill; and with Large Text (the probe
 sizes while the clock text grows to 1.25 × 13.5 px and stays within its pill. The probe
 measures in CSS px through St itself, so the values hold whether mutter lays the stage
 out in logical or physical pixels.
+
+`dock_metrics` reads the dock the same way, against the same token file: shown, centred
+and `$apex_dock_bottom_gap` above the bottom edge; its background's radius
+`$apex_radius_dock`; every icon `$apex_dock_icon_size` (`dock-icon-size` medium); the apps
+first, then the separator, Show Apps and Trash, with no separator among the apps; the
+full-colour Show Apps icon; and in the overview the dock shown, the overview's own dash
+hidden and its workspaces laid out above the dock. The safe-mode cases have no dock, and the Apex captures mask it, as they mask the
+bar, against Fedora's, whose desktop has none.
 
 ## The shell surfaces' metrics
 
@@ -217,6 +225,14 @@ windows and searches nothing, a window title and a search section.
 tile (at rest, hovered, focused) and the fixture image's System folder, opens the folder
 and reads its dialog, captures it with `G2_SURFACE_SCENES=1`, and reads the hidden
 running dot, page indicator and page hint from stand-ins.
+
+`overview_layer` checks the `overview` layer feature in the same cases, in the empty
+overview the scene captured: no background card behind the active workspace, "No open
+windows" centred on it in `$apex_fg_dim` at `$apex_font_workspace_empty_size`, the
+thumbnails at scale .081 (one drawn at .081 of the work area, 117 × 70 on 1440 × 900)
+and the threshold of one workspace, and the launcher's grid at 7 columns, 4 rows and
+88 px icons. G2 opens no windows, so the `window-title-visible` hook's answer stands in for
+a title shown without hover.
 
 `derived_surfaces` reads surfaces with no board, which G2 never opens, from nested
 stand-ins in the same cases: the workspace switcher and its dots, the resize popup, the
@@ -302,5 +318,5 @@ cases also save a scene per surface group (`surfaces`, `quick-settings`, `switch
 ## Not yet
 
 - A bar-text contrast check over the fixture wallpapers.
-- The metrics of the other surfaces (dock, launcher, overview, notifications, windows, keys),
-  and approved goldens.
+- The metrics of the other surfaces (launcher, overview, notifications, windows, keys),
+  the dock's intellihide and edge reveal, and approved goldens.

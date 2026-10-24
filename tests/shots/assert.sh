@@ -25,6 +25,12 @@ readonly DIRECT_PARTS=(main kernel fedora)
 readonly CAPTURE_CASES=(default default-scale1 dark-style stock-light stock-dark fedora-light fedora-dark)
 readonly SCENES=(desktop overview)
 readonly STOCK_MAX_THUMBNAIL_SCALE=0.05
+readonly OVERVIEW_THUMBNAIL_SCALE=0.081
+readonly OVERVIEW_THUMBNAILS_THRESHOLD=1
+readonly EMPTY_WORKSPACE_TEXT='No open windows'
+readonly LAUNCHER_COLUMNS=7
+readonly LAUNCHER_ROWS=4
+readonly LAUNCHER_ICON_SIZE=88
 readonly DIAMOND_SQUARE_PX=8
 readonly DIAMOND_STROKE_PX=2
 readonly DIAMOND_STROKE_AREA_PX=$((4 * DIAMOND_SQUARE_PX * DIAMOND_STROKE_PX))
@@ -284,6 +290,35 @@ top_bar() {
     "${metric[@]}" "and only the text grows: the clock at $LARGE_TEXT_SCALING_FACTOR x \$apex_font_bar_size, within its pill" \
         '.topBar.largeText' "((.clockText.size - $LARGE_TEXT_SCALING_FACTOR * (\$t.apex_font_bar_size | px)) | fabs < 0.05)
             and .clockText.naturalHeight <= .clockPillHeight"
+}
+
+# shellcheck disable=SC2016 # jq programs and token names, not shell expansions
+dock_metrics() {
+    local label=$1 log=$2 variant=$3 scenes tokens
+    scenes=$(report_of "$log" APEXG2-SCENES)
+    tokens=$(tokens_for "$variant")
+    local -a metric=(top_bar_metric "$label dock" "$scenes" "$tokens")
+
+    "${metric[@]}" 'the dock is shown, $apex_dock_bottom_gap above the bottom edge and centred' \
+        '.dock' '.visible == true and (.bottomGap | px_is($t.apex_dock_bottom_gap)) and (.centreOffset | fabs <= 0.5)'
+    "${metric[@]}" 'its background has radius $apex_radius_dock' \
+        '.dock.radius' 'px_is($t.apex_radius_dock)'
+    "${metric[@]}" 'every icon is $apex_dock_icon_size (dock-icon-size medium)' \
+        '.dock.items | map(select(.iconSize != null))' 'length > 0 and all(.iconSize | px_is($t.apex_dock_icon_size))'
+    "${metric[@]}" 'its apps come first, then the separator, Show Apps and Trash, with no other separator' \
+        '.dock.items | map(.kind)' \
+        '(.[-3:] == ["separator", "show-apps", "trash"]) and (.[:-3] | all(. == "app"))'
+    "${metric[@]}" 'the Show Apps tile is full colour (view-app-grid)' \
+        '.dock.items | map(select(.kind == "show-apps")) | .[0].iconName' '. == "view-app-grid"'
+    "${metric[@]}" 'the overview keeps the dock and hides its own dash' \
+        '{dash: .dock.overviewDashVisible, overview: .scenes.overview.dockVisible}' '.dash == false and .overview == true'
+    "${metric[@]}" 'and lays its workspaces out above the dock' \
+        '{dock: .dock, clearance: .scenes.overview.dockClearance}' '.dock != null and .clearance != null and .clearance >= 0'
+}
+
+no_dock() {
+    local label=$1 log=$2
+    expect_report "$label" "$log" '.dock == null' "no Apex dock" APEXG2-SCENES
 }
 
 # shellcheck disable=SC2016 # jq programs and token names, not shell expansions
@@ -617,6 +652,29 @@ app_grid() {
             and (.pageIndicator.background | colour_is($t.apex_fg)) and .pageHint.gradient == 0'
 }
 
+# The overview feature's values are the layer's, not tokens; only the empty label is styled.
+# shellcheck disable=SC2016 # jq programs and token names, not shell expansions
+overview_layer() {
+    local label=$1 log=$2 variant=$3 scenes tokens
+    scenes=$(report_of "$log" APEXG2-SCENES)
+    tokens=$(tokens_for "$variant")
+    local o=.surfaces.overviewLayer
+    expect_report "$label" "$log" "$o.titleVisible == true" \
+        "overview: window titles always shown, not only on hover" APEXG2-SCENES
+    expect_report "$label" "$log" "$o | .thumbnails.maxScale == $OVERVIEW_THUMBNAIL_SCALE and .thumbnailsThreshold == $OVERVIEW_THUMBNAILS_THRESHOLD" \
+        "overview: workspace thumbnails at scale $OVERVIEW_THUMBNAIL_SCALE, shown from $((OVERVIEW_THUMBNAILS_THRESHOLD + 1)) workspaces" APEXG2-SCENES
+    expect_report "$label" "$log" "{f: $o.thumbnails.first, w: .topBar.panel.width, h: .scenes.overview.workArea.height}
+        | (.f.width - .w * $OVERVIEW_THUMBNAIL_SCALE | fabs <= 1) and (.f.height - .h * $OVERVIEW_THUMBNAIL_SCALE | fabs <= 1)" \
+        "overview: and drawn at that scale of the work area (117 x 70 on 1440 x 900)" APEXG2-SCENES
+    expect_report "$label" "$log" "$o.workspace | .background == false and .empty.visible and .empty.text == \"$EMPTY_WORKSPACE_TEXT\"
+        and (.x + .width / 2 - .empty.x - .empty.width / 2 | fabs <= 1) and (.y + .height / 2 - .empty.y - .empty.height / 2 | fabs <= 1)" \
+        "overview: no workspace background card, and \"$EMPTY_WORKSPACE_TEXT\" centred on the empty workspace" APEXG2-SCENES
+    top_bar_metric "$label overview" "$scenes" "$tokens" 'the empty-workspace label is $apex_font_workspace_empty_size $apex_font_heading_weight in $apex_fg_dim' \
+        "$o.workspace.empty" '(.font.size | px_is($t.apex_font_workspace_empty_size)) and .font.weight == ($t.apex_font_heading_weight | tonumber) and (.foreground | colour_is($t.apex_fg_dim))'
+    expect_report "$label" "$log" ".surfaces.appGrid.grid == {columns: $LAUNCHER_COLUMNS, rows: $LAUNCHER_ROWS, iconSize: $LAUNCHER_ICON_SIZE}" \
+        "launcher: $LAUNCHER_COLUMNS columns of $LAUNCHER_ICON_SIZE px icons, $LAUNCHER_ROWS rows a page" APEXG2-SCENES
+}
+
 # shellcheck disable=SC2016 # jq programs and token names, not shell expansions
 derived_surfaces() {
     local label=$1 log=$2 variant=$3 scenes tokens
@@ -726,8 +784,8 @@ compare_with_fedora() {
     {
         # The Apex bar is $apex_bar_height, upstream's 2.2em: the overview below it lays out on
         # another work area, so overview_below_bar checks its layout instead.
-        plan_entry apex-light-vs-fedora-desktop "$run" fedora-light "$run" default desktop "$run/compare" panel
-        plan_entry apex-dark-vs-fedora-desktop "$run" fedora-dark "$run" dark-style desktop "$run/compare" panel
+        plan_entry apex-light-vs-fedora-desktop "$run" fedora-light "$run" default desktop "$run/compare" panel dock
+        plan_entry apex-dark-vs-fedora-desktop "$run" fedora-dark "$run" dark-style desktop "$run/compare" panel dock
         for scene in "${SCENES[@]}"; do
             plan_entry "safe-light-vs-fedora-$scene" "$run" fedora-light "$run" stock-light "$scene" "$run/compare"
             plan_entry "safe-dark-vs-fedora-$scene" "$run" fedora-dark "$run" stock-dark "$scene" "$run/compare"
@@ -886,6 +944,7 @@ direct_cases() {
     top_bar default "$f" light
     top_bar_today default "$f" light
     top_bar_gaps default "$f" light
+    dock_metrics default "$f" light
     shell_surfaces default "$f" light
     quick_settings default "$f" light
     window_switcher default "$f" light
@@ -893,6 +952,7 @@ direct_cases() {
     date_menu default "$f" light
     overview_style default "$f" light
     app_grid default "$f" light
+    overview_layer default "$f" light
     derived_surfaces default "$f" light
     spotlight_style default "$f" light
 
@@ -904,6 +964,7 @@ direct_cases() {
     virtual_monitor default-scale1 "$f" 1
     top_bar default-scale1 "$f" light
     top_bar_today default-scale1 "$f" light
+    dock_metrics default-scale1 "$f" light
     shell_surfaces default-scale1 "$f" light
     quick_settings default-scale1 "$f" light
     window_switcher default-scale1 "$f" light
@@ -911,6 +972,7 @@ direct_cases() {
     date_menu default-scale1 "$f" light
     overview_style default-scale1 "$f" light
     app_grid default-scale1 "$f" light
+    overview_layer default-scale1 "$f" light
     derived_surfaces default-scale1 "$f" light
     spotlight_style default-scale1 "$f" light
 
@@ -925,6 +987,7 @@ direct_cases() {
     top_bar dark-style "$f" dark
     top_bar_today dark-style "$f" dark
     top_bar_gaps dark-style "$f" dark
+    dock_metrics dark-style "$f" dark
     shell_surfaces dark-style "$f" dark
     quick_settings dark-style "$f" dark
     window_switcher dark-style "$f" dark
@@ -932,6 +995,7 @@ direct_cases() {
     date_menu dark-style "$f" dark
     overview_style dark-style "$f" dark
     app_grid dark-style "$f" dark
+    overview_layer dark-style "$f" dark
     derived_surfaces dark-style "$f" dark
     spotlight_style dark-style "$f" dark
     dark_style_off dark-style "$f"
@@ -939,6 +1003,7 @@ direct_cases() {
     for c in stock-light stock-dark; do
         exits "$run" "$c" 0
         stock_view "$c" "$run/$c.log" "${c#stock-}"
+        no_dock "$c" "$run/$c.log"
         no_apex_failure "$c" "$run/$c.log"
     done
     stock_thumbnails "$run"

@@ -28,6 +28,10 @@ function newEmitter(props = {}) {
                     fn();
             }
         },
+        connectObject(...args) {
+            for (let i = 0; i + 1 < args.length; i += 2)
+                this.connect(args[i], args[i + 1]);
+        },
     };
 }
 
@@ -403,7 +407,7 @@ async function exerciseSearchButton() {
     const button = Main.panel.statusArea['apex-search'];
     if (button) {
         const tooltip = () => {
-            const label = Main.layoutManager.lastChrome;
+            const label = Main.layoutManager.chrome.find(actor => actor.text === 'Search (Super+Space)' && !actor.destroyed);
             return label ? `${label.visible} at ${label.x},${label.y}` : 'none';
         };
         button.hover = true;
@@ -479,6 +483,134 @@ async function exerciseMaximisedWindow() {
     global.display.emit('restacked');
 }
 
+function newWorkspace(nWindows) {
+    return {
+        _background: {
+            visible: true,
+            hide() {
+                this.visible = false;
+            },
+        },
+        _container: newEmitter({
+            nWindows,
+            get_n_children() {
+                return this.nWindows;
+            },
+        }),
+        children: [],
+        add_child(child) {
+            this.children.push(child);
+        },
+    };
+}
+
+function workspaceFacts(label, workspace) {
+    const [empty] = workspace.children;
+    fact(`workspace.${label}`, `background=${workspace._background.visible} ` +
+        `${empty ? `"${empty.text}" .${empty.style_class} visible=${empty.visible} opacity=${empty.opacity}` : 'no label'}`);
+}
+
+function buildWorkspaces(label) {
+    const layout = {stateAdjustment: newEmitter({value: 1})};
+    const empty = newWorkspace(0);
+    Hooks.run('workspace', empty, layout);
+    workspaceFacts(`${label}.empty`, empty);
+    empty._container.nWindows = 1;
+    empty._container.emit('child-added');
+    workspaceFacts(`${label}.window-added`, empty);
+    empty._container.nWindows = 0;
+    empty._container.emit('child-removed');
+    layout.stateAdjustment.value = 0.5;
+    layout.stateAdjustment.emit('notify::value');
+    workspaceFacts(`${label}.half-open`, empty);
+    const busy = newWorkspace(2);
+    Hooks.run('workspace', busy, {stateAdjustment: newEmitter({value: 1})});
+    workspaceFacts(`${label}.with-windows`, busy);
+}
+
+async function overviewFacts(label) {
+    const Main = await import(`file://${shellDir}/js/ui/main.js`);
+    const {_thumbnailsBox: box, _appDisplay: {_grid: grid}} = Main.overview._overview._controls;
+    const preview = {_title: 'title', _closeButton: 'close'};
+    fact(`overview.${label}`, `title-visible=${Hooks.value('window-title-visible', false)} ` +
+        `overlay=${Hooks.value('window-overlay', ['title', 'close'], preview).join('+')} ` +
+        `scale=${Hooks.value('thumbnail-scale', 0.05)} threshold=${Hooks.value('thumbnails-threshold', 2)} ` +
+        `box=${box._maxThumbnailScale} grid=${JSON.stringify(grid._gridModes)} ` +
+        `icon=${grid.layout_manager.fixed_icon_size}`);
+    fact(`overview.${label}.relayout`, `mode=${grid._currentMode} page-width=${grid.layout_manager._pageWidth}`);
+    buildWorkspaces(label);
+}
+
+async function exerciseOverview() {
+    if (GLib.getenv('PROBE_OVERVIEW') !== '1')
+        return;
+    await overviewFacts('enabled');
+    settings.set_boolean('layer-enabled', false);
+    await spin(200);
+    await overviewFacts('off');
+    settings.set_boolean('layer-enabled', true);
+    await spin(200);
+    await overviewFacts('on');
+}
+
+function dockState(Main) {
+    const box = Main.layoutManager.chrome.find(actor => actor.name === 'apexDockBox' && !actor.destroyed);
+    const dock = box?.get_children()[0] ?? null;
+    if (!dock)
+        return `none dash=${Main.overview.dash.visible} dash-height=${Main.overview.dash.height}`;
+    const {separator, showApps, trash} = dock.tailItems;
+    const apps = dock._box.get_children().map(item => `${item.name}:${item.child.icon.iconSize}`);
+    return `${[...apps, separator.has_style_class_name('apex-dock-separator') ? 'separator' : '?',
+        `show-apps:${showApps.icon.iconSize}`, `trash:${trash.icon.iconSize}${trash.visible ? '' : '(hidden)'}`].join(' ')} ` +
+        `indicators=${!dock.has_style_class_name('apex-dock-no-indicators')} visible=${dock.visible} ` +
+        `dash=${Main.overview.dash.visible} dash-height=${Main.overview.dash.height}`;
+}
+
+async function exerciseDock() {
+    if (GLib.getenv('PROBE_DOCK') !== '1')
+        return;
+    const Main = await import(`file://${shellDir}/js/ui/main.js`);
+    const report = label => fact(`dock.${label}`, dockState(Main));
+    report('enabled');
+    for (const [key, value] of [['dock-icon-size', 'small'], ['dock-icon-size', 'large'], ['dock-show-trash', false],
+        ['dock-running-indicators', false]]) {
+        if (typeof value === 'string')
+            settings.set_string(key, value);
+        else
+            settings.set_boolean(key, value);
+        // eslint-disable-next-line no-await-in-loop
+        await spin(50);
+        report(`${key}=${value}`);
+    }
+    ['dock-icon-size', 'dock-show-trash', 'dock-running-indicators'].forEach(key => settings.reset(key));
+    await spin(50);
+    Main.sessionMode.lock(true);
+    report('locked');
+    Main.sessionMode.lock(false);
+
+    const dock = Main.layoutManager.chrome.find(actor => actor.name === 'apexDockBox' && !actor.destroyed)
+        ?.get_children()[0];
+    if (dock?.tailItems) {
+        const {showAppsButton} = dock;
+        const overviewButton = Main.overview.dash.showAppsButton;
+        showAppsButton.checked = true;
+        showAppsButton.emit('notify::checked');
+        fact('dock.show-apps', `overview=${Main.overview.visible} overview-button=${overviewButton.checked}`);
+        overviewButton.checked = false;
+        overviewButton.emit('notify::checked');
+        fact('dock.overview-show-apps-off', `dock-button=${showAppsButton.checked}`);
+        fact('dock.hooks', `separator=${Hooks.value('dash-favorites-separator', true, dock)} ` +
+            `stock-separator=${Hooks.value('dash-favorites-separator', true, {})} ` +
+            `show-apps=${Hooks.value('show-apps-icon-name', 'view-app-grid-symbolic', dock.tailItems.showApps)}`);
+    }
+    settings.set_boolean('layer-enabled', false);
+    await spin(200);
+    report('off');
+    settings.set_boolean('layer-enabled', true);
+    await spin(200);
+    report('on');
+}
+
 async function switchLayer() {
     const cycles = Number(GLib.getenv('PROBE_SWITCH') ?? '0');
     for (let cycle = 1; cycle <= cycles; cycle++) {
@@ -505,6 +637,7 @@ Hooks.provide('probe', 'boom', () => {
 fact('boom', `${Hooks.value('boom', 'stock')},${Hooks.value('boom', 'stock')}`);
 fact('run-without-provider', Hooks.run('nothing'));
 
+globalThis.PROBE_FAVOURITES = ['Files', 'Web'];
 if (layer && GLib.getenv('PROBE_ENABLE') === '1') {
     if (GLib.getenv('PROBE_LOCKED') === '1')
         (await import(`file://${shellDir}/js/ui/main.js`)).sessionMode.isLocked = true;
@@ -532,6 +665,8 @@ if (layer && GLib.getenv('PROBE_ENABLE') === '1') {
     await exerciseFocusedApp();
     await exerciseSearchButton();
     await exerciseMaximisedWindow();
+    await exerciseOverview();
+    await exerciseDock();
     await setDisabledLive();
     await switchLayer();
     for (const [signal, fn] of [...handlers.values()]) {
