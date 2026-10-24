@@ -1,0 +1,183 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Thuong Vo <66083331+SekiroKenjii@users.noreply.github.com>
+Date: Sat, 24 Oct 2026 12:00:00 +0000
+Subject: [PATCH] motion: hooks for the Apex curve and durations
+
+Hooks for DESIGN's motion, which the Apex layer's motion feature
+provides (apex ROADMAP S3c):
+
+- environment.js: a value hook over an ease's parameters in _easeActor
+  and _easeAnimatableProperty, through which curved modes become
+  Clutter's CUBIC_BEZIER, and a behaviour hook once the transitions
+  exist, which sets their control points, since a mode alone takes
+  Clutter's;
+- windowManager.js, overviewControls.js and boxpointer.js: a value hook
+  over the duration of the window size change, of the overview's state
+  transitions (in and out, and to and from the app grid) and of a
+  popover opening and closing.
+
+adjustAnimationTime still runs after the hooks, so enable-animations
+false keeps stock's 0 ms. Without the layer every hook returns stock.
+---
+ js/ui/boxpointer.js       | 7 +++++--
+ js/ui/environment.js      | 7 +++++--
+ js/ui/overviewControls.js | 9 +++++----
+ js/ui/windowManager.js    | 5 +++--
+ 4 files changed, 18 insertions(+), 10 deletions(-)
+
+diff --git a/js/ui/boxpointer.js b/js/ui/boxpointer.js
+index 41c3a80..76d905f 100644
+--- a/js/ui/boxpointer.js
++++ b/js/ui/boxpointer.js
+@@ -2,6 +2,7 @@ import Clutter from 'gi://Clutter';
+ import GObject from 'gi://GObject';
+ import St from 'gi://St';
+ 
++import * as ApexHooks from './apex/hooks.js';
+ import * as Main from './main.js';
+ 
+ export const PopupAnimation = {
+@@ -81,7 +82,8 @@ export const BoxPointer = GObject.registerClass({
+     open(animate, onComplete) {
+         const themeNode = this.get_theme_node();
+         const rise = themeNode.get_length('-arrow-rise');
+-        const animationTime = animate & PopupAnimation.FULL ? POPUP_ANIMATION_TIME : 0;
++        const animationTime = animate & PopupAnimation.FULL
++            ? ApexHooks.value('motion-duration', POPUP_ANIMATION_TIME, 'popover') : 0;
+ 
+         const {reducedMotion} = St.Settings.get();
+         const useMotion = reducedMotion !== St.ReducedMotion.REDUCE;
+@@ -145,7 +147,8 @@ export const BoxPointer = GObject.registerClass({
+         const themeNode = this.get_theme_node();
+         const rise = themeNode.get_length('-arrow-rise');
+         const fade = animate & PopupAnimation.FADE;
+-        const animationTime = animate & PopupAnimation.FULL ? POPUP_ANIMATION_TIME : 0;
++        const animationTime = animate & PopupAnimation.FULL
++            ? ApexHooks.value('motion-duration', POPUP_ANIMATION_TIME, 'popover') : 0;
+ 
+         const {reducedMotion} = St.Settings.get();
+         const useMotion = reducedMotion !== St.ReducedMotion.REDUCE;
+diff --git a/js/ui/environment.js b/js/ui/environment.js
+index 074837d..781ced2 100644
+--- a/js/ui/environment.js
++++ b/js/ui/environment.js
+@@ -16,6 +16,7 @@ import Shell from 'gi://Shell';
+ import St from 'gi://St';
+ 
+ import * as SignalTracker from '../misc/signalTracker.js';
++import * as ApexHooks from './apex/hooks.js';
+ import {adjustAnimationTime} from '../misc/animationUtils.js';
+ import {logErrorUnlessCancelled} from '../misc/errorUtils.js';
+ 
+@@ -155,7 +156,7 @@ function _easeActor(actor, params) {
+         repeatCount: 0,
+         autoReverse: false,
+         animationRequired: false,
+-        ...params,
++        ...ApexHooks.value('ease', params, actor),
+     };
+ 
+     actor.save_easing_state();
+@@ -203,6 +204,7 @@ function _easeActor(actor, params) {
+         .filter(t => t !== null);
+ 
+     transitions.forEach(t => t.set({repeatCount, autoReverse}));
++    ApexHooks.run('eased', transitions);
+ 
+     const [transition] = transitions;
+ 
+@@ -221,7 +223,7 @@ function _easeAnimatableProperty(animatable, propName, target, params) {
+         repeatCount: 0,
+         autoReverse: false,
+         animationRequired: false,
+-        ...params,
++        ...ApexHooks.value('ease', params, animatable),
+     };
+ 
+     // Avoid pointless difference with ease()
+@@ -286,6 +288,7 @@ function _easeAnimatableProperty(animatable, propName, target, params) {
+         ...params,
+     });
+     animatable.add_transition(propName, transition);
++    ApexHooks.run('eased', [transition]);
+ 
+     transition.set_to(target);
+ 
+diff --git a/js/ui/overviewControls.js b/js/ui/overviewControls.js
+index d7ef077..3e9ef4f 100644
+--- a/js/ui/overviewControls.js
++++ b/js/ui/overviewControls.js
+@@ -6,6 +6,7 @@ import Meta from 'gi://Meta';
+ import Shell from 'gi://Shell';
+ import St from 'gi://St';
+ 
++import * as ApexHooks from './apex/hooks.js';
+ import * as AppDisplay from './appDisplay.js';
+ import * as Dash from './dash.js';
+ import * as Main from './main.js';
+@@ -649,7 +650,7 @@ class ControlsManager extends St.Widget {
+             ? ControlsState.APP_GRID : ControlsState.WINDOW_PICKER;
+         this._stateAdjustment.remove_transition('value');
+         this._stateAdjustment.ease(value, {
+-            duration: SIDE_CONTROLS_ANIMATION_TIME,
++            duration: ApexHooks.value('motion-duration', SIDE_CONTROLS_ANIMATION_TIME, 'overview'),
+             mode: Clutter.AnimationMode.EASE_OUT_SINE,
+         });
+     }
+@@ -681,7 +682,7 @@ class ControlsManager extends St.Widget {
+             Main.overview.hide();
+         } else {
+             this._stateAdjustment.ease(finalState, {
+-                duration: SIDE_CONTROLS_ANIMATION_TIME,
++                duration: ApexHooks.value('motion-duration', SIDE_CONTROLS_ANIMATION_TIME, 'overview'),
+                 mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+                 onComplete: () => {
+                     this.dash.showAppsButton.checked =
+@@ -720,7 +721,7 @@ class ControlsManager extends St.Widget {
+ 
+         this._stateAdjustment.value = ControlsState.HIDDEN;
+         this._stateAdjustment.ease(state, {
+-            duration: Overview.ANIMATION_TIME,
++            duration: ApexHooks.value('motion-duration', Overview.ANIMATION_TIME, 'overview'),
+             mode: Clutter.AnimationMode.EASE_OUT_SINE,
+             onStopped: () => {
+                 if (callback)
+@@ -738,7 +739,7 @@ class ControlsManager extends St.Widget {
+         this._ignoreShowAppsButtonToggle = true;
+ 
+         this._stateAdjustment.ease(ControlsState.HIDDEN, {
+-            duration: Overview.ANIMATION_TIME,
++            duration: ApexHooks.value('motion-duration', Overview.ANIMATION_TIME, 'overview'),
+             mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+             onStopped: () => {
+                 this.dash.showAppsButton.checked = false;
+diff --git a/js/ui/windowManager.js b/js/ui/windowManager.js
+index 0ce009c..b09bd96 100644
+--- a/js/ui/windowManager.js
++++ b/js/ui/windowManager.js
+@@ -9,6 +9,7 @@ import Shell from 'gi://Shell';
+ import St from 'gi://St';
+ 
+ import * as AltTab from './altTab.js';
++import * as ApexHooks from './apex/hooks.js';
+ import * as AppFavorites from './appFavorites.js';
+ import * as Dialog from './dialog.js';
+ import * as WorkspaceSwitcherPopup from './workspaceSwitcherPopup.js';
+@@ -1366,7 +1367,7 @@ export class WindowManager {
+             scale_x: scaleX,
+             scale_y: scaleY,
+             opacity: 0,
+-            duration: WINDOW_ANIMATION_TIME,
++            duration: ApexHooks.value('motion-duration', WINDOW_ANIMATION_TIME, 'window'),
+             mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+         });
+ 
+@@ -1383,7 +1384,7 @@ export class WindowManager {
+             scale_y: 1,
+             translation_x: 0,
+             translation_y: 0,
+-            duration: WINDOW_ANIMATION_TIME,
++            duration: ApexHooks.value('motion-duration', WINDOW_ANIMATION_TIME, 'window'),
+             mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+             onStopped: () => this._sizeChangeWindowDone(shellwm, actor),
+         });

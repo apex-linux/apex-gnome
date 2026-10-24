@@ -20,7 +20,7 @@ readonly APEX_DARK_SHEET=resource:///org/gnome/shell/theme/gnome-shell-dark.css
 readonly STOCK_SHEETS=resource:///org/gnome/shell/theme/stock
 readonly FEDORA_SHEETS=resource:///org/gnome/shell/theme
 readonly DIRECT_CASES=(default default-scale1 dark-style stock-light stock-dark safe-env layer-disabled
-    layer-cycles fault-configure fault-enable fault-abort kernel-safe fedora-light fedora-dark glass fedora-glass)
+    layer-cycles motion fault-configure fault-enable fault-abort kernel-safe fedora-light fedora-dark glass fedora-glass)
 readonly DIRECT_PARTS=(main kernel fedora)
 readonly CAPTURE_CASES=(default default-scale1 dark-style stock-light stock-dark fedora-light fedora-dark)
 readonly SCENES=(desktop overview)
@@ -44,6 +44,11 @@ readonly TODAY_CLOCK_PILL_EXTRA=13
 readonly LAYER_CYCLES=3
 readonly SPOTLIGHT_ACCELERATORS='["<Super>space"]'
 readonly SPOTLIGHT_MODES='["NORMAL", "OVERVIEW"]'
+# DESIGN's motion: cubic-bezier(.2,.8,.2,1); window geometry .3 s, the overview .2 s.
+readonly MOTION_CURVE='[0.2, 0.8, 0.2, 1]'
+readonly MOTION_WINDOW_MS=300
+readonly MOTION_OVERVIEW_MS=200
+readonly LOCATE_POINTER_RIPPLE_MS=830
 # direct.sh's G2_CLOCK, in UTC; the clock shows it as weekday, date, EN SPACE, 24-hour time.
 readonly FIXED_CLOCK=2026-09-28T09:41:00Z
 readonly FIXED_CLOCK_TEXT='Mon Sep 28\u200209:41'
@@ -992,6 +997,27 @@ layer_cycles() {
     check "layer-cycles: the marker is removed at shutdown" grep -q '^layer-cycles .*marker-after-exit=no' "$run/results-main.txt"
 }
 
+# shellcheck disable=SC2016 # jq programs
+motion_curve() {
+    local run=$1 f=$1/motion.log m
+    exits "$run" motion 0
+    apex_light motion "$f"
+    no_apex_failure motion "$f"
+    m=$(report_of "$f" APEXG2-MOTION)
+    expect motion "$m" '.error == null and .animated.maximise.maximised and .animated.overview.visible' \
+        "the probe maximised a GTK window and opened the overview, with animations on"
+    expect motion "$m" ".animated.maximise.transition | .mode == \"CUBIC_BEZIER\" and .curve == $MOTION_CURVE and .duration == $MOTION_WINDOW_MS" \
+        "maximise eases the window in cubic-bezier(.2,.8,.2,1) over ${MOTION_WINDOW_MS} ms"
+    expect motion "$m" ".animated.overview.transition | .mode == \"CUBIC_BEZIER\" and .curve == $MOTION_CURVE and .duration == $MOTION_OVERVIEW_MS" \
+        "the overview transition eases in cubic-bezier(.2,.8,.2,1) over ${MOTION_OVERVIEW_MS} ms"
+    expect motion "$m" '.enableAnimations == false and .still.maximise.maximised and .still.overview.visible' \
+        "then enable-animations=false, and the window maximised and the overview opened again"
+    expect motion "$m" '.still.maximise.transition == null and .still.overview.transition == null' \
+        "with enable-animations=false neither creates a transition: both take 0 ms"
+    expect motion "$m" ".still.locatePointer.duration == $LOCATE_POINTER_RIPPLE_MS" \
+        "and Locate Pointer's ripple, an animationRequired a11y aid, still takes stock's ${LOCATE_POINTER_RIPPLE_MS} ms"
+}
+
 direct_cases() {
     local run=$1 c f
     echo "# the direct cases: $(grep -m1 -E '^gnome-shell-[0-9]' "$run/rpm.txt" 2>/dev/null)"
@@ -1112,6 +1138,7 @@ direct_cases() {
     stock_scheme layer-disabled "$f"
 
     layer_cycles "$run"
+    motion_curve "$run"
 
     f=$run/kernel-safe.log
     check "kernel-safe: /proc/cmdline carries apex.safe=1" grep -qw 'apex.safe=1' "$run/cmdline-kernel.txt"
@@ -1193,11 +1220,11 @@ glass_manager() {
     local -a expect_glass=(expect "$label" "$(report_of "$log" APEXG2-GLASS | jq -c --argjson t "$tokens" '. + {t: $t}' 2>/dev/null)")
     glass='def glass($blur; $saturation; $s): .radius == 2 * ($blur | px) * $s and ((.saturation - ($saturation | rtrimstr("%") | tonumber / 100)) | fabs < 0.001)
         and .enabled and .fine and .followOpacity and .background;
-        def none: [.panel, .quickSettings, .calendar, .banner] | all(. == null);'
+        def none: [.panel, .dock, .quickSettings, .calendar, .banner] | all(. == null);'
 
     "${expect_glass[@]}" "$glass"' .t as $t | .manager.monitorScale as $s | .manager.glass | (.panel | glass($t.apex_bar_blur; $t.apex_bar_saturation; $s))
-        and ([.quickSettings, .calendar, .banner] | all(glass($t.apex_panel_blur; $t.apex_panel_saturation; $s))) and (.solidClass | not)' \
-        'the bar blurs at $apex_bar_blur and $apex_bar_saturation; Quick Settings, the calendar and a banner at $apex_panel_blur and $apex_panel_saturation, each as radius 2 x sigma x the monitor scale, fine, following opacity'
+        and (.dock | glass($t.apex_dock_blur; $t.apex_dock_saturation; $s)) and ([.quickSettings, .calendar, .banner] | all(glass($t.apex_panel_blur; $t.apex_panel_saturation; $s))) and (.solidClass | not)' \
+        'the bar blurs at $apex_bar_blur and $apex_bar_saturation, the dock at $apex_dock_blur and $apex_dock_saturation; Quick Settings, the calendar and a banner at $apex_panel_blur and $apex_panel_saturation, each as radius 2 x sigma x the monitor scale, fine, following opacity'
     "${expect_glass[@]}" "$glass"' .manager.reduceTransparency | none and .blurEffects == [] and .solidClass' \
         'with Reduce Transparency no actor carries a blur effect, and the root carries apex-solid'
     "${expect_glass[@]}" "$glass"' .manager.highContrast | none and .blurEffects == [] and .solidClass' \

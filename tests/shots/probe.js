@@ -42,6 +42,9 @@ const STRUCTURE_MARKER = '/*! apex-shell-structure */';
 const LAYER_ENABLED_KEY = 'layer-enabled';
 const SEARCH_HINT_KEY = 'search-hint-shown';
 const OSD_LEVEL = 0.62;
+const MOTION_WINDOW_ID = 'io.github.apex_linux.G2Window';
+const MOTION_WAIT_MS = 10000;
+const MOTION_SETTLE_MS = 1000;
 const OSD_GLYPH = 'audio-volume-medium-symbolic';
 const SWITCHER_APPS = ['Text Editor', 'Terminal', 'Web', 'Files', 'Settings'];
 const SWITCHER_ICON_SIZE = 96;
@@ -1578,6 +1581,94 @@ async function withLayerCycles(cycles) {
 
 // main.js connects to startup-complete only after importing this module, so a startup that
 // completes during the import would never run the script and leave the shell up.
+function transitionInfo(transition) {
+    if (!transition)
+        return null;
+    const mode = transition.get_progress_mode();
+    const [, c1, c2] = transition.get_cubic_bezier_progress();
+    return {
+        mode: Object.keys(Clutter.AnimationMode).find(k => Clutter.AnimationMode[k] === mode) ?? mode,
+        duration: transition.get_duration(),
+        curve: [c1.x, c1.y, c2.x, c2.y].map(round),
+    };
+}
+
+// The transition the ease created, read right after the call; none when the ease took 0 ms.
+async function firstTransition(read) {
+    for (let waited = 0; waited < MOTION_SETTLE_MS; waited += 10) {
+        const transition = read();
+        if (transition)
+            return transitionInfo(transition);
+        // eslint-disable-next-line no-await-in-loop
+        await Scripting.sleep(10);
+    }
+    return null;
+}
+
+async function maximiseTransition(window) {
+    const actor = window.get_compositor_private();
+    window.maximize();
+    // _sizeChangedWindow marks the actor resizing just before it eases the size change.
+    const transition = await firstTransition(() =>
+        Main.wm._resizing.has(actor) ? actor.get_transition('scale-x') : null);
+    await Scripting.sleep(MOTION_SETTLE_MS);
+    const maximised = window.is_maximized();
+    window.unmaximize();
+    await Scripting.sleep(MOTION_SETTLE_MS);
+    return {transition, maximised};
+}
+
+async function overviewTransition() {
+    const adjustment = Main.overview._overview._controls._stateAdjustment;
+    Main.overview.show();
+    const transition = await firstTransition(() => adjustment.get_transition('value'));
+    await Scripting.sleep(MOTION_SETTLE_MS);
+    const visible = Main.overview.visible;
+    Main.overview.hide();
+    await Scripting.sleep(MOTION_SETTLE_MS);
+    return {transition, visible};
+}
+
+async function motion() {
+    Main.overview.hide();
+    await Scripting.sleep(MOTION_SETTLE_MS);
+    const client = Gio.File.new_for_uri(import.meta.url).get_parent().get_child('window.js').get_path();
+    Gio.Subprocess.new(['gjs', '-m', client], Gio.SubprocessFlags.NONE);
+    const find = () => global.get_window_actors().map(a => a.meta_window)
+        .find(w => w.get_gtk_application_id() === MOTION_WINDOW_ID);
+    let window;
+    for (let waited = 0; !(window = find()) && waited < MOTION_WAIT_MS; waited += 100)
+        // eslint-disable-next-line no-await-in-loop
+        await Scripting.sleep(100);
+    if (!window)
+        throw new Error(`no ${MOTION_WINDOW_ID} window in ${MOTION_WAIT_MS} ms`);
+    // Mutter gives a window's first size change a 0 x 0 old frame, which stock never animates.
+    window.maximize();
+    await Scripting.sleep(MOTION_SETTLE_MS);
+    window.unmaximize();
+    await Scripting.sleep(MOTION_SETTLE_MS);
+    const interfaceSettings = new Gio.Settings({schema_id: 'org.gnome.desktop.interface'});
+    // main.js inhibits animations without hardware-accelerated rendering, as G2's headless shell has.
+    const stSettings = St.Settings.get();
+    const uninhibited = interfaceSettings.get_boolean('enable-animations') && !stSettings.enable_animations;
+    if (uninhibited)
+        stSettings.uninhibit_animations();
+    const animated = {maximise: await maximiseTransition(window), overview: await overviewTransition()};
+    interfaceSettings.set_boolean('enable-animations', false);
+    await Scripting.sleep(MOTION_SETTLE_MS);
+    const still = {maximise: await maximiseTransition(window), overview: await overviewTransition()};
+    // Locate Pointer's ripples are animationRequired: an a11y aid that animates regardless.
+    interfaceSettings.set_boolean('locate-pointer', true);
+    await Scripting.sleep(MOTION_SETTLE_MS);
+    Main.locatePointer.show();
+    still.locatePointer = transitionInfo(Main.locatePointer._ripples?._ripple1.get_transition('scale-x') ?? null);
+    interfaceSettings.set_boolean('locate-pointer', false);
+    const enableAnimations = stSettings.enable_animations;
+    if (uninhibited)
+        stSettings.inhibit_animations();
+    return {uninhibited, enableAnimations, animated, still};
+}
+
 export function init() {
     if (Main.layoutManager._startingUp)
         return;
@@ -1607,6 +1698,16 @@ export async function run() {
             toggled = {error: `${e.message}\n${e.stack}`};
         }
         console.log(`APEXG2-TOGGLED ${JSON.stringify(toggled)}`);
+    }
+
+    if (GLib.getenv('G2_MOTION') === '1') {
+        let result;
+        try {
+            result = await motion();
+        } catch (e) {
+            result = {error: `${e.message}\n${e.stack}`};
+        }
+        console.log(`APEXG2-MOTION ${JSON.stringify(result)}`);
     }
 
     if (GLib.getenv('G2_GLASS') === '1') {

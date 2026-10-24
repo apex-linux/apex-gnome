@@ -1210,6 +1210,47 @@ CHANGES
     expect_eq "layer cycles: a switch the layer did not log fails one assertion" "$((all - 1))/1" "$passes/$failures"
 }
 
+# shellcheck disable=SC2016 # a jq program
+readonly MOTION_REPORT='{enableAnimations: false,
+  animated: {maximise: {maximised: true, transition: {mode: "CUBIC_BEZIER", duration: 300, curve: [0.2, 0.8, 0.2, 1]}},
+             overview: {visible: true, transition: {mode: "CUBIC_BEZIER", duration: 200, curve: [0.2, 0.8, 0.2, 1]}}},
+  still: {maximise: {maximised: true, transition: null}, overview: {visible: true, transition: null},
+         locatePointer: {mode: "CUBIC_BEZIER", duration: 830, curve: [0.2, 0.8, 0.2, 1]}}}'
+
+write_motion_run() {
+    local change=$1 dir=$T/motion
+    rm -rf "$dir" && mkdir -p "$dir"
+    {
+        printf 'APEXG2 %s\n' "$APEX_LIGHT_REPORT"
+        printf 'APEXG2-MOTION %s\n' "$(jq -nc "$MOTION_REPORT | $change")"
+    } >"$dir/motion.log"
+    echo 'motion exit=0 secs=24 marker-after-exit=no' >"$dir/results-main.txt"
+}
+
+test_motion() {
+    local change what passes failures all
+    write_motion_run .
+    read -r all failures <<<"$(assertion_counts motion_curve "$T/motion")"
+    if ((failures == 0 && all > 5)); then
+        ok "motion: the Apex curve and durations, and 0 ms without animations, pass all $all assertions"
+    else
+        not_ok "motion: a clean run passes (passed/failed $all/$failures): $(grep -m3 '^FAIL' "$T/assertions.out" | paste -sd'|' -)"
+    fi
+    while IFS='|' read -r change what; do
+        write_motion_run "$change"
+        read -r passes failures <<<"$(assertion_counts motion_curve "$T/motion")"
+        expect_eq "motion: $what fails one assertion" "$((all - 1))/1" "$passes/$failures"
+    done <<'CHANGES'
+.animated.maximise.transition.mode = "EASE_OUT_QUAD"|stock's maximise mode
+.animated.maximise.transition.curve = [0, 0, 0, 0]|the curve's mode without its control points
+.animated.overview.transition.duration = 250|stock's overview duration
+.animated.overview.transition = null|an overview that did not animate
+.still.maximise.transition = {mode: "CUBIC_BEZIER", duration: 1}|a transition left with animations off
+.animated.maximise.maximised = false|a window that did not maximise
+.still.locatePointer = null|a Locate Pointer ripple that no longer animates with animations off
+CHANGES
+}
+
 fixtures_report() {
     local part
     for part in main kernel fedora; do
@@ -1488,9 +1529,10 @@ CHANGES
 
     local on='{"radius": 96, "saturation": 1.6, "enabled": true, "fine": true, "followOpacity": true, "background": true}'
     local popover='{"radius": 120, "saturation": 1.8, "enabled": true, "fine": true, "followOpacity": true, "background": true}'
+    local dock='{"radius": 112, "saturation": 1.8, "enabled": true, "fine": true, "followOpacity": true, "background": true}'
     local manager
-    manager=$(jq -nc --argjson on "$on" --argjson p "$popover" '{panel: $on, quickSettings: $p, calendar: $p, banner: $p, blurEffects: ["panel"], solidClass: false} as $g
-        | {panel: null, quickSettings: null, calendar: null, banner: null, blurEffects: []} as $none
+    manager=$(jq -nc --argjson on "$on" --argjson p "$popover" --argjson dock "$dock" '{panel: $on, dock: $dock, quickSettings: $p, calendar: $p, banner: $p, blurEffects: ["panel"], solidClass: false} as $g
+        | {panel: null, dock: null, quickSettings: null, calendar: null, banner: null, blurEffects: []} as $none
         | {manager: {monitorScale: 2, glass: $g, reduceTransparency: ($none + {solidClass: true}), highContrast: ($none + {solidClass: true}),
             disabled: ($none + {solidClass: false}), restored: $g}}')
     while IFS='|' read -r failures what change; do
@@ -1498,9 +1540,11 @@ CHANGES
         read -r passes _ <<<"$(assertion_counts glass_manager glass "$T/glass.log" light)"
         expect_eq "glass manager: $what fails $failures of 5" "$failures" $((5 - passes))
     done <<'CHANGES'
-0|the bar and the popovers at their tokens, every switch honoured|.
+0|the bar, the dock and the popovers at their tokens, every switch honoured|.
 1|the bar at the popovers' sigma|.manager.glass.panel.radius = 120
 1|a banner at the bar's saturation|.manager.glass.banner.saturation = 1.6
+1|the dock at the popovers' sigma|.manager.glass.dock.radius = 120
+1|a dock left blurred by high contrast|.manager.highContrast.dock = .manager.glass.dock
 1|a popover without fine|.manager.glass.calendar.fine = false
 1|a blur left behind by Reduce Transparency|.manager.reduceTransparency.blurEffects = ["St_BoxLayout"]
 1|Reduce Transparency without apex-solid|.manager.reduceTransparency.solidClass = false
@@ -1535,6 +1579,7 @@ test_fixed_clock
 test_clock_c
 test_overview_below_bar
 test_layer_cycles
+test_motion
 test_spotlight_key
 test_fixtures
 test_glass
