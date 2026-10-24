@@ -33,6 +33,7 @@ const SETTLE_TIMEOUT_MS = 20000;
 const SETTLE_EXTRA_MS = 500;
 const PERF_HELPER_PING_S = 10;
 const DEFERRED_WORK_TIMEOUT_MS = 21000;
+const OSD_SETTLE_TIMEOUT_MS = 3000;
 const CALIBRATION_PX = 100;
 const INK_MAX_RGB_DISTANCE = 60;
 const TRANSLUCENT_BAR_KEY = 'translucent-top-bar';
@@ -731,12 +732,59 @@ function openPopupMenu() {
     };
 }
 
-function openOsd() {
+// Resolves at the stage's next painted frame, or false once the deadline (µs) passes.
+function nextFrame(deadline) {
+    return new Promise(resolve => {
+        const timeoutId = GLib.timeout_add(GLib.PRIORITY_DEFAULT,
+            Math.max(0, Math.ceil((deadline - GLib.get_monotonic_time()) / 1000)), () => {
+                global.stage.disconnect(paintId);
+                resolve(false);
+                return GLib.SOURCE_REMOVE;
+            });
+        const paintId = global.stage.connect('after-paint', () => {
+            global.stage.disconnect(paintId);
+            GLib.source_remove(timeoutId);
+            resolve(true);
+        });
+        global.stage.queue_redraw();
+    });
+}
+
+// Whether condition held and actor's allocation stayed the same, non-empty, over two frames.
+async function settledOverTwoFrames(actor, condition, timeoutMs) {
+    const deadline = GLib.get_monotonic_time() + timeoutMs * 1000;
+    let last = null;
+    // eslint-disable-next-line no-await-in-loop
+    while (await nextFrame(deadline)) {
+        const box = actor.get_allocation_box();
+        const now = condition() && box.get_width() > 0 && box.get_height() > 0
+            ? [box.x1, box.y1, box.x2, box.y2].join() : null;
+        if (now !== null && now === last)
+            return true;
+        last = now;
+    }
+    return false;
+}
+
+// An OSD still fading out from an earlier show resets itself, level and all, once the fade
+// ends: it goes first. The new one would hide 1.5 s on, often before settle() returns.
+async function openOsd() {
     const {primaryIndex, primaryMonitor} = Main.layoutManager;
-    Main.osdWindowManager.showOne(primaryIndex, Gio.ThemedIcon.new(OSD_GLYPH), null, OSD_LEVEL);
     const window = Main.osdWindowManager._osdWindows[primaryIndex];
+    window.cancel();
+    const gone = await settledOverTwoFrames(global.stage, () => !window.visible, OSD_SETTLE_TIMEOUT_MS);
+    Main.osdWindowManager.showOne(primaryIndex, Gio.ThemedIcon.new(OSD_GLYPH), null, OSD_LEVEL);
+    if (window._hideTimeoutId)
+        GLib.source_remove(window._hideTimeoutId);
+    window._hideTimeoutId = 0;
+    const settled = gone && await settledOverTwoFrames(window._hbox,
+        () => window.visible && window._hbox.mapped && window._level.visible, OSD_SETTLE_TIMEOUT_MS);
     return {
         measure: unit => {
+            if (!settled)
+                return {error: 'the OSD never settled'};
+            if (!window.visible)
+                return {error: 'the OSD hid before it was measured'};
             const box = styleOf(window._hbox, unit);
             const levelNode = window._level.get_theme_node();
             return {
@@ -751,7 +799,7 @@ function openOsd() {
                 },
             };
         },
-        close: () => window.cancel(),
+        close: () => window._hide(),
     };
 }
 
@@ -793,7 +841,7 @@ function openBanner() {
 
 // Open together as on board 16; G2_SURFACE_SCENES=1 also captures them.
 async function shellSurfaces(unit) {
-    const opened = {popupMenu: openPopupMenu(), osd: openOsd(), banner: openBanner()};
+    const opened = {popupMenu: openPopupMenu(), osd: await openOsd(), banner: openBanner()};
     try {
         await settle();
         const scene = GLib.getenv('G2_SURFACE_SCENES') === '1' ? await capture('surfaces') : null;
