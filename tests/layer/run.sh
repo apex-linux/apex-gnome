@@ -567,6 +567,97 @@ count_is "search hint: a schema without search-hint-shown shows none" "$SEARCH_H
 count_is "search hint: and says so once" 'has no key search-hint-shown: no search hint' 1
 has "search hint: the rest of the panel runs" 'Apex: feature panel enabled'
 
+# Only GDM unlocks, after PAM succeeds: no Apex file may name a route to it.
+readonly UNLOCK_ROUTES=("deactivate(" "emit('unlock'" "Unlock" "_onVerificationComplete" "finish(")
+readonly UNLOCK_INJECTIONS=("Main.screenShield.deactivate(false);" "Main.screenShield.emit('unlock');"
+    "this._loginManager.Unlock();" "this._userVerifier._onVerificationComplete();" "this._authPrompt.finish(() => {});")
+unlock_routes() {
+    local -a args=()
+    local route
+    for route in "${UNLOCK_ROUTES[@]}"; do args+=(-e "$route"); done
+    grep -rnF "${args[@]}" -- "$1" || true
+}
+APEX_JS=$REPO/desktop/shell/js/ui/apex
+found=$(unlock_routes "$APEX_JS")
+if [[ -z $found && -f $APEX_JS/lock/stage.js ]]; then
+    ok "unlock guard: nothing under js/ui/apex/ names a route to unlocking"
+else
+    not_ok "unlock guard: nothing under js/ui/apex/ names a route to unlocking"
+    printf '#   %s\n' "$found"
+fi
+for i in "${!UNLOCK_ROUTES[@]}"; do
+    copy=$T/guard-$i
+    cp -R "$APEX_JS" "$copy"
+    printf '%s\n' "${UNLOCK_INJECTIONS[$i]}" >>"$copy/lock/stage.js"
+    found=$(unlock_routes "$copy")
+    if [[ $found == "$copy/lock/stage.js:"*"${UNLOCK_ROUTES[$i]}"* && $(wc -l <<<"$found") == 1 ]]; then
+        ok "unlock guard: catches ${UNLOCK_ROUTES[$i]} injected into a copy"
+    else
+        not_ok "unlock guard: catches ${UNLOCK_ROUTES[$i]} injected into a copy (found: ${found:-nothing})"
+    fi
+done
+
+readonly STOCK_LOCK_LAYOUT='dialog=unlock-dialog stack=prompt-box,unlock-dialog-clock stage= clock=time,date,hint hint=true children=backgrounds,stack'
+lock_is_stock() {
+    local why=$1
+    fact "$why: the lock screen keeps upstream's two stages" "lock\.layout=$STOCK_LOCK_LAYOUT"
+    fact "$why: and opens on the clock, with no conversation" 'lock\.open=page=none prompt=none cancelled=none'
+    fact "$why: blanking touches nothing" 'lock\.blank=page=none prompt=none cancelled=none'
+    fact "$why: upstream's blur" 'lock\.blur=\{"brightness":0\.65,"radius":90\}'
+    fact "$why: the clock slides away as upstream's" 'lock\.clock-progress=0 0\.5 1'
+    fact "$why: upstream's \"Password\"" 'lock\.question\."Password:"="Password"'
+    fact "$why: upstream's question, colon stripped" 'lock\.question\."Verification code:"="Verification code"'
+    fact "$why: upstream's avatar icon" 'lock\.avatar\.real-name=stock'
+}
+
+probe lock "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_LOCK=1
+rc_is "lock: the probe runs" 0
+has "lock: the feature enables" 'Apex: feature lock enabled'
+fact "lock: the unlock-dialog hook gives the stock code" 'lock\.run=undefined'
+fact "lock: one stage, the clock over the prompt box, date above time, upstream's hint hidden, the overlay over the backgrounds" \
+    'lock\.layout=dialog=unlock-dialog apex-lock stack=apex-lock-stage stage=unlock-dialog-clock,prompt-box clock=date,time,hint hint=false children=backgrounds,apex-lock-overlay,stack'
+fact "lock: opens on the prompt with a conversation" 'lock\.open=page=prompt prompt=conversation-1 cancelled=none'
+fact "lock: the unlock hint follows the prompt" 'lock\.prompt-box=conversation-1,Press Enter to unlock'
+fact "lock: blanking tears the prompt down and cancels its verifier" 'lock\.blank=page=clock prompt=none cancelled=conversation-1'
+fact "lock: waking builds a new conversation" 'lock\.wake=page=prompt prompt=conversation-2 cancelled=conversation-1'
+fact "lock: standby is blank too" 'lock\.standby=page=clock prompt=none cancelled=conversation-1,conversation-2'
+fact "lock: and waking again builds another" 'lock\.wake-again=page=prompt prompt=conversation-3 cancelled=conversation-1,conversation-2'
+fact "lock: suspend is blank too" 'lock\.suspend=page=clock prompt=none cancelled=conversation-1,conversation-2,conversation-3'
+fact "lock: a display without power saving keeps a prompt" \
+    'lock\.unsupported=page=prompt prompt=conversation-4 cancelled=conversation-1,conversation-2,conversation-3'
+count_is "lock: each teardown is logged once, for the VM tests" '^.*Apex: lock: screen blank, prompt torn down$' 4
+count_is "lock: each rebuild too" '^.*Apex: lock: screen on, prompt rebuilt$' 4
+fact "lock: the hint stays after the rebuilt prompt" 'lock\.prompt-box\.after-wake=conversation-4,Press Enter to unlock'
+fact "lock: locked while blank, the first conversation ends as DisplayConfig answers" \
+    'lock\.open-blank=page=clock prompt=none cancelled=conversation-1'
+fact "lock: and the next starts when the screen wakes" 'lock\.open-blank\.wake=page=prompt prompt=conversation-2 cancelled=conversation-1'
+fact "lock: a DisplayConfig that never answers leaves the prompt up" \
+    'lock\.display-config-silent=page=prompt prompt=conversation-1 cancelled=none'
+fact "lock: so does one that fails" 'lock\.display-config-error=page=prompt prompt=conversation-1 cancelled=none'
+has "lock: and says so" 'Apex: lock: no org\.gnome\.Mutter\.DisplayConfig, so the prompt stays at blank'
+fact "lock: the clock never slides away" 'lock\.clock-progress=0 0 0'
+fact "lock: blur sigma 30 (radius 60), saturation 1.3, no darkening" 'lock\.blur=\{"brightness":1,"radius":60,"saturation":1\.3\}'
+fact "lock: PAM's exact \"Password:\" reads \"Enter Password\"" 'lock\.question\."Password:"="Enter Password"'
+fact "lock: \"Password: \" with a space is PAM's question verbatim" 'lock\.question\."Password: "="Password: "'
+fact "lock: other questions verbatim" 'lock\.question\."Verification code:"="Verification code:"'
+fact "lock: without a colon too" 'lock\.question\."PIN"="PIN"'
+fact "lock: lower-case \"password:\" verbatim" 'lock\.question\."password:"="password:"'
+fact "lock: the avatar is the real name's initial, sized to the avatar" \
+    'lock\.avatar\.real-name=A apex-avatar-initial font-size: 37px;'
+fact "lock: or the user name's, upper-cased" 'lock\.avatar\.user-name=Đ apex-avatar-initial font-size: 37px;'
+fact "lock: leading spaces skipped" 'lock\.avatar\.spaces=Z apex-avatar-initial font-size: 37px;'
+fact "lock: no name keeps upstream's icon" 'lock\.avatar\.nobody=stock'
+lacks "lock: the feature disables cleanly" 'off for this session|did not disable cleanly|cannot restyle'
+
+probe lock-disabled "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_LOCK=1 PROBE_DISABLED=lock
+has "disabled-features=['lock']: skips the feature" 'Apex: feature lock is in disabled-features'
+lock_is_stock "disabled-features=['lock']"
+probe lock-safe "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_LOCK=1 APEX_SHELL_SAFE=1
+lock_is_stock "APEX_SHELL_SAFE=1"
+probe lock-gdm "$CMDLINE_PLAIN" PROBE_MODE=gdm PROBE_LOCK=1
+fact "gdm mode: no layer" 'layer=null'
+lock_is_stock "gdm mode"
+
 readonly OVERVIEW_ON='title-visible=true overlay=close scale=0\.081 threshold=1 box=0\.081 grid=\[\{"rows":4,"columns":7\}\] icon=88'
 readonly OVERVIEW_STOCK='title-visible=false overlay=title\+close scale=0\.05 threshold=2 box=0\.05 grid="stock" icon=-1'
 readonly EMPTY_LABEL='"No open windows" \.apex-workspace-empty'
