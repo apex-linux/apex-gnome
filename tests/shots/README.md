@@ -250,8 +250,8 @@ last profile and back, still lit. Stock keeps VPN before Airplane Mode and nothi
 Quick Settings, the calendar and a stock `ModalDialog`, and reads each one's layer: shown,
 on the surface's box, `0 $apex_shadow_2_y $apex_shadow_2_blur $apex_shadow_2`, Quick
 Settings' at its radius, and the dialog's beside its box (above the lightbox). It counts
-the stage's paints over two idle seconds with the feature on and with `shadows` in
-`disabled-features`: the layers add none. The `motion` case, which opens the overview with a
+the stage's paints in the quieter of two idle 2 s windows with the feature on and with
+`shadows` in `disabled-features`: the layers add none. The `motion` case, which opens the overview with a
 window, checks the window preview's two layers and the `apex-window-preview` radius.
 
 `derived_surfaces` reads surfaces with no board, which G2 never opens, from nested
