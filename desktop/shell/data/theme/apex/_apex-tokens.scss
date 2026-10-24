@@ -205,6 +205,45 @@ $apex_font_events_title_size: 12.5px;
 $apex_radius_date_menu_button: 14px;
 $apex_date_menu_button_height: 40px;
 
+$apex_scrim: if($variant == 'light', rgba(236, 238, 243, .62), rgba(14, 14, 18, .58));
+$apex_pill: if($variant == 'light', rgba(255, 255, 255, .72), rgba(255, 255, 255, .1));
+$apex_pill_border: if($variant == 'light', rgba(0, 0, 10, .06), rgba(255, 255, 255, .08));
+$apex_pill_icon_opacity: .7;
+$apex_hint_opacity: .55;
+
+// St draws no backdrop filter: the glass manager of S2b reads these.
+$apex_scrim_blur: 40px;
+$apex_scrim_saturation: 140%;
+
+$apex_search_width: 440px;
+$apex_search_height: 40px;
+$apex_search_padding: 16px;
+$apex_search_top: 20px;
+$apex_search_gap: 10px;
+$apex_font_search_size: 14px;
+$apex_radius_thumbnail: 8px;
+$apex_thumbnail_gap: 10px;
+$apex_thumbnail_indicator: 2px;
+$apex_caption_height: 28px;
+$apex_caption_padding: 12px;
+$apex_font_caption_size: 12.5px;
+
+$apex_folder: if($variant == 'light', rgba(255, 255, 255, .55), rgba(255, 255, 255, .1));
+$apex_folder_panel: if($variant == 'light', rgba(248, 248, 250, .86), rgba(38, 38, 42, .82));
+
+$apex_radius_app_tile: 22px;
+$apex_app_tile_padding: 12px;
+$apex_app_tile_gap: 8px;
+$apex_font_app_label_size: 13px;
+$apex_running_dot_size: 4px;
+$apex_running_dot_opacity: .7;
+$apex_radius_folder_dialog: 26px;
+$apex_folder_dialog_width: 600px;
+$apex_folder_dialog_padding: 18px;
+$apex_folder_dialog_padding_bottom: 22px;
+$apex_folder_close_size: 28px;
+$apex_font_folder_title_size: 16px;
+
 // The lock screen and the greeter draw white on the blurred wallpaper in both variants.
 $apex_lock_fg: #ffffff;
 $apex_lock_fg_dim: rgba(255, 255, 255, .7);
