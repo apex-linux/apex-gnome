@@ -39,6 +39,8 @@ export const sessionMode = {
 
 export const actionMode = Shell.ActionMode.NORMAL;
 
+export const uiGroup = {add_child() {}};
+
 function box(children) {
     return {
         children,
@@ -111,12 +113,15 @@ export function notify(title) {
 const CHROME_PARAMS = ['trackFullscreen', 'affectsStruts'];
 
 export const layoutManager = {
+    ...emitter({}),
+    primaryMonitor: {x: 0, y: 0, width: 1440, height: 900},
+    chrome: [],
     _updateHotCorners: () => fact('hot-corners', 'rebuilt'),
     addChrome(actor, params = {}) {
         const unknown = Object.keys(params).filter(key => !CHROME_PARAMS.includes(key));
         if (unknown.length > 0)
             throw new Error(`Unrecognized parameter "${unknown[0]}"`);
-        this.lastChrome = actor;
+        this.chrome.push(actor);
         fact('chrome.add', `${actor.name ?? actor.text} trackFullscreen=${params.trackFullscreen ?? false}`);
     },
 };
@@ -144,9 +149,46 @@ const controls = {
     },
 };
 
+function emitter(props) {
+    const signalHandlers = [];
+    return {
+        ...props,
+        connect(signal, fn) {
+            signalHandlers.push([signal, fn]);
+            return signalHandlers.length;
+        },
+        disconnect(id) {
+            signalHandlers[id - 1] = null;
+        },
+        emit(signal) {
+            for (const handler of [...signalHandlers]) {
+                if (handler?.[0] === signal)
+                    handler[1](this);
+            }
+        },
+    };
+}
+
 export const overview = {
     visible: false,
     _overview: {_controls: controls},
+    dash: {
+        visible: true,
+        height: -1,
+        showAppsButton: emitter({checked: false}),
+        show() {
+            this.visible = true;
+        },
+        hide() {
+            this.visible = false;
+        },
+    },
+    showApps() {
+        this.visible = true;
+        fact('overview', 'shown, app grid');
+        this.dash.showAppsButton.checked = true;
+        this.dash.showAppsButton.emit('notify::checked');
+    },
     connect(signal, fn) {
         overviewHandlers.set(nextOverviewHandler, [signal, fn]);
         return nextOverviewHandler++;

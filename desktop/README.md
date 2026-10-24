@@ -19,6 +19,7 @@ directory with `git archive` and unpacks it at the top of Fedora's gnome-shell t
 | `js/ui/apex/layer.js` | the layer: the configure and enable phases, one `try/catch` per feature, the session-mode colour hook, the crash guard's marker file |
 | `js/ui/apex/spotlight/feature.js` | Super+Space (below) |
 | `js/ui/apex/panel/feature.js` | the top bar of S2a (below): its parts in `panel/`, one module each |
+| `js/ui/apex/dock/feature.js`, `dock.js`, `trash.js` | the dock of S2a (below): ApexDock, a subclass of upstream's `Dash`, and its Trash |
 | `js/ui/apex/fault/feature.js` | the fault-injection feature: loaded only when `APEX_SHELL_TEST_FAULT` names a phase, it fails in that phase (below) |
 | `data/theme/apex/_apex-tokens.scss` | the design tokens as SCSS variables, imported after upstream's `_colors` |
 | `data/theme/apex/_apex.scss` | the Apex sheet, imported last by the light and dark entry files: `apex-text-size()`, the `apex-surface()` mixin of the shell's own surfaces, and the partials |
@@ -31,7 +32,7 @@ directory with `git archive` and unpacks it at the top of Fedora's gnome-shell t
 | `data/theme/apex/_switcher.scss` | the window and app switcher (board 15): a glass list, radius 26, 14 px inset, tiles 6 px apart with radius 16, the selected tile in `$apex_button_hover`, names at 13.5/600. `altTab.js` sizes the icons (96 px at most) and labels every tile, so the tiles are larger than the board's 120 × 116 with 84 px icons, the window dots and the one name under the list; those need a hook |
 | `data/theme/apex/_dialogs.scss` | modal dialogs (boards 13 and 14): solid `$apex_panel_solid`, radius 26, inset 28 (22 at the bottom), 18 px between parts; a 20/700 title over `$apex_fg_dim` text; 36 px round buttons, the default one in the accent; polkit's password entry a 38 px round field with a 2 px accent ring when focused; 440 px polkit and 460 px end-session widths. `dialog.js` keeps its 12 px gap between buttons, and the lightbox its 0.4 dim |
 | `data/theme/apex/_date-menu.scss` | the calendar and notifications popover (board 34) on stock structure: glass like Quick Settings, a 400 px list beside a 318 px column 14 px apart; notification cards radius 18 (opaque `$apex_message_card`, since a group stacks its cards), a 40 px footer with a 32 px Clear pill; the weekday over a 20/800 date; the month, events, World Clocks and Weather as `$apex_glass_card` cards; 36 px round days filling seven columns, the accent today, `$apex_fg_faint` other months. Stock keeps the Do Not Disturb switch in Quick Settings, Clear on the left, grouped notifications, the month name between the pagers and its event-dot asset |
-| `data/theme/apex/_overview.scss` | the overview (board 35): the `$apex_scrim` tint over everything (S2b's glass manager blurs behind it with `$apex_scrim_blur`), the search field a 440 × 40 `$apex_pill` 20 px under the bar with a 2 px accent focus ring, workspace thumbnails in an unpadded box (`$apex_thumbnails_padding`, so they keep the full .104), radius 8 and 10 px apart in a `$apex_pill_border` ring with the current one in a 2 px accent ring, window titles 28 px pills at 12.5/700; search sections, which have no board until Spotlight, as glass cards. "No open windows" (`.apex-workspace-empty`) at 18/700 in `$apex_fg_dim`. The workspace background cards and always-visible window titles are the `overview` feature's |
+| `data/theme/apex/_overview.scss` | the overview (board 35): the `$apex_scrim` tint over everything (S2b's glass manager blurs behind it with `$apex_scrim_blur`), the search field a 440 × 40 `$apex_pill` 20 px under the bar with a 2 px accent focus ring, workspace thumbnails in an unpadded box (`$apex_thumbnails_padding`, so they keep the full .081), radius 8 and 10 px apart in a `$apex_pill_border` ring with the current one in a 2 px accent ring, window titles 28 px pills at 12.5/700; search sections, which have no board until Spotlight, as glass cards. "No open windows" (`.apex-workspace-empty`) at 18/700 in `$apex_fg_dim`. The workspace background cards and always-visible window titles are the `overview` feature's |
 | `data/theme/apex/_app-grid.scss` | the launcher (board 36): unfilled app tiles radius 22, padded 12, names at 13/600 in `$apex_fg` 8 px under the icon, `$apex_button` when hovered and an accent ring when focused; folders filled `$apex_folder` (stock fills the whole tile, the board only the icon); the folder dialog 600 px of `$apex_folder_panel` glass, radius 26, a 16/700 title and a 28 px button; 4 px running dots; and flat page hints, without upstream's gradients. `appDisplay.js` sets the grid's columns and icon sizes and the dialog's 720 px height |
 | `data/theme/apex/_derived.scss` | stock surfaces with no board, from their nearest board (DESIGN.md): the workspace switcher and resize popup take the OSD's tint, ring and radius, with `$apex_fg_faint` and `$apex_fg` dots; the input method's candidates the popup menu's; the run dialog's entry the password entry; audio device tiles the switcher's; the monitor number the OSD's radius. Glass surfaces take only the tint here: the glass manager registers them for the blur |
 | `data/theme/apex/_apex-structure.scss` | Apex actors' geometry for the high-contrast sheet |
@@ -109,6 +110,26 @@ a stock transient notification, at the first enable of the panel outside the loc
 and sets `search-hint-shown`. A schema without that key means no hint, logged once; the
 rest of the panel runs.
 
+`dock` is the dock (DESIGN.md, "Dock"; board 37). `dock/dock.js`'s ApexDock is upstream's
+`Dash` (`js/ui/dash.js`) with the hooks of patch 0014-dash, which the feature provides:
+
+- the apps (favourites, then running ones, with upstream's separator between them turned
+  off), then the dock's own separator, a full-colour Show Apps tile (`view-app-grid`,
+  falling back to the symbolic icon) and Trash (`dock/trash.js`: a click opens
+  `trash:///`, its menu opens or empties it);
+- every icon at `dock-icon-size`'s 46, 54 or 62 px, where upstream fits the icons to the
+  overview's width; Trash follows `dock-show-trash` and the running dots
+  `dock-running-indicators`; every key live;
+- each icon lifted 6 px over 180 ms while hovered, its label above it;
+- in the chrome, centred `$apex_dock_bottom_gap` above the primary monitor's bottom edge,
+  with no strut, hidden under fullscreen windows and on the lock screen;
+- in the overview too, whose own dash is hidden at the dock's height plus its gap, so the
+  overview lays its views out above the dock; the dock's Show Apps opens the app grid,
+  and the overview's Show Apps button and the dock's follow each other;
+- Ctrl+Alt+Tab reaches it, as upstream's `Dash` registers itself there.
+
+A schema without one of the keys turns off only this feature, logged.
+
 `overview` is the overview and the launcher (ROADMAP S3a, without Spotlight, the launcher's
 own search pill or the glass). Its parts provide the hooks of patch 0013-overview and follow
 the kill switches and `disabled-features=['overview']` as a whole:
@@ -118,8 +139,8 @@ the kill switches and `disabled-features=['overview']` as a whole:
 - `overview/workspaces.js`: no wallpaper card behind a workspace's windows, which sit on the
   scrim, and "No open windows" (`.apex-workspace-empty`) centred on a workspace without
   any, fading in with the overview.
-- `overview/thumbnails.js`: workspace thumbnails at scale .104 of the work area (150 × 90 on a
-  1440 × 900 screen), shown from two workspaces, where stock shows them from three at .05.
+- `overview/thumbnails.js`: workspace thumbnails at scale .081 of the work area, board 35's 70 px
+  tall (117 × 70 on a 1440 × 900 screen), shown from two workspaces, where stock shows them from three at .05.
 - `overview/launcher.js`: the launcher's grid at 7 columns of 88 px icons, 4 rows a page.
 
 The overview builds its window previews and workspaces each time it opens, so the first
@@ -154,9 +175,10 @@ gjs outside the shell: every kill switch, `apex.safe=1` through a bubblewrap bin
 `/proc/cmdline`, the gdm mode, the three fault phases, the crash guard after an
 aborted shell, and Super+Space: its registration and removal through enable, the kill
 switches, `layer-enabled` and `disabled-features` cycles and a missing Keybindings schema,
-and the top bar's hooks with stub dots, indicators and hot corners, against
+the top bar's hooks with stub dots, indicators and hot corners, and the dock's keys,
+order, Show Apps binding and hooks against a stub `Dash`, against
 `tests/layer/main-stub.js` for `main.js`, fixture typelibs for Meta and Shell, and
-`tests/layer/stubs/` for `panelMenu.js` and the features' St, Clutter and Shell imports
+`tests/layer/stubs/` for `panelMenu.js`, `dash.js`, `iconGrid.js`, `popupMenu.js` and the features' St, Clutter and Shell imports
 (gjs outside the shell has no St or Clutter, and the fixture's Shell no WindowTracker).
 
 For the fault injection in the VM, the variable goes into the shell's environment with

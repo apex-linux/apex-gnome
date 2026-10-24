@@ -196,7 +196,16 @@ REPORT_OF_A_BAR_DRAWN_FROM_TOKENS='
             pill: {x: 1303, y: 4, width: ($t.apex_bar_search_width | px), height: 24, radius: 12}},
         {accessibleName: "System", label: null, pill: {x: 1337, y: 4, width: 95, height: 24, radius: 12}}],
     opaque: {background: ($t.apex_bar_solid | hex), boxShadow: {color: ($t.apex_border | hex), inset: false, x: 0, y: 1, blur: 0, spread: 0}},
-    glass: []}}'
+    glass: []},
+  dock: {visible: true, bottomGap: ($t.apex_dock_bottom_gap | px), centreOffset: 0, radius: ($t.apex_radius_dock | px),
+    background: {x: 470, y: 820, width: 500, height: 70},
+    items: [{kind: "app", name: "Files", iconSize: ($t.apex_dock_icon_size | px)},
+            {kind: "app", name: "Web", iconSize: ($t.apex_dock_icon_size | px)},
+            {kind: "separator"},
+            {kind: "show-apps", iconSize: ($t.apex_dock_icon_size | px), iconName: "view-app-grid"},
+            {kind: "trash", iconSize: ($t.apex_dock_icon_size | px)}],
+    overviewDashVisible: false},
+  scenes: {overview: {dockVisible: true, dockClearance: 12}}}'
 # shellcheck disable=SC2016 # a jq program
 REPORT_OF_SURFACES_DRAWN_FROM_TOKENS='
 ($t.apex_surface_border | px) as $b | {top: $b, right: $b, bottom: $b, left: $b} as $border | ($t.apex_panel_border | hex) as $ring
@@ -381,7 +390,7 @@ REPORT_OF_A_LAUNCHER_DRAWN_FROM_TOKENS='
 # shellcheck disable=SC2016 # a jq program
 REPORT_OF_AN_OVERVIEW_LAYER_FROM_TOKENS='
 {topBar: {panel: {width: 1440}}, scenes: {overview: {workArea: {y: 32, height: 868}}}, surfaces: {
-    overviewLayer: {titleVisible: true, thumbnailsThreshold: 1, thumbnails: {maxScale: 0.104, first: {width: 150, height: 90}},
+    overviewLayer: {titleVisible: true, thumbnailsThreshold: 1, thumbnails: {maxScale: 0.081, first: {width: 117, height: 70}},
         workspace: {x: 250, y: 205, width: 939, height: 566, background: false,
             empty: {x: 644, y: 477, width: 150, height: 22, visible: true, text: "No open windows", foreground: ($t.apex_fg_dim | hex),
                 font: {size: ($t.apex_font_workspace_empty_size | px), weight: ($t.apex_font_heading_weight | tonumber)}}}},
@@ -509,6 +518,42 @@ CHANGES
     expect_eq "top bar: and fewer fail" 1 "$(grep -c '^FAIL' "$T/top-bar.out")"
     assert_run top_bar light 'del(.topBar)' >/dev/null
     expect_eq "top bar: a report without the top bar passes none" 0 "$(grep -c '^PASS' "$T/top-bar.out")"
+}
+
+test_dock() {
+    local variant change what passes failures open_gaps
+    for variant in light dark; do
+        read -r passes failures open_gaps <<<"$(assert_run dock_metrics "$variant")"
+        if ((failures == 0 && passes == 7)); then
+            ok "dock ($variant): a dock drawn from the tokens passes all $passes assertions"
+        else
+            not_ok "dock ($variant): a dock drawn from the tokens passes (passed/failed/gaps $passes/$failures/$open_gaps): $(grep -m3 '^FAIL' "$T/top-bar.out" | paste -sd'|' -)"
+        fi
+    done
+    while IFS='|' read -r change what; do
+        read -r passes failures open_gaps <<<"$(assert_run dock_metrics light "$change")"
+        if ((failures == 1)); then
+            ok "dock: $what fails one assertion"
+        else
+            not_ok "dock: $what fails one assertion (passed/failed/gaps $passes/$failures/$open_gaps)"
+        fi
+    done <<'CHANGES'
+.dock.bottomGap = 0|a dock on the screen's edge
+.dock.centreOffset = 12|an off-centre dock
+.dock.visible = false|a hidden dock
+.dock.radius = 16|upstream's dash radius
+.dock.items[0].iconSize = 64|upstream's fitted icon size
+.dock.items[3].iconSize = 46|a Show Apps tile at another size
+.dock.items = [.dock.items[0], {kind: "separator"}] + .dock.items[1:]|upstream's separator between favourites and running apps
+.dock.items = .dock.items[:-1]|no Trash
+.dock.items = .dock.items[:2] + [.dock.items[3], .dock.items[2], .dock.items[4]]|Show Apps before the separator
+.dock.items[3].iconName = "view-app-grid-symbolic"|a symbolic Show Apps tile
+.dock.overviewDashVisible = true|the overview's own dash beside the dock
+.scenes.overview.dockVisible = false|no dock in the overview
+.scenes.overview.dockClearance = -15|workspaces under the dock in the overview
+CHANGES
+    assert_run dock_metrics light 'del(.dock)' >/dev/null
+    expect_eq "dock: a report without the dock passes none" 0 "$(grep -c '^PASS' "$T/top-bar.out")"
 }
 
 test_shell_surfaces() {
@@ -735,7 +780,7 @@ test_overview_layer() {
 .surfaces.overviewLayer.titleVisible = false|titles only on hover
 .surfaces.overviewLayer.thumbnails.maxScale = 0.05|upstream's thumbnail scale
 .surfaces.overviewLayer.thumbnailsThreshold = 2|thumbnails only from three workspaces
-.surfaces.overviewLayer.thumbnails.first.height = 78|thumbnails cut down by the box's padding
+.surfaces.overviewLayer.thumbnails.first.height = 58|thumbnails cut down by the box's padding
 .surfaces.overviewLayer.workspace.background = true|the workspace background card
 .surfaces.overviewLayer.workspace.empty.y = 300|the empty label off centre
 .surfaces.overviewLayer.workspace.empty.foreground = "#1d1d21ff"|the empty label in full $apex_fg
@@ -1177,6 +1222,7 @@ test_compare_js
 test_incomplete_compare
 test_token_file
 test_top_bar
+test_dock
 test_shell_surfaces
 test_quick_settings
 test_window_switcher

@@ -241,7 +241,7 @@ async function exerciseSearchButton() {
     const button = Main.panel.statusArea['apex-search'];
     if (button) {
         const tooltip = () => {
-            const label = Main.layoutManager.lastChrome;
+            const label = Main.layoutManager.chrome.find(actor => actor.text === 'Search (Super+Space)' && !actor.destroyed);
             return label ? `${label.visible} at ${label.x},${label.y}` : 'none';
         };
         button.hover = true;
@@ -387,6 +387,64 @@ async function exerciseOverview() {
     await overviewFacts('on');
 }
 
+function dockState(Main) {
+    const box = Main.layoutManager.chrome.find(actor => actor.name === 'apexDockBox' && !actor.destroyed);
+    const dock = box?.get_children()[0] ?? null;
+    if (!dock)
+        return `none dash=${Main.overview.dash.visible} dash-height=${Main.overview.dash.height}`;
+    const {separator, showApps, trash} = dock.tailItems;
+    const apps = dock._box.get_children().map(item => `${item.name}:${item.child.icon.iconSize}`);
+    return `${[...apps, separator.has_style_class_name('apex-dock-separator') ? 'separator' : '?',
+        `show-apps:${showApps.icon.iconSize}`, `trash:${trash.icon.iconSize}${trash.visible ? '' : '(hidden)'}`].join(' ')} ` +
+        `indicators=${!dock.has_style_class_name('apex-dock-no-indicators')} visible=${dock.visible} ` +
+        `dash=${Main.overview.dash.visible} dash-height=${Main.overview.dash.height}`;
+}
+
+async function exerciseDock() {
+    if (GLib.getenv('PROBE_DOCK') !== '1')
+        return;
+    const Main = await import(`file://${shellDir}/js/ui/main.js`);
+    const report = label => fact(`dock.${label}`, dockState(Main));
+    report('enabled');
+    for (const [key, value] of [['dock-icon-size', 'small'], ['dock-icon-size', 'large'], ['dock-show-trash', false],
+        ['dock-running-indicators', false]]) {
+        if (typeof value === 'string')
+            settings.set_string(key, value);
+        else
+            settings.set_boolean(key, value);
+        // eslint-disable-next-line no-await-in-loop
+        await spin(50);
+        report(`${key}=${value}`);
+    }
+    ['dock-icon-size', 'dock-show-trash', 'dock-running-indicators'].forEach(key => settings.reset(key));
+    await spin(50);
+    Main.sessionMode.lock(true);
+    report('locked');
+    Main.sessionMode.lock(false);
+
+    const dock = Main.layoutManager.chrome.find(actor => actor.name === 'apexDockBox' && !actor.destroyed)
+        ?.get_children()[0];
+    if (dock?.tailItems) {
+        const {showAppsButton} = dock;
+        const overviewButton = Main.overview.dash.showAppsButton;
+        showAppsButton.checked = true;
+        showAppsButton.emit('notify::checked');
+        fact('dock.show-apps', `overview=${Main.overview.visible} overview-button=${overviewButton.checked}`);
+        overviewButton.checked = false;
+        overviewButton.emit('notify::checked');
+        fact('dock.overview-show-apps-off', `dock-button=${showAppsButton.checked}`);
+        fact('dock.hooks', `separator=${Hooks.value('dash-favorites-separator', true, dock)} ` +
+            `stock-separator=${Hooks.value('dash-favorites-separator', true, {})} ` +
+            `show-apps=${Hooks.value('show-apps-icon-name', 'view-app-grid-symbolic', dock.tailItems.showApps)}`);
+    }
+    settings.set_boolean('layer-enabled', false);
+    await spin(200);
+    report('off');
+    settings.set_boolean('layer-enabled', true);
+    await spin(200);
+    report('on');
+}
+
 async function switchLayer() {
     const cycles = Number(GLib.getenv('PROBE_SWITCH') ?? '0');
     for (let cycle = 1; cycle <= cycles; cycle++) {
@@ -413,6 +471,7 @@ Hooks.provide('probe', 'boom', () => {
 fact('boom', `${Hooks.value('boom', 'stock')},${Hooks.value('boom', 'stock')}`);
 fact('run-without-provider', Hooks.run('nothing'));
 
+globalThis.PROBE_FAVOURITES = ['Files', 'Web'];
 if (layer && GLib.getenv('PROBE_ENABLE') === '1') {
     if (GLib.getenv('PROBE_LOCKED') === '1')
         (await import(`file://${shellDir}/js/ui/main.js`)).sessionMode.isLocked = true;
@@ -439,6 +498,7 @@ if (layer && GLib.getenv('PROBE_ENABLE') === '1') {
     await exerciseSearchButton();
     await exerciseMaximisedWindow();
     await exerciseOverview();
+    await exerciseDock();
     await setDisabledLive();
     await switchLayer();
     for (const [signal, fn] of [...handlers.values()]) {
