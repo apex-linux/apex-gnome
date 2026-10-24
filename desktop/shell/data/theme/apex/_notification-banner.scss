@@ -16,9 +16,14 @@
     padding: 0;
     font-size: apex-text-size($apex_font_banner_header_size);
 
-    .message-header-content { padding-bottom: 0; }
     .message-source-title { font-weight: $apex_font_label_weight; }
-    .event-time { color: $apex_fg_dim; font-size: apex-text-size($apex_font_banner_header_size); }
+
+    // Upstream's .event-time sits one class deeper, in .message-header-content.
+    .message-header-content {
+      padding-bottom: 0;
+
+      .event-time { color: $apex_fg_dim; font-size: apex-text-size($apex_font_banner_header_size); }
+    }
 
     .message-close-button {
       min-width: $apex_banner_close_size;

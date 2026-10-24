@@ -48,11 +48,14 @@ The direct cases:
 | `default` | `color-scheme` `'default'` | the Apex light sheet with its marker, `prefer-light`, no fault feature, the crash guard's marker created and removed; Super+Space (`toggle-spotlight`) registered in the normal and overview modes; the panel showed the one-time search hint (`search-hint-shown` true; until apex-desktop's schema has the key, the shell reports `no-key`); the top bar's, the dock's and the shell surfaces' metrics, light |
 | `default-scale1` | as `default`, on a 1440x900 virtual monitor at scale 1, as the desktop VM runs | the Apex light sheet; the top bar's, the dock's and the shell surfaces' metrics at scale 1 |
 | `dark-style` | `prefer-dark` | the Apex dark sheet; the top bar's, the dock's and the shell surfaces' metrics, dark; then the probe clicks Quick Settings' Dark Style toggle (its own `clicked` signal): the toggle turns off, writes `color-scheme` `'default'`, and the running shell loads the Apex light sheet |
+| `high-contrast` | the capture settings with `org.gnome.desktop.a11y.interface high-contrast` true | every Apex surface's contrast in the high-contrast sheet (see "Accessibility") |
+| `large-text` | the capture settings with `text-scaling-factor` 1.25 | every Apex surface's text whole, on the screen, inside its surface and clear of the rest (see "Accessibility") |
 | `dock-intellihide`, `dock-intellihide-dark` | the capture settings, light or dark, without hot corners (the headless pointer starts at 0,0, in the corner); the probe starts `maximised-window.js`, one maximised GTK window | the dock shows, then hides behind the maximised window as the bar turns solid; a virtual pointer pushing against the bottom edge under it reveals it, under the pointer; moving away hides it; the overview shows it; with `dock-intellihide` off it stays, and hides again when it is back on; the window gone, it shows. The maximised and revealed scenes are captured beside board 37's |
 | `stock-light`, `stock-dark` | `APEX_SHELL_SAFE=1` with `prefer-light` or `prefer-dark` | upstream's sheet of that variant from `theme/stock/`; the overview's thumbnails at upstream's maximum scale 0.05 and at the effective scale of Fedora's build; the rebuilt high-contrast sheet, which safe mode keeps, is Fedora's apart from the structure marker; no Super+Space binding |
 | `safe-env`, `layer-disabled`, `kernel-safe` | the three kill switches | upstream's dark sheet from `theme/stock/`, the stock colour scheme, every hook stock, no Super+Space binding, the reason logged; the same sheet in all three; `safe-env`: no search hint |
 | `layer-cycles` | the capture settings; the probe sets `layer-enabled` false, then true, three times | while off: upstream's dark sheet from `theme/stock/`, the stock colour scheme, every hook stock, no Super+Space binding; while on: the Apex light sheet, `prefer-light` and Super+Space; each time it is on the stage holds the same actors, type by type, as at startup, and each time it is off the same as the first time (the first count waits out main.js's 20 s timeout for deferred work, which fills the overview's hidden dash; an `St.Icon` counts, not the texture child St gives it once it is first styled, which a dash hidden since startup decides); the layer logs each switch |
 | `motion` | the capture settings with `enable-animations` true; the probe lifts the inhibit `main.js` puts on animations without hardware-accelerated rendering, starts `window.js`, a plain GTK 4 window, maximises and restores it once (mutter gives a first size change a 0 × 0 old frame, which stock never animates), maximises it and opens the overview, then sets `enable-animations` false, does both again and plays Locate Pointer | DESIGN's motion (ROADMAP S3c): the window actor's size-change transition and the overview's state transition are `CUBIC_BEZIER` with the control points (.2, .8) and (.2, 1), over 300 and 200 ms; with animations off, neither creates a transition, while Locate Pointer's ripple (`animationRequired`, an a11y aid) still takes stock's 830 ms |
+| `idle` | the capture settings without hot corners, every feature of `layer.js`'s `FEATURES_IN_ENABLE_ORDER` on; `idle.js` lets the session settle, then watches the stage for 10 s | ROADMAP S3c's exit: an idle desktop paints no frame and queues no relayout (below, "The idle desktop") |
 | `fault-configure`, `fault-enable` | `APEX_SHELL_TEST_FAULT` | only the fault feature is off; the `witness` feature after it still enables; the rest of the layer runs, Super+Space included, and the shell survives |
 | `fault-abort` | `abort-after-enable` | SIGABRT (exit 134) with the crash guard's marker left behind |
 | `fedora-light`, `fedora-dark` | Fedora's build, `prefer-light` or `prefer-dark` | no Apex module; upstream's sheet at its own path, byte for byte the one safe mode loads from `theme/stock/` |
@@ -160,7 +163,7 @@ bar's glass, a `Shell.BlurEffect` of radius 2 × `$apex_bar_blur` × the monitor
 workspace dots' gap, height and radius, the active dot `$apex_bar_dot_active_width` wide and
 the others `$apex_bar_dot_size` square at .45; that the top-left pixel reaches the reactive
 4 × 4 hot-corner zone; "Desktop" at `$apex_font_bar_emphasis_weight` after the Activities pill,
-as nothing has focus; the search button just before the status pill, a
+as nothing has focus; the search button at the start of the right box and the status pill at its end, a
 `$apex_bar_search_width` × `$apex_bar_pill_height` pill named "Search (Super+Space)" (both
 the `panel` feature); the clock's unread-notification dot (the probe
 posts one low-urgency notification); that the diamond is drawn (at least a quarter of
@@ -187,8 +190,9 @@ bar, against Fedora's, whose desktop has none.
 
 ## App indicators
 
-In `default`, `default-scale1` and `dark-style`, `G2_INDICATORS=1` runs `indicators.js`
-after the scenes. It starts `sni-items.js`, a gjs process that exports four
+The cases `indicators`, `indicators-scale1` and `indicators-dark` are shells of their own,
+set as `default`, `default-scale1` and `dark-style` are plus two input sources (US and
+French). `G2_INDICATORS=1` runs `indicators.js`, which starts `sni-items.js`, a gjs process that exports four
 StatusNotifierItems, each with a DBusMenu and on its own session-bus connection as separate
 apps are, and registers them with the shell's watcher. Every call an item gets lands in
 `<case>-sni.log`. `indicator_metrics` asserts, against the token file:
@@ -207,10 +211,18 @@ apps are, and registers them with the shell's watcher. Every call an item gets l
   app's states, "Ctrl+Shift+C" dimmed; the opened, clicked and closed events in the log;
 - Activate on a primary click;
 - with a fifth item, three shown and "+2", and the overflow menu's two rows: glyph, title
-  and chevron.
+  and chevron;
+- board 39's "everything", with the camera and microphone indicators, the recording and
+  the sharing buttons shown by the probe: the right box's order (indicators, divider,
+  search, recording, input chip, sharing, status pill); the privacy group's size, colour,
+  glyphs and place in the status pill, whose start narrows for it and widens again once
+  nothing is in use; the recording pill's stop square and tabular timer; the sharing
+  pill's glyph, square, name and gap to the status pill; the input chip's "EN", font,
+  tracking and minimum width.
 
-The captures `<case>-indicators.png`, `<case>-indicator-menu.png` and
-`<case>-indicator-overflow.png` show the bar, Chat's menu and the overflow menu.
+The captures `<case>-indicators.png`, `<case>-indicators-everything.png`,
+`<case>-indicator-menu.png` and `<case>-indicator-overflow.png` show the bar, the bar in
+"everything", Chat's menu and the overflow menu.
 
 ## The shell surfaces' metrics
 
@@ -415,6 +427,49 @@ Both shells capture `unlockDialog.js`'s blur (actor mode, radius 90 × scale, br
 .65) over a grid, with a background-mode blur over it, every property of 0003 at its
 default: `glass-unlock.png` against `fedora-glass-unlock.png` differs by 0 pixels.
 
+## Accessibility
+
+`G2_A11Y=1` (the `default`, `dark-style`, `high-contrast` and `large-text` cases) runs
+`a11y.js`, which opens each of the panel's surfaces in turn: the bar, the dock, a popup
+menu, the OSD, a banner, Quick Settings and its Wi-Fi menu, and the date menu with two
+notifications. Its targets are the visible
+labels, entries and symbolic icons under the surface. Their ink is hidden while the shell
+draws the surface, so the capture holds what is behind them, glass and its blur included,
+with an icon's own fill put back over it. Each target's foreground colour, times its alpha
+and paint opacity, is composited over every sampled pixel of its box, and the pixel at the
+5th percentile counts, which drops an antialiased corner. `a11y_contrast` wants WCAG AA:
+4.5:1 for text and 3:1 for a glyph (1.4.3 and 1.4.11). A disabled button's content is exempt,
+and so is a target wholly outside the capture, another workspace's label. `a11y_layout`
+wants, at 1.25, no text cut short (a collapsed notification's body expands, so it may),
+none partly off the screen or outside its surface, and none overlapping text in the same
+filled box (a notification stack's cards overlap by design). The failures the checks found
+on landing are known gaps (`A11Y_GAPS`), each named after the fix that closes it. Those in
+upstream's high-contrast sheet stay gaps: restyling an upstream actor there would need a stock
+copy of the sheet for safe mode. A report for upstream, which is the owner's to file:
+
+> **High contrast: checked quick toggles fall below WCAG AA.** In gnome-shell 51.0's
+> high-contrast sheet, a checked quick toggle draws white text on the accent: 3.15:1 for the
+> default blue (WCAG 1.4.3 wants 4.5:1), and the menu arrow beside it 2.31:1 (1.4.11 wants
+> 3:1). Measured from the stage's pixels with the toggle's own colours.
+
+## The idle desktop
+
+ROADMAP S3c's last exit: an idle desktop shows no extra repaints. The `idle` case runs the
+patched shell with every feature `layer.js` lists in `FEATURES_IN_ENABLE_ORDER`, and
+`assert.sh` reads that list from the source, so a new feature is idle-tested as soon as it
+joins it. `idle.js` lets the session settle first: startup over, the overview hidden, the
+startup notifications dropped, the dock at rest (no transition on its box), the bar's and
+the dock's glass on, no actor easing, and the pointer left at 0,0 (hot corners off). Then it
+counts the stage's `after-paint` over 10 s, on the fixed clock, and expects none.
+
+A failure names what repainted. Each frame's `paint-view` hands over its redraw clip, an
+`MtkRegion`: the probe takes its extents by bisecting it with `intersect_rectangle`, since
+gjs cannot take the region's rectangles, which its getters return by value, and names the
+actors a pick finds inside it, innermost first. `queue-relayout`, which runs up the tree, is
+counted on every actor, so the innermost entry is the one that asked. `assert.sh` adds the
+`ui/apex/` file of each JS class and `apex-` style class among them. The control opens Quick
+Settings inside a window of the same counter: it must count frames and name their damage.
+
 ## Known gaps
 
 `top_bar_gaps` asserts the rest of the designed top bar ([docs/DESIGN.md](https://github.com/apex-linux/apex/blob/main/docs/DESIGN.md)),
@@ -455,7 +510,9 @@ it is at least 4.8:1), and what the goldens judge: the Apex Symbolic glyphs (S1b
 | `assert.sh`, `stable.sh`, `lib.sh` | the builder VM | the assertions |
 | `png.js`, `compare.js` | gjs | PNG with GLib's zlib only, and the masked comparison |
 | `glass.js`, `blur-ref.js` | the shell; gjs | the glass cases, and their CPU reference |
+| `a11y.js` | the shell | the accessibility cases: contrast against what is drawn, and the Large Text layout |
 | `indicators.js`, `sni-items.js` | the shell; gjs | the app-indicator part of `default`, `default-scale1` and `dark-style`, and the StatusNotifierItems it starts |
+| `idle.js` | the `idle` case's shell | the settled desktop, its paints and relayouts over 10 s, and the counter's control |
 | `frame.c`, `G2Frame-1.gir` | the glass cases' shells | `G2Frame.read()`, a region of the frame the shell drew |
 | `selftest.sh`, `png-test.js`, `blur-ref-test.js` | CI and the host | the tests of the above |
 

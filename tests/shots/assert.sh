@@ -19,8 +19,8 @@ readonly APEX_LIGHT_SHEET=resource:///org/gnome/shell/theme/gnome-shell-light.cs
 readonly APEX_DARK_SHEET=resource:///org/gnome/shell/theme/gnome-shell-dark.css
 readonly STOCK_SHEETS=resource:///org/gnome/shell/theme/stock
 readonly FEDORA_SHEETS=resource:///org/gnome/shell/theme
-readonly DIRECT_CASES=(default default-scale1 dark-style dock-intellihide dock-intellihide-dark stock-light stock-dark safe-env
-    layer-disabled layer-cycles motion fault-configure fault-enable fault-abort kernel-safe fedora-light fedora-dark glass fedora-glass
+readonly DIRECT_CASES=(default default-scale1 dark-style high-contrast large-text dock-intellihide dock-intellihide-dark stock-light stock-dark safe-env
+    layer-disabled layer-cycles motion idle fault-configure fault-enable fault-abort kernel-safe fedora-light fedora-dark glass fedora-glass
     indicators indicators-scale1 indicators-dark)
 readonly DIRECT_PARTS=(main kernel fedora)
 readonly CAPTURE_CASES=(default default-scale1 dark-style stock-light stock-dark fedora-light fedora-dark)
@@ -37,6 +37,21 @@ readonly MESSAGE_ROW_GAP=12
 readonly CARD_COLUMNS='box[apex-message-row[message-icon,box[message-header,message-box[message-content,box]]],message-action-bin]'
 readonly CARD_UPSTREAM='box[message-header,message-box[message-icon,message-content,box],message-action-bin]'
 readonly LAUNCHER_GRID_TOP=132
+# WCAG 2.2 AA: 1.4.3 for text, 1.4.11 for the glyphs a control is known by.
+readonly A11Y_TEXT_RATIO=4.5
+readonly A11Y_ICON_RATIO=3
+readonly A11Y_SURFACES=(bar dock popupMenu osd banner quickSettings wifiMenu dateMenu)
+# The failures the checks found on landing, each until the fix its PR carries.
+# shellcheck disable=SC2016 # a token's name, not an expansion
+readonly A11Y_DIM='the accessibility token fixes: light $apex_fg_dim over glass'
+readonly A11Y_TOGGLE="the accessibility token fixes: white on the checked toggle's accent"
+readonly A11Y_WIDTH='the accessibility token fixes: Quick Settings as wide as Large Text needs'
+readonly A11Y_HC_TOGGLE="upstream HC sheet: Quick Settings' checked toggle, white on its accent (3.15:1), and its menu arrow (2.31:1)"
+declare -rA A11Y_GAPS=(
+    [default:banner]=$A11Y_DIM
+    [default:quickSettings]=$A11Y_TOGGLE [dark-style:quickSettings]=$A11Y_TOGGLE [large-text:quickSettings]=$A11Y_WIDTH
+    [high-contrast:quickSettings]=$A11Y_HC_TOGGLE
+)
 # overviewControls.js: spacing is 2 % of the work area, the stock .search-entry keeps 6 px below it.
 readonly OVERVIEW_SPACING_RATIO=0.02
 readonly STOCK_SEARCH_MARGIN_BOTTOM=6
@@ -59,6 +74,9 @@ readonly MOTION_CURVE='[0.2, 0.8, 0.2, 1]'
 readonly MOTION_WINDOW_MS=300
 readonly MOTION_OVERVIEW_MS=200
 readonly LOCATE_POINTER_RIPPLE_MS=830
+# ROADMAP S3c: an idle desktop shows no extra repaints, with every feature of the layer on.
+readonly APEX_JS_DIR=${G2_APEX_JS_DIR:-$SHOTS_DIR/../../desktop/shell/js/ui/apex}
+readonly IDLE_WINDOW_MS=10000
 # direct.sh's G2_CLOCK, in UTC; the clock shows it as weekday, date, EN SPACE, 24-hour time.
 readonly FIXED_CLOCK=2026-09-28T09:41:00Z
 readonly FIXED_CLOCK_TEXT='Mon Sep 28\u200209:41'
@@ -262,9 +280,9 @@ top_bar() {
         '.topBar.leftItems' 'length == 2 and .[0].accessibleName == "Activities" and (.[1].label | .text == "Desktop" and .weight == ($t.apex_font_bar_emphasis_weight | tonumber))'
     "${metric[@]}" 'the status pill ends $apex_bar_padding from the right edge' \
         '.topBar | .panel.width - .status.pill.x - .status.pill.width' 'px_is($t.apex_bar_padding)'
-    "${metric[@]}" "the search button comes just before the status pill: a \$apex_bar_search_width x \$apex_bar_pill_height pill, radius \$apex_radius_bar_pill, named \"$SEARCH_BUTTON_NAME\"" \
-        '.topBar.rightItems | .[-2:]' \
-        "length == 2 and .[1].accessibleName == \"$STATUS_BUTTON_NAME\" and .[0].accessibleName == \"$SEARCH_BUTTON_NAME\"
+    "${metric[@]}" "the search button starts the right box, the status pill ends it: a \$apex_bar_search_width x \$apex_bar_pill_height pill, radius \$apex_radius_bar_pill, named \"$SEARCH_BUTTON_NAME\"" \
+        '.topBar.rightItems' \
+        "length >= 2 and .[-1].accessibleName == \"$STATUS_BUTTON_NAME\" and .[0].accessibleName == \"$SEARCH_BUTTON_NAME\"
             and (.[0].pill | (.width | px_is(\$t.apex_bar_search_width)) and (.height | px_is(\$t.apex_bar_pill_height)) and (.radius | px_is(\$t.apex_radius_bar_pill)))"
     "${metric[@]}" 'the clock pill is centred on the bar' \
         '.topBar | .clock.pill.x + .clock.pill.width / 2 - .panel.width / 2' 'fabs <= 0.5'
@@ -394,6 +412,41 @@ indicator_metrics() {
             and ((.colour | rgba) as $c | ($c[0:3] == $fg[0:3]) and ($c[3] - 255 * ($t.apex_indicators_divider_opacity | num) | fabs <= 1)))
             and (.d.x - .last.x - .last.width | px_is(($t.apex_indicators_divider_margin | px) + ($t.apex_bar_gap | px)))
             and (.search.x - .d.x - .d.width | px_is(($t.apex_indicators_divider_margin | px) + ($t.apex_bar_gap | px)))'
+    "${metric[@]}" 'the search button starts the stock items, before the recording pill, the input chip, the sharing pill and the status pill' \
+        '.everything.order' 'index("apex-search") as $s | $s >= 2 and .[$s - 2:$s] == ["indicators", "divider"] and .[$s + 1:] == ["screenRecording", "keyboard", "screenSharing", "quickSettings"]'
+    "${metric[@]}" 'the camera and microphone in use: a $apex_privacy_height $apex_privacy group, radius $apex_radius_privacy, $apex_bar_pill_padding_privacy into the status pill' \
+        '.everything | {g: .privacy, pill}' '(.g | (.height | px_is($t.apex_privacy_height)) and (.radius | px_is($t.apex_radius_privacy)) and (.colour | colour_is($t.apex_privacy)))
+            and (.g.x - .pill.x | px_is($t.apex_bar_pill_padding_privacy)) and (.pill.paddingLeft | px_is($t.apex_bar_pill_padding_privacy))
+            and (.g.y + .g.height / 2 - .pill.y - .pill.height / 2 | fabs < 0.51)'
+    "${metric[@]}" 'its glyphs are $apex_privacy_icon_size in $apex_privacy_fg, padded $apex_privacy_padding and $apex_privacy_gap apart' \
+        '.everything.privacy' '(.glyphs | length == 2 and all((.width | px_is($t.apex_privacy_icon_size)) and (.colour | colour_is($t.apex_privacy_fg))))
+            and (.glyphs[0].x - .x | px_is($t.apex_privacy_padding)) and (.x + .width - .glyphs[-1].x - .glyphs[-1].width | px_is($t.apex_privacy_padding))
+            and (.glyphs[1].x - .glyphs[0].x - .glyphs[0].width | px_is($t.apex_privacy_gap))'
+    "${metric[@]}" 'the next status glyph follows it after $apex_privacy_margin + $apex_bar_status_gap' \
+        '.everything.privacy' '.next.x - .x - .width | px_is(($t.apex_privacy_margin | px) + ($t.apex_bar_status_gap | px))'
+    "${metric[@]}" 'with nothing in use the group goes and the pill starts $apex_bar_pill_padding in again' \
+        '.everything.after' '.privacy == false and (.paddingLeft | px_is($t.apex_bar_pill_padding))'
+    "${metric[@]}" 'a recording is a $apex_bar_pill_height $apex_recording pill, radius $apex_radius_bar_pill' \
+        '.everything.recording' '(.height | px_is($t.apex_bar_pill_height)) and (.radius | px_is($t.apex_radius_bar_pill)) and (.colour | colour_is($t.apex_recording))'
+    "${metric[@]}" 'its stop square is $apex_screen_stop_size in $apex_recording_fg, radius $apex_radius_screen_stop, $apex_recording_padding_start in and $apex_recording_gap before the timer' \
+        '.everything.recording' '(.stop | (.width | px_is($t.apex_screen_stop_size)) and (.height | px_is($t.apex_screen_stop_size)) and (.radius | px_is($t.apex_radius_screen_stop)) and (.colour | colour_is($t.apex_recording_fg)))
+            and (.stop.x - .x | px_is($t.apex_recording_padding_start)) and (.timer.x - .stop.x - .stop.width | px_is($t.apex_recording_gap))
+            and (.x + .width - .timer.x - .timer.width | px_is($t.apex_recording_padding_end))'
+    "${metric[@]}" 'its timer is $apex_font_recording_size at weight $apex_font_recording_weight in $apex_recording_fg, in tabular figures' \
+        '.everything.recording.timer' '.text == "0:42" and (.size | px_is($t.apex_font_recording_size)) and .weight == ($t.apex_font_recording_weight | tonumber)
+            and (.colour | colour_is($t.apex_recording_fg)) and (.features | test("tnum"))'
+    "${metric[@]}" 'two input sources show the chip: "EN" at $apex_font_input_chip_size, weight $apex_font_input_chip_weight, tracked $apex_font_input_chip_tracking' \
+        '.everything.input' '.text == "EN" and (.size | px_is($t.apex_font_input_chip_size)) and .weight == ($t.apex_font_input_chip_weight | tonumber)
+            and (.tracking - ($t.apex_font_input_chip_tracking | rtrimstr("em") | num) * ($t.apex_font_input_chip_size | px) | fabs < 0.05)'
+    "${metric[@]}" 'the chip is a $apex_bar_pill_height pill, radius $apex_radius_bar_pill, at least $apex_input_chip_min_width wide' \
+        '.everything.input.pill' '(.height | px_is($t.apex_bar_pill_height)) and (.radius | px_is($t.apex_radius_bar_pill)) and .width >= ($t.apex_input_chip_min_width | px) - 0.01'
+    "${metric[@]}" 'a share is a $apex_bar_pill_height $apex_privacy pill, radius $apex_radius_bar_pill, named "Stop screen sharing", $apex_sharing_margin + $apex_bar_gap before the status pill' \
+        '.everything.sharing' '(.height | px_is($t.apex_bar_pill_height)) and (.radius | px_is($t.apex_radius_bar_pill)) and (.colour | colour_is($t.apex_privacy))
+            and .name == "Stop screen sharing" and (.next.x - .x - .width | px_is(($t.apex_sharing_margin | px) + ($t.apex_bar_gap | px)))'
+    "${metric[@]}" 'its glyph is $apex_sharing_icon_size in $apex_privacy_fg, $apex_sharing_padding_start in and $apex_sharing_gap before a $apex_screen_stop_size stop square, $apex_sharing_padding_end from the end' \
+        '.everything.sharing' '(.glyph | (.width | px_is($t.apex_sharing_icon_size)) and (.colour | colour_is($t.apex_privacy_fg))) and (.glyph.x - .x | px_is($t.apex_sharing_padding_start))
+            and (.stop.x - .glyph.x - .glyph.width | px_is($t.apex_sharing_gap)) and (.stop | (.width | px_is($t.apex_screen_stop_size)) and (.radius | px_is($t.apex_radius_screen_stop)))
+            and (.x + .width - .stop.x - .stop.width | px_is($t.apex_sharing_padding_end))'
     "${metric[@]}" 'a secondary click opens its menu: solid, radius $apex_radius_menu, at least $apex_indicator_menu_width wide' \
         '.menu' '.open and (.content.radius | px_is($t.apex_radius_menu)) and (.content.width >= ($t.apex_indicator_menu_width | px) - 0.01)'
     "${metric[@]}" 'its first row is the item'"'"'s title, $apex_indicator_menu_header_height high, in $apex_fg_dim' \
@@ -1316,6 +1369,130 @@ motion_curve() {
         "and Locate Pointer's ripple, an animationRequired a11y aid, still takes stock's ${LOCATE_POINTER_RIPPLE_MS} ms"
 }
 
+# shellcheck disable=SC2016 # jq programs
+A11Y_SURFACE='(getpath($path | split("."))) as $s
+    | if $s == null then ["not measured"] elif $s.error then ["error: \($s.error)"]
+      elif ($s.targets | length) == 0 then ["no text or glyph found"] else empty end'
+# shellcheck disable=SC2016 # jq programs
+A11Y_LOW_CONTRAST='[.targets[] | select((.inactive | not) and (.offscreen | not) and (.ratio < (if .kind == "text" then $text else $icon end)))
+    | "\(.kind) \(.name | tojson) \(.ink) at \(.alpha) on \(.backdrop): \(.ratio)"]'
+# shellcheck disable=SC2016 # jq programs
+A11Y_LAYOUT='.box as $root | [.targets[] | select(.kind == "text" and (.offscreen | not)) as $t
+    | if $t.ellipsized and ($t.expandable | not) then "\($t.name | tojson) is cut short"
+      elif $t.box.x < $m.x - 1 or $t.box.y < $m.y - 1 or $t.box.x + $t.box.width > $m.x + $m.width + 1
+          or $t.box.y + $t.box.height > $m.y + $m.height + 1 then "\($t.name | tojson) leaves the screen"
+      elif $t.box.x < $root.x - 1 or $t.box.y < $root.y - 1 or $t.box.x + $t.box.width > $root.x + $root.width + 1
+          or $t.box.y + $t.box.height > $root.y + $root.height + 1 then "\($t.name | tojson) leaves its surface"
+      else empty end]
+    + [[.targets[] | select(.kind == "text" and (.offscreen | not))] | . as $a | range(0; length) as $i | range($i + 1; length) as $j | [$a[$i], $a[$j]]
+      | select(.[0].card == .[1].card and .[0].box.x < .[1].box.x + .[1].box.width - 1 and .[1].box.x < .[0].box.x + .[0].box.width - 1
+          and .[0].box.y < .[1].box.y + .[1].box.height - 1 and .[1].box.y < .[0].box.y + .[0].box.height - 1)
+      | "\(.[0].name | tojson) overlaps \(.[1].name | tojson)"] | unique'
+
+a11y_verdict() {
+    local desc=$1 problems=$2
+    if [[ -z $problems ]]; then pass "$desc"; else fail "$desc (${problems:0:600})"; fi
+}
+
+# Each surface's text at 4.5:1 and glyphs at 3:1, against the pixels the stage drew behind them.
+a11y_contrast() {
+    local label=$1 log=$2 report s problems
+    report=$(report_of "$log" APEXG2-A11Y)
+    if [[ -z $report ]]; then
+        fail "$label accessibility: no APEXG2-A11Y report"
+        return
+    fi
+    for s in "${A11Y_SURFACES[@]}"; do
+        problems=$(jq -r --arg path "$s" --argjson text "$A11Y_TEXT_RATIO" --argjson icon "$A11Y_ICON_RATIO" \
+            "[$A11Y_SURFACE] as \$e | if (\$e | length) > 0 then \$e else (getpath(\$path | split(\".\")) | $A11Y_LOW_CONTRAST) end | join(\"; \")" \
+            <<<"$report" 2>&1)
+        known_gap "${A11Y_GAPS[$label:$s]:-}" a11y_verdict "$label accessibility: $s: text $A11Y_TEXT_RATIO:1 and glyphs $A11Y_ICON_RATIO:1 against what is drawn behind them" "$problems"
+    done
+}
+
+# Large Text: each surface's text whole, on the screen, inside its surface and clear of the rest.
+a11y_layout() {
+    local label=$1 log=$2 report s problems
+    report=$(report_of "$log" APEXG2-A11Y)
+    expect "$label accessibility" "$report" '.textScalingFactor == 1.25' "text-scaling-factor is 1.25"
+    for s in "${A11Y_SURFACES[@]}"; do
+        problems=$(jq -r --arg path "$s" \
+            ".monitor as \$m | [$A11Y_SURFACE] as \$e | if (\$e | length) > 0 then \$e else (getpath(\$path | split(\".\")) | $A11Y_LAYOUT) end | join(\"; \")" \
+            <<<"$report" 2>&1)
+        known_gap "${A11Y_GAPS[$label:$s]:-}" a11y_verdict "$label accessibility: $s: no text cut short, off the screen, outside its surface or overlapping" "$problems"
+    done
+}
+
+# The light and dark captures, high contrast and Large Text, each with its own shell.
+a11y_cases() {
+    local run=$1 c
+    for c in high-contrast large-text; do
+        exits "$run" "$c" 0
+        no_js_error "$c" "$run/$c.log"
+        no_apex_failure "$c" "$run/$c.log"
+    done
+    a11y_contrast default "$run/default.log"
+    a11y_contrast dark-style "$run/dark-style.log"
+    a11y_contrast high-contrast "$run/high-contrast.log"
+    a11y_layout large-text "$run/large-text.log"
+}
+
+# The layer's features, in layer.js's own list, so a new feature is idle-tested at once.
+layer_features() {
+    sed -n '/^const FEATURES_IN_ENABLE_ORDER = \[/,/\];/p' "$APEX_JS_DIR/layer.js" | grep -o "'[a-z-]*'" | tr -d "'"
+}
+
+# The ui/apex/ file behind each JS class or apex- style class the offenders name.
+apex_sources() {
+    local token file
+    grep -oE '(^|[ <;])[A-Z][A-Za-z0-9]*|\.apex-[a-z0-9-]+' | sed -E 's/^[ <;.]//' | sort -u | while read -r token; do
+        if [[ $token == apex-* ]]; then
+            file=$(grep -rlE "['\" ]${token}['\" ]" "$APEX_JS_DIR" 2>/dev/null | head -n 1)
+        else
+            file=$(grep -rlE "class $token( |\\{)" "$APEX_JS_DIR" 2>/dev/null | head -n 1)
+        fi
+        if [[ -n $file ]]; then
+            printf '%s in ui/apex/%s\n' "$token" "${file#"$APEX_JS_DIR"/}"
+        fi
+    done | paste -sd';' - | sed 's/;/; /g'
+}
+
+# shellcheck disable=SC2016 # jq programs
+idle_desktop() {
+    local run=$1 f=$1/idle.log r error feature offenders sources relayouts
+    exits "$run" idle 0
+    apex_light idle "$f"
+    no_apex_failure idle "$f"
+    for feature in $(layer_features); do
+        logs idle "$f" "Apex: feature $feature enabled" "the $feature feature is on"
+    done
+    r=$(report_of "$f" APEXG2-IDLE)
+    error=$(jq -r '.error // empty' <<<"$r" 2>/dev/null)
+    if [[ -n $error ]]; then
+        fail "idle: ${error%%$'\n'*}"
+        return
+    fi
+    expect idle "$r" ".windowMs == $IDLE_WINDOW_MS and (.settled | (.startingUp | not) and (.overview | not) and .dock.visible and .dock.rested and .barGlass and .dockGlass and .easing == [])" \
+        "the session settled: startup over, no overview, the dock at rest, the bar's and the dock's glass on, nothing easing"
+    offenders=$(jq -r '[.idle.frames[] | "at \(.atMs) ms, \(.damage.rectangles) rectangle(s) in \(.damage.extents | "\(.x),\(.y) \(.width)x\(.height)") under \(.damage.under | map(join(" < ")) | join(" | "))"] | join("; ")' <<<"$r" 2>/dev/null)
+    sources=$(jq -r '[.idle.frames[].damage.under[][]] | join(" < ")' <<<"$r" 2>/dev/null | apex_sources)
+    if jq -e '.idle.afterPaints == 0 and .idle.frames == []' <<<"$r" >/dev/null 2>&1; then
+        pass "idle: over ${IDLE_WINDOW_MS} ms of an idle desktop the stage paints no frame"
+    else
+        fail "idle: over ${IDLE_WINDOW_MS} ms of an idle desktop the stage paints no frame ($(jq -r '.idle.afterPaints' <<<"$r" 2>/dev/null) painted: ${offenders:-none recorded}${sources:+; from $sources})"
+    fi
+    relayouts=$(jq -r '.idle.relayouts | to_entries | map("\(.key) x\(.value)") | join("; ")' <<<"$r" 2>/dev/null)
+    if jq -e '.idle.relayouts == {}' <<<"$r" >/dev/null 2>&1; then
+        pass "idle: and no actor queues a relayout"
+    else
+        fail "idle: and no actor queues a relayout (${relayouts:-unreadable}$(apex_sources <<<"$relayouts" | sed 's/^./; from &/'))"
+    fi
+    expect idle "$r" '.control.afterPaints > 0 and (.control.frames | length > 0)' \
+        "the control: opening Quick Settings in a window of the same counter paints frames"
+    expect idle "$r" '.control.frames | length > 0 and all(.damage.extents.width > 0 and .damage.extents.height > 0 and (.damage.under | length > 0))' \
+        "and each of its frames names its damage and the actors under it, as a failure would"
+}
+
 direct_cases() {
     local run=$1 c f
     echo "# the direct cases: $(grep -m1 -E '^gnome-shell-[0-9]' "$run/rpm.txt" 2>/dev/null)"
@@ -1429,6 +1606,7 @@ direct_cases() {
     spotlight_keys dark-style "$f" dark
     screenshot_ui dark-style "$f" dark
     dark_style_off dark-style "$f"
+    a11y_cases "$run"
 
     for c in dock-intellihide dock-intellihide-dark; do
         exits "$run" "$c" 0
@@ -1463,6 +1641,7 @@ direct_cases() {
 
     layer_cycles "$run"
     motion_curve "$run"
+    idle_desktop "$run"
 
     f=$run/kernel-safe.log
     check "kernel-safe: /proc/cmdline carries apex.safe=1" grep -qw 'apex.safe=1' "$run/cmdline-kernel.txt"

@@ -348,8 +348,9 @@ function clockTextGap(label, unit) {
     return round((timeStart - dateEnd) / logical.width * boxOf(label, unit).width);
 }
 
+// panel.js hides a button it has nothing to show for, not its container.
 function panelItems(boxActor, unit) {
-    return boxActor.get_children().filter(c => c.visible).map(container => {
+    return boxActor.get_children().filter(c => c.visible && c.get_first_child()?.visible !== false).map(container => {
         const item = container.get_first_child();
         const pill = item?.get_first_child();
         const label = item ? firstVisibleLabel(item) : null;
@@ -720,6 +721,7 @@ function openPopupMenu() {
     [...rows, separator, iconRow].forEach(item => menu.addMenuItem(item));
     menu.open(BoxPointer.PopupAnimation.NONE);
     return {
+        root: menu.box,
         measure: unit => {
             const line = separator.get_children().find(c => c.has_style_class_name('popup-separator-menu-item-separator'));
             return {
@@ -788,6 +790,7 @@ async function openOsd() {
     const settled = gone && await settledOverTwoFrames(window._hbox,
         () => window.visible && window._hbox.mapped && window._level.visible, OSD_SETTLE_TIMEOUT_MS);
     return {
+        root: window._hbox,
         measure: unit => {
             if (!settled)
                 return {error: 'the OSD never settled'};
@@ -2466,6 +2469,17 @@ async function runProbe() {
         console.log(`APEXG2-SCENES ${JSON.stringify(result)}`);
     }
 
+    if (GLib.getenv('G2_A11Y') === '1') {
+        let result;
+        try {
+            const A11y = await import('./a11y.js');
+            result = await A11y.a11yReport({settle, unit: cssUnit(), apexDock, findDescendant, openPopupMenu, openOsd, openBanner});
+        } catch (e) {
+            result = {error: `${e.message}\n${e.stack}`};
+        }
+        console.log(`APEXG2-A11Y ${JSON.stringify(result)}`);
+    }
+
     if (GLib.getenv('G2_INDICATORS') === '1') {
         let result;
         try {
@@ -2517,6 +2531,17 @@ async function runProbe() {
             result = {error: `${e.message}\n${e.stack}`};
         }
         console.log(`APEXG2-CYCLES ${JSON.stringify(result)}`);
+    }
+
+    if (GLib.getenv('G2_IDLE') === '1') {
+        let result;
+        try {
+            const Idle = await import('./idle.js');
+            result = await Idle.idleReport({settle, dropStartupNotifications, apexDock});
+        } catch (e) {
+            result = {error: `${e.message}\n${e.stack}`};
+        }
+        console.log(`APEXG2-IDLE ${JSON.stringify(result)}`);
     }
 
     if (GLib.getenv('G2_DOCK') === '1') {

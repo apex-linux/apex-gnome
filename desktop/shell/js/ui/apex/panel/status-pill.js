@@ -5,12 +5,14 @@
 
 import * as Hooks from '../hooks.js';
 import * as Main from '../../main.js';
+import {PrivacyGroup} from './privacy-group.js';
 
 const HIDDEN_INDICATORS = ['_brightness', '_thunderbolt', '_nightLight', '_darkMode',
     '_doNotDisturb', '_backlight', '_bluetooth', '_rfkill', '_autoRotate', '_powerProfiles'];
 
 let _enabled = false;
 const _removedByBox = new Map();
+const _privacyGroups = new Map();
 
 function _filter(quickSettings) {
     const box = quickSettings._indicators;
@@ -25,9 +27,13 @@ function _filter(quickSettings) {
     for (const {indicator} of removed)
         box.remove_child(indicator);
     _removedByBox.set(box, removed);
+    _privacyGroups.set(box, new PrivacyGroup(quickSettings));
 }
 
 function _restore() {
+    for (const group of _privacyGroups.values())
+        group.destroy();
+    _privacyGroups.clear();
     for (const [box, removed] of _removedByBox) {
         for (const {indicator, index} of removed)
             box.insert_child_at_index(indicator, index);
