@@ -1,0 +1,62 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Thuong Vo <66083331+SekiroKenjii@users.noreply.github.com>
+Date: Sat, 24 Oct 2026 07:39:10 +0000
+Subject: [PATCH] window, tab: the Apex split panes
+
+The Apex terminal (src/apex/, Source100) splits a session into two panes:
+the tab view's terminal and a second PtyxisTab beside it. These hunks
+hook the second pane in:
+
+- ptyxis_window_get_active_tab() returns the second pane while it has
+  focus, so the window's actions (find, zoom, copy) and the sessions'
+  focus checks follow it;
+- a second pane whose process exits with the "close" action, outside
+  any tab view, closes itself through apex_pane_exited().
+---
+ src/ptyxis-tab.c    | 4 ++++
+ src/ptyxis-window.c | 4 ++++
+ 2 files changed, 8 insertions(+)
+
+diff --git a/src/ptyxis-tab.c b/src/ptyxis-tab.c
+index b19c212..5de2539 100644
+--- a/src/ptyxis-tab.c
++++ b/src/ptyxis-tab.c
+@@ -41,6 +41,8 @@
+ #include "ptyxis-util.h"
+ #include "ptyxis-window.h"
+ 
++#include "apex/apex-panes.h"
++
+ typedef enum _PtyxisTabState
+ {
+   PTYXIS_TAB_STATE_INITIAL,
+@@ -461,6 +463,8 @@ ptyxis_tab_wait_cb (GObject      *object,
+             adw_tab_view_set_page_pinned (ADW_TAB_VIEW (tab_view), page, FALSE);
+           adw_tab_view_close_page (ADW_TAB_VIEW (tab_view), page);
+         }
++      else
++        apex_pane_exited (self);
+       break;
+ 
+     case PTYXIS_EXIT_ACTION_NONE:
+diff --git a/src/ptyxis-window.c b/src/ptyxis-window.c
+index 48cb70b..cd52013 100644
+--- a/src/ptyxis-window.c
++++ b/src/ptyxis-window.c
+@@ -2479,12 +2479,16 @@ PtyxisTab *
+ ptyxis_window_get_active_tab (PtyxisWindow *self)
+ {
+   AdwTabPage *page;
++  PtyxisTab *pane;
+ 
+   g_return_val_if_fail (PTYXIS_IS_WINDOW (self), NULL);
+ 
+   if (self->tab_view == NULL)
+     return NULL;
+ 
++  if ((pane = apex_window_focused_pane (self)))
++    return pane;
++
+   if (!(page = adw_tab_view_get_selected_page (self->tab_view)))
+     return NULL;
+ 
