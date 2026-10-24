@@ -1161,6 +1161,17 @@ async function notificationsLayer(unit) {
             clear: {...boxOf(list._clearButton, unit), visible: list._clearButton.visible},
             dnd: dnd && {...boxOf(dnd, unit), label: findDescendant(dnd, a => a instanceof St.Label)?.text ?? null},
         };
+        const calendar = findDescendant(menu.box, a => a.has_style_class_name?.('calendar'));
+        const find = styleClass => findDescendant(calendar, a => a.has_style_class_name?.(styleClass));
+        const days = calendar.get_children().filter(a => a.has_style_class_name?.('calendar-day'));
+        const dots = days.map(d => findDescendant(d, a => a.has_style_class_name?.('apex-event-dot'))).filter(Boolean);
+        result.calendar = {
+            label: boxOf(find('calendar-month-label'), unit),
+            back: boxOf(find('calendar-change-month-back'), unit),
+            forward: boxOf(find('calendar-change-month-forward'), unit),
+            days: days.length,
+            dots: dots.map(d => boxOf(d, unit)),
+        };
         if (dnd) {
             dnd.emit('clicked');
             result.dndClick = {showBanners: notifications.get_boolean('show-banners'), checked: dnd.checked};

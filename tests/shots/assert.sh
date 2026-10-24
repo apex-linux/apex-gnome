@@ -494,12 +494,17 @@ notifications_layer() {
             "a click on Do Not Disturb turns banners off and checks it"
         expect "$label notifications" "$scenes" "$q.empty | .placeholder and .clearVisible and (.clearReactive | not)" \
             "with nothing to clear, Clear stays shown, insensitive"
+        expect "$label notifications" "$scenes" "$q.calendar | .label.x < .back.x and .back.x < .forward.x
+            and (.dots | length) == .days and all(.dots[]; .width == 4 and .height == 4)" \
+            "the calendar: the month on the left, both chevrons on the right, a 4 px dot laid out under every day"
     else
         expect "$label notifications" "$scenes" "$q | (.messages | length == 3) and ($flat | not) and .dnd == null
             and .cardHeader.sourceIcon and .icon == null" \
             "stock: an app's notifications stack, each header keeps its glyph, and the footer has Clear alone"
         expect "$label notifications" "$scenes" "$q.empty | .placeholder and (.clearVisible | not)" \
             "stock: with nothing to clear, Clear hides"
+        expect "$label notifications" "$scenes" "$q.calendar | .back.x < .label.x and .label.x < .forward.x and (.dots | length) == 0" \
+            "stock: the month between its chevrons, no dot widgets"
     fi
 }
 
