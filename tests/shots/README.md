@@ -321,6 +321,15 @@ no ease, Apex's or stock's, leaves a transition above 0 ms but `animationRequire
 failure names each that did. St skips CSS transitions itself with animations off
 (`st-widget.c`), the top bar's `$apex_bar_transition` included.
 
+`notifications_layer` checks the `notifications` layer feature in the same cases, and stock
+in the stock cases. The probe posts three low-urgency notifications from one app, opens the
+calendar and reads the cards' boxes, the first card's header line, glyph and icon, and the
+footer; clicks Do Not Disturb; then empties the list. The feature lays the cards out one under
+another without a group header, the header reads "app · time" without the glyph, a card
+without an icon shows the app's, Do Not Disturb sits left of Clear, which ends at the footer's
+right edge, the click turns banners off, and Clear stays shown, insensitive, once the list is
+empty. Stock stacks the cards, keeps the glyph and hides Clear.
+
 `derived_surfaces` reads surfaces with no board, which G2 never opens, from nested
 stand-ins in the same cases: the workspace switcher and its dots, the resize popup, the
 input method's candidates and a candidate, the run dialog's entry, an audio device tile

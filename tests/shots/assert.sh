@@ -574,6 +574,38 @@ quick_settings_layer() {
     fi
 }
 
+# shellcheck disable=SC2016 # jq programs
+notifications_layer() {
+    local label=$1 log=$2 mode=$3 scenes q=.surfaces.notificationsLayer
+    scenes=$(report_of "$log" APEXG2-SCENES)
+    local flat='[.messages as $m | range(1; $m | length) | $m[.].y >= $m[. - 1].y + $m[. - 1].height] | all'
+    if [[ $mode == apex ]]; then
+        expect "$label notifications" "$scenes" "$q | (.messages | length == 3) and (.header | not) and ($flat)" \
+            "the notifications feature lays an app's three notifications out flat, one under another, without a group header"
+        expect "$label notifications" "$scenes" "$q | (.cardHeader.sourceIcon | not) and (.cardHeader.line | startswith(\"G2 Chat · \"))
+            and .icon == \"mail-unread-symbolic\"" \
+            "a card's header reads app · time without the source glyph, and a card without an icon shows the app's"
+        expect "$label notifications" "$scenes" "$q | .dnd.label == \"Do Not Disturb\" and .dnd.x < .clear.x
+            and (.clear.x + .clear.width) >= (.footer.x + .footer.width - 6)" \
+            "the footer: Do Not Disturb on the left, Clear on the right"
+        expect "$label notifications" "$scenes" "$q.dndClick | .showBanners == false and .checked" \
+            "a click on Do Not Disturb turns banners off and checks it"
+        expect "$label notifications" "$scenes" "$q.empty | .placeholder and .clearVisible and (.clearReactive | not)" \
+            "with nothing to clear, Clear stays shown, insensitive"
+        expect "$label notifications" "$scenes" "$q.calendar | .label.x < .back.x and .back.x < .forward.x
+            and (.dots | length) == .days and all(.dots[]; .width == 4 and .height == 4)" \
+            "the calendar: the month on the left, both chevrons on the right, a 4 px dot laid out under every day"
+    else
+        expect "$label notifications" "$scenes" "$q | (.messages | length == 3) and ($flat | not) and .dnd == null
+            and .cardHeader.sourceIcon and .icon == null" \
+            "stock: an app's notifications stack, each header keeps its glyph, and the footer has Clear alone"
+        expect "$label notifications" "$scenes" "$q.empty | .placeholder and (.clearVisible | not)" \
+            "stock: with nothing to clear, Clear hides"
+        expect "$label notifications" "$scenes" "$q.calendar | .back.x < .label.x and .label.x < .forward.x and (.dots | length) == 0" \
+            "stock: the month between its chevrons, no dot widgets"
+    fi
+}
+
 # shellcheck disable=SC2016 # jq programs and token names, not shell expansions
 quick_settings() {
     local label=$1 log=$2 variant=$3 scenes tokens
@@ -1304,6 +1336,7 @@ direct_cases() {
     shell_surfaces default "$f" light
     quick_settings default "$f" light
     quick_settings_layer default "$f" apex
+    notifications_layer default "$f" apex
     shadow_layers default "$f" light
     window_switcher default "$f" light
     modal_dialog default "$f" light
@@ -1331,6 +1364,7 @@ direct_cases() {
     shell_surfaces default-scale1 "$f" light
     quick_settings default-scale1 "$f" light
     quick_settings_layer default-scale1 "$f" apex
+    notifications_layer default-scale1 "$f" apex
     shadow_layers default-scale1 "$f" light
     window_switcher default-scale1 "$f" light
     modal_dialog default-scale1 "$f" light
@@ -1361,6 +1395,7 @@ direct_cases() {
     shell_surfaces dark-style "$f" dark
     quick_settings dark-style "$f" dark
     quick_settings_layer dark-style "$f" apex
+    notifications_layer dark-style "$f" apex
     shadow_layers dark-style "$f" dark
     window_switcher dark-style "$f" dark
     modal_dialog dark-style "$f" dark
@@ -1388,6 +1423,7 @@ direct_cases() {
         stock_view "$c" "$run/$c.log" "${c#stock-}"
         no_dock "$c" "$run/$c.log"
         quick_settings_layer "$c" "$run/$c.log" stock
+        notifications_layer "$c" "$run/$c.log" stock
         no_apex_failure "$c" "$run/$c.log"
     done
     stock_thumbnails "$run"

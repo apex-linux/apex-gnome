@@ -1295,6 +1295,67 @@ async function calendarMenu(unit) {
     }
 }
 
+// The notifications feature: three notifications from one app, the footer, then an empty list.
+async function notificationsLayer(unit) {
+    const source = new MessageTray.Source({title: 'G2 Chat', iconName: 'mail-unread-symbolic'});
+    Main.messageTray.add(source);
+    for (const title of ['Lunch?', 'Standup moved', 'Build passed'])
+        source.addNotification(new MessageTray.Notification({source, title, body: 'Just now.', urgency: MessageTray.Urgency.LOW}));
+    const {menu, _messageList: list} = Main.panel.statusArea.dateMenu;
+    const notifications = new Gio.Settings({schema_id: 'org.gnome.desktop.notifications'});
+    menu.open(BoxPointer.PopupAnimation.NONE);
+    try {
+        await settle();
+        const group = findDescendant(menu.box, a => a.constructor.name === 'NotificationMessageGroup');
+        const messages = group.get_children().map(c => c.child).filter(m => m?.constructor.name === 'NotificationMessage');
+        const footer = list._clearButton.get_parent();
+        const dnd = footer.get_children().find(c => c.has_style_class_name('apex-dnd-button')) ?? null;
+        const header = findDescendant(messages[0], a => a.has_style_class_name?.('message-header'));
+        const line = findDescendant(header, a => a.has_style_class_name?.('message-header-content'));
+        const result = {
+            header: group._headerBox.visible,
+            cardHeader: {
+                sourceIcon: findDescendant(header, a => a.has_style_class_name?.('message-source-icon')).visible,
+                line: line.get_children().filter(c => c.visible).map(c => c.text).join(' '),
+            },
+            icon: messages[0].icon?.to_string() ?? null,
+            messages: messages.map(m => boxOf(m, unit)),
+            footer: boxOf(footer, unit),
+            clear: {...boxOf(list._clearButton, unit), visible: list._clearButton.visible},
+            dnd: dnd && {...boxOf(dnd, unit), label: findDescendant(dnd, a => a instanceof St.Label)?.text ?? null},
+        };
+        const calendar = findDescendant(menu.box, a => a.has_style_class_name?.('calendar'));
+        const find = styleClass => findDescendant(calendar, a => a.has_style_class_name?.(styleClass));
+        const days = calendar.get_children().filter(a => a.has_style_class_name?.('calendar-day'));
+        const dots = days.map(d => findDescendant(d, a => a.has_style_class_name?.('apex-event-dot'))).filter(Boolean);
+        result.calendar = {
+            label: boxOf(find('calendar-month-label'), unit),
+            back: boxOf(find('calendar-change-month-back'), unit),
+            forward: boxOf(find('calendar-change-month-forward'), unit),
+            days: days.length,
+            dots: dots.map(d => boxOf(d, unit)),
+        };
+        if (dnd) {
+            dnd.emit('clicked', Clutter.BUTTON_PRIMARY);
+            result.dndClick = {showBanners: notifications.get_boolean('show-banners'), checked: dnd.checked};
+            dnd.emit('clicked', Clutter.BUTTON_PRIMARY);
+        }
+        Main.messageTray.getSources().filter(s => s === source).forEach(s => s.destroy());
+        await settle();
+        result.empty = {
+            placeholder: list._placeholder.visible,
+            clearVisible: list._clearButton.visible,
+            clearReactive: list._clearButton.reactive,
+        };
+        return result;
+    } finally {
+        menu.close(BoxPointer.PopupAnimation.NONE);
+        notifications.reset('show-banners');
+        Main.messageTray.getSources().filter(s => s === source).forEach(s => s.destroy());
+        await settle();
+    }
+}
+
 // Board 38's rows, from providers of the probe's own: G2's image has no files or settings
 // to find, so a real query would draw nothing to measure.
 const CALCULATOR = 'org.gnome.Calculator.desktop';
@@ -1919,6 +1980,7 @@ async function scenes() {
     surfaces.switcher = await windowSwitcher(unit);
     surfaces.dialog = {...await modalDialog(unit), endSession: await endSessionDialog(unit)};
     surfaces.dateMenu = await calendarMenu(unit);
+    surfaces.notificationsLayer = await notificationsLayer(unit);
     surfaces.derived = derivedSurfaces(unit);
     surfaces.tilePreview = await tilePreview(unit);
     surfaces.spotlight = await spotlightStyle(unit);
