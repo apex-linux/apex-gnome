@@ -77,7 +77,7 @@ libnautilus is a static library: an object nothing calls is left out of the bina
 `main()` registers the resource itself rather than relying on a constructor.
 
 Budget (ADR 0014): at most 400 changed lines in upstream files, in hook hunks only; the
-added files under `src/apex/` do not count. In use: 25 lines in 7 files.
+added files under `src/apex/` do not count. In use: 29 lines in 7 files.
 
 ROADMAP S2d names the footer, the count and the zoom 0001 to 0003, and S7 the rest 0004 to
 0007. Here `0001-build` wires Source1 in, the footer and the count share one hook
