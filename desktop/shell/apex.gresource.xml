@@ -35,6 +35,7 @@
     <file alias="shadows/feature.js">js/ui/apex/shadows/feature.js</file>
     <file alias="shadows/registry.js">js/ui/apex/shadows/registry.js</file>
     <file alias="quick-settings/feature.js">js/ui/apex/quick-settings/feature.js</file>
+    <file alias="message-list/feature.js">js/ui/apex/message-list/feature.js</file>
   </gresource>
   <gresource prefix="/org/gnome/shell/theme/apex">
     <file alias="diamond-light.svg">data/theme/apex/diamond-light.svg</file>

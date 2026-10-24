@@ -48,7 +48,7 @@ mkdir -p "$T/schemas" "$T/noschema" "$T/nochild" "$T/data" "$T/home" "$T/shell" 
 # main.js and the Meta and Shell typelibs come only with gnome-shell and mutter.
 cp -R "$REPO/desktop/shell/js" "$T/shell/"
 cp "$HERE/main-stub.js" "$T/shell/js/ui/main.js"
-for upstream in panelMenu dash iconGrid popupMenu; do
+for upstream in panelMenu dash iconGrid popupMenu messageList; do
     cp "$HERE/stubs/$upstream.js" "$T/shell/js/ui/$upstream.js"
 done
 # Spotlight's providers: upstream's app search and remote providers, faked.
@@ -66,30 +66,31 @@ for gir in "$HERE"/fixtures/*.gir; do
     "$GI_COMPILER" "$gir" -o "$T/typelib/${gir_name%.gir}.typelib"
 done
 cp "$SCHEMA_DIR"/*.gschema.xml "$T/schemas/"
-readonly SEARCH_PROVIDERS_SCHEMA=$HERE/fixtures/org.gnome.desktop.search-providers.gschema.xml
-cp "$SEARCH_PROVIDERS_SCHEMA" "$T/schemas/"
+# gsettings-desktop-schemas' keys the features read, in every schema directory.
+readonly -a DESKTOP_SCHEMAS=("$HERE"/fixtures/org.gnome.desktop.*.gschema.xml)
+cp "${DESKTOP_SCHEMAS[@]}" "$T/schemas/"
 glib-compile-schemas --strict "$T/schemas"
 awk '/<child name="keybindings"/ { next }
     /<schema id="io\.github\.apex_linux\.Apex\.Desktop\.Keybindings"/ { skip = 1 }
     !skip { print }
     skip && /<\/schema>/ { skip = 0 }' "$SCHEMA_DIR/io.github.apex_linux.Apex.Desktop.gschema.xml" \
     >"$T/nochild/io.github.apex_linux.Apex.Desktop.gschema.xml"
-cp "$SEARCH_PROVIDERS_SCHEMA" "$T/nochild/"
+cp "${DESKTOP_SCHEMAS[@]}" "$T/nochild/"
 glib-compile-schemas --strict "$T/nochild"
 mkdir -p "$T/nokey"
 awk '/<key name="toggle-spotlight"/ { skip = 1 } !skip { print } skip && /<\/key>/ { skip = 0 }' \
     "$SCHEMA_DIR/io.github.apex_linux.Apex.Desktop.gschema.xml" >"$T/nokey/io.github.apex_linux.Apex.Desktop.gschema.xml"
-cp "$SEARCH_PROVIDERS_SCHEMA" "$T/nokey/"
+cp "${DESKTOP_SCHEMAS[@]}" "$T/nokey/"
 glib-compile-schemas --strict "$T/nokey"
 mkdir -p "$T/nodock"
 awk '/<key name="dock-show-trash"/ { skip = 1 } !skip { print } skip && /<\/key>/ { skip = 0 }' \
     "$SCHEMA_DIR/io.github.apex_linux.Apex.Desktop.gschema.xml" >"$T/nodock/io.github.apex_linux.Apex.Desktop.gschema.xml"
-cp "$SEARCH_PROVIDERS_SCHEMA" "$T/nodock/"
+cp "${DESKTOP_SCHEMAS[@]}" "$T/nodock/"
 glib-compile-schemas --strict "$T/nodock"
 mkdir -p "$T/nohint"
 awk '/<key name="search-hint-shown"/ { skip = 1 } !skip { print } skip && /<\/key>/ { skip = 0 }' \
     "$SCHEMA_DIR/io.github.apex_linux.Apex.Desktop.gschema.xml" >"$T/nohint/io.github.apex_linux.Apex.Desktop.gschema.xml"
-cp "$SEARCH_PROVIDERS_SCHEMA" "$T/nohint/"
+cp "${DESKTOP_SCHEMAS[@]}" "$T/nohint/"
 glib-compile-schemas --strict "$T/nohint"
 
 readonly CMDLINE_PLAIN='BOOT_IMAGE=(hd0,gpt2)/boot/ostree/apex/vmlinuz root=UUID=0 rw rhgb quiet'
@@ -356,6 +357,26 @@ has "disabled-features=['quick-settings']: skips the feature" 'Apex: feature qui
 fact "disabled-features=['quick-settings']: stock order" \
     'qs\.order=Wi-Fi,VPN,Bluetooth,Power Mode,Night Light,Dark Style,Do Not Disturb,Airplane Mode,Auto Rotate'
 fact "disabled-features=['quick-settings']: Power Mode unlit" 'qs\.power=checked=false classes=none'
+
+probe message-list "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_MESSAGE_LIST=1
+has "message-list: the feature enables" 'Apex: feature message-list enabled'
+readonly FLAT='expanded=true expansion=1 cover=false header=false/0 scaling=true flat=true'
+readonly STACKED='expanded=false expansion=0 cover=true header=false/-1 scaling=false flat=false'
+fact "message-list: a group already in the list lies flat, without its header" "ml\.groups=Mail:$FLAT"
+fact "message-list: Do Not Disturb, then Clear on the right" 'ml\.footer=apex-dnd-button,clear clear=align:3 expand:true visible:true'
+fact "message-list: a group added later lies flat too" "ml\.added\.groups=Mail:$FLAT \| Chat:$FLAT"
+fact "message-list: Clear stays shown with nothing to clear" 'ml\.added\.footer=apex-dnd-button,clear clear=align:3 expand:true visible:true'
+fact "message-list: the switch follows show-banners" 'ml\.dnd-from-settings=checked=true switch=true'
+fact "message-list: a click turns Do Not Disturb off" 'ml\.dnd-click=show-banners=true checked=false'
+fact "message-list: layer off: the groups stack again" "ml\.off\.groups=Mail:$STACKED \| Chat:$STACKED"
+fact "message-list: layer off: stock's footer, Clear hidden with the placeholder shown" 'ml\.off\.footer=clear clear=align:1 expand:true visible:false'
+fact "message-list: layer back on: flat again" "ml\.on\.groups=Mail:$FLAT \| Chat:$FLAT"
+fact "message-list: layer back on: the footer again" 'ml\.on\.footer=apex-dnd-button,clear clear=align:3 expand:true visible:true'
+
+probe message-list-disabled "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_MESSAGE_LIST=1 PROBE_DISABLED=message-list
+has "disabled-features=['message-list']: skips the feature" 'Apex: feature message-list is in disabled-features'
+fact "disabled-features=['message-list']: stacked groups" "ml\.groups=Mail:expanded=false expansion=0 cover=true header=false/0 scaling=false flat=false"
+fact "disabled-features=['message-list']: stock's footer" 'ml\.footer=clear clear=align:1 expand:true visible:true'
 
 probe shadows "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_SHADOWS=1
 has "shadows: the feature enables" 'Apex: feature shadows enabled'

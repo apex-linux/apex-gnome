@@ -372,6 +372,44 @@ async function exerciseQuickSettings() {
     quickSettingsState('qs.on', quickSettings);
 }
 
+function messageListState(label, list) {
+    const groups = list._messageView.get_children().map(item => item.child).map(g => `${g.name}:` +
+        `expanded=${g._expanded} expansion=${g.layout_manager.expansion} cover=${g._cover.visible} ` +
+        `header=${g._headerBox.visible}/${g._headerBox.height} scaling=${g.get_children()[0].layout_manager.scalingEnabled} ` +
+        `flat=${g.has_style_class_name('apex-flat')}`);
+    fact(`${label}.groups`, groups.join(' | '));
+    const clear = list._clearButton;
+    const footer = clear.get_parent().get_children().map(c => c.name ?? c.style_class).join(',');
+    fact(`${label}.footer`, `${footer} clear=align:${clear.x_align} expand:${clear.x_expand} visible:${clear.visible}`);
+}
+
+async function exerciseMessageList() {
+    if (GLib.getenv('PROBE_MESSAGE_LIST') !== '1')
+        return;
+    const Main = await import(`file://${shellDir}/js/ui/main.js`);
+    const MessageList = await import(`file://${shellDir}/js/ui/messageList.js`);
+    const St = (await import(`file://${shellDir}/../St.js`)).default;
+    const list = Main.panel.statusArea.dateMenu._messageList;
+    const notifications = new Gio.Settings({schema_id: 'org.gnome.desktop.notifications'});
+    messageListState('ml', list);
+    list._messageView.add_child(new St.Bin({child: new MessageList.NotificationMessageGroup('Chat', 2)}));
+    list._placeholder.visible = true;
+    list._clearButton.visible = false;
+    list._clearButton.emit('notify::visible');
+    messageListState('ml.added', list);
+    const dnd = list._clearButton.get_parent().get_children()[0];
+    notifications.set_boolean('show-banners', false);
+    fact('ml.dnd-from-settings', `checked=${dnd.checked} switch=${dnd.child.get_children()[1].state}`);
+    dnd.emit('clicked');
+    fact('ml.dnd-click', `show-banners=${notifications.get_boolean('show-banners')} checked=${dnd.checked}`);
+    settings.set_boolean('layer-enabled', false);
+    await spin(200);
+    messageListState('ml.off', list);
+    settings.set_boolean('layer-enabled', true);
+    await spin(200);
+    messageListState('ml.on', list);
+}
+
 // A surface two actors below the stage's child, its sheet naming one further layer.
 async function exerciseShadows() {
     if (GLib.getenv('PROBE_SHADOWS') !== '1')
@@ -759,6 +797,7 @@ if (layer && GLib.getenv('PROBE_ENABLE') === '1') {
     await pressToggleSpotlight();
     await exerciseMotion();
     await exerciseQuickSettings();
+    await exerciseMessageList();
     await exerciseShadows();
     await exerciseSpotlight();
     await exerciseTopBar();

@@ -107,6 +107,17 @@ $_calendar_day_width: ($apex_date_menu_column_width - 2 * $apex_calendar_padding
 
     &:hover, &:focus { background-color: $apex_button_hover; }
   }
+
+  // The message-list feature's Do Not Disturb row: its label, then a stock switch.
+  .apex-dnd-button {
+    min-height: $apex_clear_button_height;
+    padding: 0;
+    color: $apex_fg;
+    font-size: apex-text-size($apex_font_banner_button_size);
+    font-weight: $apex_font_label_weight;
+
+    > StBoxLayout { spacing: $apex_dnd_switch_gap; }
+  }
 }
 
 .datemenu-calendar-column {

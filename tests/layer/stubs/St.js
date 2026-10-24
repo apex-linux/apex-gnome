@@ -50,6 +50,11 @@ class Widget {
         this.get_children().forEach(child => child.destroy());
     }
 
+    insert_child_at_index(child, index) {
+        this._children.splice(index, 0, child);
+        child._parent = this;
+    }
+
     insert_child_below(child, sibling) {
         const index = this._children.indexOf(sibling);
         this._children.splice(index < 0 ? 0 : index, 0, child);
@@ -82,6 +87,10 @@ class Widget {
 
     get_theme_node() {
         return this._themeNode ?? {get_shadow: () => null, get_border_radius: () => 0};
+    }
+
+    set_height(height) {
+        this.height = height;
     }
 
     set_size(width, height) {

@@ -5,6 +5,8 @@
 import Meta from 'gi://Meta';
 import Shell from 'gi://Shell';
 
+import {newCalendarMessageList} from './messageList.js';
+
 const fact = (key, value) => printerr(`probe: ${key}=${value}`);
 const handlers = new Map();
 const actions = new Map();
@@ -195,6 +197,7 @@ export const panel = {
             get_first_child: () => ({get_children: () => [0, 1].map(() => workspaceDot)}),
         },
         quickSettings: newQuickSettings(),
+        dateMenu: {_messageList: newCalendarMessageList()},
     },
 };
 
