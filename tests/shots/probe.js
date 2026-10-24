@@ -504,7 +504,7 @@ function dockReport(unit) {
 }
 
 // The menu a right click opens on the dock's first app: stock's AppMenu, which offers the
-// other GPU while switcheroo-control reports two.
+// other GPU while switcheroo-control reports two, and builds its items once per icon.
 async function dockAppMenu() {
     const icon = apexDock()?._box.get_children().find(item => item.child?._delegate?.app)?.child;
     if (!icon)
@@ -1195,6 +1195,71 @@ async function openEndSessionDialog(unit) {
     }
 }
 
+const UPDATE1 = ['io.github.apex_linux.Apex.Update1', '/io/github/apex_linux/Apex/Update1'];
+const STAGED_UPDATE = {
+    digest: new GLib.Variant('s', 'sha256:9e41aa07c3b2d1e0f9a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c80c2b'),
+    version: new GLib.Variant('s', '45.20261010.133'),
+    'download-only': new GLib.Variant('b', true),
+};
+const UPDATE_CARD_WAIT_MS = 2000;
+
+// update1-mock.py's state, through python-dbusmock's own interface.
+function setUpdateState(state, staged) {
+    return Gio.DBus.system.call(...UPDATE1, 'org.freedesktop.DBus.Mock', 'UpdateProperties',
+        new GLib.Variant('(sa{sv})', [UPDATE1[0], {State: new GLib.Variant('s', state), Staged: new GLib.Variant('a{sv}', staged)}]),
+        null, Gio.DBusCallFlags.NONE, -1, null);
+}
+
+function updateCardOf(dialog, unit) {
+    const card = findDescendant(dialog.contentLayout, a => a.has_style_class_name?.('apex-update-card'));
+    if (!card)
+        return null;
+    const find = styleClass => findDescendant(card, a => a.has_style_class_name?.(styleClass));
+    const icon = find('apex-update-card-icon');
+    const toggle = find('toggle-switch');
+    return {
+        ...styleOf(card, unit),
+        below: card.get_previous_sibling()?.has_style_class_name('message-dialog-content') ?? false,
+        icon: {iconName: icon.icon_name, size: lengthOrNull(icon.get_theme_node(), 'icon-size', unit)},
+        textSpacing: lengthOrNull(find('apex-update-card-text').get_theme_node(), 'spacing', unit),
+        title: {...styleOf(find('apex-update-card-title'), unit), text: find('apex-update-card-title').text},
+        subtitle: {...styleOf(find('apex-update-card-subtitle'), unit), text: find('apex-update-card-subtitle').text},
+        toggle: {
+            ...styleOf(toggle, unit), on: toggle.state, sensitive: toggle.get_parent().reactive,
+            knob: styleOf(find('handle'), unit),
+        },
+        buttons: dialog.buttonLayout.get_children().filter(b => b.visible).map(b => b.label),
+    };
+}
+
+// Board 14's update card in the restart dialog: staged, then ready-for-reboot, each captured.
+async function updateCard(unit) {
+    const open = async (state, scene) => {
+        await setUpdateState(state, STAGED_UPDATE);
+        await Gio.DBus.session.call('org.gnome.Shell', '/org/gnome/SessionManager/EndSessionDialog',
+            'org.gnome.SessionManager.EndSessionDialog', 'Open', new GLib.Variant('(uuuao)', [2, 0, 60, []]),
+            null, Gio.DBusCallFlags.NONE, -1, null);
+        const dialog = Main.layoutManager.modalDialogGroup.get_children()
+            .find(c => c.dialogLayout?._dialog?.has_style_class_name('end-session-dialog'));
+        try {
+            await Scripting.sleep(UPDATE_CARD_WAIT_MS);
+            await settle();
+            global.stage.set_key_focus(null);
+            return {...updateCardOf(dialog, unit), capture: withoutBytes(await capture(scene)).file};
+        } finally {
+            dialog?.cancel();
+            await settle();
+        }
+    };
+    try {
+        return {staged: await open('staged', 'end-session-update'), ready: await open('ready-for-reboot', 'end-session-ready')};
+    } catch (e) {
+        return {error: e.message};
+    } finally {
+        await setUpdateState('up-to-date', {}).catch(() => {});
+    }
+}
+
 // A stock ModalDialog shaped like polkit's: title, description, password entry, two buttons.
 function promptDialog() {
     const dialog = new ModalDialog.ModalDialog({styleClass: 'prompt-dialog'});
@@ -1320,11 +1385,34 @@ async function calendarMenu(unit) {
 }
 
 // The notifications feature: three notifications from one app, the footer, then an empty list.
+// A card's tree by each actor's first style class, down to the header, icon, text and actions.
+const CARD_LEAVES = ['message-header', 'message-icon', 'message-content', 'message-action-bin'];
+function cardTree(actor) {
+    const name = actor.get_style_class_name?.()?.split(' ')[0] || 'box';
+    if (CARD_LEAVES.includes(name))
+        return name;
+    const children = actor.get_children();
+    return children.length ? `${name}[${children.map(cardTree).join(',')}]` : name;
+}
+
+// Board 34's card, in boxes: the icon's column, the header over the title, the close button, the actions.
+function cardLayout(message, unit) {
+    const find = styleClass => findDescendant(message, a => a.has_style_class_name?.(styleClass));
+    return {
+        card: boxOf(message, unit), icon: boxOf(message._icon, unit), header: boxOf(find('message-header-content'), unit),
+        title: boxOf(message.titleLabel, unit), close: boxOf(find('message-close-button'), unit),
+        actions: message._actionBin.visible ? boxOf(message._actionBin, unit) : null,
+    };
+}
+
 async function notificationsLayer(unit) {
     const source = new MessageTray.Source({title: 'G2 Chat', iconName: 'mail-unread-symbolic'});
     Main.messageTray.add(source);
-    for (const title of ['Lunch?', 'Standup moved', 'Build passed'])
-        source.addNotification(new MessageTray.Notification({source, title, body: 'Just now.', urgency: MessageTray.Urgency.LOW}));
+    for (const title of ['Lunch?', 'Standup moved', 'Build passed']) {
+        const notification = new MessageTray.Notification({source, title, body: 'Just now.', urgency: MessageTray.Urgency.LOW});
+        notification.addAction('Reply', () => {});
+        source.addNotification(notification);
+    }
     const {menu, _messageList: list} = Main.panel.statusArea.dateMenu;
     const notifications = new Gio.Settings({schema_id: 'org.gnome.desktop.notifications'});
     menu.open(BoxPointer.PopupAnimation.NONE);
@@ -1334,6 +1422,17 @@ async function notificationsLayer(unit) {
         const messages = group.get_children().map(c => c.child).filter(m => m?.constructor.name === 'NotificationMessage');
         const footer = list._clearButton.get_parent();
         const dnd = footer.get_children().find(c => c.has_style_class_name('apex-dnd-button')) ?? null;
+        const trees = messages.map(m => cardTree(m.get_child()));
+        const layout = {collapsed: cardLayout(messages[0], unit)};
+        // A stock stack would expand the whole group: only a flat group's card expands alone.
+        if (group.expanded) {
+            messages[0].expand(false);
+            await settle();
+            layout.expanded = {...cardLayout(messages[0], unit), tree: cardTree(messages[0].get_child())};
+            messages[0].unexpand(false);
+            await settle();
+            layout.collapsedAgain = {...cardLayout(messages[0], unit), tree: cardTree(messages[0].get_child())};
+        }
         const header = findDescendant(messages[0], a => a.has_style_class_name?.('message-header'));
         const line = findDescendant(header, a => a.has_style_class_name?.('message-header-content'));
         const result = {
@@ -1344,6 +1443,7 @@ async function notificationsLayer(unit) {
             },
             icon: messages[0].icon?.to_string() ?? null,
             messages: messages.map(m => boxOf(m, unit)),
+            trees, layout,
             footer: boxOf(footer, unit),
             clear: {...boxOf(list._clearButton, unit), visible: list._clearButton.visible},
             dnd: dnd && {...boxOf(dnd, unit), label: findDescendant(dnd, a => a instanceof St.Label)?.text ?? null},
@@ -2024,7 +2124,7 @@ async function scenes() {
         surfaces.idleRepaints = await idleRepaints();
     }
     surfaces.switcher = await windowSwitcher(unit);
-    surfaces.dialog = {...await modalDialog(unit), endSession: await endSessionDialog(unit)};
+    surfaces.dialog = {...await modalDialog(unit), endSession: await endSessionDialog(unit), updateCard: await updateCard(unit)};
     surfaces.dateMenu = await calendarMenu(unit);
     surfaces.notificationsLayer = await notificationsLayer(unit);
     surfaces.derived = derivedSurfaces(unit);
@@ -2475,6 +2575,16 @@ async function runProbe() {
             result = {error: `${e.message}\n${e.stack}`};
         }
         console.log(`APEXG2-SCENES ${JSON.stringify(result)}`);
+    }
+
+    if (GLib.getenv('G2_ONE_GPU') === '1') {
+        let result;
+        try {
+            result = await dockAppMenu();
+        } catch (e) {
+            result = {error: `${e.message}\n${e.stack}`};
+        }
+        console.log(`APEXG2-GPU ${JSON.stringify(result)}`);
     }
 
     if (GLib.getenv('G2_A11Y') === '1') {

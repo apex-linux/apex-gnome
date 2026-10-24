@@ -12,6 +12,7 @@ export const DND_LABEL = 'Do Not Disturb';
 export const SEPARATOR_STYLE_CLASS = 'apex-message-separator';
 export const CALENDAR_STYLE_CLASS = 'apex-calendar';
 export const EVENT_DOT_STYLE_CLASS = 'apex-event-dot';
+export const ROW_STYLE_CLASS = 'apex-message-row';
 const NOTIFICATIONS_SCHEMA = 'org.gnome.desktop.notifications';
 const STACK_PSEUDO_CLASSES = ['second-in-stack', 'lower-in-stack'];
 
@@ -22,6 +23,7 @@ const _messages = new Map();
 const _groups = new Map();
 const _calendars = new Map();
 const _days = new Map();
+const _layouts = new Map();
 
 function _track(map, actor, parts) {
     map.set(actor, parts);
@@ -49,8 +51,50 @@ function _messageIcon(icon, message) {
     return _enabled ? icon ?? parts?.source?.icon ?? null : icon;
 }
 
+// Board 34's card: the icon in its own column, beside the header over the title and body;
+// the action row stays under both. Upstream's tree is kept as it was, to be put back.
+function _columnize(message) {
+    const {_header: header, _icon: icon} = message;
+    const vbox = message.get_child();
+    const box = icon?.get_parent();
+    if (_layouts.has(message) || !box || header?.get_parent() !== vbox)
+        return;
+    const parts = {vbox, header, icon, box, at: vbox.get_children().indexOf(header), iconAt: box.get_children().indexOf(icon)};
+    parts.column = new St.BoxLayout({orientation: Clutter.Orientation.VERTICAL, x_expand: true});
+    parts.row = new St.BoxLayout({style_class: ROW_STYLE_CLASS, x_expand: true});
+    vbox.remove_child(header);
+    vbox.remove_child(box);
+    box.remove_child(icon);
+    parts.column.add_child(header);
+    parts.column.add_child(box);
+    parts.row.add_child(icon);
+    parts.row.add_child(parts.column);
+    vbox.insert_child_at_index(parts.row, parts.at);
+    parts.destroyId = message.connect('destroy', () => _layouts.delete(message));
+    _layouts.set(message, parts);
+}
+
+function _uncolumnize(message) {
+    const parts = _layouts.get(message);
+    if (!parts)
+        return;
+    const {vbox, header, icon, box, row, column} = parts;
+    _layouts.delete(message);
+    message.disconnect(parts.destroyId);
+    row.remove_child(icon);
+    column.remove_child(header);
+    column.remove_child(box);
+    vbox.remove_child(row);
+    box.insert_child_at_index(icon, parts.iconAt);
+    vbox.insert_child_at_index(header, parts.at);
+    vbox.insert_child_at_index(box, parts.at + 1);
+    row.destroy();
+}
+
 // DESIGN's list is flat: a group lays its cards out one under another, without its header.
 function _flatten(group, parts) {
+    _cards(group).forEach(_columnize);
+    parts.addedId = group.connect('notification-added', () => _cards(group).forEach(_columnize));
     parts.layout = group.layout_manager;
     group.layout_manager = new Clutter.BoxLayout({orientation: Clutter.Orientation.VERTICAL});
     parts.cover.hide();
@@ -64,6 +108,10 @@ function _cards(group) {
 }
 
 function _restack(group, parts) {
+    if (parts.addedId)
+        group.disconnect(parts.addedId);
+    parts.addedId = null;
+    _cards(group).forEach(_uncolumnize);
     group.layout_manager = parts.layout;
     parts.layout = null;
     parts.cover.show();
