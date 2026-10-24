@@ -24,11 +24,6 @@
   box-shadow: 0 $apex_shadow_y $apex_shadow_blur 0 $apex_shadow;
 }
 
-// The boards' second shadow layer, which the shadows feature draws (St draws only box-shadow).
-@mixin apex-shadow-layer {
-  -apex-shadow-layer: 0 $apex_shadow_2_y $apex_shadow_2_blur 0 $apex_shadow_2;
-}
-
 @import "top-bar";
 @import "popup-menus";
 @import "osd";

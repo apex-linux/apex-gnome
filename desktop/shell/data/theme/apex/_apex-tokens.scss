@@ -97,6 +97,11 @@ $apex_preview_shadow_blur: 32px;
 $apex_preview_shadow_2_y: 1px;
 $apex_preview_shadow_2_blur: 4px;
 
+// The boards' second shadow layer, which the shadows feature draws (St draws only box-shadow).
+@mixin apex-shadow-layer {
+  -apex-shadow-layer: 0 $apex_shadow_2_y $apex_shadow_2_blur 0 $apex_shadow_2;
+}
+
 // Quick Settings, the calendar and banners.
 $apex_panel_blur: 30px;
 $apex_panel_saturation: 180%;

@@ -156,7 +156,7 @@ subtitles it wrote.
 
 `shadows/feature.js` draws DESIGN's two-layer shadows (ROADMAP S3c) without a hook. St
 draws one `box-shadow` per actor, so the sheet gives a surface its first layer and names the
-second as `-apex-shadow-layer` (the `apex-shadow-layer` mixin in `_apex.scss`: popovers,
+second as `-apex-shadow-layer` (the `apex-shadow-layer` mixin in `_apex-tokens.scss`: popovers,
 Quick Settings, the calendar, menus, the banner and dialogs). The feature scans `uiGroup`,
 `modalDialogGroup` and the banner bin, and their new children, for such surfaces;
 `shadows/registry.js` puts a transparent St widget under each while it is mapped, with the
