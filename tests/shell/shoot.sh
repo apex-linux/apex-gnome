@@ -198,6 +198,8 @@ shoot lock-question "$USER_NAME" user default 'Verification code:' || status=1
 shoot lock-disabled "$USER_NAME" user default 'Password:' "$lock_off" || status=1
 shoot lock-safe "$USER_NAME" user default 'Password:' -- APEX_SHELL_SAFE=1 || status=1
 shoot lock-refused "$USER_NAME" user default '' || status=1
+shoot lock-high-contrast "$USER_NAME" user default 'Password:' "org.gnome.desktop.a11y.interface high-contrast true" || status=1
+shoot lock-large-text "$USER_NAME" user default 'Password:' "org.gnome.desktop.interface text-scaling-factor 1.25" || status=1
 ((status == 0)) || die "shoot.sh: a case failed; see ${out#"$APEX_ROOT/"}/*.log"
 python3 "$HERE/check.py" "$out" || die "shoot.sh: the cases' assertions failed"
 log "shoot.sh: captures in ${out#"$APEX_ROOT/"}"
