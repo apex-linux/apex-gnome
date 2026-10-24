@@ -1,0 +1,163 @@
+<!DOCTYPE node PUBLIC "-//freedesktop//DTD D-BUS Object Introspection 1.0//EN"
+ "http://www.freedesktop.org/standards/dbus/1.0/introspect.dtd">
+<!--
+  Apex update service: apex-updated is the only process that runs bootc.
+  System bus name io.github.apex_linux.Apex.Update1, object /io/github/apex_linux/Apex/Update1;
+  D-Bus activated (SystemdService=apex-updated.service).
+
+  No property is writable: every mutation is a method guarded by polkit (subject: the caller's
+  system-bus-name, never a PID). uid 0 is always allowed; inactive and remote sessions never.
+  Methods reply when their operation has finished, which can take hours: use no short call
+  timeout. An identical call already running or waiting gets that call's result. Right after
+  activation, Ping, GetChanges and property reads wait up to 20 s for the state.
+  Every property signals its changes; on start the service signals every current value.
+  Strings never contain control characters.
+  XML comments cannot contain a double hyphen, so bootc flags are spelled out here.
+
+  Deployment dictionaries (a{sv}), every key optional; an empty dictionary means none:
+    "image"          s   image reference
+    "digest"         s   manifest digest "sha256:..."
+    "version"        s   org.opencontainers.image.version
+    "timestamp"      t   build time, Unix seconds
+    "pinned"         b
+    "download-only"  b   staged only: locked, will not boot
+    "degraded"       as  components shipped degraded, from the deployment's own manifest,
+                         so absent for Available
+    "held"           as  lane families kept at their last good build, from the same
+                         manifest, so absent for Available
+    "holds"          a(sstbt) one record per held family, from the deployment's lane lock
+                         (/usr/share/apex/rpms.lock), so absent for Available: family; the
+                         newer Fedora builds it holds back from, comma-separated, "" when
+                         unknown; held since, Unix seconds, 0 when unknown; whether the
+                         newer builds carry a security update, false when unknown; the
+                         hold's limit, Unix seconds, 0 when unknown
+    "download-size"  t   Available and Staged only: bytes of layers not present yet, from
+                         the check that found the image; bootc rounds it to one decimal
+                         (1.2 GB, so about 50 MB either way); 0 when unknown
+
+  Errors io.github.apex_linux.Apex.Update1.Error.<Kind>:
+    Busy             another operation is running or waiting
+    NotAuthorized    polkit, or the uid 0 check of Automatic and ReportBoot, refused
+    PolicyDenied     an update gate refused; the message is fit for display
+    NothingToDo
+    InvalidArgument
+    DigestMismatch   the staged digest is not the expected one
+    Bootc            bootc failed
+    Network          the registry could not be reached
+    Internal
+
+  Polkit actions, default for an active local session:
+    io.github.apex-linux.apex.update.check           yes
+    io.github.apex-linux.apex.update.download        yes
+    io.github.apex-linux.apex.update.apply           yes
+    io.github.apex-linux.apex.update.discard         yes         AcknowledgeHealthFailure
+    io.github.apex-linux.apex.update.rollback        auth_admin
+    io.github.apex-linux.apex.update.configure       auth_admin  SetAutomaticDownloads
+-->
+<node>
+  <interface name="io.github.apex_linux.Apex.Update1">
+
+    <!-- "up-to-date", "available", "downloading", "staged", "ready-for-reboot",
+         "rollback-queued", "incompatible", "usr-overlay", "finalize-failed",
+         "health-failure", "error" or "unknown". -->
+    <property name="State" type="s" access="read">
+      <annotation name="org.freedesktop.DBus.Property.EmitsChangedSignal" value="true"/>
+    </property>
+
+    <!-- [0, 1] while State is "downloading"; -1 when the installed bootc reports none. -->
+    <property name="Progress" type="d" access="read">
+      <annotation name="org.freedesktop.DBus.Property.EmitsChangedSignal" value="true"/>
+    </property>
+
+    <property name="Booted" type="a{sv}" access="read"/>
+    <property name="Staged" type="a{sv}" access="read"/>
+    <property name="Rollback" type="a{sv}" access="read"/>
+
+    <!-- Found by the last check and not staged yet. -->
+    <property name="Available" type="a{sv}" access="read"/>
+
+    <!-- "stable" or "testing", followed by the booted deployment. -->
+    <property name="Channel" type="s" access="read"/>
+
+    <!-- Unix seconds of the last successful check; 0 if never. -->
+    <property name="LastCheck" type="t" access="read"/>
+
+    <!-- Why the available update waits (a gate) or a staged image was refused, fit for
+         display; "" otherwise. -->
+    <property name="DeferredReason" type="s" access="read"/>
+
+    <!-- Cleared by the next success. -->
+    <property name="LastError" type="s" access="read"/>
+
+    <!-- The digest of an armed boot that failed its health checks, or ""; cleared by
+         AcknowledgeHealthFailure or a green boot. -->
+    <property name="HealthFailure" type="s" access="read"/>
+
+    <!-- The digest a "fallback" ReportBoot denylisted (the update did not start), or "";
+         cleared by AcknowledgeHealthFailure. -->
+    <property name="LastFallback" type="s" access="read"/>
+
+    <!-- Whether Automatic downloads what its check finds; true unless the user turned it
+         off. Off, Automatic still checks and publishes Available. -->
+    <property name="AutomaticDownloads" type="b" access="read"/>
+
+    <!-- Liveness probe for the boot health check, no polkit check; Internal when bootc
+         cannot be used. -->
+    <method name="Ping"/>
+
+    <!-- Busy while a Download or Automatic runs or waits. -->
+    <method name="Check"/>
+
+    <!-- Stages locked. override_soft_gates skips only the power and metered gates. The
+         digest actually staged is screened again; a refused stage stays locked. -->
+    <method name="Download">
+      <arg name="override_soft_gates" type="b" direction="in"/>
+    </method>
+
+    <!-- DigestMismatch unless the stage holds expected_digest. Arms the boot counter and
+         never reboots. -->
+    <method name="Apply">
+      <arg name="expected_digest" type="s" direction="in"/>
+    </method>
+
+    <!-- mark_bad denylists the booted digest. PolicyDenied when the rollback deployment is
+         denylisted. -->
+    <method name="Rollback">
+      <arg name="mark_bad" type="b" direction="in"/>
+    </method>
+
+    <!-- Entries: (name, arch, kind, from_evr, to_evr), kind one of "added", "removed",
+         "upgraded", "downgraded"; from_evr is "" for added packages and to_evr is "" for
+         removed ones. Sorted by (name, arch); empty when nothing is staged. -->
+    <method name="GetChanges">
+      <arg name="changes" type="a(sssss)" direction="out"/>
+    </method>
+
+    <!-- Clears HealthFailure and LastFallback. -->
+    <method name="AcknowledgeHealthFailure"/>
+
+    <!-- Persisted across restarts; setting the current value again succeeds. -->
+    <method name="SetAutomaticDownloads">
+      <arg name="enabled" type="b" direction="in"/>
+    </method>
+
+    <!-- uid 0 only: check, then download if every gate passes and no user intent exists. -->
+    <method name="Automatic"/>
+
+    <!-- From apex-boot-assess, uid 0 only; digest may be "" when unknown, except for "red"
+         and "fallback".
+         verdict:
+           "green"        digest is the booted digest
+           "red"          an armed boot failed during a user session; publishes
+                          HealthFailure, never reboots
+           "red-unarmed"  report only
+           "fallback"     GRUB fell back; digest is the failed target, which is denylisted
+                          once bootc rollback made the running deployment the default and
+                          apex_target and apex_counter are unset. Never Busy. -->
+
+    <method name="ReportBoot">
+      <arg name="verdict" type="s" direction="in"/>
+      <arg name="digest" type="s" direction="in"/>
+    </method>
+  </interface>
+</node>

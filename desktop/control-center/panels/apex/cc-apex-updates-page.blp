@@ -1,0 +1,229 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+using Gtk 4.0;
+using Adw 1;
+
+template $CcApexUpdatesPage: Adw.NavigationPage {
+  title: _("Software Updates");
+  tag: "software-updates";
+
+  child: Adw.ToolbarView {
+    [top]
+    Adw.HeaderBar {}
+
+    content: Stack stack {
+      StackPage {
+        name: "page";
+
+        child: ScrolledWindow {
+          hscrollbar-policy: never;
+
+          child: Adw.Clamp {
+            maximum-size: 620;
+            margin-top: 12;
+            margin-bottom: 36;
+            margin-start: 32;
+            margin-end: 32;
+
+            child: Box {
+              orientation: vertical;
+              spacing: 26;
+
+              Box {
+                orientation: vertical;
+                spacing: 14;
+
+                styles [
+                  "card",
+                  "apex-updates-hero",
+                ]
+
+                $CcApexTile hero_tile {}
+
+                Box {
+                  orientation: vertical;
+                  spacing: 4;
+
+                  Label hero_title {
+                    wrap: true;
+                    justify: center;
+
+                    styles [
+                      "apex-title",
+                    ]
+                  }
+
+                  Label hero_subtitle {
+                    wrap: true;
+                    justify: center;
+                    max-width-chars: 64;
+
+                    styles [
+                      "apex-subtitle",
+                      "dim-label",
+                    ]
+                  }
+                }
+
+                Box hero_progress_box {
+                  orientation: vertical;
+                  spacing: 6;
+                  halign: center;
+                  width-request: 320;
+
+                  ProgressBar hero_progress {
+                    styles [
+                      "apex-progress",
+                    ]
+                  }
+
+                  Label hero_progress_label {
+                    styles [
+                      "caption",
+                      "dim-label",
+                      "numeric",
+                    ]
+                  }
+                }
+
+                Box {
+                  spacing: 10;
+                  halign: center;
+
+                  Button hero_secondary {
+                    clicked => $hero_button_clicked_cb(template);
+
+                    styles [
+                      "pill",
+                    ]
+                  }
+
+                  Button hero_primary {
+                    clicked => $hero_button_clicked_cb(template);
+
+                    styles [
+                      "pill",
+                      "suggested-action",
+                    ]
+                  }
+                }
+
+                Label error_label {
+                  visible: false;
+                  wrap: true;
+                  justify: center;
+
+                  styles [
+                    "caption",
+                    "error",
+                  ]
+                }
+              }
+
+              Box notes {
+                orientation: vertical;
+                spacing: 10;
+              }
+
+              Adw.PreferencesGroup changes_group {
+                title: _("What’s New");
+
+                Adw.ExpanderRow changes_row {
+                  expanded: true;
+                }
+              }
+
+              Box {
+                orientation: vertical;
+                spacing: 10;
+
+                Adw.PreferencesGroup {
+                  title: _("Versions");
+
+                  Adw.ActionRow running_row {
+                    title: _("Running");
+
+                    [suffix]
+                    Label running_built {
+                      styles [
+                        "dim-label",
+                      ]
+                    }
+                  }
+
+                  Adw.ActionRow staged_row {
+                    title: _("Next Restart");
+
+                    [suffix]
+                    Label staged_built {
+                      styles [
+                        "dim-label",
+                      ]
+                    }
+                  }
+
+                  Adw.ActionRow rollback_row {
+                    title: _("Previous");
+
+                    [suffix]
+                    Button rollback_button {
+                      label: _("Use at Next Restart…");
+                      valign: center;
+                      clicked => $rollback_clicked_cb(template);
+
+                      styles [
+                        "flat",
+                        "apex-link",
+                      ]
+                    }
+                  }
+                }
+
+                Label {
+                  label: _("If a new version keeps failing to start, Apex goes back to the previous one by itself.");
+                  wrap: true;
+                  xalign: 0;
+                  margin-start: 4;
+                  margin-end: 4;
+
+                  styles [
+                    "caption",
+                    "dim-label",
+                  ]
+                }
+              }
+
+              Adw.PreferencesGroup {
+                title: _("Preferences");
+
+                Adw.ActionRow channel_row {
+                  title: _("Update Channel");
+                }
+
+                Adw.ActionRow last_check_row {
+                  title: _("Last Checked");
+
+                  [suffix]
+                  Button check_button {
+                    label: _("Check Now");
+                    valign: center;
+                    clicked => $check_clicked_cb(template);
+                  }
+                }
+              }
+            };
+          };
+        };
+      }
+
+      StackPage {
+        name: "unavailable";
+
+        child: Adw.StatusPage {
+          icon-name: "software-update-available-symbolic";
+          title: _("Software Updates Are Unavailable");
+          description: _("apex-updated, the Apex update service, is not installed or does not answer, so this page cannot show or change the system’s updates.");
+        };
+      }
+    };
+  };
+}

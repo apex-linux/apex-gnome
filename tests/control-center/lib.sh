@@ -14,6 +14,7 @@ readonly SCALE=2
 readonly CLOCK_LIB=/run/apex-control-center-clock.so
 readonly CLOCK='2026-10-21 14:02:00'
 readonly FIXTURE_NAMES=(org.freedesktop.UPower org.freedesktop.NetworkManager org.bluez)
+readonly UPDATE1_NAME=io.github.apex_linux.Apex.Update1
 readonly APEX_SCHEMA_FIXTURE=$CC_TESTS/../layer/fixtures/io.github.apex_linux.Apex.Desktop.gschema.xml
 readonly APEX_SCHEMA_DIR=/usr/share/glib-2.0/schemas
 readonly MANIFEST=/usr/share/apex/manifest.json
@@ -80,6 +81,8 @@ headless_bus() {
         done
         echo '</policy></busconfig>'
     } >/etc/dbus-1/system-local.conf
+    printf '<busconfig><policy user="root"><allow own="%s"/></policy><policy context="default"><allow send_destination="%s"/></policy></busconfig>\n' \
+        "$UPDATE1_NAME" "$UPDATE1_NAME" >/etc/dbus-1/system.d/apex-update1-fixture.conf
     [[ -S /run/dbus/system_bus_socket ]] || dbus-daemon --system --fork || log "no system bus"
     python3 "$SHOTS/fixtures.py" "$log_dir" >"$log_dir/fixtures.txt" 2>&1 || log "fixtures.py: exit $?"
     gcc -O2 -Wall -Werror -shared -fPIC -o "$CLOCK_LIB" "$SHOTS/clock.c" || die "cannot build tests/shots/clock.c"
@@ -108,4 +111,24 @@ headless_run() {
             exec env LD_PRELOAD="$CLOCK_LIB" gnome-shell --headless --virtual-monitor "$MONITOR" \
                 --wayland-display=apex-control-center --automation-script "$PROBE"
         ' >"$log" 2>&1
+}
+
+# headless_update1 SCENARIO LOG: update1.py, in place of apex-updated, until headless_update1_stop.
+headless_update1() {
+    headless_update1_stop
+    rm -f -- "$2"
+    python3 "$CC_TESTS/update1.py" "$1" "$2" >>"${2%.*}.out" 2>&1 &
+    HEADLESS_UPDATE1_PID=$!
+    for _ in {1..50}; do
+        busctl --system status "$UPDATE1_NAME" >/dev/null 2>&1 && return 0
+        sleep 0.1
+    done
+    die "update1.py did not take $UPDATE1_NAME"
+}
+
+headless_update1_stop() {
+    [[ -n ${HEADLESS_UPDATE1_PID:-} ]] || return 0
+    kill "$HEADLESS_UPDATE1_PID" 2>/dev/null
+    wait "$HEADLESS_UPDATE1_PID" 2>/dev/null
+    HEADLESS_UPDATE1_PID=
 }
