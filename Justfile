@@ -46,6 +46,16 @@ ptyxis-shots:
 ptyxis-palette:
     engine=$(command -v podman || command -v docker) && "$engine" run --rm -v "{{justfile_directory()}}:/apex-gnome:z" -w /apex-gnome {{ptyxis_image}} bash -c 'dnf5 -y -q --setopt=install_weak_deps=False install {{ptyxis_shots_packages}} && tests/ptyxis/palette-test.sh _build/ptyxis/out'
 
+libadwaita_image := "registry.fedoraproject.org/fedora:45@sha256:1e13e11f63e147a40a935c9046c79d53a30b861a3cf05ebb023bb53c562382cb"
+
+# libadwaita rebuilt as the lane builds it (apex-lane's container half), in fedora:45 with podman or docker; RPMs in _build/libadwaita/out.
+libadwaita-lane:
+    engine=$(command -v podman || command -v docker) && "$engine" run --rm -v "{{justfile_directory()}}:/apex-gnome:z" -w /apex-gnome {{libadwaita_image}} tests/lib/lane.sh libadwaita
+
+# The libadwaita that libadwaita-lane built: an open window must take a rewritten apex.css within 1 s, and Fedora's must not (podman or docker).
+libadwaita-radius:
+    engine=$(command -v podman || command -v docker) && "$engine" run --rm -v "{{justfile_directory()}}:/apex-gnome:z" -w /apex-gnome {{libadwaita_image}} bash -c 'dnf5 -y -q --setopt=install_weak_deps=False install ptyxis {{ptyxis_shots_packages}} && tests/libadwaita/radius-test.sh --stock && tests/libadwaita/radius-test.sh _build/libadwaita/out'
+
 control_center_image := "registry.fedoraproject.org/fedora:45@sha256:1e13e11f63e147a40a935c9046c79d53a30b861a3cf05ebb023bb53c562382cb"
 
 # desktop/control-center: its licence lines, the recipe's source1_paths, its series and the patches' From: lines.

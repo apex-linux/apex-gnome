@@ -13,6 +13,7 @@ the Apex layer; libadwaita, Settings and Files patch series join it in S2.
 | `desktop/ptyxis/`, `packaging/pkgs/ptyxis/` | Ptyxis rebuilt in the lane with the Apex terminal, the sessions sidebar and split panes of boards 32 and 33: its sources (`src/apex/`) and its recipe ([README](packaging/pkgs/ptyxis/README.md)) |
 | `tests/lib/` | the app tests' shared tools: `lane.sh PKG`, a recipe through apex-lane's container half, and `headless.sh`, a headless gnome-shell after G2's `run_case` |
 | `tests/ptyxis/` | the checks of `desktop/ptyxis/`, the status logic's unit test, the captures (`shoot.sh`) and the palette test |
+| `packaging/pkgs/libadwaita/`, `tests/libadwaita/` | libadwaita rebuilt in the lane to load and follow Settings' `apex.css`, the live window radius ([README](packaging/pkgs/libadwaita/README.md)), and its radius test |
 | `desktop/control-center/`, `packaging/pkgs/gnome-control-center/` | gnome-control-center rebuilt in the lane for the Apex Settings, boards 11, 18, 23, 24 and 26: its sources (`panels/apex/`) and its recipe ([README](packaging/pkgs/gnome-control-center/README.md)) |
 | `tests/control-center/` | the gnome-control-center recipe through apex-lane's container half (`lane.sh`), and the checks of `desktop/control-center/` |
 
@@ -42,6 +43,8 @@ just eslint       # node, npm and git: gnome-shell 51.0's eslint rules, pinned i
 just theme        # sassc and git; dnf5, rpm2cpio, cpio and xz for Fedora's gnome-shell SRPM
 just ptyxis-lane  # podman or docker: Ptyxis rebuilt as the lane builds it, RPMs in _build/ptyxis/out
 just ptyxis-shots # podman or docker: that Ptyxis captured in a headless gnome-shell, light and dark
+just libadwaita-lane     # podman or docker: libadwaita rebuilt as the lane builds it, RPMs in _build/libadwaita/out
+just libadwaita-radius   # podman or docker: that libadwaita under an open Ptyxis, apex.css rewritten from 14 px to 0 px
 just control-center-lane # podman or docker: gnome-control-center rebuilt as the lane builds it, RPMs in _build/control-center/out
 ```
 
@@ -62,6 +65,7 @@ explains itself, and comments say only why
 
 `desktop/shell/` and the patches are GPL-2.0-or-later, as gnome-shell is
 (`LICENSE.GPL-2.0`); so are `desktop/control-center/` and the gnome-control-center
-patches, gnome-control-center's licence. `lint/eslint.config.js` keeps gnome-shell's MIT OR
+patches, gnome-control-center's licence. The libadwaita patch is LGPL-2.1-or-later, as
+libadwaita is (`LICENSE.LGPL-2.1`). `lint/eslint.config.js` keeps gnome-shell's MIT OR
 LGPL-2.1-or-later. Everything else, `desktop/ptyxis/` and the Ptyxis patches included
 (Ptyxis is GPL-3.0-or-later), is GPL-3.0-or-later (`LICENSE`).

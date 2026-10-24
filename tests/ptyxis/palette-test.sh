@@ -33,7 +33,7 @@ out=$APEX_ROOT/_build/ptyxis/palette
 rm -rf -- "$out"
 mkdir -p -- "$out"
 chmod 777 "$out"
-[[ -z ${1:-} ]] || headless_install_rpm "$1"
+[[ -z ${1:-} ]] || headless_install_rpm "$1" ptyxis
 rpm -q ptyxis >"$out/ptyxis.txt"
 
 palette() {
