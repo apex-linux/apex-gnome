@@ -351,10 +351,16 @@ async function withBanner(read) {
     }
 }
 
+function dockBackground() {
+    return Main.layoutManager.uiGroup.get_children().find(actor => actor.get_name() === 'apexDockBox')
+        ?.get_first_child()?._background ?? null;
+}
+
 async function surfacesState() {
     const {quickSettings, dateMenu} = Main.panel.statusArea;
     return {
         panel: glassOf(Main.panel),
+        dock: glassOf(dockBackground()),
         quickSettings: await withMenuOpen(quickSettings.menu, glassOf),
         calendar: await withMenuOpen(dateMenu.menu, glassOf),
         banner: await withBanner(glassOf),

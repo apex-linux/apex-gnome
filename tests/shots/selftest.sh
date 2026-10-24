@@ -1458,9 +1458,10 @@ CHANGES
 
     local on='{"radius": 96, "saturation": 1.6, "enabled": true, "fine": true, "followOpacity": true, "background": true}'
     local popover='{"radius": 120, "saturation": 1.8, "enabled": true, "fine": true, "followOpacity": true, "background": true}'
+    local dock='{"radius": 112, "saturation": 1.8, "enabled": true, "fine": true, "followOpacity": true, "background": true}'
     local manager
-    manager=$(jq -nc --argjson on "$on" --argjson p "$popover" '{panel: $on, quickSettings: $p, calendar: $p, banner: $p, blurEffects: ["panel"], solidClass: false} as $g
-        | {panel: null, quickSettings: null, calendar: null, banner: null, blurEffects: []} as $none
+    manager=$(jq -nc --argjson on "$on" --argjson p "$popover" --argjson dock "$dock" '{panel: $on, dock: $dock, quickSettings: $p, calendar: $p, banner: $p, blurEffects: ["panel"], solidClass: false} as $g
+        | {panel: null, dock: null, quickSettings: null, calendar: null, banner: null, blurEffects: []} as $none
         | {manager: {monitorScale: 2, glass: $g, reduceTransparency: ($none + {solidClass: true}), highContrast: ($none + {solidClass: true}),
             disabled: ($none + {solidClass: false}), restored: $g}}')
     while IFS='|' read -r failures what change; do
@@ -1468,9 +1469,11 @@ CHANGES
         read -r passes _ <<<"$(assertion_counts glass_manager glass "$T/glass.log" light)"
         expect_eq "glass manager: $what fails $failures of 5" "$failures" $((5 - passes))
     done <<'CHANGES'
-0|the bar and the popovers at their tokens, every switch honoured|.
+0|the bar, the dock and the popovers at their tokens, every switch honoured|.
 1|the bar at the popovers' sigma|.manager.glass.panel.radius = 120
 1|a banner at the bar's saturation|.manager.glass.banner.saturation = 1.6
+1|the dock at the popovers' sigma|.manager.glass.dock.radius = 120
+1|a dock left blurred by high contrast|.manager.highContrast.dock = .manager.glass.dock
 1|a popover without fine|.manager.glass.calendar.fine = false
 1|a blur left behind by Reduce Transparency|.manager.reduceTransparency.blurEffects = ["St_BoxLayout"]
 1|Reduce Transparency without apex-solid|.manager.reduceTransparency.solidClass = false

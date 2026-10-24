@@ -871,6 +871,8 @@ async function exerciseDock() {
     const dock = Main.layoutManager.chrome.find(actor => actor.name === 'apexDockBox' && !actor.destroyed)
         ?.get_children()[0];
     if (dock?.tailItems) {
+        const Registry = await import(`file://${shellDir}/js/ui/apex/glass/registry.js`);
+        fact('dock.glass', Registry.surfaces().filter(s => s.actor === dock._background).map(s => s.name).join(','));
         const {showAppsButton} = dock;
         const overviewButton = Main.overview.dash.showAppsButton;
         showAppsButton.checked = true;
