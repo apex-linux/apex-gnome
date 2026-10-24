@@ -87,7 +87,7 @@ async function shoot() {
 
     const tree = GLib.build_filenamev([GLib.getenv('APEX_SHOTS'), `${shot}.a11y.json`]);
     const press = GLib.getenv('APEX_A11Y_PRESS');
-    await Gio.Subprocess.new(['python3', GLib.getenv('APEX_A11Y'), tree, ...press ? [press] : []],
+    await Gio.Subprocess.new(['python3', GLib.getenv('APEX_A11Y'), tree, ...press ? press.split('|') : []],
         Gio.SubprocessFlags.NONE)
         .wait_check_async(null);
     await capture(window, `${shot}.png`);

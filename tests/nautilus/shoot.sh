@@ -167,6 +167,7 @@ for scheme in light dark; do
     shoot "search-$scheme" "$color" list-view "$home_args" "" "$SEARCH_QUERY" "$APEX_SCHEMAS" || status=1
 done
 shoot search-documents-light default list-view "$home_args" "" "$SEARCH_QUERY" "$APEX_SCHEMAS" "Documents 3" || status=1
+shoot search-again-light default list-view "$home_args" "" "$SEARCH_QUERY" "$APEX_SCHEMAS" "Documents 3|All 11" || status=1
 shoot noschema-light default icon-view "$home_args" "" "" "" || status=1
 ((status == 0)) || die "shoot.sh: a capture failed; see ${out#"$APEX_ROOT/"}/*.log"
 python3 "$HERE/check.py" "$out" || die "shoot.sh: the captures' assertions failed"

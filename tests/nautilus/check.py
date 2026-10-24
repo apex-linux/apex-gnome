@@ -4,7 +4,7 @@
 
 Asserts what boards 27, 28 and 29 say against each case's accessible tree
 (CASE.a11y.json, from a11y.py): the disk footer, the item count, the view toggle, the
-details pane, the recent strip and the search chips. Prints one line per assertion and
+details pane, the recent strip, the search chips and each search result's location. Prints one line per assertion and
 exits 1 when one fails.
 """
 
@@ -17,9 +17,24 @@ FOOTER = re.compile(r"^\d+(\.\d)? (B|kB|MB|GB|TB|PB) free of \d+(\.\d)? (B|kB|MB
 SPEC_ODT = "Apex Fedora — Spec.odt"
 RECENT = ["Apex Fedora — Spec.odt", "mockup-2880x1800.png", "HIG Notes.md", "Fedora-Workstation-Live-45.iso"]
 CHIPS = ["All 11", "Folders 4", "Documents 3", "Images 4", "Audio & Video 0"]
+# Board 29's results for "apex" and their locations, as each list row names itself.
+RESULTS = {
+    "Apex Fedora — Spec.odt": "Documents/",
+    "apex-gtk-theme": "Projects/",
+    "apex-icons": "Projects/",
+    "apex-plymouth": "Projects/",
+    "apex-shell": "Projects/",
+    "apex-facets-dark.png": "Pictures/Wallpapers/",
+    "apex-facets-light.png": "Pictures/Wallpapers/",
+    "apex-glass.png": "Pictures/Wallpapers/",
+    "apex-mono.png": "Pictures/Wallpapers/",
+    "apex.plymouth": "Projects/apex-plymouth/",
+    "apex.script": "Projects/apex-plymouth/",
+}
+DOCUMENT_RESULTS = ["Apex Fedora — Spec.odt", "apex.plymouth", "apex.script"]
 
-# Per case: the count's text (or its start), the checked view toggle, whether the details
-# pane shows, whether the recent strip shows, the checked chip, texts that must show.
+# Per case: the count (or its start), the view toggle on, the details pane and recent strip
+# shown or not, the chip on, texts that must show, and results whose rows name their location.
 CASES = {
     "home": {"count": "9 items", "view": "Grid View", "details": False, "recent": True},
     "documents": {
@@ -29,17 +44,33 @@ CASES = {
         "recent": False,
         "texts": ["Document", f"~/Documents/{SPEC_ODT}"],
     },
-    "search": {"count_prefix": "11 results", "view": "List View", "details": False, "recent": False, "chip": "All 11"},
+    "search": {
+        "count_prefix": "11 results",
+        "view": "List View",
+        "details": False,
+        "recent": False,
+        "chip": "All 11",
+        "results": list(RESULTS),
+    },
+    "search-again": {
+        "count_prefix": "11 results",
+        "view": "List View",
+        "details": False,
+        "recent": False,
+        "chip": "All 11",
+        "results": list(RESULTS),
+    },
     "search-documents": {
         "count_prefix": "3 results",
         "view": "List View",
         "details": False,
         "recent": False,
         "chip": "Documents 3",
+        "results": DOCUMENT_RESULTS,
     },
     "noschema": {"count": "9 items", "view": "Grid View", "details": False, "recent": True},
 }
-SCHEMES = {"search-documents": ["light"], "noschema": ["light"]}
+SCHEMES = {"search-documents": ["light"], "search-again": ["light"], "noschema": ["light"]}
 
 
 def showing(tree, name, role=None):
@@ -85,6 +116,10 @@ def check_case(name, tree, expect):
     else:
         claim(all(showing(tree, c) for c in CHIPS), f"the chips read {', '.join(CHIPS)}")
         claim([c for c in CHIPS if checked(tree, c)] == [chip], f"the chip “{chip}” alone is on")
+    rows = expect.get("results")
+    if rows is not None:
+        missing = [r for r in rows if f"{r} {RESULTS[r]}" not in labels]
+        claim(not missing, f"every result row shows its location: missing {missing}")
     return results
 
 
