@@ -221,8 +221,10 @@ shadow, the tiles' gap, radius, padding and fills, and the names' type.
 `modal_dialog` runs in the same cases. The probe opens a stock `ModalDialog` shaped like
 polkit's (a `MessageDialogContent`, a password entry, Cancel and a default Authenticate),
 captures it with `G2_SURFACE_SCENES=1`, and reads the box's fill, radius, width, ring,
-shadow, inset and gaps, the title and text, the entry at rest and focused, and both buttons; the
-end-session width comes from a stand-in `.end-session-dialog` box.
+shadow, inset and gaps, the title and text, the entry at rest and focused, and both buttons.
+It then opens the shell's own power-off dialog over D-Bus, as gnome-session does, and reads
+its width and gaps, the end-session feature's icon circle, the title's tracking, the
+countdown's figures, and the row: the buttons' order, widths, gap and fills.
 
 `date_menu` runs in the same cases. The probe posts two low-urgency notifications (no
 banner), opens the calendar menu at the fixed date, captures it with
@@ -267,6 +269,11 @@ Not Disturb's subtitle, then clicks Power Mode twice: VPN right after Airplane M
 Mode lit through `apex-lit` with `checked` stock, the power-profile indicator out of the
 pill, "Off" under a toggle without a subtitle of its own, and the clicks switching to the
 last profile and back, still lit. Stock keeps VPN before Airplane Mode and nothing lit.
+It also opens the Wi-Fi menu (board 17): the header's subtitle in the grid's column 3, row 0,
+at its end; the fixtures' active network the only `:checked` row; each secure network's lock
+right after its name, `$apex_quick_menu_lock_size` in `$apex_fg` at
+`$apex_quick_menu_lock_opacity`. Stock keeps the subtitle under the title, no row checked
+and each lock by its signal icon.
 
 `shadow_layers` checks the `shadows` layer feature in the same cases. The probe opens
 Quick Settings, the calendar and a stock `ModalDialog`, and reads each one's layer: shown,
@@ -300,9 +307,11 @@ headers in board order; the rows, the selected row's accent tint, verb and Enter
 the Settings rows' tiles, their colours read from `settings-tiles.json`; the
 calculator's result in tabular figures with Calculator as the first application; that an
 empty query shows only the field, and the row of a query with no results; and, after Enter on the result, that Spotlight closed and the toast's size, tint,
-inset, check circle, text and distance from the bottom edge. In the overview scene, after its capture, the probe
-types into the overview's search entry and checks that Spotlight opened with the text and
-the overview's own field emptied (patch 0013's hook).
+inset, check circle, text and distance from the bottom edge. `spotlight_glass` checks that the open panel and
+the toast carry their sheet's glass, σ 34 and σ 30 at 1.8, and that the glass feature gave each
+a blur of radius 2 × σ × the monitor's scale.
+In the overview scene, after its capture, the probe types into the overview's search entry
+and checks that Spotlight opened with the text and the overview's own field emptied (patch 0013's hook).
 
 None of these surfaces is in a capture compared with Fedora, so the comparison with Fedora's build
 is unchanged: the Apex overview is compared only run to run, and safe mode's with Fedora's.

@@ -74,6 +74,7 @@ function describePrompt(prompt) {
     return {
         question: prompt._entry?.hint_text ?? null,
         message: prompt._message?.text ?? null,
+        messageShown: Boolean(prompt._message?.visible && prompt._message.opacity > 0 && prompt._message.text),
         name: user?._label?._currentLabel?.text ?? user?._label?.text ?? null,
         avatar: avatar instanceof St.Label ? `initial ${avatar.text}` : avatar?.icon_name ?? null,
     };
@@ -81,7 +82,9 @@ function describePrompt(prompt) {
 
 function describeLock(dialog) {
     const clock = dialog._clock;
-    const hint = dialog._promptBox?.get_children().find(c => c.has_style_class_name?.('apex-lock-hint'));
+    const line = dialog._promptBox?.get_children().find(c => c.has_style_class_name?.('apex-lock-hint-line'));
+    const hint = line?.get_children().find(c => c.has_style_class_name?.('apex-lock-hint'));
+    const glyph = line?.get_children().find(c => c.has_style_class_name?.('apex-lock-hint-glyph'));
     return {
         locked: Main.screenShield.locked,
         classes: dialog.style_class,
@@ -89,6 +92,9 @@ function describeLock(dialog) {
         date: clock._date.text,
         time: clock._time.text,
         hint: hint?.text ?? null,
+        hintGlyph: glyph?.visible ? glyph.icon_name : null,
+        hintFailed: line?.has_style_class_name('apex-lock-hint-failed') ?? null,
+        indicator: dialog._authIndicatorButton?.visible ?? null,
         blur: dialog._backgroundGroup.get_children().map(b => b.get_effect('blur'))
             .map(e => e && `radius=${e.radius} brightness=${e.brightness.toFixed(2)} saturation=${e.saturation.toFixed(2)}`)[0] ?? null,
         prompt: describePrompt(dialog._authPrompt),
