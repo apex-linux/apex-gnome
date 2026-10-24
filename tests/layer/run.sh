@@ -387,6 +387,7 @@ fact "spotlight: text typed in the overview opens Spotlight with it, through 001
 fact "spotlight: and resets the overview's own search" 'spotlight\.overview-reset=yes'
 fact "spotlight: while Spotlight is open the overview's search keeps its stock path" 'spotlight\.from-overview-again=false'
 fact "spotlight: activating a result from the overview closes Spotlight and hides the overview" 'spotlight\.from-overview-enter=closed overview=false'
+fact "spotlight: the overview's search pill taking the focus opens Spotlight with an empty field" 'spotlight\.from-overview-focus=true field only'
 fact "spotlight: put in disabled-features while open, it closes and goes" 'spotlight\.live-disabled=0 popup=true'
 fact "spotlight: taken out again, Super+Space opens it afresh" 'spotlight\.live-enabled=field only'
 count_is "spotlight: every grab is given back" '^probe: modal\.push=' "$(grep -c '^probe: modal\.pop=' "$OUT")"

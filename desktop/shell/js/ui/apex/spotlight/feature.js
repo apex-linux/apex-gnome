@@ -33,7 +33,7 @@ export function popup() {
 }
 
 // Patch 0013's hook: text typed in the overview, or its focused search pill, opens Spotlight.
-function _overviewSearch(text, resetOverviewSearch) {
+function _overviewSearch(_reason, text, resetOverviewSearch) {
     if (!_popup || _popup.isOpen)
         return false;
     resetOverviewSearch();
