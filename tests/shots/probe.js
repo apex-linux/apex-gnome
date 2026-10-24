@@ -53,6 +53,7 @@ const SHADOW_REGISTRY = 'resource:///org/gnome/shell/ui/apex/shadows/registry.js
 const MOTION_WINDOW_ID = 'io.github.apex_linux.G2Window';
 const MOTION_WAIT_MS = 10000;
 const MOTION_SETTLE_MS = 1000;
+const MOTION_WINDOW_SIZE = {width: 640, height: 400};
 const OSD_GLYPH = 'audio-volume-medium-symbolic';
 const SWITCHER_APPS = ['Text Editor', 'Terminal', 'Web', 'Files', 'Settings'];
 const SWITCHER_ICON_SIZE = 96;
@@ -1839,16 +1840,30 @@ async function firstTransition(read) {
     return null;
 }
 
+// A maximise animates only from a shown frame, so each one waits for the window to rest:
+// mapped, maximised or at window.js's size, no size change pending or easing, two still frames.
+async function restAt(window, maximised, failure) {
+    const actor = window.get_compositor_private();
+    const atRest = () => {
+        const {width, height} = window.get_frame_rect();
+        return actor.mapped && window.is_maximized() === maximised &&
+            (maximised || (width === MOTION_WINDOW_SIZE.width && height === MOTION_WINDOW_SIZE.height)) &&
+            !Main.wm._resizePending.has(actor) && !Main.wm._resizing.has(actor);
+    };
+    if (!await settledOverTwoFrames(actor, atRest, MOTION_WAIT_MS))
+        throw new Error(failure);
+}
+
 async function maximiseTransition(window) {
     const actor = window.get_compositor_private();
     window.maximize();
     // _sizeChangedWindow marks the actor resizing just before it eases the size change.
     const transition = await firstTransition(() =>
         Main.wm._resizing.has(actor) ? actor.get_transition('scale-x') : null);
-    await Scripting.sleep(MOTION_SETTLE_MS);
+    await restAt(window, true, 'the maximise never settled');
     const maximised = window.is_maximized();
     window.unmaximize();
-    await Scripting.sleep(MOTION_SETTLE_MS);
+    await restAt(window, false, 'the restore never settled');
     return {transition, maximised};
 }
 
@@ -1903,10 +1918,11 @@ async function motion() {
         throw new Error(`the test client never mapped (${stderr?.trim() || `no ${MOTION_WINDOW_ID} window in ${MOTION_WAIT_MS} ms`})`);
     }
     // Mutter gives a window's first size change a 0 x 0 old frame, which stock never animates.
+    await restAt(window, false, 'the window never showed');
     window.maximize();
-    await Scripting.sleep(MOTION_SETTLE_MS);
+    await restAt(window, true, 'the warm-up maximise never settled');
     window.unmaximize();
-    await Scripting.sleep(MOTION_SETTLE_MS);
+    await restAt(window, false, 'the restore never settled');
     const interfaceSettings = new Gio.Settings({schema_id: 'org.gnome.desktop.interface'});
     // main.js inhibits animations without hardware-accelerated rendering, as G2's headless shell has.
     const stSettings = St.Settings.get();
