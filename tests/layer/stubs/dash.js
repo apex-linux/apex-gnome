@@ -60,6 +60,7 @@ export const Dash = GObject.registerClass({
         this.visible = true;
         this._styleClasses = new Set();
         this._box = new St.Widget();
+        this._background = new St.Widget({style_class: 'dash-background'});
         this._dashContainer = new St.Widget();
         this._dashContainer.add_child(this._box);
         this._showAppsIcon = new St.Widget({name: 'showApps'});

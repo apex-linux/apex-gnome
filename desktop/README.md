@@ -17,7 +17,9 @@ directory with `git archive` and unpacks it at the top of Fedora's gnome-shell t
 | `apex.gresource.xml` | the Apex resource: `/org/gnome/shell/ui/apex` (the layer), `/org/gnome/shell/theme/apex` (the sheets' assets) and `/org/gnome/shell/theme/stock` (upstream's compiled light and dark sheets, the safe-mode sheets). Patch 0001-build compiles it and links it into libshell next to upstream's JS resource. |
 | `js/ui/apex/hooks.js` | the only Apex module upstream files import: `safe()`, `value()`, `run()`, and `loadLayer()` for `main.js` |
 | `js/ui/apex/layer.js` | the layer: the configure and enable phases, one `try/catch` per feature, the session-mode colour hook, the crash guard's marker file |
+| `js/ui/apex/motion/feature.js` | DESIGN's motion (below): one curve and fixed durations through patch 0016's hooks |
 | `js/ui/apex/spotlight/` | Spotlight (below): `feature.js` (Super+Space), `search.js` (the sections, caps and budget), `providers.js` (the stock providers), `popup.js`, `toast.js`, and `tiles.js` with `settings-tiles.json`, the Settings tile colours by panel id. That JSON mirrors gnome-control-center's `panels/apex/settings-tiles.json` byte for byte and is the one file here without an SPDX line, since JSON has no comments |
+| `js/ui/apex/quick-settings/feature.js` | DESIGN's Quick Settings (below): VPN after Airplane Mode, Power Mode lit, On/Off subtitles, through patch 0011's hook |
 | `js/ui/apex/panel/feature.js` | the top bar of S2a (below): its parts in `panel/`, one module each |
 | `js/ui/apex/glass/feature.js` | the glass manager of S2b (below), with `glass/surfaces.js`, the layer's own glass, and `glass/registry.js`, where any feature registers an actor |
 | `js/ui/apex/dock/feature.js`, `dock.js`, `trash.js` | the dock of S2a (below): ApexDock, a subclass of upstream's `Dash`, and its Trash |
@@ -39,6 +41,8 @@ directory with `git archive` and unpacks it at the top of Fedora's gnome-shell t
 | `data/theme/apex/_derived.scss` | stock surfaces with no board, from their nearest board (DESIGN.md): the workspace switcher and resize popup take the OSD's tint, ring and radius, with `$apex_fg_faint` and `$apex_fg` dots; the input method's candidates the popup menu's; the run dialog's entry the password entry; audio device tiles the switcher's; the monitor number the OSD's radius. Glass surfaces take only the tint here: the glass manager registers them for the blur |
 | `data/theme/apex/_tile-preview.scss` | the edge-tiling preview (board 22): `$apex_tile_preview_inset` inside the tile mutter gives it (a clear border, since mutter sets its size), radius `$apex_radius_tile_preview`, the accent at `$apex_tile_preview_fill_opacity` ringed `$apex_tile_preview_ring` in the accent at `$apex_tile_preview_ring_opacity` (an inset shadow). The board's blur waits for the glass manager |
 | `data/theme/apex/_spotlight.scss` | Spotlight and its toast (board 38): a 680 px glass panel tinted `$apex_panel`, radius 24, 96 px below the monitor's top edge; the 60 px field with 20/500 text and a 20 px glyph; 11.5/700 uppercase section headers; 48 px rows with 32 px icons, 14/600 titles over 12.5 px subtitles, the selected one in the accent at 16 % with its verb and an Enter chip; the calculator's result at 18/700 in tabular figures; the "Copied" toast a 40 px glass pill 92 px above the screen's bottom edge. St draws no backdrop filter: S2b's glass manager blurs behind the panel with `$apex_spotlight_blur` and `$apex_spotlight_saturation` (σ 34, 1.8) and behind the toast with `$apex_toast_blur` and `$apex_toast_saturation` (σ 30, 1.8, ADR 0014's toast row) |
+| `data/theme/apex/_greeter.scss` | the greeter (board 12) beyond `_lock.scss`: the login dialog over apex-desktop's pre-blurred Facets (`$apex_greeter_background`, rendered at build time since gdm runs no JS), `$apex_greeter_fallback` without the file; the footer is apex-desktop's `org.gnome.login-screen logo`, `$apex_greeter_bottom` above the bottom edge; the back button and the bottom row's session and accessibility buttons are 38 px `$apex_greeter_button` circles ringed in `$apex_greeter_button_border`. Stock lacks the board's "Choose a user" heading, the rows' account type and chevron, the avatars' initials (the lock's JS) and the clock on the left; each needs JS gdm does not run |
+| `data/theme/apex/_screenshot.scss` | the screenshot UI (board 19), tints only (the panel's glass comes with 0017-derived-glass): a 440 px `$apex_panel` panel, radius 26, inset 14, 48 px above the bottom edge, with the board's heading row kept for the close button (a 30 px `$apex_button` circle); 64 px area buttons in `$apex_button` (`$apex_button_hover` checked), radius 16, a 20 px glyph over a 12.5/600 name; a 38 px pointer toggle, the accent when on; a 64 px capture button, a 4 px `$apex_fg` ring round a `$apex_fg` dot (a 26 px `$apex_screenshot_record` square while recording); the screenshot/screencast switch in `$apex_button`, the checked button `$apex_panel_solid`; the selection shaded `$apex_screenshot_shade` with 14 px white handles; the chosen screen and window ringed 3 px in the accent. Stock lacks the board's heading text, its 8 px gap between the area buttons (12 px, set in JS), the pointer toggle on the left and the switch on the right (swapped, set in JS), the selection's size label, and the window selector's windows in place (stock lays them out); each needs a hook |
 | `data/theme/apex/_apex-structure.scss` | Apex actors' geometry for the high-contrast sheet |
 | `data/theme/apex/meson.build` | adds the partials to upstream's `theme_sources`, so an edit recompiles the sheets |
 
@@ -132,6 +136,28 @@ Super+Space is its key. Hovered, it shows the tooltip "Search (Super+Space)" bel
 a stock transient notification, at the first enable of the panel outside the lock screen,
 and sets `search-hint-shown`. A schema without that key means no hint, logged once; the
 rest of the panel runs.
+
+`motion/feature.js` gives the shell DESIGN's one curve, `cubic-bezier(.2,.8,.2,1)`
+(ROADMAP S3c). Every ease passes through `environment.js`, where patch 0016's `ease` hook
+turns a curved mode (any but linear and stepped, and an actor's default EASE_OUT_CUBIC)
+into Clutter's `CUBIC_BEZIER`, and its `eased` hook sets the transitions' control points to
+(.2, .8) and (.2, 1). Its `motion-duration` hook, at the call sites, gives each role
+DESIGN's duration: `window` (the size change's two eases) .3 s, `overview` (the overview's
+state transitions in and out and to and from the app grid) .2 s, `popover` (a BoxPointer
+opening and closing) .18 s. The dock's .38 s is the dock's. `adjustAnimationTime` runs
+after the hooks, so `enable-animations=false` keeps stock's 0 ms.
+
+`quick-settings/feature.js` follows DESIGN's Quick Settings (ROADMAP S3c) once patch 0011's
+`quick-settings` hook says the items are in the grid. It moves the VPN toggle right after
+Airplane Mode, the end of DESIGN's order (Wi-Fi, Bluetooth, Power Mode, Night Light, Dark
+Style, Do Not Disturb, Airplane Mode, VPN). It lights Power Mode at every profile with the
+`apex-lit` class, which `_quick-settings.scss` styles as `:checked`; the toggle's `checked`
+stays stock, so a click still switches between Balanced and the last profile, and the
+status pill keeps the power-profile indicator out (`panel/status-pill.js`). A toggle with no
+subtitle of its own reads "On" or "Off" from `checked`; one that sets its own (Wi-Fi's
+network, Bluetooth's device, Power Mode's profile) keeps it, and gets ours back once it
+drops it. Disabled, the feature puts VPN back, unlights Power Mode and clears only the
+subtitles it wrote.
 
 `glass` is ADR 0014's glass manager, on patch 0003's `ShellBlurEffect`. A surface is any
 actor in `glass/registry.js`: the top bar, Quick Settings, the calendar and each banner
