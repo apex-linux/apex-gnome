@@ -37,9 +37,9 @@ readonly TODAY_CLOCK_PILL_EXTRA=13
 readonly LAYER_CYCLES=3
 readonly SPOTLIGHT_ACCELERATORS='["<Super>space"]'
 readonly SPOTLIGHT_MODES='["NORMAL", "OVERVIEW"]'
-# direct.sh's G2_CLOCK, in UTC; the clock shows it as date, EN SPACE, 24-hour time.
+# direct.sh's G2_CLOCK, in UTC; the clock shows it as weekday, date, EN SPACE, 24-hour time.
 readonly FIXED_CLOCK=2026-09-28T09:41:00Z
-readonly FIXED_CLOCK_TEXT='Sep 28\u200209:41'
+readonly FIXED_CLOCK_TEXT='Mon Sep 28\u200209:41'
 readonly BATTERY_PERCENT=87
 readonly WIFI_GLYPH=network-wireless-signal-excellent-symbolic
 readonly BATTERY_GLYPH=battery-level-80-symbolic
@@ -196,6 +196,8 @@ top_bar() {
         '.topBar.panel.font' '(.size | px_is($t.apex_font_bar_size)) and .weight == ($t.apex_font_bar_weight | tonumber)'
     "${metric[@]}" 'its digits are proportional (no tnum)' \
         '.topBar.clock.label.font' 'has("features") and (.features == null or (.features | test("tnum") | not))'
+    "${metric[@]}" 'the clock starts with the weekday (the vendor override'"'"'s clock-show-weekday)' \
+        '.topBar.clockShowsWeekday' '. == true'
     "${metric[@]}" 'the left and right boxes put their items $apex_bar_gap apart, with no inset of their own' \
         '[.topBar.left, .topBar.right]' 'all((.spacing | px_is($t.apex_bar_gap)) and .padding.left == 0 and .padding.right == 0)'
     "${metric[@]}" 'the activities, clock and status buttons fill the bar ($apex_bar_height)' \
@@ -274,12 +276,10 @@ top_bar_today() {
         '.topBar.leftItems | map(.accessibleName)' '. == ["Activities"]'
     "${metric[@]}" 'the right box has no search button' \
         '.topBar.rightItems | map(select(.accessibleName // "" | startswith("Search")))' '. == []'
-    "${metric[@]}" 'the Apex schema has no translucent-top-bar key' \
-        '.topBar.opaque' '.error != null'
+    "${metric[@]}" 'with translucent-top-bar off the bar keeps its fill and draws no line' \
+        '{opaque: .topBar.opaque, fill: .topBar.panel.background}' '.opaque.error == null and .opaque.background == .fill and .opaque.boxShadow == null'
     "${metric[@]}" 'the bar has no blur effect' \
         '.topBar.glass' '. == []'
-    "${metric[@]}" 'the clock starts with the date, not the weekday' \
-        '.topBar.clockShowsWeekday' '. == false'
     "${metric[@]}" "the clock's date and time are $TODAY_CLOCK_TEXT_GAP px apart (one EN SPACE, 24-hour clock)" \
         '.topBar.clockTextGap' "(. - $TODAY_CLOCK_TEXT_GAP) | fabs <= 0.5"
     "${metric[@]}" "with the dot, the clock pill is $TODAY_CLOCK_PILL_EXTRA px wider than \$apex_bar_pill_padding + the text + \$apex_bar_clock_gap + \$apex_bar_clock_dot_size + \$apex_bar_pill_padding" \
@@ -321,8 +321,6 @@ top_bar_gaps() {
     known_gap 'S2b (patch 0003, the glass manager)' "${metric[@]}" 'the bar is glass: a Shell.BlurEffect of radius 2 x $apex_bar_blur x the monitor scale at $apex_bar_saturation' \
         '{glass: .topBar.glass, scale: .monitorScale}' \
         '.scale as $s | .glass | any((.radius - 2 * ($t.apex_bar_blur | px) * $s | fabs < 0.01) and .saturation != null and ((.saturation - ($t.apex_bar_saturation | rtrimstr("%") | tonumber / 100)) | fabs < 0.01))'
-    known_gap 'S1b (the vendor override: clock-show-weekday)' "${metric[@]}" 'the clock starts with the weekday ("Mon Sep 28")' \
-        '.topBar.clockShowsWeekday' '. == true'
     known_gap "$clock_hook" "${metric[@]}" 'the clock'"'"'s date and time are $apex_bar_clock_gap apart (G2'"'"'s 24-hour clock puts an EN SPACE between them; en-US'"'"'s 12-hour clock adds a FIGURE SPACE before a one-digit hour, about 14 px in all)' \
         '.topBar.clockTextGap' '(. - ($t.apex_bar_clock_gap | px)) | fabs <= 0.5'
     known_gap "$clock_hook" "${metric[@]}" 'with the dot, the clock pill is $apex_bar_pill_padding + the text + $apex_bar_clock_gap + $apex_bar_clock_dot_size + $apex_bar_pill_padding wide' \
