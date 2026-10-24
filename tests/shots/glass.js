@@ -3,7 +3,10 @@
 // G2's glass cases (G2_GLASS=1): with patch 0003, frames as the shell drew them (frame.c);
 // in every shell, a capture of the stock unlock blur. tests/shots/README.md, "Glass".
 
+import Clutter from 'gi://Clutter';
+import Cogl from 'gi://Cogl';
 import Gio from 'gi://Gio';
+import GObject from 'gi://GObject';
 import GLib from 'gi://GLib';
 import Mtk from 'gi://Mtk';
 import Shell from 'gi://Shell';
@@ -13,6 +16,7 @@ import * as BoxPointer from 'resource:///org/gnome/shell/ui/boxpointer.js';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import * as MessageTray from 'resource:///org/gnome/shell/ui/messageTray.js';
 import * as Scripting from 'resource:///org/gnome/shell/ui/scripting.js';
+import * as SwitcherPopup from 'resource:///org/gnome/shell/ui/switcherPopup.js';
 
 import * as BlurRef from './blur-ref.js';
 
@@ -35,6 +39,9 @@ const UNLOCK_BRIGHTNESS = 0.65;
 const BACKGROUND_RADIUS = 40;
 const BACKGROUND_BRIGHTNESS = 0.8;
 const FRAME_TIMEOUT_MS = 2000;
+// Left of the overview's workspace, which leaves the scrim bare there.
+const SCRIM_BOX = {x: 24, y: 280, width: 160, height: 160};
+const SCRIM_WINDOW = {x: 60, y: 320, width: 200, height: 120};
 const APEX_SCHEMA = 'io.github.apex_linux.Apex.Desktop';
 const GLASS_EFFECT = 'apex-glass';
 const SOLID_STYLE_CLASS = 'apex-solid';
@@ -84,9 +91,9 @@ function patternUnder(tiles, scale) {
 // The frame after the next paint of the stage view, as it went out, and whether that
 // paint's redraw clip covered the box.
 let step = '';
-function nextFrame(scale, label = '') {
+function nextFrame(scale, label = '', area = BOX) {
     step = label;
-    const box = new Mtk.Rectangle(BOX);
+    const box = new Mtk.Rectangle(area);
     return new Promise((resolve, reject) => {
         let covered = null;
         const paintId = global.stage.connect('paint-view', (_stage, _view, clip) => {
@@ -102,16 +109,16 @@ function nextFrame(scale, label = '') {
             global.stage.disconnect(paintId);
             global.stage.disconnect(afterId);
             GLib.source_remove(timeoutId);
-            const bytes = G2Frame.read(view.get_framebuffer(), BOX.x * scale, BOX.y * scale,
-                BOX.width * scale, BOX.height * scale);
+            const bytes = G2Frame.read(view.get_framebuffer(), area.x * scale, area.y * scale,
+                area.width * scale, area.height * scale);
             resolve({covered, rgba: bytes.toArray()});
         });
     });
 }
 
-async function fullFrame(group, scale) {
+async function fullFrame(group, scale, area = BOX) {
     group.queue_redraw();
-    return (await nextFrame(scale, 'full')).rgba;
+    return (await nextFrame(scale, 'full', area)).rgba;
 }
 
 // Damage under the box that does not reach its edges: the redraw clip is the tile alone.
@@ -367,6 +374,72 @@ async function withSetting(settings, key, value, read) {
     }
 }
 
+function scrimActor() {
+    return Main.uiGroup.get_children().find(actor => actor.name === 'apexGlassScrim') ?? null;
+}
+
+// The scrims blur a clone of the hidden window_group: St restyles no unmapped actor, so the stand-in
+// window is a Clutter.Actor. Actor mode grows no paint volume, so only forwarded damage re-blurs whole.
+async function scrimTests() {
+    const scale = Main.panel.get_resource_scale();
+    const colour = hex => Cogl.Color.from_string(hex)[1];
+    const window = new Clutter.Actor({...SCRIM_WINDOW, background_color: colour('#e01b24')});
+    global.window_group.add_child(window);
+    try {
+        Main.overview.show();
+        await Scripting.waitLeisure();
+        const overview = glassOf(scrimActor());
+        const Glass = await import('resource:///org/gnome/shell/ui/apex/glass/feature.js');
+        const before = await fullFrame(Main.uiGroup, scale, SCRIM_BOX);
+        window.background_color = colour('#33d17a');
+        const unforwarded = await nextFrame(scale, 'scrim damaged', SCRIM_BOX);
+        const unforwardedFull = await fullFrame(Main.uiGroup, scale, SCRIM_BOX);
+        window.background_color = colour('#3584e4');
+        Glass.forwardDamage(SCRIM_WINDOW);
+        const forwarded = await nextFrame(scale, 'scrim damage forwarded', SCRIM_BOX);
+        const forwardedFull = await fullFrame(Main.uiGroup, scale, SCRIM_BOX);
+        const bar = glassOf(Main.panel);
+        Main.overview.dash.showAppsButton.checked = true;
+        await Scripting.waitLeisure();
+        const launcher = glassOf(scrimActor());
+        Main.overview.hide();
+        await Scripting.waitLeisure();
+        return {
+            overview, launcher, barOverScrim: bar, hidden: glassOf(scrimActor()),
+            unforwarded: {changed: BlurRef.differing(before, unforwarded.rgba), differingFromFull: BlurRef.differing(unforwarded.rgba, unforwardedFull)},
+            forwarded: {changed: BlurRef.differing(unforwardedFull, forwarded.rgba), differingFromFull: BlurRef.differing(forwarded.rgba, forwardedFull)},
+        };
+    } finally {
+        window.destroy();
+    }
+}
+
+// switcherPopup.js's popups join uiGroup, then add their list: a stand-in popup of that name does.
+const StandInSwitcherPopup = GObject.registerClass(class GlassTestSwitcherPopup extends St.Widget {});
+
+async function derivedState() {
+    const {primaryIndex} = Main.layoutManager;
+    Main.osdWindowManager.showOne(primaryIndex, Gio.ThemedIcon.new('audio-volume-medium-symbolic'), null, 0.5);
+    const popup = new StandInSwitcherPopup();
+    Main.uiGroup.add_child(popup);
+    const list = new SwitcherPopup.SwitcherList(true);
+    list.addItem(new St.Icon({icon_name: 'application-x-executable', icon_size: 96}), null);
+    popup.add_child(list);
+    // The closed screenshot UI is unstyled; it would be styled, and blurred, on opening.
+    Main.screenshotUI._panel.ensure_style();
+    try {
+        await Scripting.waitLeisure();
+        return {
+            osd: glassOf(Main.osdWindowManager._osdWindows[primaryIndex]._hbox),
+            switcher: glassOf(list),
+            screenshot: glassOf(Main.screenshotUI._panel),
+        };
+    } finally {
+        Main.osdWindowManager._osdWindows[primaryIndex].cancel();
+        popup.destroy();
+    }
+}
+
 // The glass manager's surfaces, then Reduce Transparency, high contrast and the kill switch.
 async function managerTests() {
     const apex = new Gio.Settings({schema_id: APEX_SCHEMA});
@@ -375,6 +448,8 @@ async function managerTests() {
     return {
         monitorScale: global.display.get_monitor_scale(primary.index),
         glass: await surfacesState(),
+        scrims: await scrimTests(),
+        derived: await derivedState(),
         reduceTransparency: await withSetting(apex, 'reduce-transparency', new GLib.Variant('b', true), surfacesState),
         highContrast: await withSetting(a11y, 'high-contrast', new GLib.Variant('b', true), surfacesState),
         disabled: await withSetting(apex, 'disabled-features', new GLib.Variant('as', ['glass']), surfacesState),

@@ -127,8 +127,23 @@ export const uiGroup = Object.assign(new StubActor('uiGroup', {extents: [0, 0, 1
     remove_child(actor) {
         this.children = this.children.filter(a => a !== actor);
     },
+    insert_child_below(child) {
+        this.children.push(child);
+    },
+    get_children() {
+        return [...this.children];
+    },
 });
+const overviewGroup = Object.assign(new StubActor('overviewGroup', {extents: [0, 0, 1440, 900]}), {visible: false});
 const boxPointer = new StubActor('boxpointer', {parent: uiGroup, redirect: 2});
+
+export const osdWindowManager = {
+    _osdWindows: [{_hbox: new StubActor('osd', {glass: {...POPOVER_GLASS, radius: 20}, extents: [595, 756, 250, 40], parent: uiGroup})}],
+};
+
+export const screenshotUI = {
+    _panel: Object.assign(new StubActor('screenshot', {glass: {...POPOVER_GLASS, radius: 16}, parent: uiGroup}), {mapped: false}),
+};
 
 export const messageTray = {
     _bannerBin: Object.assign(new StubActor('banner-bin', {parent: uiGroup}), {children: []}),
@@ -259,6 +274,7 @@ export const layoutManager = {
     ...emitter({}),
     primaryMonitor: {x: 0, y: 0, width: 1440, height: 900},
     chrome: [],
+    overviewGroup,
     _bgManagers: [new StubActor('background')],
     _updateHotCorners: () => fact('hot-corners', 'rebuilt'),
     addChrome(actor, params = {}) {
@@ -275,6 +291,7 @@ let nextOverviewHandler = 1;
 
 // The parts of the overview's controls the overview feature changes, as stock leaves them.
 const controls = {
+    _stateAdjustment: emitter({value: 1}),
     _thumbnailsBox: {
         _maxThumbnailScale: 0.05,
         _updateShouldShow: () => {},

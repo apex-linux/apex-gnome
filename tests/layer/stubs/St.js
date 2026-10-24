@@ -6,8 +6,17 @@ import GLib from 'gi://GLib';
 
 const scaleFactor = Number(GLib.getenv('PROBE_SCALE') ?? '1');
 
+// The glass _glass.scss gives the layer's own St widgets, by style class.
+const GLASS = [
+    ['apex-launcher', {blur: 40, saturation: 1.6}],
+    ['apex-glass-scrim', {blur: 36, saturation: 1.5}],
+];
+
 class Widget {
     constructor(params = {}) {
+        this._effects = [];
+        this.redirect = 0;
+        this.redraws = 0;
         this._children = [];
         this._handlers = [];
         this._actions = [];
@@ -82,10 +91,65 @@ class Widget {
 
     add_style_class_name(name) {
         this._styleClasses.add(name);
+        this.emit('style-changed');
     }
 
     remove_style_class_name(name) {
         this._styleClasses.delete(name);
+        this.emit('style-changed');
+    }
+
+    get_style_class_name() {
+        return [...this._styleClasses].join(' ');
+    }
+
+    get mapped() {
+        return this.visible && !this.destroyed;
+    }
+
+    get_effect(name) {
+        return this._effects.find(e => e.name === name) ?? null;
+    }
+
+    add_effect(effect) {
+        this._effects.push(effect);
+    }
+
+    remove_effect(effect) {
+        this._effects.splice(this._effects.indexOf(effect), 1);
+    }
+
+    peek_theme_node() {
+        const glass = GLASS.find(([name]) => this._styleClasses.has(name))?.[1];
+        return {
+            lookup_length: p => glass && p === '-apex-glass-blur' ? [true, glass.blur] : [false, 0],
+            lookup_double: p => glass && p === '-apex-glass-saturation' ? [true, glass.saturation] : [false, 0],
+            get_border_radius: () => 0,
+        };
+    }
+
+    get_resource_scale() {
+        return 2;
+    }
+
+    get_offscreen_redirect() {
+        return this.redirect;
+    }
+
+    set_offscreen_redirect(redirect) {
+        this.redirect = redirect;
+    }
+
+    get_transformed_position() {
+        return [this.x, this.y];
+    }
+
+    get_transformed_size() {
+        return [this.width, this.height];
+    }
+
+    queue_redraw() {
+        this.redraws++;
     }
 
     has_style_class_name(name) {

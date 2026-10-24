@@ -1117,6 +1117,18 @@ glass_manager() {
         'nor with high contrast'
     "${expect_glass[@]}" "$glass"' .manager.disabled | none and .blurEffects == [] and (.solidClass | not)' \
         "with disabled-features=['glass'] no blur effect either, and the tints stay"
+    "${expect_glass[@]}" '.t as $t | .manager.monitorScale as $s | .manager.scrims
+        | def scrim($blur; $saturation): .radius == 2 * ($blur | px) * $s and ((.saturation - ($saturation | rtrimstr("%") | tonumber / 100)) | fabs < 0.001) and .fine and (.background | not);
+        (.overview | scrim($t.apex_overview_scrim_blur; $t.apex_overview_scrim_saturation) and .enabled)
+        and (.launcher | scrim($t.apex_launcher_scrim_blur; $t.apex_launcher_scrim_saturation) and .enabled)
+        and (.hidden.enabled | not) and .barOverScrim.enabled and .barOverScrim.background' \
+        'the overview scrim blurs a clone of the desktop at $apex_overview_scrim_blur and $apex_overview_scrim_saturation in actor mode, the launcher at $apex_launcher_scrim_blur and $apex_launcher_scrim_saturation, off once the overview hides; the bar blurs the scrim beneath it'
+    "${expect_glass[@]}" "$glass"' .t as $t | .manager.monitorScale as $s | .manager.derived
+        | (.osd | glass($t.apex_panel_blur; $t.apex_panel_saturation; $s)) and (.switcher | glass($t.apex_panel_blur; $t.apex_panel_saturation; $s))
+        and (.screenshot | .radius == 2 * ($t.apex_panel_blur | px) * $s and .fine and (.enabled | not))' \
+        'the derived glass: the OSD and an Alt+Tab list blur at $apex_panel_blur and $apex_panel_saturation as the popovers do; the screenshot panel too, paused while closed'
+    "${expect_glass[@]}" '.manager.scrims | .forwarded.changed > 0 and .forwarded.differingFromFull == 0 and .unforwarded.differingFromFull > 0' \
+        'a window damaged under the scrim, forwarded as the manager forwards a window'"'"'s damage, re-blurs it in the same frame as a full redraw would; unforwarded, the blur'"'"'s halo stays stale, which is why it is forwarded'
     "${expect_glass[@]}" "$glass"' .t as $t | .manager.monitorScale as $s | .manager.restored | (.panel | glass($t.apex_bar_blur; $t.apex_bar_saturation; $s)) and (.solidClass | not)' \
         'each switch turned back, the glass is back'
 }
