@@ -314,6 +314,17 @@ REPORT_OF_A_DIALOG_DRAWN_FROM_TOKENS='
             {text: "Restart", width: ($u * 1.4), background: ($t.apex_button | hex), hover: {background: ($t.apex_button_hover | hex)}},
             {text: "Power Off", width: ($u * 1.2), background: ($t.apex_destructive | hex), foreground: ($t.apex_destructive_fg | hex),
                 hover: {background: ($t.apex_destructive_hover | hex)}}]}),
+    updateCard: ({below: true, padding: {top: ($t.apex_update_card_padding_y | px), left: ($t.apex_update_card_padding_x | px)},
+        border: {top: 1}, radius: ($t.apex_radius_update_card | px), spacing: ($t.apex_update_card_gap | px),
+        background: ($t.apex_card | hex), borderColor: ($t.apex_card_border | hex),
+        icon: {iconName: "system-software-update", size: ($t.apex_update_card_icon_size | px)}, textSpacing: ($t.apex_update_card_text_gap | px),
+        title: {text: "Start the new version next time", foreground: ($t.apex_fg | hex),
+            font: {size: ($t.apex_font_update_card_title_size | px), weight: ($t.apex_font_update_card_title_weight | tonumber)}},
+        subtitle: {text: "45.20261010.133 · GNOME 51.1, Linux 7.2.9, Mesa 26.1.2", foreground: ($t.apex_fg_dim | hex),
+            font: {size: ($t.apex_font_update_card_subtitle_size | px)}},
+        toggle: {on: true, sensitive: true, width: ($t.apex_update_switch_width | px), height: ($t.apex_update_switch_height | px),
+            background: "#3584e4ff", knob: {width: ($t.apex_update_switch_knob | px)}},
+        buttons: ["Cancel", "Restart & Update"]} | {staged: ., ready: (.toggle.sensitive = false)}),
     contentSpacing: ($t.apex_dialog_gap | px), textSpacing: ($t.apex_dialog_text_gap | px),
     title: {font: {size: ($t.apex_font_dialog_title_size | px), weight: ($t.apex_font_heading_weight | tonumber)}},
     description: {font: {size: ($t.apex_font_size | px)}, foreground: ($t.apex_fg_dim | hex)},
@@ -1012,7 +1023,7 @@ test_modal_dialog() {
     local variant change what passes failures open_gaps
     for variant in light dark; do
         read -r passes failures open_gaps <<<"$(assert_run modal_dialog "$variant")"
-        if ((failures == 0 && open_gaps == 0 && passes == 12)); then
+        if ((failures == 0 && open_gaps == 0 && passes == 16)); then
             ok "modal dialog ($variant): drawn from the tokens it passes all $passes assertions"
         else
             not_ok "modal dialog ($variant): drawn from the tokens it passes (passed/failed/gaps $passes/$failures/$open_gaps): $(grep -m3 '^FAIL' "$T/top-bar.out" | paste -sd'|' -)"
@@ -1046,6 +1057,14 @@ del(.surfaces.dialog.endSession.buttons[1])|stock's row, without Restart
 .surfaces.dialog.entry.focus.boxShadow.color = "#3584e4cc"|upstream's 80 % focus ring
 .surfaces.dialog.buttons[0].radius = 12|upstream's square-ish buttons
 .surfaces.dialog.buttons[1].background = "#00000a10"|a default button without the accent
+.surfaces.dialog.updateCard.staged.icon.size = 16|a symbolic-sized update icon
+.surfaces.dialog.updateCard.staged.below = false|the card above the dialog's text
+.surfaces.dialog.updateCard.staged.radius = 18|a card at the menus' radius
+.surfaces.dialog.updateCard.staged.subtitle.text = "45.20261010.133"|a subtitle without the versions
+.surfaces.dialog.updateCard.staged.title.foreground = "#1d1d219e"|a dimmed title
+.surfaces.dialog.updateCard.staged.toggle.on = false|the switch off by default
+.surfaces.dialog.updateCard.staged.buttons = ["Cancel", "Restart"]|Restart not relabelled while the switch is on
+.surfaces.dialog.updateCard.ready.toggle.sensitive = true|a ready-for-reboot switch that turns off
 CHANGES
 }
 

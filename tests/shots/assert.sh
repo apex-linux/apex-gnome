@@ -800,6 +800,23 @@ modal_dialog() {
     "${metric[@]}" 'the end-session dialog has $apex_end_session_gap between its parts, its title tracked $apex_dialog_title_tracking, its countdown in tabular figures' \
         "$d.endSession" '(.box.spacing | px_is($t.apex_end_session_gap)) and (.contentSpacing | px_is($t.apex_end_session_gap))
             and (.title.tracking - ($t.apex_dialog_title_tracking | px) | fabs < 0.05) and (.description.font.features | test("tnum"))'
+    local card="$d.updateCard"
+    "${metric[@]}" 'Update1 staged: board 14'"'"'s update card under the text, inset $apex_update_card_padding_y $apex_update_card_padding_x, radius $apex_radius_update_card, gap $apex_update_card_gap, $apex_card ringed in $apex_card_border' \
+        "$card.staged" '.below and (.padding.top | px_is($t.apex_update_card_padding_y)) and (.padding.left | px_is($t.apex_update_card_padding_x))
+            and (.border.top | px_is("1px")) and (.radius | px_is($t.apex_radius_update_card)) and (.spacing | px_is($t.apex_update_card_gap))
+            and (.background | colour_is($t.apex_card)) and (.borderColor | colour_is($t.apex_card_border))'
+    "${metric[@]}" 'its system-software-update at $apex_update_card_icon_size, the board'"'"'s title at $apex_font_update_card_title_size, the versions at $apex_font_update_card_subtitle_size in $apex_fg_dim' \
+        "$card.staged" '.icon.iconName == "system-software-update" and (.icon.size | px_is($t.apex_update_card_icon_size)) and (.textSpacing | px_is($t.apex_update_card_text_gap))
+            and .title.text == "Start the new version next time" and (.title.font.size | px_is($t.apex_font_update_card_title_size))
+            and .title.font.weight == ($t.apex_font_update_card_title_weight | tonumber) and (.title.foreground | colour_is($t.apex_fg))
+            and .subtitle.text == "45.20261010.133 · GNOME 51.1, Linux 7.2.9, Mesa 26.1.2"
+            and (.subtitle.font.size | px_is($t.apex_font_update_card_subtitle_size)) and (.subtitle.foreground | colour_is($t.apex_fg_dim))'
+    "${metric[@]}" 'its switch is $apex_update_switch_width by $apex_update_switch_height, on in the accent, its knob $apex_update_switch_knob; Restart reads Restart & Update' \
+        "{c: $card.staged, accent: .topBar.accent}" '.accent as $a | .c | (.toggle | .on and .sensitive and (.width | px_is($t.apex_update_switch_width))
+            and (.height | px_is($t.apex_update_switch_height)) and (.background | colour_is($a)) and (.knob.width | px_is($t.apex_update_switch_knob)))
+            and .buttons == ["Cancel", "Restart & Update"]'
+    "${metric[@]}" 'ready-for-reboot: the same card, its switch on and insensitive, Restart & Update' \
+        "$card.ready" '.below and .toggle.on and (.toggle.sensitive | not) and .buttons == ["Cancel", "Restart & Update"] and .title.text == "Start the new version next time"'
     "${metric[@]}" 'above its title, stock'"'"'s system-shutdown-symbolic at $apex_end_session_icon_glyph_size in a $apex_end_session_icon_size circle of $apex_button' \
         "$d.endSession.icon" '.iconName == "system-shutdown-symbolic" and .above and (.glyph | px_is($t.apex_end_session_icon_glyph_size))
             and (.width | px_is($t.apex_end_session_icon_size)) and (.height | px_is($t.apex_end_session_icon_size))

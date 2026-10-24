@@ -1195,6 +1195,71 @@ async function openEndSessionDialog(unit) {
     }
 }
 
+const UPDATE1 = ['io.github.apex_linux.Apex.Update1', '/io/github/apex_linux/Apex/Update1'];
+const STAGED_UPDATE = {
+    digest: new GLib.Variant('s', 'sha256:9e41aa07c3b2d1e0f9a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c80c2b'),
+    version: new GLib.Variant('s', '45.20261010.133'),
+    'download-only': new GLib.Variant('b', true),
+};
+const UPDATE_CARD_WAIT_MS = 2000;
+
+// update1-mock.py's state, through python-dbusmock's own interface.
+function setUpdateState(state, staged) {
+    return Gio.DBus.system.call(...UPDATE1, 'org.freedesktop.DBus.Mock', 'UpdateProperties',
+        new GLib.Variant('(sa{sv})', [UPDATE1[0], {State: new GLib.Variant('s', state), Staged: new GLib.Variant('a{sv}', staged)}]),
+        null, Gio.DBusCallFlags.NONE, -1, null);
+}
+
+function updateCardOf(dialog, unit) {
+    const card = findDescendant(dialog.contentLayout, a => a.has_style_class_name?.('apex-update-card'));
+    if (!card)
+        return null;
+    const find = styleClass => findDescendant(card, a => a.has_style_class_name?.(styleClass));
+    const icon = find('apex-update-card-icon');
+    const toggle = find('toggle-switch');
+    return {
+        ...styleOf(card, unit),
+        below: card.get_previous_sibling()?.has_style_class_name('message-dialog-content') ?? false,
+        icon: {iconName: icon.icon_name, size: lengthOrNull(icon.get_theme_node(), 'icon-size', unit)},
+        textSpacing: lengthOrNull(find('apex-update-card-text').get_theme_node(), 'spacing', unit),
+        title: {...styleOf(find('apex-update-card-title'), unit), text: find('apex-update-card-title').text},
+        subtitle: {...styleOf(find('apex-update-card-subtitle'), unit), text: find('apex-update-card-subtitle').text},
+        toggle: {
+            ...styleOf(toggle, unit), on: toggle.state, sensitive: toggle.get_parent().reactive,
+            knob: styleOf(find('handle'), unit),
+        },
+        buttons: dialog.buttonLayout.get_children().filter(b => b.visible).map(b => b.label),
+    };
+}
+
+// Board 14's update card in the restart dialog: staged, then ready-for-reboot, each captured.
+async function updateCard(unit) {
+    const open = async (state, scene) => {
+        await setUpdateState(state, STAGED_UPDATE);
+        await Gio.DBus.session.call('org.gnome.Shell', '/org/gnome/SessionManager/EndSessionDialog',
+            'org.gnome.SessionManager.EndSessionDialog', 'Open', new GLib.Variant('(uuuao)', [2, 0, 60, []]),
+            null, Gio.DBusCallFlags.NONE, -1, null);
+        const dialog = Main.layoutManager.modalDialogGroup.get_children()
+            .find(c => c.dialogLayout?._dialog?.has_style_class_name('end-session-dialog'));
+        try {
+            await Scripting.sleep(UPDATE_CARD_WAIT_MS);
+            await settle();
+            global.stage.set_key_focus(null);
+            return {...updateCardOf(dialog, unit), capture: withoutBytes(await capture(scene)).file};
+        } finally {
+            dialog?.cancel();
+            await settle();
+        }
+    };
+    try {
+        return {staged: await open('staged', 'end-session-update'), ready: await open('ready-for-reboot', 'end-session-ready')};
+    } catch (e) {
+        return {error: e.message};
+    } finally {
+        await setUpdateState('up-to-date', {}).catch(() => {});
+    }
+}
+
 // A stock ModalDialog shaped like polkit's: title, description, password entry, two buttons.
 function promptDialog() {
     const dialog = new ModalDialog.ModalDialog({styleClass: 'prompt-dialog'});
@@ -2059,7 +2124,7 @@ async function scenes() {
         surfaces.idleRepaints = await idleRepaints();
     }
     surfaces.switcher = await windowSwitcher(unit);
-    surfaces.dialog = {...await modalDialog(unit), endSession: await endSessionDialog(unit)};
+    surfaces.dialog = {...await modalDialog(unit), endSession: await endSessionDialog(unit), updateCard: await updateCard(unit)};
     surfaces.dateMenu = await calendarMenu(unit);
     surfaces.notificationsLayer = await notificationsLayer(unit);
     surfaces.derived = derivedSurfaces(unit);

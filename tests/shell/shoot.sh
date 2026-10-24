@@ -13,7 +13,7 @@ usage() {
     cat <<EOF
 usage: tests/shell/shoot.sh RPM_DIR
 
-The lock screen, the greeter and the date menu of the gnome-shell RPMs in RPM_DIR (the lane's
+The lock screen, the greeter, the date menu and the end-session dialog of the gnome-shell RPMs in RPM_DIR (the lane's
 _build/gnome-shell/out), headless at scale 2, as root in a throwaway fedora:$APEX_FEDORA
 container (just lock-shots). gdm-mock.py stands in for GDM: it asks one question and
 fails every answer, so no case can unlock; lock-refused's GDM refuses even to ask, and
@@ -24,6 +24,8 @@ component's _onInitiate(), with a stubbed PolkitAgent.Session that PAM never ans
 captures and style checks only (pkexec end to end is G4's). date-menu opens the date menu, sends
 the shell's notification daemon one notification, then four more, toggles Do Not Disturb twice
 and clears the list; date-menu-disabled does the same with the layer's notifications off.
+Each end-session case opens the end-session dialog over D-Bus against update1-mock.py's
+Update1 (tests/shots), from up to date through staged and ready-for-reboot to failing Applies.
 check.py asserts the cases' logs and the mock's. The users apex and guest come
 from accounts-daemon; the wallpapers, the greeter's background and its logo are apex-desktop's ($APEX_DESKTOP_REV, or
 APEX_DESKTOP_SRC, a checkout). Captures and logs land in _build/gnome-shell/shots/.
@@ -49,6 +51,7 @@ readonly FIXTURE_NAMES=(org.freedesktop.UPower org.freedesktop.NetworkManager or
 readonly GDM_NAME=org.gnome.DisplayManager
 readonly LOGIND_NAME=org.freedesktop.login1
 readonly FPRINT_NAME=net.reactivated.Fprint
+readonly UPDATE1_NAME=io.github.apex_linux.Apex.Update1
 # layer.js warns that this names no fault phase as it loads: the witness that it loaded.
 readonly LOAD_WITNESS=APEX_SHELL_TEST_FAULT=load-witness
 readonly CLOCK='2026-10-21 10:24:00'
@@ -131,11 +134,11 @@ mkdir -p /run/systemd/seats
 mkdir -p /run/dbus /etc/dbus-1 /tmp/.X11-unix && chmod 1777 /tmp/.X11-unix
 {
     echo '<busconfig><policy user="root">'
-    for name in "${FIXTURE_NAMES[@]}" "$GDM_NAME" "$LOGIND_NAME" "$FPRINT_NAME"; do
+    for name in "${FIXTURE_NAMES[@]}" "$GDM_NAME" "$LOGIND_NAME" "$FPRINT_NAME" "$UPDATE1_NAME"; do
         printf '<allow own="%s"/><allow send_destination="%s"/>\n' "$name" "$name"
     done
     printf '</policy><policy context="default">'
-    printf '<allow send_destination="%s"/>' "$GDM_NAME" "$LOGIND_NAME" "$FPRINT_NAME"
+    printf '<allow send_destination="%s"/>' "$GDM_NAME" "$LOGIND_NAME" "$FPRINT_NAME" "$UPDATE1_NAME"
     printf '</policy></busconfig>\n'
 } >/etc/dbus-1/system-local.conf
 [[ -S /run/dbus/system_bus_socket ]] || dbus-daemon --system --fork || die "no system bus"
@@ -238,6 +241,21 @@ for scheme in light dark; do
 done
 shoot polkit-fingerprint "$USER_NAME" user default 'Password:' -- APEX_POLKIT=1 APEX_POLKIT_INFO=fingerprint || status=1
 shoot polkit-disabled "$USER_NAME" user default 'Password:' "$polkit_off" -- APEX_POLKIT=1 || status=1
+# The end-session dialog's update card against a fresh Update1 each time: the probe moves it
+# from up to date through staged and ready-for-reboot to an Apply that fails.
+for scheme in light dark; do
+    color=default
+    [[ $scheme == dark ]] && color=prefer-dark
+    python3 "$SHOTS/update1-mock.py" "$out/end-session-$scheme.update1.log" >"$out/end-session-$scheme.update1.out" 2>&1 &
+    update1=$!
+    for _ in $(seq 100); do
+        grep -q "owns $UPDATE1_NAME" "$out/end-session-$scheme.update1.out" 2>/dev/null && break
+        sleep 0.1
+    done
+    shoot "end-session-$scheme" "$USER_NAME" user "$color" 'Password:' -- APEX_END_SESSION=1 || status=1
+    kill "$update1" 2>/dev/null
+    wait "$update1" 2>/dev/null
+done
 ((status == 0)) || die "shoot.sh: a case failed; see ${out#"$APEX_ROOT/"}/*.log"
 python3 "$HERE/check.py" "$out" || die "shoot.sh: the cases' assertions failed"
 log "shoot.sh: captures in ${out#"$APEX_ROOT/"}"

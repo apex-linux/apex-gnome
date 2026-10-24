@@ -59,6 +59,9 @@ cp "$HERE"/stubs/St.js "$HERE"/stubs/Clutter.js "$HERE"/stubs/Shell.js "$HERE"/s
     "$HERE"/stubs/GdkPixbuf.js "$HERE"/stubs/Polkit.js "$HERE"/stubs/AccountsService.js "$T/"
 # The shadow cutout and the indicators' mask are GObject subclasses of Clutter.ShaderEffect, which the stubs cannot be.
 cp "$HERE/stubs/cutout.js" "$T/shell/js/ui/apex/shadows/cutout.js"
+# The update card is a GObject widget too, and its Update1 a system-bus service.
+cp "$HERE/stubs/endSessionCard.js" "$T/shell/js/ui/apex/end-session/card.js"
+cp "$HERE/stubs/endSessionUpdate.js" "$T/shell/js/ui/apex/end-session/update.js"
 cp "$HERE/stubs/indicator-mask.js" "$T/shell/js/ui/apex/indicators/mask.js"
 # gjs outside the shell has no St or Clutter typelib, the job no gdk-pixbuf, and the fixtures'
 # Shell and Meta no WindowTracker or Barrier: the features get stubs instead.
@@ -408,6 +411,37 @@ fact "end-session: layer off: reopened, still stock" \
     'end-session\.off\.reopened=buttons=Cancel,Power Off icon=none spacing=12 homogeneous=true row=false'
 fact "end-session: layer back on: board 14's row again" \
     'end-session\.on=buttons=Cancel,Restart,Power Off icon=system-shutdown-symbolic spacing=10 homogeneous=false row=true'
+fact "update card: Update1 up to date: no card" 'update\.none=buttons=Cancel,Restart,Power Off card=none'
+fact "update card: never in the log-out dialog" 'update\.logout=buttons=Cancel,Log Out card=none'
+fact "update card: staged: on, and Restart reads Restart & Update" \
+    'update\.staged=buttons=Cancel,Restart & Update card=staged on=true subtitle=45\.20261010\.133 · GNOME 51\.1, Linux 7\.2\.9, Mesa 26\.1\.2'
+fact "update card: staged, a press applies the staged digest first, then confirms" \
+    'update\.staged\.calls=timer:stopped apply:sha256:9e41aa07 confirmed:ConfirmedReboot'
+fact "update card: closed, the dialog's own close and confirm again" 'update\.staged\.restored=close=true confirm=true'
+fact "update card: in the power-off dialog too, with its Restart relabelled" \
+    'update\.staged-power-off=buttons=Cancel,Restart & Update,Power Off card=staged on=true subtitle=45\.20261010\.133 · GNOME 51\.1, Linux 7\.2\.9, Mesa 26\.1\.2'
+fact "update card: switched off, Restart reads Restart again" \
+    'update\.switched-off=buttons=Cancel,Restart,Power Off card=staged on=false subtitle=45\.20261010\.133 · GNOME 51\.1, Linux 7\.2\.9, Mesa 26\.1\.2'
+fact "update card: switched off, the action alone: the stage stays locked" 'update\.switched-off\.calls=confirmed:ConfirmedShutdown'
+fact "update card: ready-for-reboot: on, and the switch does not turn off" \
+    'update\.ready-switched=buttons=Cancel,Restart & Update card=ready-for-reboot on=true subtitle=45\.20261010\.133 · GNOME 51\.1, Linux 7\.2\.9, Mesa 26\.1\.2'
+fact "update card: ready-for-reboot: nothing left to apply" 'update\.ready\.calls=confirmed:ConfirmedReboot'
+fact "update card: Apply fails on a press: the countdown stops and nothing is confirmed" \
+    'update\.apply-failed\.calls=timer:stopped apply:sha256:9e41aa07'
+fact "update card: the dialog keeps the error, the switch off" \
+    'update\.apply-failed=buttons=Cancel,Restart,Power Off card=staged on=false subtitle=Plug in the charger to install the update\.'
+fact "update card: pressed again, the action alone" 'update\.after-failure\.calls=confirmed:ConfirmedShutdown'
+fact "update card: Cancel after a failed press confirms nothing" 'update\.failed-then-cancel\.calls=none'
+fact "update card: layer off after a failed press, Cancel still confirms nothing" 'update\.failed-off-cancel\.calls=none'
+fact "update card: and once that stale confirmation is spent, stock's own again" 'update\.failed-off\.restored=close=true confirm=true'
+fact "update card: Boot Options with Apply failing: no menu asked for yet" \
+    'update\.boot-options-failed\.calls=timer:stopped apply:sha256:9e41aa07'
+fact "update card: then Cancel: the stale press asks logind for the menu, the feature unsets it at once, nothing confirmed" \
+    'update\.boot-options-cancel\.calls=logind:SetRebootToBootLoaderMenu\(60000000,\) logind:SetRebootToBootLoaderMenu\(18446744073709551615,\)'
+fact "update card: Apply fails as the countdown ends: the countdown's action still happens" \
+    'update\.countdown-failed\.calls=apply:sha256:9e41aa07 confirmed:ConfirmedReboot'
+fact "update card: layer off: no card, stock's label" 'update\.off=buttons=Cancel,Restart card=none'
+fact "update card: layer off: stock's close and confirm, no Apply" 'update\.off\.calls=confirmed:ConfirmedReboot'
 lacks "end-session: no feature fails or disables uncleanly" 'off for this session|did not disable cleanly|cannot restyle'
 
 probe end-session-disabled "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_END_SESSION=1 PROBE_DISABLED=end-session
