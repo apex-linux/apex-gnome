@@ -50,6 +50,7 @@ const OSD_LEVEL = 0.62;
 const POWER_PROFILE_WAIT_MS = 3000;
 const IDLE_PAINT_MS = 2000;
 const SHADOW_REGISTRY = 'resource:///org/gnome/shell/ui/apex/shadows/registry.js';
+const SPOTLIGHT_FEATURE = 'resource:///org/gnome/shell/ui/apex/spotlight/feature.js';
 const MOTION_WINDOW_ID = 'io.github.apex_linux.G2Window';
 const MOTION_WAIT_MS = 10000;
 const MOTION_SETTLE_MS = 1000;
@@ -1509,9 +1510,111 @@ async function spotlightStyle(unit) {
     }
 }
 
+// S3a's exit items in the real shell: a provider past the budget holds back no section, and
+// real key presses move one selection across the sections, open a row and close the popup.
+const SLOW_SETTINGS_MS = 1600;
+const SECTIONS_EARLY_MS = 300;
+const SECTIONS_LATE_MS = 1200;
+const NO_KEYBINDING_ACTION = -1;
+
+function slowSpotlightProviders(started, settings) {
+    const providers = spotlightProviders();
+    const fast = providers.get('org.gnome.Settings.desktop');
+    providers.set('org.gnome.Settings.desktop', {
+        ...fast,
+        getInitialResultSet: (terms, cancellable) => new Promise(resolve => {
+            settings.askedMs = msSince(started.at);
+            cancellable?.connect(() => {
+                settings.cancelledMs = msSince(started.at);
+            });
+            GLib.timeout_add(GLib.PRIORITY_DEFAULT, SLOW_SETTINGS_MS, () => {
+                resolve(fast.getInitialResultSet(terms));
+                return GLib.SOURCE_REMOVE;
+            });
+        }),
+    });
+    for (const [id, provider] of providers)
+        provider.activateResult = (resultId, terms) => settings.activated.push({provider: id, id: resultId, terms});
+    return providers;
+}
+
+function msSince(start) {
+    return Math.round((GLib.get_monotonic_time() - start) / 1000);
+}
+
+function spotlightSections(popup) {
+    if (!popup.isOpen)
+        return {open: false, sections: [], rows: 0, selected: null};
+    const results = popup.panel.get_children()[1];
+    const headers = results.get_children().filter(a => a.has_style_class_name('apex-spotlight-header'));
+    const selected = popup.rows.find(r => r.selected);
+    return {
+        sections: headers.map(h => h.get_child().get_text()),
+        rows: popup.rows.length,
+        selected: selected ? selected.key : null,
+    };
+}
+
+async function pressKeys(keyboard, keyval, times) {
+    for (let i = 0; i < times; i++) {
+        keyboard.notify_keyval(GLib.get_monotonic_time(), keyval, Clutter.KeyState.PRESSED);
+        keyboard.notify_keyval(GLib.get_monotonic_time(), keyval, Clutter.KeyState.RELEASED);
+        // eslint-disable-next-line no-await-in-loop
+        await Scripting.sleep(20);
+    }
+    await settle();
+}
+
+async function spotlightKeys() {
+    if ((await apexHooks())?.safe() !== false)
+        return null;
+    let Popup, BUDGET_MS;
+    try {
+        ({Popup} = await import('resource:///org/gnome/shell/ui/apex/spotlight/popup.js'));
+        ({BUDGET_MS} = await import('resource:///org/gnome/shell/ui/apex/spotlight/search.js'));
+    } catch {
+        return null;
+    }
+    const started = {at: 0};
+    const settings = {askedMs: null, cancelledMs: null, activated: []};
+    // Unbound keys map to keybinding action 0, so the toggle action here must match none.
+    const popup = new Popup(() => slowSpotlightProviders(started, settings), NO_KEYBINDING_ACTION);
+    const seat = global.stage.context.get_backend().get_default_seat();
+    const keyboard = seat.create_virtual_device(Clutter.InputDeviceType.KEYBOARD_DEVICE);
+    const keys = {budgetMs: BUDGET_MS, slowMs: SLOW_SETTINGS_MS, modalBefore: Main.modalCount};
+    try {
+        popup.open();
+        keys.modalOpen = Main.modalCount;
+        started.at = GLib.get_monotonic_time();
+        popup.panel.get_children()[0].get_children()[1].set_text('disk');
+        await Scripting.sleep(SECTIONS_EARLY_MS);
+        keys.early = {ms: msSince(started.at), ...spotlightSections(popup)};
+        await Scripting.sleep(Math.max(0, SECTIONS_LATE_MS - msSince(started.at)));
+        keys.late = {ms: msSince(started.at), ...spotlightSections(popup)};
+        keys.settings = {askedMs: settings.askedMs, cancelledMs: settings.cancelledMs};
+        await pressKeys(keyboard, Clutter.KEY_Down, 4);
+        keys.down4 = spotlightSections(popup).selected;
+        await pressKeys(keyboard, Clutter.KEY_Up, 1);
+        keys.up1 = spotlightSections(popup).selected;
+        await pressKeys(keyboard, Clutter.KEY_Down, 20);
+        keys.down20 = spotlightSections(popup).selected;
+        await pressKeys(keyboard, Clutter.KEY_Return, 1);
+        keys.enter = {open: popup.isOpen, modal: Main.modalCount, activated: settings.activated};
+        popup.open();
+        popup.panel.get_children()[0].get_children()[1].set_text('disk');
+        await settle();
+        await pressKeys(keyboard, Clutter.KEY_Escape, 1);
+        keys.escape = {open: popup.isOpen, modal: Main.modalCount};
+        return keys;
+    } finally {
+        popup.destroy();
+        await settle();
+    }
+}
+
 // Text typed in the overview reaches its search entry; patch 0013 hands it to Spotlight.
 async function overviewSearch() {
-    const feature = await import('resource:///org/gnome/shell/ui/apex/spotlight/feature.js').catch(() => null);
+    const feature = await import(SPOTLIGHT_FEATURE).catch(() => null);
     const popup = feature?.popup();
     if (!popup)
         return null;
@@ -1881,6 +1984,7 @@ async function scenes() {
     surfaces.derived = derivedSurfaces(unit);
     surfaces.tilePreview = await tilePreview(unit);
     surfaces.spotlight = await spotlightStyle(unit);
+    surfaces.spotlightKeys = await spotlightKeys();
     surfaces.screenshot = await screenshotUI(unit);
 
     Main.overview.show();
@@ -2067,6 +2171,84 @@ async function previewShadows() {
     return previews;
 }
 
+const EASE_PARAMS = new Set(['duration', 'mode', 'delay', 'onComplete', 'onStopped', 'animationRequired',
+    'repeatCount', 'autoReverse']);
+
+// environment.js puts every ease on these prototypes: each call is recorded with the transitions
+// it left, named by the canonical property (translation-y), and whether a ui/apex/ frame made it.
+function recordEases(calls) {
+    const wrap = (proto, method, read) => {
+        const original = proto[method];
+        proto[method] = function (...args) {
+            const result = original.apply(this, args);
+            const {names, params} = read(args);
+            const frames = new Error().stack.split('\n').slice(1);
+            const apexFrame = frames.find(f => f.includes('/ui/apex/'));
+            calls.push({
+                apex: !!apexFrame,
+                where: (apexFrame ?? frames[1] ?? '').replace(/^.*@/, '').replace(/^resource:\/\/\/org\/gnome\/shell\//, ''),
+                required: params?.animationRequired === true,
+                durations: names.map(name => this.get_transition(name.replaceAll('_', '-'))?.get_duration() ?? 0),
+            });
+            return result;
+        };
+        return () => (proto[method] = original);
+    };
+    const actor = ([params]) => ({names: Object.keys(params ?? {}).filter(k => !EASE_PARAMS.has(k)), params});
+    const property = ([name, , params]) => ({names: [name], params});
+    const adjustment = ([, params]) => ({names: ['value'], params});
+    const restores = [
+        wrap(Clutter.Actor.prototype, 'ease', actor),
+        wrap(Clutter.Actor.prototype, 'easeAsync', actor),
+        wrap(Clutter.Actor.prototype, 'ease_property', property),
+        wrap(Clutter.Actor.prototype, 'ease_property_async', property),
+        wrap(St.Adjustment.prototype, 'ease', adjustment),
+        wrap(St.Adjustment.prototype, 'easeAsync', adjustment),
+    ];
+    return () => restores.forEach(restore => restore());
+}
+
+// Each Apex surface opened and closed once: the dock's lift and intellihide, the overview's
+// thumbnails, Spotlight, Quick Settings, the calendar and a dialog with its shadow layer.
+async function surfaceEases(window) {
+    const calls = [];
+    const steps = [];
+    const restore = recordEases(calls);
+    const step = async (name, open, close) => {
+        const before = calls.length;
+        await open();
+        await Scripting.sleep(MOTION_SETTLE_MS);
+        await close();
+        await Scripting.sleep(MOTION_SETTLE_MS);
+        steps.push({name, eases: calls.length - before, apexEases: calls.slice(before).filter(c => c.apex).length});
+    };
+    try {
+        const icon = findDescendant(apexDock() ?? new St.Widget(), a => a._delegate?.app && a.icon);
+        await step('dock-lift', () => icon && (icon.hover = true), () => icon && (icon.hover = false));
+        await step('intellihide', () => window.maximize(), () => window.unmaximize());
+        await step('overview', () => Main.overview.show(), () => Main.overview.hide());
+        const spotlight = (await import(SPOTLIGHT_FEATURE).catch(() => null))?.popup();
+        await step('spotlight', () => spotlight?.open(), () => spotlight?.close());
+        for (const [name, indicator] of [['quick-settings', 'quickSettings'], ['calendar', 'dateMenu']]) {
+            const {menu} = Main.panel.statusArea[indicator];
+            // eslint-disable-next-line no-await-in-loop
+            await step(name, () => menu.open(BoxPointer.PopupAnimation.FULL), () => menu.close(BoxPointer.PopupAnimation.FULL));
+        }
+        const dialog = new ModalDialog.ModalDialog();
+        await step('dialog', () => dialog.open(), () => dialog.close());
+        dialog.destroy();
+    } finally {
+        restore();
+    }
+    const lasting = calls.filter(c => !c.required && c.durations.some(d => d > 0));
+    return {
+        steps,
+        eases: calls.length,
+        apexEases: calls.filter(c => c.apex).length,
+        lasting: lasting.map(({apex, where, durations}) => ({apex, where, durations})),
+    };
+}
+
 async function motion() {
     Main.overview.hide();
     await Scripting.sleep(MOTION_SETTLE_MS);
@@ -2100,10 +2282,12 @@ async function motion() {
     if (uninhibited)
         stSettings.uninhibit_animations();
     const animated = {maximise: await maximiseTransition(window), overview: await overviewTransition()};
+    animated.surfaces = await surfaceEases(window);
     const previews = await previewShadows();
     interfaceSettings.set_boolean('enable-animations', false);
     await Scripting.sleep(MOTION_SETTLE_MS);
     const still = {maximise: await maximiseTransition(window), overview: await overviewTransition()};
+    still.surfaces = await surfaceEases(window);
     // Locate Pointer's ripples are animationRequired: an a11y aid that animates regardless.
     interfaceSettings.set_boolean('locate-pointer', true);
     await Scripting.sleep(MOTION_SETTLE_MS);

@@ -591,6 +591,15 @@ def glass($b; $s): {blur: ($b | px), saturation: ($s | rtrimstr("%") | tonumber 
     panelBeforeCopy: glass($t.apex_spotlight_blur; $t.apex_spotlight_saturation),
     toast: glass($t.apex_toast_blur; $t.apex_toast_saturation)}}}}'
 # shellcheck disable=SC2016 # a jq program
+REPORT_OF_SPOTLIGHT_KEYS='
+{surfaces: {spotlightKeys: {budgetMs: 1000, slowMs: 1600, modalBefore: 0, modalOpen: 1,
+    early: {ms: 301, sections: ["APPLICATIONS", "FILES"], rows: 6, selected: "Applications/org.gnome.DiskUtility.desktop"},
+    late: {ms: 1201, sections: ["APPLICATIONS", "FILES"], rows: 6, selected: "Applications/org.gnome.DiskUtility.desktop"},
+    settings: {askedMs: 52, cancelledMs: 1053},
+    down4: "Files/images", up1: "Files/png", down20: "Files/md",
+    enter: {open: false, modal: 0, activated: [{provider: "org.gnome.Nautilus.desktop", id: "md", terms: ["disk"]}]},
+    escape: {open: false, modal: 0}}}}'
+# shellcheck disable=SC2016 # a jq program
 HEX_DEF='def hex: rgba | map([., 16] | "0123456789abcdef"[(.[0] / .[1] | floor):(.[0] / .[1] | floor) + 1]
                                     + "0123456789abcdef"[(.[0] % .[1]):(.[0] % .[1]) + 1]) | "#" + join("");'
 
@@ -615,6 +624,7 @@ assert_run() {
     [[ $assertions == spotlight_style ]] && report=$REPORT_OF_A_SPOTLIGHT_DRAWN_FROM_TOKENS
     [[ $assertions == launcher_search ]] && report=$REPORT_OF_A_LAUNCHER_SEARCH_FROM_TOKENS
     [[ $assertions == spotlight_glass ]] && report=$REPORT_OF_SPOTLIGHT_GLASS_FROM_TOKENS
+    [[ $assertions == spotlight_keys ]] && report=$REPORT_OF_SPOTLIGHT_KEYS
     [[ $assertions == shadow_layers ]] && report=$REPORT_OF_SHADOW_LAYERS_FROM_TOKENS
     [[ $assertions == indicator_metrics ]] && report=$REPORT_OF_INDICATORS_DRAWN_FROM_TOKENS prefix=APEXG2-INDICATORS
     tokens=$(tokens_for "$variant")
@@ -1308,6 +1318,36 @@ test_spotlight_glass() {
 CHANGES
 }
 
+test_spotlight_keys() {
+    local variant change what passes failures open_gaps
+    for variant in light dark; do
+        read -r passes failures open_gaps <<<"$(assert_run spotlight_keys "$variant")"
+        if ((failures == 0 && open_gaps == 0 && passes == 5)); then
+            ok "Spotlight keys ($variant): a slow provider and real key presses pass all $passes assertions"
+        else
+            not_ok "Spotlight keys ($variant): a slow provider and real key presses pass (passed/failed/gaps $passes/$failures/$open_gaps): $(grep -m3 '^FAIL' "$T/top-bar.out" | paste -sd'|' -)"
+        fi
+    done
+    while IFS='|' read -r change what; do
+        read -r passes failures open_gaps <<<"$(assert_run spotlight_keys light "$change")"
+        if ((failures == 1)); then
+            ok "Spotlight keys: $what fails one assertion"
+        else
+            not_ok "Spotlight keys: $what fails one assertion (passed/failed/gaps $passes/$failures/$open_gaps)"
+        fi
+    done <<'CHANGES'
+.surfaces.spotlightKeys.early.sections = ["APPLICATIONS"]|Files held back by the slow Settings
+.surfaces.spotlightKeys.early.ms = 1100|the sections seen only past the budget
+.surfaces.spotlightKeys.late.rows = 0|every section hidden once the budget runs out
+.surfaces.spotlightKeys.settings.cancelledMs = null|Settings never cancelled
+.surfaces.spotlightKeys.down4 = "Applications/org.gnome.baobab.desktop"|Down kept inside its section
+.surfaces.spotlightKeys.down20 = null|Down past the last row
+.surfaces.spotlightKeys.enter.activated = []|Enter opening nothing
+.surfaces.spotlightKeys.enter.modal += 1|a modal left behind after Enter
+.surfaces.spotlightKeys.escape.open = true|Esc ignored
+CHANGES
+}
+
 test_today_pins() {
     local pin_count what change passes failures open_gaps
     read -r passes failures open_gaps <<<"$(assert_run top_bar_today light)"
@@ -1478,6 +1518,12 @@ readonly MOTION_REPORT='{enableAnimations: false,
              overview: {visible: true, transition: {mode: "CUBIC_BEZIER", duration: 200, curve: [0.2, 0.8, 0.2, 1]}}},
   still: {maximise: {maximised: true, transition: null}, overview: {visible: true, transition: null},
          locatePointer: {mode: "CUBIC_BEZIER", duration: 830, curve: [0.2, 0.8, 0.2, 1]}},
+  surfaces: (["dock-lift", "intellihide", "overview", "spotlight", "quick-settings", "calendar", "dialog"]
+    | map({name: ., eases: 2, apexEases: 1}) as $steps
+    | {animated: {steps: $steps, eases: 14, apexEases: 6,
+                  lasting: [{apex: true, where: "ui/apex/dock/dock.js:71:23", durations: [180]},
+                            {apex: false, where: "ui/popupMenu.js:1132:26", durations: [180, 0]}]},
+       still: {steps: $steps, eases: 14, apexEases: 6, lasting: []}}),
   previews: [{styled: true, layers: [
     {shown: true, radius: 14, boxShadow: {color: "#141e3c33", inset: false, x: 0, y: 12, blur: 32, spread: 0}},
     {shown: true, radius: 14, boxShadow: {color: "#141e3c1a", inset: false, x: 0, y: 1, blur: 4, spread: 0}}]}]}'
@@ -1487,7 +1533,7 @@ write_motion_run() {
     rm -rf "$dir" && mkdir -p "$dir"
     {
         printf 'APEXG2 %s\n' "$APEX_LIGHT_REPORT"
-        printf 'APEXG2-MOTION %s\n' "$(jq -nc "$MOTION_REPORT | $change")"
+        printf 'APEXG2-MOTION %s\n' "$(jq -nc "$MOTION_REPORT | .animated.surfaces = .surfaces.animated | .still.surfaces = .surfaces.still | del(.surfaces) | $change")"
     } >"$dir/motion.log"
     echo 'motion exit=0 secs=24 marker-after-exit=no' >"$dir/results-main.txt"
 }
@@ -1514,11 +1560,16 @@ test_motion() {
 .animated.maximise.maximised = false|a window that did not maximise
 .still.locatePointer = null|a Locate Pointer ripple that no longer animates with animations off
 .previews[0].layers = [.previews[0].layers[0]]|a window preview with one shadow layer
+.animated.surfaces.lasting = []|a control in which no Apex ease lasts
+.still.surfaces.lasting = [{apex: true, where: "ui/apex/dock/intellihide.js:74:19", durations: [380]}]|an Apex ease left at 380 ms with animations off
+.still.surfaces.lasting = [{apex: false, where: "ui/boxpointer.js:1:1", durations: [180]}]|a stock ease left at 180 ms with animations off
+.still.surfaces.steps = .still.surfaces.steps[:-1]|a surface the probe never opened
+.still.surfaces.apexEases = 0|a run in which no Apex code eased
 CHANGES
     write_motion_run '{error: "the test client never mapped (Gtk-WARNING: Failed to open display)\nprobe.js:1700"}'
     read -r passes failures <<<"$(assertion_counts motion_curve "$T/motion")"
     expect_eq "motion: a client that never mapped fails once, with its stderr, not every assertion after it" \
-        "$((all - 7))/1 the test client never mapped (Gtk-WARNING: Failed to open display)" \
+        "$((all - 9))/1 the test client never mapped (Gtk-WARNING: Failed to open display)" \
         "$passes/$failures $(sed -n 's/^FAIL motion: //p' "$T/assertions.out")"
 }
 
@@ -1872,6 +1923,7 @@ test_tile_preview
 test_spotlight_style
 test_launcher_search
 test_spotlight_glass
+test_spotlight_keys
 test_screenshot_ui
 test_today_pins
 test_known_gaps

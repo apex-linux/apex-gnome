@@ -56,7 +56,7 @@ cp "$HERE"/stubs/appDisplay.js "$HERE"/stubs/remoteSearch.js "$HERE"/stubs/searc
 mkdir -p "$T/shell/js/misc"
 cp "$HERE/stubs/systemActions.js" "$T/shell/js/misc/"
 cp "$HERE"/stubs/St.js "$HERE"/stubs/Clutter.js "$HERE"/stubs/Shell.js "$HERE"/stubs/Meta.js "$HERE"/stubs/Graphene.js \
-    "$HERE"/stubs/GdkPixbuf.js "$T/"
+    "$HERE"/stubs/GdkPixbuf.js "$HERE"/stubs/Polkit.js "$HERE"/stubs/AccountsService.js "$T/"
 # The shadow cutout and the indicators' mask are GObject subclasses of Clutter.ShaderEffect, which the stubs cannot be.
 cp "$HERE/stubs/cutout.js" "$T/shell/js/ui/apex/shadows/cutout.js"
 cp "$HERE/stubs/indicator-mask.js" "$T/shell/js/ui/apex/indicators/mask.js"
@@ -65,7 +65,8 @@ cp "$HERE/stubs/indicator-mask.js" "$T/shell/js/ui/apex/indicators/mask.js"
 find "$T/shell/js/ui/apex" -name '*.js' -exec sed -i -e "s|'gi://St'|'file://$T/St.js'|" \
     -e "s|'gi://Clutter'|'file://$T/Clutter.js'|" -e "s|'gi://Shell'|'file://$T/Shell.js'|" \
     -e "s|'gi://Meta'|'file://$T/Meta.js'|" -e "s|'gi://Graphene'|'file://$T/Graphene.js'|" \
-    -e "s|'gi://GdkPixbuf'|'file://$T/GdkPixbuf.js'|" {} +
+    -e "s|'gi://GdkPixbuf'|'file://$T/GdkPixbuf.js'|" -e "s|'gi://Polkit'|'file://$T/Polkit.js'|" \
+    -e "s|'gi://AccountsService'|'file://$T/AccountsService.js'|" {} +
 for gir in "$HERE"/fixtures/*.gir; do
     gir_name=${gir##*/}
     "$GI_COMPILER" "$gir" -o "$T/typelib/${gir_name%.gir}.typelib"
@@ -858,6 +859,83 @@ lock_is_stock "APEX_SHELL_SAFE=1"
 probe lock-gdm "$CMDLINE_PLAIN" PROBE_MODE=gdm PROBE_LOCK=1
 fact "gdm mode: no layer" 'layer=null'
 lock_is_stock "gdm mode"
+
+readonly ROLLBACK=io\.github\.apex-linux\.apex\.update\.rollback
+readonly POLKIT_ON="dialog=prompt-dialog apex-polkit content=apex-polkit-icon,header,body,apex-polkit-details user=row:avatar,apex-polkit-names"
+readonly POLKIT_DETAILS_OPEN='open=true checked=true chevron=pan-down-symbolic'
+readonly POLKIT_FINGERPRINT='apex-polkit-info apex-polkit-fingerprint visible=true glyph=auth-fingerprint-symbolic'
+polkit_is_stock() {
+    local why=$1
+    fact "$why: the polkit-dialog hook gives the stock code" 'polkit\.run=undefined'
+    fact "$why: upstream's dialog: no shield, the avatar over the name, no Details" \
+        'polkit\.layout=dialog=prompt-dialog content=header,body user=column:avatar,polkit-dialog-user-label names=none'
+    fact "$why: upstream's info line" 'polkit\.info\.generic=stock visible=true'
+    fact "$why: no polkit lookup" 'polkit\.authority-calls=0'
+}
+
+probe polkit "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_POLKIT=1
+has "polkit: the feature enables" 'Apex: feature polkit enabled'
+fact "polkit: the polkit-dialog hook gives the stock code" 'polkit\.run=undefined'
+fact "polkit: the shield above the title, Details under the field; the avatar beside the name, \"Administrator\" under it" \
+    "polkit\.layout=$POLKIT_ON names=Apex/Administrator"
+fact "polkit: Details open, with the action's id" "polkit\.details\.open=$POLKIT_DETAILS_OPEN rows=Action=$ROLLBACK"
+fact "polkit: and its vendor, from polkit's own description" "polkit\.details\.vendor=$POLKIT_DETAILS_OPEN rows=Action=$ROLLBACK Vendor=Apex"
+fact "polkit: Details closes" "polkit\.details\.closed=open=false checked=false chevron=pan-end-symbolic rows="
+fact "polkit: and opens again" "polkit\.details\.reopened=$POLKIT_DETAILS_OPEN rows=Action=$ROLLBACK Vendor=Apex"
+fact "polkit: an action polkit does not describe shows no vendor" \
+    "polkit\.details\.unknown-action=$POLKIT_DETAILS_OPEN rows=Action=org\.example\.unregistered"
+fact "polkit: nor when polkitd fails" "polkit\.details\.error=$POLKIT_DETAILS_OPEN rows=Action=$ROLLBACK"
+has "polkit: and says why" "Apex: polkit: no vendor for $ROLLBACK: polkitd is not running"
+fact "polkit: a cancelled lookup shows none either" "polkit\.details\.cancel=$POLKIT_DETAILS_OPEN rows=Action=$ROLLBACK"
+count_is "polkit: silently" 'Apex: polkit: no vendor' 1
+fact "polkit: pam_fprintd's 44 prompt msgids, matched through the fprintd domain" \
+    'polkit\.prompt-msgids=44 Place your finger on %s \| Swipe your right little finger across %s'
+fact "polkit: no line until PAM sends one" 'polkit\.info\.none=apex-polkit-info visible=false glyph=none'
+fact "polkit: pam_fprintd's prompt is the fingerprint line" "polkit\.info\.generic=$POLKIT_FINGERPRINT"
+fact "polkit: for a named finger and reader too" "polkit\.info\.swipe-reader=$POLKIT_FINGERPRINT"
+fact "polkit: pam_fprintd's other info stays upstream's line" 'polkit\.info\.timed-out=apex-polkit-info visible=true glyph=none'
+fact "polkit: as does another module's" 'polkit\.info\.other-module=apex-polkit-info visible=true glyph=none'
+fact "polkit: and the line goes with upstream's label" 'polkit\.info\.hidden=apex-polkit-info apex-polkit-fingerprint visible=false glyph=auth-fingerprint-symbolic'
+fact "polkit: a standard account gets no role" "polkit\.role\.standard=$POLKIT_ON names=Apex/Administrator\(hidden\)"
+fact "polkit: root keeps upstream's \"Administrator\" in the name's place" \
+    "polkit\.role\.root=$POLKIT_ON names=Administrator/Administrator\(hidden\)"
+fact "polkit: no role before AccountsService loads the user" "polkit\.role\.loading=$POLKIT_ON names=Apex/Administrator\(hidden\)"
+fact "polkit: and the role once it has" "polkit\.role\.loaded=$POLKIT_ON names=Apex/Administrator"
+lacks "polkit: nothing turns the feature off" 'feature polkit off|hook polkit-dialog threw'
+
+probe polkit-disabled "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_POLKIT=1 PROBE_DISABLED=polkit
+has "disabled-features=['polkit']: skips the feature" 'Apex: feature polkit is in disabled-features'
+polkit_is_stock "disabled-features=['polkit']"
+probe polkit-safe "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_POLKIT=1 APEX_SHELL_SAFE=1
+polkit_is_stock "APEX_SHELL_SAFE=1"
+
+# Polkit's verdict is polkitd's, after PAM: no Apex file may answer the agent, end its session or
+# follow the session's signals.
+readonly POLKIT_ROUTES=(".response(" "_emitDone" "emit('done'" ".complete(" "_onSessionCompleted" "_initiateSession" "._session")
+polkit_routes() {
+    local -a args=()
+    local route
+    for route in "${POLKIT_ROUTES[@]}"; do args+=(-e "$route"); done
+    grep -rnF "${args[@]}" -- "$1" || true
+}
+found=$(polkit_routes "$APEX_JS")
+if [[ -z $found && -f $APEX_JS/polkit/feature.js ]]; then
+    ok "polkit guard: nothing under js/ui/apex/ answers polkit or ends its session"
+else
+    not_ok "polkit guard: nothing under js/ui/apex/ answers polkit or ends its session"
+    printf '#   %s\n' "$found"
+fi
+for i in "${!POLKIT_ROUTES[@]}"; do
+    copy=$T/polkit-guard-$i
+    cp -R "$APEX_JS" "$copy"
+    printf 'dialog%s\n' "${POLKIT_ROUTES[$i]}" >>"$copy/polkit/feature.js"
+    found=$(polkit_routes "$copy")
+    if [[ $found == "$copy/polkit/feature.js:"*"${POLKIT_ROUTES[$i]}"* && $(wc -l <<<"$found") == 1 ]]; then
+        ok "polkit guard: catches ${POLKIT_ROUTES[$i]} injected into a copy"
+    else
+        not_ok "polkit guard: catches ${POLKIT_ROUTES[$i]} injected into a copy (found: ${found:-nothing})"
+    fi
+done
 
 readonly OVERVIEW_ON='title-visible=true overlay=close scale=0\.081 threshold=1 box=0\.081 grid=\[\{"rows":4,"columns":7\}\] icon=88 strip=0'
 readonly OVERVIEW_STOCK='title-visible=false overlay=title\+close scale=0\.05 threshold=2 box=0\.05 grid="stock" icon=-1 strip=130'

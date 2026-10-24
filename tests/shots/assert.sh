@@ -1086,6 +1086,30 @@ spotlight_glass() {
             and (.g.toast | \$t.apex_toast_blur as \$b | \$t.apex_toast_saturation as \$s | $glass)"
 }
 
+# S3a's exit items in the real shell, with Settings answering only after the 1 s budget.
+# shellcheck disable=SC2016 # jq programs, not shell expansions
+spotlight_keys() {
+    local label=$1 log=$2 variant=$3 scenes tokens
+    scenes=$(report_of "$log" APEXG2-SCENES)
+    tokens=$(tokens_for "$variant")
+    local -a metric=(top_bar_metric "$label Spotlight keys" "$scenes" "$tokens")
+    local k=.surfaces.spotlightKeys
+    local shown='.sections == ["APPLICATIONS", "FILES"] and .rows == 6'
+
+    "${metric[@]}" 'within the budget, with Settings asked and still out, Applications and Files show, the first row selected' \
+        "$k" ".early.ms < .budgetMs and .settings.askedMs < .early.ms and (.early | $shown)
+            and .early.selected == \"Applications/org.gnome.DiskUtility.desktop\""
+    "${metric[@]}" 'past the budget, Settings is cancelled and left out; Applications and Files still show' \
+        "$k" ".late.ms > .budgetMs and .settings.cancelledMs >= .budgetMs and .settings.cancelledMs < .slowMs and (.late | $shown)"
+    "${metric[@]}" 'Down x4, Up x1 and Down x20, pressed for real, move one selection across the sections and stop at the last row' \
+        "$k" '.down4 == "Files/images" and .up1 == "Files/png" and .down20 == "Files/md"'
+    "${metric[@]}" 'Enter opens the selected file through its provider, with the terms, and closes Spotlight and its modal' \
+        "$k" '.enter.open == false and .enter.modal == .modalBefore and .modalOpen == .modalBefore + 1
+            and .enter.activated == [{provider: "org.gnome.Nautilus.desktop", id: "md", terms: ["disk"]}]'
+    "${metric[@]}" 'Esc closes Spotlight and pops its modal' \
+        "$k" '.escape.open == false and .escape.modal == .modalBefore'
+}
+
 scenes_captured() {
     local run=$1 case_name=$2
     local log=$run/$case_name.log scene
@@ -1255,6 +1279,15 @@ motion_curve() {
         "then enable-animations=false, and the window maximised and the overview opened again"
     expect motion "$m" '.still.maximise.transition == null and .still.overview.transition == null' \
         "with enable-animations=false neither creates a transition: both take 0 ms"
+    local steps='["dock-lift", "intellihide", "overview", "spotlight", "quick-settings", "calendar", "dialog"]' lasting
+    expect motion "$m" ".animated.surfaces | ([.steps[].name] == $steps) and ([.lasting[] | select(.apex)] | length > 0)" \
+        "the control: with animations on, the recorder sees the dock's own lift and slide eases last"
+    lasting=$(jq -r '[.still.surfaces.lasting[]? | "\(.where) \(.durations | max) ms"] | join(", ")' <<<"$m" 2>/dev/null)
+    if jq -e ".still.surfaces | ([.steps[].name] == $steps) and .apexEases > 0 and .lasting == []" <<<"$m" >/dev/null 2>&1; then
+        pass "motion: with enable-animations=false, opening and closing each surface leaves no ease above 0 ms, Apex's or stock's, but animationRequired ones"
+    else
+        fail "motion: with enable-animations=false, opening and closing each surface leaves no ease above 0 ms, Apex's or stock's, but animationRequired ones (lasting: ${lasting:-none recorded})"
+    fi
     tokens=$(tokens_for light)
     top_bar_metric motion "$m" "$tokens" \
         'each window preview draws two layers, 0 $apex_preview_shadow_y $apex_preview_shadow_blur $apex_preview_shadow and 0 $apex_preview_shadow_2_y $apex_preview_shadow_2_blur $apex_preview_shadow_2, radius $apex_radius_window_preview' \
@@ -1316,6 +1349,7 @@ direct_cases() {
     spotlight_style default "$f" light
     launcher_search default "$f" light
     spotlight_glass default "$f" light
+    spotlight_keys default "$f" light
     screenshot_ui default "$f" light
 
     f=$run/default-scale1.log
@@ -1343,6 +1377,7 @@ direct_cases() {
     spotlight_style default-scale1 "$f" light
     launcher_search default-scale1 "$f" light
     spotlight_glass default-scale1 "$f" light
+    spotlight_keys default-scale1 "$f" light
     screenshot_ui default-scale1 "$f" light
 
     f=$run/dark-style.log
@@ -1373,6 +1408,7 @@ direct_cases() {
     spotlight_style dark-style "$f" dark
     launcher_search dark-style "$f" dark
     spotlight_glass dark-style "$f" dark
+    spotlight_keys dark-style "$f" dark
     screenshot_ui dark-style "$f" dark
     dark_style_off dark-style "$f"
 

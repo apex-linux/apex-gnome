@@ -5,10 +5,13 @@
 import Clutter from 'gi://Clutter';
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
+import GObject from 'gi://GObject';
+import PolkitAgent from 'gi://PolkitAgent';
 import Shell from 'gi://Shell';
 import St from 'gi://St';
 
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
+import * as ModalDialog from 'resource:///org/gnome/shell/ui/modalDialog.js';
 import * as Scripting from 'resource:///org/gnome/shell/ui/scripting.js';
 
 Gio._promisify(Shell.Screenshot.prototype, 'screenshot_area');
@@ -22,6 +25,11 @@ const POWER_SAVE_ON = 0;
 const POWER_SAVE_OFF = 3;
 
 const POINTER_NUDGE = 4;
+
+// Board 13's request; tests/shell/apex-test.policy describes the action for polkitd.
+const POLKIT_ACTION = 'io.github.apex-linux.apex.update.rollback';
+const POLKIT_MESSAGE = 'Booting the previous version of Apex at the next restart needs an administrator password.';
+const PAM_FPRINTD_PROMPT = 'Place your finger on the fingerprint reader';
 
 let keyboard;
 let pointer;
@@ -177,6 +185,98 @@ async function shootLock() {
     fact('key-after-escape', describeLock(dialog));
     await Scripting.sleep(SETTLE_MS);
     fact('end', {locked: Main.screenShield.locked});
+}
+
+// What polkit-agent-helper-1 would send, without the helper: PAM never runs, so nothing the
+// dialog does can authorise. Its answers are only counted.
+function stubSession(sessions, info) {
+    return GObject.registerClass({
+        Properties: {
+            'identity': GObject.ParamSpec.object('identity', null, null,
+                GObject.ParamFlags.READWRITE | GObject.ParamFlags.CONSTRUCT_ONLY, GObject.Object),
+            'cookie': GObject.ParamSpec.string('cookie', null, null,
+                GObject.ParamFlags.READWRITE | GObject.ParamFlags.CONSTRUCT_ONLY, null),
+        },
+        Signals: {
+            'completed': {param_types: [GObject.TYPE_BOOLEAN]},
+            'request': {param_types: [GObject.TYPE_STRING, GObject.TYPE_BOOLEAN]},
+            'show-error': {param_types: [GObject.TYPE_STRING]},
+            'show-info': {param_types: [GObject.TYPE_STRING]},
+        },
+    }, class StubSession extends GObject.Object {
+        initiate() {
+            sessions.push({responses: 0, cancelled: false});
+            GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
+                if (info)
+                    this.emit('show-info', info);
+                this.emit('request', 'Password:', false);
+                return GLib.SOURCE_REMOVE;
+            });
+        }
+
+        response() {
+            sessions.at(-1).responses++;
+        }
+
+        cancel() {
+            sessions.at(-1).cancelled = true;
+        }
+    });
+}
+
+function visibleText(actor) {
+    return actor?.mapped && actor.opacity > 0 ? actor.text : null;
+}
+
+function describePolkit(dialog) {
+    const content = dialog.contentLayout;
+    const find = name => content.get_children().find(c => c.has_style_class_name?.(name));
+    const shield = find('apex-polkit-icon');
+    const header = content.get_children().find(c => c.has_style_class_name?.('message-dialog-content'));
+    const role = dialog._userLabel.get_parent()?.get_children().find(c => c.has_style_class_name?.('apex-polkit-role'));
+    const info = dialog._infoMessageLabel;
+    const line = info.get_parent();
+    const details = find('apex-polkit-details');
+    const grid = details?.get_children()[1];
+    return {
+        opened: dialog.state === ModalDialog.State.OPENED,
+        classes: dialog.style_class,
+        box: box(dialog.dialogLayout._dialog),
+        shield: shield ? {...box(shield), icon: shield.child.icon_name, background: color(shield.get_theme_node().get_background_color())} : null,
+        title: header?.title ?? null,
+        description: header?.description ?? null,
+        avatar: box(dialog._userAvatar),
+        initial: dialog._userAvatar.child instanceof St.Label ? dialog._userAvatar.child.text : null,
+        name: {...box(dialog._userLabel), text: visibleText(dialog._userLabel)},
+        role: role ? {...box(role), text: visibleText(role)} : null,
+        field: {
+            ...box(dialog._passwordEntry), hint: dialog._passwordEntry.hint_text,
+            focused: [dialog._passwordEntry, dialog._passwordEntry.clutter_text].includes(global.stage.key_focus),
+            focus: global.stage.key_focus?.constructor.name ?? null,
+        },
+        info: {text: visibleText(info), line: line.style_class, glyph: line.get_children().find(c => c instanceof St.Icon && c.visible)?.icon_name ?? null},
+        details: details ? {
+            ...box(details),
+            open: grid.visible,
+            rows: grid.get_children().filter(r => r.visible).map(r => r.get_children().map(c => c.text)),
+        } : null,
+        buttons: [dialog._cancelButton, dialog._okButton].map(b => ({...button(b), label: b.label})),
+    };
+}
+
+async function shootPolkit() {
+    await Scripting.sleep(SETTLE_MS);
+    Main.overview.hide();
+    await Scripting.sleep(STEP_MS);
+    const sessions = [];
+    PolkitAgent.Session = stubSession(sessions, GLib.getenv('APEX_POLKIT_INFO') === 'fingerprint' ? PAM_FPRINTD_PROMPT : null);
+    const agent = Main.componentManager._allComponents.polkitAgent;
+    agent._onInitiate(agent, POLKIT_ACTION, POLKIT_MESSAGE, '', 'apex-shell-test', [GLib.getenv('APEX_USER')]);
+    await Scripting.sleep(SETTLE_MS);
+    const dialog = agent._currentDialog;
+    fact('polkit', describePolkit(dialog));
+    await capture('open');
+    fact('polkit-sessions', sessions);
 }
 
 function scale() {
@@ -353,10 +453,14 @@ export async function run() {
         const seat = global.stage.context.get_backend().get_default_seat();
         keyboard = seat.create_virtual_device(Clutter.InputDeviceType.KEYBOARD_DEVICE);
         pointer = seat.create_virtual_device(Clutter.InputDeviceType.POINTER_DEVICE);
-        if (GLib.getenv('APEX_DATE_MENU') === '1')
+        if (Main.sessionMode.isGreeter)
+            await shootGreeter();
+        else if (GLib.getenv('APEX_POLKIT') === '1')
+            await shootPolkit();
+        else if (GLib.getenv('APEX_DATE_MENU') === '1')
             await shootDateMenu();
         else
-            await (Main.sessionMode.isGreeter ? shootGreeter() : shootLock());
+            await shootLock();
     } catch (e) {
         console.log(`APEXLOCK-ERROR ${e.message}\n${e.stack}`);
     }

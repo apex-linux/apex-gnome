@@ -310,6 +310,17 @@ the stage's paints in the quieter of two idle 2 s windows with the feature on an
 `shadows` in `disabled-features`: the layers add none. The `motion` case, which opens the overview with a
 window, checks the window preview's two layers and the `apex-window-preview` radius.
 
+The `motion` case also audits reduced motion. It opens and closes each Apex surface once,
+with animations on and then off: the dock's lift (a hovered icon) and intellihide (the window
+maximised), the overview with its thumbnails, Spotlight, Quick Settings, the calendar and a
+dialog with its shadow layer. Every ease goes through `environment.js`'s `ease`,
+`ease_property` and `St.Adjustment.ease` (and their async forms), which the probe wraps to
+read the transitions each call left, by the property's canonical name, and whether a
+`ui/apex/` frame called it. With animations on, the dock's own eases last: the control. Off,
+no ease, Apex's or stock's, leaves a transition above 0 ms but `animationRequired` ones, and a
+failure names each that did. St skips CSS transitions itself with animations off
+(`st-widget.c`), the top bar's `$apex_bar_transition` included.
+
 `notifications_layer` checks the `notifications` layer feature in the same cases, and stock
 in the stock cases. The probe posts three low-urgency notifications from one app, opens the
 calendar and reads the cards' boxes, the first card's header line, glyph and icon, and the
@@ -337,6 +348,11 @@ empty query shows only the field, and the row of a query with no results; and, a
 inset, check circle, text and distance from the bottom edge. `spotlight_glass` checks that the open panel and
 the toast carry their sheet's glass, σ 34 and σ 30 at 1.8, and that the glass feature gave each
 a blur of radius 2 × σ × the monitor's scale.
+`spotlight_keys` covers S3a's exit items in the real shell: with Settings answering only after the
+1 s budget, Applications and Files show at 300 ms and still at 1200 ms, once Settings is cancelled;
+Down ×4, Up ×1 and Down ×20, pressed through a virtual keyboard, move one selection across the
+sections and stop at the last row; Enter opens that file through its provider; Esc closes, and
+both pop Spotlight's modal.
 In the overview scene, after its capture, the probe types into the overview's search entry
 and checks that Spotlight opened with the text and the overview's own field emptied (patch 0013's hook).
 `launcher_search` then checks the app grid's
@@ -463,6 +479,15 @@ It also asserts the shell surfaces of the same three cases (below). With
 `-e G2_SURFACE_SCENES=1`, `direct.sh` passes the variable to the shells, and the capture
 cases also save a scene per surface group (`surfaces`, `quick-settings`, `switcher`,
 `dialog`, `datemenu`, `appgrid`), for placing beside the boards.
+
+## The authentication dialog
+
+G2 has no polkit case. `tests/shell/shoot.sh`'s polkit cases capture board 13 from the
+lane's RPMs: they call the shell's own polkit component's `_onInitiate()` with a stubbed
+`PolkitAgent.Session`, which asks for the password (and sends pam_fprintd's prompt in
+`polkit-fingerprint`) and is never answered. They are for captures and style checks only:
+PAM, polkit-agent-helper-1 and polkitd's verdict never run, and polkitd only describes the
+action. The real `pkexec` path is G4's.
 
 ## Not yet
 

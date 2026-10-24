@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+<!DOCTYPE policyconfig PUBLIC "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
+ "http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd">
+<!-- Board 13's action, for shoot.sh's polkitd: the dialog reads its vendor from polkit. -->
+<policyconfig>
+  <vendor>Apex</vendor>
+  <vendor_url>https://github.com/apex-linux</vendor_url>
+  <action id="io.github.apex-linux.apex.update.rollback">
+    <description>Roll back to the previous version of Apex</description>
+    <message>Booting the previous version of Apex at the next restart needs an administrator password.</message>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+  </action>
+</policyconfig>
