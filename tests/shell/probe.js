@@ -27,6 +27,9 @@ let pointer;
 
 function fact(name, value) {
     console.log(`APEXLOCK ${JSON.stringify({[name]: value})}`);
+    // gdm-mock.py's log then shows its calls and signals between the probe's steps.
+    Gio.DBus.system.call('org.gnome.DisplayManager', '/org/gnome/DisplayManager/Manager', 'io.github.apex_linux.GdmMock',
+        'Mark', new GLib.Variant('(s)', [name]), null, Gio.DBusCallFlags.NONE, -1, null, null);
 }
 
 function tap(keyval) {
@@ -91,6 +94,31 @@ function describeLock(dialog) {
     };
 }
 
+// gdm-mock.py's test method: pam_fprintd's "no match" in every live fingerprint conversation.
+function failScan() {
+    return Gio.DBus.system.call('org.gnome.DisplayManager', '/org/gnome/DisplayManager/Manager',
+        'io.github.apex_linux.GdmMock', 'FailScan', null, null, Gio.DBusCallFlags.NONE, -1, null);
+}
+
+async function shootFingerprint(dialog) {
+    fact('opened', describeLock(dialog));
+    await capture('open');
+    await failScan();
+    await Scripting.sleep(STEP_MS * 2);
+    fact('scan-failed', describeLock(dialog));
+    await capture('scan-failed');
+    await setPowerSaveMode(POWER_SAVE_OFF);
+    await Scripting.sleep(STEP_MS);
+    fact('blank', describeLock(dialog));
+    await Scripting.sleep(STEP_MS * 2);
+    fact('still-blank', describeLock(dialog));
+    await setPowerSaveMode(POWER_SAVE_ON);
+    await Scripting.sleep(STEP_MS * 2);
+    fact('wake', describeLock(dialog));
+    await Scripting.sleep(SETTLE_MS);
+    fact('end', {locked: Main.screenShield.locked});
+}
+
 // Locking fades to black, as before the screen blanks; activity lifts it. A move does not
 // open upstream's prompt, so its lock keeps two stages.
 async function shootLock() {
@@ -98,6 +126,10 @@ async function shootLock() {
     await Scripting.sleep(STEP_MS);
     pointer.notify_relative_motion(GLib.get_monotonic_time(), POINTER_NUDGE, POINTER_NUDGE);
     await Scripting.sleep(SETTLE_MS);
+    if (GLib.getenv('APEX_FINGERPRINT') === '1') {
+        await shootFingerprint(Main.screenShield._dialog);
+        return;
+    }
     const dialog = Main.screenShield._dialog;
     fact('opened', describeLock(dialog));
     await capture('open');
