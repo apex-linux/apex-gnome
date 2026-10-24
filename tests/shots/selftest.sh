@@ -1457,6 +1457,7 @@ test_spotlight_keys() {
 .surfaces.spotlightKeys.early.ms = 1100|the sections seen only past the budget
 .surfaces.spotlightKeys.late.rows = 0|every section hidden once the budget runs out
 .surfaces.spotlightKeys.settings.cancelledMs = null|Settings never cancelled
+.surfaces.spotlightKeys.settings.cancelledMs = 1250|Settings cancelled only after the sections were read
 .surfaces.spotlightKeys.down4 = "Applications/org.gnome.baobab.desktop"|Down kept inside its section
 .surfaces.spotlightKeys.down20 = null|Down past the last row
 .surfaces.spotlightKeys.enter.activated = []|Enter opening nothing
