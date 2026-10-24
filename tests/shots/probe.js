@@ -1467,6 +1467,56 @@ async function overviewSearch() {
     return result;
 }
 
+// Board 36: in the app grid the overview's pill is the launcher's, which filters the grid.
+async function launcherSearch(unit) {
+    const feature = await import('resource:///org/gnome/shell/ui/apex/spotlight/feature.js').catch(() => null);
+    const popup = feature?.popup();
+    if (!popup)
+        return null;
+    const {controls} = Main.overview._overview;
+    const entry = controls._searchEntry;
+    const results = () => controls._appDisplay.get_children().find(a => a.name === 'apexLauncherResults');
+    const scene = async name => {
+        await settle();
+        global.stage.set_key_focus(null);
+        const captured = GLib.getenv('G2_SURFACE_SCENES') === '1' ? await capture(name) : null;
+        if (captured)
+            delete captured.bytes;
+        return captured;
+    };
+    // The overview is up already, where showApps() does nothing: the button is what a click sets.
+    Main.overview.dash.showAppsButton.checked = true;
+    try {
+        await settle();
+        const pill = {...styleOf(entry, unit), hint: entry.hint_text};
+        entry.set_text('files');
+        const filtered = await scene('launcher');
+        const icons = results()?.get_children()[0].get_children() ?? [];
+        const found = {
+            appDisplay: boxOf(controls._appDisplay, unit),
+            results: results() ? boxOf(results(), unit) : null,
+            gridHidden: !controls._appDisplay._box.visible,
+            names: icons.map(icon => icon.app.get_name()),
+            firstSelected: icons[0]?.has_style_pseudo_class('selected') ?? false,
+            spotlightOpen: popup.isOpen,
+        };
+        entry.set_text('zzzqx');
+        const none = await scene('launcher-none');
+        const empty = results()?.get_children()[1];
+        const [title, hint] = empty?.get_children() ?? [];
+        const emptyTop = empty ? round(empty.get_transformed_position()[1] / unit.length) - found.results.y : null;
+        return {
+            scenes: {filtered, none}, pill, found,
+            empty: empty ? {...styleOf(empty, unit), top: emptyTop, title: {...styleOf(title, unit), text: title.text}, hint: {...styleOf(hint, unit), text: hint.text}} : null,
+        };
+    } finally {
+        entry.set_text('');
+        Main.overview.dash.showAppsButton.checked = false;
+        popup.close();
+        await settle();
+    }
+}
+
 // What the overview draws without windows; a caption and a search section are stand-ins.
 function overviewStyle(unit) {
     const {controls} = Main.overview._overview;
@@ -1783,6 +1833,7 @@ async function scenes() {
     };
     surfaces.overview = overviewStyle(unit);
     surfaces.overviewSearch = await overviewSearch();
+    surfaces.launcher = await launcherSearch(unit);
     surfaces.overviewLayer = await overviewLayer(unit);
     surfaces.appGrid = await appGrid(unit);
     delete overview.bytes;

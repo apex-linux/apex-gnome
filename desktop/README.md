@@ -87,6 +87,14 @@ opens Spotlight with that text through patch 0013's `overview-search` hook, and 
 own search resets; activating a result hides the overview. With `spotlight` off the hook gives
 stock, and the overview searches as upstream does.
 
+While the app grid shows, the same pill is the launcher's own (board 36, `launcher-search.js`):
+400 px wide with "Search apps", it searches apps only, through `Shell.AppSystem.search`, folders
+flattened and sorted by name, and filters the grid in place: the grid's own box shows the
+matching apps' icons, the first selected, and Enter launches it. Without a match it says "No
+Results" and that Super+Space searches everything. The hook keeps typed text from the stock
+search there and leaves the focus stock; leaving the app grid gives the stock pill and grid
+back. With `spotlight` off the app grid searches as upstream does.
+
 Spotlight draws its own rows over the stock search providers: upstream's app search
 (`AppSearchProvider`), then the remote providers `remoteSearch.js` loads, of which it keeps
 gnome-calculator, gnome-control-center and nautilus. The sections and caps are Calculator 1,

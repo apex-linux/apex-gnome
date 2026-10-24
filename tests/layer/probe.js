@@ -351,6 +351,56 @@ async function exerciseSpotlight() {
     Main.wm.press('toggle-spotlight');
 }
 
+// The launcher's pill and what the app display shows: the grid, or its results.
+function launcherState(Main) {
+    const controls = Main.overview._overview._controls;
+    const {_searchEntry: entry, _appDisplay: appDisplay} = controls;
+    const results = appDisplay.children.find(a => a.name === 'apexLauncherResults' && !a.destroyed);
+    let display = 'grid';
+    if (!appDisplay._box.visible) {
+        const [grid, empty] = results.get_children();
+        display = empty.visible
+            ? empty.get_children().map(label => label.text).join(' / ')
+            : grid.items.map(icon => `${icon.app.get_name()}${icon.pseudoClasses.has('selected') ? '*' : ''}`).join(', ');
+    }
+    return `hint=${entry.hint_text} pill=${entry.has_style_class_name('apex-launcher-search')} ${display}`;
+}
+
+async function exerciseLauncher() {
+    if (GLib.getenv('PROBE_LAUNCHER') !== '1')
+        return;
+    const Main = await import(`file://${shellDir}/js/ui/main.js`);
+    const entry = Main.overview._overview._controls._searchEntry;
+    const button = Main.overview.dash.showAppsButton;
+    const report = label => fact(`launcher.${label}`, launcherState(Main));
+    report('desktop');
+    Main.overview.showApps();
+    report('app-grid');
+    fact('launcher.hook-text', Hooks.run('overview-search', 'text', 'dis', () => fact('launcher.reset', 'yes')));
+    fact('launcher.hook-focus', Hooks.run('overview-search', 'focus', 'dis', () => fact('launcher.reset', 'yes')));
+    entry.set_text('dis');
+    report('dis');
+    fact('launcher.spotlight', (await spotlightPopup())?.isOpen ?? false);
+    entry.clutter_text.emit('activate');
+    entry.set_text('zzz');
+    report('zzz');
+    entry.set_text('');
+    report('cleared');
+    entry.set_text('char');
+    report('folder-app');
+    button.checked = false;
+    button.emit('notify::checked');
+    report('left');
+    fact('launcher.left-text', JSON.stringify(entry.get_text()));
+    Main.overview.showApps();
+    settings.set_strv('disabled-features', ['spotlight']);
+    await spin(200);
+    report('disabled');
+    settings.set_strv('disabled-features', []);
+    await spin(200);
+    report('enabled-again');
+}
+
 function pillNames(quickSettings) {
     return quickSettings._indicators.get_children().map(i => i.name).join(',');
 }
@@ -1329,6 +1379,7 @@ if (layer && GLib.getenv('PROBE_ENABLE') === '1') {
     await exerciseEndSession();
     await exerciseShadows();
     await exerciseSpotlight();
+    await exerciseLauncher();
     await exerciseTopBar();
     await exerciseSolidBar();
     await exerciseFocusedApp();

@@ -961,6 +961,24 @@ spotlight_style() {
 }
 
 # shellcheck disable=SC2016 # jq programs and token names, not shell expansions
+launcher_search() {
+    local label=$1 log=$2 variant=$3 scenes tokens
+    scenes=$(report_of "$log" APEXG2-SCENES)
+    tokens=$(tokens_for "$variant")
+    local -a metric=(top_bar_metric "$label launcher search" "$scenes" "$tokens")
+    local l=.surfaces.launcher
+
+    "${metric[@]}" 'in the app grid the overview'"'"'s pill is the launcher'"'"'s: $apex_launcher_search_width wide, "Search apps"' \
+        "$l.pill" '(.width | px_is($t.apex_launcher_search_width)) and .hint == "Search apps"'
+    "${metric[@]}" 'typing filters the grid in place, in the grid'"'"'s own box, to the matching apps, Files among them, the first selected; Spotlight stays closed' \
+        "$l.found" '.gridHidden and .results == .appDisplay and (.names | index("Files") != null) and .firstSelected and (.spotlightOpen | not)'
+    "${metric[@]}" 'no match says, $apex_launcher_empty_top down the grid'"'"'s box, "No Results" at $apex_font_launcher_empty_title_size $apex_font_heading_weight in $apex_fg over the hint at $apex_font_launcher_empty_hint_size in $apex_fg_dim, $apex_launcher_empty_gap apart' \
+        "$l.empty" '(.top | px_is(0)) and (.padding.top | px_is($t.apex_launcher_empty_top)) and (.spacing | px_is($t.apex_launcher_empty_gap)) and (.title | .text == "No Results" and (.font.size | px_is($t.apex_font_launcher_empty_title_size))
+            and .font.weight == ($t.apex_font_heading_weight | tonumber) and (.foreground | colour_is($t.apex_fg)))
+            and (.hint | (.text | startswith("The launcher searches apps only")) and (.font.size | px_is($t.apex_font_launcher_empty_hint_size)) and (.foreground | colour_is($t.apex_fg_dim)))'
+}
+
+# shellcheck disable=SC2016 # jq programs and token names, not shell expansions
 spotlight_glass() {
     local label=$1 log=$2 variant=$3 scenes tokens
     scenes=$(report_of "$log" APEXG2-SCENES)
@@ -1202,6 +1220,7 @@ direct_cases() {
     derived_surfaces default "$f" light
     tile_preview default "$f" light
     spotlight_style default "$f" light
+    launcher_search default "$f" light
     spotlight_glass default "$f" light
     screenshot_ui default "$f" light
 
@@ -1227,6 +1246,7 @@ direct_cases() {
     derived_surfaces default-scale1 "$f" light
     tile_preview default-scale1 "$f" light
     spotlight_style default-scale1 "$f" light
+    launcher_search default-scale1 "$f" light
     spotlight_glass default-scale1 "$f" light
     screenshot_ui default-scale1 "$f" light
 
@@ -1255,6 +1275,7 @@ direct_cases() {
     derived_surfaces dark-style "$f" dark
     tile_preview dark-style "$f" dark
     spotlight_style dark-style "$f" dark
+    launcher_search dark-style "$f" dark
     spotlight_glass dark-style "$f" dark
     screenshot_ui dark-style "$f" dark
     dark_style_off dark-style "$f"

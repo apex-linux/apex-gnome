@@ -303,6 +303,10 @@ the toast carry their sheet's glass, σ 34 and σ 30 at 1.8, and that the glass 
 a blur of radius 2 × σ × the monitor's scale.
 In the overview scene, after its capture, the probe types into the overview's search entry
 and checks that Spotlight opened with the text and the overview's own field emptied (patch 0013's hook).
+`launcher_search` then checks the app grid's
+pill: 400 px with "Search apps", "files" filtering the grid in its own box to apps with Files
+first and selected and Spotlight closed, and "No Results" with its hint where board 36 puts it
+(scenes `launcher` and `launcher-none`).
 
 None of these surfaces is in a capture compared with Fedora, so the comparison with Fedora's build
 is unchanged: the Apex overview is compared only run to run, and safe mode's with Fedora's.

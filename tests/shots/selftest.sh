@@ -535,6 +535,15 @@ REPORT_OF_A_SPOTLIGHT_DRAWN_FROM_TOKENS='
         label: {text: "Copied 1920"}}},
     overviewSearch: {opened: true, text: "disk", overviewText: ""}}}'
 # shellcheck disable=SC2016 # a jq program
+REPORT_OF_A_LAUNCHER_SEARCH_FROM_TOKENS='
+{surfaces: {launcher: {
+    pill: {width: ($t.apex_launcher_search_width | px), hint: "Search apps"},
+    found: {gridHidden: true, names: ["Files"], firstSelected: true, spotlightOpen: false,
+        appDisplay: {x: 0, y: 262, width: 1440, height: 541}, results: {x: 0, y: 262, width: 1440, height: 541}},
+    empty: {top: 0, padding: {top: ($t.apex_launcher_empty_top | px)}, spacing: ($t.apex_launcher_empty_gap | px),
+        title: {text: "No Results", font: {size: ($t.apex_font_launcher_empty_title_size | px), weight: ($t.apex_font_heading_weight | tonumber)}, foreground: ($t.apex_fg | hex)},
+        hint: {text: "The launcher searches apps only. Super+Space searches everything.", font: {size: ($t.apex_font_launcher_empty_hint_size | px)},
+            foreground: ($t.apex_fg_dim | hex)}}}}}'
 # shellcheck disable=SC2016 # a jq program
 REPORT_OF_SPOTLIGHT_GLASS_FROM_TOKENS='
 def glass($b; $s): {blur: ($b | px), saturation: ($s | rtrimstr("%") | tonumber / 100),
@@ -565,6 +574,7 @@ assert_run() {
     [[ $assertions == screenshot_ui ]] && report=$REPORT_OF_A_SCREENSHOT_UI_DRAWN_FROM_TOKENS
     [[ $assertions == overview_layer ]] && report=$REPORT_OF_AN_OVERVIEW_LAYER_FROM_TOKENS
     [[ $assertions == spotlight_style ]] && report=$REPORT_OF_A_SPOTLIGHT_DRAWN_FROM_TOKENS
+    [[ $assertions == launcher_search ]] && report=$REPORT_OF_A_LAUNCHER_SEARCH_FROM_TOKENS
     [[ $assertions == spotlight_glass ]] && report=$REPORT_OF_SPOTLIGHT_GLASS_FROM_TOKENS
     [[ $assertions == shadow_layers ]] && report=$REPORT_OF_SHADOW_LAYERS_FROM_TOKENS
     tokens=$(tokens_for "$variant")
@@ -1118,6 +1128,36 @@ test_spotlight_style() {
 .surfaces.spotlight.rows[2].tile.foreground = "#1d1d21ff"|a dark glyph on a coloured tile
 .surfaces.overviewSearch.opened = false|the overview's stock search
 .surfaces.overviewSearch.overviewText = "disk"|the typed text left in the overview's field too
+CHANGES
+}
+
+test_launcher_search() {
+    local variant change what passes failures open_gaps
+    for variant in light dark; do
+        read -r passes failures open_gaps <<<"$(assert_run launcher_search "$variant")"
+        if ((failures == 0 && open_gaps == 0 && passes == 3)); then
+            ok "launcher search ($variant): drawn from the tokens it passes all $passes assertions"
+        else
+            not_ok "launcher search ($variant): drawn from the tokens it passes (passed/failed/gaps $passes/$failures/$open_gaps): $(grep -m3 '^FAIL' "$T/top-bar.out" | paste -sd'|' -)"
+        fi
+    done
+    while IFS='|' read -r change what; do
+        read -r passes failures open_gaps <<<"$(assert_run launcher_search light "$change")"
+        if ((failures == 1)); then
+            ok "launcher search: $what fails one assertion"
+        else
+            not_ok "launcher search: $what fails one assertion (passed/failed/gaps $passes/$failures/$open_gaps)"
+        fi
+    done <<'CHANGES'
+.surfaces.launcher.pill.width = 440|the overview's 440 px pill
+.surfaces.launcher.pill.hint = "Type to search"|upstream's hint
+.surfaces.launcher.found.spotlightOpen = true|Spotlight opened instead
+.surfaces.launcher.found.names = []|no app found for "files"
+.surfaces.launcher.found.gridHidden = false|results under the full grid
+.surfaces.launcher.found.results.y = 422|results centred in the grid's box instead of filling it
+.surfaces.launcher.empty.top = 160|"No Results" centred instead of at its place
+.surfaces.launcher.empty.title.font.weight = 600|a lighter "No Results"
+.surfaces.launcher.empty.hint.foreground = "#1d1d21ff"|a hint at full strength
 CHANGES
 }
 
@@ -1706,6 +1746,7 @@ test_shadow_layers
 test_derived_surfaces
 test_tile_preview
 test_spotlight_style
+test_launcher_search
 test_spotlight_glass
 test_screenshot_ui
 test_today_pins
