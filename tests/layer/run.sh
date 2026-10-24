@@ -378,9 +378,25 @@ count_is "spotlight: every grab is given back" '^probe: modal\.push=' "$(grep -c
 lacks "spotlight: nothing fails" 'off for this session|did not disable cleanly|Spotlight search failed|JS ERROR|Gjs-WARNING'
 
 probe spotlight-slow "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_SPOTLIGHT=slow PROBE_SPOTLIGHT_SLOW=org.gnome.Settings.desktop
-fact "spotlight: while a provider is inside its 1 s budget, the query waits" 'spotlight\.slow\.at-700ms=field only'
-fact "spotlight: past it, the other sections show without Settings" "spotlight\.slow\.at-1300ms=APPLICATIONS: Disks\*Open Disk Usage Analyzer Disk Benchmark Disk Images \| $FILES"
-fact "spotlight: and the slow provider's call is cancelled" 'spotlight\.cancelled=org\.gnome\.Settings\.desktop'
+fact "spotlight: a slow provider does not hold back the sections that answered" \
+    "spotlight\.slow\.at-700ms=APPLICATIONS: Disks\*Open Disk Usage Analyzer Disk Benchmark Disk Images \| $FILES"
+fact "spotlight: past its 1 s budget, its section is left out" \
+    "spotlight\.slow\.at-1300ms=APPLICATIONS: Disks\*Open Disk Usage Analyzer Disk Benchmark Disk Images \| $FILES"
+fact "spotlight: and its call is cancelled" 'spotlight\.cancelled=org\.gnome\.Settings\.desktop'
+
+probe spotlight-late "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_SPOTLIGHT=late PROBE_SPOTLIGHT_SLOW=org.gnome.Settings.desktop PROBE_SPOTLIGHT_SLOW_MS=600
+fact "spotlight: within its budget, a slower section is not there yet" \
+    "spotlight\.late\.at-300ms=APPLICATIONS: Disks\*Open Disk Usage Analyzer Disk Benchmark Disk Images \| $FILES"
+fact "spotlight: the selection moves among the sections shown" \
+    "spotlight\.late\.down-5=$APPS \| FILES: disk-usage-2026-10.csv disk-unlock-board.png\*Open Disk Images diskspace-notes.md"
+fact "spotlight: the section arrives in its place, and the selection stays on its row" \
+    "spotlight\.late\.at-900ms=$APPS \| $SETTINGS \| FILES: disk-usage-2026-10.csv disk-unlock-board.png\*Open Disk Images diskspace-notes.md"
+lacks "spotlight: an answer within budget cancels nothing" 'spotlight\.cancelled='
+
+probe spotlight-late-sum "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_SPOTLIGHT=late-sum PROBE_SPOTLIGHT_SLOW=org.gnome.Calculator.desktop PROBE_SPOTLIGHT_SLOW_MS=600
+fact "spotlight: no rows yet and the query not done: only the field, no 'No results'" 'spotlight\.late-sum\.at-300ms=field only'
+fact "spotlight: a late sum still puts Calculator first among the applications" \
+    'spotlight\.late-sum\.at-900ms=CALCULATOR: 1920\(2880 / 1\.5\)\*Copy \| APPLICATIONS: Calculator'
 
 readonly KEPT_PILL='remoteAccess,camera,volumeInput,location,network,volumeOutput,unsafeMode,system'
 readonly STOCK_PILL='remoteAccess,camera,volumeInput,location,brightness,thunderbolt,nightLight,network,darkMode,doNotDisturb,backlight,bluetooth,rfkill,autoRotate,volumeOutput,unsafeMode,powerProfiles,system'

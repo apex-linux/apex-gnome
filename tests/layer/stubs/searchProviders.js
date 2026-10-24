@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
 // Fake search providers for Spotlight: each provider named in PROBE_SPOTLIGHT_SLOW answers
-// only after SLOW_MS, past Spotlight's budget.
+// only after PROBE_SPOTLIGHT_SLOW_MS, by default past Spotlight's budget.
 
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 
-const SLOW_MS = 1500;
+const SLOW_MS = Number(GLib.getenv('PROBE_SPOTLIGHT_SLOW_MS') ?? '1500');
 const fact = (key, value) => printerr(`probe: ${key}=${value}`);
 const slow = new Set((GLib.getenv('PROBE_SPOTLIGHT_SLOW') ?? '').split(',').filter(Boolean));
 
