@@ -402,6 +402,9 @@ fact "spotlight: the field has the keyboard focus" 'spotlight\.focus=true'
 fact "spotlight: sections in order, capped at 4 apps, 3 settings, 4 files; the first row selected, Enter to open" \
     "spotlight\.disk=APPLICATIONS: Disks\*Open Disk Usage Analyzer Disk Benchmark Disk Images \| $SETTINGS \| $FILES"
 lacks "spotlight: a provider without a section shows nothing" 'Characters'
+fact "spotlight: Settings rows sit on tiles: the panel's colour from settings-tiles.json, System's for its search-only pages, neutral without one" \
+    'spotlight\.tiles=Disk Encryption=#3584e4 Disk Storage=#6f8396 Removable Disks=neutral'
+fact "spotlight: Apex Desktop's tile is the accent" 'spotlight\.tiles-apex=Apex Desktop=accent'
 fact "spotlight: Down moves across sections" \
     "spotlight\.down-4=$APPS \| SETTINGS: Disk Encryption\*Open Disk Storage Removable Disks \| $FILES"
 fact "spotlight: Up moves back" \
@@ -410,7 +413,7 @@ fact "spotlight: Down stops at the last row" \
     "spotlight\.down-20=$APPS \| $SETTINGS \| FILES: disk-usage-2026-10.csv disk-unlock-board.png Disk Images diskspace-notes.md\*Open"
 fact "spotlight: Up stops at the first" "spotlight\.up-20=APPLICATIONS: Disks\*Open .*"
 fact "spotlight: Enter activates the selected result through its provider, with the terms" \
-    'spotlight\.activated=org\.gnome\.Settings\.desktop:disk-encryption terms=disk'
+    'spotlight\.activated=org\.gnome\.Settings\.desktop:privacy terms=disk'
 fact "spotlight: and closes Spotlight" 'spotlight\.enter-on-a-setting=closed'
 fact "spotlight: Enter on an app launches it" 'spotlight\.launched=org\.gnome\.DiskUtility\.desktop'
 fact "spotlight: a sum: its result first, then Calculator as the first application" \

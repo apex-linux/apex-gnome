@@ -17,6 +17,8 @@
     <file alias="spotlight/popup.js">js/ui/apex/spotlight/popup.js</file>
     <file alias="spotlight/toast.js">js/ui/apex/spotlight/toast.js</file>
     <file alias="spotlight/launcher-search.js">js/ui/apex/spotlight/launcher-search.js</file>
+    <file alias="spotlight/tiles.js">js/ui/apex/spotlight/tiles.js</file>
+    <file alias="spotlight/settings-tiles.json">js/ui/apex/spotlight/settings-tiles.json</file>
     <file alias="panel/feature.js">js/ui/apex/panel/feature.js</file>
     <file alias="panel/workspace-dots.js">js/ui/apex/panel/workspace-dots.js</file>
     <file alias="panel/hot-corner.js">js/ui/apex/panel/hot-corner.js</file>
