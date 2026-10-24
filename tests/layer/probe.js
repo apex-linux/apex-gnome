@@ -613,6 +613,17 @@ function endSessionDialog(St) {
         _stopTimer() {
             (globalThis.endSessionCalls ??= []).push('timer:stopped');
         },
+        // loginManager.js's, its logind proxy a stub that records each call.
+        _loginManager: {
+            _proxy: {
+                call(method, params) {
+                    (globalThis.endSessionCalls ??= []).push(`logind:${method}${params.print(false)}`);
+                },
+            },
+            setRebootToBootLoaderMenu() {
+                this._proxy.call('SetRebootToBootLoaderMenu', new GLib.Variant('(t)', [60000000]));
+            },
+        },
     });
     dialog.stockMethods = {close: dialog.close, _confirm: dialog._confirm};
     // As stock's confirm buttons: close the dialog, then confirm once it has closed.
@@ -629,6 +640,20 @@ function endSessionDialog(St) {
                     dialog.close(true);
                 },
             });
+            // Stock's Alt-held Boot Options closes first, then asks logind for the menu.
+            if (signal === 'ConfirmedReboot') {
+                dialog._rebootButtonAlt = dialog.addButton({
+                    label: 'Boot Options', action: () => {
+                        dialog.close(true);
+                        const id = dialog.connect('closed', () => {
+                            dialog.disconnect(id);
+                            dialog._loginManager.setRebootToBootLoaderMenu();
+                            dialog._confirm('ConfirmedReboot');
+                        });
+                    },
+                });
+                dialog._rebootButtonAlt.visible = false;
+            }
         }
         Hooks.run('end-session-buttons', dialog, content);
     };
@@ -639,7 +664,7 @@ function endSessionState(label, dialog) {
     const row = dialog.buttonLayout;
     const [first] = dialog.contentLayout.get_children();
     const icon = first.has_style_class_name('apex-end-session-icon') ? first.child.icon_name : 'none';
-    fact(label, `buttons=${row.get_children().map(b => b.label).join(',')} icon=${icon} ` +
+    fact(label, `buttons=${row.get_children().filter(b => b.visible).map(b => b.label).join(',')} icon=${icon} ` +
         `spacing=${row.layout_manager.spacing} homogeneous=${row.layout_manager.homogeneous} ` +
         `row=${row.has_style_class_name('apex-end-session-row')}`);
 }
@@ -647,7 +672,7 @@ function endSessionState(label, dialog) {
 function updateCardState(label, dialog) {
     const card = dialog.contentLayout.get_children().find(c => c.has_style_class_name('apex-update-card'));
     const described = card ? `card=${card.update.state} on=${card.on} subtitle=${card.subtitle}` : 'card=none';
-    fact(label, `buttons=${dialog.buttonLayout.get_children().map(b => b.label).join(',')} ${described}`);
+    fact(label, `buttons=${dialog.buttonLayout.get_children().filter(b => b.visible).map(b => b.label).join(',')} ${described}`);
     return card;
 }
 
@@ -703,6 +728,10 @@ async function exerciseUpdateCard(dialog, contents) {
     restored('update.failed-off.restored');
     settings.set_boolean('layer-enabled', true);
     await spin(200);
+    await open(restart, failing);
+    dialog._rebootButtonAlt.visible = true;
+    await press('update.boot-options-failed', 'Boot Options');
+    await press('update.boot-options-cancel', 'Cancel');
     await open(restart, failing);
     globalThis.endSessionCalls = [];
     await dialog._confirm('ConfirmedReboot');

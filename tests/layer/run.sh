@@ -432,6 +432,10 @@ fact "update card: pressed again, the action alone" 'update\.after-failure\.call
 fact "update card: Cancel after a failed press confirms nothing" 'update\.failed-then-cancel\.calls=none'
 fact "update card: layer off after a failed press, Cancel still confirms nothing" 'update\.failed-off-cancel\.calls=none'
 fact "update card: and once that stale confirmation is spent, stock's own again" 'update\.failed-off\.restored=close=true confirm=true'
+fact "update card: Boot Options with Apply failing: no menu asked for yet" \
+    'update\.boot-options-failed\.calls=timer:stopped apply:sha256:9e41aa07'
+fact "update card: then Cancel: the stale press asks logind for the menu, the feature unsets it at once, nothing confirmed" \
+    'update\.boot-options-cancel\.calls=logind:SetRebootToBootLoaderMenu\(60000000,\) logind:SetRebootToBootLoaderMenu\(18446744073709551615,\)'
 fact "update card: Apply fails as the countdown ends: the countdown's action still happens" \
     'update\.countdown-failed\.calls=apply:sha256:9e41aa07 confirmed:ConfirmedReboot'
 fact "update card: layer off: no card, stock's label" 'update\.off=buttons=Cancel,Restart card=none'

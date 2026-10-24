@@ -4,6 +4,8 @@
 // Restart between Cancel and Power Off, the theme's gap and widths, and the update card.
 
 import Clutter from 'gi://Clutter';
+import Gio from 'gi://Gio';
+import GLib from 'gi://GLib';
 import St from 'gi://St';
 
 import * as Hooks from '../hooks.js';
@@ -18,6 +20,8 @@ const POWER_OFF = 'ConfirmedShutdown';
 const REBOOT = 'ConfirmedReboot';
 const STOCK_BUTTON_SPACING = 12;
 export const RESTART_UPDATE_LABEL = 'Restart & Update';
+// logind unsets the one-shot boot menu for UINT64_MAX (logind-dbus.c), past a JS number.
+const UNSET_BOOT_LOADER_MENU = GLib.Variant.parse(new GLib.VariantType('(t)'), '(18446744073709551615,)', null, null);
 
 let _enabled = false;
 let _icon = null;
@@ -26,7 +30,7 @@ let _rowStyleId = 0;
 let _card = null;
 let _opening = 0;
 let _guarded = null;
-let _staleConfirms = 0;
+let _stale = [];
 let _stockConfirm = null;
 const _labels = new Map();
 
@@ -73,6 +77,12 @@ function _relabel(restarts) {
     }
 }
 
+// A stale Boot Options press has just asked logind for the menu, through stock's proxy.
+function _unsetBootLoaderMenu(dialog) {
+    dialog._loginManager?._proxy?.call('SetRebootToBootLoaderMenu', UNSET_BOOT_LOADER_MENU,
+        Gio.DBusCallFlags.NONE, -1, null, null);
+}
+
 // A pressed button closes the dialog before stock confirms: Apply runs first, and on a failure
 // the dialog stays open, its press's confirmation skipped. The countdown goes ahead regardless.
 function _guard(dialog) {
@@ -86,16 +96,18 @@ function _guard(dialog) {
             return close.call(this, skipSignal);
         this._stopTimer();
         const card = _card;
+        const bootOptions = Boolean(this._rebootButtonAlt?.visible);
         card.apply().then(() => close.call(this, true), error => {
-            _staleConfirms++;
+            _stale.push(bootOptions);
             card.fail(error);
         });
         return undefined;
     };
     dialog._confirm = async function (signal) {
-        if (_staleConfirms > 0) {
-            _staleConfirms--;
-            if (!_guarded && _staleConfirms === 0)
+        if (_stale.length > 0) {
+            if (_stale.shift())
+                _unsetBootLoaderMenu(this);
+            if (!_guarded && _stale.length === 0)
                 this._confirm = confirm;
             return undefined;
         }
@@ -114,7 +126,7 @@ function _unguard() {
     const {dialog, saved, closedId} = _guarded;
     dialog.disconnect(closedId);
     dialog.close = saved.close;
-    if (_staleConfirms === 0)
+    if (_stale.length === 0)
         dialog._confirm = saved._confirm;
     _guarded = null;
 }
@@ -195,7 +207,7 @@ function _apply(dialog, dialogContent) {
     const powerOff = signals.includes(POWER_OFF);
     _setIcon(dialog, dialogContent.iconName);
     _clearCard();
-    _staleConfirms = 0;
+    _stale = [];
     _opening++;
     // Cancel, then stock's confirm buttons in order.
     const buttons = dialog.buttonLayout.get_children().slice(1);

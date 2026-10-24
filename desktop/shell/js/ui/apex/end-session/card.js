@@ -11,7 +11,7 @@ import * as Update from './update.js';
 
 export const CARD_STYLE_CLASS = 'apex-update-card';
 export const TITLE = 'Start the new version next time';
-export const GENERIC_ERROR = 'The new version could not be prepared.';
+export const GENERIC_ERROR = 'The update could not be prepared. Software Updates in Settings has the details.';
 const ICON_NAME = 'system-software-update';
 
 export const UpdateCard = GObject.registerClass({
