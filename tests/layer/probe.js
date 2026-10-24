@@ -249,8 +249,12 @@ async function exerciseSpotlight() {
         return;
     }
 
+    const Glass = await import(`file://${shellDir}/js/ui/apex/glass/registry.js`);
+    const spotlightGlass = () => Glass.surfaces().map(surface => surface.name)
+        .filter(name => ['spotlight', 'toast'].includes(name)).join(',') || 'none';
     open();
     report('opened');
+    fact('spotlight.glass-open', spotlightGlass());
     fact('spotlight.focus', entry().focused === true);
     await type('disk', 'disk');
     fact('spotlight.tiles', tiles(popup));
@@ -281,8 +285,10 @@ async function exerciseSpotlight() {
     report('enter-on-the-sum');
     const toast = Toast.current();
     fact('spotlight.toast', toast ? `${toast.get_children()[0].accessible_name} in-ui-group=${Main.uiGroup.children.includes(toast)}` : 'none');
+    fact('spotlight.glass-copied', spotlightGlass());
     await spin(2300);
     fact('spotlight.toast-later', Toast.current() ? 'shown' : 'gone');
+    fact('spotlight.glass-later', spotlightGlass());
 
     open();
     await type('apex', 'apex');

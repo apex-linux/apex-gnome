@@ -1294,6 +1294,17 @@ function spotlightProviders() {
     }]));
 }
 
+// What the sheet asks of an actor's glass, and the blur the glass feature gave it.
+function glassOf(actor, unit) {
+    const node = actor.get_theme_node();
+    const [, saturation] = node.lookup_double('-apex-glass-saturation', false);
+    const effect = actor.get_effect('apex-glass');
+    return {
+        blur: lengthOrNull(node, '-apex-glass-blur', unit), saturation: round(saturation),
+        effect: effect ? {radius: effect.radius, saturation: round(effect.saturation), enabled: effect.enabled} : null,
+    };
+}
+
 async function spotlightScene(popup, name, text) {
     popup.panel.get_children()[0].get_children()[1].set_text(text);
     await settle();
@@ -1366,6 +1377,7 @@ async function spotlightStyle(unit) {
         captured.none = await spotlightScene(popup, 'none', 'zzz');
         measured.empty = styleOf(popup.panel.get_children()[2], unit);
         await spotlightScene(popup, null, '2880 / 1.5');
+        const panelBeforeCopy = glassOf(popup.panel, unit);
         popup.activateSelected();
         await settle();
         const scene = GLib.getenv('G2_SURFACE_SCENES') === '1' ? await capture('spotlight-copied') : null;
@@ -1383,6 +1395,7 @@ async function spotlightStyle(unit) {
             };
         }
         measured.closedOnCopy = !popup.isOpen;
+        measured.glass = {panelBeforeCopy, toast: pill ? glassOf(pill, unit) : null};
         return {scenes: captured, ...measured};
     } finally {
         popup.destroy();

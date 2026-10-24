@@ -526,6 +526,13 @@ REPORT_OF_A_SPOTLIGHT_DRAWN_FROM_TOKENS='
     overviewSearch: {opened: true, text: "disk", overviewText: ""}}}'
 # shellcheck disable=SC2016 # a jq program
 # shellcheck disable=SC2016 # a jq program
+REPORT_OF_SPOTLIGHT_GLASS_FROM_TOKENS='
+def glass($b; $s): {blur: ($b | px), saturation: ($s | rtrimstr("%") | tonumber / 100),
+    effect: {radius: (2 * ($b | px) * 2 | round), saturation: ($s | rtrimstr("%") | tonumber / 100), enabled: true}};
+{monitorScale: 2, surfaces: {spotlight: {glass: {
+    panelBeforeCopy: glass($t.apex_spotlight_blur; $t.apex_spotlight_saturation),
+    toast: glass($t.apex_toast_blur; $t.apex_toast_saturation)}}}}'
+# shellcheck disable=SC2016 # a jq program
 HEX_DEF='def hex: rgba | map([., 16] | "0123456789abcdef"[(.[0] / .[1] | floor):(.[0] / .[1] | floor) + 1]
                                     + "0123456789abcdef"[(.[0] % .[1]):(.[0] % .[1]) + 1]) | "#" + join("");'
 
@@ -548,6 +555,7 @@ assert_run() {
     [[ $assertions == screenshot_ui ]] && report=$REPORT_OF_A_SCREENSHOT_UI_DRAWN_FROM_TOKENS
     [[ $assertions == overview_layer ]] && report=$REPORT_OF_AN_OVERVIEW_LAYER_FROM_TOKENS
     [[ $assertions == spotlight_style ]] && report=$REPORT_OF_A_SPOTLIGHT_DRAWN_FROM_TOKENS
+    [[ $assertions == spotlight_glass ]] && report=$REPORT_OF_SPOTLIGHT_GLASS_FROM_TOKENS
     [[ $assertions == shadow_layers ]] && report=$REPORT_OF_SHADOW_LAYERS_FROM_TOKENS
     tokens=$(tokens_for "$variant")
     jq -nc --argjson t "$tokens" "$JQ_DEFS $HEX_DEF $report | $change" | sed 's/^/APEXG2-SCENES /' >"$T/top-bar.log"
@@ -1088,6 +1096,31 @@ test_spotlight_style() {
 .surfaces.spotlight.rows[2].tile.foreground = "#1d1d21ff"|a dark glyph on a coloured tile
 .surfaces.overviewSearch.opened = false|the overview's stock search
 .surfaces.overviewSearch.overviewText = "disk"|the typed text left in the overview's field too
+CHANGES
+}
+
+test_spotlight_glass() {
+    local variant change what passes failures open_gaps
+    for variant in light dark; do
+        read -r passes failures open_gaps <<<"$(assert_run spotlight_glass "$variant")"
+        if ((failures == 0 && open_gaps == 0 && passes == 1)); then
+            ok "Spotlight glass ($variant): drawn from the tokens it passes"
+        else
+            not_ok "Spotlight glass ($variant): drawn from the tokens it passes (passed/failed/gaps $passes/$failures/$open_gaps): $(grep -m3 '^FAIL' "$T/top-bar.out" | paste -sd'|' -)"
+        fi
+    done
+    while IFS='|' read -r change what; do
+        read -r passes failures open_gaps <<<"$(assert_run spotlight_glass light "$change")"
+        if ((failures == 1)); then
+            ok "Spotlight glass: $what fails it"
+        else
+            not_ok "Spotlight glass: $what fails it (passed/failed/gaps $passes/$failures/$open_gaps)"
+        fi
+    done <<'CHANGES'
+.surfaces.spotlight.glass.panelBeforeCopy.effect = null|a panel without its blur
+.surfaces.spotlight.glass.toast.blur = 34|the toast at the panel's sigma 34
+.surfaces.spotlight.glass.panelBeforeCopy.effect.radius = 68|a radius not scaled to the monitor
+.surfaces.spotlight.glass.toast.effect.enabled = false|a toast whose blur is off
 CHANGES
 }
 
@@ -1651,6 +1684,7 @@ test_shadow_layers
 test_derived_surfaces
 test_tile_preview
 test_spotlight_style
+test_spotlight_glass
 test_screenshot_ui
 test_today_pins
 test_known_gaps

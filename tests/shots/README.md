@@ -296,9 +296,11 @@ headers in board order; the rows, the selected row's accent tint, verb and Enter
 the Settings rows' tiles, their colours read from `settings-tiles.json`; the
 calculator's result in tabular figures with Calculator as the first application; that an
 empty query shows only the field, and the row of a query with no results; and, after Enter on the result, that Spotlight closed and the toast's size, tint,
-inset, check circle, text and distance from the bottom edge. In the overview scene, after its capture, the probe
-types into the overview's search entry and checks that Spotlight opened with the text and
-the overview's own field emptied (patch 0013's hook).
+inset, check circle, text and distance from the bottom edge. `spotlight_glass` checks that the open panel and
+the toast carry their sheet's glass, σ 34 and σ 30 at 1.8, and that the glass feature gave each
+a blur of radius 2 × σ × the monitor's scale.
+In the overview scene, after its capture, the probe types into the overview's search entry
+and checks that Spotlight opened with the text and the overview's own field emptied (patch 0013's hook).
 
 None of these surfaces is in a capture compared with Fedora, so the comparison with Fedora's build
 is unchanged: the Apex overview is compared only run to run, and safe mode's with Fedora's.

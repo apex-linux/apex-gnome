@@ -944,6 +944,21 @@ spotlight_style() {
         '.surfaces.overviewSearch' '.opened and .text == "disk" and .overviewText == ""'
 }
 
+# shellcheck disable=SC2016 # jq programs and token names, not shell expansions
+spotlight_glass() {
+    local label=$1 log=$2 variant=$3 scenes tokens
+    scenes=$(report_of "$log" APEXG2-SCENES)
+    tokens=$(tokens_for "$variant")
+    local -a metric=(top_bar_metric "$label Spotlight glass" "$scenes" "$tokens")
+    local glass='(.blur | px_is($b | px)) and (.saturation == ($s | rtrimstr("%") | tonumber / 100))
+        and (.effect | . != null and .enabled and .radius == (2 * ($b | px) * $scale | round) and .saturation == ($s | rtrimstr("%") | tonumber / 100))'
+
+    "${metric[@]}" 'the panel blurs at $apex_spotlight_blur and $apex_spotlight_saturation, the toast at $apex_toast_blur and $apex_toast_saturation (radius 2 x sigma x the scale)' \
+        '{g: .surfaces.spotlight.glass, scale: .monitorScale}' ".scale as \$scale
+            | (.g.panelBeforeCopy | \$t.apex_spotlight_blur as \$b | \$t.apex_spotlight_saturation as \$s | $glass)
+            and (.g.toast | \$t.apex_toast_blur as \$b | \$t.apex_toast_saturation as \$s | $glass)"
+}
+
 scenes_captured() {
     local run=$1 case_name=$2
     local log=$run/$case_name.log scene
@@ -1171,6 +1186,7 @@ direct_cases() {
     derived_surfaces default "$f" light
     tile_preview default "$f" light
     spotlight_style default "$f" light
+    spotlight_glass default "$f" light
     screenshot_ui default "$f" light
 
     f=$run/default-scale1.log
@@ -1195,6 +1211,7 @@ direct_cases() {
     derived_surfaces default-scale1 "$f" light
     tile_preview default-scale1 "$f" light
     spotlight_style default-scale1 "$f" light
+    spotlight_glass default-scale1 "$f" light
     screenshot_ui default-scale1 "$f" light
 
     f=$run/dark-style.log
@@ -1222,6 +1239,7 @@ direct_cases() {
     derived_surfaces dark-style "$f" dark
     tile_preview dark-style "$f" dark
     spotlight_style dark-style "$f" dark
+    spotlight_glass dark-style "$f" dark
     screenshot_ui dark-style "$f" dark
     dark_style_off dark-style "$f"
 
