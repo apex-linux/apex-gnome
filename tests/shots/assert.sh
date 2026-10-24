@@ -1225,14 +1225,14 @@ glass_frames() {
     local label=$1 log=$2
     expect_report "$label" "$log" '.error == null and .patched' "the probe ran the glass cases on the patched ShellBlurEffect" APEXG2-GLASS
     expect_report "$label" "$log" '.pixels.reference | .clippedFirst and .reblurCovered' \
-        "damage under the glass: the first frame's redraw clip leaves the box out, the effect's own redraw covers it" APEXG2-GLASS
+        "damage under the glass: the first frame's redraw clip leaves the box out (it damages again up to 5 times; else: could not obtain a partial redraw), the effect's own redraw covers it" APEXG2-GLASS
     local within="(.interior.max | max) <= $GLASS_INTERIOR_MAX and (.edge.max | max) <= $GLASS_EDGE_MAX and (.box.mean | max) <= $GLASS_MEAN_ERROR"
     expect_report "$label" "$log" ".pixels.reference | .downscale > 1 and $within" \
         "then the box is blur-ref.js's Gaussian, saturate() and corners per channel: within $GLASS_INTERIOR_MAX/255 inside, $GLASS_EDGE_MAX/255 in the ds/2 band along the edges, $GLASS_MEAN_ERROR/255 on average" APEXG2-GLASS
     expect_report "$label" "$log" '.pixels.sameFrame | .covered and .changed > 0 and .differingFromFull == 0' \
         "damage forwarded to the glass box re-blurs in the same frame, as a full redraw draws it" APEXG2-GLASS
     expect_report "$label" "$log" '.pixels.clippedRedraw | (.covered | not) and .differingFromLast == 0 and .nextCovered and .nextDifferingFromFull == 0' \
-        "a redraw clip that misses the box draws the last result, pixel for pixel; the next frame is the full redraw's" APEXG2-GLASS
+        "a redraw clip that misses the box (as above, up to 5 damages) draws the last result, pixel for pixel; the next frame is the full redraw's" APEXG2-GLASS
     expect_report "$label" "$log" '.pixels.stock | (.covered | not) and .tries >= 1' \
         "the stock control obtained a partial redraw, a frame whose redraw clip misses the box (it damages again up to 5 times; else: could not obtain a partial redraw)" APEXG2-GLASS
     expect_report "$label" "$log" ".pixels.stock | (.covered | not) and .differingFromFull > 0 and (($within) | not)" \
