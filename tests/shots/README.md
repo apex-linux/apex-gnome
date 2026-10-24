@@ -185,6 +185,33 @@ offers "Launch Using Discrete Graphics Card" while the fixtures' switcheroo-cont
 reports two GPUs. The safe-mode cases have no dock, and the Apex captures mask it, as they mask the
 bar, against Fedora's, whose desktop has none.
 
+## App indicators
+
+In `default`, `default-scale1` and `dark-style`, `G2_INDICATORS=1` runs `indicators.js`
+after the scenes. It starts `sni-items.js`, a gjs process that exports four
+StatusNotifierItems, each with a DBusMenu and on its own session-bus connection as separate
+apps are, and registers them with the shell's watcher. Every call an item gets lands in
+`<case>-sni.log`. `indicator_metrics` asserts, against the token file:
+
+- no indicators and no divider before any item registers, and none after the apps quit;
+- the four in the order they registered, then the divider, then the search button;
+- each a `$apex_indicator_width` × `$apex_bar_pill_height` pill, radius
+  `$apex_radius_bar_pill`, `$apex_bar_gap` apart, its glyph `$apex_bar_icon_size` in
+  `$apex_bar_fg` and centred, the theme's `-symbolic` icon for a named one;
+- the password manager's red pixmap drawn as a mask: the bar's colour, and no red left;
+- Chat's NeedsAttention dot: `$apex_indicator_dot_size`, the accent, at its offsets;
+- the divider's size, colour and its distance from both neighbours;
+- Chat's menu on a secondary click: radius `$apex_radius_menu`, at least
+  `$apex_indicator_menu_width` wide, the title as a `$apex_indicator_menu_header_height`
+  header in `$apex_fg_dim`, `$apex_menu_row_height` rows, its two toggles as switches in the
+  app's states, "Ctrl+Shift+C" dimmed; the opened, clicked and closed events in the log;
+- Activate on a primary click;
+- with a fifth item, three shown and "+2", and the overflow menu's two rows: glyph, title
+  and chevron.
+
+The captures `<case>-indicators.png`, `<case>-indicator-menu.png` and
+`<case>-indicator-overflow.png` show the bar, Chat's menu and the overflow menu.
+
 ## The shell surfaces' metrics
 
 `assert.sh`'s `shell_surfaces` runs in `default`, `default-scale1` and `dark-style`. In
@@ -303,6 +330,10 @@ the toast carry their sheet's glass, σ 34 and σ 30 at 1.8, and that the glass 
 a blur of radius 2 × σ × the monitor's scale.
 In the overview scene, after its capture, the probe types into the overview's search entry
 and checks that Spotlight opened with the text and the overview's own field emptied (patch 0013's hook).
+`launcher_search` then checks the app grid's
+pill: 400 px with "Search apps", "files" filtering the grid in its own box to apps with Files
+first and selected and Spotlight closed, and "No Results" with its hint where board 36 puts it
+(scenes `launcher` and `launcher-none`).
 
 None of these surfaces is in a capture compared with Fedora, so the comparison with Fedora's build
 is unchanged: the Apex overview is compared only run to run, and safe mode's with Fedora's.
@@ -399,6 +430,7 @@ it is at least 4.8:1), and what the goldens judge: the Apex Symbolic glyphs (S1b
 | `assert.sh`, `stable.sh`, `lib.sh` | the builder VM | the assertions |
 | `png.js`, `compare.js` | gjs | PNG with GLib's zlib only, and the masked comparison |
 | `glass.js`, `blur-ref.js` | the shell; gjs | the glass cases, and their CPU reference |
+| `indicators.js`, `sni-items.js` | the shell; gjs | the app-indicator part of `default`, `default-scale1` and `dark-style`, and the StatusNotifierItems it starts |
 | `frame.c`, `G2Frame-1.gir` | the glass cases' shells | `G2Frame.read()`, a region of the frame the shell drew |
 | `selftest.sh`, `png-test.js`, `blur-ref-test.js` | CI and the host | the tests of the above |
 

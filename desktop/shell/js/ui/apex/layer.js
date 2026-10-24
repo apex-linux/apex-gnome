@@ -7,7 +7,8 @@ import * as Hooks from './hooks.js';
 
 // Each <name>/feature.js exports configure(name), which may be async, and synchronous
 // enable() and disable().
-const FEATURES_IN_ENABLE_ORDER = ['motion', 'shadows', 'spotlight', 'panel', 'glass', 'dock', 'overview', 'lock', 'quick-settings', 'end-session', 'polkit'];
+const FEATURES_IN_ENABLE_ORDER = ['motion', 'shadows', 'spotlight', 'panel', 'glass', 'dock', 'overview', 'lock',
+    'quick-settings', 'end-session', 'indicators', 'polkit'];
 
 const TEST_FAULT_PHASES = ['configure', 'enable', 'abort-after-enable'];
 

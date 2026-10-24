@@ -20,7 +20,8 @@ readonly APEX_DARK_SHEET=resource:///org/gnome/shell/theme/gnome-shell-dark.css
 readonly STOCK_SHEETS=resource:///org/gnome/shell/theme/stock
 readonly FEDORA_SHEETS=resource:///org/gnome/shell/theme
 readonly DIRECT_CASES=(default default-scale1 dark-style dock-intellihide dock-intellihide-dark stock-light stock-dark safe-env
-    layer-disabled layer-cycles motion fault-configure fault-enable fault-abort kernel-safe fedora-light fedora-dark glass fedora-glass)
+    layer-disabled layer-cycles motion fault-configure fault-enable fault-abort kernel-safe fedora-light fedora-dark glass fedora-glass
+    indicators indicators-scale1 indicators-dark)
 readonly DIRECT_PARTS=(main kernel fedora)
 readonly CAPTURE_CASES=(default default-scale1 dark-style stock-light stock-dark fedora-light fedora-dark)
 readonly SCENES=(desktop overview)
@@ -353,6 +354,66 @@ dock_intellihide() {
         "the window gone, it shows" APEXG2-DOCK
     check "$label: the maximised and revealed scenes are captured" \
         test -s "$3/captures/$label-maximised.png" -a -s "$3/captures/$label-revealed.png"
+}
+
+# shellcheck disable=SC2016 # jq programs and token names, not shell expansions
+indicator_metrics() {
+    local label=$1 log=$2 variant=$3 report tokens
+    report=$(report_of "$log" APEXG2-INDICATORS)
+    tokens=$(tokens_for "$variant")
+    local -a metric=(top_bar_metric "$label indicators" "$report" "$tokens")
+    local four='["File sync", "Chat", "Game launcher", "Password manager"]'
+
+    "${metric[@]}" 'with no items there are no indicators and no divider' \
+        '.empty' '.visible == false and .divider == null'
+    "${metric[@]}" 'sni-items.js'"'"'s four items show in the order they registered, then the divider, then the search button' \
+        '.four | {names: [.items[].name], order}' \
+        ".names == $four and ((.order | index(\"indicators\")) as \$i | \$i != null and .order[\$i + 1] == \"divider\" and .order[\$i + 2] == \"apex-search\")"
+    "${metric[@]}" 'each is a $apex_indicator_width x $apex_bar_pill_height pill, radius $apex_radius_bar_pill, $apex_bar_gap apart' \
+        '.four.items | map(.pill)' \
+        'length == 4 and all((.width | px_is($t.apex_indicator_width)) and (.height | px_is($t.apex_bar_pill_height)) and (.radius | px_is($t.apex_radius_bar_pill)))
+            and ([range(1; length) as $i | .[$i].x - .[$i - 1].x - .[$i - 1].width] | all(px_is($t.apex_bar_gap)))'
+    "${metric[@]}" 'each glyph is $apex_bar_icon_size in $apex_bar_fg, centred in its pill' \
+        '.four.items' 'all(.glyph | (.width | px_is($t.apex_bar_icon_size)) and (.height | px_is($t.apex_bar_icon_size)) and (.colour | colour_is($t.apex_bar_fg)))
+            and all((.glyph.x + .glyph.width / 2 - .pill.x - .pill.width / 2 | fabs < 0.51) and (.glyph.y + .glyph.height / 2 - .pill.y - .pill.height / 2 | fabs < 0.51))'
+    "${metric[@]}" 'a named icon becomes the theme'"'"'s -symbolic icon, which St recolours: no mask' \
+        '.four.items | map(select(.name != "Password manager") | .glyph)' 'length == 3 and all((.iconName | endswith("-symbolic")) and (.mask | not))'
+    "${metric[@]}" 'a pixmap is drawn as a one-colour mask in $apex_bar_fg: no red is left of it' \
+        '.four.mask' '(.colour | colour_is($t.apex_bar_fg)) and .inkPixels > 0 and .redPixels == 0'
+    "${metric[@]}" 'NeedsAttention adds a $apex_indicator_dot_size accent dot, $apex_indicator_dot_top from the top and $apex_indicator_dot_right from the right of the pill' \
+        '{i: .four.items, accent}' '.accent as $a | (.i | map(select(.dot != null)) | length == 1 and (.[0] | .name == "Chat"
+            and (.dot | (.width | px_is($t.apex_indicator_dot_size)) and (.height | px_is($t.apex_indicator_dot_size)) and (.radius * 2 | px_is($t.apex_indicator_dot_size)) and (.colour | colour_is($a)))
+            and (.dot.y - .pill.y | px_is($t.apex_indicator_dot_top)) and (.pill.x + .pill.width - .dot.x - .dot.width | px_is($t.apex_indicator_dot_right))))'
+    "${metric[@]}" 'the divider is $apex_indicators_divider_width x $apex_indicators_divider_height in $apex_bar_fg at $apex_indicators_divider_opacity, $apex_indicators_divider_margin + $apex_bar_gap from the indicators and the search button' \
+        '.four | {d: .divider, last: .items[-1].pill, search}' \
+        '($t.apex_bar_fg | rgba) as $fg | (.d | (.width | px_is($t.apex_indicators_divider_width)) and (.height | px_is($t.apex_indicators_divider_height))
+            and ((.colour | rgba) as $c | ($c[0:3] == $fg[0:3]) and ($c[3] - 255 * ($t.apex_indicators_divider_opacity | num) | fabs <= 1)))
+            and (.d.x - .last.x - .last.width | px_is(($t.apex_indicators_divider_margin | px) + ($t.apex_bar_gap | px)))
+            and (.search.x - .d.x - .d.width | px_is(($t.apex_indicators_divider_margin | px) + ($t.apex_bar_gap | px)))'
+    "${metric[@]}" 'a secondary click opens its menu: solid, radius $apex_radius_menu, at least $apex_indicator_menu_width wide' \
+        '.menu' '.open and (.content.radius | px_is($t.apex_radius_menu)) and (.content.width >= ($t.apex_indicator_menu_width | px) - 0.01)'
+    "${metric[@]}" 'its first row is the item'"'"'s title, $apex_indicator_menu_header_height high, in $apex_fg_dim' \
+        '.menu.rows[0]' '.header and .label == "Chat" and (.height | px_is($t.apex_indicator_menu_header_height)) and (.colour | colour_is($t.apex_fg_dim))'
+    "${metric[@]}" 'its rows are $apex_menu_row_height high' \
+        '.menu.rows[1:] | map(select(.kind != "PopupSeparatorMenuItem"))' 'length == 5 and all(.height | px_is($t.apex_menu_row_height))'
+    "${metric[@]}" 'toggles are $apex_indicator_switch_width x $apex_indicator_switch_height switches, in the state the app gave' \
+        '.menu.rows | map(select(.switch) | {label, switch})' \
+        'map(.label) == ["Do Not Disturb", "Start at Login"] and (map(.switch.checked) == [false, true])
+            and all(.switch | (.width | px_is($t.apex_indicator_switch_width)) and (.height | px_is($t.apex_indicator_switch_height)))'
+    "${metric[@]}" 'a shortcut is dimmed on the right: $apex_fg_dim' \
+        '.menu.rows | map(select(.shortcut)) | map(.shortcut)' 'length == 1 and .[0].text == "Ctrl+Shift+C" and (.[0].colour | colour_is($t.apex_fg_dim))'
+    "${metric[@]}" 'opening the menu, a row and closing it send their events, and the menu closes' \
+        '{log, closed: .menu.closed}' '.closed and (.log | index("Chat Event 0 opened") != null and index("Chat Event 5 clicked") != null and index("Chat Event 0 closed") != null)'
+    "${metric[@]}" 'a primary click activates the item' \
+        '.log' 'any(startswith("File sync Activate "))'
+    "${metric[@]}" 'a fifth item: three show and "+2", a $apex_bar_pill_height pill' \
+        '.five | {names: [.items[].name], overflow}' \
+        '.names == ["File sync", "Chat", "Game launcher"] and .overflow.text == "+2" and (.overflow.pill | (.height | px_is($t.apex_bar_pill_height)) and (.radius | px_is($t.apex_radius_bar_pill)))'
+    "${metric[@]}" 'it lists the other two: glyph, title and chevron, rows $apex_menu_row_height, at least $apex_indicators_overflow_menu_width wide' \
+        '.overflowMenu' '(.rows | map(.label) == ["Password manager", "Media player"] and all((.height | px_is($t.apex_menu_row_height)) and (.glyph | px_is($t.apex_bar_icon_size)) and .chevron == "go-next-symbolic"))
+            and (.content.width >= ($t.apex_indicators_overflow_menu_width | px) - 0.01)'
+    "${metric[@]}" 'when the apps quit, the indicators and the divider go' \
+        '.gone' '.visible == false and .divider == null'
 }
 
 no_dock() {
@@ -961,6 +1022,24 @@ spotlight_style() {
 }
 
 # shellcheck disable=SC2016 # jq programs and token names, not shell expansions
+launcher_search() {
+    local label=$1 log=$2 variant=$3 scenes tokens
+    scenes=$(report_of "$log" APEXG2-SCENES)
+    tokens=$(tokens_for "$variant")
+    local -a metric=(top_bar_metric "$label launcher search" "$scenes" "$tokens")
+    local l=.surfaces.launcher
+
+    "${metric[@]}" 'in the app grid the overview'"'"'s pill is the launcher'"'"'s: $apex_launcher_search_width wide, "Search apps"' \
+        "$l.pill" '(.width | px_is($t.apex_launcher_search_width)) and .hint == "Search apps"'
+    "${metric[@]}" 'typing filters the grid in place, in the grid'"'"'s own box, to the matching apps, Files among them, the first selected; Spotlight stays closed' \
+        "$l.found" '.gridHidden and .results == .appDisplay and (.names | index("Files") != null) and .firstSelected and (.spotlightOpen | not)'
+    "${metric[@]}" 'no match says, $apex_launcher_empty_top down the grid'"'"'s box, "No Results" at $apex_font_launcher_empty_title_size $apex_font_heading_weight in $apex_fg over the hint at $apex_font_launcher_empty_hint_size in $apex_fg_dim, $apex_launcher_empty_gap apart' \
+        "$l.empty" '(.top | px_is(0)) and (.padding.top | px_is($t.apex_launcher_empty_top)) and (.spacing | px_is($t.apex_launcher_empty_gap)) and (.title | .text == "No Results" and (.font.size | px_is($t.apex_font_launcher_empty_title_size))
+            and .font.weight == ($t.apex_font_heading_weight | tonumber) and (.foreground | colour_is($t.apex_fg)))
+            and (.hint | (.text | startswith("The launcher searches apps only")) and (.font.size | px_is($t.apex_font_launcher_empty_hint_size)) and (.foreground | colour_is($t.apex_fg_dim)))'
+}
+
+# shellcheck disable=SC2016 # jq programs and token names, not shell expansions
 spotlight_glass() {
     local label=$1 log=$2 variant=$3 scenes tokens
     scenes=$(report_of "$log" APEXG2-SCENES)
@@ -1202,6 +1281,7 @@ direct_cases() {
     derived_surfaces default "$f" light
     tile_preview default "$f" light
     spotlight_style default "$f" light
+    launcher_search default "$f" light
     spotlight_glass default "$f" light
     screenshot_ui default "$f" light
 
@@ -1227,6 +1307,7 @@ direct_cases() {
     derived_surfaces default-scale1 "$f" light
     tile_preview default-scale1 "$f" light
     spotlight_style default-scale1 "$f" light
+    launcher_search default-scale1 "$f" light
     spotlight_glass default-scale1 "$f" light
     screenshot_ui default-scale1 "$f" light
 
@@ -1255,6 +1336,7 @@ direct_cases() {
     derived_surfaces dark-style "$f" dark
     tile_preview dark-style "$f" dark
     spotlight_style dark-style "$f" dark
+    launcher_search dark-style "$f" dark
     spotlight_glass dark-style "$f" dark
     screenshot_ui dark-style "$f" dark
     dark_style_off dark-style "$f"
@@ -1337,6 +1419,17 @@ direct_cases() {
     shadows_under_glass glass "$run/glass.log"
     glass_manager glass "$run/glass.log" light
     glass_unlock_vs_fedora "$run"
+    indicator_cases "$run"
+}
+
+indicator_cases() {
+    local run=$1 c
+    for c in indicators:light indicators-scale1:light indicators-dark:dark; do
+        exits "$run" "${c%:*}" 0
+        no_js_error "${c%:*}" "$run/${c%:*}.log"
+        no_apex_failure "${c%:*}" "$run/${c%:*}.log"
+        indicator_metrics "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
+    done
 }
 
 # Patch 0003's glass in the frames the shell drew (glass.js, the glass case).

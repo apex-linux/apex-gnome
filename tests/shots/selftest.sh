@@ -535,6 +535,54 @@ REPORT_OF_A_SPOTLIGHT_DRAWN_FROM_TOKENS='
         label: {text: "Copied 1920"}}},
     overviewSearch: {opened: true, text: "disk", overviewText: ""}}}'
 # shellcheck disable=SC2016 # a jq program
+REPORT_OF_A_LAUNCHER_SEARCH_FROM_TOKENS='
+{surfaces: {launcher: {
+    pill: {width: ($t.apex_launcher_search_width | px), hint: "Search apps"},
+    found: {gridHidden: true, names: ["Files"], firstSelected: true, spotlightOpen: false,
+        appDisplay: {x: 0, y: 262, width: 1440, height: 541}, results: {x: 0, y: 262, width: 1440, height: 541}},
+    empty: {top: 0, padding: {top: ($t.apex_launcher_empty_top | px)}, spacing: ($t.apex_launcher_empty_gap | px),
+        title: {text: "No Results", font: {size: ($t.apex_font_launcher_empty_title_size | px), weight: ($t.apex_font_heading_weight | tonumber)}, foreground: ($t.apex_fg | hex)},
+        hint: {text: "The launcher searches apps only. Super+Space searches everything.", font: {size: ($t.apex_font_launcher_empty_hint_size | px)},
+            foreground: ($t.apex_fg_dim | hex)}}}}}'
+# shellcheck disable=SC2016 # a jq program
+REPORT_OF_INDICATORS_DRAWN_FROM_TOKENS='
+($t.apex_indicator_width | px) as $w | ($t.apex_bar_pill_height | px) as $h | ($t.apex_bar_gap | px) as $g
+| ($t.apex_bar_icon_size | px) as $i | ($t.apex_radius_bar_pill | px) as $r | ($t.apex_indicator_dot_size | px) as $ds
+| ($t.apex_menu_row_height | px) as $row | ($t.apex_fg_dim | hex) as $dim | ($t.apex_bar_fg | rgba) as $fg
+| ["File sync", "Chat", "Game launcher", "Password manager"] as $names
+| [range(4) as $k | {x: (1000 + $k * ($w + $g)), y: 4, width: $w, height: $h, radius: $r}] as $pills
+| [range(4) as $k | {name: $names[$k], pill: $pills[$k],
+    glyph: {x: ($pills[$k].x + ($w - $i) / 2), y: (4 + ($h - $i) / 2), width: $i, height: $i, colour: ($t.apex_bar_fg | hex),
+      iconName: (if $k == 3 then null else "folder-remote-symbolic" end), mask: ($k == 3)},
+    dot: null}] as $items
+| ($items | .[1].dot = {x: (.[1].pill.x + $w - ($t.apex_indicator_dot_right | px) - $ds), y: (4 + ($t.apex_indicator_dot_top | px)),
+    width: $ds, height: $ds, radius: ($ds / 2), colour: "#3584e4ff"}) as $items
+| (($t.apex_indicators_divider_margin | px) + $g) as $around
+| ($pills[3].x + $w + $around) as $dx
+| {x: $dx, y: 9, width: ($t.apex_indicators_divider_width | px), height: ($t.apex_indicators_divider_height | px),
+   colour: ("rgba(\($fg[0]), \($fg[1]), \($fg[2]), \($t.apex_indicators_divider_opacity))" | hex)} as $divider
+| {width: ($t.apex_indicator_switch_width | px), height: ($t.apex_indicator_switch_height | px), radius: 9} as $switch
+| {empty: {visible: false, divider: null}, accent: "#3584e4ff",
+   four: {visible: true, order: ["indicators", "divider", "apex-search", "quickSettings"], items: $items, divider: $divider,
+     search: {x: ($dx + $divider.width + $around), y: 4, width: 32, height: $h},
+     mask: {colour: ($t.apex_bar_fg | hex), inkPixels: 64, redPixels: 0}},
+   menu: {open: true, closed: true, content: {x: 900, y: 32, width: ($t.apex_indicator_menu_width | px), height: 260, radius: ($t.apex_radius_menu | px)},
+     rows: [{kind: "PopupMenuItem", label: "Chat", header: true, height: ($t.apex_indicator_menu_header_height | px), colour: $dim},
+       {kind: "PopupMenuItem", label: "Show Chat", height: $row, shortcut: {text: "Ctrl+Shift+C", colour: $dim}},
+       {kind: "PopupSwitchMenuItem", label: "Do Not Disturb", height: $row, switch: ($switch + {checked: false})},
+       {kind: "PopupSwitchMenuItem", label: "Start at Login", height: $row, switch: ($switch + {checked: true})},
+       {kind: "PopupSeparatorMenuItem", label: "", height: 1},
+       {kind: "PopupMenuItem", label: "Mute for 1 Hour", height: $row},
+       {kind: "PopupSeparatorMenuItem", label: "", height: 1},
+       {kind: "PopupMenuItem", label: "Quit Chat", height: $row}]},
+   five: {items: $items[:3], overflow: {text: "+2", pill: {x: 1096, y: 4, width: 40, height: $h, radius: $r}}},
+   overflowMenu: {open: true, content: {x: 900, y: 32, width: ($t.apex_indicators_overflow_menu_width | px), height: 80, radius: ($t.apex_radius_menu | px)},
+     rows: [{label: "Password manager", height: $row, glyph: $i, chevron: "go-next-symbolic"},
+       {label: "Media player", height: $row, glyph: $i, chevron: "go-next-symbolic"}]},
+   gone: {visible: false, divider: null},
+   log: ["File sync registered", "Chat registered", "Chat Event 0 opened", "Chat Event 5 clicked", "Chat Event 0 closed",
+     "File sync Activate 1215 32"]}'
+
 # shellcheck disable=SC2016 # a jq program
 REPORT_OF_SPOTLIGHT_GLASS_FROM_TOKENS='
 def glass($b; $s): {blur: ($b | px), saturation: ($s | rtrimstr("%") | tonumber / 100),
@@ -552,7 +600,7 @@ the clock pill without the pad|.topBar.withDot.pillWidth -= ($t.apex_bar_clock_g
 the raw accent dot|.topBar.withDot.dot.background = .topBar.accent'
 
 assert_run() {
-    local assertions=$1 variant=$2 change=${3:-.} tokens report=$REPORT_OF_A_BAR_DRAWN_FROM_TOKENS
+    local assertions=$1 variant=$2 change=${3:-.} tokens report=$REPORT_OF_A_BAR_DRAWN_FROM_TOKENS prefix=APEXG2-SCENES
     [[ $assertions == shell_surfaces ]] && report=$REPORT_OF_SURFACES_DRAWN_FROM_TOKENS
     [[ $assertions == quick_settings ]] && report=$REPORT_OF_QUICK_SETTINGS_DRAWN_FROM_TOKENS
     [[ $assertions == window_switcher ]] && report=$REPORT_OF_A_SWITCHER_DRAWN_FROM_TOKENS
@@ -565,10 +613,12 @@ assert_run() {
     [[ $assertions == screenshot_ui ]] && report=$REPORT_OF_A_SCREENSHOT_UI_DRAWN_FROM_TOKENS
     [[ $assertions == overview_layer ]] && report=$REPORT_OF_AN_OVERVIEW_LAYER_FROM_TOKENS
     [[ $assertions == spotlight_style ]] && report=$REPORT_OF_A_SPOTLIGHT_DRAWN_FROM_TOKENS
+    [[ $assertions == launcher_search ]] && report=$REPORT_OF_A_LAUNCHER_SEARCH_FROM_TOKENS
     [[ $assertions == spotlight_glass ]] && report=$REPORT_OF_SPOTLIGHT_GLASS_FROM_TOKENS
     [[ $assertions == shadow_layers ]] && report=$REPORT_OF_SHADOW_LAYERS_FROM_TOKENS
+    [[ $assertions == indicator_metrics ]] && report=$REPORT_OF_INDICATORS_DRAWN_FROM_TOKENS prefix=APEXG2-INDICATORS
     tokens=$(tokens_for "$variant")
-    jq -nc --argjson t "$tokens" "$JQ_DEFS $HEX_DEF $report | $change" | sed 's/^/APEXG2-SCENES /' >"$T/top-bar.log"
+    jq -nc --argjson t "$tokens" "$JQ_DEFS $HEX_DEF $report | $change" | sed "s/^/$prefix /" >"$T/top-bar.log"
     # shellcheck disable=SC2016 # expanded by the inner bash
     bash -c '. "$1/assert.sh"; "$2" case "$3" "$4" >"$5" 2>&1; summary >>"$5"; echo "$npass $nfail $ngap"' \
         _ "$HERE" "$assertions" "$T/top-bar.log" "$variant" "$T/top-bar.out"
@@ -690,6 +740,51 @@ test_dock() {
 CHANGES
     assert_run dock_metrics light 'del(.dock)' >/dev/null
     expect_eq "dock: a report without the dock passes none" 0 "$(grep -c '^PASS' "$T/top-bar.out")"
+}
+
+test_indicators() {
+    local variant change what passes failures open_gaps
+    for variant in light dark; do
+        read -r passes failures open_gaps <<<"$(assert_run indicator_metrics "$variant")"
+        if ((failures == 0 && passes == 18)); then
+            ok "indicators ($variant): indicators drawn from the tokens pass all $passes assertions"
+        else
+            not_ok "indicators ($variant): indicators drawn from the tokens pass (passed/failed/gaps $passes/$failures/$open_gaps): $(grep -m3 '^FAIL' "$T/top-bar.out" | paste -sd'|' -)"
+        fi
+    done
+    while IFS='|' read -r change what; do
+        read -r passes failures open_gaps <<<"$(assert_run indicator_metrics light "$change")"
+        if ((failures == 1)); then
+            ok "indicators: $what fails one assertion"
+        else
+            not_ok "indicators: $what fails one assertion (passed/failed/gaps $passes/$failures/$open_gaps)"
+        fi
+    done <<'CHANGES'
+.empty.visible = true|indicators before any item registers
+.four.order = ["divider", "indicators", "apex-search", "quickSettings"]|the divider before the indicators
+.four.items[2].pill.radius = 4|a pill with a square's corners
+(.four.items[2].pill.x, .four.items[2].glyph.x) += 1|a wider gap
+.four.items[0].glyph.colour = "#ffffffff"|a glyph not in the bar's colour
+.four.items[0].glyph.mask = true|a named icon drawn as a mask
+.four.mask.redPixels = 40|a pixmap drawn in its own colours
+.four.items[1].dot = null|no attention dot
+.four.items[1].dot.colour = "#ff0000ff"|a dot not in the accent
+.four.divider.height = 24|a divider the pill's height
+.four.search.x += 4|the search button further from the divider
+.menu.content.radius = 8|a menu with a row's radius
+.menu.rows[0].header = false|no title header
+.menu.rows[1].height = 30|a row at the header's height
+.menu.rows[2].switch.width = 46|upstream's switch
+.menu.rows[3].switch.checked = false|a toggle not in the app's state
+.menu.rows[1].shortcut.colour = "#ffffffff"|a shortcut not dimmed
+.log -= ["Chat Event 5 clicked"]|no clicked event
+.log = .log[:5]|no Activate
+.five.overflow.text = "+1"|the wrong overflow count
+.overflowMenu.rows[1].chevron = null|a row without its chevron
+.gone.visible = true|indicators left after the apps quit
+CHANGES
+    assert_run indicator_metrics light 'del(.four, .menu, .five, .overflowMenu, .gone, .empty, .log)' >/dev/null
+    expect_eq "indicators: a report without them passes none" 0 "$(grep -c '^PASS' "$T/top-bar.out")"
 }
 
 test_shell_surfaces() {
@@ -1118,6 +1213,36 @@ test_spotlight_style() {
 .surfaces.spotlight.rows[2].tile.foreground = "#1d1d21ff"|a dark glyph on a coloured tile
 .surfaces.overviewSearch.opened = false|the overview's stock search
 .surfaces.overviewSearch.overviewText = "disk"|the typed text left in the overview's field too
+CHANGES
+}
+
+test_launcher_search() {
+    local variant change what passes failures open_gaps
+    for variant in light dark; do
+        read -r passes failures open_gaps <<<"$(assert_run launcher_search "$variant")"
+        if ((failures == 0 && open_gaps == 0 && passes == 3)); then
+            ok "launcher search ($variant): drawn from the tokens it passes all $passes assertions"
+        else
+            not_ok "launcher search ($variant): drawn from the tokens it passes (passed/failed/gaps $passes/$failures/$open_gaps): $(grep -m3 '^FAIL' "$T/top-bar.out" | paste -sd'|' -)"
+        fi
+    done
+    while IFS='|' read -r change what; do
+        read -r passes failures open_gaps <<<"$(assert_run launcher_search light "$change")"
+        if ((failures == 1)); then
+            ok "launcher search: $what fails one assertion"
+        else
+            not_ok "launcher search: $what fails one assertion (passed/failed/gaps $passes/$failures/$open_gaps)"
+        fi
+    done <<'CHANGES'
+.surfaces.launcher.pill.width = 440|the overview's 440 px pill
+.surfaces.launcher.pill.hint = "Type to search"|upstream's hint
+.surfaces.launcher.found.spotlightOpen = true|Spotlight opened instead
+.surfaces.launcher.found.names = []|no app found for "files"
+.surfaces.launcher.found.gridHidden = false|results under the full grid
+.surfaces.launcher.found.results.y = 422|results centred in the grid's box instead of filling it
+.surfaces.launcher.empty.top = 160|"No Results" centred instead of at its place
+.surfaces.launcher.empty.title.font.weight = 600|a lighter "No Results"
+.surfaces.launcher.empty.hint.foreground = "#1d1d21ff"|a hint at full strength
 CHANGES
 }
 
@@ -1694,6 +1819,7 @@ test_incomplete_compare
 test_token_file
 test_top_bar
 test_dock
+test_indicators
 test_shell_surfaces
 test_quick_settings
 test_window_switcher
@@ -1706,6 +1832,7 @@ test_shadow_layers
 test_derived_surfaces
 test_tile_preview
 test_spotlight_style
+test_launcher_search
 test_spotlight_glass
 test_screenshot_ui
 test_today_pins

@@ -158,3 +158,22 @@
 }
 
 .apex-toast-check-icon { icon-size: $apex_toast_check_icon_size; }
+
+// The overview's pill while the app grid shows: the launcher's, apps only.
+.search-entry.apex-launcher-search { width: $apex_launcher_search_width - 2 * $apex_search_padding; }
+
+.apex-launcher-empty {
+  padding-top: $apex_launcher_empty_top;
+  spacing: $apex_launcher_empty_gap;
+}
+
+.apex-launcher-empty-title {
+  color: $apex_fg;
+  font-size: apex-text-size($apex_font_launcher_empty_title_size);
+  font-weight: $apex_font_heading_weight;
+}
+
+.apex-launcher-empty-hint {
+  color: $apex_fg_dim;
+  font-size: apex-text-size($apex_font_launcher_empty_hint_size);
+}
