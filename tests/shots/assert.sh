@@ -477,6 +477,41 @@ window_switcher() {
         "$w.app.label" '(.size | px_is($t.apex_font_size)) and .weight == ($t.apex_font_label_weight | tonumber)'
 }
 
+# shellcheck disable=SC2016 # jq programs and token names, not shell expansions
+modal_dialog() {
+    local label=$1 log=$2 variant=$3 scenes tokens
+    scenes=$(report_of "$log" APEXG2-SCENES)
+    tokens=$(tokens_for "$variant")
+    local -a metric=(top_bar_metric "$label modal dialog" "$scenes" "$tokens")
+    local d=.surfaces.dialog
+
+    "${metric[@]}" 'a dialog is solid $apex_panel_solid, radius $apex_radius_dialog, $apex_dialog_width wide (polkit), $apex_end_session_dialog_width (end session)' \
+        "$d" '(.box | (.background | colour_is($t.apex_panel_solid)) and (.radius | px_is($t.apex_radius_dialog)) and (.width | px_is($t.apex_dialog_width)))
+            and (.endSessionWidth + 2 * ($t.apex_dialog_padding | px) | px_is($t.apex_end_session_dialog_width))'
+    "${metric[@]}" 'its ring is a $apex_surface_border border in $apex_panel_border, its shadow 0 $apex_shadow_y $apex_shadow_blur $apex_shadow' \
+        "$d.box" '(.border.top | px_is($t.apex_surface_border)) and (.borderColor | colour_is($t.apex_panel_border))
+            and (.boxShadow | .y == ($t.apex_shadow_y | px) and .blur == ($t.apex_shadow_blur | px) and (.color | colour_is($t.apex_shadow)))'
+    "${metric[@]}" 'it is inset $apex_dialog_padding, $apex_dialog_padding_bottom at the bottom, with $apex_dialog_gap between its parts and $apex_dialog_text_gap between title and text' \
+        "$d" '(.box | (.padding.top + .border.top | px_is($t.apex_dialog_padding)) and (.padding.left + .border.left | px_is($t.apex_dialog_padding))
+            and (.padding.right + .border.right | px_is($t.apex_dialog_padding)) and (.padding.bottom + .border.bottom | px_is($t.apex_dialog_padding_bottom)) and (.spacing | px_is($t.apex_dialog_gap)))
+            and (.contentSpacing | px_is($t.apex_dialog_gap)) and (.textSpacing | px_is($t.apex_dialog_text_gap))'
+    "${metric[@]}" 'its title is $apex_font_dialog_title_size at $apex_font_heading_weight, its text $apex_font_size in $apex_fg_dim' \
+        "$d" '(.title.font.size | px_is($t.apex_font_dialog_title_size)) and .title.font.weight == ($t.apex_font_heading_weight | tonumber)
+            and (.description.font.size | px_is($t.apex_font_size)) and (.description.foreground | colour_is($t.apex_fg_dim))'
+    "${metric[@]}" 'the password entry is $apex_entry_height high, fully round, $apex_button, padded $apex_entry_padding, $apex_font_entry_size at $apex_font_entry_weight' \
+        "$d.entry" '(.height | px_is($t.apex_entry_height)) and .radius >= ($t.apex_entry_height | px) / 2 and (.background | colour_is($t.apex_button)) and .boxShadow == null
+            and (.padding.left | px_is($t.apex_entry_padding)) and (.padding.right | px_is($t.apex_entry_padding))
+            and (.font.size | px_is($t.apex_font_entry_size)) and .font.weight == ($t.apex_font_entry_weight | tonumber)'
+    "${metric[@]}" 'focused, it draws a $apex_entry_focus_ring ring in the raw accent' \
+        "{e: $d.entry, accent: .topBar.accent}" '.accent as $a | .e.focus.boxShadow | .inset and (.spread | px_is($t.apex_entry_focus_ring)) and (.color | colour_is($a))'
+    "${metric[@]}" 'its buttons are $apex_dialog_button_height high, fully round, $apex_font_dialog_button_size at $apex_font_label_weight' \
+        "$d.buttons" 'length == 2 and all((.height | px_is($t.apex_dialog_button_height)) and .radius >= ($t.apex_dialog_button_height | px) / 2
+            and (.font.size | px_is($t.apex_font_dialog_button_size)) and .font.weight == ($t.apex_font_label_weight | tonumber))'
+    "${metric[@]}" 'a button is $apex_button ($apex_button_hover hovered); the default one the accent with its foreground' \
+        "{b: $d.buttons, accent: .topBar.accent}" '.accent as $a | (.b | map(select(.default | not)) | length == 1 and all((.background | colour_is($t.apex_button)) and (.foreground | colour_is($t.apex_fg)) and (.hover.background | colour_is($t.apex_button_hover))))
+            and (.b | map(select(.default)) | length == 1 and all((.background | colour_is($a)) and (.foreground | colour_is("#ffffff"))))'
+}
+
 scenes_captured() {
     local run=$1 case_name=$2
     local log=$run/$case_name.log scene
@@ -653,6 +688,7 @@ direct_cases() {
     shell_surfaces default "$f" light
     quick_settings default "$f" light
     window_switcher default "$f" light
+    modal_dialog default "$f" light
 
     f=$run/default-scale1.log
     exits "$run" default-scale1 0
@@ -665,6 +701,7 @@ direct_cases() {
     shell_surfaces default-scale1 "$f" light
     quick_settings default-scale1 "$f" light
     window_switcher default-scale1 "$f" light
+    modal_dialog default-scale1 "$f" light
 
     f=$run/dark-style.log
     exits "$run" dark-style 0
@@ -680,6 +717,7 @@ direct_cases() {
     shell_surfaces dark-style "$f" dark
     quick_settings dark-style "$f" dark
     window_switcher dark-style "$f" dark
+    modal_dialog dark-style "$f" dark
     dark_style_off dark-style "$f"
 
     for c in stock-light stock-dark; do
