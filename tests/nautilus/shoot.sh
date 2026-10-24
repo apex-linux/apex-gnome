@@ -42,6 +42,8 @@ readonly CLOCK='2026-10-21 10:24:00'
 readonly MONITOR=2880x1800
 readonly SCALE=2
 readonly SPEC_ODT='Apex Fedora — Spec.odt'
+readonly APEX_SCHEMAS=/run/apex-schemas
+readonly SEARCH_QUERY=apex
 # apex-desktop's values (schemas/90_apex.gschema.override).
 readonly APEX_SETTINGS="org.gnome.desktop.interface font-name 'Adwaita Sans 10.125'
 org.gnome.desktop.interface monospace-font-name 'JetBrains Mono 9.75'
@@ -97,8 +99,9 @@ install -Dm0644 "$desktop/desktop/icons/index.theme" /usr/share/icons/Apex/index
 install -Dm0644 -t /usr/share/icons/Apex/symbolic "$icons"/symbolic/*-symbolic.svg
 cp -a "$icons/themes/Apex/." /usr/share/icons/Apex/
 gtk4-update-icon-cache -q -t -f /usr/share/icons/Apex 2>/dev/null || true
-install -Dm0644 -t /usr/share/glib-2.0/schemas "$desktop"/desktop/schemas/io.github.apex_linux.Apex.Desktop.gschema.xml
-glib-compile-schemas /usr/share/glib-2.0/schemas || die "glib-compile-schemas failed"
+# Its own directory, so the no-schema case can leave it out.
+install -Dm0644 -t "$APEX_SCHEMAS" "$desktop"/desktop/schemas/io.github.apex_linux.Apex.Desktop.gschema.xml
+glib-compile-schemas --strict "$APEX_SCHEMAS" || die "glib-compile-schemas failed on the Apex schema"
 endgroup
 
 id "$USER_NAME" >/dev/null 2>&1 || useradd -m "$USER_NAME"
@@ -125,15 +128,19 @@ held=$(env LD_PRELOAD="$CLOCK_LIB" G2_CLOCK_EPOCH="$clock_epoch" date -u '+%F %T
 [[ $held == "$CLOCK" ]] || die "$CLOCK_LIB does not hold the clock at $CLOCK: $held"
 
 shoot() {
-    local name=$1 scheme=$2 viewer=$3 args=$4 run rc
+    local name=$1 scheme=$2 viewer=$3 args=$4 extra=$5 query=$6 schemas=$7 press=${8:-} run rc settings
     run=$(mktemp -d)
     chown "$USER_NAME:" "$run" && chmod 700 "$run"
+    rm -rf "$home/.config/dconf" "$home/.local/share/gvfs-metadata" "$home/.cache/thumbnails"
+    settings="$APEX_SETTINGS"$'\n'"$CAPTURE_SETTINGS"$'\n'"org.gnome.desktop.interface color-scheme '$scheme'"
+    settings+=$'\n'"org.gnome.nautilus.preferences default-folder-viewer '$viewer'"
+    [[ -z $extra ]] || settings+=$'\n'"$extra"
     # shellcheck disable=SC2016 # expanded by the user's bash
     runuser -u "$USER_NAME" -- env -i HOME="$home" PATH="/usr/bin:/usr/sbin" XDG_RUNTIME_DIR="$run" \
         LANG=C.UTF-8 TZ=UTC APEX_SHOTS="$out" APEX_SHOT="$name" APEX_FILES_ARGS="$args" APEX_A11Y="$HERE/a11y.py" \
+        APEX_FILES_SEARCH="$query" APEX_A11Y_PRESS="$press" ${schemas:+GSETTINGS_SCHEMA_DIR="$schemas"} \
         CLOCK_LIB="$CLOCK_LIB" G2_CLOCK_EPOCH="$clock_epoch" GTK_A11Y=atspi \
-        DBUS_SYSTEM_BUS_ADDRESS=unix:path=/run/dbus/system_bus_socket \
-        SETTINGS="$APEX_SETTINGS"$'\n'"$CAPTURE_SETTINGS"$'\n'"org.gnome.desktop.interface color-scheme '$scheme'"$'\n'"org.gnome.nautilus.preferences default-folder-viewer '$viewer'" \
+        DBUS_SYSTEM_BUS_ADDRESS=unix:path=/run/dbus/system_bus_socket SETTINGS="$settings" \
         timeout "$SHELL_TIMEOUT" dbus-run-session -- bash -c '
             while read -r schema key value; do
                 gsettings set "$schema" "$key" "$value" || exit 1
@@ -151,12 +158,16 @@ documents_args=$(printf '["--new-window", "--select", "%s/Documents/%s"]' "$home
 
 chmod 777 "$out"
 status=0
+details_on="io.github.apex_linux.Apex.Desktop files-details-pane true"
 for scheme in light dark; do
     color=default
     [[ $scheme == dark ]] && color=prefer-dark
-    shoot "home-$scheme" "$color" icon-view "$home_args" || status=1
-    shoot "documents-$scheme" "$color" list-view "$documents_args" || status=1
+    shoot "home-$scheme" "$color" icon-view "$home_args" "" "" "$APEX_SCHEMAS" || status=1
+    shoot "documents-$scheme" "$color" list-view "$documents_args" "$details_on" "" "$APEX_SCHEMAS" || status=1
+    shoot "search-$scheme" "$color" list-view "$home_args" "" "$SEARCH_QUERY" "$APEX_SCHEMAS" || status=1
 done
+shoot search-documents-light default list-view "$home_args" "" "$SEARCH_QUERY" "$APEX_SCHEMAS" "Documents 3" || status=1
+shoot noschema-light default icon-view "$home_args" "" "" "" || status=1
 ((status == 0)) || die "shoot.sh: a capture failed; see ${out#"$APEX_ROOT/"}/*.log"
 python3 "$HERE/check.py" "$out" || die "shoot.sh: the captures' assertions failed"
 log "shoot.sh: captures in ${out#"$APEX_ROOT/"}"

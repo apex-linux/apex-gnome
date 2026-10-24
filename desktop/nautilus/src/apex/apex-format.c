@@ -4,6 +4,7 @@
 
 #include <glib/gi18n.h>
 #include <math.h>
+#include <string.h>
 
 static const char * const size_units[] = { "B", "kB", "MB", "GB", "TB", "PB" };
 
@@ -79,4 +80,104 @@ apex_format_item_count (guint       n_items,
     }
 
     return g_steal_pointer (&count);
+}
+
+static const char * const document_types[] = {
+    "application/pdf",
+    "application/rtf",
+    "application/msword",
+    "application/vnd.ms-excel",
+    "application/vnd.ms-powerpoint",
+    "application/json",
+    "application/javascript",
+    "application/xml",
+    "application/x-shellscript",
+    "application/x-yaml",
+    "application/toml",
+};
+
+static const char * const document_prefixes[] = {
+    "text/",
+    "application/vnd.oasis.opendocument.",
+    "application/vnd.openxmlformats-officedocument.",
+};
+
+ApexKind
+apex_kind_of (const char *content_type,
+              gboolean    is_directory)
+{
+    if (is_directory)
+    {
+        return APEX_KIND_FOLDER;
+    }
+
+    if (content_type == NULL)
+    {
+        return APEX_KIND_OTHER;
+    }
+
+    if (g_str_has_prefix (content_type, "image/"))
+    {
+        return APEX_KIND_IMAGE;
+    }
+
+    if (g_str_has_prefix (content_type, "audio/") || g_str_has_prefix (content_type, "video/"))
+    {
+        return APEX_KIND_MEDIA;
+    }
+
+    for (guint i = 0; i < G_N_ELEMENTS (document_prefixes); i++)
+    {
+        if (g_str_has_prefix (content_type, document_prefixes[i]))
+        {
+            return APEX_KIND_DOCUMENT;
+        }
+    }
+
+    for (guint i = 0; i < G_N_ELEMENTS (document_types); i++)
+    {
+        if (g_str_equal (content_type, document_types[i]))
+        {
+            return APEX_KIND_DOCUMENT;
+        }
+    }
+
+    return APEX_KIND_OTHER;
+}
+
+char *
+apex_format_day (GDateTime *when,
+                 GDateTime *now)
+{
+    g_autoptr (GDateTime) yesterday = g_date_time_add_days (now, -1);
+    gint year, month, day;
+
+    g_date_time_get_ymd (when, &year, &month, &day);
+    if (year == g_date_time_get_year (now) && g_date_time_get_day_of_year (when) == g_date_time_get_day_of_year (now))
+    {
+        return g_strdup (_("Today"));
+    }
+
+    if (year == g_date_time_get_year (yesterday) &&
+        g_date_time_get_day_of_year (when) == g_date_time_get_day_of_year (yesterday))
+    {
+        return g_strdup (_("Yesterday"));
+    }
+
+    /* Translators: a day this year, "Oct 18"; see the GDateTime format. */
+    return g_date_time_format (when, year == g_date_time_get_year (now) ? _("%b %-d") : _("%b %-d, %Y"));
+}
+
+char *
+apex_format_home_path (const char *path,
+                       const char *home)
+{
+    gsize home_length = strlen (home);
+
+    if (g_str_has_prefix (path, home) && (path[home_length] == '/' || path[home_length] == '\0'))
+    {
+        return g_strconcat ("~", path + home_length, NULL);
+    }
+
+    return g_strdup (path);
 }
