@@ -175,18 +175,19 @@ def within(times, after, until):
 def drops(client_path, steps, presented_us, dispatch_us, start_us, end_us, strict):
     """Updates that never got a presented frame: the client's changes, then the shell's steps.
 
-    A step the compositor answered with no dispatch at all needed no frame, as under an opaque
-    popover with Reduce Transparency. With the glass (STRICT) every step must reach the screen."""
+    A step needs no frame only without the glass (not STRICT), when scenarios.js found the
+    window entirely under an opaque popover and the compositor dispatched nothing for it."""
     changes, shown = read_client(client_path)
     counted = [c for c, when in changes.items() if start_us <= when <= end_us - END_MARGIN_US]
     lost = [c for c in counted if c not in shown]
-    steps = [s for s in steps if start_us <= s <= end_us - END_MARGIN_US]
+    steps = [(s, None) if isinstance(s, int) else (s[0], s[1]) for s in steps]
+    steps = [s for s in steps if start_us <= s[0] <= end_us - END_MARGIN_US]
     lost_steps = unneeded = 0
-    for i, s in enumerate(steps):
-        following = steps[i + 1] if i + 1 < len(steps) else end_us
+    for i, (s, state) in enumerate(steps):
+        following = steps[i + 1][0] if i + 1 < len(steps) else end_us
         if within(presented_us, s, following):
             continue
-        if strict or within(dispatch_us, s, following):
+        if strict or state != "covered" or within(dispatch_us, s, following):
             lost_steps += 1
         else:
             unneeded += 1
@@ -238,7 +239,8 @@ def scenario_rows(scenario, glass, rt):
         message = glass.get("error") or rt.get("error")
         return [{"row": f"{scenario}: the scenario ran", "value": message, "limit": None, "unit": "", "status": "FAIL"}]
     rows.append(row(f"{scenario} p99 frame time", glass["p99Ms"], P99_MAX_MS, lambda v: v <= P99_MAX_MS, "ms"))
-    share = glass["drops"]["share"]
+    shares = [run["drops"]["share"] for run in (glass, rt)]
+    share = None if None in shares else max(shares)
     rows.append(row(f"{scenario} dropped frames", None if share is None else share * 100, DROPS_MAX * 100,
                     lambda v: v <= DROPS_MAX * 100, "%"))
     delta = None if glass["p50Ms"] is None or rt["p50Ms"] is None else glass["p50Ms"] - rt["p50Ms"]
@@ -275,8 +277,9 @@ def score(directory):
     directory = Path(directory)
     report = {"definitions": {
         "frameTime": "the duration of mutter's Clutter::FrameClock::dispatch() mark: frame clock dispatch through swap",
-        "dropped": "a client change or a shell step with no presented frame before the next one; with Reduce "
-                   "Transparency, a step the compositor answered with no dispatch needed no frame",
+        "dropped": "a client change or a shell step with no presented frame before the next one, the worse of the "
+                   "two runs; with Reduce Transparency a step needs no frame when the window lay entirely under an "
+                   "opaque popover and the compositor dispatched nothing",
         "dispatchToPresented": "report only: from dispatch() to the next presented() mark",
         "lateMedianMs": "report only: the median of dispatch()'s 'dispatched N µs late'",
         "framesWithSeveralCommits": "report only: frames with more than one surface commit since the last dispatch",

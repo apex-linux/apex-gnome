@@ -35,7 +35,7 @@ def mark(when_us, name, duration_us=0, message=""):
 
 
 def synth(directory, scenario, mode, frame_ms=None, slow_share=0.0, coalesce_share=0.0, coalesce_one=False,
-          lost_step_share=0.0, occluded=None, gpu=None, error=None, manual=False):
+          lost_step_share=0.0, occluded=None, stalled=None, gpu=None, error=None, manual=False):
     """One recorded run: a 90 Hz frame clock, a 60 fps client on it, and B's and C's steps."""
     base = Path(directory) / f"{scenario}-{mode}"
     if error:
@@ -51,10 +51,13 @@ def synth(directory, scenario, mode, frame_ms=None, slow_share=0.0, coalesce_sha
         if lost_every and i % lost_every == 0:
             following = steps[i + 1] if i + 1 < len(steps) else END_US
             hidden |= {v for v in vsyncs if s < v + 2000 <= following}
-    idle = set()
+    idle, covered = set(), set()
+    for stretch in (occluded, stalled):
+        if stretch:
+            first, last = stretch
+            idle |= {v for v in vsyncs if steps[first] < v <= steps[last + 1]}
     if occluded:
-        first, last = occluded
-        idle = {v for v in vsyncs if steps[first] < v <= steps[last + 1]}
+        covered = set(range(occluded[0], occluded[1] + 1))
     marks, slow_every = [], round(1 / slow_share) if slow_share else 0
     for i, v in enumerate(vsyncs):
         if v in idle:
@@ -79,7 +82,8 @@ def synth(directory, scenario, mode, frame_ms=None, slow_share=0.0, coalesce_sha
         level = gpu if gpu is not None else (40 if mode == "glass" else 37)
         base.with_suffix(".gpu").write_text("".join(f"{START_US + i * 100_000} {level}\n" for i in range(SECONDS * 10)))
     base.with_suffix(".json").write_text(json.dumps({"scenario": scenario, "startUs": START_US, "endUs": END_US,
-                                                     "steps": [int(s) for s in steps], "manual": manual}))
+                                                     "steps": [[int(s), "covered" if i in covered else "visible"]
+                                                               for i, s in enumerate(steps)], "manual": manual}))
 
 
 def synth_power(directory, scenario, glass_w, rt_w, warmup_w=None):
@@ -175,6 +179,9 @@ class Scoring(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.dir = Path(self.tmp.name)
         self.assert_fails_only("B dropped frames", **{"B-glass": {"occluded": (100, 139)}})
+
+    def test_a_visible_window_with_no_dispatch_is_lost_without_glass_too(self):
+        self.assert_fails_only("B dropped frames", **{"B-rt": {"stalled": (100, 139)}})
 
     def test_a_dispatched_step_never_presented_is_lost_without_glass_too(self):
         passing(self.dir, **{"B-rt": {"lost_step_share": 0.02}})

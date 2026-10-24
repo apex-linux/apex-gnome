@@ -81,12 +81,15 @@ and B's drops, which need the shell's steps, are unmeasured.
   window change counts as dropped when no frame showing it was presented, read from GTK's
   own frame timings as each frame completes. In B and C, a shell step counts as dropped
   when no `presented()` mark follows it before the next step.
+  - A step is a move that changed the window's place. Past the panel's right edge the
+    work area's constraints refuse B's moves, which changes nothing on screen.
   - With the glass, every step must reach the screen: every surface on B's path is
     translucent.
-  - With Reduce Transparency, a step the compositor answers with no dispatch at all needs
-    no frame, and is not counted. Mutter correctly paints nothing while B's window moves
-    entirely under the opaque Quick Settings. Headless, that is 73 of B's 601 steps in a
-    20 s run. The report counts them as `stepsNeedingNoFrame`.
+  - With Reduce Transparency, a step needs no frame only when two things hold:
+    `scenarios.js` found the window's whole buffer inside an open popover's card, inset
+    by its corners, and the compositor dispatched nothing. The report counts these as
+    `stepsNeedingNoFrame`. A visible step with no dispatch stays lost.
+  - The row takes the worse of the two runs.
   - Both count against the content, not the panel: a 60 fps window on a 90 Hz panel
     presents at one and two intervals and drops nothing.
   - A change made in the last 200 ms of the recording is not counted.
