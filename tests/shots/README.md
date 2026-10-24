@@ -68,7 +68,7 @@ starts python-dbusmock's `upower`, `networkmanager` and `bluez5` templates there
 |---|---|---|
 | UPower | a battery at 87 %, discharging (the display device) | `battery-level-80-symbolic` and, with `show-battery-percentage`, "87%" |
 | NetworkManager | the primary connection: Wi-Fi "Apex-5G" at signal 90, connected globally | `network-wireless-signal-excellent-symbolic` |
-| BlueZ | the Bluetooth keyboard "Keychron K3", paired and connected | `bluetooth-active-symbolic`, until S2a's status-pill filter (a known gap) |
+| BlueZ | the Bluetooth keyboard "Keychron K3", paired and connected | no glyph: the status pill shows network, volume and battery only (the `panel` feature) |
 
 `fixtures-PART.txt` holds what the bus reports afterwards, and `assert.sh` checks it for
 each container. `direct.sh` builds `clock.c` and preloads it into each shell with
@@ -142,12 +142,19 @@ every expected value from `desktop/shell/data/theme/apex/_apex-tokens.scss`, for
 case's variant: the bar's height, fill and type; the boxes' insets and gaps; each
 button's height and colour; each pill's height, radius, padding, and fill while closed,
 hovered and open; the clock's weight; where the pills sit, and that the Activities and
-status buttons still reach the screen's left and right edges; the bar's transition; the
-workspace dots' gap, height and radius; the clock's unread-notification dot (the probe
+status buttons still reach the screen's left and right edges; the bar's transition; with `translucent-top-bar` off, the bar `$apex_bar_solid` over a
+`0 1px 0 $apex_border` line (the `panel` feature); the
+workspace dots' gap, height and radius, the active dot `$apex_bar_dot_active_width` wide and
+the others `$apex_bar_dot_size` square at .45; that the top-left pixel reaches the reactive
+4 × 4 hot-corner zone; "Desktop" at `$apex_font_bar_emphasis_weight` after the Activities pill,
+as nothing has focus; the search button just before the status pill, a
+`$apex_bar_search_width` × `$apex_bar_pill_height` pill named "Search (Super+Space)" (both
+the `panel` feature); the clock's unread-notification dot (the probe
 posts one low-urgency notification); that the diamond is drawn (at least a quarter of
 its stroke's area in capture pixels of the bar's colour, left of the dots, at the
 capture's scale); the status pill's glyph gap and glyph size, the fixtures' Wi-Fi and
-battery glyphs, and the battery's "87%" at `$apex_font_bar_percentage_size`; on the lock screen and the
+battery glyphs, and the battery's "87%" at `$apex_font_bar_percentage_size`; that neither the
+fixtures' Bluetooth keyboard nor Do Not Disturb adds a glyph; on the lock screen and the
 greeter (the probe adds the panel's `unlock-screen` style class), that upstream's hover
 fill of the status button is centred on its pill; and with Large Text (the probe sets
 `text-scaling-factor` 1.25) that the bar, the clock pill and the glyphs keep their px
@@ -175,7 +182,7 @@ overview. Every expected value comes from `_apex-tokens.scss`, for the case's va
   them only in an expanded banner).
 
 `quick_settings` runs in the same cases. The probe opens Quick Settings and the Wi-Fi
-toggle's menu (the fixtures' Wi-Fi checks the toggle), captures them for `local.sh`, and
+toggle's menu (the fixtures' Wi-Fi checks the toggle), captures them with `G2_SURFACE_SCENES=1`, and
 reads: the panel's width, radius, tint, inset, ring and shadow; the grid's gaps and the gap
 under the top row; the round buttons and the battery pill; the toggles' size, fills
 (checked, unchecked, hovered), padding, type and subtitle opacity; the menu arrow's width
@@ -185,19 +192,6 @@ The fixtures' NetworkManager lists no access points, so the card's network list 
 
 None of these surfaces is in a compared capture, so the comparison with Fedora's build
 is unchanged.
-
-## Without the builder VM: `local.sh`
-
-`tests/shots/local.sh [OUT_DIR]` rebuilds Fedora's gnome-shell SRPM with this working
-tree's `desktop/shell/` in a Fedora 45 container, as the lane does (spec-edit, the series
-from Patch1001, Source1), then runs `direct.sh apex` on it in a second container: the
-`default` and `dark-style` cases, which also capture the `surfaces` scene with the menu,
-the OSD and the banner open, and the `quick-settings` scene.
-It asserts `top_bar`, `shell_surfaces` and `quick_settings`, and writes the
-RPMs, logs, captures and `assert.txt` to `_build/local/`. It takes about 10 minutes the
-first time, with podman or docker. The shells run on Fedora's packages rather than the
-image, with no wallpaper, so it is a fast check and a source of captures for the
-boards, not G2. `LOCAL_CA` names a CA file to trust inside the containers.
 
 ## Known gaps
 
@@ -214,14 +208,6 @@ removes its pin.
 
 | Until | Assertion | S1a measures |
 |---|---|---|
-| S2a (patch 0010) | the active workspace dot is 22 × 7 | 25 × 7 (stock's 3.625 × at two workspaces) |
-| S2a (patch 0010) | an inactive dot is 7 × 7 at .45 | 5.25 × 5.25 at .5 |
-| S2a (patch 0010) | the top-left pixel reaches a reactive 4 × 4 hot-corner zone | the Activities button, 84 × 32 |
-| S2a (patch 0010) | Do Not Disturb adds no glyph to the status pill | it adds `notifications-disabled-symbolic` |
-| S2a (patch 0010) | the status pill shows network, volume and battery only: the connected Keychron K3 adds no glyph | it adds `bluetooth-active-symbolic` |
-| S2a (the layer) | "Desktop" at 700 follows the Activities pill while nothing has focus | no item |
-| S2a (the layer) | a 32 × 24 search button named "Search…" | none |
-| S2a (the layer) | with `translucent-top-bar` off the bar is `$apex_bar_solid` over a `0 1px 0 $apex_border` line | the bar keeps its translucent fill and draws no line |
 | S2b (patch 0003, the glass manager) | a 24 px blur at 160 % saturation behind the bar | no blur effect |
 | S1b (the Facets wallpaper and the light overview) | the unread-notification dot is the raw accent | `$apex_bar_fg`: over Fedora's wallpaper an accent dot is about 1.4:1 against the light bar |
 | no step yet (a clock hook, or the owner accepts it) | `$apex_bar_clock_gap` between the date and the time | about 7 px with G2's 24-hour clock: one label, an EN SPACE. An en-US 12-hour clock adds a FIGURE SPACE before a one-digit hour ("Tue Sep 29" EN SPACE FIGURE SPACE "5:23 AM"): about 14 px |
@@ -242,11 +228,32 @@ it is at least 4.8:1), and what the goldens judge: the Apex Symbolic glyphs (S1b
 | `fixtures.py` | the direct cases' containers | the python-dbusmock services on the system bus |
 | `clock.c` | the direct cases' shells (`LD_PRELOAD`) | the fixed wall clock |
 | `smoke.sh` | CI's Fedora 45 container | `direct.sh fedora` on Fedora's gnome-shell, and the assertions that need no Apex build |
-| `local.sh` | a host with podman or docker | the Apex build from this tree, `direct.sh apex`, and the top-bar and surface and Quick Settings assertions |
+| `patched.sh` | a throwaway Fedora 45 container, by hand | the patched shell before a builder VM: rebuilds Fedora's SRPM with this checkout's recipe and `desktop/shell/`, runs `direct.sh main`, and asserts the logs and the top bar (below) |
 | `probe.js` | the shell (`--automation-script`) | prints `APEXG2 {…}` and, for the capture cases, `APEXG2-SCENES {…}` |
 | `assert.sh`, `stable.sh`, `lib.sh` | the builder VM | the assertions |
 | `png.js`, `compare.js` | gjs | PNG with GLib's zlib only, and the masked comparison |
 | `selftest.sh`, `png-test.js` | CI and the host | the tests of the above |
+
+## The patched shell without a VM
+
+`patched.sh` checks a change to the series or the layer in minutes, before `just vm-image`:
+
+```bash
+docker run --rm --network=host -v "$PWD:/src:ro" registry.fedoraproject.org/fedora:45 \
+    /src/tests/shots/patched.sh
+```
+
+It applies `spec-edit` and the series as the lane does (the mutter pin is the newest
+`mutter-devel` in Fedora's repositories), so a patch that stops applying with fuzz 0 fails
+the build. Then it installs the RPMs with the layer's schema fixture, runs `direct.sh main`,
+and asserts each case's log, the top bar of `default`, `default-scale1` and `dark-style`
+(the metrics, today's pins and the known gaps) and the layer cycles. G1, the crash guard,
+the captures against Fedora's and `rpm -V` stay with G2 in the builder VM. With
+`PATCHED_RPMS=DIR` it installs built RPMs instead; `PATCHED_OUT=DIR` keeps the RPMs and logs.
+It also asserts the shell surfaces and Quick Settings of the same three cases. With
+`-e G2_SURFACE_SCENES=1`, `direct.sh` passes the variable to the shells, and the capture
+cases also save the `surfaces` scene (the menu, the OSD and the banner open) and the
+`quick-settings` scene, for placing beside the boards.
 
 ## Not yet
 

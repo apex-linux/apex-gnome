@@ -48,6 +48,12 @@ mkdir -p "$T/schemas" "$T/noschema" "$T/nochild" "$T/data" "$T/home" "$T/shell" 
 # main.js and the Meta and Shell typelibs come only with gnome-shell and mutter.
 cp -R "$REPO/desktop/shell/js" "$T/shell/"
 cp "$HERE/main-stub.js" "$T/shell/js/ui/main.js"
+cp "$HERE/stubs/panelMenu.js" "$T/shell/js/ui/panelMenu.js"
+cp "$HERE"/stubs/St.js "$HERE"/stubs/Clutter.js "$HERE"/stubs/Shell.js "$T/"
+# gjs outside the shell has no St or Clutter typelib, and the fixture's Shell no
+# WindowTracker: the features get stubs instead.
+find "$T/shell/js/ui/apex" -name '*.js' -exec sed -i -e "s|'gi://St'|'file://$T/St.js'|" \
+    -e "s|'gi://Clutter'|'file://$T/Clutter.js'|" -e "s|'gi://Shell'|'file://$T/Shell.js'|" {} +
 for gir in "$HERE"/fixtures/*.gir; do
     gir_name=${gir##*/}
     "$GI_COMPILER" "$gir" -o "$T/typelib/${gir_name%.gir}.typelib"
@@ -303,6 +309,91 @@ count_is "no Keybindings child schema: in one log line" 'Apex: .*spotlight' 1
 keybindings_are "no Keybindings child schema: no Super+Space binding" ''
 fact "no Keybindings child schema: the rest of the layer runs" 'scheme\.user\.after-enable=prefer-light'
 fact "no Keybindings child schema: enable still runs" 'starting-file=true'
+
+readonly KEPT_PILL='remoteAccess,camera,volumeInput,location,network,volumeOutput,unsafeMode,system'
+readonly STOCK_PILL='remoteAccess,camera,volumeInput,location,brightness,thunderbolt,nightLight,network,darkMode,doNotDisturb,backlight,bluetooth,rfkill,autoRotate,volumeOutput,unsafeMode,powerProfiles,system'
+probe top-bar "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_TOP_BAR=1 PROBE_SCALE=2
+rc_is "top bar: the probe runs" 0
+has "top bar: the panel feature enables" 'Apex: feature panel enabled'
+fact "workspace-dots: the active dot widens from its own width to the sheet's -apex-active-width as it expands; the others stay full size at .45" \
+    'top-bar\.dots=7 15 22 inactive=\{"opacity":0\.45,"scale":1\}'
+fact "status-pill: network, volume, battery, the privacy and the unsafe-mode indicators stay" "pill=$KEPT_PILL"
+fact "status-pill: and so for indicators set up after enable" "pill\.set-up-after-enable=$KEPT_PILL"
+fact "hot-corner: the corner becomes a reactive 4 x 4 zone at its own position, in scaled px" \
+    'hot-corner\.zone=hot-corner reactive=true x=0 y=0 8x8'
+fact "hot-corner: in the chrome, hidden under fullscreen windows" 'chrome\.add=hot-corner trackFullscreen=true'
+count_is "hot-corner: entering it triggers the barrier once, until the pointer leaves it off the barrier" '^probe: hot-corner\.trigger=' 2
+fact "hot-corner: leaving it while on the barrier keeps the barrier's trigger" 'hot-corner\.after-leave-on-the-barrier=true'
+fact "layer-enabled=false: the dot hooks give stock" 'top-bar\.off\.dots=99 99 99 inactive="stock"'
+fact "layer-enabled=false: the status pill gets every indicator back, in order" "pill\.off=$STOCK_PILL"
+fact "layer-enabled=true: the filter again" "pill\.on=$KEPT_PILL"
+count_is "both dots restyle at each enable and disable" '^probe: workspace-dot=restyled$' 6
+count_is "the hot corners are rebuilt at each enable and disable" '^probe: hot-corners=rebuilt$' 3
+lacks "top bar: no feature fails or disables uncleanly" 'off for this session|did not disable cleanly|cannot restyle'
+
+probe top-bar-rtl "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_TOP_BAR=1 PROBE_SCALE=1 PROBE_RTL=1
+fact "hot-corner, right to left: the zone lies left of the corner" 'hot-corner\.zone=hot-corner reactive=true x=-4 y=0 4x4'
+
+probe top-bar-disabled "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_TOP_BAR=1 PROBE_DISABLED=panel
+has "disabled-features=['panel']: skips the feature" 'Apex: feature panel is in disabled-features'
+fact "disabled-features=['panel']: the dot hooks give stock" 'top-bar\.dots=99 99 99 inactive="stock"'
+fact "disabled-features=['panel']: the status pill keeps every indicator" "pill=$STOCK_PILL"
+fact "disabled-features=['panel']: the corner stays stock" 'hot-corner\.zone=none reactive=false x=undefined y=undefined undefinedxundefined'
+lacks "disabled-features=['panel']: nothing is rebuilt or restyled" 'hot-corners=rebuilt|workspace-dot=restyled'
+
+probe panel-live "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_DISABLE_LIVE=panel
+count_is "panel in and out of disabled-features while enabled: it says so" 'Apex: feature panel is in disabled-features' 2
+count_is "panel live: the hot corners are rebuilt at each enable and disable" '^probe: hot-corners=rebuilt$' 5
+lacks "panel live: the feature disables cleanly" 'off for this session|did not disable cleanly|cannot restyle'
+
+panel_classes_are() {
+    local got
+    got=$(sed -n 's/^probe: set \(.*\)$/[\1]/p; s/^probe: panel\.classes=\(.*\)$/\1/p' "$OUT" | paste -sd' ' -)
+    if [[ $got == "$2" ]]; then ok "$1"; else not_ok "$1 (got '$got', expected '$2')"; _show; fi
+}
+
+probe solid-bar "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_SOLID_BAR=1
+has "solid-bar: the panel feature enables" 'Apex: feature panel enabled'
+panel_classes_are "solid-bar: the bar is solid exactly while translucent-top-bar is off and the layer on" \
+    'none [translucent-top-bar=false] apex-solid-bar [translucent-top-bar=true] none [translucent-top-bar=false] apex-solid-bar [layer-enabled=false] none [layer-enabled=true] apex-solid-bar'
+lacks "solid-bar: no feature fails or disables uncleanly" 'off for this session|did not disable cleanly|cannot restyle'
+
+probe solid-bar-disabled "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_SOLID_BAR=1 PROBE_DISABLED=panel
+panel_classes_are "disabled-features=['panel']: the bar stays translucent" \
+    '[translucent-top-bar=false] [translucent-top-bar=true] [translucent-top-bar=false] [layer-enabled=false] [layer-enabled=true]'
+
+probe focused-app "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_FOCUSED_APP=1
+has "focused-app: the panel feature enables" 'Apex: feature panel enabled'
+fact "focused-app: its item follows the Activities pill in the left box" 'panel\.add=apex-focused-app at 1 in left'
+fact "focused-app: \"Desktop\" while nothing has focus, a label that takes no clicks" \
+    'focused-app\.none=Desktop name=Desktop visible=true reactive=false'
+fact "focused-app: the focused app's name" 'focused-app\.files=Files name=Files visible=true reactive=false'
+fact "focused-app: \"Desktop\" again when focus goes" 'focused-app\.unfocused=Desktop name=Desktop visible=true reactive=false'
+fact "focused-app: show-focused-app-name=false hides it" 'focused-app\.hidden=Desktop name=Desktop visible=false reactive=false'
+fact "focused-app: and the lock screen" 'focused-app\.locked=Desktop name=Desktop visible=false reactive=false'
+fact "focused-app: layer-enabled=false takes it out of the bar" 'focused-app\.off=none'
+fact "focused-app: layer-enabled=true brings it back" 'focused-app\.on=Desktop name=Desktop visible=true reactive=false'
+lacks "focused-app: no feature fails or disables uncleanly" 'off for this session|did not disable cleanly|cannot restyle'
+
+probe focused-app-disabled "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_FOCUSED_APP=1 PROBE_DISABLED=panel
+lacks "disabled-features=['panel']: no item in the bar" 'panel\.add=apex-focused-app'
+fact "disabled-features=['panel']: nothing follows the focus" 'focused-app\.files=none'
+
+readonly SEARCH_ITEM='Search \(Super\+Space\) pill=apex-search-pill icon=system-search-symbolic'
+probe search-button "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_SEARCH_BUTTON=1
+has "search-button: the panel feature enables" 'Apex: feature panel enabled'
+fact "search-button: just before the status pill in the right box" 'panel\.add=apex-search at 2 in right'
+fact "search-button: a pill with the search glyph, named for its key" "search\.enabled=$SEARCH_ITEM visible=true"
+fact "search-button: a click opens the overview with its search entry focused" 'search\.click\.1=overview=true'
+fact "search-button: a second click hides it, as Super+Space does" 'search\.click\.2=overview=false'
+fact "search-button: the lock screen hides it" "search\.locked=$SEARCH_ITEM visible=false"
+fact "search-button: layer-enabled=false takes it out of the bar" 'search\.off=none'
+fact "search-button: layer-enabled=true brings it back" "search\.on=$SEARCH_ITEM visible=true"
+lacks "search-button: no feature fails or disables uncleanly" 'off for this session|did not disable cleanly|cannot restyle'
+
+probe search-disabled "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_SEARCH_BUTTON=1 PROBE_DISABLED=panel
+fact "disabled-features=['panel']: no search button" 'search\.enabled=none'
+fact "disabled-features=['panel']: and Super+Space stays" 'keybinding\.add=toggle-spotlight .*'
 
 printf '1..%d\n' "$tests"
 ((failed == 0))

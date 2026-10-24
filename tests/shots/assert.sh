@@ -29,9 +29,10 @@ readonly DIAMOND_SQUARE_PX=8
 readonly DIAMOND_STROKE_PX=2
 readonly DIAMOND_STROKE_AREA_PX=$((4 * DIAMOND_SQUARE_PX * DIAMOND_STROKE_PX))
 readonly LARGE_TEXT_SCALING_FACTOR=1.25
-readonly TODAY_ACTIVE_DOT_WIDTH=25
-readonly TODAY_INACTIVE_DOT_SIZE=5.25
-readonly TODAY_INACTIVE_DOT_OPACITY=0.5
+readonly HOT_CORNER_SIZE=4px
+readonly SEARCH_BUTTON_NAME='Search (Super+Space)'
+readonly STATUS_BUTTON_NAME=System
+readonly INACTIVE_DOT_OPACITY=0.45
 readonly TODAY_CLOCK_TEXT_GAP=7.04
 readonly TODAY_CLOCK_PILL_EXTRA=13
 readonly LAYER_CYCLES=3
@@ -220,15 +221,32 @@ top_bar() {
         '.topBar.clock.label' '(.font.size | px_is($t.apex_font_bar_size)) and .font.weight == ($t.apex_font_bar_emphasis_weight | tonumber) and (.foreground | colour_is($t.apex_bar_fg))'
     "${metric[@]}" 'the activities pill starts $apex_bar_padding from the left edge' \
         '.topBar.activities.pill.x' 'px_is($t.apex_bar_padding)'
+    "${metric[@]}" 'the focused-app name follows the Activities pill: "Desktop" at $apex_font_bar_emphasis_weight while nothing has focus' \
+        '.topBar.leftItems' 'length == 2 and .[0].accessibleName == "Activities" and (.[1].label | .text == "Desktop" and .weight == ($t.apex_font_bar_emphasis_weight | tonumber))'
     "${metric[@]}" 'the status pill ends $apex_bar_padding from the right edge' \
         '.topBar | .panel.width - .status.pill.x - .status.pill.width' 'px_is($t.apex_bar_padding)'
+    "${metric[@]}" "the search button comes just before the status pill: a \$apex_bar_search_width x \$apex_bar_pill_height pill, radius \$apex_radius_bar_pill, named \"$SEARCH_BUTTON_NAME\"" \
+        '.topBar.rightItems | .[-2:]' \
+        "length == 2 and .[1].accessibleName == \"$STATUS_BUTTON_NAME\" and .[0].accessibleName == \"$SEARCH_BUTTON_NAME\"
+            and (.[0].pill | (.width | px_is(\$t.apex_bar_search_width)) and (.height | px_is(\$t.apex_bar_pill_height)) and (.radius | px_is(\$t.apex_radius_bar_pill)))"
     "${metric[@]}" 'the clock pill is centred on the bar' \
         '.topBar | .clock.pill.x + .clock.pill.width / 2 - .panel.width / 2' 'fabs <= 0.5'
     "${metric[@]}" 'the bar changes over $apex_bar_transition' \
         '.topBar.panel.transition' '. == ($t.apex_bar_transition | rtrimstr("ms") | tonumber)'
+    "${metric[@]}" 'with translucent-top-bar off the bar is $apex_bar_solid over a 0 1px 0 $apex_border line' \
+        '.topBar.opaque' \
+        '(.background | colour_is($t.apex_bar_solid)) and (.boxShadow | .inset == false and .x == 0 and .y == 1 and .blur == 0 and .spread == 0 and (.color | colour_is($t.apex_border)))'
     "${metric[@]}" 'the workspace dots are $apex_bar_dots_gap apart, the active one $apex_bar_dot_size high, each with radius $apex_radius_workspace_dot' \
         '.topBar | {spacing: .activities.pill.spacing, active: (.dots | map(select(.active)) | map(.height)), radii: (.dots | map(.radius))}' \
         '(.spacing | px_is($t.apex_bar_dots_gap)) and .active != [] and (.active | all(px_is($t.apex_bar_dot_size))) and (.radii | all(px_is($t.apex_radius_workspace_dot)))'
+    "${metric[@]}" 'the active workspace dot is $apex_bar_dot_active_width x $apex_bar_dot_size' \
+        '.topBar.dots | map(select(.active)) | map({width, height})' \
+        'length == 1 and (.[0] | (.width | px_is($t.apex_bar_dot_active_width)) and (.height | px_is($t.apex_bar_dot_size)))'
+    "${metric[@]}" "an inactive workspace dot is \$apex_bar_dot_size square at opacity $INACTIVE_DOT_OPACITY" \
+        '.topBar.dots | map(select(.active | not)) | map({width, height, opacity})' \
+        "length > 0 and all((.width | px_is(\$t.apex_bar_dot_size)) and (.height | px_is(\$t.apex_bar_dot_size)) and ((.opacity - $INACTIVE_DOT_OPACITY) | fabs < 0.01))"
+    "${metric[@]}" "the hot corner: the top-left pixel reaches a reactive $HOT_CORNER_SIZE square zone at 0,0" \
+        '.topBar.corner' ".x == 0 and .y == 0 and (.width | px_is(\"$HOT_CORNER_SIZE\")) and (.height | px_is(\"$HOT_CORNER_SIZE\"))"
     "${metric[@]}" 'the clock'"'"'s unread-notification dot is $apex_bar_clock_dot_size square, radius $apex_radius_clock_dot' \
         '.topBar.withDot.dot' '.visible and (.width | px_is($t.apex_bar_clock_dot_size)) and (.height | px_is($t.apex_bar_clock_dot_size)) and (.radius | px_is($t.apex_radius_clock_dot))'
     "${metric[@]}" "the diamond is drawn: at least a quarter of its $DIAMOND_STROKE_AREA_PX px² stroke in capture pixels of \$apex_bar_fg, left of the dots" \
@@ -241,6 +259,10 @@ top_bar() {
         '.topBar.statusGlyphs | map(.name)' "index([\"$WIFI_GLYPH\"]) != null and index([\"$BATTERY_GLYPH\"]) != null"
     "${metric[@]}" "and the battery's $BATTERY_PERCENT% at \$apex_font_bar_percentage_size in \$apex_bar_fg" \
         '.topBar.statusLabels' "length == 1 and (.[0] | .text == \"$BATTERY_PERCENT%\" and (.font.size | px_is(\$t.apex_font_bar_percentage_size)) and (.foreground | colour_is(\$t.apex_bar_fg)))"
+    "${metric[@]}" 'the status pill shows network, volume and battery only: the fixtures'"'"' connected Bluetooth keyboard adds no glyph' \
+        '.topBar.statusGlyphs | map(.name)' "length > 0 and index([\"$BLUETOOTH_GLYPH\"]) == null"
+    "${metric[@]}" 'and Do Not Disturb adds none' \
+        '.topBar.dnd' '(.off | type == "array") and .on == .off'
     "${metric[@]}" 'on the lock screen and the greeter, upstream'"'"'s hover fill of the status button is centred on its pill' \
         '.topBar.lockScreen | {fill: .statusHover, left: (.status.pill.x - .status.x), right: (.status.x + .status.width - .status.pill.x - .status.pill.width)}' \
         '(.fill.boxShadow.inset == true or (.fill.background | rgba | .[3] > 0)) and ((.left - .right) | fabs <= 0.5)'
@@ -260,24 +282,6 @@ top_bar_today() {
     tokens=$(tokens_for "$variant")
     local -a metric=(top_bar_metric "$label top bar, until its known gap closes" "$scenes" "$tokens")
 
-    "${metric[@]}" "the active workspace dot is stock's $TODAY_ACTIVE_DOT_WIDTH x \$apex_bar_dot_size" \
-        '.topBar.dots | map(select(.active)) | map({width, height})' \
-        "length == 1 and (.[0] | ((.width - $TODAY_ACTIVE_DOT_WIDTH) | fabs <= 0.5) and (.height | px_is(\$t.apex_bar_dot_size)))"
-    "${metric[@]}" "an inactive dot is stock's $TODAY_INACTIVE_DOT_SIZE square at opacity $TODAY_INACTIVE_DOT_OPACITY" \
-        '.topBar.dots | map(select(.active | not)) | map({width, height, opacity})' \
-        "length > 0 and all(((.width - $TODAY_INACTIVE_DOT_SIZE) | fabs <= 0.1) and ((.height - $TODAY_INACTIVE_DOT_SIZE) | fabs <= 0.1) and ((.opacity - $TODAY_INACTIVE_DOT_OPACITY) | fabs < 0.01))"
-    "${metric[@]}" 'the top-left pixel reaches the Activities button' \
-        '.topBar.corner' '.name == "panelActivities" and .x == 0 and .y == 0'
-    "${metric[@]}" 'Do Not Disturb adds stock'"'"'s notifications-disabled-symbolic to the status pill' \
-        '.topBar.dnd' '(.off | type == "array") and (.on - .off) == ["notifications-disabled-symbolic"]'
-    "${metric[@]}" "the fixtures' connected Keychron K3 adds stock's $BLUETOOTH_GLYPH to the status pill" \
-        '.topBar.statusGlyphs | map(.name)' "index([\"$BLUETOOTH_GLYPH\"]) != null"
-    "${metric[@]}" 'the left box holds the Activities pill alone' \
-        '.topBar.leftItems | map(.accessibleName)' '. == ["Activities"]'
-    "${metric[@]}" 'the right box has no search button' \
-        '.topBar.rightItems | map(select(.accessibleName // "" | startswith("Search")))' '. == []'
-    "${metric[@]}" 'with translucent-top-bar off the bar keeps its fill and draws no line' \
-        '{opaque: .topBar.opaque, fill: .topBar.panel.background}' '.opaque.error == null and .opaque.background == .fill and .opaque.boxShadow == null'
     "${metric[@]}" 'the bar has no blur effect' \
         '.topBar.glass' '. == []'
     "${metric[@]}" "the clock's date and time are $TODAY_CLOCK_TEXT_GAP px apart (one EN SPACE, 24-hour clock)" \
@@ -295,29 +299,9 @@ top_bar_gaps() {
     scenes=$(report_of "$log" APEXG2-SCENES)
     tokens=$(tokens_for "$variant")
     local -a metric=(top_bar_metric "$label top bar" "$scenes" "$tokens")
-    local patch0010='S2a (patch 0010)' layer='S2a (the layer)' clock_hook='no step yet (a clock hook, or the owner accepts it)'
+    local clock_hook='no step yet (a clock hook, or the owner accepts it)'
     local wallpaper='S1b (the Facets wallpaper and the light overview)'
 
-    known_gap "$patch0010" "${metric[@]}" 'the active workspace dot is 22 x $apex_bar_dot_size' \
-        '.topBar.dots | map(select(.active)) | map({width, height})' \
-        'length == 1 and (.[0] | (.width | px_is("22px")) and (.height | px_is($t.apex_bar_dot_size)))'
-    known_gap "$patch0010" "${metric[@]}" 'an inactive workspace dot is $apex_bar_dot_size square at opacity .45' \
-        '.topBar.dots | map(select(.active | not)) | map({width, height, opacity})' \
-        'length > 0 and all((.width | px_is($t.apex_bar_dot_size)) and (.height | px_is($t.apex_bar_dot_size)) and ((.opacity - 0.45) | fabs < 0.01))'
-    known_gap "$patch0010" "${metric[@]}" 'the hot corner: the top-left pixel reaches a reactive 4 x 4 zone at 0,0' \
-        '.topBar.corner' '.x == 0 and .y == 0 and (.width | px_is("4px")) and (.height | px_is("4px"))'
-    known_gap "$patch0010" "${metric[@]}" 'the status pill keeps only its own glyphs: Do Not Disturb adds none' \
-        '.topBar.dnd' '(.off | type == "array") and .on == .off'
-    known_gap "$patch0010" "${metric[@]}" 'the status pill shows network, volume and battery only: a connected Bluetooth keyboard adds no glyph' \
-        '.topBar.statusGlyphs | map(.name)' "length > 0 and index([\"$BLUETOOTH_GLYPH\"]) == null"
-    known_gap "$layer" "${metric[@]}" 'the focused-app name follows the Activities pill: "Desktop" at $apex_font_bar_emphasis_weight while nothing has focus' \
-        '.topBar.leftItems | .[1].label' '.text == "Desktop" and .weight == ($t.apex_font_bar_emphasis_weight | tonumber)'
-    known_gap "$layer" "${metric[@]}" 'the right box holds the search button: a 32 x $apex_bar_pill_height pill, radius $apex_radius_bar_pill, named "Search"' \
-        '.topBar.rightItems | map(select(.accessibleName // "" | startswith("Search")))' \
-        'length == 1 and (.[0].pill | (.width | px_is("32px")) and (.height | px_is($t.apex_bar_pill_height)) and (.radius | px_is($t.apex_radius_bar_pill)))'
-    known_gap "$layer" "${metric[@]}" 'with translucent-top-bar off the bar is $apex_bar_solid over a 0 1px 0 $apex_border line' \
-        '.topBar.opaque' \
-        '(.background | colour_is($t.apex_bar_solid)) and (.boxShadow | .x == 0 and .y == 1 and .blur == 0 and .spread == 0 and (.color | colour_is($t.apex_border)))'
     known_gap 'S2b (patch 0003, the glass manager)' "${metric[@]}" 'the bar is glass: a Shell.BlurEffect of radius 2 x $apex_bar_blur x the monitor scale at $apex_bar_saturation' \
         '{glass: .topBar.glass, scale: .monitorScale}' \
         '.scale as $s | .glass | any((.radius - 2 * ($t.apex_bar_blur | px) * $s | fabs < 0.01) and .saturation != null and ((.saturation - ($t.apex_bar_saturation | rtrimstr("%") | tonumber / 100)) | fabs < 0.01))'
