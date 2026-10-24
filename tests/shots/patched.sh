@@ -169,7 +169,7 @@ echo "# direct.sh main: exit $rc"
 set +e
 # shellcheck source=tests/shots/assert.sh
 . "$HERE/assert.sh"
-for c in default default-scale1 dark-style stock-light stock-dark safe-env layer-disabled layer-cycles motion idle; do
+for c in default default-scale1 dark-style stock-light stock-dark safe-env layer-disabled layer-cycles motion idle glass-load glass-stress; do
     no_js_error "$c" "$run/$c.log"
     fixed_clock "$c" "$run/$c.log"
 done
@@ -225,6 +225,8 @@ done
 layer_cycles "$run"
 motion_curve "$run"
 idle_desktop "$run"
+glass_load "$run"
+glass_stress "$run"
 no_js_error glass "$run/glass.log"
 glass_frames glass "$run/glass.log"
 shadows_under_glass glass "$run/glass.log"
