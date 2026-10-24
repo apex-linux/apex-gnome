@@ -887,7 +887,9 @@ async function quickSettings(unit) {
 // clicks on Power Mode, which stock answers by switching to the last profile and back.
 async function quickSettingsLayer() {
     const indicator = Main.panel.statusArea.quickSettings;
-    const toggles = indicator.menu._grid.get_children().filter(t => 'checked' in t && t.title);
+    // Without a VPN connection the VPN toggle is hidden and has no title.
+    const name = t => t.constructor.name === 'NMVpnToggle' ? 'VPN' : t.title;
+    const toggles = indicator.menu._grid.get_children().filter(t => 'checked' in t && name(t));
     const power = indicator._powerProfiles?.quickSettingsItems[0] ?? null;
     const dnd = toggles.find(t => t.constructor.name === 'DoNotDisturbToggle');
     const powerState = () => power && {
@@ -906,7 +908,7 @@ async function quickSettingsLayer() {
         return powerState();
     };
     const state = {
-        order: toggles.map(t => ({title: t.title, visible: t.visible})),
+        order: toggles.map(t => ({title: name(t), visible: t.visible})),
         power: powerState(),
         pillShowsPower: indicator._powerProfiles?.get_parent() === indicator._indicators &&
             indicator._powerProfiles.visible,
