@@ -40,6 +40,7 @@ const GLASS_EFFECT = 'apex-glass';
 const STOCK_TRIES = 5;
 const SOLID_STYLE_CLASS = 'apex-solid';
 const SHADOW_RIM = 2;
+const SHADOW_REGISTRY = 'resource:///org/gnome/shell/ui/apex/shadows/registry.js';
 
 function colourOf(column, row, generation = 0) {
     return PALETTE[(column * 7 + row * 5 + generation) % PALETTE.length];
@@ -405,6 +406,20 @@ function interiorMask(width, height, radius, band) {
     return mask;
 }
 
+// How far in from the box's edges the frames differ, and by how much at most.
+function deepestDifference(a, b, width, height) {
+    let depth = -1, max = 0;
+    for (let i = 0; i < a.length; i += 4) {
+        const diff = Math.max(...[0, 1, 2].map(c => Math.abs(a[i + c] - b[i + c])));
+        if (diff === 0)
+            continue;
+        const x = (i / 4) % width, y = Math.floor(i / 4 / width);
+        depth = Math.max(depth, Math.min(x, y, width - 1 - x, height - 1 - y));
+        max = Math.max(max, diff);
+    }
+    return {depth, max};
+}
+
 // The shadows feature keeps its layers out from under glass: Quick Settings over the pattern
 // reads the same with shadows on as in disabled-features, its antialiased rim aside.
 async function shadowsUnderGlass() {
@@ -418,7 +433,9 @@ async function shadowsUnderGlass() {
         const [x, y] = box.get_transformed_position();
         group.set_position(Math.round(x) - PATTERN.x, Math.round(y) - PATTERN.y);
         await Scripting.waitLeisure();
-        return framePixels(box);
+        const layers = (await import(SHADOW_REGISTRY)).layersOf(box)
+            .map(l => ({effect: Boolean(l.get_effect('apex-shadow-cutout')), box: [l.x, l.y, l.width, l.height]}));
+        return {...await framePixels(box), layers, box: [...box.get_transformed_position(), ...box.get_transformed_size()]};
     };
     try {
         const on = await withMenuOpen(menu, read);
@@ -432,6 +449,9 @@ async function shadowsUnderGlass() {
             sameSize: width === off.width && height === off.height,
             interiorDiffering: BlurRef.differing(on.rgba, off.rgba, interiorMask(width, height, radius, SHADOW_RIM)),
             edge: BlurRef.errors(on.rgba, BlurRef.rgbOf(off.rgba), width, height, SHADOW_RIM).edge,
+            depth: deepestDifference(on.rgba, off.rgba, width, height),
+            layers: on.layers,
+            box: on.box,
         };
     } finally {
         apex.set_strv('disabled-features', disabled);
