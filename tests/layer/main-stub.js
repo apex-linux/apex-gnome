@@ -7,6 +7,8 @@ import Shell from 'gi://Shell';
 
 const fact = (key, value) => printerr(`probe: ${key}=${value}`);
 const handlers = new Map();
+const actions = new Map();
+let lastAction = 0;
 
 function flagNames(value, flags) {
     const names = Object.entries(flags)
@@ -117,9 +119,14 @@ const PANEL_GLASS = {blur: 24, saturation: 1.6, radius: 0};
 const POPOVER_GLASS = {blur: 30, saturation: 1.8, radius: 26};
 
 export const uiGroup = Object.assign(new StubActor('uiGroup', {extents: [0, 0, 1440, 900]}), {
-    add_child() {},
-    remove_child() {},
     children: [],
+    add_child(actor) {
+        this.children.push(actor);
+        actor._parent = this;
+    },
+    remove_child(actor) {
+        this.children = this.children.filter(a => a !== actor);
+    },
     insert_child_below(child) {
         this.children.push(child);
     },
@@ -250,6 +257,19 @@ export function notify(title) {
 // layout.js's chrome parameters: Params.parse throws on any other.
 const CHROME_PARAMS = ['trackFullscreen', 'affectsStruts'];
 
+let modals = 0;
+
+export function pushModal(actor, params) {
+    modals++;
+    fact('modal.push', `${actor.name} actionMode=${params.actionMode} count=${modals}`);
+    return {};
+}
+
+export function popModal() {
+    modals--;
+    fact('modal.pop', `count=${modals}`);
+}
+
 export const layoutManager = {
     ...emitter({}),
     primaryMonitor: {x: 0, y: 0, width: 1440, height: 900},
@@ -343,6 +363,10 @@ export const overview = {
                 fn();
         }
     },
+    show() {
+        this.visible = true;
+        fact('overview', 'shown');
+    },
     focusSearch() {
         this.visible = true;
         fact('overview', 'shown, search focused');
@@ -360,11 +384,16 @@ export const wm = {
             return Meta.KeyBindingAction.NONE;
         }
         handlers.set(name, handler);
+        actions.set(name, ++lastAction);
         fact('keybinding.add', `${name} accelerators=${settings.get_strv(name).join(',')} ` +
             `flags=${flagNames(flags, Meta.KeyBindingFlags)} modes=${flagNames(modes, Shell.ActionMode)}`);
-        return handlers.size;
+        return actions.get(name);
+    },
+    actionOf(name) {
+        return actions.get(name) ?? 0;
     },
     removeKeybinding(name) {
+        actions.delete(name);
         if (handlers.delete(name))
             fact('keybinding.remove', name);
     },

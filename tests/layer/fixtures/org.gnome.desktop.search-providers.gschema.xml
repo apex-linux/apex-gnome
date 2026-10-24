@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+<!-- gsettings-desktop-schemas' search-provider keys that remoteSearch.js reads, with
+     Apex's vendor sort-order as the default. -->
+<schemalist>
+  <schema id="org.gnome.desktop.search-providers" path="/org/gnome/desktop/search-providers/">
+    <key name="disable-external" type="b">
+      <default>false</default>
+    </key>
+    <key name="sort-order" type="as">
+      <default>['org.gnome.Calculator.desktop', 'org.gnome.Settings.desktop', 'org.gnome.Nautilus.desktop']</default>
+    </key>
+    <key name="enabled" type="as">
+      <default>[]</default>
+    </key>
+    <key name="disabled" type="as">
+      <default>[]</default>
+    </key>
+  </schema>
+</schemalist>
