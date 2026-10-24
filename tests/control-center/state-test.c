@@ -155,21 +155,27 @@ test_hold_notes (void)
     g_autofree char *body2 = NULL;
     g_autofree char *title3 = NULL;
     g_autofree char *body3 = NULL;
+    g_autofree char *title4 = NULL;
+    g_autofree char *body4 = NULL;
 
-    cc_apex_updates_hold_note ("gnome-control-center", "gnome-control-center-51.1-1.fc45,gnome-control-center-51.1-2.fc45",
+    cc_apex_updates_hold_note ("gnome-control-center", "",
+                               "gnome-control-center-51.1-1.fc45,gnome-control-center-51.1-2.fc45",
                                NOW - 2 * 86400, FALSE, NOW + 12 * 86400, &title, &body);
     g_assert_cmpstr (title, ==, "Settings 51.1 is held back");
     g_assert_cmpstr (body, ==, "Apex’s Settings changes do not apply to 51.1 yet, so this update keeps the last good "
                                "build. Not a security update. Held for up to 14 days, then Apex ships the stock "
                                "51.1.");
 
-    cc_apex_updates_hold_note ("kernel-cachyos", "kernel-cachyos-7.2.9-1.fc45", NOW, TRUE, NOW + 3 * 86400, &title2,
-                               &body2);
+    cc_apex_updates_hold_note ("kernel", "kernel", "kernel-cachyos-7.2.9-1.fc45", NOW, TRUE, NOW + 3 * 86400,
+                               &title2, &body2);
     g_assert_cmpstr (title2, ==, "Linux 7.2.9 is held back");
     g_assert_true (strstr (body2, "It holds back a security update. Held for up to 3 days") != NULL);
 
-    cc_apex_updates_hold_note ("libfoo", "", 0, FALSE, 0, &title3, &body3);
+    cc_apex_updates_hold_note ("libfoo", NULL, "", 0, FALSE, 0, &title3, &body3);
     g_assert_cmpstr (title3, ==, "libfoo is held back");
+    cc_apex_updates_hold_note ("kernel", "kmod", "kmod-nvidia-580.95-1.fc45", NOW, FALSE, 0, &title4, &body4);
+    g_assert_cmpstr (title4, ==, "The NVIDIA driver 580.95 is held back");
+    g_assert_null (strstr (body4, "Held for"));
     g_assert_cmpstr (body3, ==, "Apex’s libfoo changes do not apply to Fedora’s newest build yet, so this update "
                                 "keeps the last good build.");
 }

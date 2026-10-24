@@ -395,6 +395,7 @@ refresh_notes (CcApexUpdatesPage *self, GVariant *newest)
     g_autofree const char **held = NULL;
     g_autofree const char **degraded = NULL;
     g_autoptr(GVariant) holds = NULL;
+    g_autoptr(GVariant) stock = NULL;
     GtkWidget *child;
 
     while ((child = gtk_widget_get_first_child (GTK_WIDGET (self->notes))))
@@ -404,24 +405,48 @@ refresh_notes (CcApexUpdatesPage *self, GVariant *newest)
         g_variant_lookup (newest, "held", "^a&s", &held);
         g_variant_lookup (newest, "degraded", "^a&s", &degraded);
     }
-    if (newest)
-        holds = g_variant_lookup_value (newest, "holds", G_VARIANT_TYPE ("a(sstbt)"));
+    if (newest) {
+        holds = g_variant_lookup_value (newest, "holds", G_VARIANT_TYPE ("a(sstbts)"));
+        if (holds == NULL)
+            holds = g_variant_lookup_value (newest, "holds", G_VARIANT_TYPE ("a(sstbt)"));
+        stock = g_variant_lookup_value (newest, "stock", G_VARIANT_TYPE ("a(ss)"));
+    }
     for (guint i = 0; held && held[i]; i++) {
-        g_autofree char *title = NULL;
-        g_autofree char *body = NULL;
-        const char *family, *newer;
-        guint64 since = 0, limit = 0;
-        gboolean security = FALSE, found = FALSE;
-        GVariantIter iter;
+        gboolean found = FALSE;
 
-        if (holds) {
-            g_variant_iter_init (&iter, holds);
-            while (!found && g_variant_iter_next (&iter, "(&s&stbt)", &family, &newer, &since, &security, &limit))
-                found = g_str_equal (family, held[i]);
+        for (gsize r = 0; holds && r < g_variant_n_children (holds); r++) {
+            g_autoptr(GVariant) record = g_variant_get_child_value (holds, r);
+            g_autofree char *title = NULL;
+            g_autofree char *body = NULL;
+            const char *family, *newer, *side = NULL;
+            guint64 since, limit;
+            gboolean security;
+
+            if (g_variant_n_children (record) == 6)
+                g_variant_get (record, "(&s&stbt&s)", &family, &newer, &since, &security, &limit, &side);
+            else
+                g_variant_get (record, "(&s&stbt)", &family, &newer, &since, &security, &limit);
+            if (!g_str_equal (family, held[i]))
+                continue;
+            found = TRUE;
+            cc_apex_updates_hold_note (family, side, newer, (gint64) since, security, (gint64) limit, &title, &body);
+            add_note (self, title, body);
         }
-        cc_apex_updates_hold_note (held[i], found ? newer : NULL, found ? (gint64) since : 0, found && security,
-                                   found ? (gint64) limit : 0, &title, &body);
-        add_note (self, title, body);
+        if (!found) {
+            g_autofree char *title = NULL;
+            g_autofree char *body = NULL;
+
+            cc_apex_updates_hold_note (held[i], NULL, NULL, 0, FALSE, 0, &title, &body);
+            add_note (self, title, body);
+        }
+    }
+    for (gsize r = 0; stock && r < g_variant_n_children (stock); r++) {
+        const char *family, *reason;
+        g_autofree char *title = NULL;
+
+        g_variant_get_child (stock, r, "(&s&s)", &family, &reason);
+        title = g_strdup_printf (_("%s runs Fedora’s own build"), family);
+        add_note (self, title, reason);
     }
     for (guint i = 0; degraded && degraded[i]; i++) {
         g_autofree char *title = g_strdup_printf (_("%s runs without Apex’s changes"), degraded[i]);

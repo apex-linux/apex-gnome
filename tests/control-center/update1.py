@@ -29,11 +29,14 @@ def deployment(version, digest, day, **extra):
 BOOTED = deployment("45.20261008.131", "sha256:3f9c0e7a5d1b28c4e6f0a9b7c3d2e1f0a9b8c7d6e5f4a3b2c1d0e9f8a7b6a71e", 8,
                     held=dbus.Array([], signature="s"), degraded=dbus.Array([], signature="s"))
 HOLDS = dbus.Array([("gnome-control-center", "gnome-control-center-51.1-1.fc45", stamp(19), False,
-                      dbus.UInt64(stamp(19) + 14 * 86400))], signature="(sstbt)")
+                      dbus.UInt64(stamp(19) + 14 * 86400), "")], signature="(sstbts)")
+OLD_HOLDS = dbus.Array([("nautilus", "nautilus-51.1-1.fc45", stamp(19), True, dbus.UInt64(stamp(19) + 3 * 86400))],
+                       signature="(sstbt)")
+STOCK = dbus.Array([("libadwaita", "Apex's window radius waits for libadwaita 1.10.1.")], signature="(ss)")
 SIZE = dbus.UInt64(412_000_000)
 STAGED = deployment("45.20261010.133", "sha256:9e41aa07c3b2d1e0f9a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c80c2b", 10,
                     held=dbus.Array(["gnome-control-center"], signature="s"),
-                    degraded=dbus.Array([], signature="s"), holds=HOLDS, **{"download-size": SIZE})
+                    degraded=dbus.Array([], signature="s"), holds=HOLDS, stock=STOCK, **{"download-size": SIZE})
 ROLLBACK = deployment("45.20261001.124", "sha256:b02d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b19c4", 1)
 EMPTY = dbus.Dictionary({}, signature="sv")
 CHANGES = [
@@ -53,7 +56,9 @@ FALLEN = "sha256:9e41aa07c3b2d1e0f9a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c80c2
 # "ready" also refuses SetAutomaticDownloads as polkit would; "up-to-date" accepts it.
 SCENARIOS = {
     "ready": {"State": "staged", "Staged": STAGED, "Available": EMPTY},
-    "up-to-date": {"State": "up-to-date", "Staged": EMPTY, "Available": EMPTY},
+    "up-to-date": {"State": "up-to-date", "Staged": EMPTY, "Available": EMPTY,
+                   "Booted": deployment(BOOTED["version"], BOOTED["digest"], 8, held=dbus.Array(["nautilus"], signature="s"),
+                                        holds=OLD_HOLDS)},
     "available": {"State": "available", "Staged": EMPTY, "Available": AVAILABLE},
     "downloading": {"State": "downloading", "Staged": EMPTY, "Available": AVAILABLE, "Progress": dbus.Double(0.64)},
     "health-failure": {"State": "health-failure", "Staged": EMPTY, "Available": EMPTY,

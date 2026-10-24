@@ -15,6 +15,8 @@ EXPECT = {
         "Settings 51.1 is held back",
         "Apex’s Settings changes do not apply to 51.1 yet, so this update keeps the last good build. Not a "
         "security update. Held for up to 14 days, then Apex ships the stock 51.1.",
+        "libadwaita runs Fedora’s own build",
+        "Apex's window radius waits for libadwaita 1.10.1.",
         "45.20261010.133 is downloaded and its signature checked. Your current version stays in place until you "
         "restart.",
         "GNOME 51.0 → 51.1, Linux 7.2.7 → 7.2.9, Mesa 26.1.0 → 26.1.2",
@@ -26,6 +28,8 @@ EXPECT = {
     "up-to-date": [
         "Apex Is Up to Date",
         "45.20261008.131 is the newest build on the stable (running image) channel. Checked today at 09:00.",
+        "Files 51.1 is held back",
+        "It holds back a security update. Held for up to 3 days, then Apex ships the stock 51.1.",
     ],
     "available": ["Update Available",
                   "45.20261010.133 · 412 MB. It downloads in the background and nothing changes until you restart."],

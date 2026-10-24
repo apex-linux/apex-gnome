@@ -65,8 +65,8 @@ const char *cc_apex_updates_action_label (CcApexUpdatesAction action);
 char *cc_apex_updates_when (gint64 unix_seconds, gint64 now);
 char *cc_apex_updates_size (guint64 bytes);
 char *cc_apex_updates_progress_line (double progress, guint64 total, gint64 seconds_left);
-void cc_apex_updates_hold_note (const char *family, const char *newer, gint64 since, gboolean security, gint64 limit,
-                                char **title, char **body);
+void cc_apex_updates_hold_note (const char *family, const char *side, const char *newer, gint64 since,
+                                gboolean security, gint64 limit, char **title, char **body);
 char *cc_apex_updates_built (gint64 unix_seconds);
 char *cc_apex_updates_short_digest (const char *digest);
 char *cc_apex_updates_deployment_line (const char *version, const char *digest);

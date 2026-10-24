@@ -283,9 +283,10 @@ newer_version (const char *newer)
     return n >= 3 ? g_strdup (parts[n - 2]) : NULL;
 }
 
+/* side is the kernel pair's half, "kernel" or "kmod", and "" or NULL for any other family. */
 void
-cc_apex_updates_hold_note (const char *family, const char *newer, gint64 since, gboolean security, gint64 limit,
-                           char **title, char **body)
+cc_apex_updates_hold_note (const char *family, const char *side, const char *newer, gint64 since,
+                           gboolean security, gint64 limit, char **title, char **body)
 {
     g_autofree char *version = newer_version (newer);
     g_autoptr(GString) text = g_string_new (NULL);
@@ -294,6 +295,10 @@ cc_apex_updates_hold_note (const char *family, const char *newer, gint64 since, 
     for (guint i = 0; i < G_N_ELEMENTS (family_names); i++)
         if (g_str_equal (family, family_names[i].family))
             name = _(family_names[i].name);
+    if (g_strcmp0 (side, "kernel") == 0)
+        name = _("Linux");
+    else if (g_strcmp0 (side, "kmod") == 0)
+        name = _("The NVIDIA driver");
 
     if (version) {
         *title = g_strdup_printf (_("%s %s is held back"), name, version);

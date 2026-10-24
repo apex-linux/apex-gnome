@@ -94,9 +94,12 @@ and polkit asks in the daemon, never in Settings.
   (`AcknowledgeHealthFailure`) and Go Back… (`Rollback(true)`) after a failed check; OK
   (`AcknowledgeHealthFailure`, which clears `LastFallback`) after a fallback, whose hero
   says so too. apex-session-agent's notification opens this page.
-- **Notes** for every family in the newest deployment's `held` list, with its `holds`
-  record when there is one ("Settings 51.1 is held back … Not a security update. Held
-  for up to 14 days, then Apex ships the stock 51.1."), and for every `degraded` one.
+- **Notes** for every family in the newest deployment's `held` list, with each of its
+  `holds` records when there are some ("Settings 51.1 is held back … Not a security
+  update. Held for up to 14 days, then Apex ships the stock 51.1."; the kernel pair's
+  records name Linux or the NVIDIA driver by their side), for every family in `stock`,
+  with the reason the daemon gives, and for every `degraded` one. `holds` is read as
+  `a(sstbts)` or, from a daemon before apex-system K4, `a(sstbt)`.
 - **What's New**: `GetChanges` for the staged digest, summed up as its GNOME, Linux and
   Mesa versions (then other packages), with every change in the expanded row.
 - **Versions**: Booted, Staged and Rollback, each as version, short digest and build
