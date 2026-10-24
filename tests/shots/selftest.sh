@@ -324,8 +324,9 @@ REPORT_OF_A_DIALOG_DRAWN_FROM_TOKENS='
         subtitle: {text: "45.20261010.133 · GNOME 51.1, Linux 7.2.9, Mesa 26.1.2", foreground: ($t.apex_fg_dim | hex),
             font: {size: ($t.apex_font_update_card_subtitle_size | px)}},
         toggle: {on: true, sensitive: true, width: ($t.apex_update_switch_width | px), height: ($t.apex_update_switch_height | px),
-            background: "#3584e4ff", knob: {width: ($t.apex_update_switch_knob | px)}},
-        buttons: ["Cancel", "Restart & Update"]} | {staged: ., ready: (.toggle.sensitive = false)}),
+            background: "#3584e4ff", knob: {width: ($t.apex_update_switch_knob | px)}, opacity: 1, focusable: true, a11ySensitive: true},
+        buttons: ["Cancel", "Restart & Update"]}
+        | {staged: ., ready: (.toggle += {sensitive: false, opacity: ($t.apex_update_switch_insensitive_opacity | tonumber), focusable: false, a11ySensitive: false})}),
     contentSpacing: ($t.apex_dialog_gap | px), textSpacing: ($t.apex_dialog_text_gap | px),
     title: {font: {size: ($t.apex_font_dialog_title_size | px), weight: ($t.apex_font_heading_weight | tonumber)}},
     description: {font: {size: ($t.apex_font_size | px)}, foreground: ($t.apex_fg_dim | hex)},
@@ -557,6 +558,18 @@ REPORT_OF_A_LAUNCHER_SEARCH_FROM_TOKENS='
         hint: {text: "The launcher searches apps only. Super+Space searches everything.", font: {size: ($t.apex_font_launcher_empty_hint_size | px)},
             foreground: ($t.apex_fg_dim | hex)}}}}}'
 # shellcheck disable=SC2016 # a jq program
+REPORT_OF_LIVE_KEYS_FROM_TOKENS='
+($t.apex_dock_icon_size | px) as $m | ($t.apex_dock_dot | hex) as $dot
+| def shown($size; $dots; $trash): {focusedApp: {visible: true, name: "G2 maximised window"}, iconSizes: [$size, $size, $size, $size],
+    kinds: (["app", "app", "separator", "show-apps"] + (if $trash then ["trash"] else [] end)), dots: [{app: "G2 maximised window", colour: $dots}]};
+shown($m; $dot; true) as $stock
+| {steps: {liveKeys: {
+    focusedAppOff: {set: ($stock | .focusedApp.visible = false), reset: $stock},
+    small: {set: shown(46; $dot; true), reset: $stock},
+    large: {set: shown(62; $dot; true), reset: $stock},
+    dotsOff: {set: shown($m; "#00000000"; true), reset: $stock},
+    trashOff: {set: shown($m; $dot; false), reset: $stock}}}}'
+# shellcheck disable=SC2016 # a jq program
 REPORT_OF_INDICATORS_DRAWN_FROM_TOKENS='
 ($t.apex_indicator_width | px) as $w | ($t.apex_bar_pill_height | px) as $h | ($t.apex_bar_gap | px) as $g
 | ($t.apex_bar_icon_size | px) as $i | ($t.apex_radius_bar_pill | px) as $r | ($t.apex_indicator_dot_size | px) as $ds
@@ -666,6 +679,7 @@ assert_run() {
     [[ $assertions == spotlight_keys ]] && report=$REPORT_OF_SPOTLIGHT_KEYS
     [[ $assertions == shadow_layers ]] && report=$REPORT_OF_SHADOW_LAYERS_FROM_TOKENS
     [[ $assertions == indicator_metrics ]] && report=$REPORT_OF_INDICATORS_DRAWN_FROM_TOKENS prefix=APEXG2-INDICATORS
+    [[ $assertions == dock_live_keys ]] && report=$REPORT_OF_LIVE_KEYS_FROM_TOKENS prefix=APEXG2-DOCK
     tokens=$(tokens_for "$variant")
     jq -nc --argjson t "$tokens" "$JQ_DEFS $HEX_DEF $report | $change" | sed "s/^/$prefix /" >"$T/top-bar.log"
     # shellcheck disable=SC2016 # expanded by the inner bash
@@ -884,6 +898,35 @@ CHANGES
     expect_eq "dock: a report without the dock passes none" 0 "$(grep -c '^PASS' "$T/top-bar.out")"
 }
 
+test_live_keys() {
+    local variant change what passes failures open_gaps
+    for variant in light dark; do
+        read -r passes failures open_gaps <<<"$(assert_run dock_live_keys "$variant")"
+        if ((failures == 0 && passes == 5)); then
+            ok "live keys ($variant): a dock and bar that follow the keys pass all $passes assertions"
+        else
+            not_ok "live keys ($variant): they pass (passed/failed/gaps $passes/$failures/$open_gaps): $(grep -m3 '^FAIL' "$T/top-bar.out" | paste -sd'|' -)"
+        fi
+    done
+    while IFS='|' read -r change what; do
+        read -r passes failures open_gaps <<<"$(assert_run dock_live_keys light "$change")"
+        if ((failures == 1)); then
+            ok "live keys: $what fails one assertion"
+        else
+            not_ok "live keys: $what fails one assertion (passed/failed/gaps $passes/$failures/$open_gaps)"
+        fi
+    done <<'CHANGES'
+.steps.liveKeys.focusedAppOff.set.focusedApp.visible = true|a focused-app name that ignores its key
+.steps.liveKeys.focusedAppOff.reset.focusedApp.visible = false|a focused-app name its reset leaves hidden
+.steps.liveKeys.small.set.iconSizes[0] = 54|an icon left at medium
+.steps.liveKeys.large.reset.iconSizes = [62, 62, 62, 62]|large icons after the reset
+.steps.liveKeys.dotsOff.set.dots[0].colour = "#1d1d21b3"|a running dot left drawn
+.steps.liveKeys.dotsOff.reset.dots = []|no running dot after the reset
+.steps.liveKeys.trashOff.set.kinds += ["trash"]|Trash left in
+.steps.liveKeys.trashOff.reset.kinds = ["app", "app", "separator", "show-apps"]|no Trash after the reset
+CHANGES
+}
+
 test_indicators() {
     local variant change what passes failures open_gaps
     for variant in light dark; do
@@ -1061,7 +1104,7 @@ test_modal_dialog() {
     local variant change what passes failures open_gaps
     for variant in light dark; do
         read -r passes failures open_gaps <<<"$(assert_run modal_dialog "$variant")"
-        if ((failures == 0 && open_gaps == 0 && passes == 16)); then
+        if ((failures == 0 && open_gaps == 0 && passes == 17)); then
             ok "modal dialog ($variant): drawn from the tokens it passes all $passes assertions"
         else
             not_ok "modal dialog ($variant): drawn from the tokens it passes (passed/failed/gaps $passes/$failures/$open_gaps): $(grep -m3 '^FAIL' "$T/top-bar.out" | paste -sd'|' -)"
@@ -1103,6 +1146,9 @@ del(.surfaces.dialog.endSession.buttons[1])|stock's row, without Restart
 .surfaces.dialog.updateCard.staged.toggle.on = false|the switch off by default
 .surfaces.dialog.updateCard.staged.buttons = ["Cancel", "Restart"]|Restart not relabelled while the switch is on
 .surfaces.dialog.updateCard.ready.toggle.sensitive = true|a ready-for-reboot switch that turns off
+.surfaces.dialog.updateCard.ready.toggle.opacity = 1|a ready-for-reboot switch drawn like an active one
+.surfaces.dialog.updateCard.ready.toggle.focusable = true|a ready-for-reboot switch that takes focus
+.surfaces.dialog.updateCard.ready.toggle.a11ySensitive = true|a ready-for-reboot switch announced as available
 CHANGES
 }
 
@@ -2162,6 +2208,7 @@ test_incomplete_compare
 test_token_file
 test_top_bar
 test_dock
+test_live_keys
 test_indicators
 test_shell_surfaces
 test_quick_settings
