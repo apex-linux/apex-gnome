@@ -112,6 +112,10 @@ class Widget {
         this.visible = false;
     }
 
+    set_style(style) {
+        this.style = style;
+    }
+
     set_position(x, y) {
         Object.assign(this, {x, y});
     }

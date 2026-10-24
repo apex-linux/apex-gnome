@@ -444,7 +444,11 @@ REPORT_OF_A_SPOTLIGHT_DRAWN_FROM_TOKENS='
             foreground: ($t.apex_fg_dim | hex), spacing: ($t.apex_spotlight_action_gap | px),
             chip: {height: ($t.apex_spotlight_chip_height | px), radius: ($t.apex_radius_spotlight_chip | px), background: ($t.apex_button | hex),
                 label: {text: "Enter", font: {size: ($t.apex_font_spotlight_chip_size | px), weight: ($t.apex_font_heading_weight | tonumber)}}}}}]
-        + [range(8) | $row]),
+        + [range(8) | $row]
+        | (.[2].tile, .[3].tile, .[4].tile) = {width: $icon, radius: ($t.apex_radius_spotlight_tile | px), glyph: ($t.apex_spotlight_tile_glyph_size | px)}
+        | .[2].tile += {background: "#6f8396ff", foreground: "#ffffffff"}
+        | .[3].tile += {background: "#3584e4ff", foreground: "#ffffffff"}
+        | .[4].tile += {background: ($t.apex_button | hex), foreground: ($t.apex_fg | hex)}),
     selected: ([true] + [range(8) | false]),
     calculator: {sections: ["CALCULATOR", "APPLICATIONS"], row: {title: {text: "1920",
         font: {size: ($t.apex_font_spotlight_result_size | px), weight: ($t.apex_font_heading_weight | tonumber), features: "\"tnum\""}},
@@ -897,7 +901,7 @@ test_spotlight_style() {
     local variant change what passes failures open_gaps
     for variant in light dark; do
         read -r passes failures open_gaps <<<"$(assert_run spotlight_style "$variant")"
-        if ((failures == 0 && open_gaps == 0 && passes == 15)); then
+        if ((failures == 0 && open_gaps == 0 && passes == 16)); then
             ok "Spotlight ($variant): drawn from the tokens it passes all $passes assertions"
         else
             not_ok "Spotlight ($variant): drawn from the tokens it passes (passed/failed/gaps $passes/$failures/$open_gaps): $(grep -m3 '^FAIL' "$T/top-bar.out" | paste -sd'|' -)"
@@ -932,6 +936,9 @@ test_spotlight_style() {
 .surfaces.spotlight.closedOnCopy = false|Spotlight left open after the copy
 .surfaces.spotlight.toast.box.borderColor = "#00000000"|a toast without its ring
 .surfaces.spotlight.toast.check.background = "#1d1d21ff"|a check circle without the accent
+.surfaces.spotlight.rows[3].tile.background = "#6f8396ff"|Privacy in board 38's old grey
+.surfaces.spotlight.rows[4].tile = null|a panel without a colour drawn bare
+.surfaces.spotlight.rows[2].tile.foreground = "#1d1d21ff"|a dark glyph on a coloured tile
 CHANGES
 }
 

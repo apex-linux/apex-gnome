@@ -42,6 +42,7 @@ readonly INACTIVE_DOT_OPACITY=0.45
 readonly TODAY_CLOCK_TEXT_GAP=7.04
 readonly TODAY_CLOCK_PILL_EXTRA=13
 readonly LAYER_CYCLES=3
+readonly TILES_FILE=${G2_TILES_FILE:-$SHOTS_DIR/../../desktop/shell/js/ui/apex/spotlight/settings-tiles.json}
 readonly SPOTLIGHT_ACCELERATORS='["<Super>space"]'
 readonly SPOTLIGHT_MODES='["NORMAL", "OVERVIEW"]'
 # direct.sh's G2_CLOCK, in UTC; the clock shows it as weekday, date, EN SPACE, 24-hour time.
@@ -705,7 +706,7 @@ derived_surfaces() {
 spotlight_style() {
     local label=$1 log=$2 variant=$3 scenes tokens
     scenes=$(report_of "$log" APEXG2-SCENES)
-    tokens=$(tokens_for "$variant")
+    tokens=$(tokens_for "$variant" | jq --slurpfile tiles "$TILES_FILE" '. + {settings_tiles: $tiles[0]}')
     local -a metric=(top_bar_metric "$label Spotlight" "$scenes" "$tokens")
     local s=.surfaces.spotlight
     local surface='(.border | [.top, .right, .bottom, .left] | all(px_is($t.apex_surface_border))) and (.borderColor | colour_is($t.apex_panel_border))
@@ -741,6 +742,11 @@ spotlight_style() {
     "${metric[@]}" 'the first row is selected, filled with the accent at $apex_selection_opacity; the others are unfilled' \
         "{s: $s, accent: .topBar.accent}" ".accent as \$a | .s.selected == [true, false, false, false, false, false, false, false, false]
             and (.s.rows[0] | $selected) and (.s.rows[1:] | all(.background | rgba | .[3] == 0))"
+    "${metric[@]}" 'Settings rows sit on $apex_spotlight_icon_size tiles, radius $apex_radius_spotlight_tile, with $apex_spotlight_tile_glyph_size glyphs: About in System'"'"'s colour and Privacy'"'"'s from settings-tiles.json in $apex_spotlight_tile_fg, a panel without one neutral $apex_button in $apex_fg' \
+        "[$s.rows[2:5][] | .tile]" 'length == 3 and all(. != null and (.width | px_is($t.apex_spotlight_icon_size)) and (.radius | px_is($t.apex_radius_spotlight_tile)) and (.glyph | px_is($t.apex_spotlight_tile_glyph_size)))
+            and (.[0] | (.background | colour_is($t.settings_tiles.system)) and (.foreground | colour_is($t.apex_spotlight_tile_fg)))
+            and (.[1] | (.background | colour_is($t.settings_tiles.privacy)) and (.foreground | colour_is($t.apex_spotlight_tile_fg)))
+            and (.[2] | (.background | colour_is($t.apex_button)) and (.foreground | colour_is($t.apex_fg)))'
     "${metric[@]}" 'a title is $apex_font_spotlight_title_size $apex_font_label_weight in $apex_fg, $apex_spotlight_text_gap over its subtitle, $apex_font_spotlight_subtitle_size in $apex_fg_dim' \
         "$s.rows" 'all((.title.font.size | px_is($t.apex_font_spotlight_title_size)) and .title.font.weight == ($t.apex_font_label_weight | tonumber) and (.title.foreground | colour_is($t.apex_fg))
             and (.text.spacing | px_is($t.apex_spotlight_text_gap)) and (.subtitle.font.size | px_is($t.apex_font_spotlight_subtitle_size)) and (.subtitle.foreground | colour_is($t.apex_fg_dim)))'

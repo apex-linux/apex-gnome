@@ -1036,8 +1036,8 @@ const SPOTLIGHT_ROWS = {
     'org.gnome.Settings.desktop': [
         {id: 'about', name: 'About', description: 'System · name, memory and disk capacity', icon: 'help-about-symbolic'},
         {id: 'privacy', name: 'File History & Trash', description: 'Privacy & Security', icon: 'user-trash-symbolic', keywords: 'disk'},
-        {id: 'removable', name: 'Removable Media', description: 'Apps · what happens when a disk is plugged in', icon: 'media-removable-symbolic'},
-        {id: 'storage', name: 'Disk Encryption', description: 'Privacy & Security', icon: 'drive-harddisk-symbolic'},
+        {id: 'removable-media', name: 'Removable Media', description: 'Apps · what happens when a disk is plugged in', icon: 'media-removable-symbolic'},
+        {id: 'disk-encryption', name: 'Disk Encryption', description: 'Privacy & Security', icon: 'drive-harddisk-symbolic'},
     ],
     'org.gnome.Nautilus.desktop': [
         {id: 'csv', name: 'disk-usage-2026-10.csv', description: '~/Documents', icon: 'text-x-generic'},
@@ -1102,8 +1102,10 @@ async function spotlightStyle(unit) {
         const row = actor => {
             const [icon, text, action] = actor.get_children();
             const [title, subtitle] = text.get_children();
+            const tile = icon.has_style_class_name('apex-spotlight-tile')
+                ? {...styleOf(icon, unit), glyph: lengthOrNull(icon.get_child().get_theme_node(), 'icon-size', unit)} : null;
             return {
-                ...styleOf(actor, unit), icon: styleOf(icon, unit), text: styleOf(text, unit),
+                ...styleOf(actor, unit), icon: styleOf(icon, unit), tile, text: styleOf(text, unit),
                 title: {...styleOf(title, unit), text: title.get_text()},
                 subtitle: {...styleOf(subtitle, unit), text: subtitle.get_text()},
                 action: {

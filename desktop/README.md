@@ -17,7 +17,7 @@ directory with `git archive` and unpacks it at the top of Fedora's gnome-shell t
 | `apex.gresource.xml` | the Apex resource: `/org/gnome/shell/ui/apex` (the layer), `/org/gnome/shell/theme/apex` (the sheets' assets) and `/org/gnome/shell/theme/stock` (upstream's compiled light and dark sheets, the safe-mode sheets). Patch 0001-build compiles it and links it into libshell next to upstream's JS resource. |
 | `js/ui/apex/hooks.js` | the only Apex module upstream files import: `safe()`, `value()`, `run()`, and `loadLayer()` for `main.js` |
 | `js/ui/apex/layer.js` | the layer: the configure and enable phases, one `try/catch` per feature, the session-mode colour hook, the crash guard's marker file |
-| `js/ui/apex/spotlight/` | Spotlight (below): `feature.js` (Super+Space), `search.js` (the sections, caps and budget), `providers.js` (the stock providers), `popup.js` and `toast.js` |
+| `js/ui/apex/spotlight/` | Spotlight (below): `feature.js` (Super+Space), `search.js` (the sections, caps and budget), `providers.js` (the stock providers), `popup.js`, `toast.js`, and `tiles.js` with `settings-tiles.json`, the Settings tile colours by panel id. That JSON mirrors gnome-control-center's `panels/apex/settings-tiles.json` byte for byte and is the one file here without an SPDX line, since JSON has no comments |
 | `js/ui/apex/panel/feature.js` | the top bar of S2a (below): its parts in `panel/`, one module each |
 | `js/ui/apex/dock/feature.js`, `dock.js`, `trash.js` | the dock of S2a (below): ApexDock, a subclass of upstream's `Dash`, and its Trash |
 | `js/ui/apex/fault/feature.js` | the fault-injection feature: loaded only when `APEX_SHELL_TEST_FAULT` names a phase, it fails in that phase (below) |
@@ -74,7 +74,10 @@ Applications 4, Settings 3 and Files 4, in that order. Sections show as their pr
 answer, each in its place; each provider has 1 s per query, and one past it is cancelled and
 left out of that query. The selection is the first row until Up, Down or the pointer moves it;
 after that an arriving section never moves it. A sum puts Calculator first among the
-applications, whichever answers first. Up and Down move one selection across the
+applications, whichever answers first. Settings rows draw the provider's symbolic icon on a 32 px tile
+in the panel's colour from `settings-tiles.json`, the same table as the Settings sidebar's
+tiles: System's search-only pages take System's, Apex Desktop the accent, and a panel
+without a colour a neutral tile. Up and Down move one selection across the
 sections, Enter activates it through its provider, and Enter on the calculator's result
 copies it, closes Spotlight and shows the "Copied" toast above the dock for 2 s. An empty
 query shows only the field; a query with no results says so. The feature follows the kill

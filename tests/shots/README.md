@@ -245,7 +245,8 @@ find), types board 38's queries and, with `G2_SURFACE_SCENES=1`, captures each s
 `spotlight-none` for a query with no results). It
 reads the panel's width, its distance from the monitor's top edge, radius, tint, ring and
 shadow; the field, its glyph, text and hint; the results' line and inset; the section
-headers in board order; the rows, the selected row's accent tint, verb and Enter chip; the
+headers in board order; the rows, the selected row's accent tint, verb and Enter chip;
+the Settings rows' tiles, their colours read from `settings-tiles.json`; the
 calculator's result in tabular figures with Calculator as the first application; that an
 empty query shows only the field, and the row of a query with no results; and, after Enter on the result, that Spotlight closed and the toast's size, tint,
 inset, check circle, text and distance from the bottom edge.

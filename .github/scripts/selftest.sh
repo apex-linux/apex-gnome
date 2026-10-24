@@ -36,7 +36,10 @@ check_false() {
 }
 
 # --- desktop/shell ships inside gnome-shell under gnome-shell's licence -------------------
+# JSON has no comments: the Settings tile colours mirror gnome-control-center's copy byte for byte.
+readonly SPDX_EXEMPT=js/ui/apex/spotlight/settings-tiles.json
 unlicensed=$(cd "$APEX_ROOT/desktop/shell" && find . -type f -printf '%P\n' | LC_ALL=C sort | while IFS= read -r f; do
+    [[ $f == "$SPDX_EXEMPT" ]] && continue
     [[ $(head -n 3 -- "$f") == *'SPDX-License-Identifier: GPL-2.0-or-later'* ]] || printf '%s ' "$f"
 done)
 check "desktop/shell: every file is GPL-2.0-or-later (SPDX)" "" "$unlicensed"
