@@ -8,6 +8,7 @@
   <gresource prefix="/org/gnome/shell/ui/apex">
     <file alias="hooks.js">js/ui/apex/hooks.js</file>
     <file alias="layer.js">js/ui/apex/layer.js</file>
+    <file alias="windows.js">js/ui/apex/windows.js</file>
     <file alias="fault/feature.js">js/ui/apex/fault/feature.js</file>
     <file alias="witness/feature.js">js/ui/apex/witness/feature.js</file>
     <file alias="spotlight/feature.js">js/ui/apex/spotlight/feature.js</file>
@@ -27,6 +28,7 @@
     <file alias="dock/feature.js">js/ui/apex/dock/feature.js</file>
     <file alias="dock/dock.js">js/ui/apex/dock/dock.js</file>
     <file alias="dock/trash.js">js/ui/apex/dock/trash.js</file>
+    <file alias="dock/intellihide.js">js/ui/apex/dock/intellihide.js</file>
     <file alias="overview/feature.js">js/ui/apex/overview/feature.js</file>
     <file alias="overview/window-titles.js">js/ui/apex/overview/window-titles.js</file>
     <file alias="overview/workspaces.js">js/ui/apex/overview/workspaces.js</file>
