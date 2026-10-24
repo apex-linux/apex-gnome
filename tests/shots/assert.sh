@@ -36,20 +36,18 @@ readonly LAUNCHER_GRID_TOP=132
 # WCAG 2.2 AA: 1.4.3 for text, 1.4.11 for the glyphs a control is known by.
 readonly A11Y_TEXT_RATIO=4.5
 readonly A11Y_ICON_RATIO=3
-readonly A11Y_SURFACES=(bar dock popupMenu osd banner quickSettings wifiMenu dateMenu switcher dialog endSession
-    spotlight.popup spotlight.toast overview appGrid)
-# The failures the checks found on landing, each until the fix its PR carries.
-# shellcheck disable=SC2016 # a token's name, not an expansion
-readonly A11Y_DIM='the accessibility token fixes: light $apex_fg_dim and the hint over glass'
-readonly A11Y_TOGGLE="the accessibility token fixes: white on the checked toggle's accent"
-readonly A11Y_WIDTH='the accessibility token fixes: Quick Settings as wide as Large Text needs'
+readonly A11Y_ACCENTS=(blue teal green yellow orange red pink purple slate)
+readonly A11Y_SURFACES=(bar dock popupMenu osd banner quickSettings "${A11Y_ACCENTS[@]/#/quickSettingsAccents.}" wifiMenu dateMenu
+    switcher dialog endSession spotlight.popup spotlight.toast overview appGrid)
+# The failures still open: upstream's high-contrast sheet, which safe mode keeps as Fedora's.
 readonly A11Y_HC_SEARCH="upstream HC sheet: the overview search entry's glyph, white at .7 on the entry's white (1.01:1)"
 readonly A11Y_HC_TOGGLE="upstream HC sheet: Quick Settings' checked toggle, white on its accent (3.15:1), and its menu arrow (2.31:1)"
-declare -rA A11Y_GAPS=(
-    [default:banner]=$A11Y_DIM [default:spotlight.popup]=$A11Y_DIM [default:overview]=$A11Y_DIM
-    [default:quickSettings]=$A11Y_TOGGLE [dark-style:quickSettings]=$A11Y_TOGGLE [large-text:quickSettings]=$A11Y_WIDTH
-    [high-contrast:quickSettings]=$A11Y_HC_TOGGLE [high-contrast:overview]=$A11Y_HC_SEARCH
-)
+declare -A A11Y_GAPS=([high-contrast:quickSettings]=$A11Y_HC_TOGGLE [high-contrast:overview]=$A11Y_HC_SEARCH)
+for a11y_accent in "${A11Y_ACCENTS[@]}"; do
+    A11Y_GAPS[high-contrast:quickSettingsAccents.$a11y_accent]=$A11Y_HC_TOGGLE
+done
+unset a11y_accent
+readonly A11Y_GAPS
 # overviewControls.js: spacing is 2 % of the work area, the stock .search-entry keeps 6 px below it.
 readonly OVERVIEW_SPACING_RATIO=0.02
 readonly STOCK_SEARCH_MARGIN_BOTTOM=6

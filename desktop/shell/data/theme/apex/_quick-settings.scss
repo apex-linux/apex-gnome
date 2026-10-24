@@ -1,13 +1,15 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
-$_quick_toggle_width: ($apex_quick_settings_width - 2 * $apex_quick_settings_padding - $apex_quick_settings_grid_gap) / 2;
+// In pt, as text is: Large Text widens the panel instead of cutting the toggles' titles short.
+$_quick_toggle_width: apex-text-size(($apex_quick_settings_width - 2 * $apex_quick_settings_padding - $apex_quick_settings_grid_gap) / 2);
+$_quick_toggle_checked: st-mix(black, $apex_accent, $apex_quick_toggle_checked_shade);
 $_toggle_states: hover, focus, active;
 
 // Glass, like the OSD: the tint until S2b's glass manager blurs behind it.
 .popup-menu-content.quick-settings {
   @include apex-surface($apex_panel);
   @include apex-shadow-layer;
-  width: $apex_quick_settings_width - 2 * $apex_quick_settings_padding;
+  width: apex-text-size($apex_quick_settings_width - 2 * $apex_quick_settings_padding);
   padding: $apex_quick_settings_padding - $apex_surface_border;
   border-radius: $apex_radius_quick_settings;
 
@@ -75,7 +77,7 @@ $_toggle_states: hover, focus, active;
   &:checked, &:checked:hover, &:checked:focus, &:checked:active,
   .apex-lit &, .apex-lit &:hover, .apex-lit &:focus, .apex-lit &:active {
     color: -st-accent-fg-color;
-    background-color: $apex_accent;
+    background-color: $_quick_toggle_checked;
   }
 
   & > StBoxLayout, &:ltr > StBoxLayout, &:rtl > StBoxLayout {
@@ -124,7 +126,7 @@ $_toggle_states: hover, focus, active;
 
     &:checked, &:checked:hover, &:checked:focus, &:checked:active {
       color: -st-accent-fg-color;
-      background-color: st-mix(black, $apex_accent, $apex_quick_toggle_menu_button_shade);
+      background-color: st-mix(black, $_quick_toggle_checked, $apex_quick_toggle_menu_button_shade);
     }
 
     StIcon { icon-size: $apex_quick_settings_icon_size; }
@@ -133,7 +135,7 @@ $_toggle_states: hover, focus, active;
   &.apex-lit .quick-toggle-menu-button {
     &, &:hover, &:focus, &:active {
       color: -st-accent-fg-color;
-      background-color: st-mix(black, $apex_accent, $apex_quick_toggle_menu_button_shade);
+      background-color: st-mix(black, $_quick_toggle_checked, $apex_quick_toggle_menu_button_shade);
     }
   }
 }

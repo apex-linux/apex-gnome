@@ -21,6 +21,8 @@ Gio._promisify(Shell.Screenshot.prototype, 'screenshot_area');
 const BACKDROP_PERCENTILE = 0.05;
 const MAX_SAMPLES = 4000;
 const SWITCHER_APPS = ['Text Editor', 'Terminal', 'Web', 'Files', 'Settings'];
+// org.gnome.desktop.interface accent-color: a checked toggle is filled with each.
+export const ACCENTS = ['blue', 'teal', 'green', 'yellow', 'orange', 'red', 'pink', 'purple', 'slate'];
 
 function srgb(channel) {
     const c = channel / 255;
@@ -257,6 +259,17 @@ export async function a11yReport(h) {
     const {menu} = Main.panel.statusArea.quickSettings;
     out.quickSettings = await withOpen(() => menu.open(BoxPointer.PopupAnimation.NONE),
         () => menu.close(BoxPointer.PopupAnimation.NONE), () => report(menu.box));
+    const iface = new Gio.Settings({schema_id: 'org.gnome.desktop.interface'});
+    if (iface.settings_schema.has_key('accent-color')) {
+        out.quickSettingsAccents = {};
+        for (const accent of ACCENTS) {
+            iface.set_string('accent-color', accent);
+            // eslint-disable-next-line no-await-in-loop
+            out.quickSettingsAccents[accent] = await withOpen(() => menu.open(BoxPointer.PopupAnimation.NONE),
+                () => menu.close(BoxPointer.PopupAnimation.NONE), () => report(menu.box));
+        }
+        iface.reset('accent-color');
+    }
     const wifi = h.findDescendant(menu.box, a => a.constructor.name === 'NMWirelessToggle');
     out.wifiMenu = wifi ? await withOpen(() => {
         menu.open(BoxPointer.PopupAnimation.NONE);

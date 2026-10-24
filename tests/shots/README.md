@@ -443,9 +443,10 @@ and paint opacity, is composited over every sampled pixel of its box, and the pi
 and so is a target wholly outside the capture, another workspace's label. `a11y_layout`
 wants, at 1.25, no text cut short (a collapsed notification's body expands, so it may),
 none partly off the screen or outside its surface, and none overlapping text in the same
-filled box (a notification stack's cards overlap by design). The failures the checks found
-on landing are known gaps (`A11Y_GAPS`), each named after the fix that closes it. Those in
-upstream's high-contrast sheet stay gaps: restyling an upstream actor there would need a stock
+filled box (a notification stack's cards overlap by design). Quick Settings is measured once
+more under each of the nine `accent-color` values, since a checked toggle takes its fill from
+the accent. The failures left are known gaps (`A11Y_GAPS`), all in upstream's high-contrast
+sheet, and they stay gaps: restyling an upstream actor there would need a stock
 copy of the sheet for safe mode. A report for upstream, which is the owner's to file:
 
 > **High contrast: checked quick toggles fall below WCAG AA.** In gnome-shell 51.0's
