@@ -21,6 +21,7 @@ directory with `git archive` and unpacks it at the top of Fedora's gnome-shell t
 | `js/ui/apex/spotlight/` | Spotlight (below): `feature.js` (Super+Space), `search.js` (the sections, caps and budget), `providers.js` (the stock providers), `popup.js` and `toast.js` |
 | `js/ui/apex/quick-settings/feature.js` | DESIGN's Quick Settings (below): VPN after Airplane Mode, Power Mode lit, On/Off subtitles, through patch 0011's hook |
 | `js/ui/apex/shadows/feature.js`, `registry.js` | DESIGN's second shadow layer (below): a shadow-layer actor under each surface whose sheet names `-apex-shadow-layer`, and the window previews' two layers |
+| `js/ui/apex/notifications/feature.js` | DESIGN's notifications in the calendar (below): one flat card per notification, "app · time" headers, the app's icon as a fallback, Do Not Disturb and Clear in the footer, through patch 0012's hooks |
 | `js/ui/apex/panel/feature.js` | the top bar of S2a (below): its parts in `panel/`, one module each |
 | `js/ui/apex/dock/feature.js`, `dock.js`, `trash.js` | the dock of S2a (below): ApexDock, a subclass of upstream's `Dash`, and its Trash |
 | `js/ui/apex/fault/feature.js` | the fault-injection feature: loaded only when `APEX_SHELL_TEST_FAULT` names a phase, it fails in that phase (below) |
@@ -166,6 +167,17 @@ on its window container. `register(actor, {name})` and `unregister(actor)` are t
 API for features that draw their own surfaces (the dock, Spotlight): registrations persist
 while the feature is off and draw once it is on. Disabled, the feature removes every layer
 and the preview class.
+
+`notifications/feature.js` follows DESIGN's notification list (ROADMAP S3c; board 34)
+through patch 0012's hooks. A notification group lays its cards out one under another (a
+vertical `Clutter.BoxLayout` in place of the stacking layout, the cover and header hidden) and
+counts as expanded, so a click never asks `MessageView` to expand it. A card's header reads
+"app · time" without the 16 px source glyph, and a card without an icon of its own shows the
+app's (the source's) in its 32 px column. The footer gets Do Not Disturb on the left, a label
+and a switch on `org.gnome.desktop.notifications` `show-banners` (inverted, the setting the
+Quick Settings toggle uses), and Clear on the right, shown even with nothing to clear, then
+insensitive. Disabled, the feature restores the groups' layout and stack, the headers, the
+icons and the footer; a group built while every hook was stock (the layer off) stays stock.
 
 `dock` is the dock (DESIGN.md, "Dock"; board 37). `dock/dock.js`'s ApexDock is upstream's
 `Dash` (`js/ui/dash.js`) with the hooks of patch 0014-dash, which the feature provides:
