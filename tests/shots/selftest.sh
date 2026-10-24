@@ -751,7 +751,7 @@ test_signoff() {
     local dir=$T/signoff scene
     rm -rf "$dir"
     mkdir -p "$dir/g2/captures" "$dir/shots"
-    for scene in switcher surfaces quick-settings screenshot tile-preview datemenu overview appgrid desktop spotlight-search; do
+    for scene in signoff-alt-tab surfaces quick-settings screenshot tile-preview datemenu signoff-overview launcher desktop spotlight-search; do
         printf '\x89PNG\r\n\x1a\n' >"$dir/g2/captures/default-$scene.png"
         printf '\x89PNG\r\n\x1a\n' >"$dir/g2/captures/dark-style-$scene.png"
     done
@@ -765,7 +765,7 @@ test_signoff() {
     printf 'Apex: feature panel enabled\nApex: feature dock enabled\n' >"$dir/g2/default.log"
     if "$HERE/signoff.sh" --collect "$dir/g2" "$dir/shots" "$dir/out" >"$T/signoff.out" 2>&1 &&
         [[ $(find "$dir/out" -name 'board-*.png' | wc -l) == 30 ]] &&
-        jq -e '(.boards | length) == 15 and .scale == 2 and .features == ["dock", "panel"]
+        jq -e '(.boards | length) == 15 and .scale == 2 and .features == ["dock", "panel"] and (.pins.apexDesktop | length) == 40
             and .boards[0].files.dark == "board-12-greeter-dark.png"' "$dir/out/signoff.json" >/dev/null; then
         ok "signoff: fifteen boards, light and dark, and signoff.json from their captures"
     else
