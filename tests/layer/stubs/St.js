@@ -140,6 +140,13 @@ class Widget {
         this.visible = false;
     }
 
+    // No theme node here, so the glass feature only looks for an effect to remove.
+    get_effect() {
+        return null;
+    }
+
+    remove_effect() {}
+
     set_position(x, y) {
         Object.assign(this, {x, y});
     }

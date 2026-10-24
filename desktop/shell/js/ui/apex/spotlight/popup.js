@@ -7,6 +7,7 @@ import GLib from 'gi://GLib';
 import Shell from 'gi://Shell';
 import St from 'gi://St';
 
+import * as Glass from '../glass/registry.js';
 import * as Main from '../../main.js';
 import * as Toast from './toast.js';
 import {Search, termsOf} from './search.js';
@@ -124,6 +125,7 @@ export class Popup {
         this._empty = new St.Bin({style_class: 'apex-spotlight-empty', child: this._emptyLabel, visible: false});
         this.panel.add_child(this._empty);
         this._actor.add_child(this.panel);
+        Glass.register(this.panel, {name: 'spotlight'});
     }
 
     _buildField() {

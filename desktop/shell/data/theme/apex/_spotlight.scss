@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
-// Glass: St has no backdrop filter, so S2b's glass manager blurs behind the tint.
+// Glass: the tint; S2b's glass manager blurs behind it (_glass.scss).
 .apex-spotlight {
   @include apex-surface($apex_panel);
   width: $apex_spotlight_width - 2 * $apex_surface_border;
@@ -120,7 +120,7 @@
   color: $apex_fg_dim;
 }
 
-// Glass, like the panel; it sits above the dock.
+// Glass like the panel (_glass.scss); it sits above the dock.
 .apex-toast {
   @include apex-surface($apex_panel);
   height: $apex_toast_height - 2 * $apex_surface_border;
