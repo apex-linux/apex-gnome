@@ -276,6 +276,17 @@ the stage's paints in the quieter of two idle 2 s windows with the feature on an
 `shadows` in `disabled-features`: the layers add none. The `motion` case, which opens the overview with a
 window, checks the window preview's two layers and the `apex-window-preview` radius.
 
+The `motion` case also audits reduced motion. It opens and closes each Apex surface once,
+with animations on and then off: the dock's lift (a hovered icon) and intellihide (the window
+maximised), the overview with its thumbnails, Spotlight, Quick Settings, the calendar and a
+dialog with its shadow layer. Every ease goes through `environment.js`'s `ease`,
+`ease_property` and `St.Adjustment.ease` (and their async forms), which the probe wraps to
+read the transitions each call left, by the property's canonical name, and whether a
+`ui/apex/` frame called it. With animations on, the dock's own eases last: the control. Off,
+no ease, Apex's or stock's, leaves a transition above 0 ms but `animationRequired` ones, and a
+failure names each that did. St skips CSS transitions itself with animations off
+(`st-widget.c`), the top bar's `$apex_bar_transition` included.
+
 `derived_surfaces` reads surfaces with no board, which G2 never opens, from nested
 stand-ins in the same cases: the workspace switcher and its dots, the resize popup, the
 input method's candidates and a candidate, the run dialog's entry, an audio device tile

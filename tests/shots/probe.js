@@ -50,6 +50,7 @@ const OSD_LEVEL = 0.62;
 const POWER_PROFILE_WAIT_MS = 3000;
 const IDLE_PAINT_MS = 2000;
 const SHADOW_REGISTRY = 'resource:///org/gnome/shell/ui/apex/shadows/registry.js';
+const SPOTLIGHT_FEATURE = 'resource:///org/gnome/shell/ui/apex/spotlight/feature.js';
 const MOTION_WINDOW_ID = 'io.github.apex_linux.G2Window';
 const MOTION_WAIT_MS = 10000;
 const MOTION_SETTLE_MS = 1000;
@@ -1350,7 +1351,7 @@ async function spotlightStyle(unit) {
 
 // Text typed in the overview reaches its search entry; patch 0013 hands it to Spotlight.
 async function overviewSearch() {
-    const feature = await import('resource:///org/gnome/shell/ui/apex/spotlight/feature.js').catch(() => null);
+    const feature = await import(SPOTLIGHT_FEATURE).catch(() => null);
     const popup = feature?.popup();
     if (!popup)
         return null;
@@ -1840,6 +1841,84 @@ async function previewShadows() {
     return previews;
 }
 
+const EASE_PARAMS = new Set(['duration', 'mode', 'delay', 'onComplete', 'onStopped', 'animationRequired',
+    'repeatCount', 'autoReverse']);
+
+// environment.js puts every ease on these prototypes: each call is recorded with the transitions
+// it left, named by the canonical property (translation-y), and whether a ui/apex/ frame made it.
+function recordEases(calls) {
+    const wrap = (proto, method, read) => {
+        const original = proto[method];
+        proto[method] = function (...args) {
+            const result = original.apply(this, args);
+            const {names, params} = read(args);
+            const frames = new Error().stack.split('\n').slice(1);
+            const apexFrame = frames.find(f => f.includes('/ui/apex/'));
+            calls.push({
+                apex: !!apexFrame,
+                where: (apexFrame ?? frames[1] ?? '').replace(/^.*@/, '').replace(/^resource:\/\/\/org\/gnome\/shell\//, ''),
+                required: params?.animationRequired === true,
+                durations: names.map(name => this.get_transition(name.replaceAll('_', '-'))?.get_duration() ?? 0),
+            });
+            return result;
+        };
+        return () => (proto[method] = original);
+    };
+    const actor = ([params]) => ({names: Object.keys(params ?? {}).filter(k => !EASE_PARAMS.has(k)), params});
+    const property = ([name, , params]) => ({names: [name], params});
+    const adjustment = ([, params]) => ({names: ['value'], params});
+    const restores = [
+        wrap(Clutter.Actor.prototype, 'ease', actor),
+        wrap(Clutter.Actor.prototype, 'easeAsync', actor),
+        wrap(Clutter.Actor.prototype, 'ease_property', property),
+        wrap(Clutter.Actor.prototype, 'ease_property_async', property),
+        wrap(St.Adjustment.prototype, 'ease', adjustment),
+        wrap(St.Adjustment.prototype, 'easeAsync', adjustment),
+    ];
+    return () => restores.forEach(restore => restore());
+}
+
+// Each Apex surface opened and closed once: the dock's lift and intellihide, the overview's
+// thumbnails, Spotlight, Quick Settings, the calendar and a dialog with its shadow layer.
+async function surfaceEases(window) {
+    const calls = [];
+    const steps = [];
+    const restore = recordEases(calls);
+    const step = async (name, open, close) => {
+        const before = calls.length;
+        await open();
+        await Scripting.sleep(MOTION_SETTLE_MS);
+        await close();
+        await Scripting.sleep(MOTION_SETTLE_MS);
+        steps.push({name, eases: calls.length - before, apexEases: calls.slice(before).filter(c => c.apex).length});
+    };
+    try {
+        const icon = findDescendant(apexDock() ?? new St.Widget(), a => a._delegate?.app && a.icon);
+        await step('dock-lift', () => icon && (icon.hover = true), () => icon && (icon.hover = false));
+        await step('intellihide', () => window.maximize(), () => window.unmaximize());
+        await step('overview', () => Main.overview.show(), () => Main.overview.hide());
+        const spotlight = (await import(SPOTLIGHT_FEATURE).catch(() => null))?.popup();
+        await step('spotlight', () => spotlight?.open(), () => spotlight?.close());
+        for (const [name, indicator] of [['quick-settings', 'quickSettings'], ['calendar', 'dateMenu']]) {
+            const {menu} = Main.panel.statusArea[indicator];
+            // eslint-disable-next-line no-await-in-loop
+            await step(name, () => menu.open(BoxPointer.PopupAnimation.FULL), () => menu.close(BoxPointer.PopupAnimation.FULL));
+        }
+        const dialog = new ModalDialog.ModalDialog();
+        await step('dialog', () => dialog.open(), () => dialog.close());
+        dialog.destroy();
+    } finally {
+        restore();
+    }
+    const lasting = calls.filter(c => !c.required && c.durations.some(d => d > 0));
+    return {
+        steps,
+        eases: calls.length,
+        apexEases: calls.filter(c => c.apex).length,
+        lasting: lasting.map(({apex, where, durations}) => ({apex, where, durations})),
+    };
+}
+
 async function motion() {
     Main.overview.hide();
     await Scripting.sleep(MOTION_SETTLE_MS);
@@ -1872,10 +1951,12 @@ async function motion() {
     if (uninhibited)
         stSettings.uninhibit_animations();
     const animated = {maximise: await maximiseTransition(window), overview: await overviewTransition()};
+    animated.surfaces = await surfaceEases(window);
     const previews = await previewShadows();
     interfaceSettings.set_boolean('enable-animations', false);
     await Scripting.sleep(MOTION_SETTLE_MS);
     const still = {maximise: await maximiseTransition(window), overview: await overviewTransition()};
+    still.surfaces = await surfaceEases(window);
     // Locate Pointer's ripples are animationRequired: an a11y aid that animates regardless.
     interfaceSettings.set_boolean('locate-pointer', true);
     await Scripting.sleep(MOTION_SETTLE_MS);
