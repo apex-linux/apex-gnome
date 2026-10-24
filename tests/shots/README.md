@@ -281,7 +281,9 @@ shadow; the field, its glyph, text and hint; the results' line and inset; the se
 headers in board order; the rows, the selected row's accent tint, verb and Enter chip; the
 calculator's result in tabular figures with Calculator as the first application; that an
 empty query shows only the field, and the row of a query with no results; and, after Enter on the result, that Spotlight closed and the toast's size, tint,
-inset, check circle, text and distance from the bottom edge.
+inset, check circle, text and distance from the bottom edge. In the overview scene, after its capture, the probe
+types into the overview's search entry and checks that Spotlight opened with the text and
+the overview's own field emptied (patch 0013's hook).
 
 None of these surfaces is in a capture compared with Fedora, so the comparison with Fedora's build
 is unchanged: the Apex overview is compared only run to run, and safe mode's with Fedora's.

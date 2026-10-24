@@ -136,6 +136,11 @@ async function spotlightPopup() {
     return (await import(`file://${shellDir}/js/ui/apex/spotlight/feature.js`)).popup();
 }
 
+function overviewSearchWithoutSpotlight() {
+    if (GLib.getenv('PROBE_OVERVIEW_SEARCH') === '1')
+        fact('overview-search', Hooks.run('overview-search', 'text', 'disk', () => fact('overview-search.reset', 'yes')) ?? 'stock');
+}
+
 async function pressToggleSpotlight() {
     const presses = Number(GLib.getenv('PROBE_PRESS') ?? '0');
     const Main = await import(`file://${shellDir}/js/ui/main.js`);
@@ -288,6 +293,17 @@ async function exerciseSpotlight() {
     row.actions[0].recognize();
     report('click-row');
     fact('spotlight.stage', Main.uiGroup.children.filter(a => a.name === 'apexSpotlight').length);
+
+    Main.overview.visible = true;
+    const handled = Hooks.run('overview-search', 'text', 'disk', () => fact('spotlight.overview-reset', 'yes'));
+    await spin(SEARCH_SETTLE_MS);
+    fact('spotlight.from-overview', `${handled} ${shown(popup)}`);
+    fact('spotlight.from-overview-again', Hooks.run('overview-search', 'text', 'd', () => fact('spotlight.overview-reset', 'again')));
+    key(Clutter.KEY_Return);
+    fact('spotlight.from-overview-enter', `${shown(popup)} overview=${Main.overview.visible}`);
+    Main.overview.visible = true;
+    fact('spotlight.from-overview-focus', `${Hooks.run('overview-search', 'focus', '', () => {})} ${shown(popup)}`);
+    key(Clutter.KEY_Escape);
 
     open();
     await type('live-before', 'disk');
@@ -970,6 +986,7 @@ if (layer && GLib.getenv('PROBE_ENABLE') === '1') {
     }
     mainModule = await import(`file://${shellDir}/js/ui/main.js`);
     await pressToggleSpotlight();
+    overviewSearchWithoutSpotlight();
     await exerciseLock();
     await exerciseMotion();
     await exerciseQuickSettings();
