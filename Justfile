@@ -102,6 +102,7 @@ lock-shots:
 
 s2c_image := "registry.fedoraproject.org/fedora:45@sha256:1e13e11f63e147a40a935c9046c79d53a30b861a3cf05ebb023bb53c562382cb"
 s2c_packages := "ptyxis gnome-shell mesa-dri-drivers dbus-daemon dconf python3-dbusmock python3-gobject at-spi2-core gcc util-linux jq adwaita-sans-fonts"
+s7_packages := "nautilus gjs gtk4 ptyxis mesa-dri-drivers dbus-daemon python3-dbusmock python3-gobject gcc util-linux jq adwaita-sans-fonts"
 
 # S2c's live radius end to end, after libadwaita-lane, control-center-lane and nautilus-lane: apex-session-agent from the pinned apex-system, Settings' Corner Radius pressed under open windows (podman or docker); in _build/s2c/radius.
 s2c-radius:
@@ -110,9 +111,15 @@ s2c-radius:
     engine=$(command -v podman || command -v docker) && "$engine" run --rm -v "{{justfile_directory()}}:/apex-gnome:z" -w /apex-gnome {{s2c_image}} \
         bash -c 'tests/s2c/agent.sh && dnf5 -y -q --setopt=install_weak_deps=False install {{s2c_packages}} && tests/s2c/radius-test.sh _build/s2c/rpms _build/s2c/apex-session-agent'
 
+# S7's accent exit end to end, after gnome-shell-lane: apex-desktop's folder themes and the agent under Files, GTK's chooser and Spotlight, and a control run without the agent (podman or docker); in _build/s7/accent.
+s7-accent:
+    engine=$(command -v podman || command -v docker) && "$engine" run --rm -v "{{justfile_directory()}}:/apex-gnome:z" -w /apex-gnome {{s2c_image}} \
+        bash -c 'tests/s2c/agent.sh && dnf5 -y -q --setopt=install_weak_deps=False install {{s7_packages}} && tests/s7/accent-test.sh _build/gnome-shell/out _build/s2c/apex-session-agent'
+
 # The script self-tests, as ci.yml runs them.
 selftest:
     .github/scripts/selftest.sh
+    tests/s7/selftest.sh
 
 # The comment guard on every tracked file, or on the given ones (cargo install --git https://github.com/apex-linux/apex-ci apex-lint).
 [positional-arguments]
