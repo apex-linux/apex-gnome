@@ -204,3 +204,46 @@ $apex_events_gap: 6px;
 $apex_font_events_title_size: 12.5px;
 $apex_radius_date_menu_button: 14px;
 $apex_date_menu_button_height: 40px;
+
+// The lock screen and the greeter draw white on the blurred wallpaper in both variants.
+$apex_lock_fg: #ffffff;
+$apex_lock_fg_dim: rgba(255, 255, 255, .7);
+$apex_lock_placeholder: rgba(255, 255, 255, .62);
+$apex_lock_overlay: rgba(8, 10, 20, .34);
+$apex_lock_glass: rgba(255, 255, 255, .18);
+$apex_lock_glass_border: rgba(255, 255, 255, .25);
+$apex_lock_glass_strong: rgba(255, 255, 255, .22);
+$apex_lock_avatar_border: rgba(255, 255, 255, .35);
+$apex_lock_avatar_shadow: rgba(0, 0, 0, .25);
+$apex_lock_list: rgba(255, 255, 255, .14);
+$apex_lock_list_border: rgba(255, 255, 255, .22);
+$apex_lock_list_separator: rgba(255, 255, 255, .12);
+$apex_lock_greeter_base: #0c1122;
+// lock/background.js applies the same sigma; the saturation waits for S2b's glass manager.
+$apex_lock_blur: 30px;
+$apex_lock_saturation: 130%;
+
+$apex_lock_clock_top: 128px;
+$apex_lock_clock_gap: 2px;
+$apex_lock_stage_gap: 259px;
+$apex_font_lock_date_size: 22px;
+$apex_font_lock_date_weight: 600;
+$apex_font_lock_time_size: 118px;
+$apex_font_lock_time_weight: 700;
+$apex_lock_time_tracking: -4px;
+$apex_lock_prompt_gap: 14px;
+$apex_lock_avatar_size: 92px;
+$apex_font_lock_name_size: 19px;
+$apex_font_lock_name_weight: 700;
+$apex_lock_field_width: 250px;
+$apex_lock_field_height: 38px;
+$apex_lock_field_padding: 16px;
+$apex_lock_field_gap: 8px;
+$apex_lock_button_icon_size: 20px;
+$apex_font_lock_hint_size: 12.5px;
+$apex_lock_list_width: 380px;
+$apex_radius_lock_list: 12px;
+$apex_lock_list_item_height: 62px;
+$apex_lock_list_item_padding: 12px;
+$apex_lock_list_avatar_size: 48px;
+$apex_font_lock_list_name_size: 15px;
