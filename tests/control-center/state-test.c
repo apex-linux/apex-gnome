@@ -1,5 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 
+#include <string.h>
+
 #include "cc-apex-updates-state.h"
 
 /* 2026-10-21 14:02 UTC, the captures' clock. */
@@ -103,6 +105,76 @@ test_every_state_has_a_hero (void)
 }
 
 static void
+test_sizes_and_progress (void)
+{
+    CcApexUpdatesFacts f = { .state = "available", .target_version = "45.20261010.133", .download_size = 412000000,
+                             .now = NOW };
+    g_autofree char *mb = cc_apex_updates_size (412000000);
+    g_autofree char *gb = cc_apex_updates_size (1200000000);
+    g_autofree char *small = cc_apex_updates_size (49500000);
+    g_autofree char *bytes = cc_apex_updates_size (512);
+    g_autofree char *line = cc_apex_updates_progress_line (0.64, 412000000, 70);
+    g_autofree char *soon = cc_apex_updates_progress_line (0.98, 412000000, 20);
+    g_autofree char *no_rate = cc_apex_updates_progress_line (0.64, 412000000, -1);
+    g_autofree char *no_size = cc_apex_updates_progress_line (0.64, 0, 70);
+    g_autofree char *unknown = cc_apex_updates_progress_line (-1, 412000000, 70);
+
+    g_assert_cmpstr (mb, ==, "412 MB");
+    g_assert_cmpstr (gb, ==, "1.2 GB");
+    g_assert_cmpstr (small, ==, "49.5 MB");
+    g_assert_cmpstr (bytes, ==, "512 B");
+    g_assert_cmpstr (line, ==, "264 of 412 MB · about 2 minutes left");
+    g_assert_cmpstr (soon, ==, "404 of 412 MB · less than a minute left");
+    g_assert_cmpstr (no_rate, ==, "264 of 412 MB");
+    g_assert_cmpstr (no_size, ==, "64 % downloaded");
+    g_assert_cmpstr (unknown, ==, "");
+    assert_hero (&f, "Update Available",
+                 "45.20261010.133 · 412 MB. It downloads in the background and nothing changes until you restart.",
+                 CC_APEX_UPDATES_ACTION_DOWNLOAD, CC_APEX_UPDATES_ACTION_NONE);
+}
+
+static void
+test_fallback (void)
+{
+    CcApexUpdatesFacts f = { .state = "up-to-date", .last_fallback = "sha256:9e41", .now = NOW };
+
+    assert_hero (&f, "Apex Went Back to the Previous Version", NULL, CC_APEX_UPDATES_ACTION_ACKNOWLEDGE_FALLBACK,
+                 CC_APEX_UPDATES_ACTION_NONE);
+    f.state = "health-failure";
+    assert_hero (&f, "Update Failed Its Startup Check", NULL, CC_APEX_UPDATES_ACTION_ROLLBACK_BAD,
+                 CC_APEX_UPDATES_ACTION_ACKNOWLEDGE);
+    g_assert_cmpstr (cc_apex_updates_action_label (CC_APEX_UPDATES_ACTION_ACKNOWLEDGE_FALLBACK), ==, "OK");
+}
+
+static void
+test_hold_notes (void)
+{
+    g_autofree char *title = NULL;
+    g_autofree char *body = NULL;
+    g_autofree char *title2 = NULL;
+    g_autofree char *body2 = NULL;
+    g_autofree char *title3 = NULL;
+    g_autofree char *body3 = NULL;
+
+    cc_apex_updates_hold_note ("gnome-control-center", "gnome-control-center-51.1-1.fc45,gnome-control-center-51.1-2.fc45",
+                               NOW - 2 * 86400, FALSE, NOW + 12 * 86400, &title, &body);
+    g_assert_cmpstr (title, ==, "Settings 51.1 is held back");
+    g_assert_cmpstr (body, ==, "Apex’s Settings changes do not apply to 51.1 yet, so this update keeps the last good "
+                               "build. Not a security update. Held for up to 14 days, then Apex ships the stock "
+                               "51.1.");
+
+    cc_apex_updates_hold_note ("kernel-cachyos", "kernel-cachyos-7.2.9-1.fc45", NOW, TRUE, NOW + 3 * 86400, &title2,
+                               &body2);
+    g_assert_cmpstr (title2, ==, "Linux 7.2.9 is held back");
+    g_assert_true (strstr (body2, "It holds back a security update. Held for up to 3 days") != NULL);
+
+    cc_apex_updates_hold_note ("libfoo", "", 0, FALSE, 0, &title3, &body3);
+    g_assert_cmpstr (title3, ==, "libfoo is held back");
+    g_assert_cmpstr (body3, ==, "Apex’s libfoo changes do not apply to Fedora’s newest build yet, so this update "
+                                "keeps the last good build.");
+}
+
+static void
 test_when_and_digest (void)
 {
     g_autofree char *today = cc_apex_updates_when (NOW - 5 * HOUR, NOW);
@@ -174,6 +246,9 @@ main (int argc, char **argv)
     g_test_add_func ("/updates/staged-and-ready", test_staged_and_ready);
     g_test_add_func ("/updates/failures", test_failures);
     g_test_add_func ("/updates/every-state", test_every_state_has_a_hero);
+    g_test_add_func ("/updates/sizes-and-progress", test_sizes_and_progress);
+    g_test_add_func ("/updates/fallback", test_fallback);
+    g_test_add_func ("/updates/hold-notes", test_hold_notes);
     g_test_add_func ("/updates/when-and-digest", test_when_and_digest);
     g_test_add_func ("/updates/changes", test_changes);
     g_test_add_func ("/updates/changes-without-known-packages", test_changes_without_known_packages);

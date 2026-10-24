@@ -195,6 +195,12 @@ template $CcApexUpdatesPage: Adw.NavigationPage {
               Adw.PreferencesGroup {
                 title: _("Preferences");
 
+                Adw.SwitchRow automatic_row {
+                  title: _("Automatic Downloads");
+                  subtitle: _("Waits for mains power and an unmetered network");
+                  visible: false;
+                }
+
                 Adw.ActionRow channel_row {
                   title: _("Update Channel");
                 }

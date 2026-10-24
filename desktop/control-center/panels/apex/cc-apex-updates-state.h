@@ -15,6 +15,7 @@ typedef enum {
     CC_APEX_UPDATES_ACTION_ROLLBACK_BAD,
     CC_APEX_UPDATES_ACTION_ACKNOWLEDGE,
     CC_APEX_UPDATES_ACTION_KEEP_CURRENT,
+    CC_APEX_UPDATES_ACTION_ACKNOWLEDGE_FALLBACK,
 } CcApexUpdatesAction;
 
 typedef enum {
@@ -32,6 +33,8 @@ typedef struct {
     const char *channel;
     const char *deferred_reason;
     const char *last_error;
+    const char *last_fallback;
+    guint64 download_size;
     gint64 last_check;
     gint64 now;
     gboolean kept_current;
@@ -60,6 +63,10 @@ void cc_apex_updates_hero_clear (CcApexUpdatesHero *hero);
 const char *cc_apex_updates_action_label (CcApexUpdatesAction action);
 
 char *cc_apex_updates_when (gint64 unix_seconds, gint64 now);
+char *cc_apex_updates_size (guint64 bytes);
+char *cc_apex_updates_progress_line (double progress, guint64 total, gint64 seconds_left);
+void cc_apex_updates_hold_note (const char *family, const char *newer, gint64 since, gboolean security, gint64 limit,
+                                char **title, char **body);
 char *cc_apex_updates_built (gint64 unix_seconds);
 char *cc_apex_updates_short_digest (const char *digest);
 char *cc_apex_updates_deployment_line (const char *version, const char *digest);

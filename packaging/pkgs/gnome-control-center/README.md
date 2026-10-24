@@ -82,16 +82,29 @@ and polkit asks in the daemon, never in Settings.
   and the buttons that state offers: Check Now (`Check`), Download (`Download(false)`),
   Download Anyway (`Download(true)`, while `DeferredReason` holds an update back),
   Restart Now (`Apply` with the staged digest, then `org.gnome.SessionManager.Reboot`;
-  `Reboot` alone once the update is applied), and for a health failure Go Back…
-  (`Rollback(true)`) and Keep This Version (`AcknowledgeHealthFailure`). While
-  downloading it shows `Progress`. A failed call shows the daemon's message under the
+  `Reboot` alone once the update is applied), Keep Current Version (calls nothing: the
+  hero turns to "Update Downloaded" and the image waits), and for a health failure Go
+  Back… (`Rollback(true)`) and Keep This Version (`AcknowledgeHealthFailure`). An
+  available update shows its `download-size`; while downloading, the hero shows
+  "264 of 412 MB · about 2 minutes left" from `Progress`, the size and the rate since
+  the page saw the download start. A failed call shows the daemon's message under the
   buttons; a refusal from polkit shows nothing.
-- **Notes** for every family in the newest deployment's `held` and `degraded` lists.
+- **Board 26**: with `HealthFailure` or `LastFallback` set, the page raises an
+  `AdwAlertDialog` once per digest when it shows: Keep This Version
+  (`AcknowledgeHealthFailure`) and Go Back… (`Rollback(true)`) after a failed check; OK
+  (`AcknowledgeHealthFailure`, which clears `LastFallback`) after a fallback, whose hero
+  says so too. apex-session-agent's notification opens this page.
+- **Notes** for every family in the newest deployment's `held` list, with its `holds`
+  record when there is one ("Settings 51.1 is held back … Not a security update. Held
+  for up to 14 days, then Apex ships the stock 51.1."), and for every `degraded` one.
 - **What's New**: `GetChanges` for the staged digest, summed up as its GNOME, Linux and
   Mesa versions (then other packages), with every change in the expanded row.
 - **Versions**: Booted, Staged and Rollback, each as version, short digest and build
   date; Use at Next Restart… on the previous one calls `Rollback(false)`.
-- **Preferences**: the channel, the last check and Check Now.
+- **Preferences**: Automatic Downloads (`AutomaticDownloads`, set with
+  `SetAutomaticDownloads`; polkit's `update.configure` is auth_admin, so the daemon asks
+  each time and a refusal puts the switch back), the channel, the last check and Check
+  Now.
 - With no `Update1` on the bus, the page says the update service is missing.
 
 `cc-apex-updates-state.c` holds the page's logic without GTK: each state's hero, the
@@ -175,9 +188,12 @@ keeps the captures as the `control-center-shots` artifact.
 A second part of the run starts `update1.py`, a stand-in for apex-updated, on the system
 bus, and opens `gnome-control-center system software-updates` on its scenarios: board
 18's "ready" state (captured light and dark, at the top and scrolled), up to date, an
-update available, a health failure, and no service at all. `updates.py` checks each
-state's texts through AT-SPI and presses each button, and `update1.py`'s log must show
-the method call that button makes, with its arguments.
+update available, a download under way, a health failure and a fallback (board 26's
+dialog in each), and no service at all. `updates.py` checks each
+state's texts through AT-SPI, that board 26's dialog shows, and presses each button and
+the Automatic Downloads switch: `update1.py`'s log must show the method call each makes,
+with its arguments, and the switch must go back when `update1.py` refuses it as polkit
+would.
 
 In these captures the sidebar has no separator under Apex Desktop: the fixtures offer no
 Wi-Fi device, so the Wi-Fi row, the one after the separator in `panel_order[]`, is not

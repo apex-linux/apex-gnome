@@ -77,7 +77,7 @@ update_case() {
 
 update_case ready updates-light default APEX_SCROLL=1 "APEX_CHECK=updates.py ready" || status=1
 update_case ready updates-dark prefer-dark APEX_SCROLL=1 || status=1
-for scenario in up-to-date available health-failure unavailable; do
+for scenario in up-to-date available downloading health-failure fallback unavailable; do
     update_case "$scenario" "updates-$scenario" default "APEX_CHECK=updates.py $scenario" || status=1
 done
 headless_update1_stop
