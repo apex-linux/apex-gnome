@@ -11,7 +11,8 @@ rebuilds Fedora's gnome-shell SRPM with this checkout's recipe (spec-edit, the s
 desktop/shell/ from the working tree as Source1), installs it with the layer's schema
 fixture, runs direct.sh's main part, then asserts what needs no image: each case's log and
 the top bar's metrics, today's pins and the known gaps of default, default-scale1 and
-dark-style, their shell surfaces, and the glass case. Before that, Fedora's gnome-shell of
+dark-style, their shell surfaces, every Apex surface's contrast and Large Text layout,
+and the glass case. Before that, Fedora's gnome-shell of
 the same version runs direct.sh's fedora part, the baseline of the glass case's unlock
 blur. The lane's own checks, signing and the mutter pin's mirror are apex-image's. -e G2_SURFACE_SCENES=1 also captures the surfaces' scenes.
 
@@ -169,7 +170,7 @@ echo "# direct.sh main: exit $rc"
 set +e
 # shellcheck source=tests/shots/assert.sh
 . "$HERE/assert.sh"
-for c in default default-scale1 dark-style stock-light stock-dark safe-env layer-disabled layer-cycles motion; do
+for c in default default-scale1 dark-style stock-light stock-dark safe-env layer-disabled layer-cycles motion idle; do
     no_js_error "$c" "$run/$c.log"
     fixed_clock "$c" "$run/$c.log"
 done
@@ -202,6 +203,7 @@ for c in default:light default-scale1:light dark-style:dark; do
     shell_surfaces "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
     quick_settings "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
     quick_settings_layer "${c%:*}" "$run/${c%:*}.log" apex
+    notifications_layer "${c%:*}" "$run/${c%:*}.log" apex
     shadow_layers "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
     window_switcher "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
     modal_dialog "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
@@ -219,9 +221,12 @@ for c in default:light default-scale1:light dark-style:dark; do
 done
 for c in stock-light stock-dark; do
     quick_settings_layer "$c" "$run/$c.log" stock
+    notifications_layer "$c" "$run/$c.log" stock
 done
+a11y_cases "$run"
 layer_cycles "$run"
 motion_curve "$run"
+idle_desktop "$run"
 no_js_error glass "$run/glass.log"
 glass_frames glass "$run/glass.log"
 shadows_under_glass glass "$run/glass.log"

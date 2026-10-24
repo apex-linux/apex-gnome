@@ -111,7 +111,7 @@ function sheetInfo(uri) {
         const text = new TextDecoder().decode(bytes);
         return {
             sha256: GLib.compute_checksum_for_data(GLib.ChecksumType.SHA256, bytes),
-            sha256WithoutStructureMarker: sha256OfText(text.replace(STRUCTURE_MARKER, '').trimEnd()),
+            sha256BeforeStructure: sha256OfText(text.split(STRUCTURE_MARKER)[0].trimEnd()),
             bytes: bytes.length,
             markers: ['light', 'dark'].filter(v => text.includes(`/*! apex-shell-theme ${v} */`)),
             structure: text.includes(STRUCTURE_MARKER),
@@ -348,8 +348,9 @@ function clockTextGap(label, unit) {
     return round((timeStart - dateEnd) / logical.width * boxOf(label, unit).width);
 }
 
+// panel.js hides a button it has nothing to show for, not its container.
 function panelItems(boxActor, unit) {
-    return boxActor.get_children().filter(c => c.visible).map(container => {
+    return boxActor.get_children().filter(c => c.visible && c.get_first_child()?.visible !== false).map(container => {
         const item = container.get_first_child();
         const pill = item?.get_first_child();
         const label = item ? firstVisibleLabel(item) : null;
@@ -720,6 +721,7 @@ function openPopupMenu() {
     [...rows, separator, iconRow].forEach(item => menu.addMenuItem(item));
     menu.open(BoxPointer.PopupAnimation.NONE);
     return {
+        root: menu.box,
         measure: unit => {
             const line = separator.get_children().find(c => c.has_style_class_name('popup-separator-menu-item-separator'));
             return {
@@ -788,6 +790,7 @@ async function openOsd() {
     const settled = gone && await settledOverTwoFrames(window._hbox,
         () => window.visible && window._hbox.mapped && window._level.visible, OSD_SETTLE_TIMEOUT_MS);
     return {
+        root: window._hbox,
         measure: unit => {
             if (!settled)
                 return {error: 'the OSD never settled'};
@@ -1151,12 +1154,16 @@ async function endSessionDialog(unit) {
     }
 }
 
-async function openEndSessionDialog(unit) {
+async function openShellEndSession() {
     await Gio.DBus.session.call('org.gnome.Shell', '/org/gnome/SessionManager/EndSessionDialog',
         'org.gnome.SessionManager.EndSessionDialog', 'Open', new GLib.Variant('(uuuao)', [1, 0, 60, []]),
         null, Gio.DBusCallFlags.NONE, -1, null);
-    const dialog = Main.layoutManager.modalDialogGroup.get_children()
+    return Main.layoutManager.modalDialogGroup.get_children()
         .find(c => c.dialogLayout?._dialog?.has_style_class_name('end-session-dialog'));
+}
+
+async function openEndSessionDialog(unit) {
+    const dialog = await openShellEndSession();
     try {
         await settle();
         global.stage.set_key_focus(null);
@@ -1189,7 +1196,7 @@ async function openEndSessionDialog(unit) {
 }
 
 // A stock ModalDialog shaped like polkit's: title, description, password entry, two buttons.
-async function modalDialog(unit) {
+function promptDialog() {
     const dialog = new ModalDialog.ModalDialog({styleClass: 'prompt-dialog'});
     const content = new Dialog.MessageDialogContent({
         title: 'Authentication Required',
@@ -1202,6 +1209,23 @@ async function modalDialog(unit) {
         dialog.addButton({label: 'Cancel', action: () => {}, key: Clutter.KEY_Escape}),
         dialog.addButton({label: 'Authenticate', action: () => {}, default: true}),
     ];
+    return {dialog, content, entry, buttons};
+}
+
+function openPromptDialog() {
+    const {dialog} = promptDialog();
+    dialog.open();
+    return {
+        root: dialog.dialogLayout._dialog,
+        close: () => {
+            dialog.close();
+            dialog.destroy();
+        },
+    };
+}
+
+async function modalDialog(unit) {
+    const {dialog, content, entry, buttons} = promptDialog();
     dialog.open();
     try {
         await settle();
@@ -1291,6 +1315,67 @@ async function calendarMenu(unit) {
     } finally {
         menu.close(BoxPointer.PopupAnimation.NONE);
         source.destroy();
+        await settle();
+    }
+}
+
+// The notifications feature: three notifications from one app, the footer, then an empty list.
+async function notificationsLayer(unit) {
+    const source = new MessageTray.Source({title: 'G2 Chat', iconName: 'mail-unread-symbolic'});
+    Main.messageTray.add(source);
+    for (const title of ['Lunch?', 'Standup moved', 'Build passed'])
+        source.addNotification(new MessageTray.Notification({source, title, body: 'Just now.', urgency: MessageTray.Urgency.LOW}));
+    const {menu, _messageList: list} = Main.panel.statusArea.dateMenu;
+    const notifications = new Gio.Settings({schema_id: 'org.gnome.desktop.notifications'});
+    menu.open(BoxPointer.PopupAnimation.NONE);
+    try {
+        await settle();
+        const group = findDescendant(menu.box, a => a.constructor.name === 'NotificationMessageGroup');
+        const messages = group.get_children().map(c => c.child).filter(m => m?.constructor.name === 'NotificationMessage');
+        const footer = list._clearButton.get_parent();
+        const dnd = footer.get_children().find(c => c.has_style_class_name('apex-dnd-button')) ?? null;
+        const header = findDescendant(messages[0], a => a.has_style_class_name?.('message-header'));
+        const line = findDescendant(header, a => a.has_style_class_name?.('message-header-content'));
+        const result = {
+            header: group._headerBox.visible,
+            cardHeader: {
+                sourceIcon: findDescendant(header, a => a.has_style_class_name?.('message-source-icon')).visible,
+                line: line.get_children().filter(c => c.visible).map(c => c.text).join(' '),
+            },
+            icon: messages[0].icon?.to_string() ?? null,
+            messages: messages.map(m => boxOf(m, unit)),
+            footer: boxOf(footer, unit),
+            clear: {...boxOf(list._clearButton, unit), visible: list._clearButton.visible},
+            dnd: dnd && {...boxOf(dnd, unit), label: findDescendant(dnd, a => a instanceof St.Label)?.text ?? null},
+        };
+        const calendar = findDescendant(menu.box, a => a.has_style_class_name?.('calendar'));
+        const find = styleClass => findDescendant(calendar, a => a.has_style_class_name?.(styleClass));
+        const days = calendar.get_children().filter(a => a.has_style_class_name?.('calendar-day'));
+        const dots = days.map(d => findDescendant(d, a => a.has_style_class_name?.('apex-event-dot'))).filter(Boolean);
+        result.calendar = {
+            label: boxOf(find('calendar-month-label'), unit),
+            back: boxOf(find('calendar-change-month-back'), unit),
+            forward: boxOf(find('calendar-change-month-forward'), unit),
+            days: days.length,
+            dots: dots.map(d => boxOf(d, unit)),
+        };
+        if (dnd) {
+            dnd.emit('clicked', Clutter.BUTTON_PRIMARY);
+            result.dndClick = {showBanners: notifications.get_boolean('show-banners'), checked: dnd.checked};
+            dnd.emit('clicked', Clutter.BUTTON_PRIMARY);
+        }
+        Main.messageTray.getSources().filter(s => s === source).forEach(s => s.destroy());
+        await settle();
+        result.empty = {
+            placeholder: list._placeholder.visible,
+            clearVisible: list._clearButton.visible,
+            clearReactive: list._clearButton.reactive,
+        };
+        return result;
+    } finally {
+        menu.close(BoxPointer.PopupAnimation.NONE);
+        notifications.reset('show-banners');
+        Main.messageTray.getSources().filter(s => s === source).forEach(s => s.destroy());
         await settle();
     }
 }
@@ -1545,6 +1630,28 @@ async function spotlightKeys() {
         await pressKeys(keyboard, Clutter.KEY_Escape, 1);
         keys.escape = {open: popup.isOpen, modal: Main.modalCount};
         return keys;
+    } finally {
+        popup.destroy();
+        await settle();
+    }
+}
+
+// Spotlight's popup, and its toast once a calculation is copied, for G2_A11Y.
+async function withSpotlight(read) {
+    if ((await apexHooks())?.safe() !== false)
+        return null;
+    const {Popup} = await import('resource:///org/gnome/shell/ui/apex/spotlight/popup.js');
+    const Toast = await import('resource:///org/gnome/shell/ui/apex/spotlight/toast.js');
+    const popup = new Popup(spotlightProviders, 0);
+    popup.open();
+    try {
+        return await read(popup, async () => {
+            popup.panel.get_children()[0].get_children()[1].set_text('2880 / 1.5');
+            await settle();
+            popup.activateSelected();
+            await settle();
+            return Toast.current()?.get_first_child() ?? null;
+        });
     } finally {
         popup.destroy();
         await settle();
@@ -1919,6 +2026,7 @@ async function scenes() {
     surfaces.switcher = await windowSwitcher(unit);
     surfaces.dialog = {...await modalDialog(unit), endSession: await endSessionDialog(unit)};
     surfaces.dateMenu = await calendarMenu(unit);
+    surfaces.notificationsLayer = await notificationsLayer(unit);
     surfaces.derived = derivedSurfaces(unit);
     surfaces.tilePreview = await tilePreview(unit);
     surfaces.spotlight = await spotlightStyle(unit);
@@ -2369,6 +2477,20 @@ async function runProbe() {
         console.log(`APEXG2-SCENES ${JSON.stringify(result)}`);
     }
 
+    if (GLib.getenv('G2_A11Y') === '1') {
+        let result;
+        try {
+            const A11y = await import('./a11y.js');
+            result = await A11y.a11yReport({
+                settle, unit: cssUnit(), apexDock, findDescendant, openPopupMenu, openOsd, openBanner,
+                openModalDialog: openPromptDialog, openEndSessionDialog: openShellEndSession, withSpotlight,
+            });
+        } catch (e) {
+            result = {error: `${e.message}\n${e.stack}`};
+        }
+        console.log(`APEXG2-A11Y ${JSON.stringify(result)}`);
+    }
+
     if (GLib.getenv('G2_INDICATORS') === '1') {
         let result;
         try {
@@ -2420,6 +2542,17 @@ async function runProbe() {
             result = {error: `${e.message}\n${e.stack}`};
         }
         console.log(`APEXG2-CYCLES ${JSON.stringify(result)}`);
+    }
+
+    if (GLib.getenv('G2_IDLE') === '1') {
+        let result;
+        try {
+            const Idle = await import('./idle.js');
+            result = await Idle.idleReport({settle, dropStartupNotifications, apexDock});
+        } catch (e) {
+            result = {error: `${e.message}\n${e.stack}`};
+        }
+        console.log(`APEXG2-IDLE ${JSON.stringify(result)}`);
     }
 
     if (GLib.getenv('G2_DOCK') === '1') {

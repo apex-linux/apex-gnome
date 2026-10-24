@@ -48,7 +48,7 @@ mkdir -p "$T/schemas" "$T/noschema" "$T/nochild" "$T/data" "$T/home" "$T/shell" 
 # main.js and the Meta and Shell typelibs come only with gnome-shell and mutter.
 cp -R "$REPO/desktop/shell/js" "$T/shell/"
 cp "$HERE/main-stub.js" "$T/shell/js/ui/main.js"
-for upstream in panelMenu dash iconGrid popupMenu layout; do
+for upstream in panelMenu dash iconGrid popupMenu layout messageList; do
     cp "$HERE/stubs/$upstream.js" "$T/shell/js/ui/$upstream.js"
 done
 # Spotlight's providers: upstream's app search and remote providers, faked.
@@ -79,30 +79,31 @@ awk '/<key name="disabled-features"/ { key = 1 }
     { print }' "$SCHEMA_DIR/io.github.apex_linux.Apex.Desktop.gschema.xml" >"$APEX_SCHEMA"
 cp "$SCHEMA_DIR"/*.gschema.xml "$T/schemas/"
 cp "$APEX_SCHEMA" "$T/schemas/"
-readonly SEARCH_PROVIDERS_SCHEMA=$HERE/fixtures/org.gnome.desktop.search-providers.gschema.xml
-cp "$SEARCH_PROVIDERS_SCHEMA" "$T/schemas/"
+# gsettings-desktop-schemas' keys the features read, in every schema directory.
+readonly -a DESKTOP_SCHEMAS=("$HERE"/fixtures/org.gnome.desktop.*.gschema.xml)
+cp "${DESKTOP_SCHEMAS[@]}" "$T/schemas/"
 glib-compile-schemas --strict "$T/schemas"
 awk '/<child name="keybindings"/ { next }
     /<schema id="io\.github\.apex_linux\.Apex\.Desktop\.Keybindings"/ { skip = 1 }
     !skip { print }
     skip && /<\/schema>/ { skip = 0 }' "$APEX_SCHEMA" \
     >"$T/nochild/io.github.apex_linux.Apex.Desktop.gschema.xml"
-cp "$SEARCH_PROVIDERS_SCHEMA" "$T/nochild/"
+cp "${DESKTOP_SCHEMAS[@]}" "$T/nochild/"
 glib-compile-schemas --strict "$T/nochild"
 mkdir -p "$T/nokey"
 awk '/<key name="toggle-spotlight"/ { skip = 1 } !skip { print } skip && /<\/key>/ { skip = 0 }' \
     "$APEX_SCHEMA" >"$T/nokey/io.github.apex_linux.Apex.Desktop.gschema.xml"
-cp "$SEARCH_PROVIDERS_SCHEMA" "$T/nokey/"
+cp "${DESKTOP_SCHEMAS[@]}" "$T/nokey/"
 glib-compile-schemas --strict "$T/nokey"
 mkdir -p "$T/nodock"
 awk '/<key name="dock-show-trash"/ { skip = 1 } !skip { print } skip && /<\/key>/ { skip = 0 }' \
     "$APEX_SCHEMA" >"$T/nodock/io.github.apex_linux.Apex.Desktop.gschema.xml"
-cp "$SEARCH_PROVIDERS_SCHEMA" "$T/nodock/"
+cp "${DESKTOP_SCHEMAS[@]}" "$T/nodock/"
 glib-compile-schemas --strict "$T/nodock"
 mkdir -p "$T/nohint"
 awk '/<key name="search-hint-shown"/ { skip = 1 } !skip { print } skip && /<\/key>/ { skip = 0 }' \
     "$APEX_SCHEMA" >"$T/nohint/io.github.apex_linux.Apex.Desktop.gschema.xml"
-cp "$SEARCH_PROVIDERS_SCHEMA" "$T/nohint/"
+cp "${DESKTOP_SCHEMAS[@]}" "$T/nohint/"
 glib-compile-schemas --strict "$T/nohint"
 mkdir -p "$T/noreduce"
 awk '/<key name="reduce-transparency"/ { skip = 1 } !skip { print } skip && /<\/key>/ { skip = 0 }' \
@@ -422,6 +423,36 @@ fact "disabled-features=['quick-settings']: Power Mode unlit" 'qs\.power=checked
 fact "disabled-features=['quick-settings']: a network row stays stock" 'qs\.row\.active=children=icons,label,check icons=signal,lock checked=false lock=3/none'
 fact "disabled-features=['quick-settings']: the subtitle stays under the title" 'qs\.menu=1,1 x_align=0'
 
+probe notifications "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_NOTIFICATIONS=1
+has "notifications: the feature enables" 'Apex: feature notifications enabled'
+readonly FLAT='expanded=true layout=box cover=false header=false stacked=false'
+readonly STACKED='expanded=false layout=expander cover=true header=false'
+fact "notifications: a group lays its cards out flat, without its header or cover" "nf\.groups=Mail:$FLAT"
+fact "notifications: the header reads app · time, without the source glyph" 'nf\.header=icon=false line=Mail · now'
+fact "notifications: Do Not Disturb, then Clear on the right" 'nf\.footer=apex-dnd-button,clear clear=align:3 visible:true'
+fact "notifications: a card shows the source's icon without one of its own, else its own" 'nf\.icons=fallback=mail-icon own=photo-icon'
+fact "notifications: the switch follows show-banners; Clear stays shown with nothing to clear" \
+    'nf\.dnd-from-settings=checked=true switch=true clear=true'
+fact "notifications: a click turns Do Not Disturb off" 'nf\.dnd-click=show-banners=true checked=false'
+fact "notifications: the month on the left, both chevrons on the right" 'nf\.calendar=header=month,back,forward align=1 class=true'
+fact "notifications: every day keeps a dot under its number" 'nf\.days=27/apex-event-dot 28/apex-event-dot 29/apex-event-dot'
+fact "notifications: layer off: stock's header" 'nf\.off\.calendar=header=back,month,forward align=2 class=false'
+fact "notifications: layer off: stock's day buttons" 'nf\.off\.days=27 28 29'
+fact "notifications: layer back on: the header and dots again" 'nf\.on\.calendar=header=month,back,forward align=1 class=true'
+fact "notifications: layer off: stock's groups, a new one too" "nf\.off\.groups=Mail:$STACKED stacked=true \| Chat:$STACKED stacked=true"
+fact "notifications: layer off: stock's header" 'nf\.off\.header=icon=true line=Mail now'
+fact "notifications: layer off: stock's footer, Clear hidden with the placeholder shown" 'nf\.off\.footer=clear clear=align:1 visible:false'
+fact "notifications: layer off: no fallback icon" 'nf\.off\.icons=fallback=null own=photo-icon'
+fact "notifications: layer back on: flat again; a group built while every hook was stock stays stock" \
+    "nf\.on\.groups=Mail:$FLAT \| Chat:$STACKED stacked=true"
+fact "notifications: layer back on: the footer again" 'nf\.on\.footer=apex-dnd-button,clear clear=align:3 visible:true'
+
+probe notifications-disabled "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_NOTIFICATIONS=1 PROBE_DISABLED=notifications
+has "disabled-features=['notifications']: skips the feature" 'Apex: feature notifications is in disabled-features'
+fact "disabled-features=['notifications']: stock's group" "nf\.groups=Mail:$STACKED stacked=true"
+fact "disabled-features=['notifications']: stock's header" 'nf\.header=icon=true line=Mail now'
+fact "disabled-features=['notifications']: stock's footer" 'nf\.footer=clear clear=align:1 visible:true'
+
 probe shadows "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_SHADOWS=1
 has "shadows: the feature enables" 'Apex: feature shadows enabled'
 fact "shadows: a registered surface gets one layer from -apex-shadow-layer, its box and radius, just above its top ancestor" \
@@ -580,7 +611,7 @@ fact "launcher: with spotlight in disabled-features the app grid keeps the stock
 fact "launcher: taken out again, the launcher's pill is back" 'launcher\.enabled-again=hint=Search apps pill=true grid'
 lacks "launcher: nothing fails" 'off for this session|did not disable cleanly|JS ERROR'
 
-readonly KEPT_PILL='remoteAccess,camera,volumeInput,location,network,volumeOutput,unsafeMode,system'
+readonly KEPT_PILL='privacy\(remoteAccess camera volumeInput location\),network,volumeOutput,unsafeMode,system'
 readonly STOCK_PILL='remoteAccess,camera,volumeInput,location,brightness,thunderbolt,nightLight,network,darkMode,doNotDisturb,backlight,bluetooth,rfkill,autoRotate,volumeOutput,unsafeMode,powerProfiles,system'
 probe top-bar "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_TOP_BAR=1 PROBE_SCALE=2
 rc_is "top bar: the probe runs" 0
@@ -589,6 +620,17 @@ fact "workspace-dots: the active dot widens from its own width to the sheet's -a
     'top-bar\.dots=7 15 22 inactive=\{"opacity":0\.45,"scale":1\}'
 fact "status-pill: network, volume, battery, the privacy and the unsafe-mode indicators stay" "pill=$KEPT_PILL"
 fact "status-pill: and so for indicators set up after enable" "pill\.set-up-after-enable=$KEPT_PILL"
+fact "privacy group: hidden while no privacy indicator shows" 'privacy\.idle=group=false in-use=false'
+fact "privacy group: the camera in use shows it, and the pill narrows its start for it" 'privacy\.camera=group=true in-use=true'
+fact "privacy group: hidden again once the camera is off" 'privacy\.camera-off=group=false in-use=false'
+fact "screen pills: the recording's stop square before the timer, stock's glyph hidden" 'recording=square,0:42 hidden=screencast-stop-symbolic name=Stop Screencast'
+fact "screen pills: sharing's glyph then the square, named for its click" 'sharing=screen-shared-symbolic,square hidden=screencast-stop-symbolic name=Stop screen sharing'
+fact "screen pills: sharing moves from after the recording to after the input source" \
+    'right-box=screenRecording,a11y,keyboard,screenSharing,indicators,divider,quickSettings,'
+fact "screen pills: right before the status pill again after panel.js re-adds its items" \
+    'right-box\.after-session-update=screenRecording,a11y,keyboard,indicators,divider,screenSharing,quickSettings,'
+fact "input chip: the sources' short names in capitals" 'input-chip=EN,VI'
+fact "input chip: and so after keyboard.js renames one or adds a source" 'input-chip\.changed=EN,VI₂,FR'
 fact "hot-corner: the corner becomes a reactive 4 x 4 zone at its own position, in scaled px" \
     'hot-corner\.zone=hot-corner reactive=true x=0 y=0 8x8'
 fact "hot-corner: in the chrome, hidden under fullscreen windows" 'chrome\.add=hot-corner trackFullscreen=true'
@@ -596,7 +638,15 @@ count_is "hot-corner: entering it triggers the barrier once, until the pointer l
 fact "hot-corner: leaving it while on the barrier keeps the barrier's trigger" 'hot-corner\.after-leave-on-the-barrier=true'
 fact "layer-enabled=false: the dot hooks give stock" 'top-bar\.off\.dots=99 99 99 inactive="stock"'
 fact "layer-enabled=false: the status pill gets every indicator back, in order" "pill\.off=$STOCK_PILL"
+fact "layer-enabled=false: no privacy group, and the pill's start is stock" 'privacy\.off=group=none in-use=false'
+fact "layer-enabled=false: the recording button is stock's, timer then glyph" 'recording\.off=0:42,screencast-stop-symbolic hidden=none name=Stop Screencast'
+fact "layer-enabled=false: so is sharing, named as stock names it" 'sharing\.off=screen-shared-symbolic,screencast-stop-symbolic hidden=none name=Stop Screen Sharing'
+fact "layer-enabled=false: sharing goes back after the recording" 'right-box\.off=screenRecording,screenSharing,a11y,keyboard,quickSettings,'
+fact "layer-enabled=false: the input chip has stock's names back" 'input-chip\.off=en,vi₂,fr'
 fact "layer-enabled=true: the filter again" "pill\.on=$KEPT_PILL"
+fact "layer-enabled=true: the stop squares again" 'recording\.on=square,0:42 hidden=screencast-stop-symbolic name=Stop Screencast'
+fact "layer-enabled=true: and sharing's name" 'sharing\.on=screen-shared-symbolic,square hidden=screencast-stop-symbolic name=Stop screen sharing'
+fact "layer-enabled=true: capitals again" 'input-chip\.on=EN,VI₂,FR'
 count_is "both dots restyle at each enable and disable" '^probe: workspace-dot=restyled$' 6
 count_is "the hot corners are rebuilt at each enable and disable" '^probe: hot-corners=rebuilt$' 3
 lacks "top bar: no feature fails or disables uncleanly" 'off for this session|did not disable cleanly|cannot restyle'
@@ -608,6 +658,9 @@ probe top-bar-disabled "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_TOP_BAR=1 PROBE_DIS
 has "disabled-features=['panel']: skips the feature" 'Apex: feature panel is in disabled-features'
 fact "disabled-features=['panel']: the dot hooks give stock" 'top-bar\.dots=99 99 99 inactive="stock"'
 fact "disabled-features=['panel']: the status pill keeps every indicator" "pill=$STOCK_PILL"
+fact "disabled-features=['panel']: the recording button stays stock's" 'recording=0:42,screencast-stop-symbolic hidden=none name=Stop Screencast'
+fact "disabled-features=['panel']: sharing stays where panel.js puts it" 'right-box\.after-session-update=screenRecording,screenSharing,a11y,keyboard,indicators,divider,quickSettings,'
+fact "disabled-features=['panel']: the input chip keeps stock's names" 'input-chip\.changed=en,vi₂,fr'
 fact "disabled-features=['panel']: the corner stays stock" 'hot-corner\.zone=none reactive=false x=undefined y=undefined undefinedxundefined'
 lacks "disabled-features=['panel']: nothing is rebuilt or restyled" 'hot-corners=rebuilt|workspace-dot=restyled'
 
@@ -652,7 +705,7 @@ fact "disabled-features=['panel']: nothing follows the focus" 'focused-app\.file
 readonly SEARCH_ITEM='Search \(Super\+Space\) pill=apex-search-pill icon=system-search-symbolic'
 probe search-button "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_SEARCH_BUTTON=1
 has "search-button: the panel feature enables" 'Apex: feature panel enabled'
-fact "search-button: just before the status pill in the right box" 'panel\.add=apex-search at 2 in right'
+fact "search-button: at the start of the right box" 'panel\.add=apex-search at 0 in right'
 fact "search-button: a pill with the search glyph, named for its key" "search\.enabled=$SEARCH_ITEM visible=true"
 fact "search-button: hovered, its tooltip shows centred below it" 'search\.tooltip\.hover=true at 1256,32'
 fact "search-button: and hides when the pointer leaves" 'search\.tooltip\.unhover=false at 1256,32'
@@ -998,9 +1051,9 @@ probe indicators "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_INDICATORS=1 \
 has "indicators: the feature enables" 'Apex: feature indicators enabled'
 fact "indicators: the shell owns org.kde.StatusNotifierWatcher while nobody else does" 'indicators\.watcher=shell'
 fact "indicators: with no items, no indicators and no divider; both sit before the status pill" \
-    'indicators\.empty=hidden overflow=none divider=false order=a11y,keyboard,indicators,divider,quickSettings'
+    'indicators\.empty=hidden overflow=none divider=false order=screenRecording,a11y,keyboard,screenSharing,indicators,divider,quickSettings'
 fact "indicators: four items show in the order they registered: the theme's -symbolic icon, or a full-colour icon or a pixmap as a mask" \
-    'indicators\.four=File sync:symbolic,Game launcher:mask,Password manager:pixmap,Chat:symbolic overflow=none divider=true order=a11y,keyboard,indicators,divider,quickSettings'
+    'indicators\.four=File sync:symbolic,Game launcher:mask,Password manager:pixmap,Chat:symbolic overflow=none divider=true order=screenRecording,a11y,keyboard,screenSharing,indicators,divider,quickSettings'
 fact "indicators: a fifth moves two to the overflow: three show, and +2" \
     'indicators\.five=File sync:symbolic,Game launcher:mask,Password manager:pixmap overflow=\+2 divider=true'
 fact "indicators: a pixmap's network-order ARGB becomes RGBA" 'indicators\.pixmap=16x16 alpha=true first-pixel-rgba=10,20,30,255'
@@ -1031,7 +1084,7 @@ fact "indicators: primary click on an item that is only a menu opens it" 'indica
 fact "indicators: an item whose app leaves the bus goes" \
     'indicators\.vanished=Game launcher:mask,Password manager:pixmap,Chat:symbolic\+dot overflow=none divider=true'
 fact "indicators: disabled-features=['indicators'] takes them, the divider and the watcher away" \
-    'indicators\.disabled=none watcher=none order=a11y,keyboard,quickSettings'
+    'indicators\.disabled=none watcher=none order=screenRecording,a11y,keyboard,screenSharing,quickSettings'
 readonly REREGISTERED='(Password manager:pixmap|Chat:symbolic\+dot|Game launcher:mask)(,(Password manager:pixmap|Chat:symbolic\+dot|Game launcher:mask)){2} overflow=none divider=true'
 fact "indicators: back out of it, the shell owns the watcher again and the items register again" \
     "indicators\.re-enabled=$REREGISTERED watcher=shell"
