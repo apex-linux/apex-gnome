@@ -208,8 +208,13 @@ notification card's fill, ring, radius, inset, gap, type, icon and close button,
 footer and Clear, the date labels, the month card and its name, headings and days
 (weekday, weekend, other month, today), and the events card.
 
-None of these surfaces is in a compared capture, so the comparison with Fedora's build
-is unchanged.
+`overview_style` reads the overview scene in the same cases, after its capture: the
+scrim, the search field at rest and focused and its gap under the bar, the thumbnails'
+gap, radius and ring and the current one's ring, and, as stand-ins since G2 opens no
+windows and searches nothing, a window title and a search section.
+
+None of these surfaces is in a capture compared with Fedora, so the comparison with Fedora's build
+is unchanged: the Apex overview is compared only run to run, and safe mode's with Fedora's.
 
 ## Known gaps
 

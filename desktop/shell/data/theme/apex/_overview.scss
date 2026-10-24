@@ -1,0 +1,78 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+
+// The scrim is the tint over the wallpaper until S2b's glass manager blurs behind it.
+#overviewGroup { background-color: $apex_scrim; }
+
+.search-entry {
+  width: $apex_search_width - 2 * $apex_search_padding;
+  min-height: $apex_search_height - 2 * $apex_surface_border;
+  margin-top: $apex_search_top;
+  padding: 0 ($apex_search_padding - $apex_surface_border);
+  border: $apex_surface_border solid $apex_pill_border;
+  border-radius: $apex_search_height / 2;
+  color: $apex_fg;
+  background-color: $apex_pill;
+  box-shadow: none;
+  font-size: apex-text-size($apex_font_search_size);
+  caret-color: $apex_accent;
+
+  &:hover, &:focus { color: $apex_fg; background-color: $apex_pill; }
+  &:focus { box-shadow: inset 0 0 0 $apex_entry_focus_ring $apex_accent !important; }
+
+  StLabel.hint-text { color: transparentize($apex_fg, 1 - $apex_hint_opacity); }
+
+  .search-entry-icon {
+    icon-size: $apex_quick_settings_icon_size;
+    margin: 0;
+    padding: 0;
+    color: transparentize($apex_fg, 1 - $apex_pill_icon_opacity);
+  }
+
+  .search-entry-icon:ltr { margin-right: $apex_search_gap; }
+  .search-entry-icon:rtl { margin-left: $apex_search_gap; }
+}
+
+.workspace-thumbnails {
+  spacing: $apex_thumbnail_gap;
+
+  .workspace-thumbnail {
+    border: $apex_surface_border solid $apex_pill_border;
+    border-radius: $apex_radius_thumbnail;
+  }
+}
+
+.workspace-thumbnail-indicator {
+  border: $apex_thumbnail_indicator solid $apex_accent;
+  border-radius: $apex_radius_thumbnail;
+}
+
+.window-caption {
+  min-height: $apex_caption_height - 2 * $apex_surface_border;
+  padding: 0 ($apex_caption_padding - $apex_surface_border);
+  border: $apex_surface_border solid $apex_pill_border;
+  border-radius: $apex_caption_height / 2;
+  color: $apex_fg;
+  background-color: $apex_pill;
+  font-size: apex-text-size($apex_font_caption_size);
+  font-weight: $apex_font_heading_weight;
+}
+
+// Search has no board until Spotlight (S3a): its sections are glass cards on the scrim.
+.search-section-content {
+  border: $apex_surface_border solid $apex_glass_card_border;
+  border-radius: $apex_radius_message;
+  color: $apex_fg;
+  background-color: $apex_glass_card;
+}
+
+.list-search-result, .search-provider-icon {
+  color: $apex_fg;
+  background-color: transparent;
+
+  &:hover, &:focus, &:selected, &:active { color: $apex_fg; background-color: $apex_button_hover; }
+
+  .list-search-result-description { color: $apex_fg_dim; }
+  .list-search-provider-content .list-search-provider-details { color: $apex_fg; }
+}
+
+.search-statustext { color: $apex_fg_dim; }

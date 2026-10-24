@@ -557,6 +557,35 @@ date_menu() {
             and (.eventsTitle | (.font.size | px_is(\$t.apex_font_events_title_size)) and .font.weight == (\$t.apex_font_heading_weight | tonumber) and (.foreground | colour_is(\$t.apex_fg_dim)))"
 }
 
+# shellcheck disable=SC2016 # jq programs and token names, not shell expansions
+overview_style() {
+    local label=$1 log=$2 variant=$3 scenes tokens
+    scenes=$(report_of "$log" APEXG2-SCENES)
+    tokens=$(tokens_for "$variant")
+    local -a metric=(top_bar_metric "$label overview" "$scenes" "$tokens")
+    local o=.surfaces.overview
+
+    "${metric[@]}" 'the overview is tinted with the $apex_scrim scrim' \
+        "$o.group" '(.background | colour_is($t.apex_scrim)) and .boxShadow == null'
+    "${metric[@]}" 'the search field is a $apex_search_width x $apex_search_height $apex_pill pill ringed in $apex_pill_border, padded $apex_search_padding, $apex_search_top below the bar' \
+        "{o: $o, bar: .topBar.panel.height}" '.bar as $bar | .o.search | (.width | px_is($t.apex_search_width)) and (.height | px_is($t.apex_search_height)) and .radius >= ($t.apex_search_height | px) / 2
+            and (.background | colour_is($t.apex_pill)) and (.borderColor | colour_is($t.apex_pill_border)) and (.border.top | px_is($t.apex_surface_border))
+            and (.padding.left + .border.left | px_is($t.apex_search_padding)) and (.y - $bar | px_is($t.apex_search_top))'
+    "${metric[@]}" 'its text is $apex_font_search_size in $apex_fg, its glyph $apex_quick_settings_icon_size; focused, it draws a $apex_entry_focus_ring ring in the raw accent' \
+        "{s: $o.search, accent: .topBar.accent}" '.accent as $a | .s | (.font.size | px_is($t.apex_font_search_size)) and (.foreground | colour_is($t.apex_fg)) and (.icon | px_is($t.apex_quick_settings_icon_size))
+            and (.focus.boxShadow | .inset and (.spread | px_is($t.apex_entry_focus_ring)) and (.color | colour_is($a)))'
+    "${metric[@]}" 'workspace thumbnails are $apex_thumbnail_gap apart, radius $apex_radius_thumbnail, ringed in $apex_pill_border; the current one in a $apex_thumbnail_indicator accent ring' \
+        "{o: $o, accent: .topBar.accent}" '.accent as $a | .o | (.thumbnailsSpacing | px_is($t.apex_thumbnail_gap))
+            and (.thumbnail | (.radius | px_is($t.apex_radius_thumbnail)) and (.borderColor | colour_is($t.apex_pill_border)) and (.border.top | px_is($t.apex_surface_border)))
+            and (.indicator | (.radius | px_is($t.apex_radius_thumbnail)) and (.border.top | px_is($t.apex_thumbnail_indicator)) and (.borderColor | colour_is($a)))'
+    "${metric[@]}" 'a window title is a $apex_caption_height $apex_pill pill ringed in $apex_pill_border, padded $apex_caption_padding, $apex_font_caption_size $apex_font_heading_weight in $apex_fg' \
+        "$o.caption" '(.minHeight + 2 * .border.top | px_is($t.apex_caption_height)) and .radius >= ($t.apex_caption_height | px) / 2 and (.background | colour_is($t.apex_pill))
+            and (.borderColor | colour_is($t.apex_pill_border)) and (.padding.left + .border.left | px_is($t.apex_caption_padding))
+            and (.font.size | px_is($t.apex_font_caption_size)) and .font.weight == ($t.apex_font_heading_weight | tonumber) and (.foreground | colour_is($t.apex_fg))'
+    "${metric[@]}" 'a search section is a $apex_glass_card card ringed in $apex_glass_card_border, radius $apex_radius_message, its text $apex_fg' \
+        "$o.section" '(.background | colour_is($t.apex_glass_card)) and (.borderColor | colour_is($t.apex_glass_card_border)) and (.radius | px_is($t.apex_radius_message)) and (.foreground | colour_is($t.apex_fg))'
+}
+
 scenes_captured() {
     local run=$1 case_name=$2
     local log=$run/$case_name.log scene
@@ -738,6 +767,7 @@ direct_cases() {
     window_switcher default "$f" light
     modal_dialog default "$f" light
     date_menu default "$f" light
+    overview_style default "$f" light
 
     f=$run/default-scale1.log
     exits "$run" default-scale1 0
@@ -752,6 +782,7 @@ direct_cases() {
     window_switcher default-scale1 "$f" light
     modal_dialog default-scale1 "$f" light
     date_menu default-scale1 "$f" light
+    overview_style default-scale1 "$f" light
 
     f=$run/dark-style.log
     exits "$run" dark-style 0
@@ -769,6 +800,7 @@ direct_cases() {
     window_switcher dark-style "$f" dark
     modal_dialog dark-style "$f" dark
     date_menu dark-style "$f" dark
+    overview_style dark-style "$f" dark
     dark_style_off dark-style "$f"
 
     for c in stock-light stock-dark; do
