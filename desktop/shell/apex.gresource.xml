@@ -16,6 +16,7 @@
     <file alias="spotlight/providers.js">js/ui/apex/spotlight/providers.js</file>
     <file alias="spotlight/popup.js">js/ui/apex/spotlight/popup.js</file>
     <file alias="spotlight/toast.js">js/ui/apex/spotlight/toast.js</file>
+    <file alias="spotlight/launcher-search.js">js/ui/apex/spotlight/launcher-search.js</file>
     <file alias="spotlight/tiles.js">js/ui/apex/spotlight/tiles.js</file>
     <file alias="spotlight/settings-tiles.json">js/ui/apex/spotlight/settings-tiles.json</file>
     <file alias="panel/feature.js">js/ui/apex/panel/feature.js</file>
@@ -51,6 +52,14 @@
     <file alias="quick-settings/feature.js">js/ui/apex/quick-settings/feature.js</file>
     <file alias="quick-settings/submenu.js">js/ui/apex/quick-settings/submenu.js</file>
     <file alias="end-session/feature.js">js/ui/apex/end-session/feature.js</file>
+    <file alias="indicators/feature.js">js/ui/apex/indicators/feature.js</file>
+    <file alias="indicators/watcher.js">js/ui/apex/indicators/watcher.js</file>
+    <file alias="indicators/item.js">js/ui/apex/indicators/item.js</file>
+    <file alias="indicators/icon.js">js/ui/apex/indicators/icon.js</file>
+    <file alias="indicators/mask.js">js/ui/apex/indicators/mask.js</file>
+    <file alias="indicators/dbusmenu.js">js/ui/apex/indicators/dbusmenu.js</file>
+    <file alias="indicators/indicator.js">js/ui/apex/indicators/indicator.js</file>
+    <file alias="indicators/bar.js">js/ui/apex/indicators/bar.js</file>
     <file alias="notifications/feature.js">js/ui/apex/notifications/feature.js</file>
   </gresource>
   <gresource prefix="/org/gnome/shell/theme/apex">

@@ -442,6 +442,13 @@ $apex_toast_check_size: 22px;
 $apex_toast_check_icon_size: 12px;
 $apex_toast_bottom: 92px;
 
+// The launcher's own search (board 36).
+$apex_launcher_search_width: 400px;
+$apex_launcher_empty_top: 172px;
+$apex_launcher_empty_gap: 8px;
+$apex_font_launcher_empty_title_size: 18px;
+$apex_font_launcher_empty_hint_size: 13px;
+
 $apex_screenshot_width: 440px;
 $apex_screenshot_padding: 14px;
 $apex_screenshot_gap: 12px;
@@ -478,3 +485,31 @@ $apex_screenshot_handle_shadow_blur: 4px;
 $apex_screenshot_frame: 3px;
 $apex_radius_screenshot_window: 14px;
 $apex_screenshot_screen_tint: rgba(0, 0, 0, .12);
+
+// Board 39, the app indicators.
+$apex_indicator_width: 30px;
+$apex_indicator_dot_size: 6px;
+$apex_indicator_dot_top: 3px;
+$apex_indicator_dot_right: 5px;
+$apex_indicators_divider_width: 1px;
+$apex_indicators_divider_height: 14px;
+$apex_indicators_divider_opacity: .2;
+$apex_indicators_divider_margin: 6px;
+$apex_indicators_overflow_padding_start: 6px;
+$apex_indicators_overflow_padding_end: 8px;
+$apex_indicators_overflow_gap: 2px;
+$apex_font_indicators_count_size: 12px;
+$apex_font_indicators_count_weight: 700;
+$apex_indicator_menu_width: 280px;
+$apex_indicators_overflow_menu_width: 240px;
+$apex_radius_indicator_menu_row: 9px;
+$apex_indicator_menu_row_padding: 12px;
+$apex_indicator_menu_header_height: 30px;
+$apex_indicator_menu_separator_margin: 5px;
+$apex_indicator_menu_separator_inset: 10px;
+$apex_indicators_chevron_size: 12px;
+$apex_indicators_chevron_opacity: .55;
+$apex_indicator_switch_width: 30px;
+$apex_indicator_switch_height: 18px;
+$apex_indicator_switch_padding: 2px;
+$apex_indicator_switch_knob: 14px;
