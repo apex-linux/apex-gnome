@@ -1275,12 +1275,15 @@ CHANGES
     local manager
     manager=$(jq -nc --argjson on "$on" --argjson p "$popover" '{panel: $on, quickSettings: $p, calendar: $p, banner: $p, blurEffects: ["panel"], solidClass: false} as $g
         | {panel: null, quickSettings: null, calendar: null, banner: null, blurEffects: []} as $none
+        | {radius: 144, saturation: 1.5, enabled: true, fine: true, followOpacity: true, background: false} as $scrim
         | {manager: {monitorScale: 2, glass: $g, reduceTransparency: ($none + {solidClass: true}), highContrast: ($none + {solidClass: true}),
-            disabled: ($none + {solidClass: false}), restored: $g}}')
+            disabled: ($none + {solidClass: false}), restored: $g,
+            scrims: {overview: $scrim, launcher: ($scrim + {radius: 160, saturation: 1.6}), hidden: ($scrim + {enabled: false}), barOverScrim: $on,
+                unforwarded: {changed: 59520, differingFromFull: 42880}, forwarded: {changed: 102400, differingFromFull: 0}}}}')
     while IFS='|' read -r failures what change; do
         jq -c "$change" <<<"$manager" | sed 's/^/APEXG2-GLASS /' >"$T/glass.log"
         read -r passes _ <<<"$(assertion_counts glass_manager glass "$T/glass.log" light)"
-        expect_eq "glass manager: $what fails $failures of 5" "$failures" $((5 - passes))
+        expect_eq "glass manager: $what fails $failures of 7" "$failures" $((7 - passes))
     done <<'CHANGES'
 0|the bar and the popovers at their tokens, every switch honoured|.
 1|the bar at the popovers' sigma|.manager.glass.panel.radius = 120
@@ -1291,7 +1294,11 @@ CHANGES
 1|high contrast that keeps the bar's glass|.manager.highContrast.panel = .manager.glass.panel
 1|the kill switch that turns the tints solid|.manager.disabled.solidClass = true
 1|glass that does not come back|.manager.restored.panel = null
-5|no manager|.manager = null
+1|the launcher at the overview's sigma|.manager.scrims.launcher.radius = 144
+1|a scrim in background mode|.manager.scrims.overview.background = true
+1|a scrim left on after the overview|.manager.scrims.hidden.enabled = true
+1|a forwarded damage that leaves a stale halo|.manager.scrims.forwarded.differingFromFull = 120
+7|no manager|.manager = null
 CHANGES
 }
 

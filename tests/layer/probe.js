@@ -341,6 +341,21 @@ async function exerciseGlass() {
     const report = label => fact(`glass.${label}`, `${surfaces().map(glassOf).join(' ')} ` +
         `solid=${Main.uiGroup.has_style_class_name('apex-solid')} redirects=${panel.redirect},${quickSettings.menu.box.parent.redirect}`);
     report('enabled');
+    const scrim = Main.uiGroup.get_children().find(actor => actor.name === 'apexGlassScrim');
+    const {overviewGroup} = Main.layoutManager;
+    const adjustment = Main.overview._overview._controls._stateAdjustment;
+    const scrimFact = label => fact(`glass.scrim.${label}`, scrim ? `${glassOf(scrim)} visible=${scrim.visible}` : 'none');
+    scrimFact('closed');
+    overviewGroup.visible = true;
+    overviewGroup.emit('notify::visible');
+    scrimFact('overview');
+    adjustment.value = 2;
+    adjustment.emit('notify::value');
+    scrimFact('launcher');
+    adjustment.value = 1;
+    adjustment.emit('notify::value');
+    overviewGroup.visible = false;
+    overviewGroup.emit('notify::visible');
     Main.messageTray.showBanner();
     report('banner');
 

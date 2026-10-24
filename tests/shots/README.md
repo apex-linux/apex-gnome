@@ -273,7 +273,12 @@ and Quick Settings', the calendar's (each opened) and a banner's `$apex_panel_bl
 2 × sigma × the monitor scale; that with `reduce-transparency`, and with high contrast, no
 actor on the stage carries a `Shell.BlurEffect` and the root carries `apex-solid`; that
 with `disabled-features=['glass']` no actor carries one and the tints stay; and that the
-glass comes back after each.
+glass comes back after each. In the overview the scrim blurs a clone of the desktop in actor
+mode at `$apex_overview_scrim_blur` and `$apex_overview_scrim_saturation`, and at the
+`$apex_launcher_scrim_*` tokens while the app grid shows, with the bar's glass on over it.
+A stand-in window in `window_group` (a `Clutter.Actor`: St restyles no unmapped actor)
+changes colour under the scrim: with the damage forwarded as the manager forwards a
+window's, the frame equals a full redraw; without, the blur's halo stays stale (the control).
 
 `G2_GLASS=1 G2_GLASS_STRESS=SECONDS` runs a stress instead, by hand: for that long a
 stand-in window moves and tiles change under the box, every other change forwarded. Each
