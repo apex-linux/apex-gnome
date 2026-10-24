@@ -231,7 +231,8 @@ the kill switches and `disabled-features=['overview']` as a whole:
   any, fading in with the overview.
 - `overview/thumbnails.js`: workspace thumbnails at scale .081 of the work area, board 35's 70 px
   tall (117 × 70 on a 1440 × 900 screen), shown from two workspaces, where stock shows them from three at .05.
-- `overview/launcher.js`: the launcher's grid at 7 columns of 88 px icons, 4 rows a page.
+- `overview/launcher.js`: the launcher's grid at 7 columns of 88 px icons, 4 rows a page, with
+  no workspace strip above it (board 36), so it starts right under the search field.
 
 The overview builds its window previews and workspaces each time it opens, so the first
 two take effect from the next opening; the thumbnails and the launcher change at once.

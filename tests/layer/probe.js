@@ -861,7 +861,7 @@ async function overviewFacts(label) {
         `overlay=${Hooks.value('window-overlay', ['title', 'close'], preview).join('+')} ` +
         `scale=${Hooks.value('thumbnail-scale', 0.05)} threshold=${Hooks.value('thumbnails-threshold', 2)} ` +
         `box=${box._maxThumbnailScale} grid=${JSON.stringify(grid._gridModes)} ` +
-        `icon=${grid.layout_manager.fixed_icon_size}`);
+        `icon=${grid.layout_manager.fixed_icon_size} strip=${Hooks.value('app-grid-workspaces-height', 130)}`);
     fact(`overview.${label}.relayout`, `mode=${grid._currentMode} page-width=${grid.layout_manager._pageWidth}`);
     buildWorkspaces(label);
 }
