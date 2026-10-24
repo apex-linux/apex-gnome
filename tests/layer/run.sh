@@ -787,14 +787,15 @@ for i in "${!POLKIT_ROUTES[@]}"; do
     fi
 done
 
-readonly OVERVIEW_ON='title-visible=true overlay=close scale=0\.081 threshold=1 box=0\.081 grid=\[\{"rows":4,"columns":7\}\] icon=88'
-readonly OVERVIEW_STOCK='title-visible=false overlay=title\+close scale=0\.05 threshold=2 box=0\.05 grid="stock" icon=-1'
+readonly OVERVIEW_ON='title-visible=true overlay=close scale=0\.081 threshold=1 box=0\.081 grid=\[\{"rows":4,"columns":7\}\] icon=88 strip=0'
+readonly OVERVIEW_STOCK='title-visible=false overlay=title\+close scale=0\.05 threshold=2 box=0\.05 grid="stock" icon=-1 strip=130'
 readonly EMPTY_LABEL='"No open windows" \.apex-workspace-empty'
 probe overview "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_OVERVIEW=1
 has "overview: the overview feature enables" 'Apex: feature overview enabled'
-fact "overview: titles always shown, the overlay fades only the close button; thumbnails at .081 from two workspaces; the launcher 7 columns of 88 px" \
+fact "overview: titles always shown, the overlay fades only the close button; thumbnails at .081 from two workspaces; the launcher 7 columns of 88 px, with no workspace strip above it" \
     "overview\.enabled=$OVERVIEW_ON"
 fact "launcher: the grid picks its mode and icon size afresh" 'overview\.enabled\.relayout=mode=-1 page-width=0'
+count_is "launcher: the controls lay out again at each enable and disable, so the strip comes and goes at once" '^probe: controls=relayout$' 3
 fact "workspaces: no background card, and an empty workspace says so" "workspace\.enabled\.empty=background=false $EMPTY_LABEL visible=true opacity=255"
 fact "workspaces: the label goes when a window arrives" "workspace\.enabled\.window-added=background=false $EMPTY_LABEL visible=false opacity=255"
 fact "workspaces: and fades with the overview" "workspace\.enabled\.half-open=background=false $EMPTY_LABEL visible=true opacity=128"

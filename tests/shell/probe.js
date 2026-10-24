@@ -99,7 +99,24 @@ function describeLock(dialog) {
         blur: dialog._backgroundGroup.get_children().map(b => b.get_effect('blur'))
             .map(e => e && `radius=${e.radius} brightness=${e.brightness.toFixed(2)} saturation=${e.saturation.toFixed(2)}`)[0] ?? null,
         prompt: describePrompt(dialog._authPrompt),
+        layout: describeLayout(dialog, hint),
     };
+}
+
+// What the eye reads, top to bottom, in logical pixels; only what is on screen.
+function describeLayout(dialog, hint) {
+    const prompt = dialog._authPrompt;
+    const parts = {
+        date: dialog._clock._date, time: dialog._clock._time, avatar: prompt?._userWell,
+        field: prompt?._entry, message: prompt?._message?.text ? prompt._message : null, hint,
+    };
+    const overlay = dialog.get_children().find(c => c.has_style_class_name?.('apex-lock-overlay'));
+    const layout = {screen: box(dialog), overlay: overlay ? color(overlay.get_theme_node().get_background_color()) : null};
+    for (const [name, actor] of Object.entries(parts)) {
+        if (actor?.mapped && actor.opacity > 0)
+            layout[name] = box(actor);
+    }
+    return layout;
 }
 
 // gdm-mock.py's test method: pam_fprintd's "no match" in every live fingerprint conversation.

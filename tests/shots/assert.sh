@@ -31,6 +31,8 @@ readonly EMPTY_WORKSPACE_TEXT='No open windows'
 readonly LAUNCHER_COLUMNS=7
 readonly LAUNCHER_ROWS=4
 readonly LAUNCHER_ICON_SIZE=88
+readonly LAUNCHER_GRID_TOP=128
+readonly LAUNCHER_GRID_TOP_TOLERANCE=8
 readonly DIAMOND_SQUARE_PX=8
 readonly DIAMOND_STROKE_PX=2
 readonly DIAMOND_STROKE_AREA_PX=$((4 * DIAMOND_SQUARE_PX * DIAMOND_STROKE_PX))
@@ -730,6 +732,8 @@ overview_layer() {
         "$o.workspace.empty" '(.font.size | px_is($t.apex_font_workspace_empty_size)) and .font.weight == ($t.apex_font_heading_weight | tonumber) and (.foreground | colour_is($t.apex_fg_dim))'
     expect_report "$label" "$log" ".surfaces.appGrid.grid == {columns: $LAUNCHER_COLUMNS, rows: $LAUNCHER_ROWS, iconSize: $LAUNCHER_ICON_SIZE}" \
         "launcher: $LAUNCHER_COLUMNS columns of $LAUNCHER_ICON_SIZE px icons, $LAUNCHER_ROWS rows a page" APEXG2-SCENES
+    expect_report "$label" "$log" ".surfaces.appGrid | .strip == 0 and (.box.y - $LAUNCHER_GRID_TOP | fabs) <= $LAUNCHER_GRID_TOP_TOLERANCE" \
+        "launcher: no workspace strip above the grid, which starts at board 36's ${LAUNCHER_GRID_TOP} px (within $LAUNCHER_GRID_TOP_TOLERANCE)" APEXG2-SCENES
 }
 
 # shellcheck disable=SC2016 # jq programs and token names, not shell expansions
@@ -1055,6 +1059,12 @@ motion_curve() {
     apex_light motion "$f"
     no_apex_failure motion "$f"
     m=$(report_of "$f" APEXG2-MOTION)
+    local error
+    error=$(jq -r '.error // empty' <<<"$m" 2>/dev/null)
+    if [[ -n $error ]]; then
+        fail "motion: ${error%%$'\n'*}"
+        return
+    fi
     expect motion "$m" '.error == null and .animated.maximise.maximised and .animated.overview.visible' \
         "the probe maximised a GTK window and opened the overview, with animations on"
     expect motion "$m" ".animated.maximise.transition | .mode == \"CUBIC_BEZIER\" and .curve == $MOTION_CURVE and .duration == $MOTION_WINDOW_MS" \

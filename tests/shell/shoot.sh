@@ -214,6 +214,8 @@ shoot lock-question "$USER_NAME" user default 'Verification code:' || status=1
 shoot lock-disabled "$USER_NAME" user default 'Password:' "$lock_off" || status=1
 shoot lock-safe "$USER_NAME" user default 'Password:' -- APEX_SHELL_SAFE=1 || status=1
 shoot lock-refused "$USER_NAME" user default '' || status=1
+shoot lock-high-contrast "$USER_NAME" user default 'Password:' "org.gnome.desktop.a11y.interface high-contrast true" || status=1
+shoot lock-large-text "$USER_NAME" user default 'Password:' "org.gnome.desktop.interface text-scaling-factor 1.25" || status=1
 # authselect locks GDM's fingerprint key off; an image with a reader enables the feature.
 if ! authselect enable-feature with-fingerprint >"$out/authselect.log" 2>&1 || ! dconf update; then
     die "authselect cannot enable with-fingerprint; see ${out#"$APEX_ROOT/"}/authselect.log"
