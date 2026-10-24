@@ -456,6 +456,24 @@ shell_surfaces() {
             and (.actions | (.spacing | px_is($t.apex_banner_button_gap)) and (.padding.left | px_is(($t.apex_banner_icon_size | px) + ($t.apex_banner_gap | px))))'
 }
 
+# shellcheck disable=SC2016 # jq programs and token names, not shell expansions
+shadow_layers() {
+    local label=$1 log=$2 variant=$3 scenes tokens
+    scenes=$(report_of "$log" APEXG2-SCENES)
+    tokens=$(tokens_for "$variant")
+    local -a metric=(top_bar_metric "$label shadows" "$scenes" "$tokens")
+    local layer='length == 1 and (.[0] | .shown and .sameBox and (.boxShadow | .inset == false and .x == 0
+        and (.y | px_is($t.apex_shadow_2_y)) and (.blur | px_is($t.apex_shadow_2_blur)) and (.color | colour_is($t.apex_shadow_2))))'
+    "${metric[@]}" 'Quick Settings draws its second layer, 0 $apex_shadow_2_y $apex_shadow_2_blur $apex_shadow_2, on its own box' \
+        '.surfaces.shadowLayers.quickSettings' "$layer and .[0].radius == (\$t.apex_radius_quick_settings | px)"
+    "${metric[@]}" 'the calendar draws its second layer, 0 $apex_shadow_2_y $apex_shadow_2_blur $apex_shadow_2, on its own box' \
+        '.surfaces.shadowLayers.dateMenu' "$layer"
+    "${metric[@]}" "a dialog's second layer sits beside its box, above the lightbox under the dialog" \
+        '.surfaces.shadowLayers.dialog' "$layer and .[0].besideBox"
+    expect "$label shadows" "$scenes" '.surfaces.idleRepaints | .withShadows <= .withoutShadows' \
+        "an idle desktop repaints no more with the shadow layers than with shadows in disabled-features"
+}
+
 # shellcheck disable=SC2016 # jq programs
 quick_settings_layer() {
     local label=$1 log=$2 mode=$3 scenes q=.surfaces.quickSettingsLayer
@@ -1060,7 +1078,7 @@ layer_cycles() {
 
 # shellcheck disable=SC2016 # jq programs
 motion_curve() {
-    local run=$1 f=$1/motion.log m
+    local run=$1 f=$1/motion.log m tokens
     exits "$run" motion 0
     apex_light motion "$f"
     no_apex_failure motion "$f"
@@ -1081,6 +1099,12 @@ motion_curve() {
         "then enable-animations=false, and the window maximised and the overview opened again"
     expect motion "$m" '.still.maximise.transition == null and .still.overview.transition == null' \
         "with enable-animations=false neither creates a transition: both take 0 ms"
+    tokens=$(tokens_for light)
+    top_bar_metric motion "$m" "$tokens" \
+        'each window preview draws two layers, 0 $apex_preview_shadow_y $apex_preview_shadow_blur $apex_preview_shadow and 0 $apex_preview_shadow_2_y $apex_preview_shadow_2_blur $apex_preview_shadow_2, radius $apex_radius_window_preview' \
+        '.previews' 'length > 0 and all(.styled and (.layers | length == 2 and all(.shown and .radius == ($t.apex_radius_window_preview | px))
+            and (.[0].boxShadow | (.y | px_is($t.apex_preview_shadow_y)) and (.blur | px_is($t.apex_preview_shadow_blur)) and (.color | colour_is($t.apex_preview_shadow)))
+            and (.[1].boxShadow | (.y | px_is($t.apex_preview_shadow_2_y)) and (.blur | px_is($t.apex_preview_shadow_2_blur)) and (.color | colour_is($t.apex_preview_shadow_2)))))'
     expect motion "$m" ".still.locatePointer.duration == $LOCATE_POINTER_RIPPLE_MS" \
         "and Locate Pointer's ripple, an animationRequired a11y aid, still takes stock's ${LOCATE_POINTER_RIPPLE_MS} ms"
 }
@@ -1123,6 +1147,7 @@ direct_cases() {
     shell_surfaces default "$f" light
     quick_settings default "$f" light
     quick_settings_layer default "$f" apex
+    shadow_layers default "$f" light
     window_switcher default "$f" light
     modal_dialog default "$f" light
     date_menu default "$f" light
@@ -1146,6 +1171,7 @@ direct_cases() {
     shell_surfaces default-scale1 "$f" light
     quick_settings default-scale1 "$f" light
     quick_settings_layer default-scale1 "$f" apex
+    shadow_layers default-scale1 "$f" light
     window_switcher default-scale1 "$f" light
     modal_dialog default-scale1 "$f" light
     date_menu default-scale1 "$f" light
@@ -1172,6 +1198,7 @@ direct_cases() {
     shell_surfaces dark-style "$f" dark
     quick_settings dark-style "$f" dark
     quick_settings_layer dark-style "$f" apex
+    shadow_layers dark-style "$f" dark
     window_switcher dark-style "$f" dark
     modal_dialog dark-style "$f" dark
     date_menu dark-style "$f" dark
@@ -1259,6 +1286,7 @@ direct_cases() {
     done
     compare_with_fedora "$run"
     glass_frames glass "$run/glass.log"
+    shadows_under_glass glass "$run/glass.log"
     glass_manager glass "$run/glass.log" light
     glass_unlock_vs_fedora "$run"
 }
@@ -1280,6 +1308,21 @@ glass_frames() {
         "the stock control obtained a partial redraw, a frame whose redraw clip misses the box (it damages again up to 5 times; else: could not obtain a partial redraw)" APEXG2-GLASS
     expect_report "$label" "$log" ".pixels.stock | (.covered | not) and .differingFromFull > 0 and (($within) | not)" \
         "stock's blur in such a frame samples pixels the frame did not repaint and misses those tolerances, so the case can see it" APEXG2-GLASS
+}
+
+# shellcheck disable=SC2016 # jq programs
+shadows_under_glass() {
+    local label=$1 log=$2 all='[.shadows.light, .shadows.dark | .quickSettings, .popupMenu, .dialog]'
+    expect_report "$label" "$log" "$all | length == 6 and all(.covered and .sameSize and .interiorDiffering == 0)" \
+        "the shadow layers sit above their surfaces, cut out inside them: Quick Settings (glass, over the pattern), a popup menu and a dialog, light and dark, draw their interiors pixel for pixel as with shadows in disabled-features" APEXG2-GLASS
+    expect_report "$label" "$log" "$all | length == 6 and all((.rim | type) == \"number\" and .rim <= $GLASS_EDGE_MAX)" \
+        "and the cut-out's ramp keeps the 2 px rim the rounded box covers within $GLASS_EDGE_MAX/255 (outside the arc, the shadow shows)" APEXG2-GLASS
+    expect_report "$label" "$log" "$all | length == 6 and all(.samePick and (.picked | test(\"apex-shadow-layer\") | not))" \
+        "a click just inside a surface's edge reaches what it reaches with shadows off, never a layer" APEXG2-GLASS
+    expect_report "$label" "$log" "[.shadows.light, .shadows.dark | .quickSettings, .popupMenu | .arrowless] | length == 4 and all" \
+        "the menus' BoxPointers draw nothing of their own outside the box: no arrow colour or border for a layer to cover" APEXG2-GLASS
+    expect_report "$label" "$log" '[.shadows.light, .shadows.dark | .quickSettings.corners] == ["shadow-corners-light.png", "shadow-corners-dark.png"]' \
+        "Quick Settings' corners captured at 400 %, light and dark, for review (captures/shadow-corners-*.png)" APEXG2-GLASS
 }
 
 fedora_glass() {

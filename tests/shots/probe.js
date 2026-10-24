@@ -48,6 +48,8 @@ const DOCK_INTELLIHIDE_KEY = 'dock-intellihide';
 const G2_WINDOW_TITLE = 'G2 maximised window';
 const OSD_LEVEL = 0.62;
 const POWER_PROFILE_WAIT_MS = 3000;
+const IDLE_PAINT_MS = 2000;
+const SHADOW_REGISTRY = 'resource:///org/gnome/shell/ui/apex/shadows/registry.js';
 const MOTION_WINDOW_ID = 'io.github.apex_linux.G2Window';
 const MOTION_WAIT_MS = 10000;
 const MOTION_SETTLE_MS = 1000;
@@ -996,6 +998,70 @@ async function quickSettingsLayer() {
     return state;
 }
 
+// The shadows feature's layers under a registered surface: each layer's shadow and box.
+function layerReport(Registry, surface, unit) {
+    const [sx, sy] = surface.get_transformed_position();
+    const [sw, sh] = surface.get_transformed_size();
+    return Registry.layersOf(surface).map(layer => {
+        const [lx, ly] = layer.get_transformed_position();
+        const [lw, lh] = layer.get_transformed_size();
+        return {
+            shown: layer.mapped,
+            boxShadow: shadow(layer.get_theme_node(), unit),
+            radius: round(layer.get_theme_node().get_border_radius(St.Corner.TOPLEFT) / unit.length),
+            sameBox: [lx - sx, ly - sy, lw - sw, lh - sh].every(d => Math.abs(d) <= 1),
+        };
+    });
+}
+
+async function shadowLayers(unit) {
+    const Registry = await import(SHADOW_REGISTRY);
+    const result = {};
+    for (const [name, menu] of [['quickSettings', Main.panel.statusArea.quickSettings.menu],
+        ['dateMenu', Main.panel.statusArea.dateMenu.menu]]) {
+        menu.open(BoxPointer.PopupAnimation.NONE);
+        // eslint-disable-next-line no-await-in-loop
+        await settle();
+        result[name] = layerReport(Registry, menu.box, unit);
+        menu.close(BoxPointer.PopupAnimation.NONE);
+        // eslint-disable-next-line no-await-in-loop
+        await settle();
+    }
+    // A ModalDialog keeps its lightbox right under its box's ancestor, so the layer must sit beside the box.
+    const dialog = new ModalDialog.ModalDialog();
+    dialog.contentLayout.add_child(new St.Label({text: 'Shadow'}));
+    dialog.open();
+    await settle();
+    const surface = dialog.dialogLayout._dialog;
+    result.dialog = layerReport(Registry, surface, unit)
+        .map((layer, i) => ({...layer, besideBox: Registry.layersOf(surface)[i].get_parent() === surface.get_parent()}));
+    dialog.close();
+    await settle();
+    return result;
+}
+
+async function stagePaints() {
+    let paints = 0;
+    const id = global.stage.connect('after-paint', () => paints++);
+    await Scripting.sleep(IDLE_PAINT_MS);
+    global.stage.disconnect(id);
+    return paints;
+}
+
+// An idle desktop repaints no more with the shadow layers than without them. A lone stray
+// paint lands in either state now and then, so each takes the quieter of two windows.
+async function idleRepaints() {
+    const apex = new Gio.Settings({schema_id: APEX_SCHEMA});
+    const disabled = apex.get_strv('disabled-features');
+    apex.set_strv('disabled-features', [...disabled, 'shadows']);
+    await settle();
+    const withoutShadows = Math.min(await stagePaints(), await stagePaints());
+    apex.set_strv('disabled-features', disabled);
+    await settle();
+    const withShadows = Math.min(await stagePaints(), await stagePaints());
+    return {withShadows, withoutShadows};
+}
+
 // G2 opens no windows, so the switcher is a stock SwitcherList of AppIcon-shaped items.
 async function windowSwitcher(unit) {
     const list = new SwitcherPopup.SwitcherList(true);
@@ -1592,6 +1658,11 @@ async function scenes() {
     const surfaces = await shellSurfaces(unit);
     surfaces.quickSettings = await quickSettings(unit);
     surfaces.quickSettingsLayer = await quickSettingsLayer();
+    // Fedora's own shell, in smoke.sh, has no Apex layer to draw shadows.
+    if (await apexHooks()) {
+        surfaces.shadowLayers = await shadowLayers(unit);
+        surfaces.idleRepaints = await idleRepaints();
+    }
     surfaces.switcher = await windowSwitcher(unit);
     surfaces.dialog = await modalDialog(unit);
     surfaces.dateMenu = await calendarMenu(unit);
@@ -1750,6 +1821,25 @@ async function overviewTransition() {
     return {transition, visible};
 }
 
+async function previewShadows() {
+    const Registry = await import(SHADOW_REGISTRY);
+    const unit = cssUnit();
+    Main.overview.show();
+    await settle();
+    const find = actor => actor.get_children().flatMap(c => c.window_container !== undefined ? [c] : find(c));
+    const previews = find(Main.layoutManager.overviewGroup).map(preview => ({
+        styled: preview.has_style_class_name('apex-window-preview'),
+        layers: Registry.layersOf(preview).map(layer => ({
+            shown: layer.mapped,
+            boxShadow: shadow(layer.get_theme_node(), unit),
+            radius: round(layer.get_theme_node().get_border_radius(St.Corner.TOPLEFT) / unit.length),
+        })),
+    }));
+    Main.overview.hide();
+    await settle();
+    return previews;
+}
+
 async function motion() {
     Main.overview.hide();
     await Scripting.sleep(MOTION_SETTLE_MS);
@@ -1782,6 +1872,7 @@ async function motion() {
     if (uninhibited)
         stSettings.uninhibit_animations();
     const animated = {maximise: await maximiseTransition(window), overview: await overviewTransition()};
+    const previews = await previewShadows();
     interfaceSettings.set_boolean('enable-animations', false);
     await Scripting.sleep(MOTION_SETTLE_MS);
     const still = {maximise: await maximiseTransition(window), overview: await overviewTransition()};
@@ -1794,7 +1885,7 @@ async function motion() {
     const enableAnimations = stSettings.enable_animations;
     if (uninhibited)
         stSettings.inhibit_animations();
-    return {uninhibited, enableAnimations, animated, still};
+    return {uninhibited, enableAnimations, animated, still, previews};
 }
 
 export function init() {

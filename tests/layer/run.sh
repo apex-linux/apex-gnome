@@ -56,6 +56,8 @@ cp "$HERE"/stubs/appDisplay.js "$HERE"/stubs/remoteSearch.js "$HERE"/stubs/searc
 mkdir -p "$T/shell/js/misc"
 cp "$HERE/stubs/systemActions.js" "$T/shell/js/misc/"
 cp "$HERE"/stubs/St.js "$HERE"/stubs/Clutter.js "$HERE"/stubs/Shell.js "$HERE"/stubs/Meta.js "$HERE"/stubs/Graphene.js "$T/"
+# The shadow cutout is a GObject subclass of Clutter.ShaderEffect, which the stubs cannot be.
+cp "$HERE/stubs/cutout.js" "$T/shell/js/ui/apex/shadows/cutout.js"
 # gjs outside the shell has no St or Clutter typelib, and the fixtures' Shell and Meta no
 # WindowTracker or Barrier: the features get stubs instead.
 find "$T/shell/js/ui/apex" -name '*.js' -exec sed -i -e "s|'gi://St'|'file://$T/St.js'|" \
@@ -382,6 +384,24 @@ has "disabled-features=['quick-settings']: skips the feature" 'Apex: feature qui
 fact "disabled-features=['quick-settings']: stock order" \
     'qs\.order=Wi-Fi,VPN,Bluetooth,Power Mode,Night Light,Dark Style,Do Not Disturb,Airplane Mode,Auto Rotate'
 fact "disabled-features=['quick-settings']: Power Mode unlit" 'qs\.power=checked=false classes=none'
+
+probe shadows "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_SHADOWS=1
+has "shadows: the feature enables" 'Apex: feature shadows enabled'
+fact "shadows: a registered surface gets one layer from -apex-shadow-layer, its box and radius, just above its top ancestor" \
+    'shadows\.registered=box-shadow: 0px 2px 8px 0px rgba\(20, 30, 60, 0\.2\); border-radius: 14px; at 106,46 300x200 above=true cutout=14'
+fact "shadows: registering draws before the next frame, not inside the call" 'shadows\.before-the-frame=0'
+fact "shadows: registering again keeps one layer" 'shadows\.registered-twice=1'
+fact "shadows: an unmapped surface keeps no layer" 'shadows\.unmapped=none'
+fact "shadows: mapped again, it draws again" \
+    'shadows\.mapped-again=box-shadow: 0px 2px 8px 0px rgba\(20, 30, 60, 0\.2\); border-radius: 14px; at 106,46 300x200 above=true cutout=14'
+fact "shadows: layer off: no layer drawn" 'shadows\.off=none'
+fact "shadows: layer back on: the registration draws again" \
+    'shadows\.on=box-shadow: 0px 2px 8px 0px rgba\(20, 30, 60, 0\.2\); border-radius: 14px; at 106,46 300x200 above=true cutout=14'
+fact "shadows: a destroyed surface takes its layer with it" 'shadows\.destroyed=0 layers, root=bin'
+
+probe shadows-disabled "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_SHADOWS=1 PROBE_DISABLED=shadows
+has "disabled-features=['shadows']: skips the feature" 'Apex: feature shadows is in disabled-features'
+fact "disabled-features=['shadows']: a registration draws nothing" 'shadows\.registered=none'
 
 probe spotlight-disabled "$CMDLINE_PLAIN" PROBE_DISABLED=spotlight PROBE_ENABLE=1 PROBE_PRESS=1 PROBE_OVERVIEW_SEARCH=1
 has "disabled-features=['spotlight']: skips the feature" 'Apex: feature spotlight is in disabled-features'
