@@ -16,6 +16,7 @@ $_calendar_day_width: ($apex_date_menu_column_width - 2 * $apex_calendar_padding
 // Glass, like Quick Settings: the tint until S2b's glass manager blurs behind it.
 .popup-menu-content.datemenu-popover {
   @include apex-surface($apex_panel);
+  @include apex-shadow-layer;
   padding: $apex_quick_settings_padding - $apex_surface_border;
   border-radius: $apex_radius_quick_settings;
 }
@@ -74,15 +75,22 @@ $_calendar_day_width: ($apex_date_menu_column_width - 2 * $apex_calendar_padding
       }
     }
 
+    .apex-message-row { spacing: $apex_banner_gap; }
+
+    .message-icon {
+      icon-size: $apex_message_icon_size;
+      width: $apex_message_icon_size;
+      height: $apex_message_icon_size;
+      min-width: $apex_message_icon_size;
+      min-height: $apex_message_icon_size;
+
+      &:ltr, &:rtl { margin: 0; }
+      &.message-themed-icon { padding: 0; background-color: transparent; }
+    }
+
     .message-box {
       padding: 0;
       spacing: $apex_banner_gap;
-
-      .message-icon {
-        icon-size: $apex_message_icon_size;
-
-        &:ltr, &:rtl { margin: 0; }
-      }
     }
 
     .message-title { font-size: apex-text-size($apex_font_size); font-weight: $apex_font_heading_weight; }
@@ -105,6 +113,23 @@ $_calendar_day_width: ($apex_date_menu_column_width - 2 * $apex_calendar_padding
     font-weight: $apex_font_label_weight;
 
     &:hover, &:focus { background-color: $apex_button_hover; }
+
+    // With nothing to clear, the notifications feature keeps Clear shown, faded.
+    &:insensitive {
+      color: rgba($apex_fg, $apex_clear_insensitive_opacity);
+      background-color: rgba($apex_button, alpha($apex_button) * $apex_clear_insensitive_opacity);
+    }
+  }
+
+  // The notifications feature's Do Not Disturb row: its label, then a stock switch.
+  .apex-dnd-button {
+    min-height: $apex_clear_button_height;
+    padding: 0;
+    color: $apex_fg;
+    font-size: apex-text-size($apex_font_banner_button_size);
+    font-weight: $apex_font_label_weight;
+
+    > StBoxLayout { spacing: $apex_dnd_switch_gap; }
   }
 }
 
@@ -178,6 +203,7 @@ $_calendar_day_width: ($apex_date_menu_column_width - 2 * $apex_calendar_padding
     background-color: transparent;
     font-size: apex-text-size($apex_font_calendar_day_size);
     font-weight: normal;
+    font-feature-settings: "tnum";
 
     &.calendar-weekend { color: $apex_fg; }
     &.calendar-other-month, &.calendar-other-month.calendar-weekend { color: $apex_fg_faint; }
@@ -188,6 +214,27 @@ $_calendar_day_width: ($apex_date_menu_column_width - 2 * $apex_calendar_padding
       background-color: $apex_accent;
       font-weight: $apex_font_heading_weight;
     }
+
+    &:selected {
+      box-shadow: inset 0 0 0 $apex_calendar_selected_ring $apex_accent;
+      font-weight: $apex_font_heading_weight;
+    }
+  }
+
+  // The notifications feature: the month on the left, and its event dots in place of stock's.
+  &.apex-calendar {
+    .calendar-month-header .calendar-month-label { padding: $apex_calendar_month_padding; }
+    .calendar-day-with-events { background-image: none; }
+
+    .apex-event-dot {
+      width: $apex_event_dot_size;
+      height: $apex_event_dot_size;
+      margin-top: $apex_event_dot_gap;
+      border-radius: $apex_event_dot_size / 2;
+    }
+
+    .calendar-day-with-events .apex-event-dot { background-color: $apex_accent; }
+    .calendar-today.calendar-day-with-events .apex-event-dot { background-color: -st-accent-fg-color; }
   }
 }
 

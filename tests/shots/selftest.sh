@@ -204,6 +204,8 @@ REPORT_OF_A_BAR_DRAWN_FROM_TOKENS='
             {kind: "separator"},
             {kind: "show-apps", iconSize: ($t.apex_dock_icon_size | px), iconName: "view-app-grid"},
             {kind: "trash", iconSize: ($t.apex_dock_icon_size | px)}],
+    appMenu: {app: "Files", hasDualGpu: true,
+      items: ["Open Windows", "New Window", "Launch Using Discrete Graphics Card", "Unpin", "App Details"]},
     overviewDashVisible: false},
   scenes: {overview: {dockVisible: true, dockClearance: 12}}}'
 # shellcheck disable=SC2016 # a jq program
@@ -278,7 +280,8 @@ REPORT_OF_QUICK_SETTINGS_DRAWN_FROM_TOKENS='
             border: {top: $b, left: $b}, radius: ($t.apex_radius_quick_menu | px), padding: {left: (($t.apex_quick_menu_padding | px) - $b)}, boxShadow: null},
         headerIcon: {width: ($t.apex_quick_menu_header_icon_size | px), height: ($t.apex_quick_menu_header_icon_size | px), background: "#3584e4ff", iconSize: $icon},
         title: {font: {size: ($t.apex_font_quick_menu_title_size | px), weight: ($t.apex_font_heading_weight | tonumber)}},
-        rows: [{height: ($t.apex_quick_menu_row_height | px), padding: {left: ($t.apex_menu_row_padding | px)}, radius: ($t.apex_radius_menu_row | px)}]}}}}'
+        rows: [{height: ($t.apex_quick_menu_row_height | px), padding: {left: ($t.apex_menu_row_padding | px)}, radius: ($t.apex_radius_menu_row | px)}],
+        rowHover: {background: ($t.apex_quick_menu_row_hover | hex)}}}}}'
 # shellcheck disable=SC2016 # a jq program
 REPORT_OF_A_SWITCHER_DRAWN_FROM_TOKENS='
 ($t.apex_surface_border | px) as $b | ($t.apex_switcher_padding | px) as $p
@@ -300,7 +303,28 @@ REPORT_OF_A_DIALOG_DRAWN_FROM_TOKENS='
         border: {top: $b, right: $b, bottom: $b, left: $b}, borderColor: ($t.apex_panel_border | hex),
         boxShadow: {color: ($t.apex_shadow | hex), y: ($t.apex_shadow_y | px), blur: ($t.apex_shadow_blur | px)},
         padding: {top: ($p - $b), right: ($p - $b), bottom: (($t.apex_dialog_padding_bottom | px) - $b), left: ($p - $b)}, spacing: ($t.apex_dialog_gap | px)},
-    endSessionWidth: (($t.apex_end_session_dialog_width | px) - 2 * $p),
+    endSession: (($t.apex_end_session_button_gap | px) as $g | ((($t.apex_end_session_dialog_width | px) - 2 * $p - 2 * $g) / 3.6) as $u
+        | {box: {width: ($t.apex_end_session_dialog_width | px), spacing: ($t.apex_end_session_gap | px)},
+        contentSpacing: ($t.apex_end_session_gap | px), title: {tracking: ($t.apex_dialog_title_tracking | px)},
+        description: {font: {features: "\"tnum\""}}, rowSpacing: $g,
+        icon: {iconName: "system-shutdown-symbolic", above: true, glyph: ($t.apex_end_session_icon_glyph_size | px),
+            width: ($t.apex_end_session_icon_size | px), height: ($t.apex_end_session_icon_size | px),
+            radius: (($t.apex_end_session_icon_size | px) / 2), background: ($t.apex_button | hex)},
+        buttons: [{text: "Cancel", width: $u, background: ($t.apex_button | hex), hover: {background: ($t.apex_button_hover | hex)}},
+            {text: "Restart", width: ($u * 1.4), background: ($t.apex_button | hex), hover: {background: ($t.apex_button_hover | hex)}},
+            {text: "Power Off", width: ($u * 1.2), background: ($t.apex_destructive | hex), foreground: ($t.apex_destructive_fg | hex),
+                hover: {background: ($t.apex_destructive_hover | hex)}}]}),
+    updateCard: ({below: true, padding: {top: ($t.apex_update_card_padding_y | px), left: ($t.apex_update_card_padding_x | px)},
+        border: {top: 1}, radius: ($t.apex_radius_update_card | px), spacing: ($t.apex_update_card_gap | px),
+        background: ($t.apex_card | hex), borderColor: ($t.apex_card_border | hex),
+        icon: {iconName: "system-software-update", size: ($t.apex_update_card_icon_size | px)}, textSpacing: ($t.apex_update_card_text_gap | px),
+        title: {text: "Start the new version next time", foreground: ($t.apex_fg | hex),
+            font: {size: ($t.apex_font_update_card_title_size | px), weight: ($t.apex_font_update_card_title_weight | tonumber)}},
+        subtitle: {text: "45.20261010.133 · GNOME 51.1, Linux 7.2.9, Mesa 26.1.2", foreground: ($t.apex_fg_dim | hex),
+            font: {size: ($t.apex_font_update_card_subtitle_size | px)}},
+        toggle: {on: true, sensitive: true, width: ($t.apex_update_switch_width | px), height: ($t.apex_update_switch_height | px),
+            background: "#3584e4ff", knob: {width: ($t.apex_update_switch_knob | px)}},
+        buttons: ["Cancel", "Restart & Update"]} | {staged: ., ready: (.toggle.sensitive = false)}),
     contentSpacing: ($t.apex_dialog_gap | px), textSpacing: ($t.apex_dialog_text_gap | px),
     title: {font: {size: ($t.apex_font_dialog_title_size | px), weight: ($t.apex_font_heading_weight | tonumber)}},
     description: {font: {size: ($t.apex_font_size | px)}, foreground: ($t.apex_fg_dim | hex)},
@@ -394,7 +418,64 @@ REPORT_OF_AN_OVERVIEW_LAYER_FROM_TOKENS='
         workspace: {x: 250, y: 205, width: 939, height: 566, background: false,
             empty: {x: 644, y: 477, width: 150, height: 22, visible: true, text: "No open windows", foreground: ($t.apex_fg_dim | hex),
                 font: {size: ($t.apex_font_workspace_empty_size | px), weight: ($t.apex_font_heading_weight | tonumber)}}}},
-    appGrid: {grid: {columns: 7, rows: 4, iconSize: 88}}}}'
+    appGrid: {grid: {columns: 7, rows: 4, iconSize: 88}, strip: 0, box: {y: 132}}}}'
+# shellcheck disable=SC2016 # a jq program
+REPORT_OF_SHADOW_LAYERS_FROM_TOKENS='
+{shown: true, sameBox: true, radius: 0, boxShadow: {color: ($t.apex_shadow_2 | hex), inset: false, x: 0,
+    y: ($t.apex_shadow_2_y | px), blur: ($t.apex_shadow_2_blur | px), spread: 0}} as $layer
+| {surfaces: {idleRepaints: {withShadows: 3, withoutShadows: 3}, shadowLayers: {
+    quickSettings: [$layer | .radius = ($t.apex_radius_quick_settings | px)], dateMenu: [$layer],
+    dialog: [$layer | .besideBox = true]}}}'
+# shellcheck disable=SC2016 # a jq program
+REPORT_OF_A_TILE_PREVIEW_DRAWN_FROM_TOKENS='
+($t.apex_tile_preview_inset | px) as $i
+| def tint($o): "rgba(53, 132, 228, \($o))" | hex;
+{topBar: {accent: "#3584e4ff"}, surfaces: {tilePreview: {
+    tile: {x: 0, y: 32, width: 720, height: 868},
+    preview: {styleClass: "tile-preview on-primary tile-preview-left", x: 0, y: 32, width: 720, height: 868,
+        border: {top: $i, right: $i, bottom: $i, left: $i}, borderColor: "#00000000",
+        radius: (($t.apex_radius_tile_preview | px) + $i), background: tint($t.apex_tile_preview_fill_opacity),
+        boxShadow: {inset: true, x: 0, y: 0, blur: 0, spread: ($t.apex_tile_preview_ring | px), color: tint($t.apex_tile_preview_ring_opacity)}}}}}'
+# shellcheck disable=SC2016 # a jq program
+REPORT_OF_A_SCREENSHOT_UI_DRAWN_FROM_TOKENS='
+($t.apex_surface_border | px) as $b | ($t.apex_screenshot_padding | px) as $pad | ($t.apex_screenshot_close_size | px) as $close
+| ($t.apex_screenshot_capture_size | px) as $cap | ($cap - 2 * (($t.apex_screenshot_capture_ring | px) + ($t.apex_screenshot_capture_gap | px))) as $dot
+| (900 - ($t.apex_screenshot_bottom | px) - 210) as $py | (720 - ($t.apex_screenshot_width | px) / 2) as $px
+| ($t.apex_screenshot_type_height | px) as $th | ($t.apex_radius_screenshot_type | px) as $tr
+| {topBar: {accent: "#3584e4ff"}, surfaces: {screenshot: {
+    monitorHeight: 900,
+    panel: {x: $px, y: $py, width: ($t.apex_screenshot_width | px), height: 210, background: ($t.apex_panel | hex),
+        borderColor: ($t.apex_panel_border | hex), border: {top: $b, left: $b}, radius: ($t.apex_radius_screenshot | px),
+        boxShadow: {color: ($t.apex_shadow | hex), y: ($t.apex_shadow_y | px), blur: ($t.apex_shadow_blur | px)},
+        padding: {top: ($pad + $close + ($t.apex_screenshot_gap | px) - $b), left: ($pad - $b)}, spacing: ($t.apex_screenshot_gap | px)},
+    close: {x: ($px + ($t.apex_screenshot_width | px) - $pad - ($t.apex_screenshot_close_inset | px) - $close), y: ($py + $pad),
+        width: $close, height: $close, radius: 999, background: ($t.apex_button | hex), foreground: ($t.apex_fg | hex), boxShadow: null},
+    types: [
+        {height: $th, radius: $tr, checked: true, background: ($t.apex_button_hover | hex)},
+        {height: $th, radius: $tr, checked: false, background: ($t.apex_button | hex)},
+        {height: $th, radius: $tr, checked: false, background: ($t.apex_button | hex), foreground: ($t.apex_fg_faint | hex)}],
+    checkedType: {background: ($t.apex_button_hover | hex)},
+    typeContent: {icon: {height: ($t.apex_screenshot_type_icon_size | px)}, spacing: ($t.apex_screenshot_type_label_gap | px),
+        labelFont: {size: ($t.apex_font_screenshot_type_size | px), weight: ($t.apex_font_label_weight | tonumber)}},
+    pointer: {width: ($t.apex_screenshot_pointer_size | px), height: ($t.apex_screenshot_pointer_size | px), radius: 999,
+        background: ($t.apex_button | hex), checked: {background: "#3584e4ff"}},
+    capture: {width: $cap, height: $cap, border: {top: ($t.apex_screenshot_capture_ring | px)}, borderColor: ($t.apex_fg | hex),
+        padding: {top: ($t.apex_screenshot_capture_gap | px)},
+        circle: {width: $dot, radius: 999, background: ($t.apex_fg | hex)},
+        cast: {margin: (($dot - ($t.apex_screenshot_record_dot | px)) / 2), radius: ($t.apex_radius_screenshot_record_dot | px),
+            background: ($t.apex_screenshot_record | hex)}},
+    switcher: {padding: {top: ($t.apex_screenshot_switch_padding | px)}, background: ($t.apex_button | hex),
+        radius: (($t.apex_screenshot_switch_button_height | px) / 2 + ($t.apex_screenshot_switch_padding | px))},
+    shot: {checked: true, width: ($t.apex_screenshot_switch_button_width | px), height: ($t.apex_screenshot_switch_button_height | px),
+        background: ($t.apex_panel_solid | hex), foreground: ($t.apex_fg | hex),
+        boxShadow: {y: ($t.apex_screenshot_switch_shadow_y | px), blur: ($t.apex_screenshot_switch_shadow_blur | px), color: ($t.apex_screenshot_switch_shadow | hex)}},
+    shade: {background: ($t.apex_screenshot_shade | hex)},
+    selection: {border: {top: ($t.apex_screenshot_selection_border | px)}, borderColor: ($t.apex_screenshot_selection | hex)},
+    handle: {width: ($t.apex_screenshot_handle_size | px), height: ($t.apex_screenshot_handle_size | px), radius: 999, background: "#ffffffff",
+        boxShadow: {y: ($t.apex_screenshot_handle_shadow_y | px), blur: ($t.apex_screenshot_handle_shadow_blur | px), color: ($t.apex_screenshot_handle_shadow | hex)}},
+    screen: {checked: true, border: {top: ($t.apex_screenshot_frame | px)}, borderColor: "#3584e4ff", background: ($t.apex_screenshot_screen_tint | hex)},
+    windowSelector: {background: ($t.apex_screenshot_shade | hex)},
+    windowFrame: {border: {top: ($t.apex_screenshot_frame | px)}, borderColor: "#3584e4ff", radius: ($t.apex_radius_screenshot_window | px)}}}}'
 # shellcheck disable=SC2016 # a jq program
 REPORT_OF_DERIVED_SURFACES_DRAWN_FROM_TOKENS='
 ($t.apex_surface_border | px) as $b
@@ -444,7 +525,11 @@ REPORT_OF_A_SPOTLIGHT_DRAWN_FROM_TOKENS='
             foreground: ($t.apex_fg_dim | hex), spacing: ($t.apex_spotlight_action_gap | px),
             chip: {height: ($t.apex_spotlight_chip_height | px), radius: ($t.apex_radius_spotlight_chip | px), background: ($t.apex_button | hex),
                 label: {text: "Enter", font: {size: ($t.apex_font_spotlight_chip_size | px), weight: ($t.apex_font_heading_weight | tonumber)}}}}}]
-        + [range(8) | $row]),
+        + [range(8) | $row]
+        | (.[2].tile, .[3].tile, .[4].tile) = {width: $icon, radius: ($t.apex_radius_spotlight_tile | px), glyph: ($t.apex_spotlight_tile_glyph_size | px)}
+        | .[2].tile += {background: "#6f8396ff", foreground: "#ffffffff"}
+        | .[3].tile += {background: "#3584e4ff", foreground: "#ffffffff"}
+        | .[4].tile += {background: ($t.apex_button | hex), foreground: ($t.apex_fg | hex)}),
     selected: ([true] + [range(8) | false]),
     calculator: {sections: ["CALCULATOR", "APPLICATIONS"], row: {title: {text: "1920",
         font: {size: ($t.apex_font_spotlight_result_size | px), weight: ($t.apex_font_heading_weight | tonumber), features: "\"tnum\""}},
@@ -458,8 +543,100 @@ REPORT_OF_A_SPOTLIGHT_DRAWN_FROM_TOKENS='
         bottomGap: ($t.apex_toast_bottom | px),
         check: {width: ($t.apex_toast_check_size | px), height: ($t.apex_toast_check_size | px), radius: 11, background: "#3584e4ff",
             icon: ($t.apex_toast_check_icon_size | px)},
-        label: {text: "Copied 1920"}}}}}'
+        label: {text: "Copied 1920"}}},
+    overviewSearch: {opened: true, text: "disk", overviewText: ""}}}'
 # shellcheck disable=SC2016 # a jq program
+REPORT_OF_A_LAUNCHER_SEARCH_FROM_TOKENS='
+{surfaces: {launcher: {
+    pill: {width: ($t.apex_launcher_search_width | px), hint: "Search apps"},
+    found: {gridHidden: true, names: ["Files"], firstSelected: true, spotlightOpen: false,
+        appDisplay: {x: 0, y: 262, width: 1440, height: 541}, results: {x: 0, y: 262, width: 1440, height: 541}},
+    empty: {top: 0, padding: {top: ($t.apex_launcher_empty_top | px)}, spacing: ($t.apex_launcher_empty_gap | px),
+        title: {text: "No Results", font: {size: ($t.apex_font_launcher_empty_title_size | px), weight: ($t.apex_font_heading_weight | tonumber)}, foreground: ($t.apex_fg | hex)},
+        hint: {text: "The launcher searches apps only. Super+Space searches everything.", font: {size: ($t.apex_font_launcher_empty_hint_size | px)},
+            foreground: ($t.apex_fg_dim | hex)}}}}}'
+# shellcheck disable=SC2016 # a jq program
+REPORT_OF_INDICATORS_DRAWN_FROM_TOKENS='
+($t.apex_indicator_width | px) as $w | ($t.apex_bar_pill_height | px) as $h | ($t.apex_bar_gap | px) as $g
+| ($t.apex_bar_icon_size | px) as $i | ($t.apex_radius_bar_pill | px) as $r | ($t.apex_indicator_dot_size | px) as $ds
+| ($t.apex_menu_row_height | px) as $row | ($t.apex_fg_dim | hex) as $dim | ($t.apex_bar_fg | rgba) as $fg
+| ["File sync", "Chat", "Game launcher", "Password manager"] as $names
+| [range(4) as $k | {x: (1000 + $k * ($w + $g)), y: 4, width: $w, height: $h, radius: $r}] as $pills
+| [range(4) as $k | {name: $names[$k], pill: $pills[$k],
+    glyph: {x: ($pills[$k].x + ($w - $i) / 2), y: (4 + ($h - $i) / 2), width: $i, height: $i, colour: ($t.apex_bar_fg | hex),
+      iconName: (if $k == 3 then null else "folder-remote-symbolic" end), mask: ($k == 3)},
+    dot: null}] as $items
+| ($items | .[1].dot = {x: (.[1].pill.x + $w - ($t.apex_indicator_dot_right | px) - $ds), y: (4 + ($t.apex_indicator_dot_top | px)),
+    width: $ds, height: $ds, radius: ($ds / 2), colour: "#3584e4ff"}) as $items
+| (($t.apex_indicators_divider_margin | px) + $g) as $around
+| ($pills[3].x + $w + $around) as $dx
+| {x: $dx, y: 9, width: ($t.apex_indicators_divider_width | px), height: ($t.apex_indicators_divider_height | px),
+   colour: ("rgba(\($fg[0]), \($fg[1]), \($fg[2]), \($t.apex_indicators_divider_opacity))" | hex)} as $divider
+| {width: ($t.apex_indicator_switch_width | px), height: ($t.apex_indicator_switch_height | px), radius: 9} as $switch
+| ($t.apex_privacy_height | px) as $ph | ($t.apex_privacy_icon_size | px) as $pi | ($t.apex_privacy_padding | px) as $pp
+| ($t.apex_privacy_gap | px) as $pg | ($t.apex_screen_stop_size | px) as $ss
+| {x: 1240, y: 4, width: 160, height: $h, paddingLeft: ($t.apex_bar_pill_padding_privacy | px)} as $pill
+| ($pill.x + $pill.paddingLeft) as $gx
+| {x: $gx, y: (4 + ($h - $ph) / 2), width: (2 * $pp + 2 * $pi + $pg), height: $ph, radius: ($t.apex_radius_privacy | px),
+   colour: ($t.apex_privacy | hex)} as $group
+| ($group + {next: {x: ($gx + $group.width + ($t.apex_privacy_margin | px) + ($t.apex_bar_status_gap | px)), y: 8, width: $i, height: $i},
+   glyphs: [range(2) as $k | {x: ($gx + $pp + $k * ($pi + $pg)), y: (4 + ($h - $pi) / 2), width: $pi, height: $pi,
+     iconName: "camera-web-symbolic", colour: ($t.apex_privacy_fg | hex)}]}) as $privacy
+| (1100 + ($t.apex_recording_padding_start | px)) as $sx | ($sx + $ss + ($t.apex_recording_gap | px)) as $tx
+| {x: 1100, y: 4, width: ($tx + 26 + ($t.apex_recording_padding_end | px) - 1100), height: $h, radius: $r, colour: ($t.apex_recording | hex),
+   stop: {x: $sx, y: (4 + ($h - $ss) / 2), width: $ss, height: $ss, radius: ($t.apex_radius_screen_stop | px), colour: ($t.apex_recording_fg | hex)},
+   timer: {x: $tx, y: 8, width: 26, height: 16, text: "0:42", size: ($t.apex_font_recording_size | px),
+     weight: ($t.apex_font_recording_weight | tonumber), tracking: 0, features: "tnum", colour: ($t.apex_recording_fg | hex)}} as $recording
+| {pill: {x: 1190, y: 4, width: ($t.apex_input_chip_min_width | px), height: $h, radius: $r}, text: "EN",
+   size: ($t.apex_font_input_chip_size | px), weight: ($t.apex_font_input_chip_weight | tonumber),
+   tracking: (($t.apex_font_input_chip_tracking | rtrimstr("em") | num) * ($t.apex_font_input_chip_size | px)), features: "",
+   colour: ($t.apex_bar_fg | hex)} as $input
+| ($t.apex_sharing_icon_size | px) as $si | (1240 - ($t.apex_sharing_margin | px) - $g) as $se
+| ($se - ($t.apex_sharing_padding_end | px) - $ss) as $qx | ($qx - ($t.apex_sharing_gap | px) - $si) as $gx2
+| ($gx2 - ($t.apex_sharing_padding_start | px)) as $sx2
+| {x: $sx2, y: 4, width: ($se - $sx2), height: $h, radius: $r, colour: ($t.apex_privacy | hex), name: "Stop screen sharing",
+   next: $pill, glyph: {x: $gx2, y: (4 + ($h - $si) / 2), width: $si, height: $si, iconName: "screen-shared-symbolic", colour: ($t.apex_privacy_fg | hex)},
+   stop: {x: $qx, y: (4 + ($h - $ss) / 2), width: $ss, height: $ss, radius: ($t.apex_radius_screen_stop | px), colour: ($t.apex_privacy_fg | hex)}} as $sharing
+| {empty: {visible: false, divider: null}, accent: "#3584e4ff",
+   everything: {order: ["indicators", "divider", "apex-search", "screenRecording", "keyboard", "screenSharing", "quickSettings"], pill: $pill,
+     privacy: $privacy, recording: $recording, input: $input, sharing: $sharing, search: {x: 1060, y: 4, width: 32, height: $h},
+     after: {privacy: false, paddingLeft: ($t.apex_bar_pill_padding | px)}},
+   four: {visible: true, order: ["indicators", "divider", "apex-search", "quickSettings"], items: $items, divider: $divider,
+     search: {x: ($dx + $divider.width + $around), y: 4, width: 32, height: $h},
+     mask: {colour: ($t.apex_bar_fg | hex), inkPixels: 64, redPixels: 0}},
+   menu: {open: true, closed: true, content: {x: 900, y: 32, width: ($t.apex_indicator_menu_width | px), height: 260, radius: ($t.apex_radius_menu | px)},
+     rows: [{kind: "PopupMenuItem", label: "Chat", header: true, height: ($t.apex_indicator_menu_header_height | px), colour: $dim},
+       {kind: "PopupMenuItem", label: "Show Chat", height: $row, shortcut: {text: "Ctrl+Shift+C", colour: $dim}},
+       {kind: "PopupSwitchMenuItem", label: "Do Not Disturb", height: $row, switch: ($switch + {checked: false})},
+       {kind: "PopupSwitchMenuItem", label: "Start at Login", height: $row, switch: ($switch + {checked: true})},
+       {kind: "PopupSeparatorMenuItem", label: "", height: 1},
+       {kind: "PopupMenuItem", label: "Mute for 1 Hour", height: $row},
+       {kind: "PopupSeparatorMenuItem", label: "", height: 1},
+       {kind: "PopupMenuItem", label: "Quit Chat", height: $row}]},
+   five: {items: $items[:3], overflow: {text: "+2", pill: {x: 1096, y: 4, width: 40, height: $h, radius: $r}}},
+   overflowMenu: {open: true, content: {x: 900, y: 32, width: ($t.apex_indicators_overflow_menu_width | px), height: 80, radius: ($t.apex_radius_menu | px)},
+     rows: [{label: "Password manager", height: $row, glyph: $i, chevron: "go-next-symbolic"},
+       {label: "Media player", height: $row, glyph: $i, chevron: "go-next-symbolic"}]},
+   gone: {visible: false, divider: null},
+   log: ["File sync registered", "Chat registered", "Chat Event 0 opened", "Chat Event 5 clicked", "Chat Event 0 closed",
+     "File sync Activate 1215 32"]}'
+
+# shellcheck disable=SC2016 # a jq program
+REPORT_OF_SPOTLIGHT_GLASS_FROM_TOKENS='
+def glass($b; $s): {blur: ($b | px), saturation: ($s | rtrimstr("%") | tonumber / 100),
+    effect: {radius: (2 * ($b | px) * 2 | round), saturation: ($s | rtrimstr("%") | tonumber / 100), enabled: true}};
+{monitorScale: 2, surfaces: {spotlight: {glass: {
+    panelBeforeCopy: glass($t.apex_spotlight_blur; $t.apex_spotlight_saturation),
+    toast: glass($t.apex_toast_blur; $t.apex_toast_saturation)}}}}'
+# shellcheck disable=SC2016 # a jq program
+REPORT_OF_SPOTLIGHT_KEYS='
+{surfaces: {spotlightKeys: {budgetMs: 1000, slowMs: 1600, modalBefore: 0, modalOpen: 1,
+    early: {ms: 301, sections: ["APPLICATIONS", "FILES"], rows: 6, selected: "Applications/org.gnome.DiskUtility.desktop"},
+    late: {ms: 1201, sections: ["APPLICATIONS", "FILES"], rows: 6, selected: "Applications/org.gnome.DiskUtility.desktop"},
+    settings: {askedMs: 52, cancelledMs: 1053},
+    down4: "Files/images", up1: "Files/png", down20: "Files/md",
+    enter: {open: false, modal: 0, activated: [{provider: "org.gnome.Nautilus.desktop", id: "md", terms: ["disk"]}]},
+    escape: {open: false, modal: 0}}}}'
 # shellcheck disable=SC2016 # a jq program
 HEX_DEF='def hex: rgba | map([., 16] | "0123456789abcdef"[(.[0] / .[1] | floor):(.[0] / .[1] | floor) + 1]
                                     + "0123456789abcdef"[(.[0] % .[1]):(.[0] % .[1]) + 1]) | "#" + join("");'
@@ -470,7 +647,7 @@ the clock pill without the pad|.topBar.withDot.pillWidth -= ($t.apex_bar_clock_g
 the raw accent dot|.topBar.withDot.dot.background = .topBar.accent'
 
 assert_run() {
-    local assertions=$1 variant=$2 change=${3:-.} tokens report=$REPORT_OF_A_BAR_DRAWN_FROM_TOKENS
+    local assertions=$1 variant=$2 change=${3:-.} tokens report=$REPORT_OF_A_BAR_DRAWN_FROM_TOKENS prefix=APEXG2-SCENES
     [[ $assertions == shell_surfaces ]] && report=$REPORT_OF_SURFACES_DRAWN_FROM_TOKENS
     [[ $assertions == quick_settings ]] && report=$REPORT_OF_QUICK_SETTINGS_DRAWN_FROM_TOKENS
     [[ $assertions == window_switcher ]] && report=$REPORT_OF_A_SWITCHER_DRAWN_FROM_TOKENS
@@ -479,13 +656,76 @@ assert_run() {
     [[ $assertions == overview_style ]] && report=$REPORT_OF_AN_OVERVIEW_DRAWN_FROM_TOKENS
     [[ $assertions == app_grid ]] && report=$REPORT_OF_A_LAUNCHER_DRAWN_FROM_TOKENS
     [[ $assertions == derived_surfaces ]] && report=$REPORT_OF_DERIVED_SURFACES_DRAWN_FROM_TOKENS
+    [[ $assertions == tile_preview ]] && report=$REPORT_OF_A_TILE_PREVIEW_DRAWN_FROM_TOKENS
+    [[ $assertions == screenshot_ui ]] && report=$REPORT_OF_A_SCREENSHOT_UI_DRAWN_FROM_TOKENS
     [[ $assertions == overview_layer ]] && report=$REPORT_OF_AN_OVERVIEW_LAYER_FROM_TOKENS
     [[ $assertions == spotlight_style ]] && report=$REPORT_OF_A_SPOTLIGHT_DRAWN_FROM_TOKENS
+    [[ $assertions == launcher_search ]] && report=$REPORT_OF_A_LAUNCHER_SEARCH_FROM_TOKENS
+    [[ $assertions == spotlight_glass ]] && report=$REPORT_OF_SPOTLIGHT_GLASS_FROM_TOKENS
+    [[ $assertions == spotlight_keys ]] && report=$REPORT_OF_SPOTLIGHT_KEYS
+    [[ $assertions == shadow_layers ]] && report=$REPORT_OF_SHADOW_LAYERS_FROM_TOKENS
+    [[ $assertions == indicator_metrics ]] && report=$REPORT_OF_INDICATORS_DRAWN_FROM_TOKENS prefix=APEXG2-INDICATORS
     tokens=$(tokens_for "$variant")
-    jq -nc --argjson t "$tokens" "$JQ_DEFS $HEX_DEF $report | $change" | sed 's/^/APEXG2-SCENES /' >"$T/top-bar.log"
+    jq -nc --argjson t "$tokens" "$JQ_DEFS $HEX_DEF $report | $change" | sed "s/^/$prefix /" >"$T/top-bar.log"
     # shellcheck disable=SC2016 # expanded by the inner bash
     bash -c '. "$1/assert.sh"; "$2" case "$3" "$4" >"$5" 2>&1; summary >>"$5"; echo "$npass $nfail $ngap"' \
         _ "$HERE" "$assertions" "$T/top-bar.log" "$variant" "$T/top-bar.out"
+}
+
+# shellcheck disable=SC2016 # a jq program
+REPORT_OF_LEGIBLE_SURFACES='
+{kind: "text", name: "Label", inactive: false, offscreen: false, ratio: 7, ellipsized: false, expandable: false, card: 0,
+    box: {x: 10, y: 10, width: 60, height: 20}} as $text
+| ($text + {kind: "icon", name: "glyph-symbolic", ratio: 4, box: {x: 80, y: 10, width: 16, height: 16}}) as $icon
+| {box: {x: 0, y: 0, width: 200, height: 100}, targets: [$text, $icon]} as $s
+| {textScalingFactor: 1.25, monitor: {x: 0, y: 0, width: 1440, height: 900},
+    bar: $s, dock: $s, popupMenu: $s, osd: $s, banner: $s, quickSettings: $s, wifiMenu: $s, dateMenu: $s, switcher: $s,
+    dialog: $s, endSession: $s, spotlight: {popup: $s, toast: $s}, overview: $s, appGrid: $s}'
+
+a11y_run() {
+    local assertions=$1 change=${2:-.}
+    jq -nc "$REPORT_OF_LEGIBLE_SURFACES | $change" | sed 's/^/APEXG2-A11Y /' >"$T/a11y.log"
+    # shellcheck disable=SC2016 # expanded by the inner bash
+    bash -c '. "$1/assert.sh"; "$2" case "$3" >"$4" 2>&1; summary >>"$4"; echo "$npass $nfail $ngap"' \
+        _ "$HERE" "$assertions" "$T/a11y.log" "$T/a11y.out"
+}
+
+test_a11y() {
+    local assertions expected change what passes failures open_gaps want
+    for assertions in a11y_contrast:15 a11y_layout:16; do
+        expected=${assertions#*:}
+        read -r passes failures open_gaps <<<"$(a11y_run "${assertions%:*}")"
+        if ((failures == 0 && open_gaps == 0 && passes == expected)); then
+            ok "accessibility (${assertions%:*}): legible surfaces pass all $passes assertions"
+        else
+            not_ok "accessibility (${assertions%:*}): legible surfaces pass (passed/failed/gaps $passes/$failures/$open_gaps): $(grep -m3 '^FAIL' "$T/a11y.out" | paste -sd'|' -)"
+        fi
+    done
+    while IFS='|' read -r assertions want change what; do
+        read -r passes failures open_gaps <<<"$(a11y_run "$assertions" "$change")"
+        if ((failures == want)); then
+            ok "accessibility: $what fails $want assertion(s)"
+        else
+            not_ok "accessibility: $what fails $want assertion(s) (passed/failed/gaps $passes/$failures/$open_gaps)"
+        fi
+    done <<'CHANGES'
+a11y_contrast|1|.bar.targets[0].ratio = 4.4|text at 4.4:1
+a11y_contrast|1|.dock.targets[1].ratio = 2.9|a glyph at 2.9:1
+a11y_contrast|1|.wifiMenu.targets[0].ratio = 3|a menu row's text at 3:1
+a11y_contrast|1|.spotlight.toast.targets[0].ratio = 3|the toast's text at 3:1
+a11y_contrast|1|.endSession.targets[1].ratio = 2|the end-session glyph at 2:1
+a11y_contrast|1|.banner = {error: "not shown"}|a surface that never showed
+a11y_contrast|1|.popupMenu.targets = []|a surface with nothing measured
+a11y_contrast|0|.osd.targets[0] += {inactive: true, ratio: 1}|a disabled control's text
+a11y_contrast|0|.dateMenu.targets[0] += {offscreen: true, ratio: null}|another workspace's label
+a11y_layout|1|.bar.targets[0].ellipsized = true|text cut short
+a11y_layout|1|.dock.targets[0].box.x = 1430|text over the screen's edge
+a11y_layout|1|.osd.targets[0].box.y = 95|text leaving its surface
+a11y_layout|1|.quickSettings.targets += [.quickSettings.targets[0] + {name: "Other"} + {box: {x: 20, y: 10, width: 60, height: 20}}]|overlapping text
+a11y_layout|1|.textScalingFactor = 1|text at its default size
+a11y_layout|0|.dateMenu.targets += [.dateMenu.targets[0] + {card: 1} + {box: {x: 20, y: 14, width: 60, height: 20}}]|a stacked card's text
+a11y_layout|0|.banner.targets[0] += {ellipsized: true, expandable: true}|a collapsed notification's body
+CHANGES
 }
 
 test_top_bar() {
@@ -573,7 +813,7 @@ test_dock() {
     local variant change what passes failures open_gaps
     for variant in light dark; do
         read -r passes failures open_gaps <<<"$(assert_run dock_metrics "$variant")"
-        if ((failures == 0 && passes == 7)); then
+        if ((failures == 0 && passes == 8)); then
             ok "dock ($variant): a dock drawn from the tokens passes all $passes assertions"
         else
             not_ok "dock ($variant): a dock drawn from the tokens passes (passed/failed/gaps $passes/$failures/$open_gaps): $(grep -m3 '^FAIL' "$T/top-bar.out" | paste -sd'|' -)"
@@ -600,9 +840,70 @@ test_dock() {
 .dock.overviewDashVisible = true|the overview's own dash beside the dock
 .scenes.overview.dockVisible = false|no dock in the overview
 .scenes.overview.dockClearance = -15|workspaces under the dock in the overview
+.dock.appMenu.items -= ["Launch Using Discrete Graphics Card"]|an app menu without the discrete GPU
 CHANGES
     assert_run dock_metrics light 'del(.dock)' >/dev/null
     expect_eq "dock: a report without the dock passes none" 0 "$(grep -c '^PASS' "$T/top-bar.out")"
+}
+
+test_indicators() {
+    local variant change what passes failures open_gaps
+    for variant in light dark; do
+        read -r passes failures open_gaps <<<"$(assert_run indicator_metrics "$variant")"
+        if ((failures == 0 && passes == 30)); then
+            ok "indicators ($variant): indicators drawn from the tokens pass all $passes assertions"
+        else
+            not_ok "indicators ($variant): indicators drawn from the tokens pass (passed/failed/gaps $passes/$failures/$open_gaps): $(grep -m3 '^FAIL' "$T/top-bar.out" | paste -sd'|' -)"
+        fi
+    done
+    while IFS='|' read -r change what; do
+        read -r passes failures open_gaps <<<"$(assert_run indicator_metrics light "$change")"
+        if ((failures == 1)); then
+            ok "indicators: $what fails one assertion"
+        else
+            not_ok "indicators: $what fails one assertion (passed/failed/gaps $passes/$failures/$open_gaps)"
+        fi
+    done <<'CHANGES'
+.empty.visible = true|indicators before any item registers
+.four.order = ["divider", "indicators", "apex-search", "quickSettings"]|the divider before the indicators
+.four.items[2].pill.radius = 4|a pill with a square's corners
+(.four.items[2].pill.x, .four.items[2].glyph.x) += 1|a wider gap
+.four.items[0].glyph.colour = "#ffffffff"|a glyph not in the bar's colour
+.four.items[0].glyph.mask = true|a named icon drawn as a mask
+.four.mask.redPixels = 40|a pixmap drawn in its own colours
+.four.items[1].dot = null|no attention dot
+.four.items[1].dot.colour = "#ff0000ff"|a dot not in the accent
+.four.divider.height = 24|a divider the pill's height
+.four.search.x += 4|the search button further from the divider
+.menu.content.radius = 8|a menu with a row's radius
+.menu.rows[0].header = false|no title header
+.menu.rows[1].height = 30|a row at the header's height
+.menu.rows[2].switch.width = 46|upstream's switch
+.menu.rows[3].switch.checked = false|a toggle not in the app's state
+.menu.rows[1].shortcut.colour = "#ffffffff"|a shortcut not dimmed
+.log -= ["Chat Event 5 clicked"]|no clicked event
+.log = .log[:5]|no Activate
+.five.overflow.text = "+1"|the wrong overflow count
+.overflowMenu.rows[1].chevron = null|a row without its chevron
+.gone.visible = true|indicators left after the apps quit
+.everything.order = ["indicators", "divider", "screenRecording", "keyboard", "screenSharing", "apex-search", "quickSettings"]|the search button after the stock items
+.everything.order = ["indicators", "divider", "apex-search", "screenRecording", "screenSharing", "keyboard", "quickSettings"]|the sharing pill before the input chip
+.everything.sharing.name = "Stop Screen Sharing"|the sharing pill under stock's name
+.everything.sharing.stop.radius = 4|a sharing stop dot instead of a square
+.everything.privacy.colour = "#c01c28ff"|a privacy group in the recording's red
+.everything.pill.paddingLeft = 10|the pill's stock start beside the group
+.everything.privacy.glyphs[0].colour = "#c64600ff"|a privacy glyph in the group's orange
+.everything.privacy.next.x += 4|the next status glyph further from the group
+.everything.after.privacy = true|a privacy group left once nothing is in use
+.everything.recording.radius = 4|a recording pill with a square's corners
+.everything.recording.stop.radius = 4|a stop dot instead of a square
+.everything.recording.timer.features = ""|a timer in proportional figures
+.everything.input.text = "en"|the source's short name in lower case
+.everything.input.tracking = 0|an untracked input chip
+.everything.input.pill.width = 24|an input chip under the board's minimum width
+CHANGES
+    assert_run indicator_metrics light 'del(.four, .menu, .five, .overflowMenu, .gone, .empty, .log, .everything)' >/dev/null
+    expect_eq "indicators: a report without them passes none" 0 "$(grep -c '^PASS' "$T/top-bar.out")"
 }
 
 test_shell_surfaces() {
@@ -685,6 +986,7 @@ test_quick_settings() {
 .surfaces.quickSettings.wifiMenu.box.boxShadow = {color: "#00000010", inset: false, x: 0, y: 1, blur: 2, spread: 0}|upstream's card shadow
 .surfaces.quickSettings.wifiMenu.headerIcon.width = 36|upstream's header glyph circle
 .surfaces.quickSettings.wifiMenu.rows[0].height = 37|upstream's menu row
+.surfaces.quickSettings.wifiMenu.rowHover.background = "#00000a1f"|board 16's stronger popup-menu hover
 CHANGES
     assert_run quick_settings light 'del(.surfaces)' >/dev/null
     expect_eq "Quick Settings: a report without it passes none" 0 "$(grep -c '^PASS' "$T/top-bar.out")"
@@ -721,7 +1023,7 @@ test_modal_dialog() {
     local variant change what passes failures open_gaps
     for variant in light dark; do
         read -r passes failures open_gaps <<<"$(assert_run modal_dialog "$variant")"
-        if ((failures == 0 && open_gaps == 0 && passes == 8)); then
+        if ((failures == 0 && open_gaps == 0 && passes == 16)); then
             ok "modal dialog ($variant): drawn from the tokens it passes all $passes assertions"
         else
             not_ok "modal dialog ($variant): drawn from the tokens it passes (passed/failed/gaps $passes/$failures/$open_gaps): $(grep -m3 '^FAIL' "$T/top-bar.out" | paste -sd'|' -)"
@@ -740,9 +1042,29 @@ test_modal_dialog() {
 .surfaces.dialog.box.padding.bottom = 23|upstream's even padding
 .surfaces.dialog.title.font.weight = 800|upstream's title weight
 .surfaces.dialog.entry.height = 41|upstream's entry padding
+.surfaces.dialog.endSession.box.width = 384|upstream's 24em end-session dialog
+.surfaces.dialog.endSession.contentSpacing = 18|the plain dialog gap in the end-session dialog
+.surfaces.dialog.endSession.title.tracking = 0|an untracked end-session title
+.surfaces.dialog.endSession.description.font.features = null|a countdown in proportional figures
+.surfaces.dialog.endSession.buttons[2].background = "#ebebedff"|a plain Power Off button
+.surfaces.dialog.endSession.buttons[2].hover.background = "#c01c28ff"|a Power Off button without hover feedback
+.surfaces.dialog.endSession.buttons[1].background = "#c01c28ff"|a red Restart in the power-off dialog
+.surfaces.dialog.endSession.icon = null|no icon above the title
+.surfaces.dialog.endSession.icon.glyph = 16|stock's 16 px symbolic glyph in the circle
+del(.surfaces.dialog.endSession.buttons[1])|stock's row, without Restart
+.surfaces.dialog.endSession.rowSpacing = 12|dialog.js's 12 px between the buttons
+.surfaces.dialog.endSession.buttons[1].width = 128|an even row
 .surfaces.dialog.entry.focus.boxShadow.color = "#3584e4cc"|upstream's 80 % focus ring
 .surfaces.dialog.buttons[0].radius = 12|upstream's square-ish buttons
 .surfaces.dialog.buttons[1].background = "#00000a10"|a default button without the accent
+.surfaces.dialog.updateCard.staged.icon.size = 16|a symbolic-sized update icon
+.surfaces.dialog.updateCard.staged.below = false|the card above the dialog's text
+.surfaces.dialog.updateCard.staged.radius = 18|a card at the menus' radius
+.surfaces.dialog.updateCard.staged.subtitle.text = "45.20261010.133"|a subtitle without the versions
+.surfaces.dialog.updateCard.staged.title.foreground = "#1d1d219e"|a dimmed title
+.surfaces.dialog.updateCard.staged.toggle.on = false|the switch off by default
+.surfaces.dialog.updateCard.staged.buttons = ["Cancel", "Restart"]|Restart not relabelled while the switch is on
+.surfaces.dialog.updateCard.ready.toggle.sensitive = true|a ready-for-reboot switch that turns off
 CHANGES
 }
 
@@ -808,11 +1130,90 @@ test_overview_style() {
 CHANGES
 }
 
+# shellcheck disable=SC2016 # a jq program
+readonly NOTIFICATIONS_REPORT='{surfaces: {notificationsLayer: {header: false, cardHeader: {sourceIcon: false, line: "G2 Chat · now"}, icon: "mail-unread-symbolic",
+  messages: [{x: 0, y: 0, width: 400, height: 80}, {x: 0, y: 88, width: 400, height: 80}, {x: 0, y: 176, width: 400, height: 80}],
+  footer: {x: 0, y: 600, width: 400, height: 40}, clear: {x: 310, y: 604, width: 86, height: 32, visible: true},
+  dnd: {x: 4, y: 604, width: 180, height: 32, label: "Do Not Disturb"}, dndClick: {showBanners: false, checked: true},
+  empty: {placeholder: true, clearVisible: true, clearReactive: false},
+  calendar: {label: {x: 8, y: 60, width: 90, height: 20}, back: {x: 230, y: 56, width: 32, height: 32},
+    forward: {x: 266, y: 56, width: 32, height: 32}, days: 2, dots: [{x: 20, y: 120, width: 4, height: 4}, {x: 60, y: 120, width: 4, height: 4}]},
+  trees: [range(3) | "box[apex-message-row[message-icon,box[message-header,message-box[message-content,box]]],message-action-bin]"],
+  layout: {collapsed: {card: {x: 0, y: 0, width: 400, height: 80}, icon: {x: 14, y: 12, width: 32, height: 32},
+      header: {x: 58, y: 12, width: 280, height: 16}, title: {x: 58, y: 30, width: 200, height: 20},
+      close: {x: 362, y: 10, width: 24, height: 24}, actions: null},
+    expanded: {card: {x: 0, y: 0, width: 400, height: 124}, icon: {x: 14, y: 12, width: 32, height: 32},
+      header: {x: 58, y: 12, width: 280, height: 16}, title: {x: 58, y: 30, width: 200, height: 20},
+      close: {x: 362, y: 10, width: 24, height: 24}, actions: {x: 14, y: 80, width: 376, height: 32},
+      tree: "box[apex-message-row[message-icon,box[message-header,message-box[message-content,box]]],message-action-bin]"},
+    collapsedAgain: {card: {x: 0, y: 0, width: 400, height: 80}, icon: {x: 14, y: 12, width: 32, height: 32},
+      header: {x: 58, y: 12, width: 280, height: 16}, title: {x: 58, y: 30, width: 200, height: 20},
+      close: {x: 362, y: 10, width: 24, height: 24}, actions: null,
+      tree: "box[apex-message-row[message-icon,box[message-header,message-box[message-content,box]]],message-action-bin]"}}}}}'
+
+test_notifications_layer() {
+    local change what passes failures
+    jq -nc "$NOTIFICATIONS_REPORT" | sed 's/^/APEXG2-SCENES /' >"$T/notifications.log"
+    read -r passes failures <<<"$(assertion_counts notifications_layer case "$T/notifications.log" apex)"
+    expect_eq "notifications: the feature's list, cards, footer and calendar pass all ten assertions" "10/0" "$passes/$failures"
+    while IFS='|' read -r change what; do
+        jq -nc "$NOTIFICATIONS_REPORT | .surfaces.notificationsLayer |= ($change)" | sed 's/^/APEXG2-SCENES /' >"$T/notifications.log"
+        read -r passes failures <<<"$(assertion_counts notifications_layer case "$T/notifications.log" apex)"
+        expect_eq "notifications: $what fails one assertion" "9/1" "$passes/$failures"
+    done <<'CHANGES'
+.messages[1].y = 10|a stacked group
+.header = true|a group header
+.cardHeader.sourceIcon = true|a card header with the source glyph
+.icon = null|a card without the app's icon
+.dnd = null|a footer without Do Not Disturb
+.clear.x = 200|Clear off the right edge
+.dndClick.showBanners = true|a click that left banners on
+.empty.clearVisible = false|Clear hidden with nothing to clear
+.calendar.label.x = 250|the month between its chevrons
+.calendar.dots = [.calendar.dots[0]]|a day without its dot
+.trees[2] = "box[message-header,message-box[message-icon,message-content,box],message-action-bin]"|a back card in upstream's tree
+.layout.collapsed.header.x = 50|the header 4 px from the icon's column
+.layout.collapsed.icon.width = 48|a 48 px icon tile
+.layout.expanded.actions.x = 58|the action row under the text column alone
+.layout.expanded.actions = null|an expanded card without its action row
+.layout.collapsedAgain.actions = {x: 14, y: 80, width: 376, height: 32}|the action row left shown, collapsed
+CHANGES
+    jq -nc "$NOTIFICATIONS_REPORT | .surfaces.notificationsLayer |= (.messages[1].y = 10 | .dnd = null | .empty.clearVisible = false
+        | .cardHeader.sourceIcon = true | .icon = null | .calendar.label.x = 250 | .calendar.dots = []
+        | .trees = [range(3) | \"box[message-header,message-box[message-icon,message-content,box],message-action-bin]\"])" |
+        sed 's/^/APEXG2-SCENES /' >"$T/notifications.log"
+    read -r passes failures <<<"$(assertion_counts notifications_layer case "$T/notifications.log" stock)"
+    expect_eq "notifications: stock's stacked list, lone Clear and centred month pass all four stock assertions" "4/0" "$passes/$failures"
+}
+
+test_shadow_layers() {
+    local variant change what passes failures open_gaps
+    for variant in light dark; do
+        read -r passes failures open_gaps <<<"$(assert_run shadow_layers "$variant")"
+        if ((failures == 0 && passes == 4)); then
+            ok "shadows ($variant): layers drawn from the tokens pass all $passes assertions"
+        else
+            not_ok "shadows ($variant): layers drawn from the tokens pass (passed/failed $passes/$failures): $(grep -m3 '^FAIL' "$T/top-bar.out" | paste -sd'|' -)"
+        fi
+    done
+    while IFS='|' read -r change what; do
+        read -r passes failures open_gaps <<<"$(assert_run shadow_layers light "$change")"
+        expect_eq "shadows: $what fails one assertion" "3/1" "$passes/$failures"
+    done <<'CHANGES'
+.surfaces.shadowLayers.quickSettings[0].radius = 0|a Quick Settings layer with square corners
+.surfaces.shadowLayers.dateMenu = []|a calendar without its second layer
+.surfaces.shadowLayers.dialog[0].besideBox = false|a dialog layer under the lightbox
+.surfaces.shadowLayers.dateMenu[0].sameBox = false|a layer off its surface's box
+.surfaces.shadowLayers.dialog[0].boxShadow.blur = 50|the first layer's blur on the second
+.surfaces.idleRepaints.withShadows = 9|an idle desktop that repaints more with shadows
+CHANGES
+}
+
 test_overview_layer() {
     local variant change what passes failures open_gaps
     for variant in light dark; do
         read -r passes failures open_gaps <<<"$(assert_run overview_layer "$variant")"
-        if ((failures == 0 && open_gaps == 0 && passes == 6)); then
+        if ((failures == 0 && open_gaps == 0 && passes == 7)); then
             ok "overview feature ($variant): the layer's overview passes all $passes assertions"
         else
             not_ok "overview feature ($variant): the layer's overview passes (passed/failed/gaps $passes/$failures/$open_gaps): $(grep -m3 '^FAIL' "$T/top-bar.out" | paste -sd'|' -)"
@@ -834,6 +1235,8 @@ test_overview_layer() {
 .surfaces.overviewLayer.workspace.empty.y = 300|the empty label off centre
 .surfaces.overviewLayer.workspace.empty.foreground = "#1d1d21ff"|the empty label in full $apex_fg
 .surfaces.appGrid.grid.iconSize = 96|upstream's 96 px launcher icons
+.surfaces.appGrid.box.y = 262|upstream's workspace strip above the grid
+.surfaces.appGrid.box.y = 128|the grid at board 36's old 128, which assumed an 18 px spacing
 CHANGES
 }
 
@@ -862,6 +1265,63 @@ test_app_grid() {
 .surfaces.appGrid.dialog.width = 720|upstream's 720 px folder
 .surfaces.appGrid.dialog.title.font.size = 26.667|upstream's title 1 folder name
 .surfaces.appGrid.pageHint.gradient = 1|upstream's gradient page hint
+CHANGES
+}
+
+test_screenshot_ui() {
+    local variant change what passes failures open_gaps
+    for variant in light dark; do
+        read -r passes failures open_gaps <<<"$(assert_run screenshot_ui "$variant")"
+        if ((failures == 0 && open_gaps == 0 && passes == 8)); then
+            ok "screenshot UI ($variant): drawn from the tokens it passes all $passes assertions"
+        else
+            not_ok "screenshot UI ($variant): drawn from the tokens it passes (passed/failed/gaps $passes/$failures/$open_gaps): $(grep -m3 '^FAIL' "$T/top-bar.out" | paste -sd'|' -)"
+        fi
+    done
+    while IFS='|' read -r change what; do
+        read -r passes failures open_gaps <<<"$(assert_run screenshot_ui light "$change")"
+        if ((failures == 1)); then
+            ok "screenshot UI: $what fails one assertion"
+        else
+            not_ok "screenshot UI: $what fails one assertion (passed/failed/gaps $passes/$failures/$open_gaps)"
+        fi
+    done <<'CHANGES'
+.surfaces.screenshot.panel.background = "#222226ff"|upstream's dark OSD panel
+.surfaces.screenshot.panel.padding.top = 17|no heading row
+.surfaces.screenshot.close.y -= 29|upstream's close button on the panel's corner
+.surfaces.screenshot.types[2].background = "#2e2e33ff"|upstream's insensitive Window button
+.surfaces.screenshot.pointer.checked.background = "#00000a1e"|a pointer toggle that is not the accent when on
+.surfaces.screenshot.capture.width = 48|upstream's 48 px capture button
+.surfaces.screenshot.shot.background = "#ffffffff"|upstream's white checked switch
+.surfaces.screenshot.handle.width = 24|upstream's 24 px handles
+.surfaces.screenshot.screen.borderColor = "#ffffffff"|upstream's white screen frame
+CHANGES
+}
+
+test_tile_preview() {
+    local variant change what passes failures open_gaps
+    for variant in light dark; do
+        read -r passes failures open_gaps <<<"$(assert_run tile_preview "$variant")"
+        if ((failures == 0 && open_gaps == 0 && passes == 2)); then
+            ok "tile preview ($variant): drawn from the tokens it passes all $passes assertions"
+        else
+            not_ok "tile preview ($variant): drawn from the tokens it passes (passed/failed/gaps $passes/$failures/$open_gaps): $(grep -m3 '^FAIL' "$T/top-bar.out" | paste -sd'|' -)"
+        fi
+    done
+    while IFS='|' read -r change what; do
+        read -r passes failures open_gaps <<<"$(assert_run tile_preview light "$change")"
+        if ((failures == 1)); then
+            ok "tile preview: $what fails one assertion"
+        else
+            not_ok "tile preview: $what fails one assertion (passed/failed/gaps $passes/$failures/$open_gaps)"
+        fi
+    done <<'CHANGES'
+.surfaces.tilePreview.preview.width = 708|a preview shrunk to the inset instead of bordered
+.surfaces.tilePreview.preview.borderColor = "#3584e4ff"|upstream's opaque accent border
+.surfaces.tilePreview.preview.x = 6|a preview moved instead of inset
+.surfaces.tilePreview.preview.radius = 0|upstream's square corners
+.surfaces.tilePreview.preview.background = "#3584e480"|upstream's half-accent fill
+.surfaces.tilePreview.preview.boxShadow = null|no ring
 CHANGES
 }
 
@@ -896,7 +1356,7 @@ test_spotlight_style() {
     local variant change what passes failures open_gaps
     for variant in light dark; do
         read -r passes failures open_gaps <<<"$(assert_run spotlight_style "$variant")"
-        if ((failures == 0 && open_gaps == 0 && passes == 15)); then
+        if ((failures == 0 && open_gaps == 0 && passes == 17)); then
             ok "Spotlight ($variant): drawn from the tokens it passes all $passes assertions"
         else
             not_ok "Spotlight ($variant): drawn from the tokens it passes (passed/failed/gaps $passes/$failures/$open_gaps): $(grep -m3 '^FAIL' "$T/top-bar.out" | paste -sd'|' -)"
@@ -931,6 +1391,97 @@ test_spotlight_style() {
 .surfaces.spotlight.closedOnCopy = false|Spotlight left open after the copy
 .surfaces.spotlight.toast.box.borderColor = "#00000000"|a toast without its ring
 .surfaces.spotlight.toast.check.background = "#1d1d21ff"|a check circle without the accent
+.surfaces.spotlight.rows[3].tile.background = "#6f8396ff"|Privacy in board 38's old grey
+.surfaces.spotlight.rows[4].tile = null|a panel without a colour drawn bare
+.surfaces.spotlight.rows[2].tile.foreground = "#1d1d21ff"|a dark glyph on a coloured tile
+.surfaces.overviewSearch.opened = false|the overview's stock search
+.surfaces.overviewSearch.overviewText = "disk"|the typed text left in the overview's field too
+CHANGES
+}
+
+test_launcher_search() {
+    local variant change what passes failures open_gaps
+    for variant in light dark; do
+        read -r passes failures open_gaps <<<"$(assert_run launcher_search "$variant")"
+        if ((failures == 0 && open_gaps == 0 && passes == 3)); then
+            ok "launcher search ($variant): drawn from the tokens it passes all $passes assertions"
+        else
+            not_ok "launcher search ($variant): drawn from the tokens it passes (passed/failed/gaps $passes/$failures/$open_gaps): $(grep -m3 '^FAIL' "$T/top-bar.out" | paste -sd'|' -)"
+        fi
+    done
+    while IFS='|' read -r change what; do
+        read -r passes failures open_gaps <<<"$(assert_run launcher_search light "$change")"
+        if ((failures == 1)); then
+            ok "launcher search: $what fails one assertion"
+        else
+            not_ok "launcher search: $what fails one assertion (passed/failed/gaps $passes/$failures/$open_gaps)"
+        fi
+    done <<'CHANGES'
+.surfaces.launcher.pill.width = 440|the overview's 440 px pill
+.surfaces.launcher.pill.hint = "Type to search"|upstream's hint
+.surfaces.launcher.found.spotlightOpen = true|Spotlight opened instead
+.surfaces.launcher.found.names = []|no app found for "files"
+.surfaces.launcher.found.gridHidden = false|results under the full grid
+.surfaces.launcher.found.results.y = 422|results centred in the grid's box instead of filling it
+.surfaces.launcher.empty.top = 160|"No Results" centred instead of at its place
+.surfaces.launcher.empty.title.font.weight = 600|a lighter "No Results"
+.surfaces.launcher.empty.hint.foreground = "#1d1d21ff"|a hint at full strength
+CHANGES
+}
+
+test_spotlight_glass() {
+    local variant change what passes failures open_gaps
+    for variant in light dark; do
+        read -r passes failures open_gaps <<<"$(assert_run spotlight_glass "$variant")"
+        if ((failures == 0 && open_gaps == 0 && passes == 1)); then
+            ok "Spotlight glass ($variant): drawn from the tokens it passes"
+        else
+            not_ok "Spotlight glass ($variant): drawn from the tokens it passes (passed/failed/gaps $passes/$failures/$open_gaps): $(grep -m3 '^FAIL' "$T/top-bar.out" | paste -sd'|' -)"
+        fi
+    done
+    while IFS='|' read -r change what; do
+        read -r passes failures open_gaps <<<"$(assert_run spotlight_glass light "$change")"
+        if ((failures == 1)); then
+            ok "Spotlight glass: $what fails it"
+        else
+            not_ok "Spotlight glass: $what fails it (passed/failed/gaps $passes/$failures/$open_gaps)"
+        fi
+    done <<'CHANGES'
+.surfaces.spotlight.glass.panelBeforeCopy.effect = null|a panel without its blur
+.surfaces.spotlight.glass.toast.blur = 34|the toast at the panel's sigma 34
+.surfaces.spotlight.glass.panelBeforeCopy.effect.radius = 68|a radius not scaled to the monitor
+.surfaces.spotlight.glass.toast.effect.enabled = false|a toast whose blur is off
+CHANGES
+}
+
+test_spotlight_keys() {
+    local variant change what passes failures open_gaps
+    for variant in light dark; do
+        read -r passes failures open_gaps <<<"$(assert_run spotlight_keys "$variant")"
+        if ((failures == 0 && open_gaps == 0 && passes == 5)); then
+            ok "Spotlight keys ($variant): a slow provider and real key presses pass all $passes assertions"
+        else
+            not_ok "Spotlight keys ($variant): a slow provider and real key presses pass (passed/failed/gaps $passes/$failures/$open_gaps): $(grep -m3 '^FAIL' "$T/top-bar.out" | paste -sd'|' -)"
+        fi
+    done
+    while IFS='|' read -r change what; do
+        read -r passes failures open_gaps <<<"$(assert_run spotlight_keys light "$change")"
+        if ((failures == 1)); then
+            ok "Spotlight keys: $what fails one assertion"
+        else
+            not_ok "Spotlight keys: $what fails one assertion (passed/failed/gaps $passes/$failures/$open_gaps)"
+        fi
+    done <<'CHANGES'
+.surfaces.spotlightKeys.early.sections = ["APPLICATIONS"]|Files held back by the slow Settings
+.surfaces.spotlightKeys.early.ms = 1100|the sections seen only past the budget
+.surfaces.spotlightKeys.late.rows = 0|every section hidden once the budget runs out
+.surfaces.spotlightKeys.settings.cancelledMs = null|Settings never cancelled
+.surfaces.spotlightKeys.settings.cancelledMs = 1250|Settings cancelled only after the sections were read
+.surfaces.spotlightKeys.down4 = "Applications/org.gnome.baobab.desktop"|Down kept inside its section
+.surfaces.spotlightKeys.down20 = null|Down past the last row
+.surfaces.spotlightKeys.enter.activated = []|Enter opening nothing
+.surfaces.spotlightKeys.enter.modal += 1|a modal left behind after Enter
+.surfaces.spotlightKeys.escape.open = true|Esc ignored
 CHANGES
 }
 
@@ -1098,6 +1649,133 @@ CHANGES
     expect_eq "layer cycles: a switch the layer did not log fails one assertion" "$((all - 1))/1" "$passes/$failures"
 }
 
+# shellcheck disable=SC2016 # a jq program
+readonly MOTION_REPORT='{enableAnimations: false,
+  animated: {maximise: {maximised: true, transition: {mode: "CUBIC_BEZIER", duration: 300, curve: [0.2, 0.8, 0.2, 1]}},
+             overview: {visible: true, transition: {mode: "CUBIC_BEZIER", duration: 200, curve: [0.2, 0.8, 0.2, 1]}}},
+  still: {maximise: {maximised: true, transition: null}, overview: {visible: true, transition: null},
+         locatePointer: {mode: "CUBIC_BEZIER", duration: 830, curve: [0.2, 0.8, 0.2, 1]}},
+  surfaces: (["dock-lift", "intellihide", "overview", "spotlight", "quick-settings", "calendar", "dialog"]
+    | map({name: ., eases: 2, apexEases: 1}) as $steps
+    | {animated: {steps: $steps, eases: 14, apexEases: 6,
+                  lasting: [{apex: true, where: "ui/apex/dock/dock.js:71:23", durations: [180]},
+                            {apex: false, where: "ui/popupMenu.js:1132:26", durations: [180, 0]}]},
+       still: {steps: $steps, eases: 14, apexEases: 6, lasting: []}}),
+  previews: [{styled: true, layers: [
+    {shown: true, radius: 14, boxShadow: {color: "#141e3c33", inset: false, x: 0, y: 12, blur: 32, spread: 0}},
+    {shown: true, radius: 14, boxShadow: {color: "#141e3c1a", inset: false, x: 0, y: 1, blur: 4, spread: 0}}]}]}'
+
+write_motion_run() {
+    local change=$1 dir=$T/motion
+    rm -rf "$dir" && mkdir -p "$dir"
+    {
+        printf 'APEXG2 %s\n' "$APEX_LIGHT_REPORT"
+        printf 'APEXG2-MOTION %s\n' "$(jq -nc "$MOTION_REPORT | .animated.surfaces = .surfaces.animated | .still.surfaces = .surfaces.still | del(.surfaces) | $change")"
+    } >"$dir/motion.log"
+    echo 'motion exit=0 secs=24 marker-after-exit=no' >"$dir/results-main.txt"
+}
+
+test_motion() {
+    local change what passes failures all
+    write_motion_run .
+    read -r all failures <<<"$(assertion_counts motion_curve "$T/motion")"
+    if ((failures == 0 && all > 5)); then
+        ok "motion: the Apex curve and durations, and 0 ms without animations, pass all $all assertions"
+    else
+        not_ok "motion: a clean run passes (passed/failed $all/$failures): $(grep -m3 '^FAIL' "$T/assertions.out" | paste -sd'|' -)"
+    fi
+    while IFS='|' read -r change what; do
+        write_motion_run "$change"
+        read -r passes failures <<<"$(assertion_counts motion_curve "$T/motion")"
+        expect_eq "motion: $what fails one assertion" "$((all - 1))/1" "$passes/$failures"
+    done <<'CHANGES'
+.animated.maximise.transition.mode = "EASE_OUT_QUAD"|stock's maximise mode
+.animated.maximise.transition.curve = [0, 0, 0, 0]|the curve's mode without its control points
+.animated.overview.transition.duration = 250|stock's overview duration
+.animated.overview.transition = null|an overview that did not animate
+.still.maximise.transition = {mode: "CUBIC_BEZIER", duration: 1}|a transition left with animations off
+.animated.maximise.maximised = false|a window that did not maximise
+.still.locatePointer = null|a Locate Pointer ripple that no longer animates with animations off
+.previews[0].layers = [.previews[0].layers[0]]|a window preview with one shadow layer
+.animated.surfaces.lasting = []|a control in which no Apex ease lasts
+.still.surfaces.lasting = [{apex: true, where: "ui/apex/dock/intellihide.js:74:19", durations: [380]}]|an Apex ease left at 380 ms with animations off
+.still.surfaces.lasting = [{apex: false, where: "ui/boxpointer.js:1:1", durations: [180]}]|a stock ease left at 180 ms with animations off
+.still.surfaces.steps = .still.surfaces.steps[:-1]|a surface the probe never opened
+.still.surfaces.apexEases = 0|a run in which no Apex code eased
+CHANGES
+    write_motion_run '{error: "the test client never mapped (Gtk-WARNING: Failed to open display)\nprobe.js:1700"}'
+    read -r passes failures <<<"$(assertion_counts motion_curve "$T/motion")"
+    expect_eq "motion: a client that never mapped fails once, with its stderr, not every assertion after it" \
+        "$((all - 9))/1 the test client never mapped (Gtk-WARNING: Failed to open display)" \
+        "$passes/$failures $(sed -n 's/^FAIL motion: //p' "$T/assertions.out")"
+}
+
+# shellcheck disable=SC2016 # a jq program
+readonly IDLE_REPORT='{windowMs: 10000,
+  settled: {startingUp: false, overview: false, dock: {visible: true, rested: true}, barGlass: true, dockGlass: true, easing: []},
+  idle: {afterPaints: 0, frames: [], relayouts: {}},
+  control: {afterPaints: 3, frames: [{atMs: 512, damage: {rectangles: 2, extents: {x: 1050, y: 36, width: 376, height: 418},
+    under: [["StBoxLayout.quick-settings", "StBoxLayout.popup-menu-content"]]}}]}}'
+# shellcheck disable=SC2016 # a jq program
+readonly IDLE_FRAME='{atMs: 4210, damage: {rectangles: 1, extents: {x: 600, y: 838, width: 240, height: 62},
+  under: [["StIcon.apex-dock-trash", "ApexDock#apexDock"]]}}'
+
+write_idle_run() {
+    local change=$1 dir=$T/idle feature
+    rm -rf "$dir" && mkdir -p "$dir"
+    {
+        printf 'APEXG2 %s\n' "$APEX_LIGHT_REPORT"
+        # shellcheck disable=SC2016 # expanded by the inner bash
+        for feature in $(bash -c '. "$1/assert.sh"; layer_features' _ "$HERE"); do
+            printf 'Gjs-Console-Message: 09:41:00.000: Apex: feature %s enabled\n' "$feature"
+        done
+        printf 'APEXG2-IDLE %s\n' "$(jq -nc --argjson frame "$(jq -nc "$IDLE_FRAME")" "$IDLE_REPORT | $change")"
+    } >"$dir/idle.log"
+    echo 'idle exit=0 secs=31 marker-after-exit=no' >"$dir/results-main.txt"
+}
+
+test_idle() {
+    local change what passes failures all
+    write_idle_run .
+    read -r all failures <<<"$(assertion_counts idle_desktop "$T/idle")"
+    if ((failures == 0 && all > 10)); then
+        ok "idle: no frame and no relayout over 10 s, every feature on, the counter checked, pass all $all assertions"
+    else
+        not_ok "idle: a clean run passes (passed/failed $all/$failures): $(grep -m3 '^FAIL' "$T/assertions.out" | paste -sd'|' -)"
+    fi
+    while IFS='|' read -r change what; do
+        write_idle_run "$change"
+        read -r passes failures <<<"$(assertion_counts idle_desktop "$T/idle")"
+        expect_eq "idle: $what fails one assertion" "$((all - 1))/1" "$passes/$failures"
+    done <<'CHANGES'
+.idle += {afterPaints: 1, frames: [$frame]}|a frame painted while idle
+.idle.afterPaints = 2|paints the counter saw but did not keep
+.idle.relayouts = {"StLabel.clock < StBin.clock-display": 10}|a relayout queued while idle
+.settled.easing = [{actor: ["ApexDock#apexDock"], properties: ["translation-y"]}]|an actor still easing when the window opens
+.settled.dock.rested = false|a dock that never came to rest
+.settled.overview = true|an overview left open
+.settled.barGlass = false|a bar without its glass
+.windowMs = 2000|a window shorter than 10 s
+.control.afterPaints = 0|a counter that counts nothing
+.control.frames[0].damage.under = []|a control frame whose actors went unnamed
+CHANGES
+    # shellcheck disable=SC2016 # a jq variable
+    write_idle_run '.idle += {afterPaints: 1, frames: [$frame]}'
+    assertion_counts idle_desktop "$T/idle" >/dev/null
+    expect_eq "idle: a painted frame is named, with its damage, the actors under it and their ui/apex/ files" \
+        "1 painted: at 4210 ms, 1 rectangle(s) in 600,838 240x62 under StIcon.apex-dock-trash < ApexDock#apexDock; from ApexDock in ui/apex/dock/dock.js; apex-dock-trash in ui/apex/dock/trash.js" \
+        "$(sed -n 's/^FAIL idle: over 10000 ms of an idle desktop the stage paints no frame (\(.*\))$/\1/p' "$T/assertions.out")"
+    write_idle_run .
+    sed -i '/feature polkit enabled/d' "$T/idle/idle.log"
+    read -r passes failures <<<"$(assertion_counts idle_desktop "$T/idle")"
+    expect_eq "idle: a feature of layer.js's list that did not enable fails one assertion" "$((all - 1))/1" "$passes/$failures"
+    write_idle_run '{error: "idle.js: settle never returned\nidle.js:150"}'
+    read -r passes failures <<<"$(assertion_counts idle_desktop "$T/idle")"
+    expect_eq "idle: a probe error fails once, with its message, not every assertion after it" \
+        "$((all - 5))/1 idle.js: settle never returned" \
+        "$passes/$failures $(sed -n 's/^FAIL idle: //p' "$T/assertions.out")"
+}
+
 fixtures_report() {
     local part
     for part in main kernel fedora; do
@@ -1105,8 +1783,8 @@ fixtures_report() {
     done
 }
 
-# What the shell's indicators read: network.js through libnm, bluetooth.js through
-# gnome-bluetooth, system.js the display device's properties.
+# What the shell reads: network.js through libnm, bluetooth.js through gnome-bluetooth,
+# system.js the display device's properties and appMenu.js switcheroo-control's.
 write_fixture_reader() {
     cat >"$T/read-fixtures.js" <<'EOF'
 import Gio from 'gi://Gio';
@@ -1125,6 +1803,8 @@ const listed = (device?.get_access_points() ?? []).filter(a => securityTypes.som
     .map(a => NM.utils_ssid_to_utf8(a.get_ssid().get_data()));
 const upower = Gio.DBusProxy.new_for_bus_sync(Gio.BusType.SYSTEM, Gio.DBusProxyFlags.NONE, null,
     'org.freedesktop.UPower', '/org/freedesktop/UPower/devices/DisplayDevice', 'org.freedesktop.UPower.Device', null);
+const switcheroo = Gio.DBusProxy.new_for_bus_sync(Gio.BusType.SYSTEM, Gio.DBusProxyFlags.NONE, null,
+    'net.hadess.SwitcherooControl', '/net/hadess/SwitcherooControl', 'net.hadess.SwitcherooControl', null);
 const bluetooth = new GnomeBluetooth.Client();
 const loop = new GLib.MainLoop(null, false);
 GLib.timeout_add(GLib.PRIORITY_DEFAULT, 1000, () => {
@@ -1140,6 +1820,7 @@ GLib.timeout_add(GLib.PRIORITY_DEFAULT, 1000, () => {
         battery: {present: upower.get_cached_property('IsPresent')?.unpack() ?? null,
             percentage: upower.get_cached_property('Percentage')?.unpack() ?? null},
         connectedBluetooth: connected,
+        hasDualGpu: switcheroo.get_cached_property('HasDualGpu')?.unpack() ?? null,
     }));
     loop.quit();
     return GLib.SOURCE_REMOVE;
@@ -1160,18 +1841,41 @@ EOF
     dbus-daemon --config-file="$T/bus.conf" --fork --print-address=3 --print-pid=4 3>"$T/bus.address" 4>"$T/bus.pid"
 }
 
+test_one_gpu() {
+    local failures what menu passes
+    while IFS='|' read -r failures what menu; do
+        printf 'APEXG2-GPU %s\n' "$menu" >"$T/one-gpu.log"
+        read -r passes _ <<<"$(assertion_counts one_gpu_menu dock-one-gpu "$T/one-gpu.log")"
+        expect_eq "one GPU: $what fails $failures of 2" "$failures" $((2 - passes))
+    done <<'MENUS'
+0|stock's menu without the discrete GPU|{"app": "Files", "hasDualGpu": false, "items": ["Open Windows", "New Window", "Unpin", "App Details"]}
+1|a menu that still offers it|{"app": "Files", "hasDualGpu": false, "items": ["New Window", "Launch Using Discrete Graphics Card", "Unpin"]}
+1|a switcheroo-control still reporting two GPUs|{"app": "Files", "hasDualGpu": true, "items": ["New Window", "Unpin"]}
+2|no menu at all|null
+MENUS
+}
+
 test_fixtures() {
     local passes failures address missing=()
     mkdir -p "$T/fixtures"
-    fixtures_report 'G2-FIXTURES {"battery": {"percentage": 87.0, "present": true, "onBattery": true}, "wifi": {"primary": "Apex-5G", "ssid": "Apex-5G", "strength": 90, "inRange": ["Apex-5G", "Apex-2.4G", "Library Guest"], "state": 70, "connectivity": 4}, "keyboard": {"alias": "Keychron K3", "connected": true, "icon": "input-keyboard"}}'
+    local report='G2-FIXTURES {"battery": {"percentage": 87.0, "present": true, "onBattery": true}, '
+    report+='"wifi": {"primary": "Apex-5G", "ssid": "Apex-5G", "strength": 90, "inRange": ["Apex-5G", "Apex-2.4G", "Library Guest"], '
+    report+='"state": 70, "connectivity": 4}, "keyboard": {"alias": "Keychron K3", "connected": true, "icon": "input-keyboard"}, '
+    report+='"gpus": {"hasDualGpu": true, "names": ["AMD Radeon Graphics", "NVIDIA GeForce RTX 3050 Laptop GPU"]}, '
+    report+='"powerProfiles": {"active": "balanced", "profiles": ["power-saver", "balanced", "performance"]}}'
+    fixtures_report "$report"
     read -r passes failures <<<"$(assertion_counts fixtures_on_the_bus "$T/fixtures")"
-    expect_eq "fixtures: what fixtures.py reports passes each part's four assertions" "12/0" "$passes/$failures"
-    fixtures_report 'G2-FIXTURES {"battery": {"percentage": 0.0, "present": false, "onBattery": false}, "wifi": {"primary": "Apex-5G", "ssid": "Apex-5G", "strength": 30, "inRange": ["Apex-5G"], "state": 70, "connectivity": 4}, "keyboard": {"alias": "Keychron K3", "connected": false, "icon": "phone"}}'
+    expect_eq "fixtures: what fixtures.py reports passes each part's six assertions" "18/0" "$passes/$failures"
+    report='G2-FIXTURES {"battery": {"percentage": 0.0, "present": false, "onBattery": false}, '
+    report+='"wifi": {"primary": "Apex-5G", "ssid": "Apex-5G", "strength": 30, "inRange": ["Apex-5G"], "state": 70, "connectivity": 4}, '
+    report+='"keyboard": {"alias": "Keychron K3", "connected": false, "icon": "phone"}, "gpus": {"hasDualGpu": false, "names": ["AMD Radeon Graphics"]}, '
+    report+='"powerProfiles": null}'
+    fixtures_report "$report"
     read -r passes failures <<<"$(assertion_counts fixtures_on_the_bus "$T/fixtures")"
-    expect_eq "fixtures: no battery, a weak signal, one network in range and a keyboard left unconnected fail all four" "0/12" "$passes/$failures"
+    expect_eq "fixtures: no battery, a weak signal, one network in range, a keyboard left unconnected, one GPU and no power-profiles-daemon fail all six" "0/18" "$passes/$failures"
     fixtures_report 'fixtures.py: no owner for org.bluez after 20 s'
     read -r passes failures <<<"$(assertion_counts fixtures_on_the_bus "$T/fixtures")"
-    expect_eq "fixtures: a fixtures.py that failed fails them" "0/12" "$passes/$failures"
+    expect_eq "fixtures: a fixtures.py that failed fails them" "0/18" "$passes/$failures"
 
     command -v dbus-daemon >/dev/null 2>&1 || missing+=(dbus-daemon)
     python3 -c 'import dbusmock' >/dev/null 2>&1 || missing+=(python3-dbusmock)
@@ -1184,14 +1888,14 @@ test_fixtures() {
     start_private_system_bus
     address=$(head -n 1 "$T/bus.address")
     rm -rf "$T/fixtures" && mkdir -p "$T/fixtures"
-    DBUS_SYSTEM_BUS_ADDRESS=$address python3 "$HERE/fixtures.py" "$T/fixtures" >"$T/fixtures/fixtures-main.txt" 2>&1 || true
+    DBUS_SYSTEM_BUS_ADDRESS=$address G2_POWER_PROFILES=1 python3 "$HERE/fixtures.py" "$T/fixtures" >"$T/fixtures/fixtures-main.txt" 2>&1 || true
     cp "$T/fixtures/fixtures-main.txt" "$T/fixtures/fixtures-kernel.txt"
     cp "$T/fixtures/fixtures-main.txt" "$T/fixtures/fixtures-fedora.txt"
     read -r passes failures <<<"$(assertion_counts fixtures_on_the_bus "$T/fixtures")"
-    expect_eq "fixtures: fixtures.py on a private bus passes the fixture assertions" "12/0" "$passes/$failures"
+    expect_eq "fixtures: fixtures.py on a private bus passes the fixture assertions" "18/0" "$passes/$failures"
     write_fixture_reader
-    expect_eq "fixtures: libnm, gnome-bluetooth and UPower's display device read them as the shell does" \
-        '{"wifi":{"id":"Apex-5G","strength":90,"listed":["Apex-5G","Apex-2.4G","Library Guest"],"full":true,"wireless":true},"battery":{"present":true,"percentage":87},"connectedBluetooth":["Keychron K3"]}' \
+    expect_eq "fixtures: libnm, gnome-bluetooth, UPower's display device and switcheroo-control read them as the shell does" \
+        '{"wifi":{"id":"Apex-5G","strength":90,"listed":["Apex-5G","Apex-2.4G","Library Guest"],"full":true,"wireless":true},"battery":{"present":true,"percentage":87},"connectedBluetooth":["Keychron K3"],"hasDualGpu":true}' \
         "$(DBUS_SYSTEM_BUS_ADDRESS=$address gjs -m "$T/read-fixtures.js" 2>"$T/read-fixtures.err")"
     local -a pids
     mapfile -t pids < <(cat "$T/bus.pid" "$T"/fixtures/fixture-*.pid 2>/dev/null)
@@ -1308,6 +2012,28 @@ REPORTS
 REPORTS
 }
 
+test_shadows_under_glass() {
+    local surface='{"covered": true, "sameSize": true, "interiorDiffering": 0, "rim": 9, "picked": "St.BoxLayout.popup-menu-content", "samePick": true}'
+    local good passes failures what change
+    good=$(jq -nc --argjson s "$surface" '{patched: true, shadows: ({quickSettings: ($s + {arrowless: true}), popupMenu: ($s + {arrowless: true}),
+        dialog: ($s + {arrowless: null})} as $v | {light: ($v | .quickSettings.corners = "shadow-corners-light.png"),
+        dark: ($v | .quickSettings.corners = "shadow-corners-dark.png")})}')
+    while IFS='|' read -r failures what change; do
+        jq -c "$change" <<<"$good" | sed 's/^/APEXG2-GLASS /' >"$T/glass.log"
+        read -r passes _ <<<"$(assertion_counts shadows_under_glass glass "$T/glass.log")"
+        expect_eq "shadows over surfaces: $what fails $failures of 5" "$failures" $((5 - passes))
+    done <<'CHANGES'
+0|exact interiors, rims within the tolerance, clicks through, no arrows, corners captured|.
+1|one dark dialog pixel the layer darkened|.shadows.dark.dialog.interiorDiffering = 1
+1|a popup menu rim 12.5/255 off|.shadows.light.popupMenu.rim = 13
+1|a layer that takes the click|.shadows.light.quickSettings.picked = "St.Widget.apex-shadow-layer"
+1|a click that lands elsewhere with shadows on|.shadows.dark.dialog.samePick = false
+1|a BoxPointer that draws an arrow|.shadows.dark.popupMenu.arrowless = false
+1|no dark corner crops|.shadows.dark.quickSettings.corners = null
+5|a probe that never read the frames|.shadows = null
+CHANGES
+}
+
 # glass.js's reference and frame reader, and glass_frames over reports built for it.
 test_glass() {
     local line rc=0 passes failures what change
@@ -1338,12 +2064,12 @@ test_glass() {
             "edge": {"max": [11.03, 6.23, 11.67], "mean": [1.4, 0.9, 1.3]}},
         "sameFrame": {"covered": true, "changed": 44893, "differingFromFull": 0},
         "clippedRedraw": {"covered": false, "differingFromLast": 0, "nextCovered": true, "nextDifferingFromFull": 0},
-        "stock": {"covered": false, "differingFromLast": 2304, "differingFromFull": 43927,
+        "stock": {"covered": false, "tries": 1, "differingFromLast": 2304, "differingFromFull": 43927,
             "box": {"max": [180, 150, 170], "mean": [9, 7, 8]}, "interior": {"max": [180, 150, 170], "mean": [9, 7, 8]}, "edge": {"max": [60, 50, 40], "mean": [5, 4, 4]}}}}'
     while IFS='|' read -r failures what change; do
         jq -c "$change" <<<"$good" | sed 's/^/APEXG2-GLASS /' >"$T/glass.log"
         read -r passes _ <<<"$(assertion_counts glass_frames glass "$T/glass.log")"
-        expect_eq "glass: $what fails $failures of 6" "$failures" $((6 - passes))
+        expect_eq "glass: $what fails $failures of 7" "$failures" $((7 - passes))
     done <<'CHANGES'
 0|a run within the tolerance, the frames as drawn|.
 0|the 4/255 the lead accepted inside|.pixels.reference.interior.max[2] = 4
@@ -1358,15 +2084,18 @@ test_glass() {
 1|a clipped frame never followed by its redraw|.pixels.clippedRedraw.nextCovered = false
 1|a stock control that sees nothing|.pixels.stock.differingFromFull = 0
 1|a stock control within the tolerances|.pixels.stock += (.pixels.reference | {box, interior, edge})
-6|Fedora's effect|{patched: false, pixels: null}
-6|a probe that failed|{error: "no frame within 2000 ms"}
+0|a stock control that needed 3 tries|.pixels.stock.tries = 3
+2|5 tries that never obtained a partial redraw|.pixels.stock += {covered: true, tries: 5, differingFromFull: 0}
+7|Fedora's effect|{patched: false, pixels: null}
+7|a probe that failed|{error: "no frame within 2000 ms"}
 CHANGES
 
     local on='{"radius": 96, "saturation": 1.6, "enabled": true, "fine": true, "followOpacity": true, "background": true}'
     local popover='{"radius": 120, "saturation": 1.8, "enabled": true, "fine": true, "followOpacity": true, "background": true}'
+    local dock='{"radius": 112, "saturation": 1.8, "enabled": true, "fine": true, "followOpacity": true, "background": true}'
     local manager
-    manager=$(jq -nc --argjson on "$on" --argjson p "$popover" '{panel: $on, quickSettings: $p, calendar: $p, banner: $p, blurEffects: ["panel"], solidClass: false} as $g
-        | {panel: null, quickSettings: null, calendar: null, banner: null, blurEffects: []} as $none
+    manager=$(jq -nc --argjson on "$on" --argjson p "$popover" --argjson dock "$dock" '{panel: $on, dock: $dock, quickSettings: $p, calendar: $p, banner: $p, blurEffects: ["panel"], solidClass: false} as $g
+        | {panel: null, dock: null, quickSettings: null, calendar: null, banner: null, blurEffects: []} as $none
         | {radius: 144, saturation: 1.5, enabled: true, fine: true, followOpacity: true, background: false} as $scrim
         | {manager: {monitorScale: 2, glass: $g, reduceTransparency: ($none + {solidClass: true}), highContrast: ($none + {solidClass: true}),
             disabled: ($none + {solidClass: false}), restored: $g,
@@ -1377,9 +2106,11 @@ CHANGES
         read -r passes _ <<<"$(assertion_counts glass_manager glass "$T/glass.log" light)"
         expect_eq "glass manager: $what fails $failures of 7" "$failures" $((7 - passes))
     done <<'CHANGES'
-0|the bar and the popovers at their tokens, every switch honoured|.
+0|the bar, the dock and the popovers at their tokens, every switch honoured|.
 1|the bar at the popovers' sigma|.manager.glass.panel.radius = 120
 1|a banner at the bar's saturation|.manager.glass.banner.saturation = 1.6
+1|the dock at the popovers' sigma|.manager.glass.dock.radius = 120
+1|a dock left blurred by high contrast|.manager.highContrast.dock = .manager.glass.dock
 1|a popover without fine|.manager.glass.calendar.fine = false
 1|a blur left behind by Reduce Transparency|.manager.reduceTransparency.blurEffects = ["St_BoxLayout"]
 1|Reduce Transparency without apex-solid|.manager.reduceTransparency.solidClass = false
@@ -1400,25 +2131,38 @@ test_incomplete_compare
 test_token_file
 test_top_bar
 test_dock
+test_indicators
 test_shell_surfaces
 test_quick_settings
 test_window_switcher
 test_modal_dialog
+test_a11y
 test_date_menu
 test_overview_style
 test_app_grid
 test_overview_layer
+test_notifications_layer
+test_shadow_layers
 test_derived_surfaces
+test_tile_preview
 test_spotlight_style
+test_launcher_search
+test_spotlight_glass
+test_spotlight_keys
+test_screenshot_ui
 test_today_pins
 test_known_gaps
 test_fixed_clock
 test_clock_c
 test_overview_below_bar
 test_layer_cycles
+test_motion
+test_idle
 test_spotlight_key
+test_one_gpu
 test_fixtures
 test_glass
+test_shadows_under_glass
 
 printf '1..%d\n' "$tests"
 ((failed == 0))

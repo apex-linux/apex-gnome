@@ -10,19 +10,7 @@
 // Apex sheet and its tokens loaded. A sheet compiled without the tokens fails in sassc.
 .apex-theme-marker { color: $apex_bar_fg; }
 
-// In pt, so that Large Text (text-scaling-factor) still scales the text: at the default
-// factor 0.75pt is one logical pixel.
-@function apex-text-size($px) {
-  @return $px / 1px * .75pt;
-}
-
-// St draws one box-shadow, so the board's inset ring is the border.
-@mixin apex-surface($fill) {
-  color: $apex_fg;
-  background-color: $fill;
-  border: $apex_surface_border solid $apex_panel_border;
-  box-shadow: 0 $apex_shadow_y $apex_shadow_blur 0 $apex_shadow;
-}
+@import "apex-base";
 
 @import "top-bar";
 @import "popup-menus";
@@ -34,7 +22,11 @@
 @import "date-menu";
 @import "overview";
 @import "app-grid";
+@import "lock";
+@import "greeter";
 @import "derived";
 @import "dock";
+@import "tile-preview";
 @import "spotlight";
 @import "glass";
+@import "screenshot";

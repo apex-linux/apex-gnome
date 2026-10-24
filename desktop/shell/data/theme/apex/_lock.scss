@@ -1,0 +1,184 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+
+// Boards 20 and 12. The greeter runs no Apex JS, so only these rules reach it.
+.unlock-dialog,
+.login-dialog {
+  color: $apex_lock_fg;
+
+  .user-widget.vertical {
+    spacing: $apex_lock_prompt_gap;
+
+    .user-widget-label {
+      margin-bottom: 0;
+      font-size: apex-text-size($apex_font_lock_name_size);
+      font-weight: $apex_font_lock_name_weight;
+    }
+
+    .user-icon {
+      icon-size: $apex_lock_avatar_size;
+      border: $apex_surface_border solid $apex_lock_avatar_border;
+      border-radius: $apex_lock_avatar_size / 2;
+      background-color: $apex_lock_glass_strong;
+      box-shadow: 0 10px 30px 0 $apex_lock_avatar_shadow;
+    }
+  }
+
+  .apex-avatar-initial {
+    color: $apex_lock_fg;
+    font-weight: $apex_font_lock_name_weight;
+  }
+
+  // Upstream's cancel button, the field with its button, and a spacer as wide as cancel.
+  .login-dialog-prompt-layout {
+    width: 2 * $apex_lock_field_height + $apex_lock_field_gap + $apex_lock_field_width +
+      $apex_lock_field_gap + $apex_lock_field_height;
+    margin-top: 0;
+    spacing: $apex_lock_prompt_gap;
+  }
+
+  .login-dialog-input-well { spacing: 0; }
+  .login-dialog-button-box { height: $apex_lock_field_height; }
+
+  .login-dialog-button.cancel-button {
+    &:ltr { margin-right: $apex_lock_field_gap; }
+    &:rtl { margin-left: $apex_lock_field_gap; }
+  }
+
+  // Board 20's message shares the hint's line; S4 merges the two, until then it takes no room empty.
+  .login-dialog-message { min-height: 0; }
+
+  // The submit button sits beside the field, not in it: the field leaves it its width.
+  .login-dialog-prompt-entry-area {
+    width: $apex_lock_field_width + $apex_lock_field_gap + $apex_lock_field_height;
+    margin: 0;
+  }
+
+  .login-dialog-prompt-entry {
+    min-height: $apex_lock_field_height - 2 * $apex_surface_border;
+    padding: 0 $apex_lock_field_padding;
+    border: $apex_surface_border solid $apex_lock_glass_border;
+    border-radius: $apex_lock_field_height / 2;
+    color: $apex_lock_fg;
+    background-color: $apex_lock_glass;
+    box-shadow: none;
+    font-size: apex-text-size($apex_font_entry_size);
+    font-weight: $apex_font_entry_weight;
+    caret-color: $apex_lock_fg;
+    selected-color: $apex_lock_fg;
+    &:ltr { padding-right: $apex_lock_field_padding; margin-right: $apex_lock_field_gap + $apex_lock_field_height; }
+    &:rtl { padding-left: $apex_lock_field_padding; margin-left: $apex_lock_field_gap + $apex_lock_field_height; }
+    &:hover { background-color: $apex_lock_glass; }
+    // Upstream's focus ring is !important; the brighter border marks focus instead.
+    &:focus {
+      border-color: $apex_lock_glass_focus;
+      background-color: $apex_lock_glass;
+      box-shadow: none !important;
+    }
+
+    StLabel.hint-text { color: $apex_lock_placeholder; }
+  }
+
+  .login-dialog-default-button-well {
+    &:ltr { margin-right: 0; }
+    &:rtl { margin-left: 0; }
+  }
+
+  // Upstream's next button is transparent with !important.
+  .login-dialog-button.next-button {
+    width: $apex_lock_field_height - 2 * $apex_surface_border;
+    height: $apex_lock_field_height - 2 * $apex_surface_border;
+    padding: 0;
+    border: $apex_surface_border solid $apex_lock_glass_border;
+    border-radius: $apex_lock_field_height / 2;
+    color: $apex_lock_fg;
+    background-color: $apex_lock_glass_strong !important;
+    icon-size: $apex_lock_button_icon_size;
+
+    &:hover, &:focus { background-color: $apex_lock_glass_border !important; }
+  }
+
+  .login-dialog-message,
+  .login-dialog-message-hint,
+  .apex-lock-hint {
+    color: $apex_lock_fg_dim;
+    font-size: apex-text-size($apex_font_lock_hint_size);
+  }
+
+  .login-dialog-message-warning { color: $apex_lock_fg; }
+
+  // Board 20's fingerprint states share the hint's line, the print glyph before the text.
+  .apex-lock-hint-line { spacing: $apex_lock_hint_glyph_gap; }
+  .apex-lock-hint-glyph { color: $apex_lock_fg_dim; icon-size: $apex_lock_hint_glyph_size; }
+  .apex-lock-hint-failed .apex-lock-hint, .apex-lock-hint-failed .apex-lock-hint-glyph { color: $apex_lock_fg; }
+}
+
+.apex-lock-overlay { background-color: $apex_lock_overlay; }
+
+.apex-lock-stage { spacing: $apex_lock_stage_gap; }
+
+.unlock-dialog-clock.apex-lock-clock {
+  margin-top: $apex_lock_clock_top;
+  spacing: $apex_lock_clock_gap;
+
+  .unlock-dialog-clock-date {
+    color: rgba($apex_lock_fg, .92);
+    font-size: apex-text-size($apex_font_lock_date_size);
+    font-weight: $apex_font_lock_date_weight;
+  }
+
+  .unlock-dialog-clock-time {
+    font-size: apex-text-size($apex_font_lock_time_size);
+    font-weight: $apex_font_lock_time_weight;
+    letter-spacing: $apex_lock_time_tracking;
+  }
+}
+
+#lockDialogGroup { background-color: $apex_lock_greeter_base; }
+
+.login-dialog-not-listed-button {
+  &, &:hover, &:focus, &:active { background-color: transparent; }
+
+  .login-dialog-not-listed-label {
+    color: $apex_lock_fg_dim;
+    font-size: apex-text-size($apex_font_lock_hint_size);
+  }
+  &:hover .login-dialog-not-listed-label, &:focus .login-dialog-not-listed-label { color: $apex_lock_fg; }
+}
+
+.login-dialog-user-list-view {
+  width: $apex_lock_list_width;
+
+  .login-dialog-user-list {
+    margin: 0;
+    spacing: 0;
+    border: $apex_surface_border solid $apex_lock_list_border;
+    border-radius: $apex_radius_lock_list;
+    background-color: $apex_lock_list;
+
+    .login-dialog-user-list-item {
+      min-height: $apex_lock_list_item_height;
+      padding: 0 $apex_lock_list_item_padding;
+      border-radius: 0;
+      border-top: $apex_surface_border solid $apex_lock_list_separator;
+      background-color: transparent;
+
+      &:first-child { border-top-width: 0; border-radius: $apex_radius_lock_list $apex_radius_lock_list 0 0; }
+      &:last-child { border-radius: 0 0 $apex_radius_lock_list $apex_radius_lock_list; }
+      &:hover, &:focus { background-color: $apex_lock_list_separator; }
+
+      .user-widget.horizontal { spacing: $apex_lock_prompt_gap; }
+
+      .user-widget-label {
+        font-size: apex-text-size($apex_font_lock_list_name_size);
+        font-weight: $apex_font_lock_name_weight;
+      }
+
+      .user-icon {
+        icon-size: $apex_lock_list_avatar_size;
+        border: $apex_surface_border solid $apex_lock_avatar_border;
+        border-radius: $apex_lock_list_avatar_size / 2;
+        background-color: $apex_lock_glass_strong;
+      }
+    }
+  }
+}

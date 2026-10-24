@@ -1,21 +1,25 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 //
-// DESIGN's Spotlight behind Super+Space and the bar's search button. With the feature off,
-// the button opens the stock overview search.
+// DESIGN's one engine behind Super+Space, the bar's search button and the overview's search.
+// With the feature off, the button opens the stock overview search.
 
 import Gio from 'gi://Gio';
 import Meta from 'gi://Meta';
 import Shell from 'gi://Shell';
 
+import * as Hooks from '../hooks.js';
 import * as Main from '../../main.js';
 import * as Providers from './providers.js';
+import {LauncherSearch} from './launcher-search.js';
 import {Popup} from './popup.js';
 
 const KEYBINDINGS_SCHEMA = 'io.github.apex_linux.Apex.Desktop.Keybindings';
 const TOGGLE_SPOTLIGHT = 'toggle-spotlight';
 
+let _featureName = null;
 let _keybindings = null;
 let _popup = null;
+const _launcher = new LauncherSearch();
 
 export function toggleSpotlight() {
     if (_popup)
@@ -30,7 +34,20 @@ export function popup() {
     return _popup;
 }
 
-export function configure() {
+// Patch 0013's hook: overview text or a focused pill opens Spotlight. In the app grid the pill
+// is the launcher's, which keeps the typed text and leaves the focus stock.
+function _overviewSearch(reason, text, resetOverviewSearch) {
+    if (_launcher.active)
+        return reason === 'text';
+    if (!_popup || _popup.isOpen)
+        return false;
+    resetOverviewSearch();
+    _popup.open(text);
+    return true;
+}
+
+export function configure(featureName) {
+    _featureName = featureName;
     const schema = Gio.SettingsSchemaSource.get_default()?.lookup(KEYBINDINGS_SCHEMA, true);
     if (!schema)
         throw new Error(`schema ${KEYBINDINGS_SCHEMA} is not installed`);
@@ -47,9 +64,13 @@ export function enable() {
     if (action === Meta.KeyBindingAction.NONE)
         throw new Error(`mutter refused the keybinding ${TOGGLE_SPOTLIGHT}`);
     _popup = new Popup(Providers.load, action);
+    _launcher.enable();
+    Hooks.provide(_featureName, 'overview-search', _overviewSearch);
 }
 
 export function disable() {
+    Hooks.withdraw(_featureName);
+    _launcher.disable();
     _popup?.destroy();
     _popup = null;
     Main.wm.removeKeybinding(TOGGLE_SPOTLIGHT);

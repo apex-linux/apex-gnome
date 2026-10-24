@@ -14,15 +14,24 @@
 .popup-menu-content.datemenu-popover,
 .notification-banner { @include apex-glass($apex_panel_blur, $apex_panel_saturation); }
 
+#apexDock .dash-background { @include apex-glass($apex_dock_blur, $apex_dock_saturation); }
+
+// Spotlight and its toast (board 38, ADR 0014's Spotlight and toast rows).
+.apex-spotlight { @include apex-glass($apex_spotlight_blur, $apex_spotlight_saturation); }
+.apex-toast { @include apex-glass($apex_toast_blur, $apex_toast_saturation); }
+
 .apex-glass-scrim { @include apex-glass($apex_overview_scrim_blur, $apex_overview_scrim_saturation); }
 .apex-glass-scrim.apex-launcher { @include apex-glass($apex_launcher_scrim_blur, $apex_launcher_scrim_saturation); }
 
 .apex-solid {
   #panel { background-color: $apex_bar_solid; }
+  #apexDock .dash-background { background-color: $apex_panel_solid; }
 
   .popup-menu-content.quick-settings,
   .popup-menu-content.datemenu-popover,
   .notification-banner,
   .osd-window,
-  .switcher-list { background-color: $apex_panel_solid; }
+  .switcher-list,
+  .apex-spotlight,
+  .apex-toast { background-color: $apex_panel_solid; }
 }

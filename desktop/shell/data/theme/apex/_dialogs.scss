@@ -3,6 +3,7 @@
 // Modal dialogs stay solid (DESIGN.md). dialog.js sets the 12 px gap between the buttons.
 .modal-dialog {
   @include apex-surface($apex_panel_solid);
+  @include apex-shadow-layer;
   padding: ($apex_dialog_padding - $apex_surface_border) ($apex_dialog_padding - $apex_surface_border)
     ($apex_dialog_padding_bottom - $apex_surface_border);
   border-radius: $apex_radius_dialog;
@@ -48,7 +49,79 @@
 }
 
 .prompt-dialog { width: $apex_dialog_width - 2 * $apex_dialog_padding; }
-.end-session-dialog { width: $apex_end_session_dialog_width - 2 * $apex_dialog_padding; }
+.end-session-dialog {
+  width: $apex_end_session_dialog_width - 2 * $apex_dialog_padding;
+  spacing: $apex_end_session_gap;
+
+  .modal-dialog-content-box { spacing: $apex_end_session_gap; }
+  .modal-dialog-button-box { spacing: $apex_end_session_button_gap; }
+  .message-dialog-title { letter-spacing: $apex_dialog_title_tracking; }
+  .message-dialog-description { font-feature-settings: "tnum"; }
+
+  // Cancel always comes first, so the last button is the one that ends the session.
+  .modal-dialog-button-box .modal-dialog-button:last-child {
+    &, &:default { color: $apex_destructive_fg; background-color: $apex_destructive; }
+
+    &:hover, &:active, &:focus, &:default:hover, &:default:active, &:default:focus {
+      color: $apex_destructive_fg;
+      background-color: $apex_destructive_hover;
+    }
+  }
+}
+
+$_end_session_row: $apex_end_session_dialog_width - 2 * $apex_dialog_padding - 2 * $apex_end_session_button_gap;
+$_end_session_share: $_end_session_row /
+  ($apex_end_session_cancel_share + $apex_end_session_restart_share + $apex_end_session_confirm_share);
+
+.apex-end-session-row .modal-dialog-button {
+  &:first-child { width: $_end_session_share * $apex_end_session_cancel_share; }
+  &.apex-end-session-restart { width: $_end_session_share * $apex_end_session_restart_share; }
+  &:last-child { width: $_end_session_share * $apex_end_session_confirm_share; }
+}
+
+@import "end-session-icon";
+
+// St draws one box-shadow: the card's 1 px ring is its border.
+.apex-update-card {
+  padding: $apex_update_card_padding_y $apex_update_card_padding_x;
+  spacing: $apex_update_card_gap;
+  border: 1px solid $apex_card_border;
+  border-radius: $apex_radius_update_card;
+  background-color: $apex_card;
+  box-shadow: 0 1px 3px $apex_update_card_shadow;
+
+  .apex-update-card-icon { icon-size: $apex_update_card_icon_size; }
+  .apex-update-card-text { spacing: $apex_update_card_text_gap; }
+
+  .apex-update-card-title {
+    color: $apex_fg;
+    font-size: apex-text-size($apex_font_update_card_title_size);
+    font-weight: $apex_font_update_card_title_weight;
+  }
+
+  .apex-update-card-subtitle {
+    color: $apex_fg_dim;
+    font-size: apex-text-size($apex_font_update_card_subtitle_size);
+  }
+
+  .toggle-switch {
+    width: $apex_update_switch_width;
+    height: $apex_update_switch_height;
+    background-color: $apex_button_hover;
+
+    StIcon { color: transparent; }
+
+    .handle {
+      margin: ($apex_update_switch_height - $apex_update_switch_knob) / 2;
+      width: $apex_update_switch_knob;
+      height: $apex_update_switch_knob;
+      background-color: white;
+      box-shadow: 0 1px 3px $apex_update_switch_knob_shadow;
+    }
+
+    &:checked { background-color: $apex_accent; }
+  }
+}
 
 @mixin apex-entry {
   min-height: $apex_entry_height;
@@ -75,5 +148,78 @@
   .polkit-dialog-user-label {
     font-size: apex-text-size($apex_font_size);
     font-weight: $apex_font_label_weight;
+  }
+}
+
+.apex-polkit {
+  .apex-polkit-icon {
+    width: $apex_polkit_icon_size;
+    height: $apex_polkit_icon_size;
+    border-radius: $apex_polkit_icon_size / 2;
+    color: $apex_accent;
+    background-color: st-transparentize($apex_accent, 1 - $apex_polkit_icon_tint);
+  }
+
+  .apex-polkit-icon-glyph { icon-size: $apex_polkit_icon_glyph_size; }
+
+  .message-dialog-content, .prompt-dialog-password-layout { spacing: $apex_polkit_body_gap; }
+
+  .polkit-dialog-user-layout.apex-polkit-user {
+    padding: 0 $apex_polkit_user_inset;
+    spacing: $apex_polkit_user_gap;
+    text-align: left;
+
+    .user-icon {
+      icon-size: $apex_polkit_avatar_size;
+      border-radius: $apex_polkit_avatar_size / 2;
+      background-color: $apex_accent;
+    }
+
+    .apex-avatar-initial { color: -st-accent-fg-color; font-weight: $apex_font_heading_weight; }
+  }
+
+  .apex-polkit-role { color: $apex_fg_dim; font-size: apex-text-size($apex_font_polkit_role_size); }
+
+  // Upstream's info line keeps its own look; only pam_fprintd's prompt is board 13's hint.
+  .apex-polkit-fingerprint {
+    padding: 0 $apex_polkit_hint_inset;
+    spacing: $apex_polkit_hint_gap;
+    color: $apex_fg_dim;
+
+    .prompt-dialog-info-label { color: $apex_fg_dim; font-size: apex-text-size($apex_font_polkit_hint_size); }
+  }
+
+  .apex-polkit-fingerprint-glyph { icon-size: $apex_polkit_hint_glyph_size; }
+
+  .apex-polkit-details {
+    border: $apex_surface_border solid $apex_border;
+    border-radius: $apex_radius_polkit_details;
+    font-size: apex-text-size($apex_font_polkit_details_size);
+  }
+
+  .apex-polkit-details-toggle {
+    min-height: $apex_polkit_details_heading_height - $apex_surface_border;
+    padding: 0 $apex_polkit_details_inset;
+    border-radius: $apex_radius_polkit_details;
+    color: $apex_fg_dim;
+    font-size: apex-text-size($apex_font_polkit_details_heading_size);
+    font-weight: $apex_font_label_weight;
+
+    .apex-polkit-details-heading { spacing: $apex_polkit_details_gap; }
+    &:hover, &:focus { background-color: $apex_button; }
+  }
+
+  .apex-polkit-details-chevron { icon-size: $apex_polkit_chevron_size; }
+
+  .apex-polkit-details-grid {
+    padding: 0 $apex_polkit_details_inset $apex_polkit_details_inset $apex_polkit_details_indent;
+    spacing: $apex_polkit_details_row_gap;
+  }
+
+  .apex-polkit-details-key { width: $apex_polkit_details_key_width; color: $apex_fg_dim; }
+
+  .apex-polkit-action {
+    font-family: $apex_font_mono;
+    font-size: apex-text-size($apex_font_polkit_action_size);
   }
 }

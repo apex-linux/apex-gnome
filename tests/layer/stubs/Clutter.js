@@ -5,11 +5,15 @@
 import GLib from 'gi://GLib';
 
 const TextDirection = {DEFAULT: 0, LTR: 1, RTL: 2};
+const AnimationMode = {LINEAR: 1, EASE_OUT_QUAD: 5, EASE_OUT_CUBIC: 8, EASE_OUT_EXPO: 21,
+    STEPS: 46, STEP_START: 47, STEP_END: 48, CUBIC_BEZIER: 49};
+
+class Actor {}
 
 class BinLayout {}
 
-class BindConstraint {
-    constructor(params) {
+class BoxLayout {
+    constructor(params = {}) {
         Object.assign(this, params);
     }
 }
@@ -21,6 +25,8 @@ class Clone {
 
     destroy() {}
 }
+
+class Stage {}
 
 // The probe sets the key a press reports, as Clutter does before emitting key-press.
 class KeyController {
@@ -42,18 +48,54 @@ class KeyController {
 }
 
 class ClickGesture {
+    constructor(params = {}) {
+        Object.assign(this, params);
+    }
+
     connect(signal, fn) {
         if (signal === 'recognize')
             this.recognize = fn;
     }
+
+    // What a click with that mouse button would do.
+    click(button) {
+        this._button = button;
+        this.recognize(this);
+    }
+
+    get_button() {
+        return this._button;
+    }
+}
+
+class BindConstraint {
+    constructor(params) {
+        Object.assign(this, params);
+    }
+}
+
+class ScrollController {
+    constructor(params) {
+        Object.assign(this, params);
+    }
+
+    connect(signal, fn) {
+        if (signal === 'scroll')
+            this.scroll = (dx, dy) => fn(this, null, null, dx, dy);
+    }
 }
 
 export default {
-    AnimationMode: {EASE_OUT_QUAD: 5, EASE_OUT_CUBIC: 8},
-    BUTTON_SECONDARY: 3,
-    BinLayout,
+    Actor,
+    AnimationMode,
     BindConstraint,
     BindCoordinate: {X: 0, Y: 1, WIDTH: 2, HEIGHT: 3, POSITION: 4, SIZE: 5, ALL: 6},
+    BUTTON_PRIMARY: 1,
+    BUTTON_MIDDLE: 2,
+    BUTTON_SECONDARY: 3,
+    BinLayout,
+    BoxLayout,
+    Stage,
     ClickGesture,
     Clone,
     KeyController,
@@ -65,7 +107,11 @@ export default {
     KEY_KP_Enter: 0xff8d,
     KEY_Return: 0xff0d,
     KEY_Up: 0xff52,
+    ScrollController,
+    ScrollControllerFlags: {DISCRETE: 1, SCROLL_VERTICAL: 2, SCROLL_HORIZONTAL: 4},
+    get_current_event_time: () => 0,
     ActorAlign: {FILL: 0, START: 1, CENTER: 2, END: 3},
+    GridPosition: {LEFT: 0, RIGHT: 1, TOP: 2, BOTTOM: 3},
     TextDirection,
     EVENT_PROPAGATE: false,
     EVENT_STOP: true,

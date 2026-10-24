@@ -7,21 +7,24 @@ import Clutter from 'gi://Clutter';
 import Gio from 'gi://Gio';
 import St from 'gi://St';
 
+import * as Glass from '../glass/registry.js';
 import * as Hooks from '../hooks.js';
 import * as Main from '../../main.js';
 import {ApexDock} from './dock.js';
+import {Intellihide} from './intellihide.js';
 
 const SCHEMA_ID = 'io.github.apex_linux.Apex.Desktop';
 const ICON_SIZE_KEY = 'dock-icon-size';
 const SHOW_TRASH_KEY = 'dock-show-trash';
 const RUNNING_INDICATORS_KEY = 'dock-running-indicators';
+const INTELLIHIDE_KEY = 'dock-intellihide';
 const ICON_SIZES = {small: 46, medium: 54, large: 62};
-const BOTTOM_GAP_PROPERTY = '-apex-bottom-gap';
 const SHOW_APPS_ICON = 'view-app-grid';
 
 let _settings = null;
 let _box = null;
 let _dock = null;
+let _intellihide = null;
 let _connections = [];
 
 function _iconSize() {
@@ -32,12 +35,11 @@ function _place() {
     const monitor = Main.layoutManager.primaryMonitor;
     if (!monitor)
         return;
-    const gap = _dock.get_stage() ? _dock.get_theme_node().get_length(BOTTOM_GAP_PROPERTY) : 0;
     _box.set_position(
         Math.round(monitor.x + (monitor.width - _box.width) / 2),
-        Math.round(monitor.y + monitor.height - _box.height - gap));
+        Math.round(monitor.y + monitor.height - _box.height));
     // The overview lays its views out above its own dash's height, hidden or not.
-    Main.overview.dash.height = _box.height + gap;
+    Main.overview.dash.height = _box.height;
 }
 
 function _syncSettings() {
@@ -72,7 +74,7 @@ function _inDock(actor) {
 
 export function configure(featureName) {
     const schema = Gio.SettingsSchemaSource.get_default()?.lookup(SCHEMA_ID, true);
-    const missing = [ICON_SIZE_KEY, SHOW_TRASH_KEY, RUNNING_INDICATORS_KEY]
+    const missing = [ICON_SIZE_KEY, SHOW_TRASH_KEY, RUNNING_INDICATORS_KEY, INTELLIHIDE_KEY]
         .filter(key => !schema?.has_key(key));
     if (missing.length > 0)
         throw new Error(`${SCHEMA_ID} has no key ${missing.join(', ')}`);
@@ -87,6 +89,7 @@ export function enable() {
     _dock = new ApexDock(_iconSize());
     _box = new St.Widget({name: 'apexDockBox', layout_manager: new Clutter.BinLayout()});
     _box.add_child(_dock);
+    Glass.register(_dock._background, {name: 'dock'});
     Main.layoutManager.addChrome(_box, {trackFullscreen: true});
     Main.overview.dash.hide();
 
@@ -96,7 +99,7 @@ export function enable() {
         [_settings, `changed::${RUNNING_INDICATORS_KEY}`, _syncSettings],
         [_box, 'notify::width', _place],
         [_box, 'notify::height', _place],
-        [_dock, 'style-changed', _place],
+        [_box, 'style-changed', _place],
         [Main.layoutManager, 'monitors-changed', _place],
         [Main.sessionMode, 'updated', _syncLock],
         [_dock.showAppsButton, 'notify::checked', _dockShowAppsToggled],
@@ -106,9 +109,12 @@ export function enable() {
     _syncSettings();
     _syncLock();
     _place();
+    _intellihide = new Intellihide(_box, _settings, INTELLIHIDE_KEY);
 }
 
 export function disable() {
+    _intellihide?.destroy();
+    _intellihide = null;
     for (const [emitter, id] of _connections)
         emitter.disconnect(id);
     _connections = [];

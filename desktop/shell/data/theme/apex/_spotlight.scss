@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
-// Glass: St has no backdrop filter, so S2b's glass manager blurs behind the tint.
+// Glass: the tint; S2b's glass manager blurs behind it (_glass.scss).
 .apex-spotlight {
   @include apex-surface($apex_panel);
   width: $apex_spotlight_width - 2 * $apex_surface_border;
@@ -79,6 +79,22 @@
   height: $apex_spotlight_icon_size;
 }
 
+// A Settings row: the panel's colour comes from settings-tiles.json; neutral without one.
+.apex-spotlight-tile {
+  border-radius: $apex_radius_spotlight_tile;
+  color: $apex_fg;
+  background-color: $apex_button;
+
+  StIcon { icon-size: $apex_spotlight_tile_glyph_size; }
+}
+
+.apex-spotlight-tile-coloured { color: $apex_spotlight_tile_fg; }
+
+.apex-spotlight-tile-accent {
+  color: -st-accent-fg-color;
+  background-color: $apex_accent;
+}
+
 .apex-spotlight-text { spacing: $apex_spotlight_text_gap; }
 
 .apex-spotlight-title {
@@ -120,7 +136,7 @@
   color: $apex_fg_dim;
 }
 
-// Glass, like the panel; it sits above the dock.
+// Glass like the panel (_glass.scss); it sits above the dock.
 .apex-toast {
   @include apex-surface($apex_panel);
   height: $apex_toast_height - 2 * $apex_surface_border;
@@ -142,3 +158,22 @@
 }
 
 .apex-toast-check-icon { icon-size: $apex_toast_check_icon_size; }
+
+// The overview's pill while the app grid shows: the launcher's, apps only.
+.search-entry.apex-launcher-search { width: $apex_launcher_search_width - 2 * $apex_search_padding; }
+
+.apex-launcher-empty {
+  padding-top: $apex_launcher_empty_top;
+  spacing: $apex_launcher_empty_gap;
+}
+
+.apex-launcher-empty-title {
+  color: $apex_fg;
+  font-size: apex-text-size($apex_font_launcher_empty_title_size);
+  font-weight: $apex_font_heading_weight;
+}
+
+.apex-launcher-empty-hint {
+  color: $apex_fg_dim;
+  font-size: apex-text-size($apex_font_launcher_empty_hint_size);
+}

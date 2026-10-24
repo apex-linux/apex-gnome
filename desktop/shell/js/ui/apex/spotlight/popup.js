@@ -4,9 +4,11 @@
 
 import Clutter from 'gi://Clutter';
 import GLib from 'gi://GLib';
+import Meta from 'gi://Meta';
 import Shell from 'gi://Shell';
 import St from 'gi://St';
 
+import * as Glass from '../glass/registry.js';
 import * as Main from '../../main.js';
 import * as Toast from './toast.js';
 import {Search, termsOf} from './search.js';
@@ -15,6 +17,7 @@ const HINT = 'Search apps, settings and files, or type a sum';
 const SEARCH_GLYPH = 'system-search-symbolic';
 const CLEAR_GLYPH = 'edit-clear-symbolic';
 const ICON_SIZE = 32;
+const TILE_GLYPH_SIZE = 16;
 const TYPING_PAUSE_MS = 50;
 const ENTER_KEYS = [Clutter.KEY_Return, Clutter.KEY_KP_Enter, Clutter.KEY_ISO_Enter];
 
@@ -44,7 +47,7 @@ export class Popup {
             this.open();
     }
 
-    open() {
+    open(text = '') {
         if (this.isOpen)
             return;
         Toast.hide();
@@ -53,6 +56,8 @@ export class Popup {
         Main.uiGroup.add_child(this._actor);
         this._grab = Main.pushModal(this._actor, {actionMode: Shell.ActionMode.POPUP});
         this._entry.grab_key_focus();
+        if (text !== '')
+            this._entry.set_text(text);
         this._overlayKeyId = global.display.connect('overlay-key', () => {
             this.close();
             Main.overview.show();
@@ -124,6 +129,7 @@ export class Popup {
         this._empty = new St.Bin({style_class: 'apex-spotlight-empty', child: this._emptyLabel, visible: false});
         this.panel.add_child(this._empty);
         this._actor.add_child(this.panel);
+        Glass.register(this.panel, {name: 'spotlight'});
     }
 
     _buildField() {
@@ -161,8 +167,9 @@ export class Popup {
     _onKeyPress(keys) {
         const [, symbol, keycode] = keys.get_key();
         const [, pressed, latched, locked] = keys.get_state();
-        if (symbol === Clutter.KEY_Escape ||
-            global.display.get_keybinding_action(keycode, pressed | latched | locked) === this._toggleAction) {
+        // Unbound keys map to NONE, so without a toggle action of its own none of them toggles.
+        const action = global.display.get_keybinding_action(keycode, pressed | latched | locked);
+        if (symbol === Clutter.KEY_Escape || (action !== Meta.KeyBindingAction.NONE && action === this._toggleAction)) {
             this.close();
         } else if (symbol === Clutter.KEY_Down || symbol === Clutter.KEY_Up) {
             const step = symbol === Clutter.KEY_Down ? 1 : -1;
@@ -229,6 +236,25 @@ export class Popup {
             this._select(this._rows.length > 0 ? 0 : -1);
     }
 
+    // Settings rows draw the provider's symbolic icon on a tile of the panel's colour.
+    _buildIcon(row) {
+        const tiled = row.tile !== undefined;
+        const icon = new St.Bin({
+            style_class: tiled ? 'apex-spotlight-icon apex-spotlight-tile' : 'apex-spotlight-icon',
+            y_align: Clutter.ActorAlign.CENTER,
+            child: row.gicon
+                ? new St.Icon({gicon: row.gicon, icon_size: ICON_SIZE})
+                : row.createIcon(tiled ? TILE_GLYPH_SIZE : ICON_SIZE),
+        });
+        if (row.tile === 'accent') {
+            icon.add_style_class_name('apex-spotlight-tile-accent');
+        } else if (row.tile) {
+            icon.add_style_class_name('apex-spotlight-tile-coloured');
+            icon.set_style(`background-color: ${row.tile};`);
+        }
+        return icon;
+    }
+
     _buildRow(row, index) {
         const actor = new St.BoxLayout({
             style_class: 'apex-spotlight-row',
@@ -236,11 +262,7 @@ export class Popup {
             track_hover: true,
             accessible_name: row.title,
         });
-        actor.add_child(new St.Bin({
-            style_class: 'apex-spotlight-icon',
-            y_align: Clutter.ActorAlign.CENTER,
-            child: row.gicon ? new St.Icon({gicon: row.gicon, icon_size: ICON_SIZE}) : row.createIcon(ICON_SIZE),
-        }));
+        actor.add_child(this._buildIcon(row));
         const text = new St.BoxLayout({
             style_class: 'apex-spotlight-text',
             orientation: Clutter.Orientation.VERTICAL,
@@ -289,6 +311,7 @@ export class Popup {
             return;
         this.close();
         if (row.copyText === null) {
+            Main.overview.hide();
             row.activate();
             return;
         }

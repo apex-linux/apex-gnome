@@ -31,7 +31,7 @@ skip() {
 }
 
 GI_COMPILER=$(command -v gi-compile-repository || command -v g-ir-compiler || true)
-for tool in gjs glib-compile-schemas "${GI_COMPILER:-gi-compile-repository}"; do
+for tool in gjs glib-compile-schemas "${GI_COMPILER:-gi-compile-repository}" dbus-run-session; do
     if ! command -v "$tool" >/dev/null 2>&1; then
         if [[ $NO_SKIP == 1 ]]; then
             printf 'not ok 1 - %s not found, but APEX_LAYER_TESTS_NO_SKIP=1\n1..1\n' "$tool"
@@ -48,51 +48,69 @@ mkdir -p "$T/schemas" "$T/noschema" "$T/nochild" "$T/data" "$T/home" "$T/shell" 
 # main.js and the Meta and Shell typelibs come only with gnome-shell and mutter.
 cp -R "$REPO/desktop/shell/js" "$T/shell/"
 cp "$HERE/main-stub.js" "$T/shell/js/ui/main.js"
-for upstream in panelMenu dash iconGrid popupMenu; do
+for upstream in panelMenu dash iconGrid popupMenu layout messageList; do
     cp "$HERE/stubs/$upstream.js" "$T/shell/js/ui/$upstream.js"
 done
 # Spotlight's providers: upstream's app search and remote providers, faked.
 cp "$HERE"/stubs/appDisplay.js "$HERE"/stubs/remoteSearch.js "$HERE"/stubs/searchProviders.js "$T/shell/js/ui/"
 mkdir -p "$T/shell/js/misc"
 cp "$HERE/stubs/systemActions.js" "$T/shell/js/misc/"
-cp "$HERE"/stubs/St.js "$HERE"/stubs/Clutter.js "$HERE"/stubs/Shell.js "$T/"
-# gjs outside the shell has no St or Clutter typelib, and the fixture's Shell no
-# WindowTracker: the features get stubs instead.
+cp "$HERE"/stubs/St.js "$HERE"/stubs/Clutter.js "$HERE"/stubs/Shell.js "$HERE"/stubs/Meta.js "$HERE"/stubs/Graphene.js \
+    "$HERE"/stubs/GdkPixbuf.js "$HERE"/stubs/Polkit.js "$HERE"/stubs/AccountsService.js "$T/"
+# The shadow cutout and the indicators' mask are GObject subclasses of Clutter.ShaderEffect, which the stubs cannot be.
+cp "$HERE/stubs/cutout.js" "$T/shell/js/ui/apex/shadows/cutout.js"
+# The update card is a GObject widget too, and its Update1 a system-bus service.
+cp "$HERE/stubs/endSessionCard.js" "$T/shell/js/ui/apex/end-session/card.js"
+cp "$HERE/stubs/endSessionUpdate.js" "$T/shell/js/ui/apex/end-session/update.js"
+cp "$HERE/stubs/indicator-mask.js" "$T/shell/js/ui/apex/indicators/mask.js"
+# gjs outside the shell has no St or Clutter typelib, the job no gdk-pixbuf, and the fixtures'
+# Shell and Meta no WindowTracker or Barrier: the features get stubs instead.
 find "$T/shell/js/ui/apex" -name '*.js' -exec sed -i -e "s|'gi://St'|'file://$T/St.js'|" \
-    -e "s|'gi://Clutter'|'file://$T/Clutter.js'|" -e "s|'gi://Shell'|'file://$T/Shell.js'|" {} +
+    -e "s|'gi://Clutter'|'file://$T/Clutter.js'|" -e "s|'gi://Shell'|'file://$T/Shell.js'|" \
+    -e "s|'gi://Meta'|'file://$T/Meta.js'|" -e "s|'gi://Graphene'|'file://$T/Graphene.js'|" \
+    -e "s|'gi://GdkPixbuf'|'file://$T/GdkPixbuf.js'|" -e "s|'gi://Polkit'|'file://$T/Polkit.js'|" \
+    -e "s|'gi://AccountsService'|'file://$T/AccountsService.js'|" {} +
 for gir in "$HERE"/fixtures/*.gir; do
     gir_name=${gir##*/}
     "$GI_COMPILER" "$gir" -o "$T/typelib/${gir_name%.gir}.typelib"
 done
+# A disabled-features restricted to its <choices> must also take the test-only features.
+readonly APEX_SCHEMA=$T/io.github.apex_linux.Apex.Desktop.gschema.xml
+awk '/<key name="disabled-features"/ { key = 1 }
+    key && /<choices>/ && !done { print; print "        <choice value=\"fault\"/>"; print "        <choice value=\"witness\"/>"; done = 1; next }
+    key && /<\/key>/ { key = 0 }
+    { print }' "$SCHEMA_DIR/io.github.apex_linux.Apex.Desktop.gschema.xml" >"$APEX_SCHEMA"
 cp "$SCHEMA_DIR"/*.gschema.xml "$T/schemas/"
-readonly SEARCH_PROVIDERS_SCHEMA=$HERE/fixtures/org.gnome.desktop.search-providers.gschema.xml
-cp "$SEARCH_PROVIDERS_SCHEMA" "$T/schemas/"
+cp "$APEX_SCHEMA" "$T/schemas/"
+# gsettings-desktop-schemas' keys the features read, in every schema directory.
+readonly -a DESKTOP_SCHEMAS=("$HERE"/fixtures/org.gnome.desktop.*.gschema.xml)
+cp "${DESKTOP_SCHEMAS[@]}" "$T/schemas/"
 glib-compile-schemas --strict "$T/schemas"
 awk '/<child name="keybindings"/ { next }
     /<schema id="io\.github\.apex_linux\.Apex\.Desktop\.Keybindings"/ { skip = 1 }
     !skip { print }
-    skip && /<\/schema>/ { skip = 0 }' "$SCHEMA_DIR/io.github.apex_linux.Apex.Desktop.gschema.xml" \
+    skip && /<\/schema>/ { skip = 0 }' "$APEX_SCHEMA" \
     >"$T/nochild/io.github.apex_linux.Apex.Desktop.gschema.xml"
-cp "$SEARCH_PROVIDERS_SCHEMA" "$T/nochild/"
+cp "${DESKTOP_SCHEMAS[@]}" "$T/nochild/"
 glib-compile-schemas --strict "$T/nochild"
 mkdir -p "$T/nokey"
 awk '/<key name="toggle-spotlight"/ { skip = 1 } !skip { print } skip && /<\/key>/ { skip = 0 }' \
-    "$SCHEMA_DIR/io.github.apex_linux.Apex.Desktop.gschema.xml" >"$T/nokey/io.github.apex_linux.Apex.Desktop.gschema.xml"
-cp "$SEARCH_PROVIDERS_SCHEMA" "$T/nokey/"
+    "$APEX_SCHEMA" >"$T/nokey/io.github.apex_linux.Apex.Desktop.gschema.xml"
+cp "${DESKTOP_SCHEMAS[@]}" "$T/nokey/"
 glib-compile-schemas --strict "$T/nokey"
 mkdir -p "$T/nodock"
 awk '/<key name="dock-show-trash"/ { skip = 1 } !skip { print } skip && /<\/key>/ { skip = 0 }' \
-    "$SCHEMA_DIR/io.github.apex_linux.Apex.Desktop.gschema.xml" >"$T/nodock/io.github.apex_linux.Apex.Desktop.gschema.xml"
-cp "$SEARCH_PROVIDERS_SCHEMA" "$T/nodock/"
+    "$APEX_SCHEMA" >"$T/nodock/io.github.apex_linux.Apex.Desktop.gschema.xml"
+cp "${DESKTOP_SCHEMAS[@]}" "$T/nodock/"
 glib-compile-schemas --strict "$T/nodock"
 mkdir -p "$T/nohint"
 awk '/<key name="search-hint-shown"/ { skip = 1 } !skip { print } skip && /<\/key>/ { skip = 0 }' \
-    "$SCHEMA_DIR/io.github.apex_linux.Apex.Desktop.gschema.xml" >"$T/nohint/io.github.apex_linux.Apex.Desktop.gschema.xml"
-cp "$SEARCH_PROVIDERS_SCHEMA" "$T/nohint/"
+    "$APEX_SCHEMA" >"$T/nohint/io.github.apex_linux.Apex.Desktop.gschema.xml"
+cp "${DESKTOP_SCHEMAS[@]}" "$T/nohint/"
 glib-compile-schemas --strict "$T/nohint"
 mkdir -p "$T/noreduce"
 awk '/<key name="reduce-transparency"/ { skip = 1 } !skip { print } skip && /<\/key>/ { skip = 0 }' \
-    "$SCHEMA_DIR/io.github.apex_linux.Apex.Desktop.gschema.xml" >"$T/noreduce/io.github.apex_linux.Apex.Desktop.gschema.xml"
+    "$APEX_SCHEMA" >"$T/noreduce/io.github.apex_linux.Apex.Desktop.gschema.xml"
 glib-compile-schemas --strict "$T/noreduce"
 
 readonly CMDLINE_PLAIN='BOOT_IMAGE=(hd0,gpt2)/boot/ostree/apex/vmlinuz root=UUID=0 rw rhgb quiet'
@@ -104,7 +122,7 @@ if command -v bwrap >/dev/null 2>&1 &&
 fi
 
 # A case's runtime and config directories outlive it, so the guard and a later case of
-# the same name see what its shell left there.
+# the same name see what its shell left there. Each case has its own session bus.
 probe() {
     local name=$1 cmdline=$2
     shift 2
@@ -115,7 +133,7 @@ probe() {
     local -a cmd=(env -i PATH="$PATH" HOME="$T/home" LANG=C.UTF-8
         XDG_RUNTIME_DIR="$dir/run" XDG_CONFIG_HOME="$dir/config" XDG_DATA_DIRS="$T/data"
         GSETTINGS_BACKEND=memory GSETTINGS_SCHEMA_DIR="$T/schemas" GI_TYPELIB_PATH="$T/typelib"
-        APEX_SHELL_DIR="$T/shell" "$@" gjs -m "$HERE/probe.js")
+        APEX_SHELL_DIR="$T/shell" "$@" dbus-run-session -- gjs -m "$HERE/probe.js")
     if ((sandbox)); then
         cmd=(bwrap --dev-bind / / --ro-bind "$dir/cmdline" /proc/cmdline "${cmd[@]}")
     fi
@@ -184,6 +202,18 @@ fact "spotlight: a press opens Spotlight, a modal in the popup action mode" 'mod
 fact "spotlight: over the desktop, not the overview" 'press\.1=overview=false spotlight=true'
 fact "spotlight: pressed again, it closes and gives the grab back" 'press\.2=overview=false spotlight=false'
 count_is "spotlight: one grab taken, one given back" '^probe: modal\.pop=count=0$' 1
+has "motion: the feature enables" 'Apex: feature motion enabled'
+fact "motion: a curved mode becomes CUBIC_BEZIER, its duration kept" 'motion\.quad=CUBIC_BEZIER 250'
+fact "motion: so does stock's expo" 'motion\.expo=CUBIC_BEZIER 400'
+fact "motion: an actor's default ease takes the curve" 'motion\.actor-default=CUBIC_BEZIER 100'
+fact "motion: linear stays linear" 'motion\.linear=LINEAR 100'
+fact "motion: stepped stays stepped" 'motion\.steps=STEPS 100'
+fact "motion: an adjustment's curved ease takes the curve" 'motion\.adjustment=CUBIC_BEZIER 250'
+fact "motion: an adjustment without a mode keeps Clutter's linear" 'motion\.adjustment-default=none 100'
+fact "motion: an ease without parameters passes through" 'motion\.no-params=undefined'
+fact "motion: the eased hook sets cubic-bezier(.2,.8,.2,1)" 'motion\.curve=0\.2,0\.8 0\.2,1'
+fact "motion: window geometry .3 s, the overview .2 s, popovers .18 s; other roles stock" \
+    'motion\.durations=window=300 overview=200 popover=180 unknown=250'
 if [[ $(run_guard_unit_like_systemd default) == skipped ]]; then
     ok "default: a later shell failure does not trip the guard (no marker)"
 else
@@ -316,13 +346,187 @@ fact "FAULT=everything: no fault feature" 'test-fault=stock'
 probe disabled "$CMDLINE_PLAIN" APEX_SHELL_TEST_FAULT=enable PROBE_DISABLED=fault PROBE_ENABLE=1
 has "disabled-features skips a feature" 'Apex: feature fault is in disabled-features'
 fact "and its hook gives stock" 'test-fault=stock'
+lacks "disabled-features: a test-only feature, under APEX_SHELL_TEST_FAULT, is a feature" 'names no feature'
 
-probe spotlight-disabled "$CMDLINE_PLAIN" PROBE_DISABLED=spotlight PROBE_ENABLE=1 PROBE_PRESS=1
+probe typo "$CMDLINE_PLAIN" PROBE_DISABLED=glas,dock PROBE_ENABLE=1 PROBE_DISABLE_LIVE=glas
+has "disabled-features: the feature a typo misspells stays on" 'Apex: feature glass enabled'
+if awk '/<key name="disabled-features"/ { key = 1 } key && /<choices>/ { found = 1 } key && /<\/key>/ { key = 0 }
+    END { exit !found }' "$APEX_SCHEMA"; then
+    fact "disabled-features: the schema's <choices> refuse a list with a typo" 'disabled-features='
+    lacks "disabled-features: so the layer never sees it" 'names no feature'
+else
+    fact "disabled-features: a schema without <choices> takes a typo" 'disabled-features=glas,dock'
+    has "disabled-features: the layer logs the name of no feature" 'Apex: disabled-features names no feature glas$'
+    count_is "disabled-features: once, through every later change" 'names no feature glas' 1
+    has "disabled-features: the real name beside it still disables its feature" 'Apex: feature dock is in disabled-features'
+    lacks "disabled-features: and is not logged" 'names no feature dock'
+fi
+
+probe motion-disabled "$CMDLINE_PLAIN" PROBE_DISABLED=motion PROBE_ENABLE=1
+has "disabled-features=['motion']: skips the feature" 'Apex: feature motion is in disabled-features'
+fact "disabled-features=['motion']: stock's mode" 'motion\.quad=EASE_OUT_QUAD 250'
+fact "disabled-features=['motion']: an actor's default stays Clutter's" 'motion\.actor-default=none 100'
+fact "disabled-features=['motion']: no curve is set" 'motion\.curve=stock'
+fact "disabled-features=['motion']: stock durations" 'motion\.durations=window=250 overview=250 popover=250 unknown=250'
+
+probe quick-settings "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_QUICK_SETTINGS=1
+has "quick-settings: the feature enables" 'Apex: feature quick-settings enabled'
+fact "quick-settings: VPN after Airplane Mode (DESIGN's order)" \
+    'qs\.order=Wi-Fi,Bluetooth,Power Mode,Night Light,Dark Style,Do Not Disturb,Airplane Mode,VPN,Auto Rotate'
+fact "quick-settings: On or Off under a toggle without a subtitle; a toggle's own subtitle stays" \
+    'qs\.subtitles=Wi-Fi=Home,Bluetooth=Off,Power Mode=Balanced,Night Light=Off,Dark Style=Off,Do Not Disturb=Off,Airplane Mode=Off,VPN=Off,Auto Rotate=Off'
+fact "quick-settings: Power Mode lit at Balanced, its checked state stock" 'qs\.power=checked=false classes=apex-lit'
+fact "quick-settings: the state follows checked; a subtitle the toggle sets wins" 'qs\.live=dnd=On bluetooth=Headphones'
+fact "quick-settings: once the toggle drops its own, ours follows again" 'qs\.own-subtitle-gone=bluetooth=On'
+fact "quick-settings: the active network's row is :checked, its lock after the name" 'qs\.row\.active=children=icons,label,lock,check icons=signal checked=true lock=2/apex-network-lock'
+fact "quick-settings: another network's row is not" 'qs\.row\.other=children=icons,label,lock,check icons=signal checked=false lock=2/apex-network-lock'
+fact "quick-settings: a submenu header's subtitle ends the title's row" 'qs\.menu=3,0 x_align=3'
+fact "quick-settings: :checked follows is-active" 'qs\.row\.switched=children=icons,label,lock,check icons=signal checked=false lock=2/apex-network-lock \| children=icons,label,lock,check icons=signal checked=true lock=2/apex-network-lock'
+fact "quick-settings: layer off: the row stock again" 'qs\.off\.row=children=icons,label,check icons=signal,lock checked=false lock=3/none'
+fact "quick-settings: layer off: the subtitle under the title" 'qs\.off\.menu=1,1 x_align=0'
+fact "quick-settings: layer off: :checked no longer follows" 'qs\.off\.row-unfollowed=checked=false'
+fact "quick-settings: layer back on: rows and menus built before it change again" 'qs\.on\.row=children=icons,label,lock,check icons=signal checked=true lock=2/apex-network-lock'
+fact "quick-settings: layer back on: the subtitle on the title's row" 'qs\.on\.menu=3,0 x_align=3'
+fact "quick-settings: layer off: stock order" \
+    'qs\.off\.order=Wi-Fi,VPN,Bluetooth,Power Mode,Night Light,Dark Style,Do Not Disturb,Airplane Mode,Auto Rotate'
+fact "quick-settings: layer off: only the toggles' own subtitles" \
+    'qs\.off\.subtitles=Wi-Fi=Home,VPN=-,Bluetooth=-,Power Mode=Balanced,Night Light=-,Dark Style=-,Do Not Disturb=-,Airplane Mode=-,Auto Rotate=-'
+fact "quick-settings: layer off: Power Mode unlit" 'qs\.off\.power=checked=false classes=none'
+fact "quick-settings: layer back on: DESIGN's order again" \
+    'qs\.on\.order=Wi-Fi,Bluetooth,Power Mode,Night Light,Dark Style,Do Not Disturb,Airplane Mode,VPN,Auto Rotate'
+fact "quick-settings: layer back on: lit again" 'qs\.on\.power=checked=false classes=apex-lit'
+
+probe end-session "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_END_SESSION=1
+has "end-session: the feature enables" 'Apex: feature end-session enabled'
+fact "end-session: power off: Restart between Cancel and Power Off, stock's icon, the theme's gap, the row's widths" \
+    'end-session\.power-off=buttons=Cancel,Restart,Power Off icon=system-shutdown-symbolic spacing=10 homogeneous=false row=true'
+fact "end-session: Restart goes through stock's reboot confirmation" 'end-session\.confirmed=ConfirmedReboot'
+fact "end-session: restart: no second Restart, the icon follows, an even row" \
+    'end-session\.restart=buttons=Cancel,Restart icon=view-refresh-symbolic spacing=10 homogeneous=true row=false'
+fact "end-session: log out: stock has no icon for it" \
+    'end-session\.logout=buttons=Cancel,Log Out icon=none spacing=10 homogeneous=true row=false'
+fact "end-session: layer off: stock's row and no icon, at once" \
+    'end-session\.off=buttons=Cancel,Power Off icon=none spacing=12 homogeneous=true row=false'
+fact "end-session: layer off: reopened, still stock" \
+    'end-session\.off\.reopened=buttons=Cancel,Power Off icon=none spacing=12 homogeneous=true row=false'
+fact "end-session: layer back on: board 14's row again" \
+    'end-session\.on=buttons=Cancel,Restart,Power Off icon=system-shutdown-symbolic spacing=10 homogeneous=false row=true'
+fact "update card: Update1 up to date: no card" 'update\.none=buttons=Cancel,Restart,Power Off card=none'
+fact "update card: never in the log-out dialog" 'update\.logout=buttons=Cancel,Log Out card=none'
+fact "update card: staged: on, and Restart reads Restart & Update" \
+    'update\.staged=buttons=Cancel,Restart & Update card=staged on=true subtitle=45\.20261010\.133 · GNOME 51\.1, Linux 7\.2\.9, Mesa 26\.1\.2'
+fact "update card: staged, a press applies the staged digest first, then confirms" \
+    'update\.staged\.calls=timer:stopped apply:sha256:9e41aa07 confirmed:ConfirmedReboot'
+fact "update card: closed, the dialog's own close and confirm again" 'update\.staged\.restored=close=true confirm=true'
+fact "update card: in the power-off dialog too, with its Restart relabelled" \
+    'update\.staged-power-off=buttons=Cancel,Restart & Update,Power Off card=staged on=true subtitle=45\.20261010\.133 · GNOME 51\.1, Linux 7\.2\.9, Mesa 26\.1\.2'
+fact "update card: switched off, Restart reads Restart again" \
+    'update\.switched-off=buttons=Cancel,Restart,Power Off card=staged on=false subtitle=45\.20261010\.133 · GNOME 51\.1, Linux 7\.2\.9, Mesa 26\.1\.2'
+fact "update card: switched off, the action alone: the stage stays locked" 'update\.switched-off\.calls=confirmed:ConfirmedShutdown'
+fact "update card: ready-for-reboot: on, and the switch does not turn off" \
+    'update\.ready-switched=buttons=Cancel,Restart & Update card=ready-for-reboot on=true subtitle=45\.20261010\.133 · GNOME 51\.1, Linux 7\.2\.9, Mesa 26\.1\.2'
+fact "update card: ready-for-reboot: nothing left to apply" 'update\.ready\.calls=confirmed:ConfirmedReboot'
+fact "update card: Apply fails on a press: the countdown stops and nothing is confirmed" \
+    'update\.apply-failed\.calls=timer:stopped apply:sha256:9e41aa07'
+fact "update card: the dialog keeps the error, the switch off" \
+    'update\.apply-failed=buttons=Cancel,Restart,Power Off card=staged on=false subtitle=Plug in the charger to install the update\.'
+fact "update card: pressed again, the action alone" 'update\.after-failure\.calls=confirmed:ConfirmedShutdown'
+fact "update card: Cancel after a failed press confirms nothing" 'update\.failed-then-cancel\.calls=none'
+fact "update card: layer off after a failed press, Cancel still confirms nothing" 'update\.failed-off-cancel\.calls=none'
+fact "update card: and once that stale confirmation is spent, stock's own again" 'update\.failed-off\.restored=close=true confirm=true'
+fact "update card: Boot Options with Apply failing: no menu asked for yet" \
+    'update\.boot-options-failed\.calls=timer:stopped apply:sha256:9e41aa07'
+fact "update card: then Cancel: the stale press asks logind for the menu, the feature unsets it at once, nothing confirmed" \
+    'update\.boot-options-cancel\.calls=logind:SetRebootToBootLoaderMenu\(60000000,\) logind:SetRebootToBootLoaderMenu\(18446744073709551615,\)'
+fact "update card: Apply fails as the countdown ends: the countdown's action still happens" \
+    'update\.countdown-failed\.calls=apply:sha256:9e41aa07 confirmed:ConfirmedReboot'
+fact "update card: layer off: no card, stock's label" 'update\.off=buttons=Cancel,Restart card=none'
+fact "update card: layer off: stock's close and confirm, no Apply" 'update\.off\.calls=confirmed:ConfirmedReboot'
+lacks "end-session: no feature fails or disables uncleanly" 'off for this session|did not disable cleanly|cannot restyle'
+
+probe end-session-disabled "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_END_SESSION=1 PROBE_DISABLED=end-session
+has "disabled-features=['end-session']: skips the feature" 'Apex: feature end-session is in disabled-features'
+fact "disabled-features=['end-session']: stock's power-off row" \
+    'end-session\.power-off=buttons=Cancel,Power Off icon=none spacing=12 homogeneous=true row=false'
+
+probe quick-settings-disabled "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_QUICK_SETTINGS=1 PROBE_DISABLED=quick-settings
+has "disabled-features=['quick-settings']: skips the feature" 'Apex: feature quick-settings is in disabled-features'
+fact "disabled-features=['quick-settings']: stock order" \
+    'qs\.order=Wi-Fi,VPN,Bluetooth,Power Mode,Night Light,Dark Style,Do Not Disturb,Airplane Mode,Auto Rotate'
+fact "disabled-features=['quick-settings']: Power Mode unlit" 'qs\.power=checked=false classes=none'
+fact "disabled-features=['quick-settings']: a network row stays stock" 'qs\.row\.active=children=icons,label,check icons=signal,lock checked=false lock=3/none'
+fact "disabled-features=['quick-settings']: the subtitle stays under the title" 'qs\.menu=1,1 x_align=0'
+
+probe notifications "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_NOTIFICATIONS=1
+has "notifications: the feature enables" 'Apex: feature notifications enabled'
+readonly FLAT='expanded=true layout=box cover=false header=false stacked=false'
+readonly STACKED='expanded=false layout=expander cover=true header=false'
+fact "notifications: a group lays its cards out flat, without its header or cover" "nf\.groups=Mail:$FLAT"
+readonly COLUMNS='vbox\[apex-message-row\[icon,box\[header,message-box\[content,media\]\]\],action-bin'
+readonly UPSTREAM='vbox\[header,message-box\[icon,content,media\],action-bin'
+readonly REPLY='action-bin\[actions\[Reply\]\]'
+fact "notifications: every card, the back ones too: the icon's column beside the header over the title and body, the actions under both" \
+    "nf\.cards=${COLUMNS}\] \| ${COLUMNS}\] \| ${COLUMNS}\]"
+fact "notifications: expanded, a card's action row spans both columns" "nf\.expanded=${COLUMNS/%action-bin/$REPLY}\] actions=true"
+fact "notifications: collapsed again, the same tree, the action row hidden" "nf\.unexpanded=${COLUMNS/%action-bin/$REPLY}\] actions=false"
+fact "notifications: a card added to a flat group gets the columns too" \
+    "nf\.added\.cards=${COLUMNS/%action-bin/$REPLY}\] \| ${COLUMNS}\] \| ${COLUMNS}\] \| ${COLUMNS}\]"
+fact "notifications: the header reads app · time, without the source glyph" 'nf\.header=icon=false line=Mail · now'
+fact "notifications: Do Not Disturb, then Clear on the right" 'nf\.footer=apex-dnd-button,clear clear=align:3 visible:true'
+fact "notifications: a card shows the source's icon without one of its own, else its own" 'nf\.icons=fallback=mail-icon own=photo-icon'
+fact "notifications: the switch follows show-banners; Clear stays shown with nothing to clear" \
+    'nf\.dnd-from-settings=checked=true switch=true clear=true'
+fact "notifications: a click turns Do Not Disturb off" 'nf\.dnd-click=show-banners=true checked=false'
+fact "notifications: the month on the left, both chevrons on the right" 'nf\.calendar=header=month,back,forward align=1 class=true'
+fact "notifications: every day keeps a dot under its number" 'nf\.days=27/apex-event-dot 28/apex-event-dot 29/apex-event-dot'
+fact "notifications: layer off: stock's header" 'nf\.off\.calendar=header=back,month,forward align=2 class=false'
+fact "notifications: layer off: stock's day buttons" 'nf\.off\.days=27 28 29'
+fact "notifications: layer back on: the header and dots again" 'nf\.on\.calendar=header=month,back,forward align=1 class=true'
+fact "notifications: layer off: stock's groups, a new one too" "nf\.off\.groups=Mail:$STACKED stacked=true \| Chat:$STACKED stacked=true"
+fact "notifications: layer off: stock's header" 'nf\.off\.header=icon=true line=Mail now'
+fact "notifications: layer off: upstream's tree, exactly, on every card" \
+    "nf\.off\.cards=${UPSTREAM/%action-bin/$REPLY}\] \| ${UPSTREAM}\] \| ${UPSTREAM}\] \| ${UPSTREAM}\]"
+fact "notifications: layer back on: the columns again" \
+    "nf\.on\.cards=${COLUMNS/%action-bin/$REPLY}\] \| ${COLUMNS}\] \| ${COLUMNS}\] \| ${COLUMNS}\]"
+fact "notifications: layer off: stock's footer, Clear hidden with the placeholder shown" 'nf\.off\.footer=clear clear=align:1 visible:false'
+fact "notifications: layer off: no fallback icon" 'nf\.off\.icons=fallback=null own=photo-icon'
+fact "notifications: layer back on: flat again; a group built while every hook was stock stays stock" \
+    "nf\.on\.groups=Mail:$FLAT \| Chat:$STACKED stacked=true"
+fact "notifications: layer back on: the footer again" 'nf\.on\.footer=apex-dnd-button,clear clear=align:3 visible:true'
+
+probe notifications-disabled "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_NOTIFICATIONS=1 PROBE_DISABLED=notifications
+has "disabled-features=['notifications']: skips the feature" 'Apex: feature notifications is in disabled-features'
+fact "disabled-features=['notifications']: stock's group" "nf\.groups=Mail:$STACKED stacked=true"
+fact "disabled-features=['notifications']: stock's header" 'nf\.header=icon=true line=Mail now'
+fact "disabled-features=['notifications']: stock's footer" 'nf\.footer=clear clear=align:1 visible:true'
+
+probe shadows "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_SHADOWS=1
+has "shadows: the feature enables" 'Apex: feature shadows enabled'
+fact "shadows: a registered surface gets one layer from -apex-shadow-layer, its box and radius, just above its top ancestor" \
+    'shadows\.registered=box-shadow: 0px 2px 8px 0px rgba\(20, 30, 60, 0\.2\); border-radius: 14px; at 106,46 300x200 above=true cutout=14'
+fact "shadows: registering draws before the next frame, not inside the call" 'shadows\.before-the-frame=0'
+fact "shadows: registering again keeps one layer" 'shadows\.registered-twice=1'
+fact "shadows: an unmapped surface keeps no layer" 'shadows\.unmapped=none'
+fact "shadows: mapped again, it draws again" \
+    'shadows\.mapped-again=box-shadow: 0px 2px 8px 0px rgba\(20, 30, 60, 0\.2\); border-radius: 14px; at 106,46 300x200 above=true cutout=14'
+fact "shadows: layer off: no layer drawn" 'shadows\.off=none'
+fact "shadows: layer back on: the registration draws again" \
+    'shadows\.on=box-shadow: 0px 2px 8px 0px rgba\(20, 30, 60, 0\.2\); border-radius: 14px; at 106,46 300x200 above=true cutout=14'
+fact "shadows: a destroyed surface takes its layer with it" 'shadows\.destroyed=0 layers, root=bin'
+
+probe shadows-disabled "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_SHADOWS=1 PROBE_DISABLED=shadows
+has "disabled-features=['shadows']: skips the feature" 'Apex: feature shadows is in disabled-features'
+fact "disabled-features=['shadows']: a registration draws nothing" 'shadows\.registered=none'
+
+probe spotlight-disabled "$CMDLINE_PLAIN" PROBE_DISABLED=spotlight PROBE_ENABLE=1 PROBE_PRESS=1 PROBE_OVERVIEW_SEARCH=1
 has "disabled-features=['spotlight']: skips the feature" 'Apex: feature spotlight is in disabled-features'
 keybindings_are "disabled-features=['spotlight']: no Super+Space binding" ''
 fact "disabled-features=['spotlight']: Super+Space opens nothing" 'press\.1=overview=false spotlight=false'
 fact "disabled-features=['spotlight']: no handler gets the press" 'unbound-press=toggle-spotlight'
 fact "disabled-features=['spotlight']: the rest of the layer runs" 'scheme\.user\.after-enable=prefer-light'
+fact "disabled-features=['spotlight']: the overview's search stays stock" 'overview-search=stock'
+lacks "disabled-features=['spotlight']: and is not reset" 'overview-search\.reset'
+
 
 probe spotlight-live "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_DISABLE_LIVE=spotlight
 keybindings_are "spotlight in and out of disabled-features, and the layer off and on: the binding follows each change" \
@@ -355,6 +559,9 @@ fact "spotlight: the field has the keyboard focus" 'spotlight\.focus=true'
 fact "spotlight: sections in order, capped at 4 apps, 3 settings, 4 files; the first row selected, Enter to open" \
     "spotlight\.disk=APPLICATIONS: Disks\*Open Disk Usage Analyzer Disk Benchmark Disk Images \| $SETTINGS \| $FILES"
 lacks "spotlight: a provider without a section shows nothing" 'Characters'
+fact "spotlight: Settings rows sit on tiles: the panel's colour from settings-tiles.json, System's for its search-only pages, neutral without one" \
+    'spotlight\.tiles=Disk Encryption=#3584e4 Disk Storage=#6f8396 Removable Disks=neutral'
+fact "spotlight: Apex Desktop's tile is the accent" 'spotlight\.tiles-apex=Apex Desktop=accent'
 fact "spotlight: Down moves across sections" \
     "spotlight\.down-4=$APPS \| SETTINGS: Disk Encryption\*Open Disk Storage Removable Disks \| $FILES"
 fact "spotlight: Up moves back" \
@@ -363,7 +570,7 @@ fact "spotlight: Down stops at the last row" \
     "spotlight\.down-20=$APPS \| $SETTINGS \| FILES: disk-usage-2026-10.csv disk-unlock-board.png Disk Images diskspace-notes.md\*Open"
 fact "spotlight: Up stops at the first" "spotlight\.up-20=APPLICATIONS: Disks\*Open .*"
 fact "spotlight: Enter activates the selected result through its provider, with the terms" \
-    'spotlight\.activated=org\.gnome\.Settings\.desktop:disk-encryption terms=disk'
+    'spotlight\.activated=org\.gnome\.Settings\.desktop:privacy terms=disk'
 fact "spotlight: and closes Spotlight" 'spotlight\.enter-on-a-setting=closed'
 fact "spotlight: Enter on an app launches it" 'spotlight\.launched=org\.gnome\.DiskUtility\.desktop'
 fact "spotlight: a sum: its result first, then Calculator as the first application" \
@@ -372,6 +579,9 @@ fact "spotlight: Enter on the result copies it to the clipboard" 'clipboard=1:19
 fact "spotlight: closes Spotlight" 'spotlight\.enter-on-the-sum=closed'
 fact "spotlight: and shows the Copied toast" 'spotlight\.toast=Copied 1920 in-ui-group=true'
 fact "spotlight: the toast goes after a moment" 'spotlight\.toast-later=gone'
+fact "spotlight: the open panel registers its glass" 'spotlight\.glass-open=spotlight'
+fact "spotlight: closed, its glass goes with it; the toast registers its own" 'spotlight\.glass-copied=toast'
+fact "spotlight: and the toast's goes with the toast" 'spotlight\.glass-later=none'
 lacks "spotlight: copying launches nothing" 'spotlight\.activated=org\.gnome\.Calculator'
 fact "spotlight: a query with no results says so" 'spotlight\.none=empty "No results for “zzz”"'
 fact "spotlight: Esc closes" 'spotlight\.escape=closed'
@@ -383,10 +593,28 @@ fact "spotlight: a click outside closes it" 'spotlight\.click-outside=closed'
 fact "spotlight: hovering a row selects it" "spotlight\.hover=APPLICATIONS: Disks Disk Usage Analyzer\*Open .*"
 fact "spotlight: clicking a row activates it" 'spotlight\.launched=org\.gnome\.baobab\.desktop'
 fact "spotlight: closing leaves no popup on the stage" 'spotlight\.stage=0'
+fact "spotlight: text typed in the overview opens Spotlight with it, through 0013's hook" \
+    "spotlight\.from-overview=true APPLICATIONS: Disks\*Open Disk Usage Analyzer Disk Benchmark Disk Images \| $SETTINGS \| $FILES"
+fact "spotlight: and resets the overview's own search" 'spotlight\.overview-reset=yes'
+fact "spotlight: while Spotlight is open the overview's search keeps its stock path" 'spotlight\.from-overview-again=false'
+fact "spotlight: activating a result from the overview closes Spotlight and hides the overview" 'spotlight\.from-overview-enter=closed overview=false'
+fact "spotlight: the overview's search pill taking the focus opens Spotlight with an empty field" 'spotlight\.from-overview-focus=true field only'
 fact "spotlight: put in disabled-features while open, it closes and goes" 'spotlight\.live-disabled=0 popup=true'
 fact "spotlight: taken out again, Super+Space opens it afresh" 'spotlight\.live-enabled=field only'
 count_is "spotlight: every grab is given back" '^probe: modal\.push=' "$(grep -c '^probe: modal\.pop=' "$OUT")"
 lacks "spotlight: nothing fails" 'off for this session|did not disable cleanly|Spotlight search failed|JS ERROR|Gjs-WARNING'
+
+probe spotlight-refused "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_REFUSE_KEYBINDING=toggle-spotlight PROBE_PRESS=1
+fact "spotlight: mutter refusing Super+Space is noted" 'keybinding\.refused=toggle-spotlight'
+has "spotlight: and keeps the feature off for the session, with the reason" \
+    'Apex: feature spotlight off for this session \(enable: Error: mutter refused the keybinding toggle-spotlight\)'
+fact "spotlight: refused, Super+Space opens nothing" 'press\.1=overview=false spotlight=false'
+fact "spotlight: refused, the rest of the layer runs" 'scheme\.user\.after-enable=prefer-light'
+
+probe spotlight-no-action "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_SPOTLIGHT=no-action
+fact "spotlight: with a toggle action of NONE, Down moves the selection and leaves it open" \
+    "spotlight\.no-action\.down=APPLICATIONS: Disks Disk Usage Analyzer\*Open .*"
+fact "spotlight: and Esc still closes it" 'spotlight\.no-action\.escape=closed'
 
 probe spotlight-slow "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_SPOTLIGHT=slow PROBE_SPOTLIGHT_SLOW=org.gnome.Settings.desktop
 fact "spotlight: a slow provider does not hold back the sections that answered" \
@@ -409,7 +637,28 @@ fact "spotlight: no rows yet and the query not done: only the field, no 'No resu
 fact "spotlight: a late sum still puts Calculator first among the applications" \
     'spotlight\.late-sum\.at-900ms=CALCULATOR: 1920\(2880 / 1\.5\)\*Copy \| APPLICATIONS: Calculator'
 
-readonly KEPT_PILL='remoteAccess,camera,volumeInput,location,network,volumeOutput,unsafeMode,system'
+probe launcher "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_LAUNCHER=1
+rc_is "launcher: the probe runs" 0
+fact "launcher: outside the app grid the overview's pill is stock" 'launcher\.desktop=hint=Type to search pill=false grid'
+fact "launcher: in the app grid it is the launcher's own, \"Search apps\"" 'launcher\.app-grid=hint=Search apps pill=true grid'
+fact "launcher: there 0013's hook keeps typed text from the stock search" 'launcher\.hook-text=true'
+fact "launcher: and leaves the focus to the stock entry" 'launcher\.hook-focus=false'
+lacks "launcher: without resetting the pill" 'launcher\.reset='
+fact "launcher: apps only, by name, the grid filtered in place, the first match selected" \
+    'launcher\.dis=hint=Search apps pill=true Disk Usage Analyzer\*, Disks'
+fact "launcher: Spotlight stays closed" 'launcher\.spotlight=false'
+fact "launcher: Enter launches the first match" 'launcher\.launched=disk-usage-analyzer\.desktop'
+fact "launcher: no match says so, and that Super+Space searches everything" \
+    'launcher\.zzz=hint=Search apps pill=true No Results / The launcher searches apps only\. Super\+Space searches everything\.'
+fact "launcher: an empty pill shows the grid again" 'launcher\.cleared=hint=Search apps pill=true grid'
+fact "launcher: apps inside folders are found too" 'launcher\.folder-app=hint=Search apps pill=true Characters\*'
+fact "launcher: leaving the app grid gives the stock pill and grid back" 'launcher\.left=hint=Type to search pill=false grid'
+fact "launcher: and empties it" 'launcher\.left-text=""'
+fact "launcher: with spotlight in disabled-features the app grid keeps the stock pill" 'launcher\.disabled=hint=Type to search pill=false grid'
+fact "launcher: taken out again, the launcher's pill is back" 'launcher\.enabled-again=hint=Search apps pill=true grid'
+lacks "launcher: nothing fails" 'off for this session|did not disable cleanly|JS ERROR'
+
+readonly KEPT_PILL='privacy\(remoteAccess camera volumeInput location\),network,volumeOutput,unsafeMode,system'
 readonly STOCK_PILL='remoteAccess,camera,volumeInput,location,brightness,thunderbolt,nightLight,network,darkMode,doNotDisturb,backlight,bluetooth,rfkill,autoRotate,volumeOutput,unsafeMode,powerProfiles,system'
 probe top-bar "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_TOP_BAR=1 PROBE_SCALE=2
 rc_is "top bar: the probe runs" 0
@@ -418,6 +667,17 @@ fact "workspace-dots: the active dot widens from its own width to the sheet's -a
     'top-bar\.dots=7 15 22 inactive=\{"opacity":0\.45,"scale":1\}'
 fact "status-pill: network, volume, battery, the privacy and the unsafe-mode indicators stay" "pill=$KEPT_PILL"
 fact "status-pill: and so for indicators set up after enable" "pill\.set-up-after-enable=$KEPT_PILL"
+fact "privacy group: hidden while no privacy indicator shows" 'privacy\.idle=group=false in-use=false'
+fact "privacy group: the camera in use shows it, and the pill narrows its start for it" 'privacy\.camera=group=true in-use=true'
+fact "privacy group: hidden again once the camera is off" 'privacy\.camera-off=group=false in-use=false'
+fact "screen pills: the recording's stop square before the timer, stock's glyph hidden" 'recording=square,0:42 hidden=screencast-stop-symbolic name=Stop Screencast'
+fact "screen pills: sharing's glyph then the square, named for its click" 'sharing=screen-shared-symbolic,square hidden=screencast-stop-symbolic name=Stop screen sharing'
+fact "screen pills: sharing moves from after the recording to after the input source" \
+    'right-box=screenRecording,a11y,keyboard,screenSharing,indicators,divider,quickSettings,'
+fact "screen pills: right before the status pill again after panel.js re-adds its items" \
+    'right-box\.after-session-update=screenRecording,a11y,keyboard,indicators,divider,screenSharing,quickSettings,'
+fact "input chip: the sources' short names in capitals" 'input-chip=EN,VI'
+fact "input chip: and so after keyboard.js renames one or adds a source" 'input-chip\.changed=EN,VI₂,FR'
 fact "hot-corner: the corner becomes a reactive 4 x 4 zone at its own position, in scaled px" \
     'hot-corner\.zone=hot-corner reactive=true x=0 y=0 8x8'
 fact "hot-corner: in the chrome, hidden under fullscreen windows" 'chrome\.add=hot-corner trackFullscreen=true'
@@ -425,7 +685,15 @@ count_is "hot-corner: entering it triggers the barrier once, until the pointer l
 fact "hot-corner: leaving it while on the barrier keeps the barrier's trigger" 'hot-corner\.after-leave-on-the-barrier=true'
 fact "layer-enabled=false: the dot hooks give stock" 'top-bar\.off\.dots=99 99 99 inactive="stock"'
 fact "layer-enabled=false: the status pill gets every indicator back, in order" "pill\.off=$STOCK_PILL"
+fact "layer-enabled=false: no privacy group, and the pill's start is stock" 'privacy\.off=group=none in-use=false'
+fact "layer-enabled=false: the recording button is stock's, timer then glyph" 'recording\.off=0:42,screencast-stop-symbolic hidden=none name=Stop Screencast'
+fact "layer-enabled=false: so is sharing, named as stock names it" 'sharing\.off=screen-shared-symbolic,screencast-stop-symbolic hidden=none name=Stop Screen Sharing'
+fact "layer-enabled=false: sharing goes back after the recording" 'right-box\.off=screenRecording,screenSharing,a11y,keyboard,quickSettings,'
+fact "layer-enabled=false: the input chip has stock's names back" 'input-chip\.off=en,vi₂,fr'
 fact "layer-enabled=true: the filter again" "pill\.on=$KEPT_PILL"
+fact "layer-enabled=true: the stop squares again" 'recording\.on=square,0:42 hidden=screencast-stop-symbolic name=Stop Screencast'
+fact "layer-enabled=true: and sharing's name" 'sharing\.on=screen-shared-symbolic,square hidden=screencast-stop-symbolic name=Stop screen sharing'
+fact "layer-enabled=true: capitals again" 'input-chip\.on=EN,VI₂,FR'
 count_is "both dots restyle at each enable and disable" '^probe: workspace-dot=restyled$' 6
 count_is "the hot corners are rebuilt at each enable and disable" '^probe: hot-corners=rebuilt$' 3
 lacks "top bar: no feature fails or disables uncleanly" 'off for this session|did not disable cleanly|cannot restyle'
@@ -437,6 +705,9 @@ probe top-bar-disabled "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_TOP_BAR=1 PROBE_DIS
 has "disabled-features=['panel']: skips the feature" 'Apex: feature panel is in disabled-features'
 fact "disabled-features=['panel']: the dot hooks give stock" 'top-bar\.dots=99 99 99 inactive="stock"'
 fact "disabled-features=['panel']: the status pill keeps every indicator" "pill=$STOCK_PILL"
+fact "disabled-features=['panel']: the recording button stays stock's" 'recording=0:42,screencast-stop-symbolic hidden=none name=Stop Screencast'
+fact "disabled-features=['panel']: sharing stays where panel.js puts it" 'right-box\.after-session-update=screenRecording,screenSharing,a11y,keyboard,indicators,divider,quickSettings,'
+fact "disabled-features=['panel']: the input chip keeps stock's names" 'input-chip\.changed=en,vi₂,fr'
 fact "disabled-features=['panel']: the corner stays stock" 'hot-corner\.zone=none reactive=false x=undefined y=undefined undefinedxundefined'
 lacks "disabled-features=['panel']: nothing is rebuilt or restyled" 'hot-corners=rebuilt|workspace-dot=restyled'
 
@@ -481,7 +752,7 @@ fact "disabled-features=['panel']: nothing follows the focus" 'focused-app\.file
 readonly SEARCH_ITEM='Search \(Super\+Space\) pill=apex-search-pill icon=system-search-symbolic'
 probe search-button "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_SEARCH_BUTTON=1
 has "search-button: the panel feature enables" 'Apex: feature panel enabled'
-fact "search-button: just before the status pill in the right box" 'panel\.add=apex-search at 2 in right'
+fact "search-button: at the start of the right box" 'panel\.add=apex-search at 0 in right'
 fact "search-button: a pill with the search glyph, named for its key" "search\.enabled=$SEARCH_ITEM visible=true"
 fact "search-button: hovered, its tooltip shows centred below it" 'search\.tooltip\.hover=true at 1256,32'
 fact "search-button: and hides when the pointer leaves" 'search\.tooltip\.unhover=false at 1256,32'
@@ -519,6 +790,9 @@ fact "glass: at the launcher's 40 and 1.6 once the app grid shows" 'glass\.scrim
 fact "glass: a banner blurs from the moment it is shown" "glass\.banner=$GLASS_ON $BANNER_ON solid=false redirects=0,0"
 fact "glass: the bar's glass pauses while the bar is solid" \
     "glass\.solid-bar=panel:r96/s1\.6/c0/paused/background quick-settings:r120/s1\.8/c52/on/background calendar:r120/s1\.8/c52/on/background $BANNER_ON solid=false redirects=0,0"
+fact "glass: the bar's glass pauses on the lock screen and in the unlock dialog (isLocked)" \
+    "glass\.locked=panel:r96/s1\.6/c0/paused/background quick-settings:r120/s1\.8/c52/on/background calendar:r120/s1\.8/c52/on/background $BANNER_ON solid=false redirects=0,0"
+fact "glass: and comes back on unlock" "glass\.unlocked=$GLASS_ON $BANNER_ON solid=false redirects=0,0"
 fact "glass: a closed popover's glass pauses" \
     "glass\.menu-closed=panel:r96/s1\.6/c0/on/background quick-settings:r120/s1\.8/c52/paused/background calendar:r120/s1\.8/c52/on/background $BANNER_ON solid=false redirects=0,0"
 fact "glass: a second register() replaces the first's opts, one surface per actor" 'glass\.registered-twice=dock:r112/s1\.8/c44/paused/background 1'
@@ -567,14 +841,195 @@ count_is "search hint: a schema without search-hint-shown shows none" "$SEARCH_H
 count_is "search hint: and says so once" 'has no key search-hint-shown: no search hint' 1
 has "search hint: the rest of the panel runs" 'Apex: feature panel enabled'
 
-readonly OVERVIEW_ON='title-visible=true overlay=close scale=0\.081 threshold=1 box=0\.081 grid=\[\{"rows":4,"columns":7\}\] icon=88'
-readonly OVERVIEW_STOCK='title-visible=false overlay=title\+close scale=0\.05 threshold=2 box=0\.05 grid="stock" icon=-1'
+# Only GDM unlocks, after PAM succeeds: no Apex file may name a route to it.
+readonly UNLOCK_ROUTES=("deactivate(" "emit('unlock'" "Unlock" "_onVerificationComplete" "finish(")
+readonly UNLOCK_INJECTIONS=("Main.screenShield.deactivate(false);" "Main.screenShield.emit('unlock');"
+    "this._loginManager.Unlock();" "this._userVerifier._onVerificationComplete();" "this._authPrompt.finish(() => {});")
+unlock_routes() {
+    local -a args=()
+    local route
+    for route in "${UNLOCK_ROUTES[@]}"; do args+=(-e "$route"); done
+    grep -rnF "${args[@]}" -- "$1" || true
+}
+APEX_JS=$REPO/desktop/shell/js/ui/apex
+found=$(unlock_routes "$APEX_JS")
+if [[ -z $found && -f $APEX_JS/lock/stage.js ]]; then
+    ok "unlock guard: nothing under js/ui/apex/ names a route to unlocking"
+else
+    not_ok "unlock guard: nothing under js/ui/apex/ names a route to unlocking"
+    printf '#   %s\n' "$found"
+fi
+for i in "${!UNLOCK_ROUTES[@]}"; do
+    copy=$T/guard-$i
+    cp -R "$APEX_JS" "$copy"
+    printf '%s\n' "${UNLOCK_INJECTIONS[$i]}" >>"$copy/lock/stage.js"
+    found=$(unlock_routes "$copy")
+    if [[ $found == "$copy/lock/stage.js:"*"${UNLOCK_ROUTES[$i]}"* && $(wc -l <<<"$found") == 1 ]]; then
+        ok "unlock guard: catches ${UNLOCK_ROUTES[$i]} injected into a copy"
+    else
+        not_ok "unlock guard: catches ${UNLOCK_ROUTES[$i]} injected into a copy (found: ${found:-nothing})"
+    fi
+done
+
+readonly STOCK_LOCK_LAYOUT='dialog=unlock-dialog stack=prompt-box,unlock-dialog-clock stage= clock=time,date,hint hint=true children=backgrounds,stack'
+lock_is_stock() {
+    local why=$1
+    fact "$why: the lock screen keeps upstream's two stages" "lock\.layout=$STOCK_LOCK_LAYOUT"
+    fact "$why: and opens on the clock, with no conversation" 'lock\.open=page=none prompt=none cancelled=none'
+    fact "$why: blanking touches nothing" 'lock\.blank=page=none prompt=none cancelled=none'
+    fact "$why: upstream's blur" 'lock\.blur=\{"brightness":0\.65,"radius":90\}'
+    fact "$why: the clock slides away as upstream's" 'lock\.clock-progress=0 0\.5 1'
+    fact "$why: upstream's \"Password\"" 'lock\.question\."Password:"="Password"'
+    fact "$why: upstream's question, colon stripped" 'lock\.question\."Verification code:"="Verification code"'
+    fact "$why: upstream's avatar icon" 'lock\.avatar\.real-name=stock'
+}
+
+probe lock "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_LOCK=1
+rc_is "lock: the probe runs" 0
+has "lock: the feature enables" 'Apex: feature lock enabled'
+fact "lock: the unlock-dialog hook gives the stock code" 'lock\.run=undefined'
+fact "lock: one stage, the clock over the prompt box, date above time, upstream's hint hidden, the overlay over the backgrounds" \
+    'lock\.layout=dialog=unlock-dialog apex-lock stack=apex-lock-stage stage=unlock-dialog-clock,prompt-box clock=date,time,hint hint=false children=backgrounds,apex-lock-overlay,stack'
+fact "lock: opens on the prompt with a conversation" 'lock\.open=page=prompt prompt=conversation-1 cancelled=none'
+fact "lock: the unlock hint follows the prompt" 'lock\.prompt-box=conversation-1,Press Enter to unlock'
+readonly HINT_PASSWORD='"Press Enter to unlock" glyph=none failed=false'
+readonly HINT_SCAN='"Or touch the fingerprint reader" glyph=auth-fingerprint-symbolic failed=false'
+readonly HINT_FAILED='"Fingerprint not recognized\. Try again\." glyph=auth-fingerprint-symbolic failed=true'
+fact "lock: the password's hint, upstream's message line and indicator" "lock\.hint\.password=$HINT_PASSWORD message=true indicator=true"
+fact "lock: gdm-fingerprint's prompt is board 20's line with the print, in place of upstream's message and indicator" \
+    "lock\.hint\.fingerprint-scan=$HINT_SCAN message=false indicator=false"
+fact "lock: a failed scan swaps the line's text" "lock\.hint\.fingerprint-failed=$HINT_FAILED message=false indicator=false"
+fact "lock: and keeps it when upstream's queue empties" "lock\.hint\.queue-done=$HINT_FAILED message=true indicator=false"
+fact "lock: the password's own problem stays in upstream's message line" \
+    "lock\.hint\.password-problem=$HINT_FAILED message=true indicator=false"
+fact "lock: the reader's next prompt brings the line back" "lock\.hint\.fingerprint-again=$HINT_SCAN message=false indicator=false"
+fact "lock: a prompt rebuilt after blank starts on the password's hint" "lock\.hint\.after-wake=$HINT_PASSWORD message=true indicator=true"
+fact "lock: blanking tears the prompt down and cancels its verifier" 'lock\.blank=page=clock prompt=none cancelled=conversation-1'
+fact "lock: waking builds a new conversation" 'lock\.wake=page=prompt prompt=conversation-2 cancelled=conversation-1'
+fact "lock: standby is blank too" 'lock\.standby=page=clock prompt=none cancelled=conversation-1,conversation-2'
+fact "lock: and waking again builds another" 'lock\.wake-again=page=prompt prompt=conversation-3 cancelled=conversation-1,conversation-2'
+fact "lock: suspend is blank too" 'lock\.suspend=page=clock prompt=none cancelled=conversation-1,conversation-2,conversation-3'
+fact "lock: a display without power saving keeps a prompt" \
+    'lock\.unsupported=page=prompt prompt=conversation-4 cancelled=conversation-1,conversation-2,conversation-3'
+count_is "lock: each teardown is logged once, for the VM tests" '^.*Apex: lock: screen blank, prompt torn down$' 4
+count_is "lock: each rebuild too" '^.*Apex: lock: screen on, prompt rebuilt$' 4
+fact "lock: the hint stays after the rebuilt prompt" 'lock\.prompt-box\.after-wake=conversation-4,Press Enter to unlock'
+fact "lock: locked while blank, the first conversation ends as DisplayConfig answers" \
+    'lock\.open-blank=page=clock prompt=none cancelled=conversation-1'
+fact "lock: and the next starts when the screen wakes" 'lock\.open-blank\.wake=page=prompt prompt=conversation-2 cancelled=conversation-1'
+fact "lock: a DisplayConfig that never answers leaves the prompt up" \
+    'lock\.display-config-silent=page=prompt prompt=conversation-1 cancelled=none'
+fact "lock: so does one that fails" 'lock\.display-config-error=page=prompt prompt=conversation-1 cancelled=none'
+has "lock: and says so" 'Apex: lock: no org\.gnome\.Mutter\.DisplayConfig, so the prompt stays at blank'
+fact "lock: the clock never slides away" 'lock\.clock-progress=0 0 0'
+fact "lock: blur sigma 30 (radius 60), saturation 1.3, no darkening" 'lock\.blur=\{"brightness":1,"radius":60,"saturation":1\.3\}'
+fact "lock: PAM's exact \"Password:\" reads \"Enter Password\"" 'lock\.question\."Password:"="Enter Password"'
+fact "lock: \"Password: \" with a space is PAM's question verbatim" 'lock\.question\."Password: "="Password: "'
+fact "lock: other questions verbatim" 'lock\.question\."Verification code:"="Verification code:"'
+fact "lock: without a colon too" 'lock\.question\."PIN"="PIN"'
+fact "lock: lower-case \"password:\" verbatim" 'lock\.question\."password:"="password:"'
+fact "lock: the avatar is the real name's initial, sized to the avatar" \
+    'lock\.avatar\.real-name=A apex-avatar-initial font-size: 37px;'
+fact "lock: or the user name's, upper-cased" 'lock\.avatar\.user-name=Đ apex-avatar-initial font-size: 37px;'
+fact "lock: leading spaces skipped" 'lock\.avatar\.spaces=Z apex-avatar-initial font-size: 37px;'
+fact "lock: no name keeps upstream's icon" 'lock\.avatar\.nobody=stock'
+lacks "lock: the feature disables cleanly" 'off for this session|did not disable cleanly|cannot restyle'
+
+probe lock-disabled "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_LOCK=1 PROBE_DISABLED=lock
+has "disabled-features=['lock']: skips the feature" 'Apex: feature lock is in disabled-features'
+lock_is_stock "disabled-features=['lock']"
+probe lock-safe "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_LOCK=1 APEX_SHELL_SAFE=1
+lock_is_stock "APEX_SHELL_SAFE=1"
+probe lock-gdm "$CMDLINE_PLAIN" PROBE_MODE=gdm PROBE_LOCK=1
+fact "gdm mode: no layer" 'layer=null'
+lock_is_stock "gdm mode"
+
+readonly ROLLBACK=io\.github\.apex-linux\.apex\.update\.rollback
+readonly POLKIT_ON="dialog=prompt-dialog apex-polkit content=apex-polkit-icon,header,body,apex-polkit-details user=row:avatar,apex-polkit-names"
+readonly POLKIT_DETAILS_OPEN='open=true checked=true chevron=pan-down-symbolic'
+readonly POLKIT_FINGERPRINT='apex-polkit-info apex-polkit-fingerprint visible=true glyph=auth-fingerprint-symbolic'
+polkit_is_stock() {
+    local why=$1
+    fact "$why: the polkit-dialog hook gives the stock code" 'polkit\.run=undefined'
+    fact "$why: upstream's dialog: no shield, the avatar over the name, no Details" \
+        'polkit\.layout=dialog=prompt-dialog content=header,body user=column:avatar,polkit-dialog-user-label names=none'
+    fact "$why: upstream's info line" 'polkit\.info\.generic=stock visible=true'
+    fact "$why: no polkit lookup" 'polkit\.authority-calls=0'
+}
+
+probe polkit "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_POLKIT=1
+has "polkit: the feature enables" 'Apex: feature polkit enabled'
+fact "polkit: the polkit-dialog hook gives the stock code" 'polkit\.run=undefined'
+fact "polkit: the shield above the title, Details under the field; the avatar beside the name, \"Administrator\" under it" \
+    "polkit\.layout=$POLKIT_ON names=Apex/Administrator"
+fact "polkit: Details open, with the action's id" "polkit\.details\.open=$POLKIT_DETAILS_OPEN rows=Action=$ROLLBACK"
+fact "polkit: and its vendor, from polkit's own description" "polkit\.details\.vendor=$POLKIT_DETAILS_OPEN rows=Action=$ROLLBACK Vendor=Apex"
+fact "polkit: Details closes" "polkit\.details\.closed=open=false checked=false chevron=pan-end-symbolic rows="
+fact "polkit: and opens again" "polkit\.details\.reopened=$POLKIT_DETAILS_OPEN rows=Action=$ROLLBACK Vendor=Apex"
+fact "polkit: an action polkit does not describe shows no vendor" \
+    "polkit\.details\.unknown-action=$POLKIT_DETAILS_OPEN rows=Action=org\.example\.unregistered"
+fact "polkit: nor when polkitd fails" "polkit\.details\.error=$POLKIT_DETAILS_OPEN rows=Action=$ROLLBACK"
+has "polkit: and says why" "Apex: polkit: no vendor for $ROLLBACK: polkitd is not running"
+fact "polkit: a cancelled lookup shows none either" "polkit\.details\.cancel=$POLKIT_DETAILS_OPEN rows=Action=$ROLLBACK"
+count_is "polkit: silently" 'Apex: polkit: no vendor' 1
+fact "polkit: pam_fprintd's 44 prompt msgids, matched through the fprintd domain" \
+    'polkit\.prompt-msgids=44 Place your finger on %s \| Swipe your right little finger across %s'
+fact "polkit: no line until PAM sends one" 'polkit\.info\.none=apex-polkit-info visible=false glyph=none'
+fact "polkit: pam_fprintd's prompt is the fingerprint line" "polkit\.info\.generic=$POLKIT_FINGERPRINT"
+fact "polkit: for a named finger and reader too" "polkit\.info\.swipe-reader=$POLKIT_FINGERPRINT"
+fact "polkit: pam_fprintd's other info stays upstream's line" 'polkit\.info\.timed-out=apex-polkit-info visible=true glyph=none'
+fact "polkit: as does another module's" 'polkit\.info\.other-module=apex-polkit-info visible=true glyph=none'
+fact "polkit: and the line goes with upstream's label" 'polkit\.info\.hidden=apex-polkit-info apex-polkit-fingerprint visible=false glyph=auth-fingerprint-symbolic'
+fact "polkit: a standard account gets no role" "polkit\.role\.standard=$POLKIT_ON names=Apex/Administrator\(hidden\)"
+fact "polkit: root keeps upstream's \"Administrator\" in the name's place" \
+    "polkit\.role\.root=$POLKIT_ON names=Administrator/Administrator\(hidden\)"
+fact "polkit: no role before AccountsService loads the user" "polkit\.role\.loading=$POLKIT_ON names=Apex/Administrator\(hidden\)"
+fact "polkit: and the role once it has" "polkit\.role\.loaded=$POLKIT_ON names=Apex/Administrator"
+lacks "polkit: nothing turns the feature off" 'feature polkit off|hook polkit-dialog threw'
+
+probe polkit-disabled "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_POLKIT=1 PROBE_DISABLED=polkit
+has "disabled-features=['polkit']: skips the feature" 'Apex: feature polkit is in disabled-features'
+polkit_is_stock "disabled-features=['polkit']"
+probe polkit-safe "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_POLKIT=1 APEX_SHELL_SAFE=1
+polkit_is_stock "APEX_SHELL_SAFE=1"
+
+# Polkit's verdict is polkitd's, after PAM: no Apex file may answer the agent, end its session or
+# follow the session's signals.
+readonly POLKIT_ROUTES=(".response(" "_emitDone" "emit('done'" ".complete(" "_onSessionCompleted" "_initiateSession" "._session")
+polkit_routes() {
+    local -a args=()
+    local route
+    for route in "${POLKIT_ROUTES[@]}"; do args+=(-e "$route"); done
+    grep -rnF "${args[@]}" -- "$1" || true
+}
+found=$(polkit_routes "$APEX_JS")
+if [[ -z $found && -f $APEX_JS/polkit/feature.js ]]; then
+    ok "polkit guard: nothing under js/ui/apex/ answers polkit or ends its session"
+else
+    not_ok "polkit guard: nothing under js/ui/apex/ answers polkit or ends its session"
+    printf '#   %s\n' "$found"
+fi
+for i in "${!POLKIT_ROUTES[@]}"; do
+    copy=$T/polkit-guard-$i
+    cp -R "$APEX_JS" "$copy"
+    printf 'dialog%s\n' "${POLKIT_ROUTES[$i]}" >>"$copy/polkit/feature.js"
+    found=$(polkit_routes "$copy")
+    if [[ $found == "$copy/polkit/feature.js:"*"${POLKIT_ROUTES[$i]}"* && $(wc -l <<<"$found") == 1 ]]; then
+        ok "polkit guard: catches ${POLKIT_ROUTES[$i]} injected into a copy"
+    else
+        not_ok "polkit guard: catches ${POLKIT_ROUTES[$i]} injected into a copy (found: ${found:-nothing})"
+    fi
+done
+
+readonly OVERVIEW_ON='title-visible=true overlay=close scale=0\.081 threshold=1 box=0\.081 grid=\[\{"rows":4,"columns":7\}\] icon=88 strip=0'
+readonly OVERVIEW_STOCK='title-visible=false overlay=title\+close scale=0\.05 threshold=2 box=0\.05 grid="stock" icon=-1 strip=130'
 readonly EMPTY_LABEL='"No open windows" \.apex-workspace-empty'
 probe overview "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_OVERVIEW=1
 has "overview: the overview feature enables" 'Apex: feature overview enabled'
-fact "overview: titles always shown, the overlay fades only the close button; thumbnails at .081 from two workspaces; the launcher 7 columns of 88 px" \
+fact "overview: titles always shown, the overlay fades only the close button; thumbnails at .081 from two workspaces; the launcher 7 columns of 88 px, with no workspace strip above it" \
     "overview\.enabled=$OVERVIEW_ON"
 fact "launcher: the grid picks its mode and icon size afresh" 'overview\.enabled\.relayout=mode=-1 page-width=0'
+count_is "launcher: the controls lay out again at each enable and disable, so the strip comes and goes at once" '^probe: controls=relayout$' 3
 fact "workspaces: no background card, and an empty workspace says so" "workspace\.enabled\.empty=background=false $EMPTY_LABEL visible=true opacity=255"
 fact "workspaces: the label goes when a window arrives" "workspace\.enabled\.window-added=background=false $EMPTY_LABEL visible=false opacity=255"
 fact "workspaces: and fades with the overview" "workspace\.enabled\.half-open=background=false $EMPTY_LABEL visible=true opacity=128"
@@ -604,6 +1059,7 @@ fact "dock: large is 62" 'dock\.dock-icon-size=large=Files:62 Web:62 separator s
 fact "dock: dock-show-trash=false hides Trash" 'dock\.dock-show-trash=false=.* trash:62\(hidden\) .*'
 fact "dock: dock-running-indicators=false hides the dots" 'dock\.dock-running-indicators=false=.* indicators=false .*'
 fact "dock: the lock screen hides it" "dock\.locked=Files:54 Web:54 $DOCK_TAIL indicators=true visible=false dash=false dash-height=0"
+fact "dock: its background registers with the glass registry as 'dock'" 'dock\.glass=dock'
 fact "dock: its Show Apps opens the overview's app grid" 'dock\.show-apps=overview=true overview-button=true'
 fact "dock: and follows the overview's own button" 'dock\.overview-show-apps-off=dock-button=false'
 fact "dock: no separator between the dock's favourites and running apps, upstream's elsewhere; a full-colour Show Apps" \
@@ -612,6 +1068,20 @@ fact "dock: layer-enabled=false takes it away and gives the overview its dash ba
 fact "dock: layer-enabled=true brings it back" "dock\.on=Files:54 Web:54 $DOCK_TAIL indicators=true visible=true dash=false dash-height=0"
 count_is "dock: the old dock is destroyed" '^probe: dock\.destroyed=apexDock$' 1
 lacks "dock: no feature fails or disables uncleanly" 'off for this session|did not disable cleanly|cannot restyle'
+
+probe intellihide "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_INTELLIHIDE=1
+fact "intellihide: a threshold-0 barrier on the bottom edge, under the dock, blocking downward motion" \
+    'intellihide\.barrier=x=660\.\.780 y=900\.\.900 directions=8'
+fact "intellihide: the pressure barrier triggers on the first hit" 'pressure-barrier=threshold=0 timeout=1000'
+intellihide_steps_are() {
+    local got
+    got=$(sed -n 's/^probe: set \(.*\)$/[\1]/p; s/^probe: intellihide\.hidden=\(.*\)$/\1/p' "$OUT" | paste -sd' ' -)
+    if [[ $got == "$2" ]]; then ok "$1"; else not_ok "$1 (got '$got', expected '$2')"; _show; fi
+}
+intellihide_steps_are "intellihide: hidden behind a maximised window, revealed by the edge while the pointer is on it, shown in the overview and with the key off" \
+    '[initial] false [maximised] true [edge] false [pointer-elsewhere] true [edge-again] false [pointer-on-dock] false [left] true [overview] false [no-overview] true [intellihide=false] false [intellihide=true] true [closed] false [layer-enabled=false] false'
+fact "intellihide: layer-enabled=false takes its barrier away" 'intellihide\.after-off=pressure-destroyed=true barrier-destroyed=true'
+lacks "intellihide: no feature fails or disables uncleanly" 'off for this session|did not disable cleanly|cannot restyle'
 
 probe dock-disabled "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_DOCK=1 PROBE_DISABLED=dock
 has "disabled-features=['dock']: skips the feature" 'Apex: feature dock is in disabled-features'
@@ -625,6 +1095,67 @@ probe dock-nokey "$CMDLINE_PLAIN" GSETTINGS_SCHEMA_DIR="$T/nodock" PROBE_ENABLE=
 has "a schema without dock-show-trash: only the dock is off, and says why" \
     'Apex: feature dock off for this session \(configure: Error: io\.github\.apex_linux\.Apex\.Desktop has no key dock-show-trash\)'
 has "and the rest of the layer runs" 'Apex: feature panel enabled'
+
+probe indicators "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_INDICATORS=1 \
+    PROBE_THEME_ICONS=apex-sync-symbolic,apex-chat-symbolic,apex-games
+has "indicators: the feature enables" 'Apex: feature indicators enabled'
+fact "indicators: the shell owns org.kde.StatusNotifierWatcher while nobody else does" 'indicators\.watcher=shell'
+fact "indicators: with no items, no indicators and no divider; both sit before the status pill" \
+    'indicators\.empty=hidden overflow=none divider=false order=screenRecording,a11y,keyboard,screenSharing,indicators,divider,quickSettings'
+fact "indicators: four items show in the order they registered: the theme's -symbolic icon, or a full-colour icon or a pixmap as a mask" \
+    'indicators\.four=File sync:symbolic,Game launcher:mask,Password manager:pixmap,Chat:symbolic overflow=none divider=true order=screenRecording,a11y,keyboard,screenSharing,indicators,divider,quickSettings'
+fact "indicators: a fifth moves two to the overflow: three show, and +2" \
+    'indicators\.five=File sync:symbolic,Game launcher:mask,Password manager:pixmap overflow=\+2 divider=true'
+fact "indicators: a pixmap's network-order ARGB becomes RGBA" 'indicators\.pixmap=16x16 alpha=true first-pixel-rgba=10,20,30,255'
+fact "indicators: the overflow menu has a row per hidden item: glyph, title, chevron; an icon the theme lacks gets the fallback" \
+    'indicators\.overflow\.rows=symbolic:Chat:go-next-symbolic fallback:Media player:go-next-symbolic'
+fact "indicators: a row closes the overflow menu and opens that item's menu under the overflow button" \
+    'indicators\.overflow\.after-row=open=false item-menu-under=overflow'
+fact "indicators: a Passive item is hidden, and four show again" \
+    'indicators\.passive=File sync:symbolic,Game launcher:mask,Password manager:pixmap,Chat:symbolic overflow=none divider=true'
+fact "indicators: NeedsAttention adds the dot" 'indicators\.attention=.*,Chat:symbolic\+dot overflow=none divider=true'
+fact "indicators: primary click calls Activate, under the button" 'sni\.File sync\.Activate=1316 32'
+fact "indicators: middle click calls SecondaryActivate" 'sni\.File sync\.SecondaryActivate=1316 32'
+fact "indicators: secondary click on an item without a menu calls ContextMenu" 'sni\.File sync\.ContextMenu=1316 32'
+fact "indicators: scrolling calls Scroll, vertically" 'sni\.File sync\.Scroll=-120 vertical'
+fact "indicators: and horizontally" 'sni\.File sync\.Scroll=-120 horizontal'
+fact "indicators: primary click on an item with a menu, not only a menu, activates it" 'sni\.Chat\.Activate=1316 32'
+fact "indicators: secondary click opens the DBusMenu: the title as header, a shortcut, a switch, a separator, a submenu of radio items; hidden and disabled rows" \
+    'indicators\.menu=\[Chat\] Show Chat<Ctrl\+Shift\+C> Do Not Disturb=switch:false \| Status>\(Online=radio:on Away=radio:off\) Hidden\(hidden\) Quit Chat\(off\)'
+fact "indicators: the open menu's button shows as checked" 'indicators\.menu\.button-checked=true'
+fact "indicators: ItemsPropertiesUpdated changes the open menu in place" \
+    'indicators\.menu\.updated=\[Chat\] Show Chat Window<Ctrl\+Shift\+C> Do Not Disturb=switch:true .*'
+fact "indicators: opening the menu sends opened" 'menu\.Chat\.event=0 opened'
+fact "indicators: a row sends clicked" 'menu\.Chat\.event=2 clicked'
+fact "indicators: a submenu sends opened" 'menu\.Chat\.event=4 opened'
+fact "indicators: closing sends closed" 'menu\.Chat\.event=0 closed'
+fact "indicators: and the button is no longer checked" 'indicators\.menu\.closed=open=false button-checked=false'
+fact "indicators: primary click on an item that is only a menu opens it" 'indicators\.item-is-menu=\[Game launcher\] Library'
+fact "indicators: an item whose app leaves the bus goes" \
+    'indicators\.vanished=Game launcher:mask,Password manager:pixmap,Chat:symbolic\+dot overflow=none divider=true'
+fact "indicators: disabled-features=['indicators'] takes them, the divider and the watcher away" \
+    'indicators\.disabled=none watcher=none order=screenRecording,a11y,keyboard,screenSharing,quickSettings'
+readonly REREGISTERED='(Password manager:pixmap|Chat:symbolic\+dot|Game launcher:mask)(,(Password manager:pixmap|Chat:symbolic\+dot|Game launcher:mask)){2} overflow=none divider=true'
+fact "indicators: back out of it, the shell owns the watcher again and the items register again" \
+    "indicators\.re-enabled=$REREGISTERED watcher=shell"
+fact "indicators: layer-enabled=false takes them away" 'indicators\.layer-off=none watcher=none'
+fact "indicators: layer-enabled=true brings them back" "indicators\.layer-on=$REREGISTERED"
+lacks "indicators: the feature disables cleanly" 'off for this session|did not disable cleanly|cannot restyle'
+
+probe indicators-remote "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_REMOTE_WATCHER=1 PROBE_THEME_ICONS=apex-sync-symbolic
+fact "another process's watcher: the shell registers as a host with it" \
+    'fake-watcher\.host=org\.kde\.StatusNotifierHost-apex-[0-9]+'
+fact "another process's watcher: the items it lists show" 'remote\.listed=Early:symbolic overflow=none divider=true'
+fact "another process's watcher: and the items it announces" 'remote\.announced=Early:symbolic,Late:symbolic overflow=none divider=true'
+fact "another process's watcher: once it leaves, the shell owns the name and the items register with it" \
+    'remote\.gone=(Early|Late):symbolic,(Early|Late):symbolic overflow=none divider=true watcher=shell'
+
+probe indicators-disabled "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_DISABLED=indicators PROBE_WATCHER_OWNER=1
+has "disabled-features=['indicators']: skips the feature" 'Apex: feature indicators is in disabled-features'
+fact "disabled-features=['indicators']: nobody owns the watcher" 'watcher-owner=none'
+
+probe indicators-safe "$CMDLINE_PLAIN" APEX_SHELL_SAFE=1 PROBE_ENABLE=1 PROBE_WATCHER_OWNER=1
+fact "safe mode: no indicators, and nobody owns the watcher" 'watcher-owner=none'
 
 printf '1..%d\n' "$tests"
 ((failed == 0))

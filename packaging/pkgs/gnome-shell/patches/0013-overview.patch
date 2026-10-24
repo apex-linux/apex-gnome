@@ -13,13 +13,73 @@ layer provides (apex-fedora ROADMAP S3a):
   layout, through which the layer hides the background card and adds the
   empty-workspace label;
 - ThumbnailsBox: value hooks over the maximum thumbnail scale and over
-  the number of dynamic workspaces above which the thumbnails show.
+  the number of dynamic workspaces above which the thumbnails show;
+- SearchController: a behaviour hook when text arrives in the search
+  entry or the entry takes the key focus, given which of the two, the
+  text and a reset, through which Spotlight takes over the overview's
+  search.
+- ControlsManagerLayout: a value hook over the height of the app grid's
+  workspace strip, through which the layer gives the grid that space.
 ---
+ js/ui/overviewControls.js   | 3 ++-
+ js/ui/searchController.js   | 6 ++++++
  js/ui/windowPreview.js      | 9 +++++----
  js/ui/workspace.js          | 2 ++
  js/ui/workspaceThumbnail.js | 5 +++--
- 3 files changed, 10 insertions(+), 6 deletions(-)
+ 5 files changed, 18 insertions(+), 7 deletions(-)
 
+diff --git a/js/ui/overviewControls.js b/js/ui/overviewControls.js
+index d7ef077..43d2bec 100644
+--- a/js/ui/overviewControls.js
++++ b/js/ui/overviewControls.js
+@@ -6,6 +6,7 @@ import Meta from 'gi://Meta';
+ import Shell from 'gi://Shell';
+ import St from 'gi://St';
+ 
++import * as ApexHooks from './apex/hooks.js';
+ import * as AppDisplay from './appDisplay.js';
+ import * as Dash from './dash.js';
+ import * as Main from './main.js';
+@@ -103,7 +104,7 @@ class ControlsManagerLayout extends Clutter.LayoutManager {
+             workspaceBox.set_origin(0, startY + searchHeight + spacing);
+             workspaceBox.set_size(
+                 width,
+-                Math.round(height * SMALL_WORKSPACE_RATIO));
++                ApexHooks.value('app-grid-workspaces-height', Math.round(height * SMALL_WORKSPACE_RATIO)));
+             break;
+         }
+ 
+diff --git a/js/ui/searchController.js b/js/ui/searchController.js
+index 1547ade..78a28fb 100644
+--- a/js/ui/searchController.js
++++ b/js/ui/searchController.js
+@@ -3,6 +3,7 @@ import GObject from 'gi://GObject';
+ import St from 'gi://St';
+ 
+ import * as Main from './main.js';
++import * as ApexHooks from './apex/hooks.js';
+ import * as Search from './search.js';
+ import * as ShellEntry from './shellEntry.js';
+ 
+@@ -204,6 +205,8 @@ export const SearchController = GObject.registerClass({
+         const appearFocused = focus != null &&
+             (this._entry.contains(focus) ||
+              this._searchResults.contains(focus));
++        if (appearFocused && ApexHooks.run('overview-search', 'focus', this._entry.get_text(), () => this.reset()))
++            return;
+ 
+         this._text.set_cursor_visible(appearFocused);
+ 
+@@ -233,6 +236,9 @@ export const SearchController = GObject.registerClass({
+     }
+ 
+     _onTextChanged() {
++        const text = this._entry.get_text();
++        if (text !== '' && ApexHooks.run('overview-search', 'text', text, () => this.reset()))
++            return;
+         const terms = getTermsForSearchString(this._entry.get_text());
+ 
+         const searchActive = terms.length > 0;
 diff --git a/js/ui/windowPreview.js b/js/ui/windowPreview.js
 index a9b9bdd..0d9f541 100644
 --- a/js/ui/windowPreview.js
