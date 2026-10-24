@@ -425,7 +425,7 @@ async function exerciseNotifications() {
     const dnd = list.footer.get_children()[0];
     notifications.set_boolean('show-banners', false);
     fact('nf.dnd-from-settings', `checked=${dnd.checked} switch=${dnd.child.get_children()[1].state} clear=${list.clear.visible}`);
-    dnd.emit('clicked');
+    dnd.emit('clicked', 1);
     fact('nf.dnd-click', `show-banners=${notifications.get_boolean('show-banners')} checked=${dnd.checked}`);
     const month = MessageList.newCalendar();
     const calendarState = label => {

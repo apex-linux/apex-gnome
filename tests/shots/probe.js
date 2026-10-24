@@ -1173,9 +1173,9 @@ async function notificationsLayer(unit) {
             dots: dots.map(d => boxOf(d, unit)),
         };
         if (dnd) {
-            dnd.emit('clicked');
+            dnd.emit('clicked', Clutter.BUTTON_PRIMARY);
             result.dndClick = {showBanners: notifications.get_boolean('show-banners'), checked: dnd.checked};
-            dnd.emit('clicked');
+            dnd.emit('clicked', Clutter.BUTTON_PRIMARY);
         }
         Main.messageTray.getSources().filter(s => s === source).forEach(s => s.destroy());
         await settle();
