@@ -379,6 +379,22 @@ REPORT_OF_A_LAUNCHER_DRAWN_FROM_TOKENS='
     pageIndicator: {background: ($t.apex_fg | hex)},
     pageHint: {gradient: 0}}}}'
 # shellcheck disable=SC2016 # a jq program
+REPORT_OF_DERIVED_SURFACES_DRAWN_FROM_TOKENS='
+($t.apex_surface_border | px) as $b
+| {border: {top: $b}, borderColor: ($t.apex_panel_border | hex),
+   boxShadow: {color: ($t.apex_shadow | hex), y: ($t.apex_shadow_y | px), blur: ($t.apex_shadow_blur | px)}} as $ring
+| ($ring + {background: ($t.apex_panel | hex), radius: ($t.apex_radius_osd | px)}) as $osd
+| {topBar: {accent: "#3584e4ff"}, surfaces: {derived: {
+    workspaceSwitcher: $osd, resizePopup: $osd,
+    wsIndicator: {background: ($t.apex_fg_faint | hex), active: {background: ($t.apex_fg | hex)}},
+    candidatePopup: ($ring + {background: ($t.apex_panel_solid | hex), radius: ($t.apex_radius_menu | px)}),
+    candidateBox: {radius: ($t.apex_radius_menu_row | px), hover: {background: ($t.apex_button_hover | hex)}},
+    runEntry: {minHeight: ($t.apex_entry_height | px), background: ($t.apex_button | hex), boxShadow: null,
+        focus: {boxShadow: {inset: true, spread: ($t.apex_entry_focus_ring | px), color: "#3584e4ff"}}},
+    audioDevice: {radius: ($t.apex_radius_switcher_item | px), background: "#00000000", foreground: ($t.apex_fg | hex),
+        hover: {background: ($t.apex_button_hover | hex)}},
+    monitorLabel: {radius: ($t.apex_radius_osd | px)}}}}'
+# shellcheck disable=SC2016 # a jq program
 HEX_DEF='def hex: rgba | map([., 16] | "0123456789abcdef"[(.[0] / .[1] | floor):(.[0] / .[1] | floor) + 1]
                                     + "0123456789abcdef"[(.[0] % .[1]):(.[0] % .[1]) + 1]) | "#" + join("");'
 
@@ -397,6 +413,7 @@ assert_run() {
     [[ $assertions == date_menu ]] && report=$REPORT_OF_A_DATE_MENU_DRAWN_FROM_TOKENS
     [[ $assertions == overview_style ]] && report=$REPORT_OF_AN_OVERVIEW_DRAWN_FROM_TOKENS
     [[ $assertions == app_grid ]] && report=$REPORT_OF_A_LAUNCHER_DRAWN_FROM_TOKENS
+    [[ $assertions == derived_surfaces ]] && report=$REPORT_OF_DERIVED_SURFACES_DRAWN_FROM_TOKENS
     tokens=$(tokens_for "$variant")
     jq -nc --argjson t "$tokens" "$JQ_DEFS $HEX_DEF $report | $change" | sed 's/^/APEXG2-SCENES /' >"$T/top-bar.log"
     # shellcheck disable=SC2016 # expanded by the inner bash
@@ -713,6 +730,33 @@ test_app_grid() {
 .surfaces.appGrid.dialog.width = 720|upstream's 720 px folder
 .surfaces.appGrid.dialog.title.font.size = 26.667|upstream's title 1 folder name
 .surfaces.appGrid.pageHint.gradient = 1|upstream's gradient page hint
+CHANGES
+}
+
+test_derived_surfaces() {
+    local variant change what passes failures open_gaps
+    for variant in light dark; do
+        read -r passes failures open_gaps <<<"$(assert_run derived_surfaces "$variant")"
+        if ((failures == 0 && open_gaps == 0 && passes == 6)); then
+            ok "derived surfaces ($variant): drawn from the tokens they pass all $passes assertions"
+        else
+            not_ok "derived surfaces ($variant): drawn from the tokens they pass (passed/failed/gaps $passes/$failures/$open_gaps): $(grep -m3 '^FAIL' "$T/top-bar.out" | paste -sd'|' -)"
+        fi
+    done
+    while IFS='|' read -r change what; do
+        read -r passes failures open_gaps <<<"$(assert_run derived_surfaces light "$change")"
+        if ((failures == 1)); then
+            ok "derived surfaces: $what fails one assertion"
+        else
+            not_ok "derived surfaces: $what fails one assertion (passed/failed/gaps $passes/$failures/$open_gaps)"
+        fi
+    done <<'CHANGES'
+.surfaces.derived.resizePopup.radius = 999|upstream's round OSD panel
+.surfaces.derived.wsIndicator.active.background = "#ffffffff"|upstream's white current workspace
+.surfaces.derived.candidatePopup.background = "#fafafbff"|upstream's menu fill on the candidates
+.surfaces.derived.runEntry.minHeight = null|upstream's padded run entry
+.surfaces.derived.audioDevice.foreground = "#22222666"|a dimmed device name
+.surfaces.derived.monitorLabel.radius = 16|upstream's monitor label radius
 CHANGES
 }
 
@@ -1102,6 +1146,7 @@ test_modal_dialog
 test_date_menu
 test_overview_style
 test_app_grid
+test_derived_surfaces
 test_today_pins
 test_known_gaps
 test_fixed_clock

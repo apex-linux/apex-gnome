@@ -218,6 +218,11 @@ tile (at rest, hovered, focused) and the fixture image's System folder, opens th
 and reads its dialog, captures it with `G2_SURFACE_SCENES=1`, and reads the hidden
 running dot, page indicator and page hint from stand-ins.
 
+`derived_surfaces` reads surfaces with no board, which G2 never opens, from nested
+stand-ins in the same cases: the workspace switcher and its dots, the resize popup, the
+input method's candidates and a candidate, the run dialog's entry, an audio device tile
+and the monitor number.
+
 None of these surfaces is in a capture compared with Fedora, so the comparison with Fedora's build
 is unchanged: the Apex overview is compared only run to run, and safe mode's with Fedora's.
 

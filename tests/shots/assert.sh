@@ -617,6 +617,32 @@ app_grid() {
             and (.pageIndicator.background | colour_is($t.apex_fg)) and .pageHint.gradient == 0'
 }
 
+# shellcheck disable=SC2016 # jq programs and token names, not shell expansions
+derived_surfaces() {
+    local label=$1 log=$2 variant=$3 scenes tokens
+    scenes=$(report_of "$log" APEXG2-SCENES)
+    tokens=$(tokens_for "$variant")
+    local -a metric=(top_bar_metric "$label derived surfaces" "$scenes" "$tokens")
+    local d=.surfaces.derived
+    local ring='(.border.top | px_is($t.apex_surface_border)) and (.borderColor | colour_is($t.apex_panel_border))
+        and (.boxShadow | .y == ($t.apex_shadow_y | px) and .blur == ($t.apex_shadow_blur | px) and (.color | colour_is($t.apex_shadow)))'
+
+    "${metric[@]}" 'the workspace switcher and the resize popup take the OSD'"'"'s $apex_panel tint, ring and shadow, radius $apex_radius_osd' \
+        "[$d.workspaceSwitcher, $d.resizePopup]" "all((.background | colour_is(\$t.apex_panel)) and (.radius | px_is(\$t.apex_radius_osd)) and $ring)"
+    "${metric[@]}" 'the workspace dots are $apex_fg_faint, the current one $apex_fg' \
+        "$d.wsIndicator" '(.background | colour_is($t.apex_fg_faint)) and (.active.background | colour_is($t.apex_fg))'
+    "${metric[@]}" 'the input method'"'"'s candidates take the popup menu: $apex_panel_solid, ring and shadow, radius $apex_radius_menu; rows radius $apex_radius_menu_row, $apex_button_hover when hovered' \
+        "$d" "(.candidatePopup | (.background | colour_is(\$t.apex_panel_solid)) and (.radius | px_is(\$t.apex_radius_menu)) and $ring)
+            and (.candidateBox | (.radius | px_is(\$t.apex_radius_menu_row)) and (.hover.background | colour_is(\$t.apex_button_hover)))"
+    "${metric[@]}" 'the run dialog'"'"'s entry is the password entry: $apex_entry_height, $apex_button, a $apex_entry_focus_ring raw-accent ring when focused' \
+        "{e: $d.runEntry, accent: .topBar.accent}" '.accent as $a | .e | (.minHeight | px_is($t.apex_entry_height)) and (.background | colour_is($t.apex_button)) and .boxShadow == null
+            and (.focus.boxShadow | .inset and (.spread | px_is($t.apex_entry_focus_ring)) and (.color | colour_is($a)))'
+    "${metric[@]}" 'an audio device tile takes the switcher'"'"'s: radius $apex_radius_switcher_item, unfilled, $apex_button_hover when hovered, $apex_fg' \
+        "$d.audioDevice" '(.radius | px_is($t.apex_radius_switcher_item)) and (.background | rgba | .[3] == 0) and (.hover.background | colour_is($t.apex_button_hover)) and (.foreground | colour_is($t.apex_fg))'
+    "${metric[@]}" 'the monitor number takes the OSD'"'"'s radius $apex_radius_osd' \
+        "$d.monitorLabel.radius" 'px_is($t.apex_radius_osd)'
+}
+
 scenes_captured() {
     local run=$1 case_name=$2
     local log=$run/$case_name.log scene
@@ -800,6 +826,7 @@ direct_cases() {
     date_menu default "$f" light
     overview_style default "$f" light
     app_grid default "$f" light
+    derived_surfaces default "$f" light
 
     f=$run/default-scale1.log
     exits "$run" default-scale1 0
@@ -816,6 +843,7 @@ direct_cases() {
     date_menu default-scale1 "$f" light
     overview_style default-scale1 "$f" light
     app_grid default-scale1 "$f" light
+    derived_surfaces default-scale1 "$f" light
 
     f=$run/dark-style.log
     exits "$run" dark-style 0
@@ -835,6 +863,7 @@ direct_cases() {
     date_menu dark-style "$f" dark
     overview_style dark-style "$f" dark
     app_grid dark-style "$f" dark
+    derived_surfaces dark-style "$f" dark
     dark_style_off dark-style "$f"
 
     for c in stock-light stock-dark; do

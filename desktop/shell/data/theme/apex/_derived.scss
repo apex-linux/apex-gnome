@@ -1,0 +1,44 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+
+// Surfaces with no board take their nearest board's look (DESIGN.md): the glass ones its
+// tint and ring, until the glass manager registers them for the blur.
+.workspace-switcher, .resize-popup {
+  @include apex-surface($apex_panel);
+  border-radius: $apex_radius_osd;
+}
+
+.ws-switcher-indicator {
+  background-color: $apex_fg_faint;
+
+  &:active { background-color: $apex_fg; }
+}
+
+.candidate-popup-content {
+  @include apex-surface($apex_panel_solid);
+  padding: $apex_menu_padding - $apex_surface_border;
+  border-radius: $apex_radius_menu;
+  font-size: apex-text-size($apex_font_size);
+}
+
+.candidate-box {
+  border-radius: $apex_radius_menu_row;
+
+  &:hover { color: $apex_fg; background-color: $apex_button_hover; }
+}
+
+.candidate-index { color: $apex_fg_dim; }
+
+.run-dialog {
+  .run-dialog-entry { @include apex-entry; }
+  .run-dialog-description { color: $apex_fg_dim; }
+}
+
+.audio-device-selection-dialog .audio-selection-box .audio-selection-device {
+  border-radius: $apex_radius_switcher_item;
+  color: $apex_fg;
+  background-color: transparent;
+
+  &:hover, &:focus, &:active { color: $apex_fg; background-color: $apex_button_hover; }
+}
+
+.osd-monitor-label, .osd-break-countdown-label { border-radius: $apex_radius_osd; }
