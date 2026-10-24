@@ -208,15 +208,6 @@ apex_sidebar_select_row_of (ApexSidebar *self,
 }
 
 static void
-apex_sidebar_focus_selected (ApexSidebar *self)
-{
-  GtkRoot *root = gtk_widget_get_root (GTK_WIDGET (self));
-
-  if (self->selected != NULL && GTK_IS_WINDOW (root) && gtk_window_is_active (GTK_WINDOW (root)))
-    apex_session_focused (self->selected);
-}
-
-static void
 apex_sidebar_selected_page_cb (ApexSidebar *self)
 {
   AdwTabPage *page = adw_tab_view_get_selected_page (self->tab_view);
@@ -227,7 +218,6 @@ apex_sidebar_selected_page_cb (ApexSidebar *self)
 
   if (session != NULL)
     apex_sidebar_select_row_of (self, session);
-  apex_sidebar_focus_selected (self);
 }
 
 static void

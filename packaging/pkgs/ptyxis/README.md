@@ -42,6 +42,7 @@ path `source1_paths` allows; `tests/ptyxis/selftest.sh` checks both.
 | `src/apex/apex-sidebar.c` | the "Terminal" header (New Session, the main menu), the sessions grouped by where they run, the group headers with "N needs you", and the footer counts |
 | `src/apex/apex-session.c` | one session per tab: it feeds the status logic from the terminal's precmd, preexec and postexec signals, the bell, the agent's foreground command line and leader kind, the container termprops, OSC 7 and OSC 9;4 |
 | `src/apex/apex-session-state.c` | the status logic, without GTK: idle, running, done, failed, needs you; the subtitle; the relative time; the ssh host |
+| `src/apex/apex-panes.c` | board 33's splits: `ApexPanes` wraps the tab view in a `GtkPaned`; Split Right and Split Down (header toggles, Ctrl+Alt+R and Ctrl+Alt+D, `apex.split-right`/`-down`) give the selected session a second `PtyxisTab` beside it, in its working directory and container; each pane gets a 34 px header (its running command or "Shell", path, tag, the needs-you glyph, Close Pane on the second); the unfocused pane is dimmed (.7 header, .62 body); a session remembers its focused pane, and focusing a pane clears its "needs you". A session's row shows the stronger status of its two panes |
 | `src/apex/apex-palette.c` | `apex_profile_follow_palette_files()`: a profile notifies `palette` when the palette list reloads a file with its palette id, so open terminals and the window dressing take a rewritten user palette (apex-session-agent's `apex.palette`) |
 | `src/apex/apex-session-row.c`, `apex-glyph.c` | a row (title, subtitle, time, glyph, the 2 px progress bar) and the Apex Symbolic glyphs drawn from their 16 px paths |
 
@@ -75,10 +76,11 @@ Two limits of Fedora 45, raised with apex-desktop:
 | `0001-build` | `src/meson.build` | +1 | `subdir('apex')` after upstream's resources |
 | `0002-sidebar` | `src/ptyxis-window.c` | +5 −1 | the include; `apex_window_attach()` at the end of `ptyxis_window_init()`; the tab bar hidden while the sidebar shows |
 | `0003-palette-reload` | `src/ptyxis-profile.c` | +4 | the include; `apex_profile_follow_palette_files()` at the end of `ptyxis_profile_constructed()` |
+| `0004-panes` | `src/ptyxis-window.c`, `src/ptyxis-tab.c` | +8 | `ptyxis_window_get_active_tab()` returns the focused second pane; a second pane whose process exits with the close action closes itself (`apex_pane_exited()`) |
 
 Budget (ADR 0014, as amended for Ptyxis): at most 400 changed lines in upstream files,
-in hook hunks only; the added files under `src/apex/` do not count. In use: 11 lines in
-3 files.
+in hook hunks only; the added files under `src/apex/` do not count. In use: 19 lines in
+4 files.
 
 The patches are `git format-patch` output against Fedora's `%prep` tree, with `a/` and
 `b/` prefixes, applied with `-p1`. Write them with apex-image's `just pkg-prep ptyxis`
@@ -107,8 +109,11 @@ G2's `fixtures.py` on the system bus and its `clock.c` holding the wall clock, a
 `tests/shots/direct.sh` runs a case (`lib.sh`, shared with `palette-test.sh`).
 Its automation script, `probe.js`, opens board 32's five sessions with `ptyxis --tab`,
 types each command with a virtual keyboard into bash with vte.sh, selects apex-image
-and captures the window. `fixture.c`, installed as `claude`, `just`, `cargo`, `rpmbuild`
-and `ssh`, prints what `sessions.sh` wrote for that program and then waits, exits 0 or
+and captures the window (`light`, `dark`). The `split` scene (`split-light`,
+`split-dark`, board 33) splits apex-gnome to the right with Ctrl+Alt+R right after
+`claude` starts, runs `git status --short` in the second pane, and captures apex-gnome
+once the other sessions are open: its first pane rang while unfocused. `fixture.c`,
+installed as `claude`, `just`, `cargo`, `rpmbuild`, `ssh` and `git`, prints what `sessions.sh` wrote for that program and then waits, exits 0 or
 1, or rings the bell, so every status comes from the real shell integration. CI runs
 it after the lane and keeps the captures as the `ptyxis-shots` artifact.
 

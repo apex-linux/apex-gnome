@@ -15,7 +15,8 @@ in a throwaway fedora:$APEX_FEDORA container (just ptyxis-shots). RPM_DIR holds 
 lane's built RPMs (_build/ptyxis/out); without it the installed ptyxis is captured. A
 user '$USER_NAME' opens the sessions of the design canvas's board 32, typed into the
 terminals by a virtual keyboard, so the statuses come from bash's shell integration
-(vte.sh). The captures and logs land in _build/ptyxis/shots/.
+(vte.sh); the split captures add board 33's right split of apex-gnome. The captures and
+logs land in _build/ptyxis/shots/.
 
 It needs gnome-shell, mesa-dri-drivers, dbus-daemon, python3-dbusmock, gcc, util-linux and
 the Apex fonts (jetbrains-mono-fonts-all, adwaita-sans-fonts). G2's clock.c and fixtures.py
@@ -41,7 +42,7 @@ fixtures=$home/.apex-fixtures
 install -d -o "$USER_NAME" "$home/bin" "$fixtures" "$home/src/apex-gnome" "$home/src/apex-system" \
     "$home/src/apex-desktop" "$home/apex-image"
 gcc -O2 -Wall -Werror -o "$home/bin/fixture" "$PTYXIS_TESTS/fixture.c" || die "cannot build fixture.c"
-for program in claude just cargo rpmbuild ssh; do
+for program in claude just cargo rpmbuild ssh git; do
     cp "$home/bin/fixture" "$home/bin/$program"
 done
 "$PTYXIS_TESTS/sessions.sh" "$fixtures"
@@ -62,17 +63,19 @@ chown -R "$USER_NAME:" "$home"
 headless_bus "$out"
 
 shoot() {
-    local name=$1 scheme=$2 style=$3
+    local name=$1 scene=$2 scheme=$3 style=$4
     headless_run "$out/$name.log" "$PTYXIS_TESTS/probe.js" "$SHELL_TIMEOUT" \
         "org.gnome.desktop.interface color-scheme '$scheme'"$'\n'"org.gnome.Ptyxis interface-style '$style'" \
-        APEX_SHOTS="$out" APEX_SHOT="$name"
+        APEX_SHOTS="$out" APEX_SHOT="$name" APEX_SCENE="$scene"
     log "shoot.sh: $name: exit $?"
     grep -q 'APEXPTYXIS ' "$out/$name.log" && [[ -s $out/$name.png ]]
 }
 
 status=0
 # The container has no settings portal for libadwaita to read color-scheme from.
-shoot light default light || status=1
-shoot dark prefer-dark dark || status=1
+shoot light sessions default light || status=1
+shoot dark sessions prefer-dark dark || status=1
+shoot split-light split default light || status=1
+shoot split-dark split prefer-dark dark || status=1
 ((status == 0)) || die "shoot.sh: a capture failed; see ${out#"$APEX_ROOT/"}/*.log"
 log "shoot.sh: captures in ${out#"$APEX_ROOT/"}"
