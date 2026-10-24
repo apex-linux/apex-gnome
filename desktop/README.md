@@ -21,9 +21,13 @@ directory with `git archive` and unpacks it at the top of Fedora's gnome-shell t
 | `js/ui/apex/panel/feature.js` | the top bar of S2a (below): its parts in `panel/`, one module each |
 | `js/ui/apex/fault/feature.js` | the fault-injection feature: loaded only when `APEX_SHELL_TEST_FAULT` names a phase, it fails in that phase (below) |
 | `data/theme/apex/_apex-tokens.scss` | the design tokens as SCSS variables, imported after upstream's `_colors` |
-| `data/theme/apex/_apex.scss` | the Apex sheet, imported last by the light and dark entry files |
+| `data/theme/apex/_apex.scss` | the Apex sheet, imported last by the light and dark entry files: `apex-text-size()`, the `apex-surface()` mixin of the shell's own surfaces, and the partials |
 | `data/theme/apex/_top-bar.scss` | the top bar over upstream's panel, in the user session and the overview. Its text sizes are in pt (`apex-text-size`), so Large Text grows the text and nothing else: the bar, the pills and the glyphs keep SPEC's px sizes, where upstream sizes the bar in em. The unread-notification dot is `$apex_bar_fg` until S1b brings the wallpaper SPEC's accent dot was drawn over; over Fedora's wallpaper the light bar hides an accent dot. G2 asserts both ([tests/shots](../tests/shots/README.md)) |
 | `data/theme/apex/diamond-{light,dark}.svg` | the Apex diamond in the Activities pill, stroked in each variant's `$apex_bar_fg` |
+| `data/theme/apex/_popup-menus.scss` | stock popup menus (board 16): solid `$apex_panel_solid`, radius 14, 34 px rows, the board's inset ring as a 1 px border and its first shadow (St draws one). The calendar and Quick Settings popovers take it too until their own partials |
+| `data/theme/apex/_osd.scss` | the OSD (board 16): a 40 px pill tinted `$apex_panel`, its level 180 × 6 in the accent, 104 px above the screen's bottom edge |
+| `data/theme/apex/_notification-banner.scss` | the notification banner (board 16) on stock structure: 460 px, tinted `$apex_panel`, 12 px below the bar. Stock shows the action buttons only once a banner expands; they are the board's 32 px pills. The OSD and the banner are glass: the tint now, S2b's glass manager blurs behind it |
+| `data/theme/apex/_quick-settings.scss` | Quick Settings and its stock submenus (board 17): a 376 px glass panel, radius 26, 14 px inset; 36 px round buttons and battery pill; 54 px toggles, the accent when checked, the menu arrow shaded 12 % with black; accent sliders with a white 20 px handle; submenus as `$apex_card` cards with 38 px rows. BoxPointer's one `-arrow-rise` sets both the 6 px gap under the bar and the side clamp, so the panel sits 6 px from the right edge, not the board's 8 |
 | `data/theme/apex/_apex-structure.scss` | Apex actors' geometry for the high-contrast sheet |
 | `data/theme/apex/meson.build` | adds the partials to upstream's `theme_sources`, so an edit recompiles the sheets |
 

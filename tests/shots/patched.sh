@@ -11,7 +11,8 @@ rebuilds Fedora's gnome-shell SRPM with this checkout's recipe (spec-edit, the s
 desktop/shell/ from the working tree as Source1), installs it with the layer's schema
 fixture, runs direct.sh's main part, then asserts what needs no image: each case's log and
 the top bar's metrics, today's pins and the known gaps of default, default-scale1 and
-dark-style. The lane's own checks, signing and the mutter pin's mirror are apex-image's.
+dark-style, and their shell surfaces and Quick Settings. The lane's own checks, signing and the mutter pin's
+mirror are apex-image's. -e G2_SURFACE_SCENES=1 also captures the surfaces' scenes.
 
   PATCHED_RPMS=DIR   install the gnome-shell RPMs in DIR instead of building them
   PATCHED_OUT=DIR    keep the RPMs and the run's logs in DIR (default: a temporary one)
@@ -171,6 +172,10 @@ top_bar_today default-scale1 "$run/default-scale1.log" light
 top_bar dark-style "$run/dark-style.log" dark
 top_bar_today dark-style "$run/dark-style.log" dark
 top_bar_gaps dark-style "$run/dark-style.log" dark
+for c in default:light default-scale1:light dark-style:dark; do
+    shell_surfaces "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
+    quick_settings "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
+done
 layer_cycles "$run"
 echo "# logs and captures: $run"
 summary

@@ -1,0 +1,4 @@
+# Hook hunks only: all logic lives in desktop/nautilus/. Format: packaging/README.md.
+0001-build.patch
+0002-window.patch
+0003-zoom.patch
