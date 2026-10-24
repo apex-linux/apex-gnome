@@ -253,6 +253,7 @@ REPORT_OF_QUICK_SETTINGS_DRAWN_FROM_TOKENS='
 | ($t.apex_quick_toggle_height | px) as $th | ($t.apex_quick_settings_button_size | px) as $bs | ($t.apex_quick_settings_icon_size | px) as $icon
 | ((($t.apex_quick_settings_width | px) - 2 * $qp - $gap) / 2) as $tw | ($t.apex_quick_toggle_padding | px) as $tp
 | ($t.apex_quick_toggle_menu_button_shade | rtrimstr("%") | tonumber / 100) as $shade
+| ($t.apex_quick_toggle_checked_shade | rtrimstr("%") | tonumber / 100) as $checked
 | {size: ($t.apex_font_quick_toggle_title_size | px), weight: ($t.apex_font_heading_weight | tonumber)} as $title
 | {topBar: {accent: "#3584e4ff"}, surfaces: {quickSettings: {
     box: {width: ($t.apex_quick_settings_width | px), radius: ($t.apex_radius_quick_settings | px), background: ($t.apex_panel | hex),
@@ -266,11 +267,11 @@ REPORT_OF_QUICK_SETTINGS_DRAWN_FROM_TOKENS='
             box: {padding: {left: ($t.apex_quick_settings_battery_padding | px), right: ($t.apex_quick_settings_battery_padding | px)}, spacing: ($t.apex_quick_settings_battery_gap | px)},
             title: {font: {size: ($t.apex_font_quick_settings_battery_size | px), weight: ($t.apex_font_label_weight | tonumber)}}}},
     wifi: {y: (44 + $bs + ($t.apex_quick_settings_section_gap | px)), width: $tw, height: $th,
-        toggle: {background: "#3584e4ff", foreground: "#ffffffff", icon: $icon, title: {font: $title},
+        toggle: {background: ([53, 132, 228] | map(. * (1 - $checked) | round) | "rgb(\(.[0]), \(.[1]), \(.[2]))" | hex), foreground: "#ffffffff", icon: $icon, title: {font: $title},
             subtitle: {foreground: ("rgba(255, 255, 255, \($t.apex_quick_toggle_subtitle_opacity))" | hex), font: {size: ($t.apex_font_quick_toggle_subtitle_size | px)}},
             box: {padding: {left: $tp, right: ($t.apex_quick_toggle_menu_padding | px)}, spacing: ($t.apex_quick_toggle_gap | px)}},
         separator: {width: 0},
-        menuButton: {width: ($t.apex_quick_toggle_menu_button_width | px), background: ([53, 132, 228] | map(. * (1 - $shade) | round) | "rgb(\(.[0]), \(.[1]), \(.[2]))" | hex)}},
+        menuButton: {width: ($t.apex_quick_toggle_menu_button_width | px), background: ([53, 132, 228] | map(. * (1 - $checked) * (1 - $shade) | round) | "rgb(\(.[0]), \(.[1]), \(.[2]))" | hex)}},
     unchecked: {width: $tw, height: $th, radius: 999, background: ($t.apex_button | hex), foreground: ($t.apex_fg | hex),
         hover: {background: ($t.apex_button_hover | hex)}, icon: $icon, box: {padding: {left: $tp, right: $tp}, spacing: ($t.apex_quick_toggle_gap | px)}},
     slider: {spacing: ($t.apex_quick_slider_gap | px), trackHeight: ($t.apex_quick_slider_track_height | px), track: ($t.apex_button_hover | hex),
@@ -680,6 +681,7 @@ REPORT_OF_LEGIBLE_SURFACES='
 | ($text + {kind: "icon", name: "glyph-symbolic", ratio: 4, box: {x: 80, y: 10, width: 16, height: 16}}) as $icon
 | {box: {x: 0, y: 0, width: 200, height: 100}, targets: [$text, $icon]} as $s
 | {textScalingFactor: 1.25, monitor: {x: 0, y: 0, width: 1440, height: 900},
+    quickSettingsAccents: (["blue", "teal", "green", "yellow", "orange", "red", "pink", "purple", "slate"] | map({key: ., value: $s}) | from_entries),
     bar: $s, dock: $s, popupMenu: $s, osd: $s, banner: $s, quickSettings: $s, wifiMenu: $s, dateMenu: $s, switcher: $s,
     dialog: $s, endSession: $s, spotlight: {popup: $s, toast: $s}, overview: $s, appGrid: $s}'
 
@@ -693,7 +695,7 @@ a11y_run() {
 
 test_a11y() {
     local assertions expected change what passes failures open_gaps want
-    for assertions in a11y_contrast:15 a11y_layout:16; do
+    for assertions in a11y_contrast:24 a11y_layout:25; do
         expected=${assertions#*:}
         read -r passes failures open_gaps <<<"$(a11y_run "${assertions%:*}")"
         if ((failures == 0 && open_gaps == 0 && passes == expected)); then
@@ -714,6 +716,8 @@ a11y_contrast|1|.bar.targets[0].ratio = 4.4|text at 4.4:1
 a11y_contrast|1|.dock.targets[1].ratio = 2.9|a glyph at 2.9:1
 a11y_contrast|1|.wifiMenu.targets[0].ratio = 3|a menu row's text at 3:1
 a11y_contrast|1|.spotlight.toast.targets[0].ratio = 3|the toast's text at 3:1
+a11y_contrast|1|.quickSettingsAccents.yellow.targets[0].ratio = 4.49|a checked toggle on the yellow accent at 4.49:1
+a11y_contrast|1|del(.quickSettingsAccents.slate)|an accent left unmeasured
 a11y_contrast|1|.endSession.targets[1].ratio = 2|the end-session glyph at 2:1
 a11y_contrast|1|.banner = {error: "not shown"}|a surface that never showed
 a11y_contrast|1|.popupMenu.targets = []|a surface with nothing measured
@@ -1480,6 +1484,7 @@ test_spotlight_keys() {
 .surfaces.spotlightKeys.early.ms = 1100|the sections seen only past the budget
 .surfaces.spotlightKeys.late.rows = 0|every section hidden once the budget runs out
 .surfaces.spotlightKeys.settings.cancelledMs = null|Settings never cancelled
+.surfaces.spotlightKeys.settings.cancelledMs = 1250|Settings cancelled only after the sections were read
 .surfaces.spotlightKeys.down4 = "Applications/org.gnome.baobab.desktop"|Down kept inside its section
 .surfaces.spotlightKeys.down20 = null|Down past the last row
 .surfaces.spotlightKeys.enter.activated = []|Enter opening nothing

@@ -40,20 +40,17 @@ readonly LAUNCHER_GRID_TOP=132
 # WCAG 2.2 AA: 1.4.3 for text, 1.4.11 for the glyphs a control is known by.
 readonly A11Y_TEXT_RATIO=4.5
 readonly A11Y_ICON_RATIO=3
-readonly A11Y_SURFACES=(bar dock popupMenu osd banner quickSettings wifiMenu dateMenu switcher dialog endSession
-    spotlight.popup spotlight.toast overview appGrid)
-# The failures the checks found on landing, each until the fix its PR carries.
-# shellcheck disable=SC2016 # a token's name, not an expansion
-readonly A11Y_DIM='the accessibility token fixes: light $apex_fg_dim and the hint over glass'
-readonly A11Y_TOGGLE="the accessibility token fixes: white on the checked toggle's accent"
-readonly A11Y_WIDTH='the accessibility token fixes: Quick Settings as wide as Large Text needs'
-readonly A11Y_HC_SEARCH="upstream HC sheet: the overview search entry's glyph, white at .7 on the entry's white (1.01:1)"
+readonly A11Y_ACCENTS=(blue teal green yellow orange red pink purple slate)
+readonly A11Y_SURFACES=(bar dock popupMenu osd banner quickSettings "${A11Y_ACCENTS[@]/#/quickSettingsAccents.}" wifiMenu dateMenu
+    switcher dialog endSession spotlight.popup spotlight.toast overview appGrid)
+# The failures still open: upstream's high-contrast sheet, which safe mode keeps as Fedora's.
 readonly A11Y_HC_TOGGLE="upstream HC sheet: Quick Settings' checked toggle, white on its accent (3.15:1), and its menu arrow (2.31:1)"
-declare -rA A11Y_GAPS=(
-    [default:banner]=$A11Y_DIM [default:spotlight.popup]=$A11Y_DIM [default:overview]=$A11Y_DIM
-    [default:quickSettings]=$A11Y_TOGGLE [dark-style:quickSettings]=$A11Y_TOGGLE [large-text:quickSettings]=$A11Y_WIDTH
-    [high-contrast:quickSettings]=$A11Y_HC_TOGGLE [high-contrast:overview]=$A11Y_HC_SEARCH
-)
+declare -A A11Y_GAPS=([high-contrast:quickSettings]=$A11Y_HC_TOGGLE)
+for a11y_accent in "${A11Y_ACCENTS[@]}"; do
+    A11Y_GAPS[high-contrast:quickSettingsAccents.$a11y_accent]=$A11Y_HC_TOGGLE
+done
+unset a11y_accent
+readonly A11Y_GAPS
 # overviewControls.js: spacing is 2 % of the work area, the stock .search-entry keeps 6 px below it.
 readonly OVERVIEW_SPACING_RATIO=0.02
 readonly STOCK_SEARCH_MARGIN_BOTTOM=6
@@ -710,8 +707,9 @@ quick_settings() {
             and (.[1].radius >= (\$t.apex_quick_toggle_height | px) / 2)"
     "${metric[@]}" 'an unchecked toggle is $apex_button with $apex_fg text, $apex_button_hover when hovered' \
         "$q.unchecked" '(.background | colour_is($t.apex_button)) and (.foreground | colour_is($t.apex_fg)) and (.hover.background | colour_is($t.apex_button_hover))'
-    "${metric[@]}" 'a checked toggle is the accent, its text the accent'"'"'s foreground, its subtitle that at $apex_quick_toggle_subtitle_opacity' \
-        "{t: $q.wifi.toggle, accent: .topBar.accent}" '.accent as $a | (.t.background | colour_is($a)) and (.t.foreground | colour_is("#ffffff"))
+    "${metric[@]}" 'a checked toggle is the accent shaded $apex_quick_toggle_checked_shade with black, its text the accent'"'"'s foreground, its subtitle that at $apex_quick_toggle_subtitle_opacity' \
+        "{t: $q.wifi.toggle, accent: .topBar.accent}" '(.accent | rgba) as $a | (.t.background | rgba) as $f | ($t.apex_quick_toggle_checked_shade | rtrimstr("%") | tonumber / 100) as $k
+            | ([range(3)] | all(($f[.] - $a[.] * (1 - $k)) | fabs <= 1)) and (.t.foreground | colour_is("#ffffff"))
             and (.t.subtitle.foreground | colour_is("rgba(255, 255, 255, \($t.apex_quick_toggle_subtitle_opacity))"))'
     "${metric[@]}" 'a toggle is padded $apex_quick_toggle_padding ($apex_quick_toggle_menu_padding before a menu arrow), $apex_quick_toggle_gap between glyph and text, its glyph $apex_quick_settings_icon_size' \
         "[$q.wifi.toggle, $q.unchecked]" 'all((.box.padding.left | px_is($t.apex_quick_toggle_padding)) and (.box.spacing | px_is($t.apex_quick_toggle_gap)) and (.icon | px_is($t.apex_quick_settings_icon_size)))
@@ -719,10 +717,11 @@ quick_settings() {
     "${metric[@]}" 'its title is $apex_font_quick_toggle_title_size at $apex_font_heading_weight, its subtitle $apex_font_quick_toggle_subtitle_size' \
         "$q.wifi.toggle" '(.title.font.size | px_is($t.apex_font_quick_toggle_title_size)) and .title.font.weight == ($t.apex_font_heading_weight | tonumber)
             and (.subtitle.font.size | px_is($t.apex_font_quick_toggle_subtitle_size))'
-    "${metric[@]}" 'the menu arrow is $apex_quick_toggle_menu_button_width wide, the checked fill shaded $apex_quick_toggle_menu_button_shade with black, with no separator' \
+    "${metric[@]}" 'the menu arrow is $apex_quick_toggle_menu_button_width wide, the checked fill shaded $apex_quick_toggle_menu_button_shade more with black, with no separator' \
         "{w: $q.wifi, accent: .topBar.accent}" "(.accent | rgba) as \$a | (.w.menuButton.background | rgba) as \$m
+            | (\$t.apex_quick_toggle_checked_shade | rtrimstr(\"%\") | tonumber / 100) as \$k
             | (.w.menuButton.width | px_is(\$t.apex_quick_toggle_menu_button_width)) and (.w.separator.width == 0)
-            and ([range(3)] | all((\$m[.] - \$a[.] * $shade) | fabs <= 1))"
+            and ([range(3)] | all((\$m[.] - \$a[.] * (1 - \$k) * $shade) | fabs <= 1))"
     "${metric[@]}" 'a slider has $apex_quick_slider_gap beside its glyph, a $apex_quick_slider_track_height track in $apex_button_hover filled with the accent, a $apex_quick_slider_handle_size $apex_slider_handle handle' \
         "{s: $q.slider, accent: .topBar.accent}" '.accent as $a | .s | (.spacing | px_is($t.apex_quick_slider_gap)) and (.trackHeight | px_is($t.apex_quick_slider_track_height))
             and (.track | colour_is($t.apex_button_hover)) and (.fill | colour_is($a)) and (.handleRadius * 2 | px_is($t.apex_quick_slider_handle_size)) and (.handle | colour_is($t.apex_slider_handle))'
@@ -1192,8 +1191,8 @@ spotlight_keys() {
     "${metric[@]}" 'within the budget, with Settings asked and still out, Applications and Files show, the first row selected' \
         "$k" ".early.ms < .budgetMs and .settings.askedMs < .early.ms and (.early | $shown)
             and .early.selected == \"Applications/org.gnome.DiskUtility.desktop\""
-    "${metric[@]}" 'past the budget, Settings is cancelled and left out; Applications and Files still show' \
-        "$k" ".late.ms > .budgetMs and .settings.cancelledMs >= .budgetMs and .settings.cancelledMs < .slowMs and (.late | $shown)"
+    "${metric[@]}" 'past the budget, Settings is cancelled and left out; after the cancel, Applications and Files still show' \
+        "$k" ".settings.cancelledMs >= .budgetMs and .settings.cancelledMs < .late.ms and .late.ms < .slowMs and (.late | $shown)"
     "${metric[@]}" 'Down x4, Up x1 and Down x20, pressed for real, move one selection across the sections and stop at the last row' \
         "$k" '.down4 == "Files/images" and .up1 == "Files/png" and .down20 == "Files/md"'
     "${metric[@]}" 'Enter opens the selected file through its provider, with the terms, and closes Spotlight and its modal' \
