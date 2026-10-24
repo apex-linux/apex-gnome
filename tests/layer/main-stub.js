@@ -15,7 +15,100 @@ function flagNames(value, flags) {
     return names.length > 0 ? names.join('|') : 'NONE';
 }
 
-export const sessionMode = {_sync: () => printerr('probe: restyled')};
+const sessionModeHandlers = new Map();
+let nextSessionModeHandler = 1;
+
+export const sessionMode = {
+    isLocked: false,
+    _sync: () => printerr('probe: restyled'),
+    connect(signal, fn) {
+        sessionModeHandlers.set(nextSessionModeHandler, [signal, fn]);
+        return nextSessionModeHandler++;
+    },
+    disconnect(id) {
+        sessionModeHandlers.delete(id);
+    },
+    lock(locked) {
+        this.isLocked = locked;
+        for (const [signal, fn] of [...sessionModeHandlers.values()]) {
+            if (signal === 'updated')
+                fn();
+        }
+    },
+};
+
+export const actionMode = Shell.ActionMode.NORMAL;
+
+function box(children) {
+    return {
+        children,
+        get_children() {
+            return [...this.children];
+        },
+        remove_child(child) {
+            this.children.splice(this.children.indexOf(child), 1);
+        },
+        insert_child_at_index(child, index) {
+            this.children.splice(index, 0, child);
+        },
+    };
+}
+
+// QuickSettings' fields for its indicators, in the order panel.js adds them to the pill.
+const QUICK_SETTINGS_INDICATORS = ['_remoteAccess', '_camera', '_volumeInput', '_location',
+    '_brightness', '_thunderbolt', '_nightLight', '_network', '_darkMode', '_doNotDisturb',
+    '_backlight', '_bluetooth', '_rfkill', '_autoRotate', '_volumeOutput', '_unsafeMode',
+    '_powerProfiles', '_system'];
+
+const rightBox = box([{name: 'a11y'}, {name: 'keyboard'}]);
+
+export function newQuickSettings() {
+    const quickSettings = {_indicators: box([]), container: {get_parent: () => rightBox}};
+    rightBox.children.push(quickSettings.container);
+    for (const field of QUICK_SETTINGS_INDICATORS) {
+        quickSettings[field] = {name: field.slice(1)};
+        quickSettings._indicators.children.push(quickSettings[field]);
+    }
+    return quickSettings;
+}
+
+const workspaceDot = {
+    _updateVisuals: () => fact('workspace-dot', 'restyled'),
+    queue_relayout: () => {},
+};
+
+const panelStyleClasses = new Set();
+
+function syncPanelStyleClasses(change) {
+    change();
+    fact('panel.classes', [...panelStyleClasses].join(',') || 'none');
+}
+
+export const panel = {
+    add_style_class_name: name => syncPanelStyleClasses(() => panelStyleClasses.add(name)),
+    remove_style_class_name: name => syncPanelStyleClasses(() => panelStyleClasses.delete(name)),
+    addToStatusArea(role, indicator, position, boxName) {
+        if (this.statusArea[role])
+            throw new Error(`there is already a status indicator for role ${role}`);
+        this.statusArea[role] = indicator;
+        indicator.connect('destroy', () => delete this.statusArea[role]);
+        fact('panel.add', `${role} at ${position} in ${boxName}`);
+        return indicator;
+    },
+    statusArea: {
+        activities: {
+            get_first_child: () => ({get_children: () => [0, 1].map(() => workspaceDot)}),
+        },
+        quickSettings: newQuickSettings(),
+    },
+};
+
+export const layoutManager = {
+    _updateHotCorners: () => fact('hot-corners', 'rebuilt'),
+    addChrome(actor, params) {
+        fact('chrome.add', `${actor.name} trackFullscreen=${params?.trackFullscreen ?? false}`);
+    },
+};
 
 export const overview = {
     visible: false,

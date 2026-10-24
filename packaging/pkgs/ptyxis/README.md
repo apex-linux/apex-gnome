@@ -12,7 +12,7 @@ escalation rule. The lane, `apex-lane`, and the formats of the files here are in
 | `pkg.env` | the SRPM, the hold family `ptyxis`, the one binary package the image takes, and Source1 (`desktop/ptyxis/`, unpacked as `src/apex/`) |
 | `spec-edit` | anchored edits to Fedora's spec: `.apexN`, `Source100`, and the `%prep` line that unpacks it |
 | `series`, `patches/` | the hook hunks, one patch per concern |
-| `check.sh` | the lane checks of this package: upstream's resource still in `/usr/bin/ptyxis`, every resource file of Source1 in `/org/gnome/Ptyxis/apex`, the Apex marker, and Fedora's gschema override |
+| `check.sh` | the lane checks of this package: upstream's resource still in `/usr/bin/ptyxis`, every resource file of Source1 in `/org/gnome/Ptyxis/apex`, the Apex marker and the sidebar's sheet, and Fedora's gschema override |
 
 ## What the build does to Fedora's package
 
@@ -35,19 +35,48 @@ path `source1_paths` allows; `tests/ptyxis/selftest.sh` checks both.
 
 | Path | What it is |
 |---|---|
-| `src/apex/meson.build` | adds the Apex resource to `ptyxis_sources` |
+| `src/apex/meson.build` | adds the Apex sources and resource to `ptyxis_sources` |
 | `src/apex/apex.gresource.xml` | the Apex resource, `/org/gnome/Ptyxis/apex`; outside the resource base path, so libadwaita loads nothing from it by itself |
-| `src/apex/apex.css` | the Apex marker; the sheet the sidebar and pane headers will use |
+| `src/apex/apex.css` | the sheet: board 32's colours as variables on `window.apex`, dark ones on `window.apex.apex-dark` |
+| `src/apex/apex-window.c` | `apex_window_attach()`: an `AdwOverlaySplitView` with the sidebar beside the window's content, the header bar restyled (session title, path and tag; Find; the session menu), the sheet loaded, and `apex-dark` following `AdwStyleManager:dark`. `APEX_PTYXIS_STOCK=1` keeps the stock window |
+| `src/apex/apex-sidebar.c` | the "Terminal" header (New Session, the main menu), the sessions grouped by where they run, the group headers with "N needs you", and the footer counts |
+| `src/apex/apex-session.c` | one session per tab: it feeds the status logic from the terminal's precmd, preexec and postexec signals, the bell, the agent's foreground command line and leader kind, the container termprops, OSC 7 and OSC 9;4 |
+| `src/apex/apex-session-state.c` | the status logic, without GTK: idle, running, done, failed, needs you; the subtitle; the relative time; the ssh host |
+| `src/apex/apex-session-row.c`, `apex-glyph.c` | a row (title, subtitle, time, glyph, the 2 px progress bar) and the Apex Symbolic glyphs drawn from their 16 px paths |
+
+### What a session shows
+
+| Status | From | Subtitle |
+|---|---|---|
+| running | `vte.shell.preexec` | `<command> · running` |
+| done, failed | `vte.shell.postexec=N` then `vte.shell.precmd`, after a preexec | `<command> · done`, `<command> · exit N` |
+| needs you | the bell while the session is not the focused tab of the active window; it holds until the session is focused | `<command> · needs you` |
+| idle | a new session, or a remote one (ssh, mosh, telnet in the foreground): its prompts never reach this side | the last command, or the shell |
+
+`<command>` is the foreground command line the agent reports, its program shown by name.
+Groups: "This computer"; a container from the `vte.container.name` and `.runtime`
+termprops, or the tab's own container; a remote host parsed from the ssh command line.
+The header tag is the running program, `ssh` for a remote session, or the user's shell.
+
+Two limits of Fedora 45, raised with apex-desktop:
+
+- VTE 0.84 hands an application no desktop notification (OSC 777, 9 or 99): only the
+  bell marks a session "needs you".
+- Fedora's `PROMPT_COMMAND` is an array whose first entries reset `$?`, and vte.sh's
+  `__vte_precmd` reads `$?` after a `local`, so bash always reports exit 0, and zsh
+  sends no preexec. Until the prompt snippet reports the status first, no session
+  reads "failed". `tests/ptyxis/shoot.sh`'s `.bashrc` does what that snippet needs to.
 
 ## The series
 
 | Patch | Upstream files | Changed lines | Hunks |
 |---|---|---|---|
 | `0001-build` | `src/meson.build` | +1 | `subdir('apex')` after upstream's resources |
+| `0002-sidebar` | `src/ptyxis-window.c` | +5 −1 | the include; `apex_window_attach()` at the end of `ptyxis_window_init()`; the tab bar hidden while the sidebar shows |
 
 Budget (ADR 0014, as amended for Ptyxis): at most 400 changed lines in upstream files,
-in hook hunks only; the added files under `src/apex/` do not count. In use: 1 line in
-1 file.
+in hook hunks only; the added files under `src/apex/` do not count. In use: 7 lines in
+2 files.
 
 The patches are `git format-patch` output against Fedora's `%prep` tree, with `a/` and
 `b/` prefixes, applied with `-p1`. Write them with apex-image's `just pkg-prep ptyxis`
@@ -57,7 +86,9 @@ and `just pkg-export ptyxis`, as for gnome-shell
 ## Building it here
 
 ```bash
+just ptyxis-test     # desktop/ptyxis's licence and paths; the status logic's unit test
 just ptyxis-lane     # podman or docker: apex-lane's container half in fedora:45
+just ptyxis-shots    # the built RPM in a headless gnome-shell, light and dark
 ```
 
 `tests/ptyxis/lane.sh` builds `apex-lane` from a pinned apex-image commit and runs its
@@ -66,3 +97,14 @@ SRPM's signature, `spec-edit`, the series at fuzz 0, the exact-tree check,
 `rpmbuild -ba` with Fedora's `%check`, the lane checks and `check.sh`. It leaves out
 what the VM adds, the signing and the store. The RPMs and logs land in
 `_build/ptyxis/out/`. CI runs it on every push.
+
+`tests/ptyxis/shoot.sh` installs that RPM in a fedora:45 container and runs gnome-shell
+headless at scale 2 for the user `apex`, with apex-desktop's fonts and profile values,
+G2's `fixtures.py` on the system bus and its `clock.c` holding the wall clock, as
+`tests/shots/direct.sh` runs a case.
+Its automation script, `probe.js`, opens board 32's five sessions with `ptyxis --tab`,
+types each command with a virtual keyboard into bash with vte.sh, selects apex-image
+and captures the window. `fixture.c`, installed as `claude`, `just`, `cargo`, `rpmbuild`
+and `ssh`, prints what `sessions.sh` wrote for that program and then waits, exits 0 or
+1, or rings the bell, so every status comes from the real shell integration. CI runs
+it after the lane and keeps the captures as the `ptyxis-shots` artifact.

@@ -155,7 +155,7 @@ REPORT_OF_A_BAR_DRAWN_FROM_TOKENS='
 | ($t.apex_bar_dot_size | px) as $dot | ($t.apex_radius_workspace_dot | px) as $dot_radius
 | ($t.apex_bar_clock_gap | px) as $clock_gap | ($t.apex_bar_clock_dot_size | px) as $clock_dot
 | ($t.apex_bar_icon_size | px) as $icon | ($t.apex_font_bar_size | px) as $text_size
-| ["bluetooth-active-symbolic", "network-wireless-signal-excellent-symbolic", "battery-level-80-symbolic"] as $glyphs
+| ["network-wireless-signal-excellent-symbolic", "battery-level-80-symbolic"] as $glyphs
 | ($glyphs | map({name: ., width: $icon, height: $icon, iconSize: $icon})) as $glyph_sizes
 | {height: ($t.apex_bar_pill_height | px), radius: ($t.apex_radius_bar_pill | px), background: "#00000000",
    hover: {background: $hover}, checked: {background: $hover}, padding: {left: $pp, right: $pp}} as $pill
@@ -181,18 +181,21 @@ REPORT_OF_A_BAR_DRAWN_FROM_TOKENS='
         clockText: {size: (1.25 * $text_size), weight: ($t.apex_font_bar_emphasis_weight | tonumber), height: 24, naturalHeight: 21},
         statusGlyphs: $glyph_sizes},
     diamond: {box: {x: 16, y: 8, width: 60, height: 48}, colour: $fg, inkPixels: 180},
-    dots: [{active: true, x: 38, y: 12.5, width: 25, height: $dot, opacity: 1, radius: $dot_radius},
-           {active: false, x: 68.875, y: 13.375, width: 5.25, height: 5.25, opacity: 0.498, radius: $dot_radius}],
+    dots: [{active: true, x: 38, y: 12.5, width: ($t.apex_bar_dot_active_width | px), height: $dot, opacity: 1, radius: $dot_radius},
+           {active: false, x: 64, y: 12.5, width: $dot, height: $dot, opacity: 0.447, radius: $dot_radius}],
     withDot: {dot: {visible: true, width: $clock_dot, height: $clock_dot, radius: ($t.apex_radius_clock_dot | px),
             background: $fg},
         labelWidth: 120, pillWidth: (120 + 2 * $pp + 2 * ($clock_gap + $clock_dot))},
     clockTextGap: 7.041,
     clockShowsWeekday: true,
-    corner: {name: "panelActivities", type: "ActivitiesButton", x: 0, y: 0, width: 84, height: $h},
-    dnd: {off: $glyphs, on: (["notifications-disabled-symbolic"] + $glyphs)},
-    leftItems: [{accessibleName: "Activities", label: null, pill: {x: $pad, y: 4, width: 76, height: 24, radius: 12}}],
-    rightItems: [{accessibleName: "System", label: null, pill: {x: 1337, y: 4, width: 95, height: 24, radius: 12}}],
-    opaque: {background: ($t.apex_bar | hex), boxShadow: null},
+    corner: {name: "hot-corner", type: "HotCorner", x: 0, y: 0, width: 4, height: 4},
+    dnd: {off: $glyphs, on: $glyphs},
+    leftItems: [{accessibleName: "Activities", label: null, pill: {x: $pad, y: 4, width: 76, height: 24, radius: 12}},
+        {accessibleName: "Desktop", label: {text: "Desktop", weight: ($t.apex_font_bar_emphasis_weight | tonumber)}, pill: null}],
+    rightItems: [{accessibleName: "Search (Super+Space)", label: null,
+            pill: {x: 1303, y: 4, width: ($t.apex_bar_search_width | px), height: 24, radius: 12}},
+        {accessibleName: "System", label: null, pill: {x: 1337, y: 4, width: 95, height: 24, radius: 12}}],
+    opaque: {background: ($t.apex_bar_solid | hex), boxShadow: {color: ($t.apex_border | hex), inset: false, x: 0, y: 1, blur: 0, spread: 0}},
     glass: []}}'
 # shellcheck disable=SC2016 # a jq program
 REPORT_OF_SURFACES_DRAWN_FROM_TOKENS='
@@ -303,15 +306,7 @@ HEX_DEF='def hex: rgba | map([., 16] | "0123456789abcdef"[(.[0] / .[1] | floor):
                                     + "0123456789abcdef"[(.[0] % .[1]):(.[0] % .[1]) + 1]) | "#" + join("");'
 
 # shellcheck disable=SC2016 # jq programs
-GAP_CLOSERS='the active dot at 22|.topBar.dots[0].width = 22
-inactive dots at full size and .45|.topBar.dots[1] |= (.width = 7 | .height = 7 | .opacity = 0.451)
-the hot-corner zone|.topBar.corner = {name: "hot-corner", type: "Actor", x: 0, y: 0, width: 4, height: 4}
-the status-pill filter|.topBar.dnd.on = .topBar.dnd.off
-no Bluetooth glyph|.topBar.statusGlyphs |= map(select(.name != "bluetooth-active-symbolic"))
-the focused-app name|.topBar.leftItems += [{accessibleName: "Desktop", label: {text: "Desktop", weight: 700}}]
-the search button|.topBar.rightItems |= [{accessibleName: "Search (Super+Space)", pill: {width: 32, height: 24, radius: 12}}] + .
-the solid bar|.topBar.opaque = {background: ($t.apex_bar_solid | hex), boxShadow: {color: ($t.apex_border | hex), inset: false, x: 0, y: 1, blur: 0, spread: 0}}
-the glass|.topBar.glass = [{actor: "panel", radius: 96, saturation: 1.6}]
+GAP_CLOSERS='the glass|.topBar.glass = [{actor: "panel", radius: 96, saturation: 1.6}]
 the clock gap|.topBar.clockTextGap = 8
 the clock pill without the pad|.topBar.withDot.pillWidth -= ($t.apex_bar_clock_gap | px) + ($t.apex_bar_clock_dot_size | px)
 the raw accent dot|.topBar.withDot.dot.background = .topBar.accent'
@@ -384,6 +379,23 @@ del(.topBar.statusGlyphs[1])|no Wi-Fi glyph
 .topBar.statusLabels[0].font.size = 13.5|the percentage at the bar's text size
 .topBar.statusLabels = []|no percentage label
 .topBar.clockShowsWeekday = false|a clock without the weekday
+.topBar.dots[0].width = 25|stock's widened active dot
+.topBar.dots[1] += {width: 5.25, height: 5.25, opacity: 0.498}|stock's shrunk, half-faded inactive dot
+.topBar.dots[1].opacity = 1|an inactive dot as strong as the active one
+.topBar.corner = {name: "panelActivities", type: "ActivitiesButton", x: 0, y: 0, width: 84, height: 32}|no hot-corner zone at the top-left pixel
+.topBar.corner.width = 1|a 1 px hot corner
+.topBar.opaque.background = .topBar.panel.background|translucent-top-bar off that keeps the translucent fill
+.topBar.opaque.boxShadow = null|a solid bar without its line
+.topBar.opaque.boxShadow.y = 2|a 2 px line under the solid bar
+.topBar.leftItems = .topBar.leftItems[:1]|no focused-app name
+.topBar.leftItems[1].label.weight = 600|a focused-app name at the bar's weight
+.topBar.leftItems[1].label.text = "Activities"|another name while nothing has focus
+.topBar.rightItems = .topBar.rightItems[1:]|no search button
+.topBar.rightItems = .topBar.rightItems[1:] + .topBar.rightItems[:1]|a search button after the status pill
+.topBar.rightItems[0].pill.width = 36|a search pill padded like the others
+.topBar.rightItems[0].accessibleName = "Search"|a search button that does not name its key
+.topBar.dnd.on = ["notifications-disabled-symbolic"] + .topBar.dnd.off|a Do Not Disturb glyph in the status pill
+.topBar.statusGlyphs += [{name: "bluetooth-active-symbolic", width: 16, height: 16, iconSize: 16}]|the connected keyboard's Bluetooth glyph
 CHANGES
     assert_run top_bar light '.monitorScale = 1 | .topBar.diamond.inkPixels = 16' >/dev/null
     expect_eq "top bar: at scale 1 a quarter of the diamond's stroke is 16 capture pixels" 0 "$(grep -c '^FAIL' "$T/top-bar.out")"

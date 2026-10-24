@@ -4,7 +4,7 @@ set -uo pipefail
 
 usage() {
     cat <<'EOF'
-usage: direct.sh main|kernel|fedora|apex
+usage: direct.sh main|kernel|fedora
 
 G2's direct cases, run by run.sh as root in a throwaway container of its bus image (the
 built image plus dbus-daemon), with tests/shots at /w (read-only) and the run's results
@@ -14,16 +14,16 @@ HOME and XDG_RUNTIME_DIR, a 2880x1800 virtual monitor at scale 2 (default-scale1
 /out/CASE.log gets its output, /out/results-PART.txt its exit status. Every shell sees
 fixtures.py's python-dbusmock services on the system bus (/out/fixtures-PART.txt) and a
 wall clock that clock.c holds at G2_CLOCK. A case that times out stops the part (exit 3).
+G2_SURFACE_SCENES=1 in direct.sh's environment also captures the shell surfaces' scenes.
 
   main     every case, with the VM's real /proc/cmdline
   kernel   the apex.safe=1 case (run.sh binds a fixture over /proc/cmdline)
   fedora   the captures of Fedora's own gnome-shell build (run.sh's baseline image)
-  apex     the Apex capture cases default and dark-style alone (local.sh)
 EOF
 }
 
 case ${1:-} in
-    main | kernel | fedora | apex) part=$1 ;;
+    main | kernel | fedora) part=$1 ;;
     -h | --help) usage; exit 0 ;;
     *) usage >&2; exit 2 ;;
 esac
@@ -75,7 +75,8 @@ run_case() {
     env -i HOME="$home" PATH=/usr/bin:/usr/sbin XDG_RUNTIME_DIR="$run" LANG=C.UTF-8 \
         DBUS_SYSTEM_BUS_ADDRESS=unix:path=/run/dbus/system_bus_socket \
         G2_CASE="$name" G2_CAPTURES=/out/captures G2_SETTINGS="$gsettings_triples" \
-        G2_SCALE=2 G2_MONITOR=2880x1800 TZ=UTC G2_CLOCK_LIB="$CLOCK_LIB" G2_CLOCK_EPOCH="$G2_CLOCK_EPOCH" "$@" \
+        G2_SCALE=2 G2_MONITOR=2880x1800 TZ=UTC G2_CLOCK_LIB="$CLOCK_LIB" G2_CLOCK_EPOCH="$G2_CLOCK_EPOCH" \
+        G2_SURFACE_SCENES="${G2_SURFACE_SCENES:-0}" "$@" \
         timeout "$SHELL_TIMEOUT" dbus-run-session -- bash -c '
             set -u
             gsettings set org.gnome.desktop.interface scaling-factor "$G2_SCALE"
@@ -124,10 +125,6 @@ case $part in
     fedora)
         run_and_record_case fedora-light "$CAPTURE_SETTINGS;org.gnome.desktop.interface color-scheme prefer-light" G2_SCENES=1
         run_and_record_case fedora-dark "$CAPTURE_SETTINGS;org.gnome.desktop.interface color-scheme prefer-dark" G2_SCENES=1
-        exit 0 ;;
-    apex)
-        run_and_record_case default "$CAPTURE_SETTINGS" G2_SCENES=1 G2_SURFACE_SCENES=1
-        run_and_record_case dark-style "$CAPTURE_SETTINGS;org.gnome.desktop.interface color-scheme prefer-dark" G2_SCENES=1 G2_SURFACE_SCENES=1
         exit 0 ;;
 esac
 

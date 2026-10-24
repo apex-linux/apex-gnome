@@ -713,7 +713,7 @@ function openBanner() {
     };
 }
 
-// Open together as on board 16; G2_SURFACE_SCENES=1 (local.sh) also captures them.
+// Open together as on board 16; G2_SURFACE_SCENES=1 also captures them.
 async function shellSurfaces(unit) {
     const opened = {popupMenu: openPopupMenu(), osd: openOsd(), banner: openBanner()};
     try {
