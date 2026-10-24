@@ -116,7 +116,10 @@ export class StubActor {
 const PANEL_GLASS = {blur: 24, saturation: 1.6, radius: 0};
 const POPOVER_GLASS = {blur: 30, saturation: 1.8, radius: 26};
 
-export const uiGroup = new StubActor('uiGroup', {extents: [0, 0, 1440, 900]});
+export const uiGroup = Object.assign(new StubActor('uiGroup', {extents: [0, 0, 1440, 900]}), {
+    add_child() {},
+    remove_child() {},
+});
 const boxPointer = new StubActor('boxpointer', {parent: uiGroup, redirect: 2});
 
 export const messageTray = {
@@ -153,8 +156,6 @@ export const sessionMode = {
 };
 
 export const actionMode = Shell.ActionMode.NORMAL;
-
-export const uiGroup = {add_child() {}};
 
 function box(children) {
     return {
