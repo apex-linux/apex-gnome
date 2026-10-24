@@ -19,7 +19,6 @@ const NO_TIMEOUT = GLib.MAXINT32;
 export const STAGED = 'staged';
 export const READY_FOR_REBOOT = 'ready-for-reboot';
 
-// The subtitle's parts, each from the first package of its list that the update changes.
 const PARTS = [['GNOME', ['gnome-shell']], ['Linux', ['kernel-cachyos', 'kernel']], ['Mesa', ['mesa-dri-drivers']]];
 
 Gio._promisify(Gio.DBusConnection.prototype, 'call');
@@ -51,7 +50,6 @@ function _version(evr) {
     return dash > 0 ? withoutEpoch.slice(0, dash) : withoutEpoch;
 }
 
-// "GNOME 51.1, Linux 7.2.9, Mesa 26.1.2" from GetChanges, leaving out what the update keeps.
 export async function changes() {
     const reply = await _call(IFACE, 'GetChanges', null, new GLib.VariantType('(a(sssss))'), CHANGES_TIMEOUT_MS);
     const [rows] = reply.deepUnpack();
@@ -62,7 +60,6 @@ export async function changes() {
     }).filter(Boolean).join(', ');
 }
 
-// Resolves once the stage is applied; rejects with {kind, message}, the message PolicyDenied's own.
 export async function apply(digest) {
     try {
         await _call(IFACE, 'Apply', new GLib.Variant('(s)', [digest]), null, NO_TIMEOUT);

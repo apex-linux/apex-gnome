@@ -415,6 +415,7 @@ fact "update card: staged: on, and Restart reads Restart & Update" \
     'update\.staged=buttons=Cancel,Restart & Update card=staged on=true subtitle=45\.20261010\.133 · GNOME 51\.1, Linux 7\.2\.9, Mesa 26\.1\.2'
 fact "update card: staged, a press applies the staged digest first, then confirms" \
     'update\.staged\.calls=timer:stopped apply:sha256:9e41aa07 confirmed:ConfirmedReboot'
+fact "update card: closed, the dialog's own close and confirm again" 'update\.staged\.restored=close=true confirm=true'
 fact "update card: in the power-off dialog too, with its Restart relabelled" \
     'update\.staged-power-off=buttons=Cancel,Restart & Update,Power Off card=staged on=true subtitle=45\.20261010\.133 · GNOME 51\.1, Linux 7\.2\.9, Mesa 26\.1\.2'
 fact "update card: switched off, Restart reads Restart again" \
@@ -430,6 +431,7 @@ fact "update card: the dialog keeps the error, the switch off" \
 fact "update card: pressed again, the action alone" 'update\.after-failure\.calls=confirmed:ConfirmedShutdown'
 fact "update card: Cancel after a failed press confirms nothing" 'update\.failed-then-cancel\.calls=none'
 fact "update card: layer off after a failed press, Cancel still confirms nothing" 'update\.failed-off-cancel\.calls=none'
+fact "update card: and once that stale confirmation is spent, stock's own again" 'update\.failed-off\.restored=close=true confirm=true'
 fact "update card: Apply fails as the countdown ends: the countdown's action still happens" \
     'update\.countdown-failed\.calls=apply:sha256:9e41aa07 confirmed:ConfirmedReboot'
 fact "update card: layer off: no card, stock's label" 'update\.off=buttons=Cancel,Restart card=none'

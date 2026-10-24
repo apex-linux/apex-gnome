@@ -614,6 +614,7 @@ function endSessionDialog(St) {
             (globalThis.endSessionCalls ??= []).push('timer:stopped');
         },
     });
+    dialog.stockMethods = {close: dialog.close, _confirm: dialog._confirm};
     // As stock's confirm buttons: close the dialog, then confirm once it has closed.
     dialog.open = content => {
         buttonLayout.destroy_all_children();
@@ -654,6 +655,9 @@ function updateCardState(label, dialog) {
 // button does with Update1's Apply.
 async function exerciseUpdateCard(dialog, contents) {
     const {powerOff, restart, logout} = contents;
+    const {stockMethods} = dialog;
+    const restored = label => fact(label,
+        `close=${dialog.close === stockMethods.close} confirm=${dialog._confirm === stockMethods._confirm}`);
     const staged = {state: 'staged', digest: 'sha256:9e41aa07', version: '45.20261010.133'};
     const open = async (content, update) => {
         globalThis.update1 = update;
@@ -674,6 +678,7 @@ async function exerciseUpdateCard(dialog, contents) {
     await open(restart, {read: staged});
     updateCardState('update.staged', dialog);
     await press('update.staged', 'Restart & Update');
+    restored('update.staged.restored');
     await open(powerOff, {read: staged});
     updateCardState('update.staged-power-off', dialog).setOn(false);
     updateCardState('update.switched-off', dialog);
@@ -695,6 +700,7 @@ async function exerciseUpdateCard(dialog, contents) {
     settings.set_boolean('layer-enabled', false);
     await spin(200);
     await press('update.failed-off-cancel', 'Cancel');
+    restored('update.failed-off.restored');
     settings.set_boolean('layer-enabled', true);
     await spin(200);
     await open(restart, failing);

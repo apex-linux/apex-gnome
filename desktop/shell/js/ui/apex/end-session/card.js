@@ -10,8 +10,8 @@ import * as PopupMenu from '../../popupMenu.js';
 import * as Update from './update.js';
 
 export const CARD_STYLE_CLASS = 'apex-update-card';
-export const TITLE = 'Install update';
-export const GENERIC_ERROR = 'The update could not be prepared.';
+export const TITLE = 'Start the new version next time';
+export const GENERIC_ERROR = 'The new version could not be prepared.';
 const ICON_NAME = 'system-software-update';
 
 export const UpdateCard = GObject.registerClass({
@@ -22,7 +22,10 @@ export const UpdateCard = GObject.registerClass({
         this._update = update;
         this._applied = false;
         this.add_child(new St.Icon({style_class: 'apex-update-card-icon', icon_name: ICON_NAME, y_align: Clutter.ActorAlign.CENTER}));
-        const labels = new St.BoxLayout({orientation: Clutter.Orientation.VERTICAL, x_expand: true, y_align: Clutter.ActorAlign.CENTER});
+        const labels = new St.BoxLayout({
+            style_class: 'apex-update-card-text', orientation: Clutter.Orientation.VERTICAL,
+            x_expand: true, y_align: Clutter.ActorAlign.CENTER,
+        });
         this.add_child(labels);
         labels.add_child(new St.Label({style_class: 'apex-update-card-title', text: TITLE}));
         this._subtitle = new St.Label({style_class: 'apex-update-card-subtitle', text: update.version});
@@ -71,7 +74,6 @@ export const UpdateCard = GObject.registerClass({
     fail(error) {
         this._failed = true;
         this._subtitle.text = error.kind === 'PolicyDenied' && error.message ? error.message : GENERIC_ERROR;
-        this._subtitle.add_style_class_name('apex-update-card-error');
         this.setOn(false);
     }
 });

@@ -44,6 +44,7 @@ readonly FIXTURE_NAMES=(org.freedesktop.UPower org.freedesktop.NetworkManager or
 readonly GDM_NAME=org.gnome.DisplayManager
 readonly LOGIND_NAME=org.freedesktop.login1
 readonly FPRINT_NAME=net.reactivated.Fprint
+readonly UPDATE1_NAME=io.github.apex_linux.Apex.Update1
 # layer.js warns that this names no fault phase as it loads: the witness that it loaded.
 readonly LOAD_WITNESS=APEX_SHELL_TEST_FAULT=load-witness
 readonly CLOCK='2026-10-21 10:24:00'
@@ -124,11 +125,11 @@ mkdir -p /run/systemd/seats
 mkdir -p /run/dbus /etc/dbus-1 /tmp/.X11-unix && chmod 1777 /tmp/.X11-unix
 {
     echo '<busconfig><policy user="root">'
-    for name in "${FIXTURE_NAMES[@]}" "$GDM_NAME" "$LOGIND_NAME" "$FPRINT_NAME"; do
+    for name in "${FIXTURE_NAMES[@]}" "$GDM_NAME" "$LOGIND_NAME" "$FPRINT_NAME" "$UPDATE1_NAME"; do
         printf '<allow own="%s"/><allow send_destination="%s"/>\n' "$name" "$name"
     done
     printf '</policy><policy context="default">'
-    printf '<allow send_destination="%s"/>' "$GDM_NAME" "$LOGIND_NAME" "$FPRINT_NAME"
+    printf '<allow send_destination="%s"/>' "$GDM_NAME" "$LOGIND_NAME" "$FPRINT_NAME" "$UPDATE1_NAME"
     printf '</policy></busconfig>\n'
 } >/etc/dbus-1/system-local.conf
 [[ -S /run/dbus/system_bus_socket ]] || dbus-daemon --system --fork || die "no system bus"
@@ -217,6 +218,21 @@ shoot lock-fingerprint "$USER_NAME" user default 'Password:' -- APEX_FINGERPRINT
 if ! authselect disable-feature with-fingerprint >>"$out/authselect.log" 2>&1 || ! dconf update; then
     log "authselect: cannot disable with-fingerprint"
 fi
+# The end-session dialog's update card against a fresh Update1 each time: the probe moves it
+# from up to date through staged and ready-for-reboot to an Apply that fails.
+for scheme in light dark; do
+    color=default
+    [[ $scheme == dark ]] && color=prefer-dark
+    python3 "$SHOTS/update1-mock.py" "$out/end-session-$scheme.update1.log" >"$out/end-session-$scheme.update1.out" 2>&1 &
+    update1=$!
+    for _ in $(seq 100); do
+        grep -q "owns $UPDATE1_NAME" "$out/end-session-$scheme.update1.out" 2>/dev/null && break
+        sleep 0.1
+    done
+    shoot "end-session-$scheme" "$USER_NAME" user "$color" 'Password:' -- APEX_END_SESSION=1 || status=1
+    kill "$update1" 2>/dev/null
+    wait "$update1" 2>/dev/null
+done
 ((status == 0)) || die "shoot.sh: a case failed; see ${out#"$APEX_ROOT/"}/*.log"
 python3 "$HERE/check.py" "$out" || die "shoot.sh: the cases' assertions failed"
 log "shoot.sh: captures in ${out#"$APEX_ROOT/"}"

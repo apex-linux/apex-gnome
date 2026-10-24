@@ -6,7 +6,8 @@ Asserts each shoot.sh case from its log's APEXLOCK lines and gdm-mock.py's log: 
 boards 20 and 12 show, that no case unlocks, that a wrong answer leaves the screen
 locked, that a GDM refusing to reauthenticate leaves it locked, that the fingerprint
 conversation stops while the screen is blank, that blanking cancels the conversation and waking starts a new one, that
-stock and safe mode keep upstream's lock, and that the greeter runs no Apex JS.
+stock and safe mode keep upstream's lock, that the greeter runs no Apex JS, and what the
+end-session dialog's update card does with update1-mock.py's Apply.
 Prints one line per assertion and exits 1 when one fails.
 """
 
@@ -312,6 +313,61 @@ def check_greeter_style(case, style, t):
           json.dumps(buttons))
 
 
+END_SESSION_CASES = ["end-session-light", "end-session-dark"]
+STAGED_DIGEST = "sha256:9e41aa07c3b2d1e0f9a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c80c2b"
+UPDATE_TITLE = "Start the new version next time"
+UPDATE_SUBTITLE = "45.20261010.133 · GNOME 51.1, Linux 7.2.9, Mesa 26.1.2"
+POLICY_DENIED = "Plug in the charger to install the update."
+
+
+def card_is(step, on, sensitive=True, subtitle=UPDATE_SUBTITLE):
+    card = step.get("card") or {}
+    return (card.get("title") == UPDATE_TITLE and card.get("subtitle") == subtitle and card.get("on") is on
+            and card.get("sensitive") is sensitive and card.get("icon") == "system-software-update")
+
+
+def check_end_session(shots, case):
+    """Board 14's update card against update1-mock.py: where it shows, and what Apply sees."""
+    f = facts(read(shots, f"{case}.log"))
+
+    def step(name):
+        return f.get(name) or {}
+
+    def detail(*names):
+        return json.dumps({n: f.get(n) for n in names})
+
+    check(f"{case}: Update1 up to date: no card, the power-off dialog's own buttons",
+          step("up-to-date").get("card", 1) is None and step("up-to-date").get("buttons") == ["Cancel", "Restart", "Power Off"],
+          detail("up-to-date"))
+    check(f"{case}: staged, but never in the log-out dialog", "logout" in f and step("logout").get("card", 1) is None, detail("logout"))
+    check(f"{case}: staged: the card, its switch on, Restart reads Restart & Update",
+          card_is(step("staged"), True) and step("staged").get("buttons") == ["Cancel", "Restart & Update"], detail("staged"))
+    check(f"{case}: staged: Restart & Update applies the staged digest, then restarts",
+          step("staged-pressed").get("apply") == [STAGED_DIGEST] and step("staged-pressed").get("signals") == ["ConfirmedReboot"]
+          and step("staged-pressed").get("open") is False, detail("staged-pressed"))
+    check(f"{case}: switched off: Restart reads Restart again",
+          card_is(step("switched-off"), False) and step("switched-off").get("buttons") == ["Cancel", "Restart", "Power Off"],
+          detail("switched-off"))
+    check(f"{case}: switched off: Power Off powers off without Apply, the stage left locked",
+          step("switched-off-pressed").get("apply") == [] and step("switched-off-pressed").get("signals") == ["ConfirmedShutdown"],
+          detail("switched-off-pressed"))
+    check(f"{case}: ready-for-reboot: the card, its switch on and insensitive, Restart & Update",
+          card_is(step("ready"), True, sensitive=False) and step("ready").get("buttons") == ["Cancel", "Restart & Update"], detail("ready"))
+    check(f"{case}: ready-for-reboot: Restart & Update restarts, nothing left to apply",
+          step("ready-pressed").get("apply") == [] and step("ready-pressed").get("signals") == ["ConfirmedReboot"], detail("ready-pressed"))
+    check(f"{case}: Apply fails on a press: the dialog stays open with PolicyDenied's message, the switch off, nothing confirmed",
+          step("apply-failed").get("open") is True and card_is(step("apply-failed"), False, subtitle=POLICY_DENIED)
+          and step("apply-failed").get("apply") == [STAGED_DIGEST] and step("apply-failed").get("signals") == [],
+          detail("apply-failed"))
+    signals = step("apply-failed-cancelled").get("signals")
+    check(f"{case}: then Cancel cancels: the failed press's confirmation never comes",
+          isinstance(signals, list) and "Canceled" in signals and not any(s.startswith("Confirmed") for s in signals),
+          detail("apply-failed-cancelled"))
+    check(f"{case}: Apply fails as the countdown ends: the countdown still restarts",
+          step("countdown-failed").get("apply") == [STAGED_DIGEST] and step("countdown-failed").get("signals") == ["ConfirmedReboot"],
+          detail("countdown-failed"))
+
+
 def main():
     if len(sys.argv) != 2:
         print(__doc__, file=sys.stderr)
@@ -323,6 +379,8 @@ def main():
     check_fingerprint(shots, "lock-fingerprint")
     for case in GREETER_CASES:
         check_greeter(shots, case)
+    for case in END_SESSION_CASES:
+        check_end_session(shots, case)
     return 1 if failed else 0
 
 

@@ -103,14 +103,16 @@ function _guard(dialog) {
             await _card.apply().catch(logError);
         return confirm.call(this, signal);
     };
-    _guarded = {dialog, saved};
+    const closedId = dialog.connect('closed', () => _unguard());
+    _guarded = {dialog, saved, closedId};
 }
 
-// A failed press's stale confirmation must still be skipped, even with the layer off.
+// On close and on disable. A failed press's stale confirmation is still skipped after either.
 function _unguard() {
     if (!_guarded)
         return;
-    const {dialog, saved} = _guarded;
+    const {dialog, saved, closedId} = _guarded;
+    dialog.disconnect(closedId);
     dialog.close = saved.close;
     if (_staleConfirms === 0)
         dialog._confirm = saved._confirm;
