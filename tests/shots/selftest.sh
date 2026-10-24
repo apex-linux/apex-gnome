@@ -1240,7 +1240,11 @@ EOF
 test_fixtures() {
     local passes failures address missing=()
     mkdir -p "$T/fixtures"
-    fixtures_report 'G2-FIXTURES {"battery": {"percentage": 87.0, "present": true, "onBattery": true}, "wifi": {"primary": "Apex-5G", "ssid": "Apex-5G", "strength": 90, "inRange": ["Apex-5G", "Apex-2.4G", "Library Guest"], "state": 70, "connectivity": 4}, "keyboard": {"alias": "Keychron K3", "connected": true, "icon": "input-keyboard"}, "powerProfiles": {"active": "balanced", "profiles": ["power-saver", "balanced", "performance"]}}'
+    fixtures_report "G2-FIXTURES $(jq -c . <<<'{"battery": {"percentage": 87.0, "present": true, "onBattery": true},
+        "wifi": {"primary": "Apex-5G", "ssid": "Apex-5G", "strength": 90, "inRange": ["Apex-5G", "Apex-2.4G", "Library Guest"],
+            "state": 70, "connectivity": 4},
+        "keyboard": {"alias": "Keychron K3", "connected": true, "icon": "input-keyboard"},
+        "powerProfiles": {"active": "balanced", "profiles": ["power-saver", "balanced", "performance"]}}')"
     read -r passes failures <<<"$(assertion_counts fixtures_on_the_bus "$T/fixtures")"
     expect_eq "fixtures: what fixtures.py reports passes each part's five assertions" "15/0" "$passes/$failures"
     fixtures_report 'G2-FIXTURES {"battery": {"percentage": 0.0, "present": false, "onBattery": false}, "wifi": {"primary": "Apex-5G", "ssid": "Apex-5G", "strength": 30, "inRange": ["Apex-5G"], "state": 70, "connectivity": 4}, "keyboard": {"alias": "Keychron K3", "connected": false, "icon": "phone"}, "powerProfiles": null}'
