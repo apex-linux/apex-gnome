@@ -56,6 +56,12 @@ control-center-test:
 control-center-lane:
     engine=$(command -v podman || command -v docker) && "$engine" run --rm -v "{{justfile_directory()}}:/apex-gnome:z" -w /apex-gnome {{control_center_image}} tests/control-center/lane.sh
 
+control_center_run_packages := "gnome-shell mesa-dri-drivers dbus-daemon python3-dbusmock python3-gobject at-spi2-core gcc util-linux adwaita-sans-fonts"
+
+# The Settings that control-center-lane built, in a headless gnome-shell: board 11's captures, light and dark, and every row's binding; in _build/control-center/shots.
+control-center-run:
+    engine=$(command -v podman || command -v docker) && "$engine" run --rm -v "{{justfile_directory()}}:/apex-gnome:z" -w /apex-gnome {{control_center_image}} bash -c 'dnf5 -y -q --setopt=install_weak_deps=False install {{control_center_run_packages}} && tests/control-center/run.sh _build/control-center/out'
+
 # The script self-tests, as ci.yml runs them.
 selftest:
     .github/scripts/selftest.sh

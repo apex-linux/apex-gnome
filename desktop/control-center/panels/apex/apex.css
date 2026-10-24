@@ -1,2 +1,32 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
 /*! apex-control-center */
+
+apex-header {
+  padding: 28px 20px 22px;
+}
+
+apex-header .apex-tile {
+  border-radius: 20px;
+  background-color: var(--view-bg-color);
+  outline: 1px solid var(--border-color);
+  outline-offset: -1px;
+  box-shadow: 0 6px 18px rgb(0 0 0 / 12%);
+}
+
+apex-header .apex-diamond {
+  min-width: 20px;
+  min-height: 20px;
+  border: 3px solid var(--accent-bg-color);
+  border-radius: 5px;
+  transform: rotate(45deg);
+}
+
+apex-header .apex-title {
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: -0.3px;
+}
+
+apex-header .apex-versions {
+  font-size: 12.5px;
+}

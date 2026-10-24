@@ -1,0 +1,81 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Thuong Vo <66083331+SekiroKenjii@users.noreply.github.com>
+Date: Sat, 24 Oct 2026 09:30:00 +0000
+Subject: [PATCH] apex: add the Apex Desktop panel, first in the sidebar
+
+The Apex Settings ship inside gnome-control-center. Their sources come
+from Source1, a git archive of desktop/control-center/ in apex-gnome,
+which %prep unpacks at the top of this tree as panels/apex/.
+
+panels/meson.build reads panels/apex/meson.build after upstream's panels.
+It adds the Apex Desktop panel to panels_libs and gives
+apex_shell_sources, the Apex resource /org/gnome/Settings/apex, which
+shell/meson.build compiles straight into gnome-control-center: as
+sources, not a static library, so the linker keeps them while no
+upstream code calls them.
+
+cc-panel-loader.c registers the panel as "apex", so
+`gnome-control-center apex` opens it, and cc-panel-list.c puts it first
+in the sidebar, above a separator.
+---
+ panels/meson.build      | 1 +
+ shell/cc-panel-list.c   | 3 +++
+ shell/cc-panel-loader.c | 2 ++
+ shell/meson.build       | 1 +
+ 4 files changed, 7 insertions(+)
+
+diff --git a/panels/meson.build b/panels/meson.build
+index 07c7733..8987c3a 100644
+--- a/panels/meson.build
++++ b/panels/meson.build
+@@ -46,3 +46,4 @@ foreach cappletname: dependent_panels + panels
+ 
+   subdir(cappletname)
+ endforeach
++subdir('apex')
+diff --git a/shell/cc-panel-list.c b/shell/cc-panel-list.c
+index f2d1e26..993d98f 100644
+--- a/shell/cc-panel-list.c
++++ b/shell/cc-panel-list.c
+@@ -335,6 +335,9 @@ filter_func (GtkListBoxRow *row, gpointer user_data)
+ 
+ static const gchar *const panel_order[] = {
+     /* Main page */
++    "apex",
++    "separator",
++
+     "wifi",
+     "network",
+     "wwan",
+diff --git a/shell/cc-panel-loader.c b/shell/cc-panel-loader.c
+index d9cabff..cab90ac 100644
+--- a/shell/cc-panel-loader.c
++++ b/shell/cc-panel-loader.c
+@@ -31,6 +31,7 @@
+ #ifndef CC_PANEL_LOADER_NO_GTYPES
+ 
+ /* Extension points */
++extern GType cc_apex_panel_get_type (void);
+ extern GType cc_applications_panel_get_type (void);
+ extern GType cc_background_panel_get_type (void);
+ #ifdef BUILD_BLUETOOTH
+@@ -85,6 +86,7 @@ extern void cc_wwan_panel_static_init_func (void);
+ #endif
+ 
+ static CcPanelLoaderVtable default_panels[] = {
++    PANEL_TYPE ("apex", cc_apex_panel_get_type, NULL),
+     PANEL_TYPE ("applications", cc_applications_panel_get_type, NULL),
+     PANEL_TYPE ("background", cc_background_panel_get_type, NULL),
+ #ifdef BUILD_BLUETOOTH
+diff --git a/shell/meson.build b/shell/meson.build
+index 79405f9..892dc38 100644
+--- a/shell/meson.build
++++ b/shell/meson.build
+@@ -112,6 +112,7 @@ libshell_dep = declare_dependency(
+ ########################
+ 
+ shell_sources = common_sources + files('main.c')
++shell_sources += apex_shell_sources
+ 
+ shell_deps = common_deps + [
+   libdevice_dep,
