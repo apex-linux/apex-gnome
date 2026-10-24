@@ -2,12 +2,14 @@
 
 set shell := ["bash", "-euo", "pipefail", "-c"]
 
+ptyxis_image := "registry.fedoraproject.org/fedora:45@sha256:1e13e11f63e147a40a935c9046c79d53a30b861a3cf05ebb023bb53c562382cb"
+
 # List the recipes.
 default:
     @just --list
 
 # The tests, eslint, the theme compile, the script self-test and the comment guard, as ci.yml runs them (tests that need a missing tool skip).
-check: layer-test shots-test eslint theme selftest
+check: layer-test shots-test eslint theme selftest ptyxis-test
     apex-lint comments
 
 # The Apex layer's safety net in gjs: kill switches, fault injection, crash guard, live layer cycles.
@@ -25,6 +27,14 @@ eslint:
 # The three sheets compiled with sassc as the rebuild does, against Fedora's gnome-shell SRPM (or GNOME_SHELL_SRC, a source tree).
 theme:
     lint/theme.sh
+
+# desktop/ptyxis: its licence lines, the recipe's source1_paths and its series.
+ptyxis-test:
+    tests/ptyxis/selftest.sh
+
+# Ptyxis rebuilt as the lane builds it (apex-lane's container half), in fedora:45 with podman or docker; RPMs in _build/ptyxis/out.
+ptyxis-lane:
+    engine=$(command -v podman || command -v docker) && "$engine" run --rm -v "{{justfile_directory()}}:/apex-gnome:z" -w /apex-gnome {{ptyxis_image}} tests/ptyxis/lane.sh
 
 # The script self-tests, as ci.yml runs them.
 selftest:
