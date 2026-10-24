@@ -268,6 +268,14 @@ Mode lit through `apex-lit` with `checked` stock, the power-profile indicator ou
 pill, "Off" under a toggle without a subtitle of its own, and the clicks switching to the
 last profile and back, still lit. Stock keeps VPN before Airplane Mode and nothing lit.
 
+`shadow_layers` checks the `shadows` layer feature in the same cases. The probe opens
+Quick Settings, the calendar and a stock `ModalDialog`, and reads each one's layer: shown,
+on the surface's box, `0 $apex_shadow_2_y $apex_shadow_2_blur $apex_shadow_2`, Quick
+Settings' at its radius, and the dialog's beside its box (above the lightbox). It counts
+the stage's paints in the quieter of two idle 2 s windows with the feature on and with
+`shadows` in `disabled-features`: the layers add none. The `motion` case, which opens the overview with a
+window, checks the window preview's two layers and the `apex-window-preview` radius.
+
 `notifications_layer` checks the `notifications` layer feature in the same cases, and stock
 in the stock cases. The probe posts three low-urgency notifications from one app, opens the
 calendar and reads the cards' boxes, the first card's header line, glyph and icon, and the
@@ -328,6 +336,15 @@ and Quick Settings', the calendar's (each opened) and a banner's `$apex_panel_bl
 actor on the stage carries a `Shell.BlurEffect` and the root carries `apex-solid`; that
 with `disabled-features=['glass']` no actor carries one and the tints stay; and that the
 glass comes back after each.
+
+`shadows_under_glass` checks the `shadows` feature against the glass in the same case, light
+and dark: `glass.js` lays the tile grid under Quick Settings, a popup menu and a dialog and
+reads each box with `framePixels()`, once with the shadows on and once with `shadows` in
+`disabled-features`. The pixels the rounded box covers fully, 2 device px in from its edges,
+are the same in both frames; the 2 px rim's covered pixels are within 12/255; the reactive
+pick just inside the box is the same actor in both, never a layer; the menus draw no arrow.
+It writes `shadow-corners-light.png` and `shadow-corners-dark.png`, Quick Settings' four
+corners at 4×, for review.
 
 `G2_GLASS=1 G2_GLASS_STRESS=SECONDS` runs a stress instead, by hand: for that long a
 stand-in window moves and tiles change under the box, every other change forwarded. Each

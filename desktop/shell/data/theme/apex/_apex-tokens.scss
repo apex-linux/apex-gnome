@@ -82,10 +82,26 @@ $apex_panel_border: if($variant == 'light', rgba(255, 255, 255, .65), rgba(255, 
 $apex_button: if($variant == 'light', rgba(0, 0, 10, .065), rgba(255, 255, 255, .09));
 $apex_button_hover: if($variant == 'light', rgba(0, 0, 10, .12), rgba(255, 255, 255, .16));
 $apex_shadow: if($variant == 'light', rgba(20, 30, 60, .22), rgba(0, 0, 0, .5));
+// St draws one box-shadow: the shadows feature draws each second layer (-apex-shadow-layer).
+$apex_shadow_2: if($variant == 'light', rgba(20, 30, 60, .1), rgba(0, 0, 0, .3));
+$apex_preview_shadow: if($variant == 'light', rgba(20, 30, 60, .2), rgba(0, 0, 0, .45));
+$apex_preview_shadow_2: if($variant == 'light', rgba(20, 30, 60, .1), rgba(0, 0, 0, .3));
 
 $apex_surface_border: 1px;
 $apex_shadow_y: 18px;
 $apex_shadow_blur: 50px;
+$apex_shadow_2_y: 2px;
+$apex_shadow_2_blur: 8px;
+$apex_preview_shadow_y: 12px;
+$apex_preview_shadow_blur: 32px;
+$apex_preview_shadow_2_y: 1px;
+$apex_preview_shadow_2_blur: 4px;
+
+// The boards' second shadow layer, which the shadows feature draws (St draws only box-shadow).
+@mixin apex-shadow-layer {
+  -apex-shadow-layer: 0 $apex_shadow_2_y $apex_shadow_2_blur 0 $apex_shadow_2;
+}
+
 // Quick Settings, the calendar and banners.
 $apex_panel_blur: 30px;
 $apex_panel_saturation: 180%;
@@ -262,6 +278,8 @@ $apex_search_top: 20px;
 $apex_search_gap: 10px;
 $apex_font_search_size: 14px;
 $apex_radius_thumbnail: 8px;
+// DESIGN's default window radius (window-corner-radius 14): board 35 draws the previews' shadows with it.
+$apex_radius_window_preview: 14px;
 $apex_thumbnail_gap: 10px;
 // Unpadded, so the overview's height cap leaves the thumbnails their full .081 scale.
 $apex_thumbnails_padding: 0px;

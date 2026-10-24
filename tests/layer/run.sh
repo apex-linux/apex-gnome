@@ -56,6 +56,8 @@ cp "$HERE"/stubs/appDisplay.js "$HERE"/stubs/remoteSearch.js "$HERE"/stubs/searc
 mkdir -p "$T/shell/js/misc"
 cp "$HERE/stubs/systemActions.js" "$T/shell/js/misc/"
 cp "$HERE"/stubs/St.js "$HERE"/stubs/Clutter.js "$HERE"/stubs/Shell.js "$HERE"/stubs/Meta.js "$HERE"/stubs/Graphene.js "$T/"
+# The shadow cutout is a GObject subclass of Clutter.ShaderEffect, which the stubs cannot be.
+cp "$HERE/stubs/cutout.js" "$T/shell/js/ui/apex/shadows/cutout.js"
 # gjs outside the shell has no St or Clutter typelib, and the fixtures' Shell and Meta no
 # WindowTracker or Barrier: the features get stubs instead.
 find "$T/shell/js/ui/apex" -name '*.js' -exec sed -i -e "s|'gi://St'|'file://$T/St.js'|" \
@@ -65,7 +67,14 @@ for gir in "$HERE"/fixtures/*.gir; do
     gir_name=${gir##*/}
     "$GI_COMPILER" "$gir" -o "$T/typelib/${gir_name%.gir}.typelib"
 done
+# A disabled-features restricted to its <choices> must also take the test-only features.
+readonly APEX_SCHEMA=$T/io.github.apex_linux.Apex.Desktop.gschema.xml
+awk '/<key name="disabled-features"/ { key = 1 }
+    key && /<choices>/ && !done { print; print "        <choice value=\"fault\"/>"; print "        <choice value=\"witness\"/>"; done = 1; next }
+    key && /<\/key>/ { key = 0 }
+    { print }' "$SCHEMA_DIR/io.github.apex_linux.Apex.Desktop.gschema.xml" >"$APEX_SCHEMA"
 cp "$SCHEMA_DIR"/*.gschema.xml "$T/schemas/"
+cp "$APEX_SCHEMA" "$T/schemas/"
 # gsettings-desktop-schemas' keys the features read, in every schema directory.
 readonly -a DESKTOP_SCHEMAS=("$HERE"/fixtures/org.gnome.desktop.*.gschema.xml)
 cp "${DESKTOP_SCHEMAS[@]}" "$T/schemas/"
@@ -73,28 +82,28 @@ glib-compile-schemas --strict "$T/schemas"
 awk '/<child name="keybindings"/ { next }
     /<schema id="io\.github\.apex_linux\.Apex\.Desktop\.Keybindings"/ { skip = 1 }
     !skip { print }
-    skip && /<\/schema>/ { skip = 0 }' "$SCHEMA_DIR/io.github.apex_linux.Apex.Desktop.gschema.xml" \
+    skip && /<\/schema>/ { skip = 0 }' "$APEX_SCHEMA" \
     >"$T/nochild/io.github.apex_linux.Apex.Desktop.gschema.xml"
 cp "${DESKTOP_SCHEMAS[@]}" "$T/nochild/"
 glib-compile-schemas --strict "$T/nochild"
 mkdir -p "$T/nokey"
 awk '/<key name="toggle-spotlight"/ { skip = 1 } !skip { print } skip && /<\/key>/ { skip = 0 }' \
-    "$SCHEMA_DIR/io.github.apex_linux.Apex.Desktop.gschema.xml" >"$T/nokey/io.github.apex_linux.Apex.Desktop.gschema.xml"
+    "$APEX_SCHEMA" >"$T/nokey/io.github.apex_linux.Apex.Desktop.gschema.xml"
 cp "${DESKTOP_SCHEMAS[@]}" "$T/nokey/"
 glib-compile-schemas --strict "$T/nokey"
 mkdir -p "$T/nodock"
 awk '/<key name="dock-show-trash"/ { skip = 1 } !skip { print } skip && /<\/key>/ { skip = 0 }' \
-    "$SCHEMA_DIR/io.github.apex_linux.Apex.Desktop.gschema.xml" >"$T/nodock/io.github.apex_linux.Apex.Desktop.gschema.xml"
+    "$APEX_SCHEMA" >"$T/nodock/io.github.apex_linux.Apex.Desktop.gschema.xml"
 cp "${DESKTOP_SCHEMAS[@]}" "$T/nodock/"
 glib-compile-schemas --strict "$T/nodock"
 mkdir -p "$T/nohint"
 awk '/<key name="search-hint-shown"/ { skip = 1 } !skip { print } skip && /<\/key>/ { skip = 0 }' \
-    "$SCHEMA_DIR/io.github.apex_linux.Apex.Desktop.gschema.xml" >"$T/nohint/io.github.apex_linux.Apex.Desktop.gschema.xml"
+    "$APEX_SCHEMA" >"$T/nohint/io.github.apex_linux.Apex.Desktop.gschema.xml"
 cp "${DESKTOP_SCHEMAS[@]}" "$T/nohint/"
 glib-compile-schemas --strict "$T/nohint"
 mkdir -p "$T/noreduce"
 awk '/<key name="reduce-transparency"/ { skip = 1 } !skip { print } skip && /<\/key>/ { skip = 0 }' \
-    "$SCHEMA_DIR/io.github.apex_linux.Apex.Desktop.gschema.xml" >"$T/noreduce/io.github.apex_linux.Apex.Desktop.gschema.xml"
+    "$APEX_SCHEMA" >"$T/noreduce/io.github.apex_linux.Apex.Desktop.gschema.xml"
 glib-compile-schemas --strict "$T/noreduce"
 
 readonly CMDLINE_PLAIN='BOOT_IMAGE=(hd0,gpt2)/boot/ostree/apex/vmlinuz root=UUID=0 rw rhgb quiet'
@@ -330,6 +339,21 @@ fact "FAULT=everything: no fault feature" 'test-fault=stock'
 probe disabled "$CMDLINE_PLAIN" APEX_SHELL_TEST_FAULT=enable PROBE_DISABLED=fault PROBE_ENABLE=1
 has "disabled-features skips a feature" 'Apex: feature fault is in disabled-features'
 fact "and its hook gives stock" 'test-fault=stock'
+lacks "disabled-features: a test-only feature, under APEX_SHELL_TEST_FAULT, is a feature" 'names no feature'
+
+probe typo "$CMDLINE_PLAIN" PROBE_DISABLED=glas,dock PROBE_ENABLE=1 PROBE_DISABLE_LIVE=glas
+has "disabled-features: the feature a typo misspells stays on" 'Apex: feature glass enabled'
+if awk '/<key name="disabled-features"/ { key = 1 } key && /<choices>/ { found = 1 } key && /<\/key>/ { key = 0 }
+    END { exit !found }' "$APEX_SCHEMA"; then
+    fact "disabled-features: the schema's <choices> refuse a list with a typo" 'disabled-features='
+    lacks "disabled-features: so the layer never sees it" 'names no feature'
+else
+    fact "disabled-features: a schema without <choices> takes a typo" 'disabled-features=glas,dock'
+    has "disabled-features: the layer logs the name of no feature" 'Apex: disabled-features names no feature glas$'
+    count_is "disabled-features: once, through every later change" 'names no feature glas' 1
+    has "disabled-features: the real name beside it still disables its feature" 'Apex: feature dock is in disabled-features'
+    lacks "disabled-features: and is not logged" 'names no feature dock'
+fi
 
 probe motion-disabled "$CMDLINE_PLAIN" PROBE_DISABLED=motion PROBE_ENABLE=1
 has "disabled-features=['motion']: skips the feature" 'Apex: feature motion is in disabled-features'
@@ -391,6 +415,24 @@ has "disabled-features=['notifications']: skips the feature" 'Apex: feature noti
 fact "disabled-features=['notifications']: stock's group" "nf\.groups=Mail:$STACKED stacked=true"
 fact "disabled-features=['notifications']: stock's header" 'nf\.header=icon=true line=Mail now'
 fact "disabled-features=['notifications']: stock's footer" 'nf\.footer=clear clear=align:1 visible:true'
+
+probe shadows "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_SHADOWS=1
+has "shadows: the feature enables" 'Apex: feature shadows enabled'
+fact "shadows: a registered surface gets one layer from -apex-shadow-layer, its box and radius, just above its top ancestor" \
+    'shadows\.registered=box-shadow: 0px 2px 8px 0px rgba\(20, 30, 60, 0\.2\); border-radius: 14px; at 106,46 300x200 above=true cutout=14'
+fact "shadows: registering draws before the next frame, not inside the call" 'shadows\.before-the-frame=0'
+fact "shadows: registering again keeps one layer" 'shadows\.registered-twice=1'
+fact "shadows: an unmapped surface keeps no layer" 'shadows\.unmapped=none'
+fact "shadows: mapped again, it draws again" \
+    'shadows\.mapped-again=box-shadow: 0px 2px 8px 0px rgba\(20, 30, 60, 0\.2\); border-radius: 14px; at 106,46 300x200 above=true cutout=14'
+fact "shadows: layer off: no layer drawn" 'shadows\.off=none'
+fact "shadows: layer back on: the registration draws again" \
+    'shadows\.on=box-shadow: 0px 2px 8px 0px rgba\(20, 30, 60, 0\.2\); border-radius: 14px; at 106,46 300x200 above=true cutout=14'
+fact "shadows: a destroyed surface takes its layer with it" 'shadows\.destroyed=0 layers, root=bin'
+
+probe shadows-disabled "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_SHADOWS=1 PROBE_DISABLED=shadows
+has "disabled-features=['shadows']: skips the feature" 'Apex: feature shadows is in disabled-features'
+fact "disabled-features=['shadows']: a registration draws nothing" 'shadows\.registered=none'
 
 probe spotlight-disabled "$CMDLINE_PLAIN" PROBE_DISABLED=spotlight PROBE_ENABLE=1 PROBE_PRESS=1 PROBE_OVERVIEW_SEARCH=1
 has "disabled-features=['spotlight']: skips the feature" 'Apex: feature spotlight is in disabled-features'

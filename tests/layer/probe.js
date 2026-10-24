@@ -68,6 +68,7 @@ globalThis.global = {
     window_group: newEmitter(),
     get_window_actors: () => [...windowActors],
     stage: {width: 1440},
+    compositor: {get_laters: () => ({add: (_type, fn) => GLib.idle_add(GLib.PRIORITY_DEFAULT, fn), remove: id => GLib.source_remove(id)})},
     pointer: [0, 0],
     get_pointer() {
         return [...this.pointer, 0];
@@ -93,8 +94,10 @@ if (settings) {
     if (GLib.getenv('PROBE_HINT_SHOWN') === '1')
         settings.set_boolean('search-hint-shown', true);
     const disabled = GLib.getenv('PROBE_DISABLED');
-    if (disabled)
+    if (disabled) {
         settings.set_strv('disabled-features', disabled.split(','));
+        fact('disabled-features', settings.get_strv('disabled-features').join(','));
+    }
 }
 
 const Hooks = await import(`file://${shellDir}/js/ui/apex/hooks.js`);
@@ -484,6 +487,53 @@ async function exerciseNotifications() {
     await spin(200);
     notificationsState('nf.on', list, groups);
     calendarState('nf.on');
+}
+
+// A surface two actors below the stage's child, its sheet naming one further layer.
+async function exerciseShadows() {
+    if (GLib.getenv('PROBE_SHADOWS') !== '1')
+        return;
+    const St = (await import(`file://${shellDir}/../St.js`)).default;
+    const Registry = await import(`file://${shellDir}/js/ui/apex/shadows/registry.js`);
+    const root = new St.Widget({name: 'root'});
+    root._stage = {};
+    const bin = new St.Widget({name: 'bin', x: 100, y: 40});
+    const surface = new St.Widget({name: 'surface', x: 6, y: 6, width: 300, height: 200, mapped: true});
+    surface._themeNode = {
+        get_shadow: p => p === '-apex-shadow-layer'
+            ? {color: {red: 20, green: 30, blue: 60, alpha: 51}, xoffset: 0, yoffset: 2, blur: 8, spread: 0} : null,
+        get_border_radius: () => 14,
+    };
+    root.add_child(bin);
+    bin.add_child(surface);
+    const layers = label => {
+        const found = Registry.layersOf(surface);
+        fact(`shadows.${label}`, found.map(l => `${l.style} at ${l.x},${l.y} ${l.width}x${l.height} ` +
+            `above=${root.get_children().indexOf(l) === root.get_children().indexOf(bin) + 1} cutout=${l.cutout}`).join(' | ') || 'none');
+    };
+    Registry.register(surface, {name: 'probe', container: root});
+    fact('shadows.before-the-frame', Registry.layersOf(surface).length);
+    await spin(50);
+    layers('registered');
+    Registry.register(surface, {name: 'probe', container: root});
+    await spin(50);
+    fact('shadows.registered-twice', Registry.layersOf(surface).length);
+    surface.mapped = false;
+    surface.emit('notify::mapped');
+    await spin(50);
+    layers('unmapped');
+    surface.mapped = true;
+    surface.emit('notify::mapped');
+    await spin(50);
+    layers('mapped-again');
+    settings.set_boolean('layer-enabled', false);
+    await spin(200);
+    layers('off');
+    settings.set_boolean('layer-enabled', true);
+    await spin(200);
+    layers('on');
+    surface.destroy();
+    fact('shadows.destroyed', `${Registry.layersOf(surface).length} layers, root=${root.get_children().map(c => c.name).join(',')}`);
 }
 
 async function exerciseTopBar() {
@@ -1130,6 +1180,7 @@ if (layer && GLib.getenv('PROBE_ENABLE') === '1') {
     await exerciseMotion();
     await exerciseQuickSettings();
     await exerciseNotifications();
+    await exerciseShadows();
     await exerciseSpotlight();
     await exerciseTopBar();
     await exerciseSolidBar();

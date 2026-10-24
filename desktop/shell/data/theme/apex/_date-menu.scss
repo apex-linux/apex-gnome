@@ -16,6 +16,7 @@ $_calendar_day_width: ($apex_date_menu_column_width - 2 * $apex_calendar_padding
 // Glass, like Quick Settings: the tint until S2b's glass manager blurs behind it.
 .popup-menu-content.datemenu-popover {
   @include apex-surface($apex_panel);
+  @include apex-shadow-layer;
   padding: $apex_quick_settings_padding - $apex_surface_border;
   border-radius: $apex_radius_quick_settings;
 }
