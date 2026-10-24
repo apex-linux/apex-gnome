@@ -12,7 +12,16 @@ export class Button {
         this.styleClasses = [];
         this.container = {visible: true};
         this.destroyed = false;
-        this._destroyHandlers = [];
+        this.hover = false;
+        this._handlers = [];
+    }
+
+    get_transformed_position() {
+        return [1300, 0];
+    }
+
+    get_transformed_size() {
+        return [32, 32];
     }
 
     setSensitive(sensitive) {
@@ -32,13 +41,16 @@ export class Button {
     }
 
     connect(signal, fn) {
-        if (signal === 'destroy')
-            this._destroyHandlers.push(fn);
-        return this._destroyHandlers.length;
+        this._handlers.push([signal, fn]);
+        return this._handlers.length;
+    }
+
+    emit(signal) {
+        this._handlers.filter(([s]) => s === signal).forEach(([, fn]) => fn(this));
     }
 
     destroy() {
         this.destroyed = true;
-        this._destroyHandlers.forEach(fn => fn(this));
+        this.emit('destroy');
     }
 }

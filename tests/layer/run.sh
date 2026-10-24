@@ -66,6 +66,10 @@ awk '/<child name="keybindings"/ { next }
     skip && /<\/schema>/ { skip = 0 }' "$SCHEMA_DIR/io.github.apex_linux.Apex.Desktop.gschema.xml" \
     >"$T/nochild/io.github.apex_linux.Apex.Desktop.gschema.xml"
 glib-compile-schemas --strict "$T/nochild"
+mkdir -p "$T/nohint"
+awk '/<key name="search-hint-shown"/ { skip = 1 } !skip { print } skip && /<\/key>/ { skip = 0 }' \
+    "$SCHEMA_DIR/io.github.apex_linux.Apex.Desktop.gschema.xml" >"$T/nohint/io.github.apex_linux.Apex.Desktop.gschema.xml"
+glib-compile-schemas --strict "$T/nohint"
 
 readonly CMDLINE_PLAIN='BOOT_IMAGE=(hd0,gpt2)/boot/ostree/apex/vmlinuz root=UUID=0 rw rhgb quiet'
 sandbox=0
@@ -384,6 +388,9 @@ probe search-button "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_SEARCH_BUTTON=1
 has "search-button: the panel feature enables" 'Apex: feature panel enabled'
 fact "search-button: just before the status pill in the right box" 'panel\.add=apex-search at 2 in right'
 fact "search-button: a pill with the search glyph, named for its key" "search\.enabled=$SEARCH_ITEM visible=true"
+fact "search-button: hovered, its tooltip shows centred below it" 'search\.tooltip\.hover=true at 1256,32'
+fact "search-button: and hides when the pointer leaves" 'search\.tooltip\.unhover=false at 1256,32'
+fact "search-button: the tooltip names the key, in the chrome as dash.js's labels are" 'chrome\.add=Search \(Super\+Space\) trackFullscreen=false'
 fact "search-button: a click opens the overview with its search entry focused" 'search\.click\.1=overview=true'
 fact "search-button: a second click hides it, as Super+Space does" 'search\.click\.2=overview=false'
 fact "search-button: the lock screen hides it" "search\.locked=$SEARCH_ITEM visible=false"
@@ -399,6 +406,24 @@ probe maximised "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_MAXIMISED=1
 panel_classes_are "solid-bar: solid while a window on the primary monitor is maximised and the overview is closed" \
     'none [maximised] apex-solid-bar [overview] none [no-overview] apex-solid-bar [minimised] none [unminimised] apex-solid-bar [unmaximised] none [other-monitor] none [desktop-window] none [workspace] apex-solid-bar [closed] none [translucent-top-bar=false] apex-solid-bar [layer-enabled=false] none [restacked]'
 lacks "solid-bar: the maximised-window trigger disables cleanly" 'off for this session|did not disable cleanly|cannot restyle'
+
+readonly SEARCH_HINT='^probe: notify=Press Super+Space to search$'
+probe search-hint "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_SWITCH=2
+count_is "search hint: the first enable shows it, once, through layer-enabled cycles" "$SEARCH_HINT" 1
+fact "search hint: and remembers it" 'search-hint-shown=true'
+probe search-hint-shown "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_HINT_SHOWN=1
+count_is "search hint: not shown again once search-hint-shown is true" "$SEARCH_HINT" 0
+probe search-hint-locked "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_LOCKED=1
+count_is "search hint: not on the lock screen" "$SEARCH_HINT" 0
+fact "search hint: so it waits for the next unlocked enable" 'search-hint-shown=false'
+probe search-hint-disabled "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_DISABLED=panel
+count_is "search hint: not with disabled-features=['panel']" "$SEARCH_HINT" 0
+probe search-hint-safe "$CMDLINE_PLAIN" PROBE_ENABLE=1 APEX_SHELL_SAFE=1
+count_is "search hint: not in safe mode" "$SEARCH_HINT" 0
+probe search-hint-nokey "$CMDLINE_PLAIN" GSETTINGS_SCHEMA_DIR="$T/nohint" PROBE_ENABLE=1 PROBE_SWITCH=1
+count_is "search hint: a schema without search-hint-shown shows none" "$SEARCH_HINT" 0
+count_is "search hint: and says so once" 'has no key search-hint-shown: no search hint' 1
+has "search hint: the rest of the panel runs" 'Apex: feature panel enabled'
 
 printf '1..%d\n' "$tests"
 ((failed == 0))

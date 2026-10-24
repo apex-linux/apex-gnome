@@ -161,6 +161,8 @@ for c in default default-scale1 dark-style; do
     exits "$run" "$c" 0
     no_apex_failure "$c" "$run/$c.log"
 done
+search_hint default "$run/default.log" true
+search_hint safe-env "$run/safe-env.log" false
 top_bar default "$run/default.log" light
 top_bar_today default "$run/default.log" light
 top_bar_gaps default "$run/default.log" light
