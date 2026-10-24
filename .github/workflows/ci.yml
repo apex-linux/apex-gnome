@@ -141,7 +141,7 @@ jobs:
   ptyxis-lane:
     # The ptyxis recipe through apex-lane's own container half, built from a pinned
     # apex-image; the builder VM adds only the signing and the store.
-    name: tests/ptyxis/lane.sh (Fedora 45, Ptyxis rebuilt)
+    name: tests/lib/lane.sh ptyxis (Fedora 45, Ptyxis rebuilt)
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     permissions:
@@ -161,8 +161,8 @@ jobs:
       - name: tests/ptyxis/selftest.sh
         run: tests/ptyxis/selftest.sh
 
-      - name: tests/ptyxis/lane.sh
-        run: tests/ptyxis/lane.sh
+      - name: tests/lib/lane.sh ptyxis
+        run: tests/lib/lane.sh ptyxis
 
       - name: tests/ptyxis/status-test.sh
         env:

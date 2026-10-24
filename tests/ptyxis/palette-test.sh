@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: GPL-3.0-or-later
 set -uo pipefail
-# shellcheck source=SCRIPTDIR/lib.sh
-. "$(dirname -- "${BASH_SOURCE[0]}")/lib.sh"
+# shellcheck source=SCRIPTDIR/../lib/headless.sh
+. "$(dirname -- "${BASH_SOURCE[0]}")/../lib/headless.sh"
+
+PTYXIS_TESTS=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+readonly PTYXIS_TESTS
 
 readonly DEADLINE_MS=1000
 readonly SHELL_TIMEOUT=90

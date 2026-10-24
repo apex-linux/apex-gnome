@@ -36,7 +36,7 @@ ptyxis-test:
 
 # Ptyxis rebuilt as the lane builds it (apex-lane's container half), in fedora:45 with podman or docker; RPMs in _build/ptyxis/out.
 ptyxis-lane:
-    engine=$(command -v podman || command -v docker) && "$engine" run --rm -v "{{justfile_directory()}}:/apex-gnome:z" -w /apex-gnome {{ptyxis_image}} tests/ptyxis/lane.sh
+    engine=$(command -v podman || command -v docker) && "$engine" run --rm -v "{{justfile_directory()}}:/apex-gnome:z" -w /apex-gnome {{ptyxis_image}} tests/lib/lane.sh ptyxis
 
 # The Ptyxis that ptyxis-lane built, captured in a headless gnome-shell, light and dark (podman or docker); in _build/ptyxis/shots.
 ptyxis-shots:

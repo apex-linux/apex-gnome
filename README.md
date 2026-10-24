@@ -11,7 +11,8 @@ the Apex layer; libadwaita, Settings and Files patch series join it in S2.
 | `tests/layer/` | The layer's safety net in gjs: kill switches, fault injection, the crash guard and live layer cycles |
 | `tests/shots/` | G2, the headless shell of a built image, and its self-test |
 | `desktop/ptyxis/`, `packaging/pkgs/ptyxis/` | Ptyxis rebuilt in the lane with the Apex terminal, the sessions sidebar and split panes of boards 32 and 33: its sources (`src/apex/`) and its recipe ([README](packaging/pkgs/ptyxis/README.md)) |
-| `tests/ptyxis/` | the ptyxis recipe through apex-lane's container half (`lane.sh`), the checks of `desktop/ptyxis/`, the status logic's unit test, and the captures (`shoot.sh`) |
+| `tests/lib/` | the app tests' shared tools: `lane.sh PKG`, a recipe through apex-lane's container half, and `headless.sh`, a headless gnome-shell after G2's `run_case` |
+| `tests/ptyxis/` | the checks of `desktop/ptyxis/`, the status logic's unit test, the captures (`shoot.sh`) and the palette test |
 | `desktop/control-center/`, `packaging/pkgs/gnome-control-center/` | gnome-control-center rebuilt in the lane for the Apex Settings, boards 11, 18, 23, 24 and 26: its sources (`panels/apex/`) and its recipe ([README](packaging/pkgs/gnome-control-center/README.md)) |
 | `tests/control-center/` | the gnome-control-center recipe through apex-lane's container half (`lane.sh`), and the checks of `desktop/control-center/` |
 
