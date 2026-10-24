@@ -97,6 +97,11 @@ $apex_preview_shadow_blur: 32px;
 $apex_preview_shadow_2_y: 1px;
 $apex_preview_shadow_2_blur: 4px;
 
+// The boards' second shadow layer, which the shadows feature draws (St draws only box-shadow).
+@mixin apex-shadow-layer {
+  -apex-shadow-layer: 0 $apex_shadow_2_y $apex_shadow_2_blur 0 $apex_shadow_2;
+}
+
 // Quick Settings, the calendar and banners.
 $apex_panel_blur: 30px;
 $apex_panel_saturation: 180%;
@@ -298,6 +303,12 @@ $apex_folder_dialog_padding: 18px;
 $apex_folder_dialog_padding_bottom: 22px;
 $apex_folder_close_size: 28px;
 $apex_font_folder_title_size: 16px;
+
+$apex_tile_preview_inset: 6px;
+$apex_radius_tile_preview: 14px;
+$apex_tile_preview_fill_opacity: .16;
+$apex_tile_preview_ring: 2px;
+$apex_tile_preview_ring_opacity: .7;
 
 // The lock screen and the greeter draw white on the blurred wallpaper in both variants.
 $apex_lock_fg: #ffffff;

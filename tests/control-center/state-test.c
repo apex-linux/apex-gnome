@@ -2,6 +2,7 @@
 
 #include <string.h>
 
+#include "cc-apex-power-state.h"
 #include "cc-apex-updates-state.h"
 
 /* 2026-10-21 14:02 UTC, the captures' clock. */
@@ -243,6 +244,74 @@ test_changes_without_known_packages (void)
     g_assert_null (cc_apex_updates_changes_summary (none, NULL));
 }
 
+/* GetCurrentState as Mutter answers it: a built-in panel at 2880x1800, and an external monitor. */
+#define PANEL_MODES                                                                                                    \
+    "[('2880x1800@90.000', 2880, 1800, 90.0, 2.0, [1.0, 2.0], {'is-current': <true>, 'is-preferred': <true>}),"     \
+    " ('2880x1800@60.001', 2880, 1800, 60.001, 2.0, [2.0], @a{sv} {}),"                                                \
+    " ('2880x1800@48.000', 2880, 1800, 48.0, 2.0, [2.0], @a{sv} {}),"                                                  \
+    " ('1920x1200@120.000', 1920, 1200, 120.0, 1.0, [1.0], @a{sv} {})]"
+#define EXTERNAL                                                                                                       \
+    "(('HDMI-1', 'DEL', 'U2723QE', '0x1'), [('2560x1440@144.000', 2560, 1440, 144.0, 1.0, [1.0],"                     \
+    " {'is-current': <true>})], {'is-builtin': <false>})"
+
+static GVariant *
+display_state (const char *monitors)
+{
+    g_autofree char *text = g_strdup_printf ("(uint32 1, %s, @a(iiduba(ssss)a{sv}) [], @a{sv} {})", monitors);
+
+    return g_variant_ref_sink (g_variant_new_parsed (text));
+}
+
+static void
+test_refresh_line (void)
+{
+    g_autoptr(GVariant) laptop =
+        display_state ("[(('eDP-1', 'SDC', '0x4161', '0x0'), " PANEL_MODES ", {'is-builtin': <true>}), " EXTERNAL "]");
+    g_autoptr(GVariant) desktop = display_state ("[" EXTERNAL "]");
+    g_autoptr(GVariant) one_rate = display_state (
+        "[(('eDP-1', 'SDC', '0x4161', '0x0'), [('2880x1800@90.000', 2880, 1800, 90.0, 2.0, [2.0],"
+        " {'is-current': <true>})], {'is-builtin': <true>})]");
+    g_autoptr(GVariant) wrong = g_variant_ref_sink (g_variant_new_parsed ("(uint32 1, 'eDP-1')"));
+    g_autofree char *line = cc_apex_power_refresh_line (laptop);
+    g_autofree char *none = cc_apex_power_refresh_line (desktop);
+    g_autofree char *single = cc_apex_power_refresh_line (one_rate);
+    g_autofree char *missing = cc_apex_power_refresh_line (NULL);
+    int low = 0, high = 0;
+
+    g_assert_true (cc_apex_power_refresh_pair (laptop, &low, &high));
+    g_assert_cmpint (low, ==, 60);
+    g_assert_cmpint (high, ==, 90);
+    g_assert_cmpstr (line, ==, "60 Hz on battery, 90 Hz when plugged in");
+    g_assert_false (cc_apex_power_refresh_pair (desktop, &low, &high));
+    g_assert_cmpstr (none, ==, "The built-in display's lowest rate on battery, its highest when plugged in");
+    g_assert_cmpstr (single, ==, "The built-in display runs at 90 Hz either way");
+    g_assert_cmpstr (missing, ==, none);
+    g_assert_false (cc_apex_power_refresh_pair (wrong, &low, &high));
+}
+
+static void
+test_gpu (void)
+{
+    g_autofree char *named = cc_apex_power_gpu_name ("GA107M [GeForce RTX 3050 Mobile]");
+    g_autofree char *plain = cc_apex_power_gpu_name ("GA107M");
+    g_autofree char *unknown = cc_apex_power_gpu_name (NULL);
+
+    g_assert_cmpstr (named, ==, "NVIDIA GeForce RTX 3050 Mobile");
+    g_assert_cmpstr (plain, ==, "NVIDIA GA107M");
+    g_assert_cmpstr (unknown, ==, "NVIDIA Graphics");
+    g_assert_cmpint (cc_apex_power_gpu_state ("suspended"), ==, CC_APEX_GPU_OFF);
+    g_assert_cmpint (cc_apex_power_gpu_state ("active"), ==, CC_APEX_GPU_ON);
+    g_assert_cmpint (cc_apex_power_gpu_state ("resuming"), ==, CC_APEX_GPU_WAKING);
+    g_assert_cmpint (cc_apex_power_gpu_state ("suspending"), ==, CC_APEX_GPU_SLEEPING);
+    g_assert_cmpint (cc_apex_power_gpu_state ("unsupported"), ==, CC_APEX_GPU_ALWAYS_ON);
+    g_assert_cmpint (cc_apex_power_gpu_state (NULL), ==, CC_APEX_GPU_ALWAYS_ON);
+    g_assert_cmpstr (cc_apex_power_gpu_status (CC_APEX_GPU_OFF), ==, "Off");
+    g_assert_cmpstr (cc_apex_power_gpu_subtitle (CC_APEX_GPU_OFF), ==, "Powered down until an app asks for it");
+    g_assert_cmpstr (cc_apex_power_gpu_status (CC_APEX_GPU_ON), ==, "On");
+    g_assert_cmpstr (cc_apex_power_gpu_status (CC_APEX_GPU_ALWAYS_ON), ==, "On");
+    g_assert_cmpstr (cc_apex_power_gpu_subtitle (CC_APEX_GPU_ALWAYS_ON), ==, "Its driver keeps it powered");
+}
+
 int
 main (int argc, char **argv)
 {
@@ -258,5 +327,7 @@ main (int argc, char **argv)
     g_test_add_func ("/updates/when-and-digest", test_when_and_digest);
     g_test_add_func ("/updates/changes", test_changes);
     g_test_add_func ("/updates/changes-without-known-packages", test_changes_without_known_packages);
+    g_test_add_func ("/power/refresh-line", test_refresh_line);
+    g_test_add_func ("/power/gpu", test_gpu);
     return g_test_run ();
 }

@@ -14,8 +14,11 @@
 .popup-menu-content.datemenu-popover,
 .notification-banner { @include apex-glass($apex_panel_blur, $apex_panel_saturation); }
 
+#apexDock .dash-background { @include apex-glass($apex_dock_blur, $apex_dock_saturation); }
+
 .apex-solid {
   #panel { background-color: $apex_bar_solid; }
+  #apexDock .dash-background { background-color: $apex_panel_solid; }
 
   .popup-menu-content.quick-settings,
   .popup-menu-content.datemenu-popover,
