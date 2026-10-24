@@ -90,10 +90,13 @@ and polkit asks in the daemon, never in Settings.
   the page saw the download start. A failed call shows the daemon's message under the
   buttons; a refusal from polkit shows nothing.
 - **Board 26**: with `HealthFailure` or `LastFallback` set, the page raises an
-  `AdwAlertDialog` once per digest when it shows: Keep This Version
-  (`AcknowledgeHealthFailure`) and Go Back… (`Rollback(true)`) after a failed check; OK
-  (`AcknowledgeHealthFailure`, which clears `LastFallback`) after a fallback, whose hero
-  says so too. apex-session-agent's notification opens this page.
+  `AdwAlertDialog` once per digest when it shows: the failed checks
+  (`HealthFailureChecks`), Keep This Version (`AcknowledgeHealthFailure`) and Go Back…
+  (`Rollback(true)`) after a failed check; Show Changes (`GetChangesFor` the set-aside
+  digest, listed in a second dialog) and OK (`AcknowledgeHealthFailure`, which clears
+  `LastFallback`) after a fallback, whose hero says so too. These three members, and
+  `Kept`, come from apex-system K4; the page reads them through a proxy without the
+  compiled interface and offers each only when the daemon has it. apex-session-agent's notification opens this page.
 - **Notes** for every family in the newest deployment's `held` list, with each of its
   `holds` records when there are some ("Settings 51.1 is held back … Not a security
   update. Held for up to 14 days, then Apex ships the stock 51.1."; the kernel pair's
@@ -104,6 +107,7 @@ and polkit asks in the daemon, never in Settings.
   Mesa versions (then other packages), with every change in the expanded row.
 - **Versions**: Booted, Staged and Rollback, each as version, short digest and build
   date, and "Kept by Apex: …" with the `pin-reason` of a deployment the daemon pinned;
+  a Kept row for each deployment in `Kept`, the daemon's other pinned ones;
   Use at Next Restart… on the previous one calls `Rollback(false)`.
 - **Preferences**: Automatic Downloads (`AutomaticDownloads`, set with
   `SetAutomaticDownloads`; polkit's `update.configure` is auth_admin, so the daemon asks

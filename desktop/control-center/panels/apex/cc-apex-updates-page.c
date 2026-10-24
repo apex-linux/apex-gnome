@@ -16,6 +16,10 @@ struct _CcApexUpdatesPage {
     AdwNavigationPage parent_instance;
 
     CcApexUpdate1 *update1;
+    GDBusProxy *members;
+    gboolean has_changes_for;
+    gboolean members_known;
+    GPtrArray *kept_rows;
     GCancellable *cancellable;
     char *changes_digest;
     char *kept_digest;
@@ -46,6 +50,7 @@ struct _CcApexUpdatesPage {
     AdwActionRow *staged_row;
     GtkLabel *staged_built;
     AdwActionRow *rollback_row;
+    AdwPreferencesGroup *versions_group;
     GtkButton *rollback_button;
     AdwSwitchRow *automatic_row;
     AdwActionRow *channel_row;
@@ -87,6 +92,15 @@ static gboolean
 dict_is_empty (GVariant *dict)
 {
     return dict == NULL || g_variant_n_children (dict) == 0;
+}
+
+/* Members newer than the compiled interface come through an info-less proxy, so an older daemon simply lacks them. */
+static GVariant *
+member (CcApexUpdatesPage *self, const char *name, const char *type)
+{
+    g_autoptr(GVariant) value = self->members ? g_dbus_proxy_get_cached_property (self->members, name) : NULL;
+
+    return value && g_variant_is_of_type (value, G_VARIANT_TYPE (type)) ? g_steal_pointer (&value) : NULL;
 }
 
 static void
@@ -287,9 +301,63 @@ badge_icon (const char *state, const CcApexUpdatesHero *hero)
 }
 
 static void
+changes_for_cb (GObject *source, GAsyncResult *result, gpointer user_data)
+{
+    g_autoptr(GVariant) reply = NULL;
+    g_autoptr(GVariant) changes = NULL;
+    g_autoptr(GPtrArray) parsed = NULL;
+    g_autoptr(GError) error = NULL;
+    CcApexUpdatesPage *self;
+    GtkWidget *view, *page, *group;
+    AdwDialog *dialog;
+
+    reply = g_dbus_proxy_call_finish (G_DBUS_PROXY (source), result, &error);
+    if (g_error_matches (error, G_IO_ERROR, G_IO_ERROR_CANCELLED))
+        return;
+    self = CC_APEX_UPDATES_PAGE (user_data);
+    if (reply == NULL) {
+        show_error (self, error);
+        return;
+    }
+
+    changes = g_variant_get_child_value (reply, 0);
+    parsed = cc_apex_updates_changes (changes);
+    group = adw_preferences_group_new ();
+    for (guint i = 0; i < parsed->len; i++) {
+        CcApexUpdatesChange *c = g_ptr_array_index (parsed, i);
+        GtkWidget *row = adw_action_row_new ();
+        GtkWidget *kind = gtk_label_new (c->kind);
+
+        adw_preferences_row_set_use_markup (ADW_PREFERENCES_ROW (row), FALSE);
+        adw_preferences_row_set_title (ADW_PREFERENCES_ROW (row), c->name);
+        adw_action_row_set_subtitle (ADW_ACTION_ROW (row), c->versions);
+        gtk_widget_add_css_class (kind, "dim-label");
+        adw_action_row_add_suffix (ADW_ACTION_ROW (row), kind);
+        adw_preferences_group_add (ADW_PREFERENCES_GROUP (group), row);
+    }
+    if (parsed->len == 0)
+        adw_preferences_group_set_description (ADW_PREFERENCES_GROUP (group), _("No package changes are known."));
+    page = adw_preferences_page_new ();
+    adw_preferences_page_add (ADW_PREFERENCES_PAGE (page), ADW_PREFERENCES_GROUP (group));
+    view = adw_toolbar_view_new ();
+    adw_toolbar_view_add_top_bar (ADW_TOOLBAR_VIEW (view), adw_header_bar_new ());
+    adw_toolbar_view_set_content (ADW_TOOLBAR_VIEW (view), page);
+    dialog = adw_dialog_new ();
+    adw_dialog_set_title (dialog, _("Changes in the Set-Aside Version"));
+    adw_dialog_set_content_width (dialog, 480);
+    adw_dialog_set_content_height (dialog, 560);
+    adw_dialog_set_child (dialog, view);
+    adw_dialog_present (dialog, GTK_WIDGET (self));
+}
+
+static void
 alert_response_cb (CcApexUpdatesPage *self, const char *response)
 {
-    if (g_str_equal (response, "back"))
+    if (g_str_equal (response, "changes"))
+        g_dbus_proxy_call (self->members, "GetChangesFor",
+                           g_variant_new ("(s)", or_empty (cc_apex_update1_get_last_fallback (self->update1))),
+                           G_DBUS_CALL_FLAGS_NONE, G_MAXINT, self->cancellable, changes_for_cb, self);
+    else if (g_str_equal (response, "back"))
         run_action (self, CC_APEX_UPDATES_ACTION_ROLLBACK_BAD);
     else if (g_str_equal (response, "keep") || g_str_equal (response, "ok"))
         run_action (self, CC_APEX_UPDATES_ACTION_ACKNOWLEDGE);
@@ -320,9 +388,10 @@ maybe_alert (CcApexUpdatesPage *self, const char *health_failure, const char *la
     g_autofree char *short_digest = NULL;
     AdwDialog *dialog;
     GtkWidget *grid;
+    int row = 0;
 
     if (digest == NULL || *digest == '\0' || g_strcmp0 (digest, self->alerted_digest) == 0 ||
-        !gtk_widget_get_mapped (GTK_WIDGET (self)))
+        !self->members_known || !gtk_widget_get_mapped (GTK_WIDGET (self)))
         return;
     g_free (self->alerted_digest);
     self->alerted_digest = g_strdup (digest);
@@ -332,13 +401,21 @@ maybe_alert (CcApexUpdatesPage *self, const char *health_failure, const char *la
     gtk_grid_set_row_spacing (GTK_GRID (grid), 5);
     gtk_widget_set_halign (grid, GTK_ALIGN_CENTER);
     gtk_widget_add_css_class (grid, "apex-alert-facts");
-    add_alert_row (GTK_GRID (grid), 0, _("Running"), or_empty (dict_string (booted, "version")));
+    if (failed) {
+        g_autoptr(GVariant) checks = member (self, "HealthFailureChecks", "as");
+        g_autofree const char **names = checks ? g_variant_get_strv (checks, NULL) : NULL;
+        g_autofree char *joined = names && names[0] ? g_strjoinv (", ", (char **) names) : NULL;
+
+        if (joined)
+            add_alert_row (GTK_GRID (grid), row++, _("Failed check"), joined);
+    }
+    add_alert_row (GTK_GRID (grid), row++, _("Running"), or_empty (dict_string (booted, "version")));
     if (failed) {
         dialog = adw_alert_dialog_new (_("Update Failed Its Startup Check"),
                                        _("This version is running, but a required check did not pass. Going back to "
                                          "the version you had before is the safe choice. Nothing restarts until you "
                                          "say so."));
-        add_alert_row (GTK_GRID (grid), 1, _("Previous"), or_empty (dict_string (rollback, "version")));
+        add_alert_row (GTK_GRID (grid), row++, _("Previous"), or_empty (dict_string (rollback, "version")));
         adw_alert_dialog_add_responses (ADW_ALERT_DIALOG (dialog), "keep", _("Keep This Version"), "back",
                                         _("Go Back…"), NULL);
         adw_alert_dialog_set_response_appearance (ADW_ALERT_DIALOG (dialog), "back", ADW_RESPONSE_SUGGESTED);
@@ -350,8 +427,10 @@ maybe_alert (CcApexUpdatesPage *self, const char *health_failure, const char *la
                                          "the version you had before. That build will not be offered again; a newer "
                                          "one will be."));
         short_digest = cc_apex_updates_short_digest (digest);
-        add_alert_row (GTK_GRID (grid), 1, _("Set aside"), short_digest);
-        add_alert_row (GTK_GRID (grid), 2, _("Your files"), _("unchanged"));
+        add_alert_row (GTK_GRID (grid), row++, _("Set aside"), short_digest);
+        add_alert_row (GTK_GRID (grid), row++, _("Your files"), _("unchanged"));
+        if (self->has_changes_for)
+            adw_alert_dialog_add_response (ADW_ALERT_DIALOG (dialog), "changes", _("Show Changes"));
         adw_alert_dialog_add_responses (ADW_ALERT_DIALOG (dialog), "ok", _("OK"), NULL);
         adw_alert_dialog_set_response_appearance (ADW_ALERT_DIALOG (dialog), "ok", ADW_RESPONSE_SUGGESTED);
         adw_alert_dialog_set_close_response (ADW_ALERT_DIALOG (dialog), "close");
@@ -551,6 +630,29 @@ set_deployment (AdwActionRow *row, GtkLabel *built_label, GVariant *dict)
 }
 
 static void
+refresh_kept (CcApexUpdatesPage *self)
+{
+    g_autoptr(GVariant) kept = member (self, "Kept", "aa{sv}");
+
+    for (guint i = 0; i < self->kept_rows->len; i++)
+        adw_preferences_group_remove (self->versions_group, g_ptr_array_index (self->kept_rows, i));
+    g_ptr_array_set_size (self->kept_rows, 0);
+
+    for (gsize i = 0; kept && i < g_variant_n_children (kept); i++) {
+        g_autoptr(GVariant) dict = g_variant_get_child_value (kept, i);
+        GtkWidget *row = adw_action_row_new ();
+        GtkWidget *built = gtk_label_new (NULL);
+
+        adw_preferences_row_set_title (ADW_PREFERENCES_ROW (row), _("Kept"));
+        gtk_widget_add_css_class (built, "dim-label");
+        adw_action_row_add_suffix (ADW_ACTION_ROW (row), built);
+        set_deployment (ADW_ACTION_ROW (row), GTK_LABEL (built), dict);
+        adw_preferences_group_add (self->versions_group, row);
+        g_ptr_array_add (self->kept_rows, row);
+    }
+}
+
+static void
 refresh (CcApexUpdatesPage *self)
 {
     g_autoptr(GVariant) booted = NULL;
@@ -626,6 +728,7 @@ refresh (CcApexUpdatesPage *self)
     set_deployment (self->running_row, self->running_built, booted);
     set_deployment (self->staged_row, self->staged_built, staged);
     set_deployment (self->rollback_row, NULL, rollback);
+    refresh_kept (self);
     gtk_widget_set_sensitive (GTK_WIDGET (self->rollback_button),
                               !self->busy && g_strcmp0 (facts.state, "rollback-queued") != 0);
 
@@ -638,6 +741,57 @@ refresh (CcApexUpdatesPage *self)
     gtk_widget_set_sensitive (GTK_WIDGET (self->check_button), !self->busy);
     show_automatic (self);
     maybe_alert (self, cc_apex_update1_get_health_failure (self->update1), facts.last_fallback, booted, rollback);
+}
+
+static void
+introspect_cb (GObject *source, GAsyncResult *result, gpointer user_data)
+{
+    g_autoptr(GVariant) reply = NULL;
+    g_autoptr(GDBusNodeInfo) node = NULL;
+    const char *xml;
+    GDBusInterfaceInfo *iface;
+
+    g_autoptr(GError) error = NULL;
+    CcApexUpdatesPage *self;
+
+    reply = g_dbus_connection_call_finish (G_DBUS_CONNECTION (source), result, &error);
+    if (g_error_matches (error, G_IO_ERROR, G_IO_ERROR_CANCELLED))
+        return;
+    self = CC_APEX_UPDATES_PAGE (user_data);
+    if (reply) {
+        g_variant_get (reply, "(&s)", &xml);
+        node = g_dbus_node_info_new_for_xml (xml, NULL);
+        iface = node ? g_dbus_node_info_lookup_interface (node, UPDATE1_NAME) : NULL;
+        self->has_changes_for = iface != NULL && g_dbus_interface_info_lookup_method (iface, "GetChangesFor") != NULL;
+    }
+    self->members_known = TRUE;
+    refresh (self);
+}
+
+static void
+members_ready_cb (GObject *source, GAsyncResult *result, gpointer user_data)
+{
+    g_autoptr(GError) error = NULL;
+    CcApexUpdatesPage *self;
+    GDBusProxy *proxy;
+
+    proxy = g_dbus_proxy_new_finish (result, &error);
+    if (g_error_matches (error, G_IO_ERROR, G_IO_ERROR_CANCELLED))
+        return;
+    self = CC_APEX_UPDATES_PAGE (user_data);
+    if (proxy == NULL) {
+        g_warning ("Cannot read %s's newer members: %s", UPDATE1_NAME, error->message);
+        self->members_known = TRUE;
+        refresh (self);
+        return;
+    }
+    self->members = proxy;
+    g_dbus_proxy_set_default_timeout (proxy, G_MAXINT);
+    g_signal_connect_object (proxy, "g-properties-changed", G_CALLBACK (refresh), self, G_CONNECT_SWAPPED);
+    g_dbus_connection_call (g_dbus_proxy_get_connection (proxy), UPDATE1_NAME, UPDATE1_PATH,
+                            "org.freedesktop.DBus.Introspectable", "Introspect", NULL, G_VARIANT_TYPE ("(s)"),
+                            G_DBUS_CALL_FLAGS_NONE, -1, self->cancellable, introspect_cb, self);
+    refresh (self);
 }
 
 static void
@@ -662,6 +816,8 @@ proxy_ready_cb (GObject *source, GAsyncResult *result, gpointer user_data)
     g_signal_connect_object (proxy, "g-properties-changed", G_CALLBACK (refresh), self, G_CONNECT_SWAPPED);
     g_signal_connect_object (proxy, "notify::g-name-owner", G_CALLBACK (refresh), self, G_CONNECT_SWAPPED);
     refresh (self);
+    g_dbus_proxy_new (g_dbus_proxy_get_connection (G_DBUS_PROXY (proxy)), G_DBUS_PROXY_FLAGS_DO_NOT_AUTO_START, NULL,
+                      UPDATE1_NAME, UPDATE1_PATH, UPDATE1_NAME, self->cancellable, members_ready_cb, self);
 }
 
 static void
@@ -671,6 +827,7 @@ cc_apex_updates_page_dispose (GObject *object)
 
     g_cancellable_cancel (self->cancellable);
     g_clear_object (&self->update1);
+    g_clear_object (&self->members);
 
     G_OBJECT_CLASS (cc_apex_updates_page_parent_class)->dispose (object);
 }
@@ -682,6 +839,7 @@ cc_apex_updates_page_finalize (GObject *object)
 
     g_clear_object (&self->cancellable);
     g_clear_pointer (&self->change_rows, g_ptr_array_unref);
+    g_clear_pointer (&self->kept_rows, g_ptr_array_unref);
     g_free (self->changes_digest);
     g_free (self->kept_digest);
     g_free (self->alerted_digest);
@@ -720,6 +878,7 @@ cc_apex_updates_page_class_init (CcApexUpdatesPageClass *klass)
     gtk_widget_class_bind_template_child (widget_class, CcApexUpdatesPage, staged_row);
     gtk_widget_class_bind_template_child (widget_class, CcApexUpdatesPage, staged_built);
     gtk_widget_class_bind_template_child (widget_class, CcApexUpdatesPage, rollback_row);
+    gtk_widget_class_bind_template_child (widget_class, CcApexUpdatesPage, versions_group);
     gtk_widget_class_bind_template_child (widget_class, CcApexUpdatesPage, rollback_button);
     gtk_widget_class_bind_template_child (widget_class, CcApexUpdatesPage, automatic_row);
     gtk_widget_class_bind_template_child (widget_class, CcApexUpdatesPage, channel_row);
@@ -738,6 +897,7 @@ cc_apex_updates_page_init (CcApexUpdatesPage *self)
 
     self->cancellable = g_cancellable_new ();
     self->change_rows = g_ptr_array_new ();
+    self->kept_rows = g_ptr_array_new ();
     gtk_widget_set_visible (GTK_WIDGET (self->changes_group), FALSE);
     gtk_widget_set_visible (GTK_WIDGET (self->notes), FALSE);
     g_signal_connect_swapped (self->automatic_row, "notify::active", G_CALLBACK (automatic_changed_cb), self);

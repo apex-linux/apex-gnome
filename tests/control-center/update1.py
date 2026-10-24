@@ -54,16 +54,21 @@ CHANGES = [
 AVAILABLE = deployment("45.20261010.133", "", 10, **{"download-size": SIZE})
 FALLEN = "sha256:9e41aa07c3b2d1e0f9a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c80c2b"
 
+KEPT = dbus.Array([deployment("45.20260924.118", "sha256:7c1d9a0b2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f5e21", 24,
+                              pinned=True, **{"pin-reason": "the version before the failed boots"})],
+                  signature="a{sv}")
+
 # "ready" also refuses SetAutomaticDownloads as polkit would; "up-to-date" accepts it.
 SCENARIOS = {
-    "ready": {"State": "staged", "Staged": STAGED, "Available": EMPTY},
+    "ready": {"State": "staged", "Staged": STAGED, "Available": EMPTY, "Kept": KEPT},
     "up-to-date": {"State": "up-to-date", "Staged": EMPTY, "Available": EMPTY,
                    "Booted": deployment(BOOTED["version"], BOOTED["digest"], 8, held=dbus.Array(["nautilus"], signature="s"),
                                         holds=OLD_HOLDS)},
     "available": {"State": "available", "Staged": EMPTY, "Available": AVAILABLE},
     "downloading": {"State": "downloading", "Staged": EMPTY, "Available": AVAILABLE, "Progress": dbus.Double(0.64)},
     "health-failure": {"State": "health-failure", "Staged": EMPTY, "Available": EMPTY,
-                       "HealthFailure": BOOTED["digest"]},
+                       "HealthFailure": BOOTED["digest"],
+                       "HealthFailureChecks": dbus.Array(["failed-units"], signature="s")},
     "fallback": {"State": "up-to-date", "Staged": EMPTY, "Available": EMPTY, "LastFallback": FALLEN},
 }
 
@@ -77,6 +82,7 @@ class Update1(dbus.service.Object):
             "Rollback": ROLLBACK, "Available": EMPTY, "Channel": "stable (running image)",
             "LastCheck": stamp(21), "DeferredReason": "", "LastError": "", "HealthFailure": "",
             "LastFallback": "", "AutomaticDownloads": True,
+            "HealthFailureChecks": dbus.Array([], signature="s"), "Kept": dbus.Array([], signature="a{sv}"),
         }
         self.scenario = scenario
         self.props.update(SCENARIOS[scenario])
@@ -121,6 +127,11 @@ class Update1(dbus.service.Object):
     def GetChanges(self):
         self.record("GetChanges")
         return dbus.Array(CHANGES if self.props["Staged"] else [], signature="(sssss)")
+
+    @dbus.service.method(IFACE, in_signature="s", out_signature="a(sssss)")
+    def GetChangesFor(self, digest):
+        self.record("GetChangesFor", str(digest))
+        return dbus.Array(CHANGES, signature="(sssss)")
 
     @dbus.service.method(IFACE)
     def AcknowledgeHealthFailure(self):

@@ -24,6 +24,8 @@ EXPECT = {
         "45.20261010.133 · sha256:9e41…0c2b",
         "45.20261001.124 · sha256:b02d…19c4",
         "Kept by Apex: the last version that started cleanly",
+        "45.20260924.118 · sha256:7c1d…5e21",
+        "Kept by Apex: the version before the failed boots",
         "today at 09:00",
     ],
     "up-to-date": [
@@ -35,7 +37,7 @@ EXPECT = {
     "available": ["Update Available",
                   "45.20261010.133 · 412 MB. It downloads in the background and nothing changes until you restart."],
     "downloading": ["Downloading Update", "264 of 412 MB"],
-    "health-failure": ["Update Failed Its Startup Check"],
+    "health-failure": ["Update Failed Its Startup Check", "failed-units"],
     "fallback": ["Apex Went Back to the Previous Version", "sha256:9e41…0c2b", "unchanged"],
     "unavailable": ["Software Updates Are Unavailable"],
 }
@@ -46,8 +48,12 @@ PRESSES = {
               ("Keep Current Version", "Update Downloaded"), ("Restart Now", ["Apply", STAGED_DIGEST])],
     "available": [("Download", ["Download", False])],
     "health-failure": [("Keep This Version", ["AcknowledgeHealthFailure"]), ("Go Back…", ["Rollback", True])],
-    "fallback": [("OK", ["AcknowledgeHealthFailure"])],
+    "fallback": [("Show Changes", ["GetChangesFor", "sha256:9e41aa07c3b2d1e0f9a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c80c2b"]),
+                 ("OK", ["AcknowledgeHealthFailure"])],
 }
+
+# Texts that must show once the presses are done: Show Changes' list of the set-aside build.
+AFTER = {"fallback": ["Changes in the Set-Aside Version", "gnome-shell", "51.0-1 → 51.1-1"]}
 
 # Board 26: the alert the page raises by itself, by its heading.
 ALERTS = {
@@ -133,6 +139,9 @@ def main():
                 print(f"ok {scenario}: “{label}” shows “{call}” and calls nothing", flush=True)
         elif wait_for(f"{scenario}: “{label}” calls {call}", lambda: call in calls(log)):
             print(f"ok {scenario}: “{label}” calls {call[0]}", flush=True)
+    for want in AFTER.get(scenario, []):
+        if wait_for(f"{scenario}: then shows “{want}”", lambda: any(want in t for t in texts(app))):
+            print(f"ok {scenario}: then shows “{want}”", flush=True)
     finish()
 
 
