@@ -80,6 +80,73 @@ async function pressToggleSpotlight() {
     }
 }
 
+function pillNames(quickSettings) {
+    return quickSettings._indicators.get_children().map(i => i.name).join(',');
+}
+
+function newHotCorner() {
+    const signalHandlers = {};
+    let triggers = 0;
+    const barrier = {
+        _isTriggered: false,
+        _barriers: [{_isHit: false}],
+        _trigger() {
+            this._isTriggered = true;
+            fact('hot-corner.trigger', ++triggers);
+        },
+    };
+    return {
+        _x: 0, _y: 0, _pressureBarrier: barrier, handlers: signalHandlers,
+        set(props) {
+            Object.assign(this, props);
+        },
+        connect(signal, fn) {
+            signalHandlers[signal] = fn;
+        },
+    };
+}
+
+function topBarHooks(label) {
+    const dot = {get_theme_node: () => ({get_length: p => p === '-apex-active-width' ? 22 : 0})};
+    const widths = [0, 0.5, 1].map(e => Hooks.value('workspace-dot-width', [99, 99], [7, 7], dot, e)[0]);
+    fact(`${label}.dots`, `${widths.join(' ')} inactive=${JSON.stringify(Hooks.value('workspace-dot-inactive', 'stock'))}`);
+}
+
+async function exerciseTopBar() {
+    if (GLib.getenv('PROBE_TOP_BAR') !== '1')
+        return;
+    const Main = await import(`file://${shellDir}/js/ui/main.js`);
+    const {quickSettings} = Main.panel.statusArea;
+    topBarHooks('top-bar');
+    fact('pill', pillNames(quickSettings));
+    const later = Main.newQuickSettings();
+    Hooks.run('status-indicators', later);
+    fact('pill.set-up-after-enable', pillNames(later));
+
+    const corner = newHotCorner();
+    Hooks.run('hot-corner', corner, Main.layoutManager);
+    fact('hot-corner.zone', `${corner.name ?? 'none'} reactive=${corner.reactive ?? false} ` +
+        `x=${corner.x} y=${corner.y} ${corner.width}x${corner.height}`);
+    if (corner.handlers['enter-event']) {
+        corner.handlers['enter-event']();
+        corner.handlers['enter-event']();
+        corner._pressureBarrier._barriers[0]._isHit = true;
+        corner.handlers['leave-event']();
+        fact('hot-corner.after-leave-on-the-barrier', corner._pressureBarrier._isTriggered);
+        corner._pressureBarrier._barriers[0]._isHit = false;
+        corner.handlers['leave-event']();
+        corner.handlers['enter-event']();
+    }
+
+    settings.set_boolean('layer-enabled', false);
+    await spin(200);
+    topBarHooks('top-bar.off');
+    fact('pill.off', pillNames(quickSettings));
+    settings.set_boolean('layer-enabled', true);
+    await spin(200);
+    fact('pill.on', pillNames(quickSettings));
+}
+
 async function switchLayer() {
     const cycles = Number(GLib.getenv('PROBE_SWITCH') ?? '0');
     for (let cycle = 1; cycle <= cycles; cycle++) {
@@ -124,6 +191,7 @@ if (layer && GLib.getenv('PROBE_ENABLE') === '1') {
         fact('survived', `${waitSeconds}s`);
     }
     await pressToggleSpotlight();
+    await exerciseTopBar();
     await setDisabledLive();
     await switchLayer();
     for (const [signal, fn] of [...handlers.values()]) {

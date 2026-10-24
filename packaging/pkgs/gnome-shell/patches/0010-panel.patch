@@ -1,0 +1,87 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Sat, 24 Oct 2026 05:53:30 +0000
+Subject: [PATCH] panel: hooks for the Apex top bar
+
+Value and behaviour hooks for the top bar of DESIGN.md, which the Apex
+layer provides (apex-fedora ROADMAP S2a):
+
+- WorkspaceDot: a value hook over the inactive dot's opacity and scale,
+  and one over the dot's preferred width, given its natural width, the
+  dot and its expansion;
+- QuickSettings: a behaviour hook once the indicators are set up, through
+  which the layer filters the status pill;
+- HotCorner: a behaviour hook once the corner is built, through which the
+  layer adds a reactive zone next to the pressure barrier.
+---
+ js/ui/layout.js |  2 ++
+ js/ui/panel.js  | 15 +++++++++++----
+ 2 files changed, 13 insertions(+), 4 deletions(-)
+
+diff --git a/js/ui/layout.js b/js/ui/layout.js
+index 47cf50c..0040e56 100644
+--- a/js/ui/layout.js
++++ b/js/ui/layout.js
+@@ -15,6 +15,7 @@ import * as DND from './dnd.js';
+ import * as Main from './main.js';
+ import * as Params from '../misc/params.js';
+ import * as Ripples from './ripples.js';
++import * as ApexHooks from './apex/hooks.js';
+ 
+ import {logErrorUnlessCancelled} from '../misc/errorUtils.js';
+ 
+@@ -1164,6 +1165,7 @@ class HotCorner extends Clutter.Actor {
+         this._ripples.addTo(layoutManager.uiGroup);
+ 
+         this.connect('destroy', this._onDestroy.bind(this));
++        ApexHooks.run('hot-corner', this, layoutManager);
+     }
+ 
+     setBarrierSize(size) {
+diff --git a/js/ui/panel.js b/js/ui/panel.js
+index 7e98d91..1e2eedd 100644
+--- a/js/ui/panel.js
++++ b/js/ui/panel.js
+@@ -36,6 +36,7 @@ import {ATIndicator} from './status/accessibility.js';
+ import {InputSourceIndicator} from './status/keyboard.js';
+ import {DwellClickIndicator} from './status/dwellClick.js';
+ import {ScreenRecordingIndicator, ScreenSharingIndicator} from './status/remoteAccess.js';
++import * as ApexHooks from './apex/hooks.js';
+ 
+ const BUTTON_DND_ACTIVATION_TIMEOUT = 250;
+ 
+@@ -80,17 +81,21 @@ const WorkspaceDot = GObject.registerClass({
+ 
+     _updateVisuals() {
+         const {expansion} = this;
++        const inactive = ApexHooks.value('workspace-dot-inactive',
++            {opacity: 0.50, scale: INACTIVE_WORKSPACE_DOT_SCALE});
+ 
+         this._dot.set({
+-            opacity: Util.lerp(0.50, 1.0, expansion) * 255,
+-            scaleX: Util.lerp(INACTIVE_WORKSPACE_DOT_SCALE, 1.0, expansion),
+-            scaleY: Util.lerp(INACTIVE_WORKSPACE_DOT_SCALE, 1.0, expansion),
++            opacity: Util.lerp(inactive.opacity, 1.0, expansion) * 255,
++            scaleX: Util.lerp(inactive.scale, 1.0, expansion),
++            scaleY: Util.lerp(inactive.scale, 1.0, expansion),
+         });
+     }
+ 
+     vfunc_get_preferred_width(forHeight) {
+         const factor = Util.lerp(1.0, this.widthMultiplier, this.expansion);
+-        return this._dot.get_preferred_width(forHeight).map(v => Math.round(v * factor));
++        const width = this._dot.get_preferred_width(forHeight);
++        return ApexHooks.value('workspace-dot-width',
++            width.map(v => Math.round(v * factor)), width, this._dot, this.expansion);
+     }
+ 
+     vfunc_get_preferred_height(forWidth) {
+@@ -407,6 +412,8 @@ class QuickSettings extends PanelMenu.Button {
+         // append background apps
+         this._backgroundApps.quickSettingsItems.forEach(
+             item => this.menu.addItem(item, N_QUICK_SETTINGS_COLUMNS));
++
++        ApexHooks.run('status-indicators', this);
+     }
+ 
+     _addItemsBefore(items, sibling, colSpan = 1) {
