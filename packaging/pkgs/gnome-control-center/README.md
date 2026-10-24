@@ -87,6 +87,17 @@ the one table of Settings tile colours: the shell's Spotlight keeps a byte-ident
 `desktop/shell/data/apex/settings-tiles.json`, and compares the two. The selftest checks
 its format (sorted keys, two-space indent, a final newline, `#rrggbb` or `accent`).
 
+## Appearance
+
+Board 23 is stock 51.0's Appearance panel (`background`) with its rows unchanged, so it
+takes no patch: a block of `apex.css` restyles stock's own classes. Accent swatches are
+32 px, and the chosen one gets a 2 px ring in the card colour and a 4 px one in the accent.
+The style previews and wallpaper thumbnails are rounded to 10 px, thumbnails get a 1 px
+border, and the active wallpaper gets a 3 px accent ring. Stock's check mark stays on the
+active wallpaper as a cue that does not rely on colour; the board shows only the ring.
+Stock's chooser lays thumbnails out at a fixed size, so the grid holds as many as fit,
+three at the window size the captures use, where the board has four.
+
 ## The Software Updates page
 
 System's Software Updates row opens it (0003), and so does

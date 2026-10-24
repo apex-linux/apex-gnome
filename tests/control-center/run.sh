@@ -16,14 +16,16 @@ RPM_DIR holds the lane's built RPMs (_build/gnome-control-center/out); without i
 gnome-control-center runs. For a user '$USER_NAME', with apex-desktop's schema from
 tests/layer/fixtures, it captures board 11 at both scroll positions, light and dark, and
 checks every row against its key both ways through AT-SPI (bindings.py). Without the
-schema it captures and checks the explanation the panel shows instead. Then, with
+schema it captures and checks the explanation the panel shows instead. It captures
+Appearance (board 23) light and dark on a gnome-backgrounds wallpaper. Then, with
 update1.py standing in for apex-updated on the system bus, it opens System > Software
 Updates and captures board 18 light and dark, and updates.py checks each state's texts
 and that each button makes its Update1 call. The captures and logs land in
 _build/control-center/shots/.
 
 It needs gnome-shell, mesa-dri-drivers, dbus-daemon, python3-dbusmock, python3-gobject,
-at-spi2-core, gcc, util-linux and adwaita-sans-fonts. G2's clock.c and fixtures.py
+at-spi2-core, gcc, util-linux, adwaita-sans-fonts, python3-dbus, systemd and
+gnome-backgrounds. G2's clock.c and fixtures.py
 (tests/shots) are used as they are.
 EOF
 }
@@ -45,10 +47,11 @@ headless_user
 headless_bus "$out"
 
 # run_case NAME SCHEME [NAME=VALUE...]: one shell; libadwaita has no settings portal here, so ADW_DEBUG_COLOR_SCHEME.
+# CASE_SETTINGS holds extra "schema key value" lines for that shell.
 run_case() {
     local name=$1 scheme=$2
     shift 2
-    headless_run "$out/$name.log" "$CC_TESTS/probe.js" "$SHELL_TIMEOUT" "" \
+    headless_run "$out/$name.log" "$CC_TESTS/probe.js" "$SHELL_TIMEOUT" "${CASE_SETTINGS:-}" \
         APEX_SHOTS="$out" APEX_SHOT="$name" ADW_DEBUG_COLOR_SCHEME="$scheme" "$@"
     log "run.sh: $name: exit $?"
     grep -q 'APEXCC ' "$out/$name.log" && [[ -s $out/$name.png ]] || return 1
@@ -62,6 +65,13 @@ run_case dark prefer-dark APEX_SCROLL=1 || status=1
 headless_apex_schema no
 run_case no-schema default "APEX_CHECK=bindings.py no-schema" || status=1
 headless_apex_schema yes
+# Board 23: amber.xml's wallpaper as it lists it, so the chooser has an active item to ring.
+amber="org.gnome.desktop.background picture-uri 'file:///usr/share/backgrounds/gnome/amber-l.jxl'
+org.gnome.desktop.background picture-uri-dark 'file:///usr/share/backgrounds/gnome/amber-d.jxl'
+org.gnome.desktop.background primary-color '#F57511'
+org.gnome.desktop.background secondary-color '#DD4C38'"
+CASE_SETTINGS=$amber run_case appearance-light default APEX_OPEN=background || status=1
+CASE_SETTINGS=$amber run_case appearance-dark prefer-dark APEX_OPEN=background || status=1
 
 # update_case SCENARIO NAME SCHEME [NAME=VALUE...]: System > Software Updates on update1.py's SCENARIO.
 update_case() {
