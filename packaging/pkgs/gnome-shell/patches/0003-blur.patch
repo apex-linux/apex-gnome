@@ -1,0 +1,482 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Sat, 24 Oct 2026 10:14:18 +0000
+Subject: [PATCH] blur: saturation, rounded coverage and fine mode for Apex
+ glass
+
+Four properties for the glass of ADR 0014 (apex-fedora ROADMAP S2b).
+At their defaults the effect builds stock's pipelines and nodes, so its
+output is byte-identical to the unpatched effect's.
+
+- saturation (1.0): CSS saturate() in the final pass, after brightness;
+- corner-radius (0): the antialiased coverage of a rounded box in that
+  pass, in the blurred texture's pixels;
+- follow-opacity (false): background mode paints with the actor's paint
+  opacity instead of 255;
+- fine (false): the smallest power-of-two downscale with sigma / ds <= 4
+  and a side of at least 4 px, without the 256 px floor, reduced by a
+  box filter in one pass. In background mode, a frame whose redraw clip
+  does not cover the actor draws the last result and queues a redraw,
+  so a blit never reads pixels the frame did not repaint; the last
+  result is kept per stage view.
+---
+ src/shell-blur-effect.c | 299 ++++++++++++++++++++++++++++++++++++++--
+ 1 file changed, 289 insertions(+), 10 deletions(-)
+
+diff --git a/src/shell-blur-effect.c b/src/shell-blur-effect.c
+index d362b0a..b268ec8 100644
+--- a/src/shell-blur-effect.c
++++ b/src/shell-blur-effect.c
+@@ -50,8 +50,41 @@ static const gchar *brightness_glsl_declarations =
+ static const gchar *brightness_glsl =
+ "  cogl_color_out.rgb *= brightness;                                       \n";
+ 
++/* CSS saturate(), then the antialiased coverage of a rounded rectangle */
++static const gchar *glass_glsl_declarations =
++"uniform float saturation;                                                 \n"
++"uniform float corner_radius;                                              \n"
++"uniform vec2 size;                                                        \n";
++
++static const gchar *glass_glsl =
++"  float luma = dot (cogl_color_out.rgb, vec3 (0.213, 0.715, 0.072));      \n"
++"  cogl_color_out.rgb = clamp (mix (vec3 (luma), cogl_color_out.rgb,       \n"
++"                                   saturation), 0.0, cogl_color_out.a);   \n"
++"  vec2 q = abs (cogl_tex_coord0_in.st - 0.5) * size                       \n"
++"           - (size * 0.5 - corner_radius);                                \n"
++"  float d = length (max (q, 0.0)) + min (max (q.x, q.y), 0.0)             \n"
++"            - corner_radius;                                              \n"
++"  cogl_color_out *= clamp (0.5 - d, 0.0, 1.0);                            \n";
++
++/* Each tap sits on the corner of 2 x 2 texels: the mean of the whole footprint */
++static const gchar *box_glsl_declarations =
++"uniform float downscale;                                                  \n"
++"uniform vec2 pixel_step;                                                  \n";
++
++static const gchar *box_glsl =
++"  vec2 corner = cogl_tex_coord.st - 0.5 * downscale * pixel_step;         \n"
++"  vec4 sum = vec4 (0.0);                                                  \n"
++"  for (float y = 1.0; y < downscale; y += 2.0)                            \n"
++"    for (float x = 1.0; x < downscale; x += 2.0)                          \n"
++"      sum += texture2D (cogl_sampler, corner + vec2 (x, y) * pixel_step); \n"
++"  cogl_texel = downscale > 1.0                                            \n"
++"    ? sum * 4.0 / (downscale * downscale)                                 \n"
++"    : texture2D (cogl_sampler, cogl_tex_coord.st);                        \n";
++
+ #define MIN_DOWNSCALE_SIZE 256.f
+ #define MAX_RADIUS 12.f
++#define FINE_MAX_SIGMA 4.f
++#define FINE_MIN_SIZE 4.f
+ 
+ typedef enum
+ {
+@@ -64,6 +97,7 @@ typedef struct
+   CoglFramebuffer *framebuffer;
+   CoglPipeline *pipeline;
+   CoglTexture *texture;
++  gboolean glass;
+ } FramebufferData;
+ 
+ struct _ShellBlurEffect
+@@ -87,6 +121,13 @@ struct _ShellBlurEffect
+   float downscale_factor;
+   float brightness;
+   int radius;
++
++  float saturation;
++  int corner_radius;
++  gboolean follow_opacity;
++  gboolean fine;
++  /* Fine mode keeps the last result per stage view, in an effect of its own */
++  GHashTable *view_effects;
+ };
+ 
+ G_DEFINE_TYPE (ShellBlurEffect, shell_blur_effect, CLUTTER_TYPE_EFFECT)
+@@ -96,6 +137,10 @@ enum {
+   PROP_RADIUS,
+   PROP_BRIGHTNESS,
+   PROP_MODE,
++  PROP_SATURATION,
++  PROP_CORNER_RADIUS,
++  PROP_FOLLOW_OPACITY,
++  PROP_FINE,
+   N_PROPS
+ };
+ 
+@@ -151,13 +196,63 @@ create_brightness_pipeline (void)
+   return cogl_pipeline_copy (brightness_pipeline);
+ }
+ 
++static CoglPipeline*
++create_glass_pipeline (void)
++{
++  static CoglPipeline *glass_pipeline = NULL;
++
++  if (G_UNLIKELY (glass_pipeline == NULL))
++    {
++      CoglSnippet *snippet = cogl_snippet_new (COGL_SNIPPET_HOOK_FRAGMENT,
++                                               glass_glsl_declarations, glass_glsl);
++
++      glass_pipeline = create_brightness_pipeline ();
++      cogl_pipeline_add_snippet (glass_pipeline, snippet);
++      g_object_unref (snippet);
++    }
++
++  return cogl_pipeline_copy (glass_pipeline);
++}
++
++static CoglPipeline*
++create_source_pipeline (gboolean fine)
++{
++  static CoglPipeline *box_pipeline = NULL;
++
++  if (G_UNLIKELY (fine && box_pipeline == NULL))
++    {
++      CoglSnippet *snippet = cogl_snippet_new (COGL_SNIPPET_HOOK_TEXTURE_LOOKUP,
++                                               box_glsl_declarations, NULL);
++
++      box_pipeline = create_base_pipeline ();
++      cogl_snippet_set_replace (snippet, box_glsl);
++      cogl_pipeline_add_layer_snippet (box_pipeline, 0, snippet);
++      g_object_unref (snippet);
++    }
++
++  return fine ? cogl_pipeline_copy (box_pipeline) : create_base_pipeline ();
++}
++
++#define UNIFORM(pipeline, name) cogl_pipeline_get_uniform_location (pipeline, name)
+ 
+ static void
+ update_brightness (ShellBlurEffect *self,
+                    uint8_t          paint_opacity)
+ {
++  FramebufferData *data = &self->brightness_fb;
++  gboolean glass = self->saturation != 1.f || self->corner_radius > 0;
+   CoglColor color;
+ 
++  /* At default values the pipeline is stock's, so the output is byte-identical */
++  if (data->glass != glass)
++    {
++      g_object_unref (data->pipeline);
++      data->pipeline = glass ? create_glass_pipeline () : create_brightness_pipeline ();
++      data->glass = glass;
++      if (data->texture)
++        cogl_pipeline_set_layer_texture (data->pipeline, 0, data->texture);
++    }
++
+   cogl_color_init_from_4f (&color,
+                            paint_opacity / 255.0, paint_opacity / 255.0,
+                            paint_opacity / 255.0, paint_opacity / 255.0);
+@@ -169,6 +264,18 @@ update_brightness (ShellBlurEffect *self,
+                                     self->brightness_uniform,
+                                     self->brightness);
+     }
++
++  if (glass)
++    {
++      float size[2] = { self->tex_width, self->tex_height };
++
++      cogl_pipeline_set_uniform_1f (data->pipeline, UNIFORM (data->pipeline, "saturation"),
++                                    self->saturation);
++      cogl_pipeline_set_uniform_1f (data->pipeline, UNIFORM (data->pipeline, "corner_radius"),
++                                    self->corner_radius);
++      cogl_pipeline_set_uniform_float (data->pipeline, UNIFORM (data->pipeline, "size"),
++                                       2, 1, size);
++    }
+ }
+ 
+ static void
+@@ -242,7 +349,8 @@ update_actor_fbo (ShellBlurEffect *self,
+ 
+   self->cache_flags &= ~ACTOR_PAINTED;
+ 
+-  return update_fbo (&self->actor_fb, width, height, downscale_factor);
++  return update_fbo (&self->actor_fb, width, height,
++                     self->fine && self->mode == SHELL_BLUR_MODE_ACTOR ? 1.f : downscale_factor);
+ }
+ 
+ static gboolean
+@@ -314,6 +422,20 @@ calculate_downscale_factor (float width,
+   return downscale_factor;
+ }
+ 
++static float
++calculate_fine_downscale_factor (float width,
++                                 float height,
++                                 float radius)
++{
++  float downscale_factor = 1.f;
++
++  while (radius / 2.f / downscale_factor > FINE_MAX_SIGMA &&
++         MIN (width, height) / (downscale_factor * 2.f) >= FINE_MIN_SIZE)
++    downscale_factor *= 2.f;
++
++  return downscale_factor;
++}
++
+ static void
+ shell_blur_effect_set_actor (ClutterActorMeta *meta,
+                              ClutterActor     *actor)
+@@ -328,6 +450,7 @@ shell_blur_effect_set_actor (ClutterActorMeta *meta,
+   clear_framebuffer_data (&self->actor_fb);
+   clear_framebuffer_data (&self->background_fb);
+   clear_framebuffer_data (&self->brightness_fb);
++  g_hash_table_remove_all (self->view_effects);
+ 
+   /* we keep a back pointer here, to avoid going through the ActorMeta */
+   self->actor = clutter_actor_meta_get_actor (meta);
+@@ -508,7 +631,9 @@ update_framebuffers (ShellBlurEffect     *self,
+ 
+   clutter_actor_box_get_size (source_actor_box, &width, &height);
+ 
+-  downscale_factor = calculate_downscale_factor (width, height, self->radius);
++  downscale_factor = self->fine
++    ? calculate_fine_downscale_factor (width, height, self->radius)
++    : calculate_downscale_factor (width, height, self->radius);
+ 
+   updated = update_actor_fbo (self, width, height, downscale_factor) &&
+             update_brightness_fbo (self, width, height, downscale_factor);
+@@ -520,6 +645,16 @@ update_framebuffers (ShellBlurEffect     *self,
+   self->tex_height = height;
+   self->downscale_factor = downscale_factor;
+ 
++  if (self->fine)
++    {
++      CoglPipeline *source = self->mode == SHELL_BLUR_MODE_ACTOR
++        ? self->actor_fb.pipeline : self->background_fb.pipeline;
++      float pixel_step[2] = { 1.f / width, 1.f / height };
++
++      cogl_pipeline_set_uniform_1f (source, UNIFORM (source, "downscale"), downscale_factor);
++      cogl_pipeline_set_uniform_float (source, UNIFORM (source, "pixel_step"), 2, 1, pixel_step);
++    }
++
+   return updated;
+ }
+ 
+@@ -564,8 +699,8 @@ paint_actor_offscreen (ShellBlurEffect         *self,
+ 
+       /* Transform node */
+       graphene_matrix_init_scale (&transform,
+-                                  1.f / self->downscale_factor,
+-                                  1.f / self->downscale_factor,
++                                  self->fine ? 1.f : 1.f / self->downscale_factor,
++                                  self->fine ? 1.f : 1.f / self->downscale_factor,
+                                   1.f);
+       transform_node = clutter_transform_node_new (&transform);
+       clutter_paint_node_set_static_name (transform_node, "ShellBlurEffect (downscale)");
+@@ -617,13 +752,18 @@ needs_repaint (ShellBlurEffect         *self,
+   return TRUE;
+ }
+ 
++static uint8_t
++background_opacity (ShellBlurEffect *self)
++{
++  return self->follow_opacity ? clutter_actor_get_paint_opacity (self->actor) : 255;
++}
++
+ static void
+-shell_blur_effect_paint_node (ClutterEffect           *effect,
+-                              ClutterPaintNode        *node,
+-                              ClutterPaintContext     *paint_context,
+-                              ClutterEffectPaintFlags  flags)
++paint_blur (ShellBlurEffect         *self,
++            ClutterPaintNode        *node,
++            ClutterPaintContext     *paint_context,
++            ClutterEffectPaintFlags  flags)
+ {
+-  ShellBlurEffect *self = SHELL_BLUR_EFFECT (effect);
+   uint8_t paint_opacity;
+ 
+   g_assert (self->actor != NULL);
+@@ -639,7 +779,7 @@ shell_blur_effect_paint_node (ClutterEffect           *effect,
+           break;
+ 
+         case SHELL_BLUR_MODE_BACKGROUND:
+-          paint_opacity = 255;
++          paint_opacity = background_opacity (self);
+           break;
+ 
+         default:
+@@ -701,6 +841,89 @@ fail:
+   add_actor_node (self, node, -1);
+ }
+ 
++static gboolean
++redraw_clip_covers_actor (ShellBlurEffect     *self,
++                          ClutterPaintContext *paint_context,
++                          ClutterStageView    *stage_view)
++{
++  const MtkRegion *redraw_clip = clutter_paint_context_get_redraw_clip (paint_context);
++  MtkRectangle layout, box;
++  float x, y, width, height;
++
++  if (!redraw_clip)
++    return TRUE;
++
++  clutter_actor_get_transformed_position (self->actor, &x, &y);
++  clutter_actor_get_transformed_size (self->actor, &width, &height);
++  box = (MtkRectangle) {
++    floorf (x), floorf (y),
++    ceilf (x + width) - floorf (x), ceilf (y + height) - floorf (y),
++  };
++  clutter_stage_view_get_layout (stage_view, &layout);
++
++  return !mtk_rectangle_intersect (&box, &layout, &box) ||
++         mtk_region_contains_rectangle (redraw_clip, &box) == MTK_REGION_OVERLAP_IN;
++}
++
++static void
++set_fine (ShellBlurEffect *self,
++          gboolean         fine)
++{
++  self->fine = fine;
++  self->cache_flags = 0;
++  clear_framebuffer_data (&self->actor_fb);
++  clear_framebuffer_data (&self->background_fb);
++  g_object_unref (self->actor_fb.pipeline);
++  g_object_unref (self->background_fb.pipeline);
++  self->actor_fb.pipeline = create_source_pipeline (fine);
++  self->background_fb.pipeline = create_source_pipeline (fine);
++  g_hash_table_remove_all (self->view_effects);
++}
++
++/* A blit outside the frame's redraw clip would read pixels it did not repaint */
++static void
++shell_blur_effect_paint_node (ClutterEffect           *effect,
++                              ClutterPaintNode        *node,
++                              ClutterPaintContext     *paint_context,
++                              ClutterEffectPaintFlags  flags)
++{
++  ShellBlurEffect *self = SHELL_BLUR_EFFECT (effect);
++  ClutterStageView *stage_view = clutter_paint_context_get_stage_view (paint_context);
++  ShellBlurEffect *view_effect;
++
++  if (!self->fine || self->mode != SHELL_BLUR_MODE_BACKGROUND || !stage_view)
++    {
++      paint_blur (self, node, paint_context, flags);
++      return;
++    }
++
++  view_effect = g_hash_table_lookup (self->view_effects, stage_view);
++  if (!view_effect)
++    {
++      view_effect = shell_blur_effect_new ();
++      view_effect->mode = SHELL_BLUR_MODE_BACKGROUND;
++      set_fine (view_effect, TRUE);
++      g_hash_table_insert (self->view_effects, stage_view, view_effect);
++    }
++  view_effect->actor = self->actor;
++  view_effect->radius = self->radius;
++  view_effect->brightness = self->brightness;
++  view_effect->saturation = self->saturation;
++  view_effect->corner_radius = self->corner_radius;
++  view_effect->follow_opacity = self->follow_opacity;
++
++  if (self->radius > 0 && !redraw_clip_covers_actor (self, paint_context, stage_view))
++    {
++      if (view_effect->cache_flags & BLUR_APPLIED)
++        add_blurred_pipeline (view_effect, node, background_opacity (self));
++      add_actor_node (self, node, -1);
++      clutter_actor_queue_redraw (self->actor);
++      return;
++    }
++
++  paint_blur (view_effect, node, paint_context, flags);
++}
++
+ static void
+ shell_blur_effect_finalize (GObject *object)
+ {
+@@ -713,6 +936,7 @@ shell_blur_effect_finalize (GObject *object)
+   g_clear_object (&self->actor_fb.pipeline);
+   g_clear_object (&self->background_fb.pipeline);
+   g_clear_object (&self->brightness_fb.pipeline);
++  g_clear_pointer (&self->view_effects, g_hash_table_unref);
+ 
+   G_OBJECT_CLASS (shell_blur_effect_parent_class)->finalize (object);
+ }
+@@ -739,6 +963,22 @@ shell_blur_effect_get_property (GObject    *object,
+       g_value_set_enum (value, self->mode);
+       break;
+ 
++    case PROP_SATURATION:
++      g_value_set_float (value, self->saturation);
++      break;
++
++    case PROP_CORNER_RADIUS:
++      g_value_set_int (value, self->corner_radius);
++      break;
++
++    case PROP_FOLLOW_OPACITY:
++      g_value_set_boolean (value, self->follow_opacity);
++      break;
++
++    case PROP_FINE:
++      g_value_set_boolean (value, self->fine);
++      break;
++
+     default:
+       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
+     }
+@@ -766,9 +1006,30 @@ shell_blur_effect_set_property (GObject      *object,
+       shell_blur_effect_set_mode (self, g_value_get_enum (value));
+       break;
+ 
++    case PROP_SATURATION:
++      self->saturation = g_value_get_float (value);
++      break;
++
++    case PROP_CORNER_RADIUS:
++      self->corner_radius = g_value_get_int (value);
++      break;
++
++    case PROP_FOLLOW_OPACITY:
++      self->follow_opacity = g_value_get_boolean (value);
++      break;
++
++    case PROP_FINE:
++      if (self->fine != g_value_get_boolean (value))
++        set_fine (self, g_value_get_boolean (value));
++      break;
++
+     default:
+       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
++      return;
+     }
++
++  if (prop_id >= PROP_SATURATION && self->actor)
++    clutter_effect_queue_repaint (CLUTTER_EFFECT (self));
+ }
+ 
+ static void
+@@ -802,6 +1063,22 @@ shell_blur_effect_class_init (ShellBlurEffectClass *klass)
+                        SHELL_BLUR_MODE_ACTOR,
+                        G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_EXPLICIT_NOTIFY);
+ 
++  properties[PROP_SATURATION] =
++    g_param_spec_float ("saturation", NULL, NULL, 0.f, G_MAXFLOAT, 1.f,
++                        G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS);
++
++  properties[PROP_CORNER_RADIUS] =
++    g_param_spec_int ("corner-radius", NULL, NULL, 0, G_MAXINT, 0,
++                      G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS);
++
++  properties[PROP_FOLLOW_OPACITY] =
++    g_param_spec_boolean ("follow-opacity", NULL, NULL, FALSE,
++                          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS);
++
++  properties[PROP_FINE] =
++    g_param_spec_boolean ("fine", NULL, NULL, FALSE,
++                          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS);
++
+   g_object_class_install_properties (object_class, N_PROPS, properties);
+ }
+ 
+@@ -811,6 +1088,8 @@ shell_blur_effect_init (ShellBlurEffect *self)
+   self->mode = SHELL_BLUR_MODE_ACTOR;
+   self->radius = 0;
+   self->brightness = 1.f;
++  self->saturation = 1.f;
++  self->view_effects = g_hash_table_new_full (NULL, NULL, NULL, g_object_unref);
+ 
+   self->actor_fb.pipeline = create_base_pipeline ();
+   self->background_fb.pipeline = create_base_pipeline ();

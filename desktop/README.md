@@ -17,12 +17,14 @@ directory with `git archive` and unpacks it at the top of Fedora's gnome-shell t
 | `apex.gresource.xml` | the Apex resource: `/org/gnome/shell/ui/apex` (the layer), `/org/gnome/shell/theme/apex` (the sheets' assets) and `/org/gnome/shell/theme/stock` (upstream's compiled light and dark sheets, the safe-mode sheets). Patch 0001-build compiles it and links it into libshell next to upstream's JS resource. |
 | `js/ui/apex/hooks.js` | the only Apex module upstream files import: `safe()`, `value()`, `run()`, and `loadLayer()` for `main.js` |
 | `js/ui/apex/layer.js` | the layer: the configure and enable phases, one `try/catch` per feature, the session-mode colour hook, the crash guard's marker file |
-| `js/ui/apex/spotlight/feature.js` | Super+Space (below) |
+| `js/ui/apex/spotlight/` | Spotlight (below): `feature.js` (Super+Space), `search.js` (the sections, caps and budget), `providers.js` (the stock providers), `popup.js` and `toast.js` |
 | `js/ui/apex/panel/feature.js` | the top bar of S2a (below): its parts in `panel/`, one module each |
+| `js/ui/apex/glass/feature.js` | the glass manager of S2b (below), with `glass/surfaces.js`, the layer's own glass, and `glass/registry.js`, where any feature registers an actor |
 | `js/ui/apex/dock/feature.js`, `dock.js`, `trash.js` | the dock of S2a (below): ApexDock, a subclass of upstream's `Dash`, and its Trash |
 | `js/ui/apex/fault/feature.js` | the fault-injection feature: loaded only when `APEX_SHELL_TEST_FAULT` names a phase, it fails in that phase (below) |
 | `data/theme/apex/_apex-tokens.scss` | the design tokens as SCSS variables, imported after upstream's `_colors` |
 | `data/theme/apex/_apex.scss` | the Apex sheet, imported last by the light and dark entry files: `apex-text-size()`, the `apex-surface()` mixin of the shell's own surfaces, and the partials |
+| `data/theme/apex/_glass.scss` | each glass surface's `-apex-glass-blur` and `-apex-glass-saturation`, from the tokens of ADR 0014's table, and the solid tints under `.apex-solid` |
 | `data/theme/apex/_top-bar.scss` | the top bar over upstream's panel, in the user session and the overview. Its text sizes are in pt (`apex-text-size`), so Large Text grows the text and nothing else: the bar, the pills and the glyphs keep SPEC's px sizes, where upstream sizes the bar in em. The unread-notification dot is `$apex_bar_fg` until S1b brings the wallpaper SPEC's accent dot was drawn over; over Fedora's wallpaper the light bar hides an accent dot. G2 asserts both ([tests/shots](../tests/shots/README.md)) |
 | `data/theme/apex/diamond-{light,dark}.svg` | the Apex diamond in the Activities pill, stroked in each variant's `$apex_bar_fg` |
 | `data/theme/apex/_popup-menus.scss` | stock popup menus (board 16): solid `$apex_panel_solid`, radius 14, 34 px rows, the board's inset ring as a 1 px border and its first shadow (St draws one). The calendar and Quick Settings popovers take it too until their own partials |
@@ -36,6 +38,7 @@ directory with `git archive` and unpacks it at the top of Fedora's gnome-shell t
 | `data/theme/apex/_app-grid.scss` | the launcher (board 36): unfilled app tiles radius 22, padded 12, names at 13/600 in `$apex_fg` 8 px under the icon, `$apex_button` when hovered and an accent ring when focused; folders filled `$apex_folder` (stock fills the whole tile, the board only the icon); the folder dialog 600 px of `$apex_folder_panel` glass, radius 26, a 16/700 title and a 28 px button; 4 px running dots; and flat page hints, without upstream's gradients. `appDisplay.js` sets the grid's columns and icon sizes and the dialog's 720 px height |
 | `data/theme/apex/_derived.scss` | stock surfaces with no board, from their nearest board (DESIGN.md): the workspace switcher and resize popup take the OSD's tint, ring and radius, with `$apex_fg_faint` and `$apex_fg` dots; the input method's candidates the popup menu's; the run dialog's entry the password entry; audio device tiles the switcher's; the monitor number the OSD's radius. Glass surfaces take only the tint here: the glass manager registers them for the blur |
 | `data/theme/apex/_tile-preview.scss` | the edge-tiling preview (board 22): `$apex_tile_preview_inset` inside the tile mutter gives it (a clear border, since mutter sets its size), radius `$apex_radius_tile_preview`, the accent at `$apex_tile_preview_fill_opacity` ringed `$apex_tile_preview_ring` in the accent at `$apex_tile_preview_ring_opacity` (an inset shadow). The board's blur waits for the glass manager |
+| `data/theme/apex/_spotlight.scss` | Spotlight and its toast (board 38): a 680 px glass panel tinted `$apex_panel`, radius 24, 96 px below the monitor's top edge; the 60 px field with 20/500 text and a 20 px glyph; 11.5/700 uppercase section headers; 48 px rows with 32 px icons, 14/600 titles over 12.5 px subtitles, the selected one in the accent at 16 % with its verb and an Enter chip; the calculator's result at 18/700 in tabular figures; the "Copied" toast a 40 px glass pill 92 px above the screen's bottom edge. St draws no backdrop filter: S2b's glass manager blurs behind the panel with `$apex_spotlight_blur` and `$apex_spotlight_saturation` (σ 34, 1.8) and behind the toast with `$apex_toast_blur` and `$apex_toast_saturation` (σ 30, 1.8, ADR 0014's toast row) |
 | `data/theme/apex/_apex-structure.scss` | Apex actors' geometry for the high-contrast sheet |
 | `data/theme/apex/meson.build` | adds the partials to upstream's `theme_sources`, so an edit recompiles the sheets |
 
@@ -55,16 +58,32 @@ Rules, which the lane and `.github/scripts/selftest.sh` enforce:
 
 ### The layer
 
-`FEATURES_IN_ENABLE_ORDER` in `layer.js` lists `spotlight` (S1b), `panel` (S2a) and
-`overview` (S3a), by the names DESIGN's `disabled-features` uses. `spotlight`
+`FEATURES_IN_ENABLE_ORDER` in `layer.js` lists `spotlight` (S1b), `panel` (S2a), `glass`
+(S2b), `dock` (S2a) and `overview` (S3a), by the names DESIGN's `disabled-features` uses.
+`spotlight`
 registers `toggle-spotlight` from `io.github.apex_linux.Apex.Desktop.Keybindings`
 (`['<Super>space']`) with `Main.wm.addKeybinding` at enable, in the normal and overview
-action modes and without autorepeat, and removes it at disable. Until S3a's Spotlight it
-opens the stock overview with its search entry focused, and pressed while the overview is
-up it hides it. apex-desktop's override moves `switch-input-source` to Super+Alt+Space,
-so nothing else owns Super+Space; a Super tap (the overview) and Super+A (the launcher)
-are upstream's. The feature follows the kill switches and `disabled-features` like any
-other, and a missing Keybindings child schema turns off only this feature, logged once.
+action modes and without autorepeat, and removes it at disable. A press opens Spotlight
+(board 38, DESIGN's Spotlight rules), a modal popup in the popup action mode; Esc, a click
+outside or Super+Space again close it. Upstream allows the Super tap only in the normal and
+overview modes, so it does nothing while Spotlight is open (no hook); with Spotlight closed
+it opens the overview as before.
+apex-desktop's override moves `switch-input-source` to Super+Alt+Space, so nothing else
+owns Super+Space; a Super tap (the overview) and Super+A (the launcher) are upstream's.
+
+Spotlight draws its own rows over the stock search providers: upstream's app search
+(`AppSearchProvider`), then the remote providers `remoteSearch.js` loads, of which it keeps
+gnome-calculator, gnome-control-center and nautilus. The sections and caps are Calculator 1,
+Applications 4, Settings 3 and Files 4, in that order. Sections show as their providers
+answer, each in its place; each provider has 1 s per query, and one past it is cancelled and
+left out of that query. The selection is the first row until Up, Down or the pointer moves it;
+after that an arriving section never moves it. A sum puts Calculator first among the
+applications, whichever answers first. Up and Down move one selection across the
+sections, Enter activates it through its provider, and Enter on the calculator's result
+copies it, closes Spotlight and shows the "Copied" toast above the dock for 2 s. An empty
+query shows only the field; a query with no results says so. The feature follows the kill
+switches and `disabled-features` like any other; a missing Keybindings child schema, or one
+without `toggle-spotlight`, turns off only this feature, logged once. It adds no hook.
 
 `panel` is the top bar. Its parts provide the hooks of patch 0010-panel
 ([the series](../packaging/pkgs/gnome-shell/README.md#the-series)); the feature follows the
@@ -100,9 +119,9 @@ the key turns off the `panel` feature, logged.
 
 `panel/search-button.js` adds a pill just before the status pill (role `apex-search`), named
 "Search (Super+Space)", `$apex_bar_search_width` wide with the 16 px search glyph. A click
-does what Super+Space does (`toggleSpotlight()` of `spotlight`): the overview with its
-search entry focused, or, while the overview is up, hides it. It works with `spotlight`
-in `disabled-features` too. The lock screen hides it; keyboard focus reaches it, but
+does what Super+Space does (`toggleSpotlight()` of `spotlight`): it opens or closes
+Spotlight. With `spotlight` in `disabled-features` it opens the overview with its search
+entry focused, or, while the overview is up, hides it. The lock screen hides it; keyboard focus reaches it, but
 Super+Space is its key. Hovered, it shows the tooltip "Search (Super+Space)" below it, a
 `dash-label` in the chrome, as the dash's labels are.
 
@@ -110,6 +129,45 @@ Super+Space is its key. Hovered, it shows the tooltip "Search (Super+Space)" bel
 a stock transient notification, at the first enable of the panel outside the lock screen,
 and sets `search-hint-shown`. A schema without that key means no hint, logged once; the
 rest of the panel runs.
+
+`glass` is ADR 0014's glass manager, on patch 0003's `ShellBlurEffect`. A surface is any
+actor in `glass/registry.js`: the top bar, Quick Settings, the calendar and each banner
+(`glass/surfaces.js`), and whatever another feature registers, for example the dock:
+
+```js
+import * as Glass from '../glass/registry.js';
+Glass.register(actor, {name: 'dock'});
+Glass.unregister(actor);
+```
+
+`register()` again replaces an actor's opts; `unregister()` is idempotent, and the
+registry drops an actor on its `destroy`. The shape is the `shadows` registry's (S3c).
+
+The registry needs no running manager, so a feature registers once and its glass follows
+`disabled-features` and the switches below. The actor's sheet says how much glass:
+`-apex-glass-blur` (ADR 0014's sigma, a token in CSS px) and `-apex-glass-saturation`, as
+`_glass.scss` sets them for the layer's own surfaces; its `border-radius` gives the corners.
+An actor without `-apex-glass-blur` gets no blur. The manager then:
+
+- adds a background-mode `Shell.BlurEffect` with `fine` and `follow-opacity`, radius
+  2 × sigma × the actor's resource scale (ClutterBlur's sigma is half the radius, in device
+  pixels), the saturation and the corner radius. `register()` takes `mode: 'actor'` for the
+  scrims of S3a and `paused()` with `pausedChanged` for a pause rule of its own;
+- pauses a surface's blur while it is unmapped (a closed popover, a hidden dock, chrome
+  under a fullscreen window) and the bar's while the panel carries `apex-solid-bar`;
+- holds the offscreen redirects of the surface and its ancestors off while it blurs (the
+  panel's, BoxPointer's and the dash's are `ALWAYS`), since a background blur inside one
+  blits the offscreen layer, not the stage, and gives each back;
+- forwards damage, for latency only: a window actor's `damaged`, its moves and resizes
+  (old and new box), restacking and background changes redraw each glass box they touch,
+  so the re-blur lands in the same frame. A missed source costs one frame, through 0003's
+  redraw-clip rule;
+- for `reduce-transparency` or high contrast, removes every blur and adds `apex-solid` to
+  `Main.uiGroup`, under which `_glass.scss` swaps the glass tints for `$apex_bar_solid` and
+  `$apex_panel_solid` (the high-contrast sheet keeps upstream's colours). With
+  `disabled-features=['glass']` the effects go and the tints stay.
+
+A schema without `reduce-transparency` turns off the `glass` feature, logged.
 
 `dock` is the dock (DESIGN.md, "Dock"; board 37). `dock/dock.js`'s ApexDock is upstream's
 `Dash` (`js/ui/dash.js`) with the hooks of patch 0014-dash, which the feature provides:

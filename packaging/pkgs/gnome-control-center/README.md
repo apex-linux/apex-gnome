@@ -71,6 +71,22 @@ the launcher's "Apex Tweaks" (`io.github.apex_linux.Apex.Tweaks.desktop`) opens 
 - **Without apex-desktop's schema** the panel shows an explanation instead of the rows.
   A schema without one of the Apex keys hides that row and logs it.
 
+## The sidebar
+
+0002 puts each panel's icon on a 24 px tile, radius 7, white on its colour, and orders the
+panels as boards 11, 18, 23 and 24 do: Apex Desktop; Wi-Fi, Network, Bluetooth; Displays,
+Sound, Power; Appearance (`background`), Multitasking, Notifications, Search, Apps, then
+Online Accounts, Sharing, Wellbeing; Privacy & Security, Keyboard, Mouse & Touchpad, then
+Color, Printers, Wacom, Accessibility and System. The panels the boards leave out keep
+their place next to their group.
+
+The colours are `panels/apex/settings-tiles.json`, `{"<panel id>": "#rrggbb" | "accent"}`,
+compiled into the resource and turned into one CSS rule per panel when Settings starts;
+`accent` is the user's accent colour, and a panel the table lacks gets a slate tile. It is
+the one table of Settings tile colours: the shell's Spotlight keeps a byte-identical copy,
+`desktop/shell/js/ui/apex/spotlight/settings-tiles.json`, and compares the two. The selftest checks
+its format (sorted keys, two-space indent, a final newline, `#rrggbb` or `accent`).
+
 ## The Software Updates page
 
 System's Software Updates row opens it (0003), and so does
@@ -82,30 +98,53 @@ and polkit asks in the daemon, never in Settings.
   and the buttons that state offers: Check Now (`Check`), Download (`Download(false)`),
   Download Anyway (`Download(true)`, while `DeferredReason` holds an update back),
   Restart Now (`Apply` with the staged digest, then `org.gnome.SessionManager.Reboot`;
-  `Reboot` alone once the update is applied), and for a health failure Go Back…
-  (`Rollback(true)`) and Keep This Version (`AcknowledgeHealthFailure`). While
-  downloading it shows `Progress`. A failed call shows the daemon's message under the
+  `Reboot` alone once the update is applied), Keep Current Version (calls nothing: the
+  hero turns to "Update Downloaded" and the image waits), and for a health failure Go
+  Back… (`Rollback(true)`) and Keep This Version (`AcknowledgeHealthFailure`). An
+  available update shows its `download-size`; while downloading, the hero shows
+  "264 of 412 MB · about 2 minutes left" from `Progress`, the size and the rate since
+  the page saw the download start. A failed call shows the daemon's message under the
   buttons; a refusal from polkit shows nothing.
-- **Notes** for every family in the newest deployment's `held` and `degraded` lists.
+- **Board 26**: with `HealthFailure` or `LastFallback` set, the page raises an
+  `AdwAlertDialog` once per digest when it shows: the failed checks
+  (`HealthFailureChecks`), Keep This Version (`AcknowledgeHealthFailure`) and Go Back…
+  (`Rollback(true)`) after a failed check; Show Changes (`GetChangesFor` the set-aside
+  digest, listed in a second dialog) and OK (`AcknowledgeHealthFailure`, which clears
+  `LastFallback`) after a fallback, whose hero says so too. These three members, and
+  `Kept`, come from apex-system K4; the page reads them through a proxy without the
+  compiled interface and offers each only when the daemon has it, so the page also runs
+  against a daemon from before K4. apex-session-agent's notification opens this page.
+- **Notes** for every family in the newest deployment's `held` list, with each of its
+  `holds` records when there are some ("Settings 51.1 is held back … Not a security
+  update. Held for up to 14 days, then Apex ships the stock 51.1."; the kernel pair's
+  records name Linux or the NVIDIA driver by their side), for every family in `stock`,
+  with the reason the daemon gives, and for every `degraded` one. `holds` is read as
+  `a(sstbts)` or, from a daemon before apex-system K4, `a(sstbt)`.
 - **What's New**: `GetChanges` for the staged digest, summed up as its GNOME, Linux and
   Mesa versions (then other packages), with every change in the expanded row.
 - **Versions**: Booted, Staged and Rollback, each as version, short digest and build
-  date; Use at Next Restart… on the previous one calls `Rollback(false)`.
-- **Preferences**: the channel, the last check and Check Now.
+  date, and "Kept by Apex: …" with the `pin-reason` of a deployment the daemon pinned;
+  a Kept row for each deployment in `Kept`, the daemon's other pinned ones;
+  Use at Next Restart… on the previous one calls `Rollback(false)`.
+- **Preferences**: Automatic Downloads (`AutomaticDownloads`, set with
+  `SetAutomaticDownloads`; polkit's `update.configure` is auth_admin, so the daemon asks
+  each time and a refusal puts the switch back), the channel, the last check and Check
+  Now.
 - With no `Update1` on the bus, the page says the update service is missing.
 
 `cc-apex-updates-state.c` holds the page's logic without GTK: each state's hero, the
 dates, digests and the changes' summary. `tests/control-center/state-test.sh` tests it.
 
 `panels/apex/io.github.apex_linux.Apex.Update1.xml` is apex-system's
-`crates/apex-dbus/data/io.github.apex_linux.Apex.Update1.xml` at 05ce79b, copied byte for
+`crates/apex-dbus/data/io.github.apex_linux.Apex.Update1.xml` at 4082998, copied byte for
 byte;
 gdbus-codegen makes the page's proxy from it, and apex-image's contracts job compares the
 two. Change it there first, then copy it here.
 
 ## `desktop/control-center/`
 
-Every file but the `Update1` copy is GPL-2.0-or-later, gnome-control-center's licence,
+Every file but the `Update1` copy and the JSON tile table, which cannot carry a comment, is
+GPL-2.0-or-later, gnome-control-center's licence,
 and sits under `panels/apex/`, the one path `source1_paths` allows;
 `tests/control-center/selftest.sh` checks both, and that every patch is the owner's. The
 copy keeps apex-system's bytes and licence, GPL-3.0-or-later, so the built package is
@@ -121,6 +160,8 @@ copy keeps apex-system's bytes and licence, GPL-3.0-or-later, so the built packa
 | `panels/apex/gnome-apex-panel.desktop.in` | the panel's name, icon, keywords and section for the sidebar and search |
 | `panels/apex/io.github.apex_linux.Apex.Tweaks.desktop.in` | "Apex Tweaks" in the launcher |
 | `panels/apex/icons/org.gnome.Settings-apex-symbolic.svg` | the Apex diamond, the panel's sidebar icon |
+| `panels/apex/cc-apex-sidebar.{c,h}` | the sidebar's tiles from `settings-tiles.json`, and the one loader of the Apex sheets |
+| `panels/apex/settings-tiles.json` | the tile colours by panel id, shared with the shell's Spotlight |
 | `panels/apex/cc-apex-tile.{c,h}` | the wallpaper tile with the Apex diamond, and a badge, shared by the panel's header and the updates page |
 | `panels/apex/cc-apex-updates-page.{c,h,blp}` | the Software Updates page |
 | `panels/apex/cc-apex-updates-state.{c,h}` | its logic, without GTK |
@@ -131,6 +172,7 @@ copy keeps apex-system's bytes and licence, GPL-3.0-or-later, so the built packa
 | Patch | Upstream files | Changed lines | Hunks |
 |---|---|---|---|
 | `0001-apex-desktop` | `panels/meson.build`, `shell/meson.build`, `shell/cc-panel-loader.c`, `shell/cc-panel-list.c` | +7 | `subdir('apex')` after upstream's panels; `apex_shell_sources` added to `shell_sources`; the panel registered as `apex`; `"apex"` and a separator at the head of `panel_order[]` |
+| `0002-sidebar-tiles` | `shell/cc-panel-list.c` | +8 −7 | the include; each row's icon handed to `cc_apex_sidebar_tile()`; `panel_order[]` in the design's order |
 | `0003-software-updates` | `panels/system/cc-system-panel.c`, `panels/system/cc-system-panel.blp` | +6 −3 | the include; the `software-updates` subpage; the Software Updates group always shown; its row pushes the page (`navigation.push`) instead of spawning gnome-software, with a forward arrow for the external-link one |
 
 The resource goes into the executable as sources, not as a static library in
@@ -138,8 +180,7 @@ The resource goes into the executable as sources, not as a static library in
 and nothing upstream does.
 
 Budget (ADR 0014): at most 150 changed lines in upstream files, in hook hunks only; the
-added files under `panels/apex/` do not count. In use: 16 lines in 6 files. 0002, the
-coloured sidebar tiles, comes next.
+added files under `panels/apex/` do not count. In use: 31 lines in 6 files.
 
 The patches are `git format-patch` output against Fedora's `%prep` tree, with `a/` and
 `b/` prefixes, applied with `-p1`. Write them with apex-image's
@@ -175,9 +216,12 @@ keeps the captures as the `control-center-shots` artifact.
 A second part of the run starts `update1.py`, a stand-in for apex-updated, on the system
 bus, and opens `gnome-control-center system software-updates` on its scenarios: board
 18's "ready" state (captured light and dark, at the top and scrolled), up to date, an
-update available, a health failure, and no service at all. `updates.py` checks each
-state's texts through AT-SPI and presses each button, and `update1.py`'s log must show
-the method call that button makes, with its arguments.
+update available, a download under way, a health failure and a fallback (board 26's
+dialog in each), and no service at all. `updates.py` checks each
+state's texts through AT-SPI, that board 26's dialog shows, and presses each button and
+the Automatic Downloads switch: `update1.py`'s log must show the method call each makes,
+with its arguments, and the switch must go back when `update1.py` refuses it as polkit
+would.
 
 In these captures the sidebar has no separator under Apex Desktop: the fixtures offer no
 Wi-Fi device, so the Wi-Fi row, the one after the separator in `panel_order[]`, is not
