@@ -16,6 +16,11 @@ const SHELL_START_MS = 2500;
 const SETTLE_MS = 3000;
 const WINDOW_WAIT_MS = 30000;
 
+// Board 32 selects apex-image; board 33 splits apex-gnome to the right and runs git in the second pane.
+const SCENES = {
+    sessions: {selected: 2, split: null},
+    split: {selected: 1, split: {keyval: 'r', command: 'git status --short'}},
+};
 const SESSIONS = [
     {dir: 'src/apex-gnome', command: 'claude'},
     {dir: 'apex-image', command: 'just vm-image'},
@@ -23,7 +28,6 @@ const SESSIONS = [
     {dir: 'src/apex-desktop', command: 'rpmbuild -bb packaging/apex-desktop.spec'},
     {dir: '', command: 'ssh builder@apex-builder'},
 ];
-const SELECTED_SESSION = 2;
 
 let keyboard;
 
@@ -79,6 +83,7 @@ async function shoot() {
     Main.overview.hide();
     await Scripting.sleep(500);
     const home = GLib.get_home_dir();
+    const scene = SCENES[GLib.getenv('APEX_SCENE') ?? 'sessions'];
 
     for (const [i, session] of SESSIONS.entries()) {
         const dir = GLib.build_filenamev([home, session.dir]);
@@ -89,12 +94,20 @@ async function shoot() {
         }
         await type(session.command);
         await Scripting.sleep(500);
+        if (i === 0 && scene.split) {
+            tap(Clutter.unicode_to_keysym(scene.split.keyval.codePointAt(0)), [Clutter.KEY_Control_L, Clutter.KEY_Alt_L]);
+            await Scripting.sleep(SHELL_START_MS);
+            await type(scene.split.command);
+            await Scripting.sleep(500);
+        }
     }
 
-    tap(Clutter.KEY_1 + SELECTED_SESSION - 1, [Clutter.KEY_Alt_L]);
+    tap(Clutter.KEY_1 + scene.selected - 1, [Clutter.KEY_Alt_L]);
     await Scripting.sleep(SETTLE_MS);
 
     const [window] = ptyxisWindows();
+    window.move_resize_frame(false, WINDOW.x, WINDOW.y, WINDOW.width, WINDOW.height);
+    await Scripting.sleep(SETTLE_MS);
     const r = window.get_frame_rect();
     console.log(`APEXPTYXIS ${JSON.stringify({shot: await capture(window), frame: [r.x, r.y, r.width, r.height]})}`);
 }

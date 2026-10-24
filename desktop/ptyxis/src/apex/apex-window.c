@@ -2,12 +2,14 @@
 
 #include <glib/gi18n.h>
 
+#include "apex-panes.h"
 #include "apex-sidebar.h"
 #include "apex-window.h"
 
 #define SIDEBAR_WIDTH 272
 #define STOCK_ENV "APEX_PTYXIS_STOCK"
 #define SIDEBAR_KEY "apex-sidebar"
+#define PANES_KEY "apex-panes"
 
 static GtkWidget *
 template_child (PtyxisWindow *window,
@@ -46,27 +48,108 @@ title_label (const char *css_class,
   return label;
 }
 
+typedef struct
+{
+  GtkWidget       *title;
+  GtkWidget       *path;
+  GtkWidget       *tag;
+  GtkToggleButton *right;
+  GtkToggleButton *down;
+  ApexSession     *session;
+  gboolean         syncing;
+} SessionHeader;
+
+static void
+session_header_update (SessionHeader *h)
+{
+  ApexSplit split = h->session != NULL ? apex_session_get_split (h->session) : APEX_SPLIT_NONE;
+
+  if (h->session == NULL)
+    return;
+
+  gtk_label_set_label (GTK_LABEL (h->title), apex_session_get_title (h->session));
+  gtk_label_set_label (GTK_LABEL (h->path), split != APEX_SPLIT_NONE ? _("2 panes") : apex_session_get_path (h->session));
+  gtk_label_set_label (GTK_LABEL (h->tag), apex_session_get_tag (h->session));
+  gtk_widget_set_visible (h->tag, split == APEX_SPLIT_NONE);
+
+  h->syncing = TRUE;
+  gtk_toggle_button_set_active (h->right, split == APEX_SPLIT_RIGHT);
+  gtk_toggle_button_set_active (h->down, split == APEX_SPLIT_DOWN);
+  h->syncing = FALSE;
+}
+
+static void
+session_header_selected_cb (ApexSidebar   *sidebar,
+                            GParamSpec    *pspec,
+                            SessionHeader *h)
+{
+  ApexSession *session = apex_sidebar_get_selected_session (sidebar);
+
+  if (h->session != NULL)
+    g_signal_handlers_disconnect_by_data (h->session, h);
+  g_set_object (&h->session, session);
+
+  if (session != NULL)
+    {
+      g_signal_connect_swapped (session, "notify::title", G_CALLBACK (session_header_update), h);
+      g_signal_connect_swapped (session, "notify::path", G_CALLBACK (session_header_update), h);
+      g_signal_connect_swapped (session, "notify::tag", G_CALLBACK (session_header_update), h);
+      g_signal_connect_swapped (session, "notify::split", G_CALLBACK (session_header_update), h);
+    }
+  session_header_update (h);
+}
+
+static void
+split_toggled_cb (GtkToggleButton *button,
+                  SessionHeader   *h)
+{
+  if (!h->syncing)
+    gtk_widget_activate_action (GTK_WIDGET (button),
+                                button == h->right ? "apex.split-right" : "apex.split-down", NULL);
+}
+
+static void
+session_header_free (gpointer data)
+{
+  SessionHeader *h = data;
+
+  if (h->session != NULL)
+    g_signal_handlers_disconnect_by_data (h->session, h);
+  g_clear_object (&h->session);
+  g_free (h);
+}
+
+static GtkToggleButton *
+split_button (const char    *icon_name,
+              const char    *tooltip,
+              SessionHeader *h)
+{
+  GtkWidget *button = gtk_toggle_button_new ();
+
+  gtk_button_set_icon_name (GTK_BUTTON (button), icon_name);
+  gtk_widget_set_tooltip_text (button, tooltip);
+  gtk_widget_add_css_class (button, "flat");
+  g_signal_connect (button, "toggled", G_CALLBACK (split_toggled_cb), h);
+  return GTK_TOGGLE_BUTTON (button);
+}
+
 static GtkWidget *
-session_title (ApexSidebar *sidebar)
+session_title (ApexSidebar   *sidebar,
+               SessionHeader *h)
 {
   GtkWidget *box = gtk_box_new (GTK_ORIENTATION_HORIZONTAL, 10);
-  GtkWidget *title = title_label ("apex-title", FALSE);
-  GtkWidget *path = title_label ("apex-path", TRUE);
-  GtkWidget *tag = title_label ("apex-tag", FALSE);
-  GBindingGroup *bindings = g_binding_group_new ();
+
+  h->title = title_label ("apex-title", FALSE);
+  h->path = title_label ("apex-path", TRUE);
+  h->tag = title_label ("apex-tag", FALSE);
 
   gtk_widget_add_css_class (box, "apex-session-title");
   gtk_widget_set_valign (box, GTK_ALIGN_CENTER);
-  gtk_box_append (GTK_BOX (box), title);
-  gtk_box_append (GTK_BOX (box), path);
-  gtk_box_append (GTK_BOX (box), tag);
+  gtk_box_append (GTK_BOX (box), h->title);
+  gtk_box_append (GTK_BOX (box), h->path);
+  gtk_box_append (GTK_BOX (box), h->tag);
 
-  g_binding_group_bind (bindings, "title", title, "label", G_BINDING_SYNC_CREATE);
-  g_binding_group_bind (bindings, "path", path, "label", G_BINDING_SYNC_CREATE);
-  g_binding_group_bind (bindings, "tag", tag, "label", G_BINDING_SYNC_CREATE);
-  g_object_bind_property (sidebar, "selected-session", bindings, "source", G_BINDING_SYNC_CREATE);
-  g_object_set_data_full (G_OBJECT (box), "apex-bindings", bindings, g_object_unref);
-
+  g_signal_connect (sidebar, "notify::selected-session", G_CALLBACK (session_header_selected_cb), h);
   return box;
 }
 
@@ -98,6 +181,7 @@ restyle_header (PtyxisWindow *window,
   g_autoptr(GMenuModel) menu = session_menu ();
   GtkWidget *menu_button = gtk_menu_button_new ();
   GtkWidget *find = gtk_button_new_from_icon_name ("edit-find-symbolic");
+  SessionHeader *h = g_new0 (SessionHeader, 1);
 
   gtk_widget_set_visible (template_child (window, "new_tab_box"), FALSE);
   gtk_widget_set_visible (template_child (window, "tab_overview_button"), FALSE);
@@ -112,20 +196,16 @@ restyle_header (PtyxisWindow *window,
 
   gtk_widget_add_css_class (GTK_WIDGET (header), "apex-session-header");
   adw_header_bar_set_show_title (header, FALSE);
-  adw_header_bar_pack_start (header, session_title (sidebar));
+  h->right = split_button ("view-dual-symbolic", _("Split Right"), h);
+  h->down = split_button ("view-paged-symbolic", _("Split Down"), h);
+
+  adw_header_bar_pack_start (header, session_title (sidebar, h));
   adw_header_bar_pack_end (header, menu_button);
   adw_header_bar_pack_end (header, find);
-}
-
-static void
-window_active_cb (GtkWindow   *window,
-                  GParamSpec  *pspec,
-                  ApexSidebar *sidebar)
-{
-  ApexSession *session = apex_sidebar_get_selected_session (sidebar);
-
-  if (session != NULL && gtk_window_is_active (window))
-    apex_session_focused (session);
+  adw_header_bar_pack_end (header, GTK_WIDGET (h->down));
+  adw_header_bar_pack_end (header, GTK_WIDGET (h->right));
+  g_object_set_data_full (G_OBJECT (header), "apex-session-header", h, session_header_free);
+  session_header_selected_cb (sidebar, NULL, h);
 }
 
 /* Ptyxis sets its own color-scheme on the style manager, which GTK's
@@ -156,6 +236,7 @@ apex_window_attach (PtyxisWindow *window)
 
   load_css_once ();
 
+  g_object_set_data (G_OBJECT (window), PANES_KEY, apex_panes_attach (window, tab_view));
   sidebar = apex_sidebar_new (tab_view, gtk_menu_button_get_menu_model (primary));
   g_object_set_data (G_OBJECT (window), SIDEBAR_KEY, sidebar);
   restyle_header (window, APEX_SIDEBAR (sidebar));
@@ -170,11 +251,16 @@ apex_window_attach (PtyxisWindow *window)
   adw_overlay_split_view_set_content (ADW_OVERLAY_SPLIT_VIEW (split), content);
   adw_application_window_set_content (app_window, split);
 
-  g_signal_connect_object (window, "notify::is-active", G_CALLBACK (window_active_cb), sidebar, 0);
 
   gtk_widget_add_css_class (GTK_WIDGET (window), "apex");
   g_signal_connect_object (adw_style_manager_get_default (), "notify::dark", G_CALLBACK (style_dark_cb), window, 0);
   style_dark_cb (adw_style_manager_get_default (), NULL, GTK_WIDGET (window));
+}
+
+PtyxisTab *
+apex_window_focused_pane (PtyxisWindow *window)
+{
+  return apex_panes_focused_second (g_object_get_data (G_OBJECT (window), PANES_KEY));
 }
 
 gboolean
