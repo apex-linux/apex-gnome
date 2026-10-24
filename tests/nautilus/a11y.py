@@ -1,11 +1,12 @@
 #!/usr/bin/python3
 # SPDX-License-Identifier: GPL-3.0-or-later
-"""usage: a11y.py OUT.json [PRESS]
+"""usage: a11y.py OUT.json [PRESS...]
 
 Writes the accessible tree of the running Files window as JSON, one object per node:
 {"role": ..., "name": ..., "depth": ..., "states": [...]}, in document order, with the
 states that tell a toggle's or a pane's state (STATES). With PRESS, it first performs the
-default action of the node named PRESS and waits for the window to settle. Needs the session's
+default action of each node named PRESS, in order, waiting for the window to settle after
+each. Needs the session's
 accessibility bus (at-spi2-core) and the Atspi typelib.
 """
 
@@ -61,14 +62,14 @@ def press(node, name):
 
 
 def main():
-    if len(sys.argv) not in (2, 3):
+    if len(sys.argv) < 2:
         print(__doc__, file=sys.stderr)
         return 2
-    if len(sys.argv) == 3:
-        desktop = Atspi.get_desktop(0)
-        apps = [desktop.get_child_at_index(i) for i in range(desktop.get_child_count())]
-        if not any(press(app, sys.argv[2]) for app in apps if app and (app.get_name() or "") in APP_NAMES):
-            print(f"a11y.py: nothing named {sys.argv[2]!r} to press", file=sys.stderr)
+    desktop = Atspi.get_desktop(0)
+    apps = [desktop.get_child_at_index(i) for i in range(desktop.get_child_count())]
+    for name in sys.argv[2:]:
+        if not any(press(app, name) for app in apps if app and (app.get_name() or "") in APP_NAMES):
+            print(f"a11y.py: nothing named {name!r} to press", file=sys.stderr)
             return 1
         time.sleep(SETTLE_S)
     nodes = files_tree()
