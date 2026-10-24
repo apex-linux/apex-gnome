@@ -39,6 +39,7 @@ const APEX_SCHEMA = 'io.github.apex_linux.Apex.Desktop';
 const GLASS_EFFECT = 'apex-glass';
 const STOCK_TRIES = 5;
 const SOLID_STYLE_CLASS = 'apex-solid';
+const SHADOW_RIM = 2;
 
 function colourOf(column, row, generation = 0) {
     return PALETTE[(column * 7 + row * 5 + generation) % PALETTE.length];
@@ -85,9 +86,9 @@ function patternUnder(tiles, scale) {
 // The frame after the next paint of the stage view, as it went out, and whether that
 // paint's redraw clip covered the box.
 let step = '';
-function nextFrame(scale, label = '') {
+function nextFrame(scale, label = '', rect = BOX) {
     step = label;
-    const box = new Mtk.Rectangle(BOX);
+    const box = new Mtk.Rectangle(rect);
     return new Promise((resolve, reject) => {
         let covered = null;
         const paintId = global.stage.connect('paint-view', (_stage, _view, clip) => {
@@ -103,11 +104,22 @@ function nextFrame(scale, label = '') {
             global.stage.disconnect(paintId);
             global.stage.disconnect(afterId);
             GLib.source_remove(timeoutId);
-            const bytes = G2Frame.read(view.get_framebuffer(), BOX.x * scale, BOX.y * scale,
-                BOX.width * scale, BOX.height * scale);
+            const bytes = G2Frame.read(view.get_framebuffer(), rect.x * scale, rect.y * scale,
+                rect.width * scale, rect.height * scale);
             resolve({covered, rgba: bytes.toArray()});
         });
     });
+}
+
+// An actor's box on the next frame, as drawn, in device pixels.
+export async function framePixels(actor) {
+    G2Frame ??= (await import('gi://G2Frame')).default;
+    const [x, y] = actor.get_transformed_position().map(Math.round);
+    const [width, height] = actor.get_transformed_size().map(Math.round);
+    const scale = actor.get_resource_scale();
+    actor.queue_redraw();
+    const frame = await nextFrame(scale, `framePixels ${actor}`, {x, y, width, height});
+    return {...frame, width: width * scale, height: height * scale};
 }
 
 async function fullFrame(group, scale) {
@@ -331,7 +343,7 @@ async function withMenuOpen(menu, read) {
     menu.open(BoxPointer.PopupAnimation.NONE);
     try {
         await Scripting.waitLeisure();
-        return read(menu.box);
+        return await read(menu.box);
     } finally {
         menu.close(BoxPointer.PopupAnimation.NONE);
     }
@@ -381,6 +393,53 @@ async function withSetting(settings, key, value, read) {
     }
 }
 
+// The pixels the rounded box covers fully, a band in from its edges: no shadow layer reaches them.
+function interiorMask(width, height, radius, band) {
+    const mask = BlurRef.fullyCovered(width, height, radius);
+    for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+            if (Math.min(x, y, width - 1 - x, height - 1 - y) < band)
+                mask[y * width + x] = 0;
+        }
+    }
+    return mask;
+}
+
+// The shadows feature keeps its layers out from under glass: Quick Settings over the pattern
+// reads the same with shadows on as in disabled-features, its antialiased rim aside.
+async function shadowsUnderGlass() {
+    const apex = new Gio.Settings({schema_id: APEX_SCHEMA});
+    const disabled = apex.get_strv('disabled-features');
+    const {menu} = Main.panel.statusArea.quickSettings;
+    const group = new St.Widget();
+    Main.uiGroup.insert_child_above(group, global.window_group);
+    buildPattern(group);
+    const read = async box => {
+        const [x, y] = box.get_transformed_position();
+        group.set_position(Math.round(x) - PATTERN.x, Math.round(y) - PATTERN.y);
+        await Scripting.waitLeisure();
+        return framePixels(box);
+    };
+    try {
+        const on = await withMenuOpen(menu, read);
+        apex.set_strv('disabled-features', [...disabled, 'shadows']);
+        await Scripting.waitLeisure();
+        const off = await withMenuOpen(menu, read);
+        const {width, height} = on;
+        const radius = menu.box.get_theme_node().get_border_radius(St.Corner.TOPLEFT) * menu.box.get_resource_scale();
+        return {
+            covered: on.covered && off.covered,
+            sameSize: width === off.width && height === off.height,
+            interiorDiffering: BlurRef.differing(on.rgba, off.rgba, interiorMask(width, height, radius, SHADOW_RIM)),
+            edge: BlurRef.errors(on.rgba, BlurRef.rgbOf(off.rgba), width, height, SHADOW_RIM).edge,
+        };
+    } finally {
+        apex.set_strv('disabled-features', disabled);
+        group.destroy();
+        await Scripting.waitLeisure();
+    }
+}
+
 // The glass manager's surfaces, then Reduce Transparency, high contrast and the kill switch.
 async function managerTests() {
     const apex = new Gio.Settings({schema_id: APEX_SCHEMA});
@@ -406,5 +465,6 @@ export async function glassReport() {
         unlock: await unlockCapture(),
         pixels: patched ? await pixelTests() : null,
         manager: patched ? await managerTests() : null,
+        shadows: patched ? await shadowsUnderGlass() : null,
     };
 }

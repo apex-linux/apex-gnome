@@ -417,7 +417,7 @@ async function exerciseShadows() {
     const layers = label => {
         const found = Registry.layersOf(surface);
         fact(`shadows.${label}`, found.map(l => `${l.style} at ${l.x},${l.y} ${l.width}x${l.height} ` +
-            `below=${root.get_children().indexOf(l) < root.get_children().indexOf(bin)}`).join(' | ') || 'none');
+            `below=${root.get_children().indexOf(l) < root.get_children().indexOf(bin)} cutout=${l.cutout}`).join(' | ') || 'none');
     };
     Registry.register(surface, {name: 'probe', container: root});
     fact('shadows.before-the-frame', Registry.layersOf(surface).length);

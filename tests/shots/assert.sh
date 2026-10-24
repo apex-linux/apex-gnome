@@ -1182,6 +1182,7 @@ direct_cases() {
     done
     compare_with_fedora "$run"
     glass_frames glass "$run/glass.log"
+    shadows_under_glass glass "$run/glass.log"
     glass_manager glass "$run/glass.log" light
     glass_unlock_vs_fedora "$run"
 }
@@ -1203,6 +1204,14 @@ glass_frames() {
         "the stock control obtained a partial redraw, a frame whose redraw clip misses the box (it damages again up to 5 times; else: could not obtain a partial redraw)" APEXG2-GLASS
     expect_report "$label" "$log" ".pixels.stock | (.covered | not) and .differingFromFull > 0 and (($within) | not)" \
         "stock's blur in such a frame samples pixels the frame did not repaint and misses those tolerances, so the case can see it" APEXG2-GLASS
+}
+
+shadows_under_glass() {
+    local label=$1 log=$2
+    expect_report "$label" "$log" '.shadows | .covered and .sameSize and .interiorDiffering == 0' \
+        "the shadows feature keeps its layers out from under glass: Quick Settings over the pattern draws its interior pixel for pixel as with shadows in disabled-features" APEXG2-GLASS
+    expect_report "$label" "$log" "(.shadows.edge.max | max) <= $GLASS_EDGE_MAX" \
+        "and its 2 px rim within $GLASS_EDGE_MAX/255" APEXG2-GLASS
 }
 
 fedora_glass() {

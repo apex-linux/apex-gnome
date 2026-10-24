@@ -42,6 +42,7 @@
     <file alias="lock/avatar.js">js/ui/apex/lock/avatar.js</file>
     <file alias="shadows/feature.js">js/ui/apex/shadows/feature.js</file>
     <file alias="shadows/registry.js">js/ui/apex/shadows/registry.js</file>
+    <file alias="shadows/cutout.js">js/ui/apex/shadows/cutout.js</file>
     <file alias="quick-settings/feature.js">js/ui/apex/quick-settings/feature.js</file>
   </gresource>
   <gresource prefix="/org/gnome/shell/theme/apex">

@@ -1437,6 +1437,22 @@ REPORTS
 REPORTS
 }
 
+test_shadows_under_glass() {
+    local good='{"patched": true, "shadows": {"covered": true, "sameSize": true, "interiorDiffering": 0,
+        "edge": {"max": [9, 7, 8], "mean": [2, 1, 2]}}}' passes failures what change
+    while IFS='|' read -r failures what change; do
+        jq -c "$change" <<<"$good" | sed 's/^/APEXG2-GLASS /' >"$T/glass.log"
+        read -r passes _ <<<"$(assertion_counts shadows_under_glass glass "$T/glass.log")"
+        expect_eq "shadows under glass: $what fails $failures of 2" "$failures" $((2 - passes))
+    done <<'CHANGES'
+0|the same interior, a rim within the tolerance|.
+1|one interior pixel the layer darkened|.shadows.interiorDiffering = 1
+1|a rim 12.5/255 off|.shadows.edge.max[1] = 12.5
+1|a frame that missed the box|.shadows.covered = false
+2|a probe that never read the frames|.shadows = null
+CHANGES
+}
+
 # glass.js's reference and frame reader, and glass_frames over reports built for it.
 test_glass() {
     local line rc=0 passes failures what change
@@ -1549,6 +1565,7 @@ test_motion
 test_spotlight_key
 test_fixtures
 test_glass
+test_shadows_under_glass
 
 printf '1..%d\n' "$tests"
 ((failed == 0))

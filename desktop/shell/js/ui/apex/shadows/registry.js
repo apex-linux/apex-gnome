@@ -9,6 +9,7 @@ import Meta from 'gi://Meta';
 import St from 'gi://St';
 
 import * as Main from '../../main.js';
+import * as Cutout from './cutout.js';
 
 export const LAYER_PROPERTIES = ['-apex-shadow-layer', '-apex-shadow-layer-2'];
 export const LAYER_STYLE_CLASS = 'apex-shadow-layer';
@@ -97,6 +98,7 @@ function _build(entry) {
             x_align: Clutter.ActorAlign.START,
             y_align: Clutter.ActorAlign.START,
         });
+        Cutout.addCutout(layer, radius);
         entry.host.parent.insert_child_below(layer, entry.host.below);
         entry.layers.push(layer);
     }
