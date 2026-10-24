@@ -269,7 +269,15 @@ function quickSettingsGrid(toggles) {
 export function newQuickSettings() {
     const quickSettings = {
         _indicators: box([]), container: {get_parent: () => rightBox},
-        menu: {box: new StubActor('quick-settings', {glass: POPOVER_GLASS, extents: [1056, 40, 376, 420], parent: boxPointer})},
+        menu: {
+            box: new StubActor('quick-settings', {glass: POPOVER_GLASS, extents: [1056, 40, 376, 420], parent: boxPointer}),
+            actor: {
+                children: [],
+                get_children() {
+                    return [...this.children];
+                },
+            },
+        },
     };
     rightBox.children.push(quickSettings.container);
     for (const field of QUICK_SETTINGS_INDICATORS) {
