@@ -93,7 +93,7 @@ function describeLock(dialog) {
         hint: hint?.text ?? null,
         hintGlyph: glyph?.visible ? glyph.icon_name : null,
         hintFailed: line?.has_style_class_name('apex-lock-hint-failed') ?? null,
-        indicator: dialog._authIndicatorButton?.visible ? dialog._authIndicatorButton.opacity : null,
+        indicator: dialog._authIndicatorButton?.visible ?? null,
         blur: dialog._backgroundGroup.get_children().map(b => b.get_effect('blur'))
             .map(e => e && `radius=${e.radius} brightness=${e.brightness.toFixed(2)} saturation=${e.saturation.toFixed(2)}`)[0] ?? null,
         prompt: describePrompt(dialog._authPrompt),

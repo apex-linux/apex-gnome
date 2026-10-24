@@ -6,8 +6,6 @@ const FINGERPRINT_SERVICE = 'gdm-fingerprint';
 // authPrompt.js's setMessage() gives an error this class, before this module hears the message.
 const ERROR_CLASS = 'login-dialog-message-warning';
 const FAILED_CLASS = 'apex-lock-hint-failed';
-const INDICATOR_HIDDEN = 0;
-const INDICATOR_SHOWN = 255;
 
 export const State = {PASSWORD: 'password', SCAN: 'scan', FAILED: 'failed'};
 
@@ -25,19 +23,36 @@ export function stateAfter(state, message, isError) {
     return isError ? State.FAILED : State.SCAN;
 }
 
+// Upstream fades the indicator through its opacity, so it stands aside through visible,
+// which its layout also reads; what upstream last asked for comes back after.
+function _followIndicator(dialog, hint) {
+    const indicator = dialog._authIndicatorButton;
+    if (!indicator || hint.indicator)
+        return;
+    hint.indicator = {wanted: indicator.visible};
+    indicator.connectObject('notify::visible', () => {
+        if (hint.state === State.PASSWORD)
+            hint.indicator.wanted = indicator.visible;
+        else if (indicator.visible)
+            [hint.indicator.wanted, indicator.visible] = [true, false];
+    }, dialog);
+}
+
 function _show(dialog, hint, state) {
+    hint.state = state;
     hint.label.text = hintText(state);
     hint.glyph.visible = state !== State.PASSWORD;
     if (state === State.FAILED)
         hint.line.add_style_class_name(FAILED_CLASS);
     else
         hint.line.remove_style_class_name(FAILED_CLASS);
-    if (dialog._authIndicatorButton)
-        dialog._authIndicatorButton.opacity = state === State.PASSWORD ? INDICATOR_SHOWN : INDICATOR_HIDDEN;
+    if (hint.indicator)
+        dialog._authIndicatorButton.visible = state === State.PASSWORD && hint.indicator.wanted;
 }
 
 export function followPrompt(dialog, prompt, hint) {
     let state = State.PASSWORD;
+    _followIndicator(dialog, hint);
     _show(dialog, hint, state);
     prompt._userVerifier.connectObject('show-message', verifier => {
         const message = verifier.currentMessage;

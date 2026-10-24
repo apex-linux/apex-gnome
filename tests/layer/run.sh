@@ -674,15 +674,15 @@ fact "lock: the unlock hint follows the prompt" 'lock\.prompt-box=conversation-1
 readonly HINT_PASSWORD='"Press Enter to unlock" glyph=none failed=false'
 readonly HINT_SCAN='"Or touch the fingerprint reader" glyph=auth-fingerprint-symbolic failed=false'
 readonly HINT_FAILED='"Fingerprint not recognized\. Try again\." glyph=auth-fingerprint-symbolic failed=true'
-fact "lock: the password's hint, upstream's message line and indicator" "lock\.hint\.password=$HINT_PASSWORD message=true indicator=255"
+fact "lock: the password's hint, upstream's message line and indicator" "lock\.hint\.password=$HINT_PASSWORD message=true indicator=true"
 fact "lock: gdm-fingerprint's prompt is board 20's line with the print, in place of upstream's message and indicator" \
-    "lock\.hint\.fingerprint-scan=$HINT_SCAN message=false indicator=0"
-fact "lock: a failed scan swaps the line's text" "lock\.hint\.fingerprint-failed=$HINT_FAILED message=false indicator=0"
-fact "lock: and keeps it when upstream's queue empties" "lock\.hint\.queue-done=$HINT_FAILED message=true indicator=0"
+    "lock\.hint\.fingerprint-scan=$HINT_SCAN message=false indicator=false"
+fact "lock: a failed scan swaps the line's text" "lock\.hint\.fingerprint-failed=$HINT_FAILED message=false indicator=false"
+fact "lock: and keeps it when upstream's queue empties" "lock\.hint\.queue-done=$HINT_FAILED message=true indicator=false"
 fact "lock: the password's own problem stays in upstream's message line" \
-    "lock\.hint\.password-problem=$HINT_FAILED message=true indicator=0"
-fact "lock: the reader's next prompt brings the line back" "lock\.hint\.fingerprint-again=$HINT_SCAN message=false indicator=0"
-fact "lock: a prompt rebuilt after blank starts on the password's hint" "lock\.hint\.after-wake=$HINT_PASSWORD message=true indicator=255"
+    "lock\.hint\.password-problem=$HINT_FAILED message=true indicator=false"
+fact "lock: the reader's next prompt brings the line back" "lock\.hint\.fingerprint-again=$HINT_SCAN message=false indicator=false"
+fact "lock: a prompt rebuilt after blank starts on the password's hint" "lock\.hint\.after-wake=$HINT_PASSWORD message=true indicator=true"
 fact "lock: blanking tears the prompt down and cancels its verifier" 'lock\.blank=page=clock prompt=none cancelled=conversation-1'
 fact "lock: waking builds a new conversation" 'lock\.wake=page=prompt prompt=conversation-2 cancelled=conversation-1'
 fact "lock: standby is blank too" 'lock\.standby=page=clock prompt=none cancelled=conversation-1,conversation-2'

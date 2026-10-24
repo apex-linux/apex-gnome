@@ -234,7 +234,7 @@ def check_fingerprint(shots, case):
           any(line.endswith(begun) for line in between(gdm, "", "opened")))
     check(f"{case}: board 20's line says so with the print, in place of upstream's message line",
           fingerprint_line(f["opened"], FINGERPRINT_HINT, False), json.dumps(f["opened"]))
-    check(f"{case}: upstream's fingerprint indicator stands aside", f["opened"].get("indicator") in (None, 0), json.dumps(f["opened"]))
+    check(f"{case}: upstream's fingerprint indicator stands aside", f["opened"].get("indicator") is False, json.dumps(f["opened"]))
     check(f"{case}: a failed scan swaps the line's text, and the screen stays locked",
           fingerprint_line(f["scan-failed"], FINGERPRINT_FAILED, True), json.dumps(f["scan-failed"]))
     before_blank = between(gdm, "capture.scan-failed", "blank")

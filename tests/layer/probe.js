@@ -602,7 +602,7 @@ function newUnlockDialog(St) {
     stack.add_child(promptBox);
     stack.add_child(clock);
     const dialog = new St.Widget({style_class: 'unlock-dialog'});
-    dialog._authIndicatorButton = new St.Widget({name: 'auth-indicator', opacity: 255});
+    dialog._authIndicatorButton = new St.Widget({name: 'auth-indicator', visible: true});
     Object.assign(dialog, {
         _clock: clock, _promptBox: promptBox, _stack: stack, _authPrompt: null,
         _backgroundGroup: new St.Widget({name: 'backgrounds'}), conversations: 0, cancelled: [],
@@ -665,7 +665,7 @@ function hintState(dialog) {
         return 'none';
     const [glyph, label] = line.children;
     return `"${label.text}" glyph=${glyph.visible ? glyph.icon_name : 'none'} failed=${line.has_style_class_name('apex-lock-hint-failed')} ` +
-        `message=${dialog._authPrompt?._message.visible ?? 'none'} indicator=${dialog._authIndicatorButton.opacity}`;
+        `message=${dialog._authPrompt?._message.visible ?? 'none'} indicator=${dialog._authIndicatorButton.visible}`;
 }
 
 function lockState(dialog) {
