@@ -388,6 +388,28 @@ fact "quick-settings: layer back on: DESIGN's order again" \
     'qs\.on\.order=Wi-Fi,Bluetooth,Power Mode,Night Light,Dark Style,Do Not Disturb,Airplane Mode,VPN,Auto Rotate'
 fact "quick-settings: layer back on: lit again" 'qs\.on\.power=checked=false classes=apex-lit'
 
+probe end-session "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_END_SESSION=1
+has "end-session: the feature enables" 'Apex: feature end-session enabled'
+fact "end-session: power off: Restart between Cancel and Power Off, stock's icon, the theme's gap, the row's widths" \
+    'end-session\.power-off=buttons=Cancel,Restart,Power Off icon=system-shutdown-symbolic spacing=10 homogeneous=false row=true'
+fact "end-session: Restart goes through stock's reboot confirmation" 'end-session\.confirmed=ConfirmedReboot'
+fact "end-session: restart: no second Restart, the icon follows, an even row" \
+    'end-session\.restart=buttons=Cancel,Restart icon=view-refresh-symbolic spacing=10 homogeneous=true row=false'
+fact "end-session: log out: stock has no icon for it" \
+    'end-session\.logout=buttons=Cancel,Log Out icon=none spacing=10 homogeneous=true row=false'
+fact "end-session: layer off: stock's row and no icon, at once" \
+    'end-session\.off=buttons=Cancel,Power Off icon=none spacing=12 homogeneous=true row=false'
+fact "end-session: layer off: reopened, still stock" \
+    'end-session\.off\.reopened=buttons=Cancel,Power Off icon=none spacing=12 homogeneous=true row=false'
+fact "end-session: layer back on: board 14's row again" \
+    'end-session\.on=buttons=Cancel,Restart,Power Off icon=system-shutdown-symbolic spacing=10 homogeneous=false row=true'
+lacks "end-session: no feature fails or disables uncleanly" 'off for this session|did not disable cleanly|cannot restyle'
+
+probe end-session-disabled "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_END_SESSION=1 PROBE_DISABLED=end-session
+has "disabled-features=['end-session']: skips the feature" 'Apex: feature end-session is in disabled-features'
+fact "disabled-features=['end-session']: stock's power-off row" \
+    'end-session\.power-off=buttons=Cancel,Power Off icon=none spacing=12 homogeneous=true row=false'
+
 probe quick-settings-disabled "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_QUICK_SETTINGS=1 PROBE_DISABLED=quick-settings
 has "disabled-features=['quick-settings']: skips the feature" 'Apex: feature quick-settings is in disabled-features'
 fact "disabled-features=['quick-settings']: stock order" \

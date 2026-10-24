@@ -208,6 +208,19 @@ $apex_dialog_text_gap: 6px;
 $apex_dialog_button_height: 36px;
 $apex_font_dialog_title_size: 20px;
 $apex_font_dialog_button_size: 13px;
+// Board 14's end-session dialog: a wider column gap, and the Adwaita red that ends the session.
+$apex_end_session_gap: 20px;
+$apex_dialog_title_tracking: -.2px;
+$apex_destructive: #c01c28;
+$apex_destructive_hover: #a51d2d;
+$apex_destructive_fg: #ffffff;
+// The end-session feature's icon circle and its power-off row: Cancel, Restart, Power Off.
+$apex_end_session_icon_size: 56px;
+$apex_end_session_icon_glyph_size: 26px;
+$apex_end_session_button_gap: 10px;
+$apex_end_session_cancel_share: 1;
+$apex_end_session_restart_share: 1.4;
+$apex_end_session_confirm_share: 1.2;
 $apex_entry_height: 38px;
 $apex_entry_padding: 16px;
 $apex_entry_focus_ring: 2px;

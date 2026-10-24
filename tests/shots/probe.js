@@ -1139,6 +1139,53 @@ async function windowSwitcher(unit) {
     }
 }
 
+// The shell's own power-off dialog, opened as gnome-session opens it, so that patch 0018's
+// hook runs: Cancel, the end-session feature's Restart, then Power Off.
+async function endSessionDialog(unit) {
+    try {
+        return await openEndSessionDialog(unit);
+    } catch (e) {
+        return {error: e.message};
+    }
+}
+
+async function openEndSessionDialog(unit) {
+    await Gio.DBus.session.call('org.gnome.Shell', '/org/gnome/SessionManager/EndSessionDialog',
+        'org.gnome.SessionManager.EndSessionDialog', 'Open', new GLib.Variant('(uuuao)', [1, 0, 60, []]),
+        null, Gio.DBusCallFlags.NONE, -1, null);
+    const dialog = Main.layoutManager.modalDialogGroup.get_children()
+        .find(c => c.dialogLayout?._dialog?.has_style_class_name('end-session-dialog'));
+    try {
+        await settle();
+        global.stage.set_key_focus(null);
+        const find = styleClass => findDescendant(dialog.contentLayout, a => a.has_style_class_name?.(styleClass));
+        const title = find('message-dialog-title');
+        const icon = find('apex-end-session-icon');
+        const row = dialog.buttonLayout;
+        return {
+            box: styleOf(dialog.dialogLayout._dialog, unit),
+            contentSpacing: lengthOrNull(dialog.contentLayout.get_theme_node(), 'spacing', unit),
+            icon: icon ? {
+                ...styleOf(icon, unit),
+                glyph: lengthOrNull(icon.child.get_theme_node(), 'icon-size', unit),
+                iconName: icon.child.icon_name,
+                above: icon.get_next_sibling() === find('message-dialog-content'),
+            } : null,
+            title: {...styleOf(title, unit), tracking: round(title.get_theme_node().get_letter_spacing() / unit.length)},
+            description: styleOf(find('message-dialog-description'), unit),
+            rowSpacing: round(row.layout_manager.spacing / unit.length),
+            buttons: row.get_children().filter(b => b.visible).map(b => ({
+                ...styleOf(b, unit),
+                text: b.label,
+                hover: underPseudoClass(b, 'hover', () => paint(b.get_theme_node(), unit)),
+            })),
+        };
+    } finally {
+        dialog?.cancel();
+        await settle();
+    }
+}
+
 // A stock ModalDialog shaped like polkit's: title, description, password entry, two buttons.
 async function modalDialog(unit) {
     const dialog = new ModalDialog.ModalDialog({styleClass: 'prompt-dialog'});
@@ -1161,8 +1208,6 @@ async function modalDialog(unit) {
         if (scene)
             delete scene.bytes;
         const find = styleClass => findDescendant(content, a => a.has_style_class_name?.(styleClass));
-        const endSession = withStyledActor(new St.BoxLayout({style_class: 'modal-dialog end-session-dialog'}),
-            node => lengthOrNull(node, 'width', unit));
         return {
             scene,
             box: styleOf(dialog.dialogLayout._dialog, unit),
@@ -1179,7 +1224,6 @@ async function modalDialog(unit) {
                 default: b.has_style_pseudo_class('default'),
                 hover: underPseudoClass(b, 'hover', () => paint(b.get_theme_node(), unit)),
             })),
-            endSessionWidth: endSession,
         };
     } finally {
         dialog.close();
@@ -1719,7 +1763,7 @@ async function scenes() {
         surfaces.idleRepaints = await idleRepaints();
     }
     surfaces.switcher = await windowSwitcher(unit);
-    surfaces.dialog = await modalDialog(unit);
+    surfaces.dialog = {...await modalDialog(unit), endSession: await endSessionDialog(unit)};
     surfaces.dateMenu = await calendarMenu(unit);
     surfaces.derived = derivedSurfaces(unit);
     surfaces.tilePreview = await tilePreview(unit);

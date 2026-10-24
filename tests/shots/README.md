@@ -221,8 +221,10 @@ shadow, the tiles' gap, radius, padding and fills, and the names' type.
 `modal_dialog` runs in the same cases. The probe opens a stock `ModalDialog` shaped like
 polkit's (a `MessageDialogContent`, a password entry, Cancel and a default Authenticate),
 captures it with `G2_SURFACE_SCENES=1`, and reads the box's fill, radius, width, ring,
-shadow, inset and gaps, the title and text, the entry at rest and focused, and both buttons; the
-end-session width comes from a stand-in `.end-session-dialog` box.
+shadow, inset and gaps, the title and text, the entry at rest and focused, and both buttons.
+It then opens the shell's own power-off dialog over D-Bus, as gnome-session does, and reads
+its width and gaps, the end-session feature's icon circle, the title's tracking, the
+countdown's figures, and the row: the buttons' order, widths, gap and fills.
 
 `date_menu` runs in the same cases. The probe posts two low-urgency notifications (no
 banner), opens the calendar menu at the fixed date, captures it with

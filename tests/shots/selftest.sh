@@ -303,7 +303,17 @@ REPORT_OF_A_DIALOG_DRAWN_FROM_TOKENS='
         border: {top: $b, right: $b, bottom: $b, left: $b}, borderColor: ($t.apex_panel_border | hex),
         boxShadow: {color: ($t.apex_shadow | hex), y: ($t.apex_shadow_y | px), blur: ($t.apex_shadow_blur | px)},
         padding: {top: ($p - $b), right: ($p - $b), bottom: (($t.apex_dialog_padding_bottom | px) - $b), left: ($p - $b)}, spacing: ($t.apex_dialog_gap | px)},
-    endSessionWidth: (($t.apex_end_session_dialog_width | px) - 2 * $p),
+    endSession: (($t.apex_end_session_button_gap | px) as $g | ((($t.apex_end_session_dialog_width | px) - 2 * $p - 2 * $g) / 3.6) as $u
+        | {box: {width: ($t.apex_end_session_dialog_width | px), spacing: ($t.apex_end_session_gap | px)},
+        contentSpacing: ($t.apex_end_session_gap | px), title: {tracking: ($t.apex_dialog_title_tracking | px)},
+        description: {font: {features: "\"tnum\""}}, rowSpacing: $g,
+        icon: {iconName: "system-shutdown-symbolic", above: true, glyph: ($t.apex_end_session_icon_glyph_size | px),
+            width: ($t.apex_end_session_icon_size | px), height: ($t.apex_end_session_icon_size | px),
+            radius: (($t.apex_end_session_icon_size | px) / 2), background: ($t.apex_button | hex)},
+        buttons: [{text: "Cancel", width: $u, background: ($t.apex_button | hex), hover: {background: ($t.apex_button_hover | hex)}},
+            {text: "Restart", width: ($u * 1.4), background: ($t.apex_button | hex), hover: {background: ($t.apex_button_hover | hex)}},
+            {text: "Power Off", width: ($u * 1.2), background: ($t.apex_destructive | hex), foreground: ($t.apex_destructive_fg | hex),
+                hover: {background: ($t.apex_destructive_hover | hex)}}]}),
     contentSpacing: ($t.apex_dialog_gap | px), textSpacing: ($t.apex_dialog_text_gap | px),
     title: {font: {size: ($t.apex_font_dialog_title_size | px), weight: ($t.apex_font_heading_weight | tonumber)}},
     description: {font: {size: ($t.apex_font_size | px)}, foreground: ($t.apex_fg_dim | hex)},
@@ -799,7 +809,7 @@ test_modal_dialog() {
     local variant change what passes failures open_gaps
     for variant in light dark; do
         read -r passes failures open_gaps <<<"$(assert_run modal_dialog "$variant")"
-        if ((failures == 0 && open_gaps == 0 && passes == 8)); then
+        if ((failures == 0 && open_gaps == 0 && passes == 12)); then
             ok "modal dialog ($variant): drawn from the tokens it passes all $passes assertions"
         else
             not_ok "modal dialog ($variant): drawn from the tokens it passes (passed/failed/gaps $passes/$failures/$open_gaps): $(grep -m3 '^FAIL' "$T/top-bar.out" | paste -sd'|' -)"
@@ -818,6 +828,18 @@ test_modal_dialog() {
 .surfaces.dialog.box.padding.bottom = 23|upstream's even padding
 .surfaces.dialog.title.font.weight = 800|upstream's title weight
 .surfaces.dialog.entry.height = 41|upstream's entry padding
+.surfaces.dialog.endSession.box.width = 384|upstream's 24em end-session dialog
+.surfaces.dialog.endSession.contentSpacing = 18|the plain dialog gap in the end-session dialog
+.surfaces.dialog.endSession.title.tracking = 0|an untracked end-session title
+.surfaces.dialog.endSession.description.font.features = null|a countdown in proportional figures
+.surfaces.dialog.endSession.buttons[2].background = "#ebebedff"|a plain Power Off button
+.surfaces.dialog.endSession.buttons[2].hover.background = "#c01c28ff"|a Power Off button without hover feedback
+.surfaces.dialog.endSession.buttons[1].background = "#c01c28ff"|a red Restart in the power-off dialog
+.surfaces.dialog.endSession.icon = null|no icon above the title
+.surfaces.dialog.endSession.icon.glyph = 16|stock's 16 px symbolic glyph in the circle
+del(.surfaces.dialog.endSession.buttons[1])|stock's row, without Restart
+.surfaces.dialog.endSession.rowSpacing = 12|dialog.js's 12 px between the buttons
+.surfaces.dialog.endSession.buttons[1].width = 128|an even row
 .surfaces.dialog.entry.focus.boxShadow.color = "#3584e4cc"|upstream's 80 % focus ring
 .surfaces.dialog.buttons[0].radius = 12|upstream's square-ish buttons
 .surfaces.dialog.buttons[1].background = "#00000a10"|a default button without the accent
