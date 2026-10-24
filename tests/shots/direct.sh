@@ -43,6 +43,7 @@ readonly FIXTURE_NAMES=(org.freedesktop.UPower org.freedesktop.NetworkManager or
     org.freedesktop.UPower.PowerProfiles)
 # Two fixed workspaces: stock widens the active workspace dot by a factor that depends on
 # the count. A 24-hour clock: in 12 hours a one-digit hour adds a figure space.
+readonly NO_HOT_CORNER='org.gnome.desktop.interface enable-hot-corners false'
 readonly CAPTURE_SETTINGS='org.gnome.desktop.interface enable-animations false;org.gnome.desktop.interface cursor-blink false;org.gnome.mutter dynamic-workspaces false;org.gnome.desktop.wm.preferences num-workspaces 2;org.gnome.desktop.interface clock-format 24h;org.gnome.desktop.interface show-battery-percentage true'
 
 # The motion case needs animations, which the captures turn off.
@@ -147,6 +148,9 @@ esac
 run_and_record_case default "$CAPTURE_SETTINGS" G2_SCENES=1
 run_and_record_case default-scale1 "$CAPTURE_SETTINGS" G2_SCENES=1 G2_SCALE=1 G2_MONITOR=1440x900
 run_and_record_case dark-style "$CAPTURE_SETTINGS;org.gnome.desktop.interface color-scheme prefer-dark" G2_SCENES=1 G2_TURN_DARK_OFF=1
+# The headless pointer starts at 0,0, in the hot corner, which its first motion would trip.
+run_and_record_case dock-intellihide "$CAPTURE_SETTINGS;$NO_HOT_CORNER" G2_DOCK=1
+run_and_record_case dock-intellihide-dark "$CAPTURE_SETTINGS;$NO_HOT_CORNER;org.gnome.desktop.interface color-scheme prefer-dark" G2_DOCK=1
 run_and_record_case stock-light "$CAPTURE_SETTINGS;org.gnome.desktop.interface color-scheme prefer-light" APEX_SHELL_SAFE=1 G2_SCENES=1
 run_and_record_case stock-dark "$CAPTURE_SETTINGS;org.gnome.desktop.interface color-scheme prefer-dark" APEX_SHELL_SAFE=1 G2_SCENES=1
 run_and_record_case safe-env '' APEX_SHELL_SAFE=1

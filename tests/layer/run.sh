@@ -48,19 +48,19 @@ mkdir -p "$T/schemas" "$T/noschema" "$T/nochild" "$T/data" "$T/home" "$T/shell" 
 # main.js and the Meta and Shell typelibs come only with gnome-shell and mutter.
 cp -R "$REPO/desktop/shell/js" "$T/shell/"
 cp "$HERE/main-stub.js" "$T/shell/js/ui/main.js"
-for upstream in panelMenu dash iconGrid popupMenu; do
+for upstream in panelMenu dash iconGrid popupMenu layout; do
     cp "$HERE/stubs/$upstream.js" "$T/shell/js/ui/$upstream.js"
 done
 # Spotlight's providers: upstream's app search and remote providers, faked.
 cp "$HERE"/stubs/appDisplay.js "$HERE"/stubs/remoteSearch.js "$HERE"/stubs/searchProviders.js "$T/shell/js/ui/"
 mkdir -p "$T/shell/js/misc"
 cp "$HERE/stubs/systemActions.js" "$T/shell/js/misc/"
-cp "$HERE"/stubs/St.js "$HERE"/stubs/Clutter.js "$HERE"/stubs/Shell.js "$HERE"/stubs/Graphene.js "$T/"
-# gjs outside the shell has no St or Clutter typelib, and the fixture's Shell no
-# WindowTracker: the features get stubs instead.
+cp "$HERE"/stubs/St.js "$HERE"/stubs/Clutter.js "$HERE"/stubs/Shell.js "$HERE"/stubs/Meta.js "$HERE"/stubs/Graphene.js "$T/"
+# gjs outside the shell has no St or Clutter typelib, and the fixtures' Shell and Meta no
+# WindowTracker or Barrier: the features get stubs instead.
 find "$T/shell/js/ui/apex" -name '*.js' -exec sed -i -e "s|'gi://St'|'file://$T/St.js'|" \
     -e "s|'gi://Clutter'|'file://$T/Clutter.js'|" -e "s|'gi://Shell'|'file://$T/Shell.js'|" \
-    -e "s|'gi://Graphene'|'file://$T/Graphene.js'|" {} +
+    -e "s|'gi://Meta'|'file://$T/Meta.js'|" -e "s|'gi://Graphene'|'file://$T/Graphene.js'|" {} +
 for gir in "$HERE"/fixtures/*.gir; do
     gir_name=${gir##*/}
     "$GI_COMPILER" "$gir" -o "$T/typelib/${gir_name%.gir}.typelib"
@@ -361,12 +361,15 @@ fact "disabled-features=['quick-settings']: stock order" \
     'qs\.order=Wi-Fi,VPN,Bluetooth,Power Mode,Night Light,Dark Style,Do Not Disturb,Airplane Mode,Auto Rotate'
 fact "disabled-features=['quick-settings']: Power Mode unlit" 'qs\.power=checked=false classes=none'
 
-probe spotlight-disabled "$CMDLINE_PLAIN" PROBE_DISABLED=spotlight PROBE_ENABLE=1 PROBE_PRESS=1
+probe spotlight-disabled "$CMDLINE_PLAIN" PROBE_DISABLED=spotlight PROBE_ENABLE=1 PROBE_PRESS=1 PROBE_OVERVIEW_SEARCH=1
 has "disabled-features=['spotlight']: skips the feature" 'Apex: feature spotlight is in disabled-features'
 keybindings_are "disabled-features=['spotlight']: no Super+Space binding" ''
 fact "disabled-features=['spotlight']: Super+Space opens nothing" 'press\.1=overview=false spotlight=false'
 fact "disabled-features=['spotlight']: no handler gets the press" 'unbound-press=toggle-spotlight'
 fact "disabled-features=['spotlight']: the rest of the layer runs" 'scheme\.user\.after-enable=prefer-light'
+fact "disabled-features=['spotlight']: the overview's search stays stock" 'overview-search=stock'
+lacks "disabled-features=['spotlight']: and is not reset" 'overview-search\.reset'
+
 
 probe spotlight-live "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_DISABLE_LIVE=spotlight
 keybindings_are "spotlight in and out of disabled-features, and the layer off and on: the binding follows each change" \
@@ -430,6 +433,12 @@ fact "spotlight: a click outside closes it" 'spotlight\.click-outside=closed'
 fact "spotlight: hovering a row selects it" "spotlight\.hover=APPLICATIONS: Disks Disk Usage Analyzer\*Open .*"
 fact "spotlight: clicking a row activates it" 'spotlight\.launched=org\.gnome\.baobab\.desktop'
 fact "spotlight: closing leaves no popup on the stage" 'spotlight\.stage=0'
+fact "spotlight: text typed in the overview opens Spotlight with it, through 0013's hook" \
+    "spotlight\.from-overview=true APPLICATIONS: Disks\*Open Disk Usage Analyzer Disk Benchmark Disk Images \| $SETTINGS \| $FILES"
+fact "spotlight: and resets the overview's own search" 'spotlight\.overview-reset=yes'
+fact "spotlight: while Spotlight is open the overview's search keeps its stock path" 'spotlight\.from-overview-again=false'
+fact "spotlight: activating a result from the overview closes Spotlight and hides the overview" 'spotlight\.from-overview-enter=closed overview=false'
+fact "spotlight: the overview's search pill taking the focus opens Spotlight with an empty field" 'spotlight\.from-overview-focus=true field only'
 fact "spotlight: put in disabled-features while open, it closes and goes" 'spotlight\.live-disabled=0 popup=true'
 fact "spotlight: taken out again, Super+Space opens it afresh" 'spotlight\.live-enabled=field only'
 count_is "spotlight: every grab is given back" '^probe: modal\.push=' "$(grep -c '^probe: modal\.pop=' "$OUT")"
@@ -751,6 +760,20 @@ fact "dock: layer-enabled=false takes it away and gives the overview its dash ba
 fact "dock: layer-enabled=true brings it back" "dock\.on=Files:54 Web:54 $DOCK_TAIL indicators=true visible=true dash=false dash-height=0"
 count_is "dock: the old dock is destroyed" '^probe: dock\.destroyed=apexDock$' 1
 lacks "dock: no feature fails or disables uncleanly" 'off for this session|did not disable cleanly|cannot restyle'
+
+probe intellihide "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_INTELLIHIDE=1
+fact "intellihide: a threshold-0 barrier on the bottom edge, under the dock, blocking downward motion" \
+    'intellihide\.barrier=x=660\.\.780 y=900\.\.900 directions=8'
+fact "intellihide: the pressure barrier triggers on the first hit" 'pressure-barrier=threshold=0 timeout=1000'
+intellihide_steps_are() {
+    local got
+    got=$(sed -n 's/^probe: set \(.*\)$/[\1]/p; s/^probe: intellihide\.hidden=\(.*\)$/\1/p' "$OUT" | paste -sd' ' -)
+    if [[ $got == "$2" ]]; then ok "$1"; else not_ok "$1 (got '$got', expected '$2')"; _show; fi
+}
+intellihide_steps_are "intellihide: hidden behind a maximised window, revealed by the edge while the pointer is on it, shown in the overview and with the key off" \
+    '[initial] false [maximised] true [edge] false [pointer-elsewhere] true [edge-again] false [pointer-on-dock] false [left] true [overview] false [no-overview] true [intellihide=false] false [intellihide=true] true [closed] false [layer-enabled=false] false'
+fact "intellihide: layer-enabled=false takes its barrier away" 'intellihide\.after-off=pressure-destroyed=true barrier-destroyed=true'
+lacks "intellihide: no feature fails or disables uncleanly" 'off for this session|did not disable cleanly|cannot restyle'
 
 probe dock-disabled "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_DOCK=1 PROBE_DISABLED=dock
 has "disabled-features=['dock']: skips the feature" 'Apex: feature dock is in disabled-features'

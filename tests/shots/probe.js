@@ -42,6 +42,8 @@ const HIGH_CONTRAST_SHEET = 'resource:///org/gnome/shell/theme/gnome-shell-high-
 const STRUCTURE_MARKER = '/*! apex-shell-structure */';
 const LAYER_ENABLED_KEY = 'layer-enabled';
 const SEARCH_HINT_KEY = 'search-hint-shown';
+const DOCK_INTELLIHIDE_KEY = 'dock-intellihide';
+const G2_WINDOW_TITLE = 'G2 maximised window';
 const OSD_LEVEL = 0.62;
 const POWER_PROFILE_WAIT_MS = 3000;
 const MOTION_WINDOW_ID = 'io.github.apex_linux.G2Window';
@@ -894,6 +896,8 @@ async function quickSettings(unit) {
                 title: styleOf(find(header, 'title'), unit),
                 subtitle: styleOf(find(header, 'subtitle'), unit),
                 rows: wifi.menu._getMenuItems().filter(i => i.visible && i.label?.text).map(i => styleOf(i, unit)),
+                rowHover: (row => row && underPseudoClass(row, 'hover', () => paint(row.get_theme_node(), unit)))(
+                    wifi.menu._getMenuItems().find(i => i.visible && i.label?.text)),
                 separator: styleOf(wifi.menu._getMenuItems().find(i => i instanceof PopupMenu.PopupSeparatorMenuItem), unit),
             } : null,
         };
@@ -1228,6 +1232,25 @@ async function spotlightStyle(unit) {
     }
 }
 
+// Text typed in the overview reaches its search entry; patch 0013 hands it to Spotlight.
+async function overviewSearch() {
+    const feature = await import('resource:///org/gnome/shell/ui/apex/spotlight/feature.js').catch(() => null);
+    const popup = feature?.popup();
+    if (!popup)
+        return null;
+    const entry = Main.overview._overview.controls._searchEntry;
+    entry.set_text('disk');
+    await settle();
+    const result = {
+        opened: popup.isOpen,
+        text: popup.isOpen ? popup.panel.get_children()[0].get_children()[1].get_text() : null,
+        overviewText: entry.get_text(),
+    };
+    popup.close();
+    await settle();
+    return result;
+}
+
 // What the overview draws without windows; a caption and a search section are stand-ins.
 function overviewStyle(unit) {
     const {controls} = Main.overview._overview;
@@ -1534,6 +1557,7 @@ async function scenes() {
         dockClearance: dockClearance(unit),
     };
     surfaces.overview = overviewStyle(unit);
+    surfaces.overviewSearch = await overviewSearch();
     surfaces.overviewLayer = await overviewLayer(unit);
     surfaces.appGrid = await appGrid(unit);
     delete overview.bytes;
@@ -1719,6 +1743,98 @@ export function init() {
     import(import.meta.url).then(self => Scripting.runPerfScript(self, GLib.getenv('SHELL_PERF_OUTPUT')));
 }
 
+function withoutBytes(captured) {
+    delete captured.bytes;
+    return captured;
+}
+
+async function until(condition, timeoutMs = 10000) {
+    for (let waited = 0; waited < timeoutMs; waited += 100) {
+        if (condition())
+            return true;
+        // eslint-disable-next-line no-await-in-loop
+        await Scripting.sleep(100);
+    }
+    return condition();
+}
+
+function dockHidden() {
+    return (apexDock()?.get_parent().translation_y ?? 0) > 0;
+}
+
+function maximisedWindow() {
+    return global.display.list_all_windows().some(w => w.title === G2_WINDOW_TITLE && w.is_maximized());
+}
+
+// A window counts once its actor is mapped, which mutter does at its first frame.
+function maximisedWindowShown() {
+    return global.get_window_actors().some(a => a.mapped &&
+        a.meta_window.title === G2_WINDOW_TITLE && a.meta_window.is_maximized());
+}
+
+// The scripted case of ROADMAP S2a: a maximised window hides the dock, the bottom edge under
+// it reveals it, and leaving it hides it again.
+async function withDockIntellihide() {
+    const unit = cssUnit();
+    dropStartupNotifications();
+    Main.overview.hide();
+    await settle();
+    const steps = {initial: {hidden: dockHidden()}};
+    const here = GLib.path_get_dirname(GLib.filename_from_uri(import.meta.url)[0]);
+    const client = Gio.Subprocess.new(['gjs', '-m', GLib.build_filenamev([here, 'maximised-window.js'])],
+        Gio.SubprocessFlags.NONE);
+    try {
+        steps.maximised = {window: await until(maximisedWindowShown)};
+        await until(dockHidden, 3000);
+        await settle();
+        steps.maximised.hidden = dockHidden();
+        steps.maximised.barSolid = Main.panel.has_style_class_name('apex-solid-bar');
+        steps.maximised.capture = withoutBytes(await capture('maximised'));
+
+        const box = apexDock().get_parent();
+        const [boxX] = box.get_transformed_position();
+        const monitor = Main.layoutManager.primaryMonitor;
+        const seat = global.stage.context.get_backend().get_default_seat();
+        const pointer = seat.create_virtual_device(Clutter.InputDeviceType.POINTER_DEVICE);
+        const now = () => GLib.get_monotonic_time();
+        pointer.notify_absolute_motion(now(), boxX + box.width / 2, monitor.y + monitor.height - 1);
+        for (let push = 0; push < 5; push++) {
+            pointer.notify_relative_motion(now(), 0, 20);
+            // eslint-disable-next-line no-await-in-loop
+            await Scripting.sleep(50);
+        }
+        await until(() => !dockHidden(), 3000);
+        await settle();
+        const underPointer = global.stage.get_actor_at_pos(Clutter.PickMode.REACTIVE,
+            boxX + box.width / 2, monitor.y + monitor.height - 1);
+        steps.revealed = {hidden: dockHidden(), underPointer: box === underPointer || box.contains(underPointer)};
+        steps.revealed.capture = withoutBytes(await capture('revealed'));
+
+        pointer.notify_absolute_motion(now(), monitor.x + monitor.width / 2, monitor.y + monitor.height / 2);
+        await until(dockHidden, 3000);
+        steps.left = {hidden: dockHidden()};
+
+        Main.overview.show();
+        await settle();
+        steps.overview = {hidden: dockHidden()};
+        Main.overview.hide();
+        await settle();
+
+        const settings = new Gio.Settings({schema_id: APEX_SCHEMA});
+        settings.set_boolean(DOCK_INTELLIHIDE_KEY, false);
+        await until(() => !dockHidden(), 3000);
+        steps.intellihideOff = {hidden: dockHidden(), window: maximisedWindow()};
+        settings.reset(DOCK_INTELLIHIDE_KEY);
+        await until(dockHidden, 3000);
+        steps.intellihideOn = {hidden: dockHidden()};
+    } finally {
+        client.force_exit();
+    }
+    await until(() => !maximisedWindow() && !dockHidden(), 5000);
+    steps.closed = {hidden: dockHidden(), window: maximisedWindow()};
+    return {unit, steps};
+}
+
 // gnome-shell-perf-helper quits after 30 s without a call, and scripting.js's last call to it
 // then fails the shell: a probe that runs longer pings it.
 function keepPerfHelperAwake() {
@@ -1791,6 +1907,16 @@ async function runProbe() {
             result = {error: `${e.message}\n${e.stack}`};
         }
         console.log(`APEXG2-CYCLES ${JSON.stringify(result)}`);
+    }
+
+    if (GLib.getenv('G2_DOCK') === '1') {
+        let result;
+        try {
+            result = await withDockIntellihide();
+        } catch (e) {
+            result = {error: `${e.message}\n${e.stack}`};
+        }
+        console.log(`APEXG2-DOCK ${JSON.stringify(result)}`);
     }
 
     const wait = Number(GLib.getenv('PROBE_WAIT') ?? '0');
