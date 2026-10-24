@@ -3,12 +3,8 @@
 
 import sys
 
-import gi
-
 from ccatspi import Atspi, checked, find, find_app, finish, wait_for, walk
-
-gi.require_version("Gio", "2.0")
-from gi.repository import Gio  # noqa: E402
+from gi.repository import Gio
 
 NOTE = "{} has a light and a dark version and follows the style."
 # balls.xml's entry; the chooser's tiles have no AT-SPI action, so the settings change as a click would make them.
