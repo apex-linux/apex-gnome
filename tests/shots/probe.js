@@ -52,6 +52,7 @@ const SWITCHER_APPS = ['Text Editor', 'Terminal', 'Web', 'Files', 'Settings'];
 const SWITCHER_ICON_SIZE = 96;
 
 Gio._promisify(Shell.Screenshot.prototype, 'screenshot');
+Gio._promisify(Gio.Subprocess.prototype, 'communicate_utf8_async');
 
 function hex(color) {
     return `#${[color.red, color.green, color.blue, color.alpha]
@@ -1674,15 +1675,22 @@ async function motion() {
     Main.overview.hide();
     await Scripting.sleep(MOTION_SETTLE_MS);
     const client = Gio.File.new_for_uri(import.meta.url).get_parent().get_child('window.js').get_path();
-    Gio.Subprocess.new(['gjs', '-m', client], Gio.SubprocessFlags.NONE);
+    // The shell's environment names no display: the client gets the shell's own, on Wayland.
+    const launcher = new Gio.SubprocessLauncher({flags: Gio.SubprocessFlags.STDERR_PIPE});
+    launcher.setenv('WAYLAND_DISPLAY', GLib.getenv('G2_WAYLAND_DISPLAY') ?? 'apex-g2', true);
+    launcher.setenv('GDK_BACKEND', 'wayland', true);
+    const clientProcess = launcher.spawnv(['gjs', '-m', client]);
     const find = () => global.get_window_actors().map(a => a.meta_window)
         .find(w => w.get_gtk_application_id() === MOTION_WINDOW_ID);
     let window;
     for (let waited = 0; !(window = find()) && waited < MOTION_WAIT_MS; waited += 100)
         // eslint-disable-next-line no-await-in-loop
         await Scripting.sleep(100);
-    if (!window)
-        throw new Error(`no ${MOTION_WINDOW_ID} window in ${MOTION_WAIT_MS} ms`);
+    if (!window) {
+        clientProcess.force_exit();
+        const [, , stderr] = await clientProcess.communicate_utf8_async(null, null);
+        throw new Error(`the test client never mapped (${stderr?.trim() || `no ${MOTION_WINDOW_ID} window in ${MOTION_WAIT_MS} ms`})`);
+    }
     // Mutter gives a window's first size change a 0 x 0 old frame, which stock never animates.
     window.maximize();
     await Scripting.sleep(MOTION_SETTLE_MS);

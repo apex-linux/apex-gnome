@@ -1249,6 +1249,11 @@ test_motion() {
 .animated.maximise.maximised = false|a window that did not maximise
 .still.locatePointer = null|a Locate Pointer ripple that no longer animates with animations off
 CHANGES
+    write_motion_run '{error: "the test client never mapped (Gtk-WARNING: Failed to open display)\nprobe.js:1700"}'
+    read -r passes failures <<<"$(assertion_counts motion_curve "$T/motion")"
+    expect_eq "motion: a client that never mapped fails once, with its stderr, not every assertion after it" \
+        "$((all - 6))/1 the test client never mapped (Gtk-WARNING: Failed to open display)" \
+        "$passes/$failures $(sed -n 's/^FAIL motion: //p' "$T/assertions.out")"
 }
 
 fixtures_report() {

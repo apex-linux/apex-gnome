@@ -1032,6 +1032,12 @@ motion_curve() {
     apex_light motion "$f"
     no_apex_failure motion "$f"
     m=$(report_of "$f" APEXG2-MOTION)
+    local error
+    error=$(jq -r '.error // empty' <<<"$m" 2>/dev/null)
+    if [[ -n $error ]]; then
+        fail "motion: ${error%%$'\n'*}"
+        return
+    fi
     expect motion "$m" '.error == null and .animated.maximise.maximised and .animated.overview.visible' \
         "the probe maximised a GTK window and opened the overview, with animations on"
     expect motion "$m" ".animated.maximise.transition | .mode == \"CUBIC_BEZIER\" and .curve == $MOTION_CURVE and .duration == $MOTION_WINDOW_MS" \
