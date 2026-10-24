@@ -22,8 +22,7 @@ float apex_d = length(max(apex_q, 0.0)) + min(max(apex_q.x, apex_q.y), 0.0) - ap
 cogl_color_out *= clamp(apex_d, 0.0, 1.0);
 `;
 
-// The layer, above its surface, keeps nothing inside the surface's rounded box. The offscreen
-// covers the layer's paint box, shadow included.
+// Above its surface, the layer keeps nothing inside the surface's rounded box.
 const CutoutEffect = GObject.registerClass(
 class CutoutEffect extends Clutter.ShaderEffect {
     constructor(radius) {
