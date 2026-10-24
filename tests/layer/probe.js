@@ -247,6 +247,22 @@ async function exerciseSpotlight() {
         report('late.at-900ms');
         return;
     }
+    // A popup whose toggle action is NONE, the action every unbound key maps to.
+    if (mode === 'no-action') {
+        const {Popup} = await import(`file://${shellDir}/js/ui/apex/spotlight/popup.js`);
+        const {default: Meta} = await import('gi://Meta');
+        const bare = new Popup(popup._loadProviders, Meta.KeyBindingAction.NONE);
+        bare.open();
+        const bareEntry = bare.panel.get_children()[0].get_children()[1];
+        bareEntry.set_text('disk');
+        await spin(SEARCH_SETTLE_MS);
+        bareEntry.actions[0].press(Clutter.KEY_Down);
+        fact('spotlight.no-action.down', shown(bare));
+        bareEntry.actions[0].press(Clutter.KEY_Escape);
+        fact('spotlight.no-action.escape', shown(bare));
+        bare.destroy();
+        return;
+    }
     if (mode === 'late-sum') {
         open();
         entry().set_text('2880 / 1.5');
