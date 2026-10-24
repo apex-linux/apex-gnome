@@ -87,6 +87,20 @@ the one table of Settings tile colours: the shell's Spotlight keeps a byte-ident
 `desktop/shell/js/ui/apex/spotlight/settings-tiles.json`, and compares the two. The selftest checks
 its format (sorted keys, two-space indent, a final newline, `#rrggbb` or `accent`).
 
+## Appearance
+
+Board 23 is stock 51.0's Appearance panel (`background`) with its rows unchanged: a
+block of `apex.css` restyles stock's own classes, and 0004 adds the board's two texts. Accent swatches are
+32 px, and the chosen one gets a 2 px ring in the card colour and a 4 px one in the accent.
+The style previews and wallpaper thumbnails are rounded to 10 px, thumbnails get a 1 px
+border, and the active wallpaper gets a 3 px accent ring. Stock's check mark stays on the
+active wallpaper as a cue that does not rely on colour; the board shows only the ring.
+The active wallpaper's name sits beside the Background header and a note under the
+chooser says whether it has a dark version and follows the style
+(`panels/apex/cc-apex-background.c`); a wallpaper the chooser does not list shows neither.
+Stock's chooser lays thumbnails out at a fixed size, so the grid holds as many as fit,
+three at the window size the captures use, where the board has four.
+
 ## The Software Updates page
 
 System's Software Updates row opens it (0003), and so does
@@ -165,6 +179,7 @@ copy keeps apex-system's bytes and licence, GPL-3.0-or-later, so the built packa
 | `panels/apex/cc-apex-tile.{c,h}` | the wallpaper tile with the Apex diamond, and a badge, shared by the panel's header and the updates page |
 | `panels/apex/cc-apex-updates-page.{c,h,blp}` | the Software Updates page |
 | `panels/apex/cc-apex-updates-state.{c,h}` | its logic, without GTK |
+| `panels/apex/cc-apex-background.{c,h}` | Appearance's wallpaper name and note (0004) |
 | `panels/apex/io.github.apex_linux.Apex.Update1.xml` | apex-system's interface, the one file without an SPDX line: a byte-identical copy |
 
 ## The series
@@ -174,13 +189,14 @@ copy keeps apex-system's bytes and licence, GPL-3.0-or-later, so the built packa
 | `0001-apex-desktop` | `panels/meson.build`, `shell/meson.build`, `shell/cc-panel-loader.c`, `shell/cc-panel-list.c` | +7 | `subdir('apex')` after upstream's panels; `apex_shell_sources` added to `shell_sources`; the panel registered as `apex`; `"apex"` and a separator at the head of `panel_order[]` |
 | `0002-sidebar-tiles` | `shell/cc-panel-list.c` | +8 −7 | the include; each row's icon handed to `cc_apex_sidebar_tile()`; `panel_order[]` in the design's order |
 | `0003-software-updates` | `panels/system/cc-system-panel.c`, `panels/system/cc-system-panel.blp` | +6 −3 | the include; the `software-updates` subpage; the Software Updates group always shown; its row pushes the page (`navigation.push`) instead of spawning gnome-software, with a forward arrow for the external-link one |
+| `0004-appearance` | `panels/background/cc-background-chooser.c` | +4 | the include; the active item's name and whether it has a dark version handed to `cc_apex_background_show()` where the chooser marks it, and cleared when it gets a new one |
 
 The resource goes into the executable as sources, not as a static library in
 `panels_libs`: the linker takes an archive member only when something references it,
 and nothing upstream does.
 
 Budget (ADR 0014): at most 150 changed lines in upstream files, in hook hunks only; the
-added files under `panels/apex/` do not count. In use: 31 lines in 6 files.
+added files under `panels/apex/` do not count. In use: 35 lines in 7 files.
 
 The patches are `git format-patch` output against Fedora's `%prep` tree, with `a/` and
 `b/` prefixes, applied with `-p1`. Write them with apex-image's
