@@ -99,7 +99,9 @@ what the VM adds, the signing and the store. The RPMs and logs land in
 `_build/ptyxis/out/`. CI runs it on every push.
 
 `tests/ptyxis/shoot.sh` installs that RPM in a fedora:45 container and runs gnome-shell
-headless at scale 2 for the user `apex`, with apex-desktop's fonts and profile values.
+headless at scale 2 for the user `apex`, with apex-desktop's fonts and profile values,
+G2's `fixtures.py` on the system bus and its `clock.c` holding the wall clock, as
+`tests/shots/direct.sh` runs a case.
 Its automation script, `probe.js`, opens board 32's five sessions with `ptyxis --tab`,
 types each command with a virtual keyboard into bash with vte.sh, selects apex-image
 and captures the window. `fixture.c`, installed as `claude`, `just`, `cargo`, `rpmbuild`

@@ -3,6 +3,7 @@
 set -uo pipefail
 
 HERE=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+readonly SHOTS=$HERE/../shots
 . "$HERE/../../.github/scripts/lib.sh"
 
 usage() {
@@ -16,8 +17,9 @@ user 'apex' opens the sessions of the design canvas's board 32, typed into the t
 by a virtual keyboard, so the statuses come from bash's shell integration (vte.sh). The
 captures and logs land in _build/ptyxis/shots/.
 
-It needs gnome-shell, mesa-dri-drivers, dbus-daemon, gcc, util-linux and the Apex fonts
-(jetbrains-mono-fonts-all, adwaita-sans-fonts).
+It needs gnome-shell, mesa-dri-drivers, dbus-daemon, python3-dbusmock, gcc, util-linux and
+the Apex fonts (jetbrains-mono-fonts-all, adwaita-sans-fonts). G2's clock.c and fixtures.py
+(tests/shots) are used as they are.
 EOF
 }
 
@@ -29,6 +31,9 @@ esac
 
 readonly USER_NAME=apex
 readonly SHELL_TIMEOUT=120
+readonly CLOCK_LIB=/run/apex-ptyxis-clock.so
+readonly FIXTURE_NAMES=(org.freedesktop.UPower org.freedesktop.NetworkManager org.bluez)
+readonly CLOCK='2026-10-24 10:24:00'
 readonly MONITOR=2880x1800
 readonly SCALE=2
 # apex-desktop's values (schemas/90_apex.gschema.override, dconf/distro.d/50-apex-ptyxis).
@@ -84,9 +89,22 @@ PROMPT_COMMAND=(__apex_postexec "${PROMPT_COMMAND[@]}" apex_fixture_toolbox)
 EOF
 chown -R "$USER_NAME:" "$home"
 
+# From here to the shell's exec, the steps of tests/shots/direct.sh and its run_case: keep them in step.
 rm -rf /run/systemd/seats
-mkdir -p /run/dbus /tmp/.X11-unix && chmod 1777 /tmp/.X11-unix
+mkdir -p /run/dbus /etc/dbus-1 /tmp/.X11-unix && chmod 1777 /tmp/.X11-unix
+{
+    echo '<busconfig><policy user="root">'
+    for name in "${FIXTURE_NAMES[@]}"; do
+        printf '<allow own="%s"/><allow send_destination="%s"/>\n' "$name" "$name"
+    done
+    echo '</policy></busconfig>'
+} >/etc/dbus-1/system-local.conf
 [[ -S /run/dbus/system_bus_socket ]] || dbus-daemon --system --fork || log "no system bus"
+python3 "$SHOTS/fixtures.py" "$out" >"$out/fixtures.txt" 2>&1 || log "fixtures.py: exit $?"
+gcc -O2 -Wall -Werror -shared -fPIC -o "$CLOCK_LIB" "$SHOTS/clock.c" || die "cannot build tests/shots/clock.c"
+clock_epoch=$(date -u -d "$CLOCK" +%s)
+held=$(env LD_PRELOAD="$CLOCK_LIB" G2_CLOCK_EPOCH="$clock_epoch" date -u '+%F %T' 2>&1)
+[[ $held == "$CLOCK" ]] || die "$CLOCK_LIB does not hold the clock at $CLOCK: $held"
 # Ptyxis's agent spawns through systemd-run when it answers --version; there is no user manager here.
 shim=$(mktemp -d)
 printf '#!/bin/sh\nexit 1\n' >"$shim/systemd-run"
@@ -98,13 +116,14 @@ shoot() {
     chown "$USER_NAME:" "$run" && chmod 700 "$run"
     # shellcheck disable=SC2016 # expanded by the user's bash
     runuser -u "$USER_NAME" -- env -i HOME="$home" PATH="$shim:/usr/bin:/usr/sbin" XDG_RUNTIME_DIR="$run" \
-        LANG=C.UTF-8 TZ=UTC APEX_SHOTS="$out" APEX_SHOT="$name" \
+        LANG=C.UTF-8 TZ=UTC APEX_SHOTS="$out" APEX_SHOT="$name" CLOCK_LIB="$CLOCK_LIB" G2_CLOCK_EPOCH="$clock_epoch" \
+        DBUS_SYSTEM_BUS_ADDRESS=unix:path=/run/dbus/system_bus_socket \
         SETTINGS="$APEX_SETTINGS"$'\n'"$CAPTURE_SETTINGS"$'\n'"org.gnome.desktop.interface color-scheme '$scheme'"$'\n'"org.gnome.Ptyxis interface-style '$style'" \
         timeout "$SHELL_TIMEOUT" dbus-run-session -- bash -c '
             while read -r schema key value; do
                 gsettings set "$schema" "$key" "$value" || exit 1
             done <<<"$SETTINGS"
-            exec gnome-shell --headless --virtual-monitor '"$MONITOR"' --wayland-display=apex-ptyxis \
+            exec env LD_PRELOAD="$CLOCK_LIB" gnome-shell --headless --virtual-monitor '"$MONITOR"' --wayland-display=apex-ptyxis \
                 --automation-script '"$HERE"'/probe.js
         ' >"$out/$name.log" 2>&1
     rc=$?

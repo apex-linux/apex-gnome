@@ -2,7 +2,7 @@
 
 set shell := ["bash", "-euo", "pipefail", "-c"]
 
-ptyxis_shots_packages := "gnome-shell mesa-dri-drivers dbus-daemon gcc util-linux jetbrains-mono-fonts-all adwaita-sans-fonts"
+ptyxis_shots_packages := "gnome-shell mesa-dri-drivers dbus-daemon python3-dbusmock gcc util-linux jetbrains-mono-fonts-all adwaita-sans-fonts"
 ptyxis_image := "registry.fedoraproject.org/fedora:45@sha256:1e13e11f63e147a40a935c9046c79d53a30b861a3cf05ebb023bb53c562382cb"
 
 # List the recipes.
