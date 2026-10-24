@@ -4,8 +4,8 @@
 // shadow-layer actor per further layer its sheet names, below it and following its box.
 
 import Clutter from 'gi://Clutter';
-import GLib from 'gi://GLib';
 import Graphene from 'gi://Graphene';
+import Meta from 'gi://Meta';
 import St from 'gi://St';
 
 import * as Main from '../../main.js';
@@ -15,6 +15,19 @@ export const LAYER_STYLE_CLASS = 'apex-shadow-layer';
 
 const _entries = new Map();
 let _drawing = false;
+
+// Before the next frame: a map, an unmap or a style change arrives while Clutter or St walks
+// the parent's children, and adding or removing a sibling then breaks the walk.
+export function later(fn) {
+    return global.compositor.get_laters().add(Meta.LaterType.BEFORE_REDRAW, () => {
+        fn();
+        return false;
+    });
+}
+
+export function cancelLater(id) {
+    global.compositor.get_laters().remove(id);
+}
 
 function _css(shadow, radius, scale) {
     const px = v => `${v / scale}px`;
@@ -55,10 +68,17 @@ function _sync(entry) {
     }
 }
 
+function _clear(entry) {
+    entry.layers.forEach(l => l.destroy());
+    entry.layers = [];
+}
+
+// Layers exist only while their surface is mapped: a closed menu or dialog keeps none.
 function _build(entry) {
+    entry.laterId = 0;
     _clear(entry);
     const {actor} = entry;
-    if (!(actor instanceof St.Widget) || !actor.get_stage())
+    if (!actor.mapped || !(actor instanceof St.Widget))
         return;
     const node = actor.get_theme_node();
     const scale = St.ThemeContext.get_for_stage(global.stage).scale_factor;
@@ -83,38 +103,30 @@ function _build(entry) {
     _sync(entry);
 }
 
-function _clear(entry) {
-    entry.layers.forEach(l => l.destroy());
-    entry.layers = [];
-}
-
-// A style change arrives while St walks the parent's children: adding a sibling then breaks the walk.
 function _queueBuild(entry) {
-    entry.buildId ||= GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
-        entry.buildId = 0;
-        _build(entry);
-        return GLib.SOURCE_REMOVE;
-    });
+    entry.layers.forEach(l => l.hide());
+    entry.laterId ||= later(() => _build(entry));
 }
 
 function _attach(entry) {
     const {actor} = entry;
-    const watched = [[actor, 'style-changed', () => _queueBuild(entry)], [actor, 'notify::mapped', () => _sync(entry)]];
+    const watched = [[actor, 'style-changed', () => _queueBuild(entry)], [actor, 'notify::mapped', () => _queueBuild(entry)]];
     for (let a = entry.opts.box ?? actor; a && !(a instanceof Clutter.Stage); a = a.get_parent()) {
         for (const signal of ['notify::allocation', 'notify::translation-x', 'notify::translation-y',
             'notify::scale-x', 'notify::scale-y', 'notify::opacity'])
             watched.push([a, signal, () => _sync(entry)]);
     }
     entry.ids = watched.map(([emitter, signal, fn]) => [emitter, emitter.connect(signal, fn)]);
-    _build(entry);
+    if (actor.mapped)
+        _queueBuild(entry);
 }
 
 function _detach(entry) {
     entry.ids.forEach(([emitter, id]) => emitter.disconnect(id));
     entry.ids = [];
-    if (entry.buildId)
-        GLib.source_remove(entry.buildId);
-    entry.buildId = 0;
+    if (entry.laterId)
+        cancelLater(entry.laterId);
+    entry.laterId = 0;
     _clear(entry);
 }
 
@@ -122,11 +134,11 @@ export function register(actor, opts = {}) {
     const known = _entries.get(actor);
     if (known) {
         known.opts = opts;
-        if (_drawing)
-            _build(known);
+        if (_drawing && actor.mapped)
+            _queueBuild(known);
         return;
     }
-    const entry = {actor, opts, layers: [], ids: [], host: null, buildId: 0};
+    const entry = {actor, opts, layers: [], ids: [], host: null, laterId: 0};
     entry.destroyId = actor.connect('destroy', () => unregister(actor));
     _entries.set(actor, entry);
     if (_drawing)

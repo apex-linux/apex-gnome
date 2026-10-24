@@ -23,10 +23,12 @@ directory with `git archive` and unpacks it at the top of Fedora's gnome-shell t
 | `js/ui/apex/shadows/feature.js`, `registry.js` | DESIGN's second shadow layer (below): a shadow-layer actor under each surface whose sheet names `-apex-shadow-layer`, and the window previews' two layers |
 | `js/ui/apex/notifications/feature.js` | DESIGN's notifications in the calendar (below): one flat card per notification, "app · time" headers, the app's icon as a fallback, Do Not Disturb and Clear in the footer, through patch 0012's hooks |
 | `js/ui/apex/panel/feature.js` | the top bar of S2a (below): its parts in `panel/`, one module each |
+| `js/ui/apex/glass/feature.js` | the glass manager of S2b (below), with `glass/surfaces.js`, the layer's own glass, and `glass/registry.js`, where any feature registers an actor |
 | `js/ui/apex/dock/feature.js`, `dock.js`, `trash.js` | the dock of S2a (below): ApexDock, a subclass of upstream's `Dash`, and its Trash |
 | `js/ui/apex/fault/feature.js` | the fault-injection feature: loaded only when `APEX_SHELL_TEST_FAULT` names a phase, it fails in that phase (below) |
 | `data/theme/apex/_apex-tokens.scss` | the design tokens as SCSS variables, imported after upstream's `_colors` |
 | `data/theme/apex/_apex.scss` | the Apex sheet, imported last by the light and dark entry files: `apex-text-size()`, the `apex-surface()` mixin of the shell's own surfaces, and the partials |
+| `data/theme/apex/_glass.scss` | each glass surface's `-apex-glass-blur` and `-apex-glass-saturation`, from the tokens of ADR 0014's table, and the solid tints under `.apex-solid` |
 | `data/theme/apex/_top-bar.scss` | the top bar over upstream's panel, in the user session and the overview. Its text sizes are in pt (`apex-text-size`), so Large Text grows the text and nothing else: the bar, the pills and the glyphs keep SPEC's px sizes, where upstream sizes the bar in em. The unread-notification dot is `$apex_bar_fg` until S1b brings the wallpaper SPEC's accent dot was drawn over; over Fedora's wallpaper the light bar hides an accent dot. G2 asserts both ([tests/shots](../tests/shots/README.md)) |
 | `data/theme/apex/diamond-{light,dark}.svg` | the Apex diamond in the Activities pill, stroked in each variant's `$apex_bar_fg` |
 | `data/theme/apex/_popup-menus.scss` | stock popup menus (board 16): solid `$apex_panel_solid`, radius 14, 34 px rows, the board's inset ring as a 1 px border and its first shadow (St draws one). The calendar and Quick Settings popovers take it too until their own partials |
@@ -59,8 +61,9 @@ Rules, which the lane and `.github/scripts/selftest.sh` enforce:
 
 ### The layer
 
-`FEATURES_IN_ENABLE_ORDER` in `layer.js` lists `spotlight` (S1b), `panel` (S2a) and
-`overview` (S3a), by the names DESIGN's `disabled-features` uses. `spotlight`
+`FEATURES_IN_ENABLE_ORDER` in `layer.js` lists `spotlight` (S1b), `panel` (S2a), `glass`
+(S2b), `dock` (S2a) and `overview` (S3a), by the names DESIGN's `disabled-features` uses.
+`spotlight`
 registers `toggle-spotlight` from `io.github.apex_linux.Apex.Desktop.Keybindings`
 (`['<Super>space']`) with `Main.wm.addKeybinding` at enable, in the normal and overview
 action modes and without autorepeat, and removes it at disable. A press opens Spotlight
@@ -157,11 +160,12 @@ draws one `box-shadow` per actor, so the sheet gives a surface its first layer a
 second as `-apex-shadow-layer` (the `apex-shadow-layer` mixin in `_apex.scss`: popovers,
 Quick Settings, the calendar, menus, the banner and dialogs). The feature scans `uiGroup`,
 `modalDialogGroup` and the banner bin, and their new children, for such surfaces;
-`shadows/registry.js` puts a transparent St widget under each, with the layer as its own
-`box-shadow` and the surface's radius, and keeps it on the surface's box, opacity and
-visibility through the ancestors' allocation and transform signals, so an idle desktop
-repaints nothing more. A dialog's layer goes inside the dialog, above the lightbox that
-ModalDialog keeps under its box. In the overview, each window preview gets the
+`shadows/registry.js` puts a transparent St widget under each while it is mapped, with the
+layer as its own `box-shadow` and the surface's radius, and keeps it on the surface's box and
+opacity through the ancestors' allocation and transform signals. It adds and removes layers
+before the next frame, never inside Clutter's or St's walk over the parent's children, and a
+closed menu or dialog keeps none, so an idle desktop repaints nothing more. A dialog's layer
+goes inside the dialog, above the lightbox that ModalDialog keeps under its box. In the overview, each window preview gets the
 `apex-window-preview` class and two layers (`$apex_preview_shadow`, `$apex_preview_shadow_2`)
 on its window container. `register(actor, {name})` and `unregister(actor)` are the registry's
 API for features that draw their own surfaces (the dock, Spotlight): registrations persist
@@ -178,6 +182,45 @@ and a switch on `org.gnome.desktop.notifications` `show-banners` (inverted, the 
 Quick Settings toggle uses), and Clear on the right, shown even with nothing to clear, then
 insensitive. Disabled, the feature restores the groups' layout and stack, the headers, the
 icons and the footer; a group built while every hook was stock (the layer off) stays stock.
+
+`glass` is ADR 0014's glass manager, on patch 0003's `ShellBlurEffect`. A surface is any
+actor in `glass/registry.js`: the top bar, Quick Settings, the calendar and each banner
+(`glass/surfaces.js`), and whatever another feature registers, for example the dock:
+
+```js
+import * as Glass from '../glass/registry.js';
+Glass.register(actor, {name: 'dock'});
+Glass.unregister(actor);
+```
+
+`register()` again replaces an actor's opts; `unregister()` is idempotent, and the
+registry drops an actor on its `destroy`. The shape is the `shadows` registry's (S3c).
+
+The registry needs no running manager, so a feature registers once and its glass follows
+`disabled-features` and the switches below. The actor's sheet says how much glass:
+`-apex-glass-blur` (ADR 0014's sigma, a token in CSS px) and `-apex-glass-saturation`, as
+`_glass.scss` sets them for the layer's own surfaces; its `border-radius` gives the corners.
+An actor without `-apex-glass-blur` gets no blur. The manager then:
+
+- adds a background-mode `Shell.BlurEffect` with `fine` and `follow-opacity`, radius
+  2 × sigma × the actor's resource scale (ClutterBlur's sigma is half the radius, in device
+  pixels), the saturation and the corner radius. `register()` takes `mode: 'actor'` for the
+  scrims of S3a and `paused()` with `pausedChanged` for a pause rule of its own;
+- pauses a surface's blur while it is unmapped (a closed popover, a hidden dock, chrome
+  under a fullscreen window) and the bar's while the panel carries `apex-solid-bar`;
+- holds the offscreen redirects of the surface and its ancestors off while it blurs (the
+  panel's, BoxPointer's and the dash's are `ALWAYS`), since a background blur inside one
+  blits the offscreen layer, not the stage, and gives each back;
+- forwards damage, for latency only: a window actor's `damaged`, its moves and resizes
+  (old and new box), restacking and background changes redraw each glass box they touch,
+  so the re-blur lands in the same frame. A missed source costs one frame, through 0003's
+  redraw-clip rule;
+- for `reduce-transparency` or high contrast, removes every blur and adds `apex-solid` to
+  `Main.uiGroup`, under which `_glass.scss` swaps the glass tints for `$apex_bar_solid` and
+  `$apex_panel_solid` (the high-contrast sheet keeps upstream's colours). With
+  `disabled-features=['glass']` the effects go and the tints stay.
+
+A schema without `reduce-transparency` turns off the `glass` feature, logged.
 
 `dock` is the dock (DESIGN.md, "Dock"; board 37). `dock/dock.js`'s ApexDock is upstream's
 `Dash` (`js/ui/dash.js`) with the hooks of patch 0014-dash, which the feature provides:

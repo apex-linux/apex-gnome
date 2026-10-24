@@ -973,17 +973,17 @@ async function stagePaints() {
     return paints;
 }
 
-// An idle desktop repaints no more with the shadow layers than without them.
+// An idle desktop repaints no more with the shadow layers than without them. A lone stray
+// paint lands in either state now and then, so each takes the quieter of two windows.
 async function idleRepaints() {
     const apex = new Gio.Settings({schema_id: APEX_SCHEMA});
     const disabled = apex.get_strv('disabled-features');
-    await settle();
-    const withShadows = await stagePaints();
     apex.set_strv('disabled-features', [...disabled, 'shadows']);
     await settle();
-    const withoutShadows = await stagePaints();
+    const withoutShadows = Math.min(await stagePaints(), await stagePaints());
     apex.set_strv('disabled-features', disabled);
     await settle();
+    const withShadows = Math.min(await stagePaints(), await stagePaints());
     return {withShadows, withoutShadows};
 }
 

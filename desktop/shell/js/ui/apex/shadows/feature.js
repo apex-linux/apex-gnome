@@ -11,6 +11,7 @@ const SURFACE_DEPTH = 4;
 
 let _watched = [];
 const _previews = new Set();
+const _pending = new Map();
 
 function _surfaces(actor, depth = 0) {
     if (!(actor instanceof St.Widget) || depth > SURFACE_DEPTH)
@@ -27,6 +28,26 @@ function _registerIn(container, child) {
         const host = inDialog ? surface.get_parent() : container;
         Registry.register(surface, {name: 'apex-shadow', container: host});
     }
+}
+
+// A ModalDialog joins its group before it builds its box, so the scan waits for the next frame.
+function _registerSoon(container, child) {
+    if (_pending.has(child))
+        return;
+    const destroyId = child.connect('destroy', () => _forget(child));
+    const laterId = Registry.later(() => {
+        _forget(child, false);
+        _registerIn(container, child);
+    });
+    _pending.set(child, {destroyId, laterId});
+}
+
+function _forget(child, cancel = true) {
+    const {destroyId, laterId} = _pending.get(child);
+    child.disconnect(destroyId);
+    if (cancel)
+        Registry.cancelLater(laterId);
+    _pending.delete(child);
 }
 
 function _registerPreviews() {
@@ -48,7 +69,7 @@ export function enable() {
     Registry.start();
     for (const container of _containers()) {
         container.get_children().forEach(child => _registerIn(container, child));
-        _watched.push([container, container.connect('child-added', (_c, child) => _registerIn(container, child))]);
+        _watched.push([container, container.connect('child-added', (_c, child) => _registerSoon(container, child))]);
     }
     _watched.push([Main.overview, Main.overview.connect('showing', _registerPreviews)]);
     if (Main.overview.visible)
@@ -58,6 +79,7 @@ export function enable() {
 export function disable() {
     _watched.forEach(([emitter, id]) => emitter.disconnect(id));
     _watched = [];
+    [..._pending.keys()].forEach(child => _forget(child));
     for (const preview of _previews)
         preview.remove_style_class_name(PREVIEW_STYLE_CLASS);
     _previews.clear();

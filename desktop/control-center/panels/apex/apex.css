@@ -48,6 +48,15 @@ apex-tile .badge.error {
   background-color: var(--error-bg-color);
 }
 
+image.apex-tile {
+  min-width: 24px;
+  min-height: 24px;
+  border-radius: 7px;
+  color: white;
+  background-color: #6f8396;
+  -gtk-icon-size: 16px;
+}
+
 .apex-title {
   font-size: 20px;
   font-weight: 800;
@@ -81,4 +90,35 @@ apex-tile .badge.error {
 
 button.apex-link {
   color: var(--accent-color);
+}
+
+/* Board 23: stock Appearance's own classes; the panel gains no rows. */
+.accent-button {
+  min-width: 32px;
+  min-height: 32px;
+  padding: 0;
+}
+
+.accent-button:checked {
+  box-shadow: 0 0 0 2px var(--card-bg-color), 0 0 0 4px var(--accent-bg-color);
+}
+
+.background-preview-button,
+background-preview,
+background-preview .window {
+  border-radius: 10px;
+}
+
+.background-flowbox > flowboxchild,
+.background-thumbnail {
+  border-radius: 10px;
+}
+
+.background-flowbox > flowboxchild .background-thumbnail {
+  outline: 1px solid var(--border-color);
+  outline-offset: -1px;
+}
+
+.background-flowbox > flowboxchild.active-item {
+  box-shadow: inset 0 0 0 3px var(--accent-bg-color);
 }

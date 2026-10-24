@@ -215,6 +215,7 @@ layer_cycles "$run"
 motion_curve "$run"
 no_js_error glass "$run/glass.log"
 glass_frames glass "$run/glass.log"
+glass_manager glass "$run/glass.log" light
 glass_unlock_vs_fedora "$run"
 echo "# logs and captures: $run"
 summary
