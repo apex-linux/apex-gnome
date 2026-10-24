@@ -14,7 +14,9 @@ $_upstream_panel_button_minimum_hpadding: $base_padding;
   .panel-button.clock-display#{$s} > .clock-display-box,
   .panel-button#{$s} > .panel-status-indicators-box,
   .panel-button#{$s} > .system-status-icon,
-  .panel-button.apex-search#{$s} > .apex-search-pill { @content; }
+  .panel-button.apex-search#{$s} > .apex-search-pill,
+  .panel-button.apex-indicator#{$s} > .apex-indicator-pill,
+  .panel-button.apex-indicators-overflow#{$s} > .apex-indicators-overflow-pill { @content; }
 }
 
 #panel, #panel:overview {
@@ -162,3 +164,5 @@ $_upstream_panel_button_minimum_hpadding: $base_padding;
   // Upstream fills the whole button here, so the status pill spans it and its glyphs centre.
   .panel-button > .panel-status-indicators-box { margin-right: 0; }
 }
+
+@import "indicators";

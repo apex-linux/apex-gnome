@@ -178,9 +178,82 @@ class Widget {
 
 class Label extends Widget {}
 class Bin extends Widget {}
-class Icon extends Widget {}
-class Button extends Widget {}
-class BoxLayout extends Widget {}
+class BoxLayout extends Widget {
+    insert_child_at_index(child, index) {
+        this._children.splice(index, 0, child);
+        child._parent = this;
+    }
+}
+
+class Icon extends Widget {
+    constructor(params) {
+        super(params);
+        this._effects = [];
+    }
+
+    add_effect(effect) {
+        this._effects.push(effect);
+    }
+
+    remove_effect(effect) {
+        this._effects = this._effects.filter(e => e !== effect);
+    }
+
+    get_effects() {
+        return [...this._effects];
+    }
+
+    get_theme_node() {
+        return {get_foreground_color: () => ({red: 22, green: 22, blue: 26, alpha: 255})};
+    }
+}
+
+class Button extends Widget {
+    constructor(params) {
+        super({checked: false, ...params});
+        this._actions = [];
+    }
+
+    set child(child) {
+        this._child = child;
+        child._parent = this;
+    }
+
+    get child() {
+        return this._child;
+    }
+
+    add_action(action) {
+        this._actions.push(action);
+    }
+
+    get_actions() {
+        return [...this._actions];
+    }
+
+    get_transformed_position() {
+        return [1200, 0];
+    }
+
+    get_transformed_size() {
+        return [30, 32];
+    }
+}
+
+// The theme holds the icons PROBE_THEME_ICONS names.
+class IconTheme {
+    has_icon(name) {
+        return (GLib.getenv('PROBE_THEME_ICONS') ?? '').split(',').includes(name);
+    }
+
+    set_search_path(path) {
+        this._path = path;
+    }
+
+    lookup_icon() {
+        return null;
+    }
+}
 
 class Entry extends Widget {
     constructor(params) {
@@ -239,6 +312,7 @@ export default {
     ClipboardType: {PRIMARY: 0, CLIPBOARD: 1},
     Entry,
     Icon,
+    IconTheme,
     Label,
     Corner: {TOPLEFT: 0, TOPRIGHT: 1, BOTTOMRIGHT: 2, BOTTOMLEFT: 3},
     Settings: {get: () => settings},

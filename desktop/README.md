@@ -24,6 +24,7 @@ directory with `git archive` and unpacks it at the top of Fedora's gnome-shell t
 | `js/ui/apex/glass/feature.js` | the glass manager of S2b (below), with `glass/surfaces.js`, the layer's own glass, and `glass/registry.js`, where any feature registers an actor |
 | `js/ui/apex/dock/feature.js`, `dock.js`, `trash.js`, `intellihide.js` | the dock of S2a (below): ApexDock, a subclass of upstream's `Dash`, its Trash and its intellihide |
 | `js/ui/apex/windows.js` | whether a window on the primary monitor is maximised, and the signals that change it: the solid bar and the dock's intellihide |
+| `js/ui/apex/indicators/` | the app indicators of S2a (below): `watcher.js` (the StatusNotifierWatcher and host), `item.js`, `icon.js` and `mask.js` (the glyph), `dbusmenu.js` (the menus), `indicator.js` (one button) and `bar.js` (their place and the overflow) |
 | `js/ui/apex/fault/feature.js` | the fault-injection feature: loaded only when `APEX_SHELL_TEST_FAULT` names a phase, it fails in that phase (below) |
 | `data/theme/apex/_apex-tokens.scss` | the design tokens as SCSS variables, imported after upstream's `_colors` |
 | `data/theme/apex/_apex.scss` | the Apex sheet, imported last by the light and dark entry files: `apex-text-size()`, the `apex-surface()` mixin of the shell's own surfaces, and the partials |
@@ -44,6 +45,7 @@ directory with `git archive` and unpacks it at the top of Fedora's gnome-shell t
 | `data/theme/apex/_spotlight.scss` | Spotlight and its toast (board 38): a 680 px glass panel tinted `$apex_panel`, radius 24, 96 px below the monitor's top edge; the 60 px field with 20/500 text and a 20 px glyph; 11.5/700 uppercase section headers; 48 px rows with 32 px icons, 14/600 titles over 12.5 px subtitles, the selected one in the accent at 16 % with its verb and an Enter chip; the calculator's result at 18/700 in tabular figures; the "Copied" toast a 40 px glass pill 92 px above the screen's bottom edge. St draws no backdrop filter: S2b's glass manager blurs behind the panel with `$apex_spotlight_blur` and `$apex_spotlight_saturation` (σ 34, 1.8) and behind the toast with `$apex_toast_blur` and `$apex_toast_saturation` (σ 30, 1.8, ADR 0014's toast row) |
 | `data/theme/apex/_greeter.scss` | the greeter (board 12) beyond `_lock.scss`: the login dialog over apex-desktop's pre-blurred Facets (`$apex_greeter_background`, rendered at build time since gdm runs no JS), `$apex_greeter_fallback` without the file; the footer is apex-desktop's `org.gnome.login-screen logo`, `$apex_greeter_bottom` above the bottom edge; the back button and the bottom row's session and accessibility buttons are 38 px `$apex_greeter_button` circles ringed in `$apex_greeter_button_border`. Stock lacks the board's "Choose a user" heading, the rows' account type and chevron, the avatars' initials (the lock's JS) and the clock on the left; each needs JS gdm does not run |
 | `data/theme/apex/_screenshot.scss` | the screenshot UI (board 19), tints only (the panel's glass comes with 0017-derived-glass): a 440 px `$apex_panel` panel, radius 26, inset 14, 48 px above the bottom edge, with the board's heading row kept for the close button (a 30 px `$apex_button` circle); 64 px area buttons in `$apex_button` (`$apex_button_hover` checked), radius 16, a 20 px glyph over a 12.5/600 name; a 38 px pointer toggle, the accent when on; a 64 px capture button, a 4 px `$apex_fg` ring round a `$apex_fg` dot (a 26 px `$apex_screenshot_record` square while recording); the screenshot/screencast switch in `$apex_button`, the checked button `$apex_panel_solid`; the selection shaded `$apex_screenshot_shade` with 14 px white handles; the chosen screen and window ringed 3 px in the accent. Stock lacks the board's heading text, its 8 px gap between the area buttons (12 px, set in JS), the pointer toggle on the left and the switch on the right (swapped, set in JS), the selection's size label, and the window selector's windows in place (stock lays them out); each needs a hook |
+| `data/theme/apex/_indicators.scss` | the app indicators (board 39): 30 × 24 pills, radius 12, 2 px apart, their 16 px glyphs in `$apex_bar_fg`; the 6 px accent dot 3 px from the top and 5 px from the right; the 1 × 14 divider in `$apex_bar_fg` at .2, 6 px each side; "‹ +N"; an open one in `$apex_button_hover`. Their menus at least 280 px (the overflow's 240), rows padded 12 with radius 9, the title as a 30 px header in `$apex_fg_dim`, separators 5 px from rows and 10 from the sides, shortcuts in `$apex_fg_dim`, 30 × 18 switches with a 14 px knob |
 | `data/theme/apex/_apex-structure.scss` | Apex actors' geometry for the high-contrast sheet |
 | `data/theme/apex/meson.build` | adds the partials to upstream's `theme_sources`, so an edit recompiles the sheets |
 
@@ -63,9 +65,9 @@ Rules, which the lane and `.github/scripts/selftest.sh` enforce:
 
 ### The layer
 
-`FEATURES_IN_ENABLE_ORDER` in `layer.js` lists `spotlight` (S1b), `panel` (S2a), `glass`
-(S2b), `dock` (S2a) and `overview` (S3a), by the names DESIGN's `disabled-features` uses.
-`spotlight`
+`FEATURES_IN_ENABLE_ORDER` in `layer.js` lists `motion` (S3c), `spotlight` (S1b), `panel`
+(S2a), `glass` (S2b), `dock` (S2a), `overview` (S3a), `lock` (S3b), `quick-settings` (S3c)
+and `indicators` (S2a), by the names DESIGN's `disabled-features` uses. `spotlight`
 registers `toggle-spotlight` from `io.github.apex_linux.Apex.Desktop.Keybindings`
 (`['<Super>space']`) with `Main.wm.addKeybinding` at enable, in the normal and overview
 action modes and without autorepeat, and removes it at disable. A press opens Spotlight
@@ -227,6 +229,34 @@ A schema without `reduce-transparency` turns off the `glass` feature, logged.
 
 A schema without one of the keys turns off only this feature, logged.
 
+`indicators` is the app indicators (DESIGN.md, "Top bar"; board 39): a StatusNotifierItem
+host with DBusMenu menus, and no XEmbed tray. It needs no hook.
+
+- `indicators/watcher.js` owns `org.kde.StatusNotifierWatcher` while nobody else does. It
+  takes an item's bus name, or its object path from the sender, as Flatpak apps send it,
+  and drops the item when its name leaves the bus. While another process owns the
+  watcher, the shell registers `org.kde.StatusNotifierHost-apex-<pid>` with it and follows
+  its items; its name request stays queued, so when that watcher leaves, the shell takes
+  over and the apps register again.
+- `indicators/item.js` reads Title, Status, IconName, IconPixmap, AttentionIconName,
+  IconThemePath, ToolTip, ItemIsMenu and Menu, again on each New* signal.
+- `indicators/icon.js`: the item's `-symbolic` icon when the theme has one, which St
+  recolours; otherwise its icon, from `IconThemePath` too, or its pixmap (ARGB32 to RGBA),
+  drawn through `mask.js` as a one-colour mask in the bar's colour.
+- `indicators/bar.js` puts them left of the search button after a thin divider, in the
+  order the items registered, and hides the lot on the lock screen. `Passive` items are
+  hidden and `NeedsAttention` adds the dot. Up to four show; with more, three show and
+  "‹ +N" opens a menu with a row (glyph, title, chevron) per hidden item, which opens that
+  item's menu under the overflow button.
+- `indicators/indicator.js`: primary click calls Activate, or opens the menu when
+  ItemIsMenu; secondary click opens the menu (ContextMenu without one); middle click calls
+  SecondaryActivate; scrolling calls Scroll (120 a step).
+- `indicators/dbusmenu.js` renders the item's menu as a popup menu, titled with the item's
+  name: separators, toggles as switches, radio items, shortcuts on the right, submenus,
+  hidden and disabled rows. It follows LayoutUpdated and ItemsPropertiesUpdated (label,
+  enabled, visible and toggle state in place) and sends AboutToShow and the opened,
+  clicked and closed events.
+
 `overview` is the overview and the launcher (ROADMAP S3a, without Spotlight, the launcher's
 own search pill or the glass). Its parts provide the hooks of patch 0013-overview and follow
 the kill switches and `disabled-features=['overview']` as a whole:
@@ -273,10 +303,12 @@ gjs outside the shell: every kill switch, `apex.safe=1` through a bubblewrap bin
 aborted shell, and Super+Space: its registration and removal through enable, the kill
 switches, `layer-enabled` and `disabled-features` cycles and a missing Keybindings schema,
 the top bar's hooks with stub dots, indicators and hot corners, and the dock's keys,
-order, Show Apps binding and hooks against a stub `Dash`, against
+order, Show Apps binding and hooks against a stub `Dash`, and the app indicators against
+fake items and a fake watcher on each case's own session bus (`dbus-run-session`), against
 `tests/layer/main-stub.js` for `main.js`, fixture typelibs for Meta and Shell, and
-`tests/layer/stubs/` for `panelMenu.js`, `dash.js`, `iconGrid.js`, `popupMenu.js` and the features' St, Clutter and Shell imports
-(gjs outside the shell has no St or Clutter, and the fixture's Shell no WindowTracker).
+`tests/layer/stubs/` for `panelMenu.js`, `dash.js`, `iconGrid.js`, `popupMenu.js`, the
+indicators' `mask.js` and the features' St, Clutter, Shell and GdkPixbuf imports (gjs
+outside the shell has no St or Clutter, and the fixture's Shell no WindowTracker).
 
 For the fault injection in the VM, the variable goes into the shell's environment with
 a user drop-in on its unit, which the image never ships:

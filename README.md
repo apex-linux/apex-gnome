@@ -41,7 +41,7 @@ outside the shell otherwise lacks; `tests/layer/main-stub.js` stands in for `mai
 
 ```bash
 just check        # the layer tests, G2's self-test, eslint, the theme, the script self-test and the comment guard
-just layer-test   # gjs, glib-compile-schemas and gi-compile-repository (or g-ir-compiler); bwrap for the kernel command-line cases
+just layer-test   # gjs, glib-compile-schemas, gi-compile-repository (or g-ir-compiler) and dbus-run-session; bwrap for the kernel command-line cases
 just shots-test   # gjs, GdkPixbuf and jq; dbus-daemon and python3-dbusmock for the fixtures
 just eslint       # node, npm and git: gnome-shell 51.0's eslint rules, pinned in lint/package-lock.json
 just theme        # sassc and git; dnf5, rpm2cpio, cpio and xz for Fedora's gnome-shell SRPM

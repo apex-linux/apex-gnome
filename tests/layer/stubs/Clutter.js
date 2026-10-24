@@ -32,9 +32,23 @@ class KeyController {
 }
 
 class ClickGesture {
+    constructor(params = {}) {
+        Object.assign(this, params);
+    }
+
     connect(signal, fn) {
         if (signal === 'recognize')
             this.recognize = fn;
+    }
+
+    // What a click with that mouse button would do.
+    click(button) {
+        this._button = button;
+        this.recognize(this);
+    }
+
+    get_button() {
+        return this._button;
     }
 }
 
@@ -44,11 +58,24 @@ class BindConstraint {
     }
 }
 
+class ScrollController {
+    constructor(params) {
+        Object.assign(this, params);
+    }
+
+    connect(signal, fn) {
+        if (signal === 'scroll')
+            this.scroll = (dx, dy) => fn(this, null, null, dx, dy);
+    }
+}
+
 export default {
     Actor,
     AnimationMode,
     BindConstraint,
     BindCoordinate: {X: 0, Y: 1, WIDTH: 2, HEIGHT: 3, POSITION: 4, SIZE: 5, ALL: 6},
+    BUTTON_PRIMARY: 1,
+    BUTTON_MIDDLE: 2,
     BUTTON_SECONDARY: 3,
     BinLayout,
     ClickGesture,
@@ -61,6 +88,9 @@ export default {
     KEY_KP_Enter: 0xff8d,
     KEY_Return: 0xff0d,
     KEY_Up: 0xff52,
+    ScrollController,
+    ScrollControllerFlags: {DISCRETE: 1, SCROLL_VERTICAL: 2, SCROLL_HORIZONTAL: 4},
+    get_current_event_time: () => 0,
     ActorAlign: {FILL: 0, START: 1, CENTER: 2, END: 3},
     TextDirection,
     EVENT_PROPAGATE: false,

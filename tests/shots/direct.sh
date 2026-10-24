@@ -151,6 +151,10 @@ run_and_record_case dark-style "$CAPTURE_SETTINGS;org.gnome.desktop.interface co
 # The headless pointer starts at 0,0, in the hot corner, which its first motion would trip.
 run_and_record_case dock-intellihide "$CAPTURE_SETTINGS;$NO_HOT_CORNER" G2_DOCK=1
 run_and_record_case dock-intellihide-dark "$CAPTURE_SETTINGS;$NO_HOT_CORNER;org.gnome.desktop.interface color-scheme prefer-dark" G2_DOCK=1
+# The indicators get shells of their own, as default, default-scale1 and dark-style.
+run_and_record_case indicators "$CAPTURE_SETTINGS;$NO_HOT_CORNER" G2_INDICATORS=1
+run_and_record_case indicators-scale1 "$CAPTURE_SETTINGS;$NO_HOT_CORNER" G2_INDICATORS=1 G2_SCALE=1 G2_MONITOR=1440x900
+run_and_record_case indicators-dark "$CAPTURE_SETTINGS;$NO_HOT_CORNER;org.gnome.desktop.interface color-scheme prefer-dark" G2_INDICATORS=1
 run_and_record_case stock-light "$CAPTURE_SETTINGS;org.gnome.desktop.interface color-scheme prefer-light" APEX_SHELL_SAFE=1 G2_SCENES=1
 run_and_record_case stock-dark "$CAPTURE_SETTINGS;org.gnome.desktop.interface color-scheme prefer-dark" APEX_SHELL_SAFE=1 G2_SCENES=1
 run_and_record_case safe-env '' APEX_SHELL_SAFE=1
