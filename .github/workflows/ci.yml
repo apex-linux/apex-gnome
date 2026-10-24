@@ -257,7 +257,9 @@ jobs:
           persist-credentials: false
 
       - name: tests/control-center/selftest.sh
-        run: tests/control-center/selftest.sh
+        run: |
+          dnf5 -y -q --setopt=install_weak_deps=False --repo=fedora --repo=updates install python3
+          tests/control-center/selftest.sh
 
       - name: tests/control-center/state-test.sh
         env:

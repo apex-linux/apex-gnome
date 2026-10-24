@@ -90,6 +90,10 @@ awk '/<key name="search-hint-shown"/ { skip = 1 } !skip { print } skip && /<\/ke
     "$SCHEMA_DIR/io.github.apex_linux.Apex.Desktop.gschema.xml" >"$T/nohint/io.github.apex_linux.Apex.Desktop.gschema.xml"
 cp "$SEARCH_PROVIDERS_SCHEMA" "$T/nohint/"
 glib-compile-schemas --strict "$T/nohint"
+mkdir -p "$T/noreduce"
+awk '/<key name="reduce-transparency"/ { skip = 1 } !skip { print } skip && /<\/key>/ { skip = 0 }' \
+    "$SCHEMA_DIR/io.github.apex_linux.Apex.Desktop.gschema.xml" >"$T/noreduce/io.github.apex_linux.Apex.Desktop.gschema.xml"
+glib-compile-schemas --strict "$T/noreduce"
 
 readonly CMDLINE_PLAIN='BOOT_IMAGE=(hd0,gpt2)/boot/ostree/apex/vmlinuz root=UUID=0 rw rhgb quiet'
 sandbox=0
@@ -501,6 +505,46 @@ probe maximised "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_MAXIMISED=1
 panel_classes_are "solid-bar: solid while a window on the primary monitor is maximised and the overview is closed" \
     'none [maximised] apex-solid-bar [overview] none [no-overview] apex-solid-bar [minimised] none [unminimised] apex-solid-bar [unmaximised] none [other-monitor] none [desktop-window] none [workspace] apex-solid-bar [closed] none [translucent-top-bar=false] apex-solid-bar [layer-enabled=false] none [restacked]'
 lacks "solid-bar: the maximised-window trigger disables cleanly" 'off for this session|did not disable cleanly|cannot restyle'
+
+readonly GLASS_ON='panel:r96/s1.6/c0/on/background quick-settings:r120/s1.8/c52/on/background calendar:r120/s1.8/c52/on/background'
+readonly GLASS_OFF='panel:none quick-settings:none calendar:none'
+readonly BANNER_ON='banner:r120/s1.8/c32/on/background'
+probe glass "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_GLASS=1
+has "glass: the feature enables" 'Apex: feature glass enabled'
+fact "glass: the bar, Quick Settings and the calendar blur behind them: radius 2 x their sheet's sigma x the scale, its saturation and corners, fine, following opacity; the offscreen redirects they sit in are held off" \
+    "glass\.enabled=$GLASS_ON solid=false redirects=0,0"
+fact "glass: a banner blurs from the moment it is shown" "glass\.banner=$GLASS_ON $BANNER_ON solid=false redirects=0,0"
+fact "glass: the bar's glass pauses while the bar is solid" \
+    "glass\.solid-bar=panel:r96/s1\.6/c0/paused/background quick-settings:r120/s1\.8/c52/on/background calendar:r120/s1\.8/c52/on/background $BANNER_ON solid=false redirects=0,0"
+fact "glass: a closed popover's glass pauses" \
+    "glass\.menu-closed=panel:r96/s1\.6/c0/on/background quick-settings:r120/s1\.8/c52/paused/background calendar:r120/s1\.8/c52/on/background $BANNER_ON solid=false redirects=0,0"
+fact "glass: a second register() replaces the first's opts, one surface per actor" 'glass\.registered-twice=dock:r112/s1\.8/c44/paused/background 1'
+fact "glass: another feature registers its actor, the dock's sigma 28 at 1.8, without the manager" 'glass\.registered=dock:r112/s1\.8/c44/on/background'
+fact "glass: a damaged window that touches no glass box redraws none" 'glass\.damage-elsewhere=panel=0 quick-settings=0 dock=0 -> panel=0 quick-settings=0 dock=0'
+fact "glass: a window moved under the bar redraws the bar's box" 'glass\.moved-under-the-bar=panel=1 quick-settings=0 dock=0'
+fact "glass: moved out from under the bar and damaged under the dock, it redraws the bar once more and the dock" 'glass\.damage-under-the-dock=panel=2 quick-settings=0 dock=2'
+fact "glass: a restack redraws every glass box" 'glass\.restacked=panel=3 quick-settings=1 dock=3'
+fact "glass: Reduce Transparency removes every blur and roots apex-solid; the redirects come back" \
+    "glass\.reduce-transparency=$GLASS_OFF banner:none solid=true redirects=2,2"
+fact "glass: and the registered dock's" 'glass\.reduce-transparency\.dock=dock:none'
+fact "glass: high contrast does the same" "glass\.high-contrast=$GLASS_OFF banner:none solid=true redirects=2,2"
+fact "glass: disabled-features=['glass'] removes every blur and keeps the tints" "glass\.disabled=$GLASS_OFF banner:none solid=false redirects=2,2"
+fact "glass: and the registered dock's" 'glass\.disabled\.dock=dock:none'
+fact "glass: an actor registered while glass is off waits" 'glass\.registered-while-disabled=later:none'
+fact "glass: and blurs once glass is back" 'glass\.registered-while-disabled\.enabled=later:r136/s1\.8/c52/on/background'
+fact "glass: unregistered, twice, the dock loses its blur" 'glass\.unregistered=dock:none'
+fact "glass: layer-enabled=false removes every blur and gives the redirects back" "glass\.off=$GLASS_OFF banner:none solid=false redirects=2,2"
+fact "glass: layer-enabled=true brings the glass back" "glass\.on=$GLASS_ON $BANNER_ON solid=false redirects=0,0"
+lacks "glass: no feature fails or disables uncleanly" 'off for this session|did not disable cleanly|cannot restyle'
+
+probe glass-disabled "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_DISABLED=glass PROBE_GLASS=1
+has "disabled-features=['glass']: skips the feature" 'Apex: feature glass is in disabled-features'
+fact "disabled-features=['glass']: no blur, the panel's own redirect" "glass\.enabled=$GLASS_OFF solid=false redirects=2,2"
+
+probe glass-noreduce "$CMDLINE_PLAIN" GSETTINGS_SCHEMA_DIR="$T/noreduce" PROBE_ENABLE=1
+has "a schema without reduce-transparency: only glass is off, and says why" \
+    'Apex: feature glass off for this session \(configure: Error: io\.github\.apex_linux\.Apex\.Desktop has no key reduce-transparency\)'
+has "and the rest of the layer runs" 'Apex: feature panel enabled'
 
 readonly SEARCH_HINT='^probe: notify=Press Super+Space to search$'
 probe search-hint "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_SWITCH=2

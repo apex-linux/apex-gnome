@@ -1,0 +1,76 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Thuong Vo <66083331+SekiroKenjii@users.noreply.github.com>
+Date: Sat, 24 Oct 2026 11:45:00 +0000
+Subject: [PATCH] sidebar: coloured tiles in the design's order
+
+Apex's Settings sidebar shows each panel's icon on a coloured tile, and
+orders the panels as the design does: Apex Desktop; Wi-Fi, Network and
+Bluetooth; Displays, Sound and Power; Appearance, Multitasking,
+Notifications, Search and Apps, with Online Accounts, Sharing and
+Wellbeing; Privacy & Security, Keyboard and Mouse & Touchpad, then Color,
+Printers, Wacom, Accessibility and System.
+
+row_data_new() hands each row's icon to cc_apex_sidebar_tile() in
+panels/apex/, which gives it the classes apex-tile and apex-tile-<id>;
+the colours come from panels/apex/settings-tiles.json, the table the
+shell's Spotlight shares.
+---
+ shell/cc-panel-list.c | 15 +++++++--------
+ 1 file changed, 7 insertions(+), 8 deletions(-)
+
+diff --git a/shell/cc-panel-list.c b/shell/cc-panel-list.c
+index 993d98f..9d82e3d 100644
+--- a/shell/cc-panel-list.c
++++ b/shell/cc-panel-list.c
+@@ -26,6 +26,7 @@
+ #include "cc-panel-list.h"
+ #include "cc-ui-util.h"
+ #include "cc-util.h"
++#include "panels/apex/cc-apex-sidebar.h"
+ 
+ typedef struct {
+     GtkWidget *row;
+@@ -243,6 +244,7 @@ row_data_new (CcPanelCategory category, const gchar *id, const gchar *name, cons
+ 
+     /* Icon */
+     image = g_object_new (GTK_TYPE_IMAGE, "accessible-role", GTK_ACCESSIBLE_ROLE_PRESENTATION, "icon-name", icon, NULL);
++    cc_apex_sidebar_tile (image, id);
+ 
+     gtk_grid_attach (GTK_GRID (grid), image, 0, 0, 1, 1);
+ 
+@@ -349,30 +351,27 @@ static const gchar *const panel_order[] = {
+     "display",
+     "sound",
+     "power",
+-    "multitasking",
+-    "background",
+ 
+     "separator",
+ 
+-    "applications",
++    "background",
++    "multitasking",
+     "notifications",
+     "search",
++    "applications",
+     "online-accounts",
+     "sharing",
+     "wellbeing",
+ 
+     "separator",
+ 
+-    "mouse",
++    "privacy",
+     "keyboard",
++    "mouse",
+     "color",
+     "printers",
+     "wacom",
+-
+-    "separator",
+-
+     "universal-access",
+-    "privacy",
+     "system",
+     "reset-settings",
+ };
