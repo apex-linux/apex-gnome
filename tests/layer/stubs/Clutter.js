@@ -5,6 +5,10 @@
 import GLib from 'gi://GLib';
 
 const TextDirection = {DEFAULT: 0, LTR: 1, RTL: 2};
+const AnimationMode = {LINEAR: 1, EASE_OUT_QUAD: 5, EASE_OUT_CUBIC: 8, EASE_OUT_EXPO: 21,
+    STEPS: 46, STEP_START: 47, STEP_END: 48, CUBIC_BEZIER: 49};
+
+class Actor {}
 
 class BinLayout {}
 
@@ -34,8 +38,17 @@ class ClickGesture {
     }
 }
 
+class BindConstraint {
+    constructor(params) {
+        Object.assign(this, params);
+    }
+}
+
 export default {
-    AnimationMode: {EASE_OUT_QUAD: 5, EASE_OUT_CUBIC: 8},
+    Actor,
+    AnimationMode,
+    BindConstraint,
+    BindCoordinate: {X: 0, Y: 1, WIDTH: 2, HEIGHT: 3, POSITION: 4, SIZE: 5, ALL: 6},
     BUTTON_SECONDARY: 3,
     BinLayout,
     ClickGesture,

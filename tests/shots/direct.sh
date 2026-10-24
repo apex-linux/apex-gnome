@@ -39,10 +39,14 @@ readonly FRAME_DIR=/run/g2-frame
 readonly G2_CLOCK='2026-09-28 09:41:00'
 G2_CLOCK_EPOCH=$(date -u -d "$G2_CLOCK" +%s)
 readonly G2_CLOCK_EPOCH
-readonly FIXTURE_NAMES=(org.freedesktop.UPower org.freedesktop.NetworkManager org.bluez)
+readonly FIXTURE_NAMES=(org.freedesktop.UPower org.freedesktop.NetworkManager org.bluez net.hadess.SwitcherooControl
+    org.freedesktop.UPower.PowerProfiles)
 # Two fixed workspaces: stock widens the active workspace dot by a factor that depends on
 # the count. A 24-hour clock: in 12 hours a one-digit hour adds a figure space.
 readonly CAPTURE_SETTINGS='org.gnome.desktop.interface enable-animations false;org.gnome.desktop.interface cursor-blink false;org.gnome.mutter dynamic-workspaces false;org.gnome.desktop.wm.preferences num-workspaces 2;org.gnome.desktop.interface clock-format 24h;org.gnome.desktop.interface show-battery-percentage true'
+
+# The motion case needs animations, which the captures turn off.
+readonly MOTION_SETTINGS=${CAPTURE_SETTINGS/enable-animations false/enable-animations true}
 
 cat /proc/cmdline >"/out/cmdline-$part.txt"
 # gnome-shell's loginManager.js takes its dummy manager only when /run/systemd/seats is
@@ -60,7 +64,7 @@ mkdir -p /etc/dbus-1
 } >/etc/dbus-1/system-local.conf
 dbus-daemon --system --fork || echo "no system bus"
 mkdir -p "/out/fixtures-$part"
-python3 /w/fixtures.py "/out/fixtures-$part" >"/out/fixtures-$part.txt" 2>&1 || echo "fixtures.py: exit $?"
+G2_POWER_PROFILES=1 python3 /w/fixtures.py "/out/fixtures-$part" >"/out/fixtures-$part.txt" 2>&1 || echo "fixtures.py: exit $?"
 mkdir -p /tmp/.X11-unix && chmod 1777 /tmp/.X11-unix
 gcc -O2 -Wall -Werror -shared -fPIC -o "$CLOCK_LIB" /w/clock.c || { echo "direct.sh: cannot build clock.c" >&2; exit 1; }
 # ld.so only warns when a preload is missing, and the shells would keep the real clock.
@@ -148,6 +152,7 @@ run_and_record_case stock-dark "$CAPTURE_SETTINGS;org.gnome.desktop.interface co
 run_and_record_case safe-env '' APEX_SHELL_SAFE=1
 run_and_record_case layer-disabled 'io.github.apex_linux.Apex.Desktop layer-enabled false'
 run_and_record_case layer-cycles "$CAPTURE_SETTINGS" G2_CYCLES=3
+run_and_record_case motion "$MOTION_SETTINGS" G2_MOTION=1
 run_and_record_case fault-configure '' APEX_SHELL_TEST_FAULT=configure
 run_and_record_case fault-enable '' APEX_SHELL_TEST_FAULT=enable PROBE_WAIT=10
 run_and_record_case fault-abort '' APEX_SHELL_TEST_FAULT=abort-after-enable PROBE_WAIT=20

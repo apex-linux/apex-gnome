@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
-// The fixture typelib's Shell, plus a WindowTracker whose focus the probe sets and an
-// AppSystem that knows a few apps, one of them in a folder.
+// The fixture typelib's Shell, plus a WindowTracker whose focus the probe sets, a BlurEffect
+// and an AppSystem that knows a few apps, one of them in a folder.
 
 import Shell from 'gi://Shell';
 
@@ -36,8 +36,24 @@ const appSystem = {
         .map(app => app.get_id())],
 };
 
-const stubs = {WindowTracker: {get_default: () => windowTracker}, AppSystem: appSystem};
+// ShellBlurEffect with patch 0003's properties, as the glass feature sets them.
+class BlurEffect {
+    constructor(props) {
+        Object.assign(this, {enabled: true, radius: 0, saturation: 1, corner_radius: 0}, props);
+    }
+
+    set(props) {
+        Object.assign(this, props);
+    }
+}
+
+const stubs = {
+    WindowTracker: {get_default: () => windowTracker},
+    AppSystem: appSystem,
+    BlurEffect,
+    BlurMode: {ACTOR: 0, BACKGROUND: 1},
+};
 
 export default new Proxy(Shell, {
-    get: (target, name) => Object.hasOwn(stubs, name) ? stubs[name] : target[name],
+    get: (target, name) => stubs[name] ?? target[name],
 });

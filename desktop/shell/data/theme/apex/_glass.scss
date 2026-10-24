@@ -1,0 +1,28 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+//
+// The glass manager (js/ui/apex/glass/) blurs behind each surface that declares a blur here,
+// and roots apex-solid for Reduce Transparency and high contrast: the solid tokens win.
+
+@mixin apex-glass($blur, $saturation) {
+  -apex-glass-blur: $blur;
+  -apex-glass-saturation: $saturation / 100%;
+}
+
+#panel { @include apex-glass($apex_bar_blur, $apex_bar_saturation); }
+
+.popup-menu-content.quick-settings,
+.popup-menu-content.datemenu-popover,
+.notification-banner { @include apex-glass($apex_panel_blur, $apex_panel_saturation); }
+
+#apexDock .dash-background { @include apex-glass($apex_dock_blur, $apex_dock_saturation); }
+
+.apex-solid {
+  #panel { background-color: $apex_bar_solid; }
+  #apexDock .dash-background { background-color: $apex_panel_solid; }
+
+  .popup-menu-content.quick-settings,
+  .popup-menu-content.datemenu-popover,
+  .notification-banner,
+  .osd-window,
+  .switcher-list { background-color: $apex_panel_solid; }
+}

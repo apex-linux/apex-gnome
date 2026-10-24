@@ -20,6 +20,11 @@ spec-edit, the series with fuzz 0, the exact-tree check, rpmbuild -ba with %chec
 lane checks and check.sh. Source1 is the working tree's source1= directory, so a local
 run needs no commit. Runs as root in a throwaway fedora:45 container, as the lane does:
 it creates ${LANE_PATHS[*]}. The RPMs land in _build/PKG/out/.
+
+APEX_LANE_CACHE names a directory kept between runs (CI's actions/cache): the apex-lane
+binary, dnf's package cache, and the last build by its apex-lane content key.
+When 'apex-lane in-container key' gives a key the cache holds, and every RPM matches its
+manifest sha256, that build is reused, as the builder VM reuses a stored key.
 EOF
 }
 
@@ -40,9 +45,18 @@ done
 
 git_() { git -c safe.directory='*' "$@"; }
 
+cache=${APEX_LANE_CACHE:-}
+if [[ -n $cache ]]; then
+    mkdir -p -- "$cache/bin" "$cache/dnf" "$cache/builds"
+    cache=$(cd -- "$cache" && pwd)
+    # dnf keeps what it downloads in the cache: the tools, the build dependencies, the SRPM.
+    rm -rf /var/cache/libdnf5 && ln -s -- "$cache/dnf" /var/cache/libdnf5
+    grep -q '^keepcache=' /etc/dnf/dnf.conf || printf 'keepcache=True\n' >>/etc/dnf/dnf.conf
+fi
+
 group "Tools"
 dnf5 -y -q --setopt=install_weak_deps=False --repo=fedora --repo=updates install \
-    rust cargo gcc git-core tar >/dev/null
+    gcc git-core tar >/dev/null
 endgroup
 
 build=$APEX_ROOT/_build/$PKG
@@ -61,9 +75,15 @@ fi
 
 group "apex-lane"
 lane_tree=$(git_ -C "$src" rev-parse HEAD:crates/apex-lane)
-CARGO_TARGET_DIR=$build/cargo APEX_LANE_TREE=$lane_tree \
-    cargo build -q --release --locked -p apex-lane --manifest-path "$src/Cargo.toml"
 lane=$build/cargo/release/apex-lane
+if [[ -n $cache && -x $cache/bin/apex-lane-$lane_tree ]]; then
+    lane=$cache/bin/apex-lane-$lane_tree
+else
+    dnf5 -y -q --setopt=install_weak_deps=False --repo=fedora --repo=updates install rust cargo >/dev/null
+    CARGO_TARGET_DIR=$build/cargo APEX_LANE_TREE=$lane_tree \
+        cargo build -q --release --locked -p apex-lane --manifest-path "$src/Cargo.toml"
+    [[ -z $cache ]] || cp -- "$lane" "$cache/bin/apex-lane-$lane_tree"
+fi
 "$lane" --version
 endgroup
 
@@ -93,14 +113,42 @@ ln -sfn -- "$APEX_ROOT" /recipes
 ln -sfn -- "$work" /work
 ln -sfn -- "$build/store" /store
 
-args=(in-container build "$PKG" --n 1 --tool "lane.sh-$APEX_IMAGE_REV"
+common=("$PKG" --n 1 --tool "lane.sh-$APEX_IMAGE_REV"
     --repos-base "$repos_base" --ga-reached "$ga_reached" "${source1_args[@]}")
-in_github_actions && args+=(--github)
-status=0
-"$lane" "${args[@]}" || status=$?
+in_github_actions && common+=(--github)
 
+# reusable KEY: the cache's build of KEY, if its key and every file the manifest lists check out.
+reusable() {
+    local dir=$cache/builds/$1 kind sha file
+    [[ -f $dir/manifest.txt && $(cat -- "$dir/key.txt" 2>/dev/null) == "$1" ]] || return 1
+    while read -r kind _ sha file; do
+        [[ $kind == built || $kind == apex-srpm ]] || continue
+        [[ $(sha256sum -- "$dir/$file" 2>/dev/null | cut -d' ' -f1) == "$sha" ]] || return 1
+    done < <(grep -v '^#' "$dir/manifest.txt")
+}
+
+key=
+if [[ -n $cache ]]; then
+    key=$("$lane" in-container key "${common[@]}" | tail -n 1)
+    log "lane.sh: $PKG's content key is $key"
+fi
 rm -rf -- "$build/out"
+if [[ -n $key ]] && reusable "$key"; then
+    cp -a -- "$cache/builds/$key" "$build/out"
+    log "lane.sh: $PKG reused the build of $key: the key covers every input but the buildroot, as on the builder VM"
+    [[ -z ${GITHUB_OUTPUT:-} ]] || echo "built=false" >>"$GITHUB_OUTPUT"
+    exit 0
+fi
+
+status=0
+"$lane" in-container build "${common[@]}" || status=$?
+
 cp -a -- "$work/out" "$build/out"
+if ((status == 0)) && [[ -n $cache ]]; then
+    rm -rf -- "$cache/builds" && mkdir -p -- "$cache/builds"
+    cp -a -- "$build/out" "$cache/builds/$(cat -- "$build/out/key.txt")"
+    [[ -z ${GITHUB_OUTPUT:-} ]] || echo "built=true" >>"$GITHUB_OUTPUT"
+fi
 case $status in
     0) log "lane.sh: $PKG built; RPMs and logs in ${build#"$APEX_ROOT/"}/out" ;;
     3) die "lane.sh: no shippable build: $(sed -n '1p' "$build/out/failed.txt" 2>/dev/null)" ;;

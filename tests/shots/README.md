@@ -51,6 +51,7 @@ The direct cases:
 | `stock-light`, `stock-dark` | `APEX_SHELL_SAFE=1` with `prefer-light` or `prefer-dark` | upstream's sheet of that variant from `theme/stock/`; the overview's thumbnails at upstream's maximum scale 0.05 and at the effective scale of Fedora's build; the rebuilt high-contrast sheet, which safe mode keeps, is Fedora's apart from the structure marker; no Super+Space binding |
 | `safe-env`, `layer-disabled`, `kernel-safe` | the three kill switches | upstream's dark sheet from `theme/stock/`, the stock colour scheme, every hook stock, no Super+Space binding, the reason logged; the same sheet in all three; `safe-env`: no search hint |
 | `layer-cycles` | the capture settings; the probe sets `layer-enabled` false, then true, three times | while off: upstream's dark sheet from `theme/stock/`, the stock colour scheme, every hook stock, no Super+Space binding; while on: the Apex light sheet, `prefer-light` and Super+Space; each time it is on the stage holds the same actors, type by type, as at startup, and each time it is off the same as the first time (the first count waits out main.js's 20 s timeout for deferred work, which fills the overview's hidden dash; an `St.Icon` counts, not the texture child St gives it once it is first styled, which a dash hidden since startup decides); the layer logs each switch |
+| `motion` | the capture settings with `enable-animations` true; the probe lifts the inhibit `main.js` puts on animations without hardware-accelerated rendering, starts `window.js`, a plain GTK 4 window, maximises and restores it once (mutter gives a first size change a 0 × 0 old frame, which stock never animates), maximises it and opens the overview, then sets `enable-animations` false, does both again and plays Locate Pointer | DESIGN's motion (ROADMAP S3c): the window actor's size-change transition and the overview's state transition are `CUBIC_BEZIER` with the control points (.2, .8) and (.2, 1), over 300 and 200 ms; with animations off, neither creates a transition, while Locate Pointer's ripple (`animationRequired`, an a11y aid) still takes stock's 830 ms |
 | `fault-configure`, `fault-enable` | `APEX_SHELL_TEST_FAULT` | only the fault feature is off; the `witness` feature after it still enables; the rest of the layer runs, Super+Space included, and the shell survives |
 | `fault-abort` | `abort-after-enable` | SIGABRT (exit 134) with the crash guard's marker left behind |
 | `fedora-light`, `fedora-dark` | Fedora's build, `prefer-light` or `prefer-dark` | no Apex module; upstream's sheet at its own path, byte for byte the one safe mode loads from `theme/stock/` |
@@ -59,17 +60,25 @@ The direct cases:
 Every case: the probe ran (so the static import graph loaded), from `startup-complete`, and no `JS ERROR`;
 the wall clock stands at the fixed time and the top bar's clock shows it (`Mon Sep 28`, EN SPACE, `09:41`).
 
+A probe that runs longer than 30 s keeps `gnome-shell-perf-helper` awake with a call every 10 s:
+the helper quits after 30 s without one, and `scripting.js`'s last call to it would then end the
+shell with exit 1.
+
 ## Fixtures and the clock
 
 Before the first case, `direct.sh` lets root own and call the fixtures' names on the
 container's system bus (`/etc/dbus-1/system-local.conf`) and runs `fixtures.py`, which
-starts python-dbusmock's `upower`, `networkmanager` and `bluez5` templates there:
+starts python-dbusmock's `upower`, `networkmanager` and `bluez5` templates there, a bare
+mock of switcheroo-control, which has no template, and (`G2_POWER_PROFILES=1`)
+`upower_power_profiles_daemon`:
 
 | Service | Fixture | The shell shows |
 |---|---|---|
 | UPower | a battery at 87 %, discharging (the display device) | `battery-level-80-symbolic` and, with `show-battery-percentage`, "87%" |
 | NetworkManager | the primary connection: Wi-Fi "Apex-5G" at signal 90, connected globally, with "Apex-2.4G" (72) and the open "Library Guest" (48) in range, each with WPA2's ciphers or none, as libnm needs to list a network | `network-wireless-signal-excellent-symbolic`, and three networks in the Wi-Fi menu |
 | BlueZ | the Bluetooth keyboard "Keychron K3", paired and connected | no glyph: the status pill shows network, volume and battery only (the `panel` feature) |
+| switcheroo-control | two GPUs, "Intel Graphics" the default and "NVIDIA GeForce RTX 4060" (`HasDualGpu`) | "Launch Using Discrete Graphics Card" in an app's menu, the dock's included |
+| power-profiles-daemon | the Balanced profile, with Power Saver and Performance | the Power Mode toggle, lit at Balanced (the `quick-settings` feature); no glyph in the status pill |
 
 `fixtures-PART.txt` holds what the bus reports afterwards, and `assert.sh` checks it for
 each container. `direct.sh` builds `clock.c` and preloads it into each shell with
@@ -143,7 +152,9 @@ every expected value from `desktop/shell/data/theme/apex/_apex-tokens.scss`, for
 case's variant: the bar's height, fill and type; the boxes' insets and gaps; each
 button's height and colour; each pill's height, radius, padding, and fill while closed,
 hovered and open; the clock's weight; where the pills sit, and that the Activities and
-status buttons still reach the screen's left and right edges; the bar's transition; with `translucent-top-bar` off, the bar `$apex_bar_solid` over a
+status buttons still reach the screen's left and right edges; the bar's transition; the
+bar's glass, a `Shell.BlurEffect` of radius 2 × `$apex_bar_blur` × the monitor scale at
+`$apex_bar_saturation` (the glass manager); with `translucent-top-bar` off, the bar `$apex_bar_solid` over a
 `0 1px 0 $apex_border` line (the `panel` feature); the
 workspace dots' gap, height and radius, the active dot `$apex_bar_dot_active_width` wide and
 the others `$apex_bar_dot_size` square at .45; that the top-left pixel reaches the reactive
@@ -168,7 +179,9 @@ and `$apex_dock_bottom_gap` above the bottom edge; its background's radius
 `$apex_radius_dock`; every icon `$apex_dock_icon_size` (`dock-icon-size` medium); the apps
 first, then the separator, Show Apps and Trash, with no separator among the apps; the
 full-colour Show Apps icon; and in the overview the dock shown, the overview's own dash
-hidden and its workspaces laid out above the dock. The safe-mode cases have no dock, and the Apex captures mask it, as they mask the
+hidden and its workspaces laid out above the dock. Its first app's menu, stock's app menu,
+offers "Launch Using Discrete Graphics Card" while the fixtures' switcheroo-control
+reports two GPUs. The safe-mode cases have no dock, and the Apex captures mask it, as they mask the
 bar, against Fedora's, whose desktop has none.
 
 ## The shell surfaces' metrics
@@ -235,6 +248,25 @@ and the threshold of one workspace, and the launcher's grid at 7 columns, 4 rows
 88 px icons. G2 opens no windows, so the `window-title-visible` hook's answer stands in for
 a title shown without hover.
 
+`tile_preview` runs in the same cases. G2 opens no window to drag, so a stand-in actor in
+the window group plays the window and the stock `TilePreview` opens over the left half of the
+work area, captured with `G2_SURFACE_SCENES=1`. It reads the preview's box against the tile, its
+clear inset border, the radius inside it, the accent fill and the inset accent ring.
+
+`screenshot_ui` runs in the same cases. The probe opens the stock screenshot UI in its
+selection mode, captures it with `G2_SURFACE_SCENES=1`, and reads the panel, the close button
+in the heading row, the area buttons (Window insensitive with no window), the pointer toggle,
+the capture button and its recording state, the screenshot/screencast switch, the selection's
+shade, outline and handles, then the screen mode's frame; a checked window frame is a stand-in.
+
+`quick_settings_layer` checks the `quick-settings` layer feature in the same cases, and
+stock in the stock cases. The probe reads the grid's toggles in order (the VPN toggle by
+its class: it has no title without a VPN connection), Power Mode, the status pill and Do
+Not Disturb's subtitle, then clicks Power Mode twice: VPN right after Airplane Mode, Power
+Mode lit through `apex-lit` with `checked` stock, the power-profile indicator out of the
+pill, "Off" under a toggle without a subtitle of its own, and the clicks switching to the
+last profile and back, still lit. Stock keeps VPN before Airplane Mode and nothing lit.
+
 `derived_surfaces` reads surfaces with no board, which G2 never opens, from nested
 stand-ins in the same cases: the workspace switcher and its dots, the resize popup, the
 input method's candidates and a candidate, the run dialog's entry, an audio device tile
@@ -280,10 +312,28 @@ damages the tile alone:
 | a tile changes | the first frame's redraw clip leaves the box out and the effect redraws it on the next; that frame is `blur-ref.js`'s reference per channel within 4/255 inside, 12/255 in the band ds/2 px wide along the edges (ds the effect's own downscale) and 1/255 on average over the box. The first run fixed these (ROADMAP S2b): at ds 16 the edge band is the low-resolution blur's own clamping and upsampling, the interior's 4 is 8-bit intermediates times the saturation; llvmpipe is the reference renderer |
 | a tile changes and the box's redraw is queued, as the glass manager forwards damage | the same frame is the box a full redraw draws, pixel for pixel |
 | a tile changes, nothing forwarded | the frame draws the last result, pixel for pixel, and the next one is the full redraw's |
-| the same with `fine` off | stock's effect in that frame differs from the full redraw and misses the tolerances above: the stale sampling the redraw-clip rule prevents, so the case can see it |
+| the same with `fine` off | stock's effect in that frame differs from the full redraw and misses the tolerances above: the stale sampling the redraw-clip rule prevents, so the case can see it. When another redraw covers the box in that frame (then a full redraw), it damages the tile again, up to 5 times |
 
 `blur-ref.js` is a clamp-to-edge Gaussian at full resolution, CSS `saturate()` and the
 rounded box's coverage, over the box alone; `blur-ref-test.js` tests it in `selftest.sh`.
+In the same case the glass manager (`js/ui/apex/glass/`) is read on the live shell, light:
+`glass_manager` asserts that the bar's blur is `$apex_bar_blur` at `$apex_bar_saturation`,
+and Quick Settings', the calendar's (each opened) and a banner's `$apex_panel_blur` at
+`$apex_panel_saturation`, each a `fine`, opacity-following background blur of radius
+2 × sigma × the monitor scale; that with `reduce-transparency`, and with high contrast, no
+actor on the stage carries a `Shell.BlurEffect` and the root carries `apex-solid`; that
+with `disabled-features=['glass']` no actor carries one and the tints stay; and that the
+glass comes back after each.
+
+`G2_GLASS=1 G2_GLASS_STRESS=SECONDS` runs a stress instead, by hand: for that long a
+stand-in window moves and tiles change under the box, every other change forwarded. Each
+frame must have no black pixel; a frame whose clip misses the box must equal the last one
+wherever the box covers fully (its corners show what lies beneath); every 20th covered frame
+must equal a full redraw. `G2_GLASS_STRESS_STOCK=1` runs stock's effect as the control, which
+draws stale frames. With `CLUTTER_PAINT=damage-region`, mutter 51 repaints the whole view
+each frame (`meta-stage-impl.c`) and draws the damage on top, so no clip ever misses the box
+there: that run shows the damage, not the redraw-clip rule.
+
 Both shells capture `unlockDialog.js`'s blur (actor mode, radius 90 × scale, brightness
 .65) over a grid, with a background-mode blur over it, every property of 0003 at its
 default: `glass-unlock.png` against `fedora-glass-unlock.png` differs by 0 pixels.
@@ -303,13 +353,12 @@ removes its pin.
 
 | Until | Assertion | S1a measures |
 |---|---|---|
-| S2b (patch 0003, the glass manager) | a 24 px blur at 160 % saturation behind the bar | no blur effect |
 | S1b (the Facets wallpaper and the light overview) | the unread-notification dot is the raw accent | `$apex_bar_fg`: over Fedora's wallpaper an accent dot is about 1.4:1 against the light bar |
 | no step yet (a clock hook, or the owner accepts it) | `$apex_bar_clock_gap` between the date and the time | about 7 px with G2's 24-hour clock: one label, an EN SPACE. An en-US 12-hour clock adds a FIGURE SPACE before a one-digit hour ("Tue Sep 29" EN SPACE FIGURE SPACE "5:23 AM"): about 14 px |
 | no step yet (a clock hook, or the owner accepts it) | with the dot, the clock pill is padding + text + gap + dot + padding wide | 13 px wider: upstream's invisible pad left of the text |
 
 Not asserted here: the maximised-window trigger of the solid bar (G2 opens no window
-yet; the layer tests cover it), the volume glyph (the container has no audio server), Reduce Transparency (S2b), the bar
+yet; the layer tests cover it), the volume glyph (the container has no audio server), the bar
 text's contrast over other wallpapers (S2b's solid fallback; over the fixture wallpaper
 it is at least 4.8:1), and what the goldens judge: the Apex Symbolic glyphs (S1b), `ss03`
 (S1b, fontconfig) and the light bar over the still-dark overview (S1b).
