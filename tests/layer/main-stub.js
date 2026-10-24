@@ -17,6 +17,59 @@ function flagNames(value, flags) {
 
 export const sessionMode = {_sync: () => printerr('probe: restyled')};
 
+export const actionMode = Shell.ActionMode.NORMAL;
+
+function box(children) {
+    return {
+        children,
+        get_children() {
+            return [...this.children];
+        },
+        remove_child(child) {
+            this.children.splice(this.children.indexOf(child), 1);
+        },
+        insert_child_at_index(child, index) {
+            this.children.splice(index, 0, child);
+        },
+    };
+}
+
+// QuickSettings' fields for its indicators, in the order panel.js adds them to the pill.
+const QUICK_SETTINGS_INDICATORS = ['_remoteAccess', '_camera', '_volumeInput', '_location',
+    '_brightness', '_thunderbolt', '_nightLight', '_network', '_darkMode', '_doNotDisturb',
+    '_backlight', '_bluetooth', '_rfkill', '_autoRotate', '_volumeOutput', '_unsafeMode',
+    '_powerProfiles', '_system'];
+
+export function newQuickSettings() {
+    const quickSettings = {_indicators: box([])};
+    for (const field of QUICK_SETTINGS_INDICATORS) {
+        quickSettings[field] = {name: field.slice(1)};
+        quickSettings._indicators.children.push(quickSettings[field]);
+    }
+    return quickSettings;
+}
+
+const workspaceDot = {
+    _updateVisuals: () => fact('workspace-dot', 'restyled'),
+    queue_relayout: () => {},
+};
+
+export const panel = {
+    statusArea: {
+        activities: {
+            get_first_child: () => ({get_children: () => [0, 1].map(() => workspaceDot)}),
+        },
+        quickSettings: newQuickSettings(),
+    },
+};
+
+export const layoutManager = {
+    _updateHotCorners: () => fact('hot-corners', 'rebuilt'),
+    addChrome(actor, params) {
+        fact('chrome.add', `${actor.name} trackFullscreen=${params?.trackFullscreen ?? false}`);
+    },
+};
+
 export const overview = {
     visible: false,
     focusSearch() {

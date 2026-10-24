@@ -48,6 +48,10 @@ mkdir -p "$T/schemas" "$T/noschema" "$T/nochild" "$T/data" "$T/home" "$T/shell" 
 # main.js and the Meta and Shell typelibs come only with gnome-shell and mutter.
 cp -R "$REPO/desktop/shell/js" "$T/shell/"
 cp "$HERE/main-stub.js" "$T/shell/js/ui/main.js"
+cp "$HERE"/stubs/*.js "$T/"
+# gjs outside the shell has no St or Clutter typelib: the features get stubs instead.
+find "$T/shell/js/ui/apex" -name '*.js' -exec sed -i \
+    -e "s|'gi://St'|'file://$T/St.js'|" -e "s|'gi://Clutter'|'file://$T/Clutter.js'|" {} +
 for gir in "$HERE"/fixtures/*.gir; do
     gir_name=${gir##*/}
     "$GI_COMPILER" "$gir" -o "$T/typelib/${gir_name%.gir}.typelib"
@@ -303,6 +307,42 @@ count_is "no Keybindings child schema: in one log line" 'Apex: .*spotlight' 1
 keybindings_are "no Keybindings child schema: no Super+Space binding" ''
 fact "no Keybindings child schema: the rest of the layer runs" 'scheme\.user\.after-enable=prefer-light'
 fact "no Keybindings child schema: enable still runs" 'starting-file=true'
+
+readonly KEPT_PILL='remoteAccess,camera,volumeInput,location,network,volumeOutput,unsafeMode,system'
+readonly STOCK_PILL='remoteAccess,camera,volumeInput,location,brightness,thunderbolt,nightLight,network,darkMode,doNotDisturb,backlight,bluetooth,rfkill,autoRotate,volumeOutput,unsafeMode,powerProfiles,system'
+probe top-bar "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_TOP_BAR=1 PROBE_SCALE=2
+rc_is "top bar: the probe runs" 0
+has "top bar: the panel feature enables" 'Apex: feature panel enabled'
+fact "workspace-dots: the active dot widens from its own width to the sheet's -apex-active-width as it expands; the others stay full size at .45" \
+    'top-bar\.dots=7 15 22 inactive=\{"opacity":0\.45,"scale":1\}'
+fact "status-pill: network, volume, battery, the privacy and the unsafe-mode indicators stay" "pill=$KEPT_PILL"
+fact "status-pill: and so for indicators set up after enable" "pill\.set-up-after-enable=$KEPT_PILL"
+fact "hot-corner: the corner becomes a reactive 4 x 4 zone at its own position, in scaled px" \
+    'hot-corner\.zone=hot-corner reactive=true x=0 y=0 8x8'
+fact "hot-corner: in the chrome, hidden under fullscreen windows" 'chrome\.add=hot-corner trackFullscreen=true'
+count_is "hot-corner: entering it triggers the barrier once, until the pointer leaves it off the barrier" '^probe: hot-corner\.trigger=' 2
+fact "hot-corner: leaving it while on the barrier keeps the barrier's trigger" 'hot-corner\.after-leave-on-the-barrier=true'
+fact "layer-enabled=false: the dot hooks give stock" 'top-bar\.off\.dots=99 99 99 inactive="stock"'
+fact "layer-enabled=false: the status pill gets every indicator back, in order" "pill\.off=$STOCK_PILL"
+fact "layer-enabled=true: the filter again" "pill\.on=$KEPT_PILL"
+count_is "both dots restyle at each enable and disable" '^probe: workspace-dot=restyled$' 6
+count_is "the hot corners are rebuilt at each enable and disable" '^probe: hot-corners=rebuilt$' 3
+lacks "top bar: no feature fails or disables uncleanly" 'off for this session|did not disable cleanly|cannot restyle'
+
+probe top-bar-rtl "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_TOP_BAR=1 PROBE_SCALE=1 PROBE_RTL=1
+fact "hot-corner, right to left: the zone lies left of the corner" 'hot-corner\.zone=hot-corner reactive=true x=-4 y=0 4x4'
+
+probe top-bar-disabled "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_TOP_BAR=1 PROBE_DISABLED=panel
+has "disabled-features=['panel']: skips the feature" 'Apex: feature panel is in disabled-features'
+fact "disabled-features=['panel']: the dot hooks give stock" 'top-bar\.dots=99 99 99 inactive="stock"'
+fact "disabled-features=['panel']: the status pill keeps every indicator" "pill=$STOCK_PILL"
+fact "disabled-features=['panel']: the corner stays stock" 'hot-corner\.zone=none reactive=false x=undefined y=undefined undefinedxundefined'
+lacks "disabled-features=['panel']: nothing is rebuilt or restyled" 'hot-corners=rebuilt|workspace-dot=restyled'
+
+probe panel-live "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_DISABLE_LIVE=panel
+count_is "panel in and out of disabled-features while enabled: it says so" 'Apex: feature panel is in disabled-features' 2
+count_is "panel live: the hot corners are rebuilt at each enable and disable" '^probe: hot-corners=rebuilt$' 5
+lacks "panel live: the feature disables cleanly" 'off for this session|did not disable cleanly|cannot restyle'
 
 printf '1..%d\n' "$tests"
 ((failed == 0))

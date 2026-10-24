@@ -18,6 +18,7 @@ directory with `git archive` and unpacks it at the top of Fedora's gnome-shell t
 | `js/ui/apex/hooks.js` | the only Apex module upstream files import: `safe()`, `value()`, `run()`, and `loadLayer()` for `main.js` |
 | `js/ui/apex/layer.js` | the layer: the configure and enable phases, one `try/catch` per feature, the session-mode colour hook, the crash guard's marker file |
 | `js/ui/apex/spotlight/feature.js` | Super+Space (below) |
+| `js/ui/apex/panel/feature.js` | the top bar of S2a (below): its parts in `panel/`, one module each |
 | `js/ui/apex/fault/feature.js` | the fault-injection feature: loaded only when `APEX_SHELL_TEST_FAULT` names a phase, it fails in that phase (below) |
 | `data/theme/apex/_apex-tokens.scss` | the design tokens as SCSS variables, imported after upstream's `_colors` |
 | `data/theme/apex/_apex.scss` | the Apex sheet, imported last by the light and dark entry files |
@@ -42,7 +43,8 @@ Rules, which the lane and `.github/scripts/selftest.sh` enforce:
 
 ### The layer
 
-`FEATURES_IN_ENABLE_ORDER` in `layer.js` lists one feature, `spotlight` (S1b). It
+`FEATURES_IN_ENABLE_ORDER` in `layer.js` lists `spotlight` (S1b) and `panel` (S2a), by
+the names DESIGN's `disabled-features` uses. `spotlight`
 registers `toggle-spotlight` from `io.github.apex_linux.Apex.Desktop.Keybindings`
 (`['<Super>space']`) with `Main.wm.addKeybinding` at enable, in the normal and overview
 action modes and without autorepeat, and removes it at disable. Until S3a's Spotlight it
@@ -51,6 +53,24 @@ up it hides it. apex-desktop's override moves `switch-input-source` to Super+Alt
 so nothing else owns Super+Space; a Super tap (the overview) and Super+A (the launcher)
 are upstream's. The feature follows the kill switches and `disabled-features` like any
 other, and a missing Keybindings child schema turns off only this feature, logged once.
+
+`panel` is the top bar. Its parts provide the hooks of patch 0010-panel
+([the series](../packaging/pkgs/gnome-shell/README.md#the-series)); the feature follows the
+kill switches and `disabled-features=['panel']` as a whole, and each part restores the
+stock bar when it is disabled:
+
+- `panel/workspace-dots.js`: the active dot as wide as `.workspace-dot`'s `-apex-active-width`
+  (`$apex_bar_dot_active_width`), the others full size at .45, where stock widens the
+  active one by a factor of the workspace count and shrinks the rest to .75 at .5.
+- `panel/hot-corner.js`: each hot corner's actor becomes a reactive 4 × 4 zone in the chrome (in
+  scaled px, left of the corner right to left, hidden under fullscreen windows). Entering
+  it triggers the corner's pressure barrier, so the pressure that follows does not toggle
+  the overview back; the barrier stays. Both exist only with `enable-hot-corners`.
+- `panel/status-pill.js`: takes brightness, Thunderbolt, Night Light, Dark Style, Do Not Disturb,
+  backlight, Bluetooth, Airplane Mode, auto-rotate and the power profile out of the status
+  pill. Network, volume, battery, the camera, microphone, location and remote-access
+  indicators, unsafe mode and other panel buttons (input source, accessibility,
+  recording) stay. Their Quick Settings toggles stay too.
 
 The layer also does what every feature relies on:
 
@@ -81,7 +101,10 @@ gjs outside the shell: every kill switch, `apex.safe=1` through a bubblewrap bin
 `/proc/cmdline`, the gdm mode, the three fault phases, the crash guard after an
 aborted shell, and Super+Space: its registration and removal through enable, the kill
 switches, `layer-enabled` and `disabled-features` cycles and a missing Keybindings schema,
-against `tests/layer/main-stub.js` for `main.js` and fixture typelibs for Meta and Shell.
+and the top bar's hooks with stub dots, indicators and hot corners, against
+`tests/layer/main-stub.js` for `main.js`, fixture typelibs for Meta and Shell, and
+`tests/layer/stubs/` for the features' St and Clutter imports, which gjs outside the shell
+cannot load.
 
 For the fault injection in the VM, the variable goes into the shell's environment with
 a user drop-in on its unit, which the image never ships:

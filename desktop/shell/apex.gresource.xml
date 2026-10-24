@@ -11,6 +11,10 @@
     <file alias="fault/feature.js">js/ui/apex/fault/feature.js</file>
     <file alias="witness/feature.js">js/ui/apex/witness/feature.js</file>
     <file alias="spotlight/feature.js">js/ui/apex/spotlight/feature.js</file>
+    <file alias="panel/feature.js">js/ui/apex/panel/feature.js</file>
+    <file alias="panel/workspace-dots.js">js/ui/apex/panel/workspace-dots.js</file>
+    <file alias="panel/hot-corner.js">js/ui/apex/panel/hot-corner.js</file>
+    <file alias="panel/status-pill.js">js/ui/apex/panel/status-pill.js</file>
   </gresource>
   <gresource prefix="/org/gnome/shell/theme/apex">
     <file alias="diamond-light.svg">data/theme/apex/diamond-light.svg</file>

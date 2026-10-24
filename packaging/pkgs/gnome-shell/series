@@ -1,3 +1,4 @@
 # Hook hunks only: all logic lives in desktop/shell/. Format: packaging/README.md.
 0001-build.patch
 0002-loader.patch
+0010-panel.patch

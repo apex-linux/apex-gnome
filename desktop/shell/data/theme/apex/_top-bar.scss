@@ -67,8 +67,9 @@ $_upstream_panel_button_minimum_hpadding: $base_padding;
         (($apex_bar_pill_height - $_diamond_svg_size) / 2);
     }
 
-    // panel.js widens the active dot from this size and shrinks the others, until patch 0010.
+    // The workspace-dots feature reads -apex-active-width; St ignores a property it does not know.
     .workspace-dot {
+      -apex-active-width: $apex_bar_dot_active_width;
       min-width: $apex_bar_dot_size;
       min-height: $apex_bar_dot_size;
       border-radius: $apex_radius_workspace_dot;
