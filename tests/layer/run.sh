@@ -344,5 +344,21 @@ count_is "panel in and out of disabled-features while enabled: it says so" 'Apex
 count_is "panel live: the hot corners are rebuilt at each enable and disable" '^probe: hot-corners=rebuilt$' 5
 lacks "panel live: the feature disables cleanly" 'off for this session|did not disable cleanly|cannot restyle'
 
+panel_classes_are() {
+    local got
+    got=$(sed -n 's/^probe: set \(.*\)$/[\1]/p; s/^probe: panel\.classes=\(.*\)$/\1/p' "$OUT" | paste -sd' ' -)
+    if [[ $got == "$2" ]]; then ok "$1"; else not_ok "$1 (got '$got', expected '$2')"; _show; fi
+}
+
+probe solid-bar "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_SOLID_BAR=1
+has "solid-bar: the panel feature enables" 'Apex: feature panel enabled'
+panel_classes_are "solid-bar: the bar is solid exactly while translucent-top-bar is off and the layer on" \
+    'none [translucent-top-bar=false] apex-solid-bar [translucent-top-bar=true] none [translucent-top-bar=false] apex-solid-bar [layer-enabled=false] none [layer-enabled=true] apex-solid-bar'
+lacks "solid-bar: no feature fails or disables uncleanly" 'off for this session|did not disable cleanly|cannot restyle'
+
+probe solid-bar-disabled "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_SOLID_BAR=1 PROBE_DISABLED=panel
+panel_classes_are "disabled-features=['panel']: the bar stays translucent" \
+    '[translucent-top-bar=false] [translucent-top-bar=true] [translucent-top-bar=false] [layer-enabled=false] [layer-enabled=true]'
+
 printf '1..%d\n' "$tests"
 ((failed == 0))

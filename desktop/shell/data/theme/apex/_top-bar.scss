@@ -125,8 +125,18 @@ $_upstream_panel_button_minimum_hpadding: $base_padding;
   }
 }
 
+#panel.apex-solid-bar {
+  background-color: $apex_bar_solid;
+  box-shadow: 0 1px 0 $apex_border;
+}
+
 // The lock screen and the greeter keep upstream's transparent panel and its fills until S3b.
 #panel.unlock-screen, #panel.login-screen {
+  &.apex-solid-bar {
+    background-color: transparent;
+    box-shadow: none;
+  }
+
   @each $state in $_open_states {
     @include pills($state) { background-color: transparent; }
   }

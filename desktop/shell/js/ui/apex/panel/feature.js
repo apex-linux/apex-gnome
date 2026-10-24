@@ -4,10 +4,11 @@
 // own hooks and restores the stock bar when it is disabled.
 
 import * as HotCorner from './hot-corner.js';
+import * as SolidBar from './solid-bar.js';
 import * as StatusPill from './status-pill.js';
 import * as WorkspaceDots from './workspace-dots.js';
 
-const PARTS = [WorkspaceDots, HotCorner, StatusPill];
+const PARTS = [WorkspaceDots, HotCorner, StatusPill, SolidBar];
 
 export function configure(featureName) {
     for (const part of PARTS)

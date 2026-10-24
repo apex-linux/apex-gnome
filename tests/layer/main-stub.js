@@ -54,7 +54,16 @@ const workspaceDot = {
     queue_relayout: () => {},
 };
 
+const panelStyleClasses = new Set();
+
+function syncPanelStyleClasses(change) {
+    change();
+    fact('panel.classes', [...panelStyleClasses].join(',') || 'none');
+}
+
 export const panel = {
+    add_style_class_name: name => syncPanelStyleClasses(() => panelStyleClasses.add(name)),
+    remove_style_class_name: name => syncPanelStyleClasses(() => panelStyleClasses.delete(name)),
     statusArea: {
         activities: {
             get_first_child: () => ({get_children: () => [0, 1].map(() => workspaceDot)}),

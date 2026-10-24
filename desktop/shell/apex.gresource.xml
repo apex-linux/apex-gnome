@@ -15,6 +15,7 @@
     <file alias="panel/workspace-dots.js">js/ui/apex/panel/workspace-dots.js</file>
     <file alias="panel/hot-corner.js">js/ui/apex/panel/hot-corner.js</file>
     <file alias="panel/status-pill.js">js/ui/apex/panel/status-pill.js</file>
+    <file alias="panel/solid-bar.js">js/ui/apex/panel/solid-bar.js</file>
   </gresource>
   <gresource prefix="/org/gnome/shell/theme/apex">
     <file alias="diamond-light.svg">data/theme/apex/diamond-light.svg</file>
