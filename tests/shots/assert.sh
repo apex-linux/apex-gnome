@@ -19,7 +19,7 @@ readonly APEX_LIGHT_SHEET=resource:///org/gnome/shell/theme/gnome-shell-light.cs
 readonly APEX_DARK_SHEET=resource:///org/gnome/shell/theme/gnome-shell-dark.css
 readonly STOCK_SHEETS=resource:///org/gnome/shell/theme/stock
 readonly FEDORA_SHEETS=resource:///org/gnome/shell/theme
-readonly DIRECT_CASES=(default default-scale1 dark-style high-contrast large-text dock-intellihide dock-intellihide-dark stock-light stock-dark safe-env
+readonly DIRECT_CASES=(default default-scale1 dark-style high-contrast large-text dock-intellihide dock-intellihide-dark dock-one-gpu stock-light stock-dark safe-env
     layer-disabled layer-cycles motion idle fault-configure fault-enable fault-abort kernel-safe fedora-light fedora-dark glass fedora-glass
     indicators indicators-scale1 indicators-dark)
 readonly DIRECT_PARTS=(main kernel fedora)
@@ -32,22 +32,25 @@ readonly EMPTY_WORKSPACE_TEXT='No open windows'
 readonly LAUNCHER_COLUMNS=7
 readonly LAUNCHER_ROWS=4
 readonly LAUNCHER_ICON_SIZE=88
+readonly MESSAGE_ICON_SIZE=32
+readonly MESSAGE_ROW_GAP=12
+readonly CARD_COLUMNS='box[apex-message-row[message-icon,box[message-header,message-box[message-content,box]]],message-action-bin]'
+readonly CARD_UPSTREAM='box[message-header,message-box[message-icon,message-content,box],message-action-bin]'
 readonly LAUNCHER_GRID_TOP=132
 # WCAG 2.2 AA: 1.4.3 for text, 1.4.11 for the glyphs a control is known by.
 readonly A11Y_TEXT_RATIO=4.5
 readonly A11Y_ICON_RATIO=3
-readonly A11Y_SURFACES=(bar dock popupMenu osd banner quickSettings wifiMenu dateMenu)
-# The failures the checks found on landing, each until the fix its PR carries.
-# shellcheck disable=SC2016 # a token's name, not an expansion
-readonly A11Y_DIM='the accessibility token fixes: light $apex_fg_dim over glass'
-readonly A11Y_TOGGLE="the accessibility token fixes: white on the checked toggle's accent"
-readonly A11Y_WIDTH='the accessibility token fixes: Quick Settings as wide as Large Text needs'
+readonly A11Y_ACCENTS=(blue teal green yellow orange red pink purple slate)
+readonly A11Y_SURFACES=(bar dock popupMenu osd banner quickSettings "${A11Y_ACCENTS[@]/#/quickSettingsAccents.}" wifiMenu dateMenu
+    switcher dialog endSession spotlight.popup spotlight.toast overview appGrid)
+# The failures still open: upstream's high-contrast sheet, which safe mode keeps as Fedora's.
 readonly A11Y_HC_TOGGLE="upstream HC sheet: Quick Settings' checked toggle, white on its accent (3.15:1), and its menu arrow (2.31:1)"
-declare -rA A11Y_GAPS=(
-    [default:banner]=$A11Y_DIM
-    [default:quickSettings]=$A11Y_TOGGLE [dark-style:quickSettings]=$A11Y_TOGGLE [large-text:quickSettings]=$A11Y_WIDTH
-    [high-contrast:quickSettings]=$A11Y_HC_TOGGLE
-)
+declare -A A11Y_GAPS=([high-contrast:quickSettings]=$A11Y_HC_TOGGLE)
+for a11y_accent in "${A11Y_ACCENTS[@]}"; do
+    A11Y_GAPS[high-contrast:quickSettingsAccents.$a11y_accent]=$A11Y_HC_TOGGLE
+done
+unset a11y_accent
+readonly A11Y_GAPS
 # overviewControls.js: spacing is 2 % of the work area, the stock .search-entry keeps 6 px below it.
 readonly OVERVIEW_SPACING_RATIO=0.02
 readonly STOCK_SEARCH_MARGIN_BOTTOM=6
@@ -355,6 +358,26 @@ dock_metrics() {
         '.dock.appMenu' '.hasDualGpu == true and (.items | any(. == "Launch Using Discrete Graphics Card"))'
 }
 
+# shellcheck disable=SC2016 # jq programs and token names, not shell expansions
+dock_live_keys() {
+    local label=$1 log=$2 variant=$3 report tokens
+    report=$(report_of "$log" APEXG2-DOCK)
+    tokens=$(tokens_for "$variant")
+    local -a metric=(top_bar_metric "$label live keys" "$report" "$tokens")
+    local k=.steps.liveKeys medium='all(px_is($t.apex_dock_icon_size))'
+
+    "${metric[@]}" 'show-focused-app-name=false hides the focused app'"'"'s name, and its reset shows it again' \
+        "$k.focusedAppOff" '.set.focusedApp.visible == false and .reset.focusedApp.visible == true'
+    "${metric[@]}" 'dock-icon-size small makes every icon 46, its reset $apex_dock_icon_size again' \
+        "$k.small" "(.set.iconSizes | length > 0 and all(. == 46)) and (.reset.iconSizes | $medium)"
+    "${metric[@]}" 'dock-icon-size large makes every icon 62, its reset $apex_dock_icon_size again' \
+        "$k.large" "(.set.iconSizes | length > 0 and all(. == 62)) and (.reset.iconSizes | $medium)"
+    "${metric[@]}" 'dock-running-indicators=false clears the running app'"'"'s dot, and its reset draws it in $apex_dock_dot again' \
+        "$k.dotsOff" '(.set.dots | length > 0 and all(.colour | rgba | .[3] == 0)) and (.reset.dots | length > 0 and all(.colour | colour_is($t.apex_dock_dot)))'
+    "${metric[@]}" 'dock-show-trash=false takes Trash out, and its reset puts it last again' \
+        "$k.trashOff" '(.set.kinds | index("trash") == null) and .reset.kinds[-1] == "trash"'
+}
+
 dock_intellihide() {
     local label=$1 log=$2
     expect_report "$label" "$log" '.error == null and .steps.initial.hidden == false' \
@@ -367,6 +390,7 @@ dock_intellihide() {
     expect_report "$label" "$log" '.steps.overview.hidden == false' "the overview shows it over the maximised window" APEXG2-DOCK
     expect_report "$label" "$log" '.steps.intellihideOff | .hidden == false and .window == true' \
         "with dock-intellihide off it stays over the maximised window" APEXG2-DOCK
+    dock_live_keys "$label" "$log" "$4"
     expect_report "$label" "$log" '.steps.intellihideOn.hidden == true' "turned back on, it hides again" APEXG2-DOCK
     expect_report "$label" "$log" '.steps.closed | .hidden == false and .window == false' \
         "the window gone, it shows" APEXG2-DOCK
@@ -648,12 +672,26 @@ notifications_layer() {
         expect "$label notifications" "$scenes" "$q.calendar | .label.x < .back.x and .back.x < .forward.x
             and (.dots | length) == .days and all(.dots[]; .width == 4 and .height == 4)" \
             "the calendar: the month on the left, both chevrons on the right, a 4 px dot laid out under every day"
+        expect "$label notifications" "$scenes" "$q.trees | length == 3 and all(. == \"$CARD_COLUMNS\")" \
+            "every card, the back ones too: the icon's column beside the header over the title and body, the actions under both"
+        expect "$label notifications" "$scenes" "$q.layout.collapsed | .icon.width == $MESSAGE_ICON_SIZE
+            and (.header.x - .icon.x - .icon.width - $MESSAGE_ROW_GAP | fabs <= 1) and (.title.x - .header.x | fabs <= 1)
+            and .title.y >= .header.y + .header.height - 1 and .close.x > .header.x and .close.x + .close.width <= .card.x + .card.width
+            and .actions == null" \
+            "a card: the $MESSAGE_ICON_SIZE px icon, $MESSAGE_ROW_GAP px from the column of the header over the title; the close button on the right"
+        expect "$label notifications" "$scenes" "$q.layout.expanded | .actions != null and (.tree | startswith(\"box[apex-message-row[\"))
+            and .actions.x <= .icon.x + 1 and .actions.x + .actions.width >= .title.x + .title.width - 1 and .actions.y >= .title.y" \
+            "expanded, a card's action row spans both columns, under them"
+        expect "$label notifications" "$scenes" "$q.layout.collapsedAgain | .actions == null and .tree == \"$CARD_COLUMNS\"" \
+            "collapsed again, the same columns, the action row hidden"
     else
         expect "$label notifications" "$scenes" "$q | (.messages | length == 3) and ($flat | not) and .dnd == null
             and .cardHeader.sourceIcon and .icon == null" \
             "stock: an app's notifications stack, each header keeps its glyph, and the footer has Clear alone"
         expect "$label notifications" "$scenes" "$q.empty | .placeholder and (.clearVisible | not)" \
             "stock: with nothing to clear, Clear hides"
+        expect "$label notifications" "$scenes" "$q.trees | length == 3 and all(. == \"$CARD_UPSTREAM\")" \
+            "stock: upstream's card, exactly: the header, then the icon beside the title and body, then the actions"
         expect "$label notifications" "$scenes" "$q.calendar | .back.x < .label.x and .label.x < .forward.x and (.dots | length) == 0" \
             "stock: the month between its chevrons, no dot widgets"
     fi
@@ -690,8 +728,9 @@ quick_settings() {
             and (.[1].radius >= (\$t.apex_quick_toggle_height | px) / 2)"
     "${metric[@]}" 'an unchecked toggle is $apex_button with $apex_fg text, $apex_button_hover when hovered' \
         "$q.unchecked" '(.background | colour_is($t.apex_button)) and (.foreground | colour_is($t.apex_fg)) and (.hover.background | colour_is($t.apex_button_hover))'
-    "${metric[@]}" 'a checked toggle is the accent, its text the accent'"'"'s foreground, its subtitle that at $apex_quick_toggle_subtitle_opacity' \
-        "{t: $q.wifi.toggle, accent: .topBar.accent}" '.accent as $a | (.t.background | colour_is($a)) and (.t.foreground | colour_is("#ffffff"))
+    "${metric[@]}" 'a checked toggle is the accent shaded $apex_quick_toggle_checked_shade with black, its text the accent'"'"'s foreground, its subtitle that at $apex_quick_toggle_subtitle_opacity' \
+        "{t: $q.wifi.toggle, accent: .topBar.accent}" '(.accent | rgba) as $a | (.t.background | rgba) as $f | ($t.apex_quick_toggle_checked_shade | rtrimstr("%") | tonumber / 100) as $k
+            | ([range(3)] | all(($f[.] - $a[.] * (1 - $k)) | fabs <= 1)) and (.t.foreground | colour_is("#ffffff"))
             and (.t.subtitle.foreground | colour_is("rgba(255, 255, 255, \($t.apex_quick_toggle_subtitle_opacity))"))'
     "${metric[@]}" 'a toggle is padded $apex_quick_toggle_padding ($apex_quick_toggle_menu_padding before a menu arrow), $apex_quick_toggle_gap between glyph and text, its glyph $apex_quick_settings_icon_size' \
         "[$q.wifi.toggle, $q.unchecked]" 'all((.box.padding.left | px_is($t.apex_quick_toggle_padding)) and (.box.spacing | px_is($t.apex_quick_toggle_gap)) and (.icon | px_is($t.apex_quick_settings_icon_size)))
@@ -699,10 +738,11 @@ quick_settings() {
     "${metric[@]}" 'its title is $apex_font_quick_toggle_title_size at $apex_font_heading_weight, its subtitle $apex_font_quick_toggle_subtitle_size' \
         "$q.wifi.toggle" '(.title.font.size | px_is($t.apex_font_quick_toggle_title_size)) and .title.font.weight == ($t.apex_font_heading_weight | tonumber)
             and (.subtitle.font.size | px_is($t.apex_font_quick_toggle_subtitle_size))'
-    "${metric[@]}" 'the menu arrow is $apex_quick_toggle_menu_button_width wide, the checked fill shaded $apex_quick_toggle_menu_button_shade with black, with no separator' \
+    "${metric[@]}" 'the menu arrow is $apex_quick_toggle_menu_button_width wide, the checked fill shaded $apex_quick_toggle_menu_button_shade more with black, with no separator' \
         "{w: $q.wifi, accent: .topBar.accent}" "(.accent | rgba) as \$a | (.w.menuButton.background | rgba) as \$m
+            | (\$t.apex_quick_toggle_checked_shade | rtrimstr(\"%\") | tonumber / 100) as \$k
             | (.w.menuButton.width | px_is(\$t.apex_quick_toggle_menu_button_width)) and (.w.separator.width == 0)
-            and ([range(3)] | all((\$m[.] - \$a[.] * $shade) | fabs <= 1))"
+            and ([range(3)] | all((\$m[.] - \$a[.] * (1 - \$k) * $shade) | fabs <= 1))"
     "${metric[@]}" 'a slider has $apex_quick_slider_gap beside its glyph, a $apex_quick_slider_track_height track in $apex_button_hover filled with the accent, a $apex_quick_slider_handle_size $apex_slider_handle handle' \
         "{s: $q.slider, accent: .topBar.accent}" '.accent as $a | .s | (.spacing | px_is($t.apex_quick_slider_gap)) and (.trackHeight | px_is($t.apex_quick_slider_track_height))
             and (.track | colour_is($t.apex_button_hover)) and (.fill | colour_is($a)) and (.handleRadius * 2 | px_is($t.apex_quick_slider_handle_size)) and (.handle | colour_is($t.apex_slider_handle))'
@@ -780,6 +820,26 @@ modal_dialog() {
     "${metric[@]}" 'the end-session dialog has $apex_end_session_gap between its parts, its title tracked $apex_dialog_title_tracking, its countdown in tabular figures' \
         "$d.endSession" '(.box.spacing | px_is($t.apex_end_session_gap)) and (.contentSpacing | px_is($t.apex_end_session_gap))
             and (.title.tracking - ($t.apex_dialog_title_tracking | px) | fabs < 0.05) and (.description.font.features | test("tnum"))'
+    local card="$d.updateCard"
+    "${metric[@]}" 'Update1 staged: board 14'"'"'s update card under the text, inset $apex_update_card_padding_y $apex_update_card_padding_x, radius $apex_radius_update_card, gap $apex_update_card_gap, $apex_card ringed in $apex_card_border' \
+        "$card.staged" '.below and (.padding.top | px_is($t.apex_update_card_padding_y)) and (.padding.left | px_is($t.apex_update_card_padding_x))
+            and (.border.top | px_is("1px")) and (.radius | px_is($t.apex_radius_update_card)) and (.spacing | px_is($t.apex_update_card_gap))
+            and (.background | colour_is($t.apex_card)) and (.borderColor | colour_is($t.apex_card_border))'
+    "${metric[@]}" 'its system-software-update at $apex_update_card_icon_size, the board'"'"'s title at $apex_font_update_card_title_size, the versions at $apex_font_update_card_subtitle_size in $apex_fg_dim' \
+        "$card.staged" '.icon.iconName == "system-software-update" and (.icon.size | px_is($t.apex_update_card_icon_size)) and (.textSpacing | px_is($t.apex_update_card_text_gap))
+            and .title.text == "Start the new version next time" and (.title.font.size | px_is($t.apex_font_update_card_title_size))
+            and .title.font.weight == ($t.apex_font_update_card_title_weight | tonumber) and (.title.foreground | colour_is($t.apex_fg))
+            and .subtitle.text == "45.20261010.133 · GNOME 51.1, Linux 7.2.9, Mesa 26.1.2"
+            and (.subtitle.font.size | px_is($t.apex_font_update_card_subtitle_size)) and (.subtitle.foreground | colour_is($t.apex_fg_dim))'
+    "${metric[@]}" 'its switch is $apex_update_switch_width by $apex_update_switch_height, on in the accent, its knob $apex_update_switch_knob; Restart reads Restart & Update' \
+        "{c: $card.staged, accent: .topBar.accent}" '.accent as $a | .c | (.toggle | .on and .sensitive and (.width | px_is($t.apex_update_switch_width))
+            and (.height | px_is($t.apex_update_switch_height)) and (.background | colour_is($a)) and (.knob.width | px_is($t.apex_update_switch_knob)))
+            and .buttons == ["Cancel", "Restart & Update"]'
+    "${metric[@]}" 'ready-for-reboot: the same card, its switch on and insensitive, Restart & Update' \
+        "$card.ready" '.below and .toggle.on and (.toggle.sensitive | not) and .buttons == ["Cancel", "Restart & Update"] and .title.text == "Start the new version next time"'
+    "${metric[@]}" 'that switch draws at $apex_update_switch_insensitive_opacity, takes no focus and is unavailable to assistive technology; the staged one is whole' \
+        "$card" '(.ready.toggle | (.opacity - ($t.apex_update_switch_insensitive_opacity | tonumber) | fabs < 0.01) and (.focusable | not) and (.a11ySensitive | not))
+            and (.staged.toggle | .opacity == 1 and .focusable and .a11ySensitive)'
     "${metric[@]}" 'above its title, stock'"'"'s system-shutdown-symbolic at $apex_end_session_icon_glyph_size in a $apex_end_session_icon_size circle of $apex_button' \
         "$d.endSession.icon" '.iconName == "system-shutdown-symbolic" and .above and (.glyph | px_is($t.apex_end_session_icon_glyph_size))
             and (.width | px_is($t.apex_end_session_icon_size)) and (.height | px_is($t.apex_end_session_icon_size))
@@ -1152,8 +1212,8 @@ spotlight_keys() {
     "${metric[@]}" 'within the budget, with Settings asked and still out, Applications and Files show, the first row selected' \
         "$k" ".early.ms < .budgetMs and .settings.askedMs < .early.ms and (.early | $shown)
             and .early.selected == \"Applications/org.gnome.DiskUtility.desktop\""
-    "${metric[@]}" 'past the budget, Settings is cancelled and left out; Applications and Files still show' \
-        "$k" ".late.ms > .budgetMs and .settings.cancelledMs >= .budgetMs and .settings.cancelledMs < .slowMs and (.late | $shown)"
+    "${metric[@]}" 'past the budget, Settings is cancelled and left out; after the cancel, Applications and Files still show' \
+        "$k" ".settings.cancelledMs >= .budgetMs and .settings.cancelledMs < .late.ms and .late.ms < .slowMs and (.late | $shown)"
     "${metric[@]}" 'Down x4, Up x1 and Down x20, pressed for real, move one selection across the sections and stop at the last row' \
         "$k" '.down4 == "Files/images" and .up1 == "Files/png" and .down20 == "Files/md"'
     "${metric[@]}" 'Enter opens the selected file through its provider, with the terms, and closes Spotlight and its modal' \
@@ -1197,12 +1257,12 @@ overview_below_bar() {
 
 high_contrast_is_fedoras() {
     local run=$1 fedora
-    fedora=$(report_of "$run/fedora-light.log" | jq -r '.highContrastSheet.sha256WithoutStructureMarker // empty')
+    fedora=$(report_of "$run/fedora-light.log" | jq -r '.highContrastSheet.sha256BeforeStructure // empty')
     expect_report fedora-light "$run/fedora-light.log" '.highContrastSheet.structure == false' \
         "Fedora's high-contrast sheet has no Apex structure marker"
     expect_report stock-light "$run/stock-light.log" \
-        ".highContrastSheet | .structure and .sha256WithoutStructureMarker == \"${fedora:-none}\"" \
-        "the rebuilt high-contrast sheet, which safe mode keeps (it has no stock copy), is Fedora's apart from the structure marker"
+        ".highContrastSheet | .structure and .sha256BeforeStructure == \"${fedora:-none}\"" \
+        "the rebuilt high-contrast sheet, which safe mode keeps (it has no stock copy), is Fedora's up to the structure marker: Apex only appends"
 }
 
 fedora_baseline() {
@@ -1271,7 +1331,7 @@ fixtures_on_the_bus() {
             "BlueZ: the keyboard \"Keychron K3\" is connected"
         expect "fixtures ($part)" "$fixtures" '.powerProfiles | .active == "balanced" and (.profiles | index("performance") != null)' \
             "power-profiles-daemon: Balanced, with Performance to switch to"
-        expect "fixtures ($part)" "$fixtures" '.gpus | .hasDualGpu and .names == ["Intel Graphics", "NVIDIA GeForce RTX 4060"]' \
+        expect "fixtures ($part)" "$fixtures" '.gpus | .hasDualGpu and .names == ["AMD Radeon Graphics", "NVIDIA GeForce RTX 3050 Laptop GPU"]' \
             "switcheroo-control: an integrated and a discrete GPU"
     done
 }
@@ -1590,10 +1650,10 @@ direct_cases() {
     dark_style_off dark-style "$f"
     a11y_cases "$run"
 
-    for c in dock-intellihide dock-intellihide-dark; do
-        exits "$run" "$c" 0
-        no_apex_failure "$c" "$run/$c.log"
-        dock_intellihide "$c" "$run/$c.log" "$run"
+    for c in dock-intellihide:light dock-intellihide-dark:dark; do
+        exits "$run" "${c%:*}" 0
+        no_apex_failure "${c%:*}" "$run/${c%:*}.log"
+        dock_intellihide "${c%:*}" "$run/${c%:*}.log" "$run" "${c#*:}"
     done
 
     for c in stock-light stock-dark; do
@@ -1671,6 +1731,25 @@ direct_cases() {
     glass_manager glass "$run/glass.log" light
     glass_unlock_vs_fedora "$run"
     indicator_cases "$run"
+    one_gpu_case "$run"
+}
+
+# The dock-one-gpu case: fixtures.py --gpus 1, as switcheroo-control reports a laptop
+# whose NVIDIA driver is not bound.
+one_gpu_case() {
+    local run=$1
+    exits "$run" dock-one-gpu 0
+    no_js_error dock-one-gpu "$run/dock-one-gpu.log"
+    no_apex_failure dock-one-gpu "$run/dock-one-gpu.log"
+    one_gpu_menu dock-one-gpu "$run/dock-one-gpu.log"
+}
+
+one_gpu_menu() {
+    local label=$1 log=$2
+    expect_report "$label" "$log" '.hasDualGpu == false and (.items | length > 0)' \
+        "the dock's app menu opens while switcheroo-control reports one GPU" APEXG2-GPU
+    expect_report "$label" "$log" '.items != null and (.items | all(. != "Launch Using Discrete Graphics Card"))' \
+        "and offers no Launch Using Discrete Graphics Card" APEXG2-GPU
 }
 
 indicator_cases() {

@@ -50,8 +50,9 @@ The direct cases:
 | `dark-style` | `prefer-dark` | the Apex dark sheet; the top bar's, the dock's and the shell surfaces' metrics, dark; then the probe clicks Quick Settings' Dark Style toggle (its own `clicked` signal): the toggle turns off, writes `color-scheme` `'default'`, and the running shell loads the Apex light sheet |
 | `high-contrast` | the capture settings with `org.gnome.desktop.a11y.interface high-contrast` true | every Apex surface's contrast in the high-contrast sheet (see "Accessibility") |
 | `large-text` | the capture settings with `text-scaling-factor` 1.25 | every Apex surface's text whole, on the screen, inside its surface and clear of the rest (see "Accessibility") |
-| `dock-intellihide`, `dock-intellihide-dark` | the capture settings, light or dark, without hot corners (the headless pointer starts at 0,0, in the corner); the probe starts `maximised-window.js`, one maximised GTK window | the dock shows, then hides behind the maximised window as the bar turns solid; a virtual pointer pushing against the bottom edge under it reveals it, under the pointer; moving away hides it; the overview shows it; with `dock-intellihide` off it stays, and hides again when it is back on; the window gone, it shows. The maximised and revealed scenes are captured beside board 37's |
-| `stock-light`, `stock-dark` | `APEX_SHELL_SAFE=1` with `prefer-light` or `prefer-dark` | upstream's sheet of that variant from `theme/stock/`; the overview's thumbnails at upstream's maximum scale 0.05 and at the effective scale of Fedora's build; the rebuilt high-contrast sheet, which safe mode keeps, is Fedora's apart from the structure marker; no Super+Space binding |
+| `dock-intellihide`, `dock-intellihide-dark` | the capture settings, light or dark, without hot corners (the headless pointer starts at 0,0, in the corner); the probe starts `maximised-window.js`, one maximised GTK window | the dock shows, then hides behind the maximised window as the bar turns solid; a virtual pointer pushing against the bottom edge under it reveals it, under the pointer; moving away hides it; the overview shows it; with `dock-intellihide` off it stays, and while it does, `show-focused-app-name`, `dock-icon-size` (small, then large), `dock-running-indicators` and `dock-show-trash` each change the running shell (the name hidden; every icon 46, then 62; the running dot cleared; Trash gone), and each reset changes it back (the name; `$apex_dock_icon_size`; the dot in `$apex_dock_dot`; Trash last); the key back on, it hides again; the window gone, it shows. The maximised and revealed scenes are captured beside board 37's |
+| `dock-one-gpu` | the capture settings, after `fixtures.py --gpus 1` (put back to two after it) | switcheroo-control reports one GPU, and the dock's first app's menu offers no "Launch Using Discrete Graphics Card" |
+| `stock-light`, `stock-dark` | `APEX_SHELL_SAFE=1` with `prefer-light` or `prefer-dark` | upstream's sheet of that variant from `theme/stock/`; the overview's thumbnails at upstream's maximum scale 0.05 and at the effective scale of Fedora's build; the rebuilt high-contrast sheet, which safe mode keeps, is Fedora's up to the structure marker (Apex only appends); no Super+Space binding |
 | `safe-env`, `layer-disabled`, `kernel-safe` | the three kill switches | upstream's dark sheet from `theme/stock/`, the stock colour scheme, every hook stock, no Super+Space binding, the reason logged; the same sheet in all three; `safe-env`: no search hint |
 | `layer-cycles` | the capture settings; the probe sets `layer-enabled` false, then true, three times | while off: upstream's dark sheet from `theme/stock/`, the stock colour scheme, every hook stock, no Super+Space binding; while on: the Apex light sheet, `prefer-light` and Super+Space; each time it is on the stage holds the same actors, type by type, as at startup, and each time it is off the same as the first time (the first count waits out main.js's 20 s timeout for deferred work, which fills the overview's hidden dash; an `St.Icon` counts, not the texture child St gives it once it is first styled, which a dash hidden since startup decides); the layer logs each switch |
 | `motion` | the capture settings with `enable-animations` true; the probe lifts the inhibit `main.js` puts on animations without hardware-accelerated rendering, starts `window.js`, a plain GTK 4 window, maximises and restores it once (mutter gives a first size change a 0 × 0 old frame, which stock never animates), maximises it and opens the overview, then sets `enable-animations` false, does both again and plays Locate Pointer | DESIGN's motion (ROADMAP S3c): the window actor's size-change transition and the overview's state transition are `CUBIC_BEZIER` with the control points (.2, .8) and (.2, 1), over 300 and 200 ms; with animations off, neither creates a transition, while Locate Pointer's ripple (`animationRequired`, an a11y aid) still takes stock's 830 ms |
@@ -81,7 +82,7 @@ mock of switcheroo-control, which has no template, and (`G2_POWER_PROFILES=1`)
 | UPower | a battery at 87 %, discharging (the display device) | `battery-level-80-symbolic` and, with `show-battery-percentage`, "87%" |
 | NetworkManager | the primary connection: Wi-Fi "Apex-5G" at signal 90, connected globally, with "Apex-2.4G" (72) and the open "Library Guest" (48) in range, each with WPA2's ciphers or none, as libnm needs to list a network | `network-wireless-signal-excellent-symbolic`, and three networks in the Wi-Fi menu |
 | BlueZ | the Bluetooth keyboard "Keychron K3", paired and connected | no glyph: the status pill shows network, volume and battery only (the `panel` feature) |
-| switcheroo-control | two GPUs, "Intel Graphics" the default and "NVIDIA GeForce RTX 4060" (`HasDualGpu`) | "Launch Using Discrete Graphics Card" in an app's menu, the dock's included |
+| switcheroo-control | the laptop's two GPUs, "AMD Radeon Graphics" the default and "NVIDIA GeForce RTX 3050 Laptop GPU" (`HasDualGpu`); `fixtures.py --gpus 1` leaves the iGPU alone | "Launch Using Discrete Graphics Card" in an app's menu, the dock's included |
 | power-profiles-daemon | the Balanced profile, with Power Saver and Performance | the Power Mode toggle, lit at Balanced (the `quick-settings` feature); no glyph in the status pill |
 
 `fixtures-PART.txt` holds what the bus reports afterwards, and `assert.sh` checks it for
@@ -185,7 +186,9 @@ first, then the separator, Show Apps and Trash, with no separator among the apps
 full-colour Show Apps icon; and in the overview the dock shown, the overview's own dash
 hidden and its workspaces laid out above the dock. Its first app's menu, stock's app menu,
 offers "Launch Using Discrete Graphics Card" while the fixtures' switcheroo-control
-reports two GPUs. The safe-mode cases have no dock, and the Apex captures mask it, as they mask the
+reports two GPUs. In `dock-one-gpu` it reports the iGPU alone, as on the laptop with
+`/apex/pair-mode` off, when no NVIDIA driver is bound and the dGPU has no DRM card, and the
+same menu offers no such item. The safe-mode cases have no dock, and the Apex captures mask it, as they mask the
 bar, against Fedora's, whose desktop has none.
 
 ## App indicators
@@ -264,6 +267,11 @@ shadow, inset and gaps, the title and text, the entry at rest and focused, and b
 It then opens the shell's own power-off dialog over D-Bus, as gnome-session does, and reads
 its width and gaps, the end-session feature's icon circle, the title's tracking, the
 countdown's figures, and the row: the buttons' order, widths, gap and fills.
+Last, with `update1-mock.py` (python-dbusmock's Update1, started by `direct.sh`) moved to
+`staged` and then `ready-for-reboot`, it opens the restart dialog and reads board 14's
+update card: its place under the text, inset, radius, gap, fill and ring, the icon, the
+title and the versions, the switch (on, sensitive only when staged) and Restart's label,
+capturing `end-session-update` and `end-session-ready`.
 
 `date_menu` runs in the same cases. The probe posts two low-urgency notifications (no
 banner), opens the calendar menu at the fixed date, captures it with
@@ -430,9 +438,10 @@ default: `glass-unlock.png` against `fedora-glass-unlock.png` differs by 0 pixel
 ## Accessibility
 
 `G2_A11Y=1` (the `default`, `dark-style`, `high-contrast` and `large-text` cases) runs
-`a11y.js`, which opens each of the panel's surfaces in turn: the bar, the dock, a popup
-menu, the OSD, a banner, Quick Settings and its Wi-Fi menu, and the date menu with two
-notifications. Its targets are the visible
+`a11y.js`, which opens each Apex surface in turn: the bar, the dock, a popup menu, the OSD,
+a banner, Quick Settings and its Wi-Fi menu, the date menu with two notifications, the
+window switcher, a polkit-shaped dialog, the shell's own power-off dialog, Spotlight with
+"disk" typed and its toast, the overview and the app grid. Its targets are the visible
 labels, entries and symbolic icons under the surface. Their ink is hidden while the shell
 draws the surface, so the capture holds what is behind them, glass and its blur included,
 with an icon's own fill put back over it. Each target's foreground colour, times its alpha
@@ -442,9 +451,10 @@ and paint opacity, is composited over every sampled pixel of its box, and the pi
 and so is a target wholly outside the capture, another workspace's label. `a11y_layout`
 wants, at 1.25, no text cut short (a collapsed notification's body expands, so it may),
 none partly off the screen or outside its surface, and none overlapping text in the same
-filled box (a notification stack's cards overlap by design). The failures the checks found
-on landing are known gaps (`A11Y_GAPS`), each named after the fix that closes it. Those in
-upstream's high-contrast sheet stay gaps: restyling an upstream actor there would need a stock
+filled box (a notification stack's cards overlap by design). Quick Settings is measured once
+more under each of the nine `accent-color` values, since a checked toggle takes its fill from
+the accent. The failures left are known gaps (`A11Y_GAPS`), all in upstream's high-contrast
+sheet, and they stay gaps: restyling an upstream actor there would need a stock
 copy of the sheet for safe mode. A report for upstream, which is the owner's to file:
 
 > **High contrast: checked quick toggles fall below WCAG AA.** In gnome-shell 51.0's
@@ -469,6 +479,19 @@ actors a pick finds inside it, innermost first. `queue-relayout`, which runs up 
 counted on every actor, so the innermost entry is the one that asked. `assert.sh` adds the
 `ui/apex/` file of each JS class and `apex-` style class among them. The control opens Quick
 Settings inside a window of the same counter: it must count frames and name their damage.
+
+## Sign-off captures
+
+Every slice ends with the owner signing off its boards, light and dark, which then become
+approved goldens. `signoff.sh RPM_DIR` shoots them in one place: `patched.sh` with
+`PATCHED_PART=signoff` runs `direct.sh signoff`, the `default`, `dark-style`, `indicators`
+and `indicators-dark` cases with `G2_SURFACE_SCENES=1`, and `tests/shell/shoot.sh` shoots
+the greeter, the lock screen, polkit's dialog and the power-off dialog with an update
+staged. Each board's scene is copied to `board-NN-SLUG-light.png` and `-dark.png`, and
+`signoff.json` records its title, its scene and fixture state, the commit, the layer's
+features enabled, the scale and the monitor. These are review captures: nothing is
+compared, and only a scene without a capture fails the run, named. The `signoff` workflow
+(`workflow_dispatch` only) uploads the set as `signoff-SHA`.
 
 ## Known gaps
 
@@ -510,6 +533,7 @@ it is at least 4.8:1), and what the goldens judge: the Apex Symbolic glyphs (S1b
 | `assert.sh`, `stable.sh`, `lib.sh` | the builder VM | the assertions |
 | `png.js`, `compare.js` | gjs | PNG with GLib's zlib only, and the masked comparison |
 | `glass.js`, `blur-ref.js` | the shell; gjs | the glass cases, and their CPU reference |
+| `signoff.sh` | a throwaway Fedora 45 container; `.github/workflows/signoff.yml` on demand | the owner's sign-off captures (below) |
 | `a11y.js` | the shell | the accessibility cases: contrast against what is drawn, and the Large Text layout |
 | `indicators.js`, `sni-items.js` | the shell; gjs | the app-indicator part of `default`, `default-scale1` and `dark-style`, and the StatusNotifierItems it starts |
 | `idle.js` | the `idle` case's shell | the settled desktop, its paints and relayouts over 10 s, and the counter's control |

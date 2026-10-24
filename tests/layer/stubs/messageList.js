@@ -19,13 +19,47 @@ class MessageHeader extends St.BoxLayout {
     }
 }
 
+// Upstream's tree: the header, then the icon beside the title and body, then the actions.
 export class Message extends St.Button {
     constructor(source, gicon = null) {
         super({style_class: 'message'});
-        this.header = new MessageHeader(source);
-        this.add_child(this.header);
+        const vbox = new St.BoxLayout({name: 'vbox'});
+        this.set_child(vbox);
+        this.header = this._header = new MessageHeader(source);
+        vbox.add_child(this.header);
+        const box = new St.BoxLayout({name: 'message-box', style_class: 'message-box'});
+        vbox.add_child(box);
+        this._actionBin = new St.Bin({name: 'action-bin', visible: false});
+        vbox.add_child(this._actionBin);
+        this._icon = new St.Icon({name: 'icon'});
+        box.add_child(this._icon);
+        box.add_child(new St.BoxLayout({name: 'content'}));
+        box.add_child(new St.BoxLayout({name: 'media'}));
+        this.expanded = false;
         Hooks.run('message', this, source);
         this.icon = gicon;
+    }
+
+    setActionArea(actor) {
+        this._actionBin.set_child(actor);
+        this._actionBin.visible = this.expanded;
+    }
+
+    expand() {
+        this.expanded = true;
+        this._actionBin.visible = !!this._actionBin.get_child();
+    }
+
+    unexpand() {
+        this.expanded = false;
+        this._actionBin.visible = false;
+    }
+
+    // NotificationMessage's action row: a box of buttons in the action bin.
+    addAction(label) {
+        if (!this._actionBin.get_child())
+            this.setActionArea(new St.BoxLayout({name: 'actions'}));
+        this._actionBin.get_child().add_child(new St.Button({name: label}));
     }
 
     get icon() {
@@ -55,6 +89,12 @@ export class NotificationMessageGroup extends St.Widget {
         this.add_child(this.cover);
         this.add_child(this.header);
         Hooks.run('message-group', this, this.cover, this.header);
+    }
+
+    // A notification arriving in a built group: its card goes under the others.
+    addNotification(source) {
+        this.insert_child_at_index(new St.Bin({child: new Message(source)}), this.count++);
+        this.emit('notification-added');
     }
 
     get expanded() {

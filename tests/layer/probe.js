@@ -635,6 +635,20 @@ function notificationsState(label, list, groups) {
         `clear=align:${clear.x_align} visible:${clear.visible}`);
 }
 
+// A card's tree to two levels below its box, the header as one node.
+function cardTree(actor) {
+    if (actor.has_style_class_name?.('message-header'))
+        return 'header';
+    const children = actor.get_children();
+    const name = actor.name ?? actor.style_class ?? 'box';
+    return children.length ? `${name}[${children.map(cardTree).join(',')}]` : name;
+}
+
+function cardsState(label, group) {
+    const cards = group.get_children().map(c => c.child).filter(Boolean);
+    fact(`${label}.cards`, cards.map(c => cardTree(c.get_child())).join(' | '));
+}
+
 async function exerciseNotifications() {
     if (GLib.getenv('PROBE_NOTIFICATIONS') !== '1')
         return;
@@ -643,6 +657,15 @@ async function exerciseNotifications() {
     const list = MessageList.newCalendarMessageList();
     const groups = [new MessageList.NotificationMessageGroup(mail, 3)];
     notificationsState('nf', list, groups);
+    cardsState('nf', groups[0]);
+    const [card] = groups[0].get_children().map(c => c.child);
+    card.addAction('Reply');
+    card.expand();
+    fact('nf.expanded', `${cardTree(card.get_child())} actions=${card._actionBin.visible}`);
+    card.unexpand();
+    fact('nf.unexpanded', `${cardTree(card.get_child())} actions=${card._actionBin.visible}`);
+    groups[0].addNotification(mail);
+    cardsState('nf.added', groups[0]);
     const own = new MessageList.Message(mail, 'photo-icon');
     fact('nf.icons', `fallback=${groups[0].get_children()[0].child.icon} own=${own.icon}`);
     list.placeholder.visible = true;
@@ -668,10 +691,12 @@ async function exerciseNotifications() {
     calendarState('nf.off');
     groups.push(new MessageList.NotificationMessageGroup({title: 'Chat', icon: 'chat-icon'}, 2));
     notificationsState('nf.off', list, groups);
+    cardsState('nf.off', groups[0]);
     fact('nf.off.icons', `fallback=${groups[0].get_children()[0].child.icon} own=${own.icon}`);
     settings.set_boolean('layer-enabled', true);
     await spin(200);
     notificationsState('nf.on', list, groups);
+    cardsState('nf.on', groups[0]);
     calendarState('nf.on');
 }
 
@@ -681,8 +706,10 @@ function endSessionDialog(St) {
     const buttonLayout = new St.BoxLayout({style_class: 'modal-dialog-button-box'});
     buttonLayout.layout_manager = {spacing: 12, homogeneous: true};
     buttonLayout.peek_theme_node = () => ({lookup_length: p => p === 'spacing' ? [true, 10] : [false, 0]});
+    const message = new St.BoxLayout({style_class: 'message-dialog-content'});
     const dialog = newEmitter({
-        contentLayout: new St.BoxLayout({child: new St.BoxLayout({style_class: 'message-dialog-content'})}),
+        contentLayout: new St.BoxLayout({child: message}),
+        _messageDialogContent: message,
         buttonLayout,
         addButton({label, action}) {
             const button = new St.Button({style_class: 'modal-dialog-button', label});
@@ -695,14 +722,54 @@ function endSessionDialog(St) {
         },
         _confirm(signal) {
             fact('end-session.confirmed', signal);
+            (globalThis.endSessionCalls ??= []).push(`confirmed:${signal}`);
             return Promise.resolve();
         },
+        _stopTimer() {
+            (globalThis.endSessionCalls ??= []).push('timer:stopped');
+        },
+        // loginManager.js's, its logind proxy a stub that records each call.
+        _loginManager: {
+            _proxy: {
+                call(method, params) {
+                    (globalThis.endSessionCalls ??= []).push(`logind:${method}${params.print(false)}`);
+                },
+            },
+            setRebootToBootLoaderMenu() {
+                this._proxy.call('SetRebootToBootLoaderMenu', new GLib.Variant('(t)', [60000000]));
+            },
+        },
     });
+    dialog.stockMethods = {close: dialog.close, _confirm: dialog._confirm};
+    // As stock's confirm buttons: close the dialog, then confirm once it has closed.
     dialog.open = content => {
         buttonLayout.destroy_all_children();
-        dialog.addButton({label: 'Cancel', action: () => {}});
-        for (const {label} of content.confirmButtons)
-            dialog.addButton({label, action: () => {}});
+        dialog.addButton({label: 'Cancel', action: () => dialog.close()});
+        for (const {label, signal} of content.confirmButtons) {
+            dialog.addButton({
+                label, action: () => {
+                    const id = dialog.connect('closed', () => {
+                        dialog.disconnect(id);
+                        dialog._confirm(signal);
+                    });
+                    dialog.close(true);
+                },
+            });
+            // Stock's Alt-held Boot Options closes first, then asks logind for the menu.
+            if (signal === 'ConfirmedReboot') {
+                dialog._rebootButtonAlt = dialog.addButton({
+                    label: 'Boot Options', action: () => {
+                        dialog.close(true);
+                        const id = dialog.connect('closed', () => {
+                            dialog.disconnect(id);
+                            dialog._loginManager.setRebootToBootLoaderMenu();
+                            dialog._confirm('ConfirmedReboot');
+                        });
+                    },
+                });
+                dialog._rebootButtonAlt.visible = false;
+            }
+        }
         Hooks.run('end-session-buttons', dialog, content);
     };
     return dialog;
@@ -712,9 +779,86 @@ function endSessionState(label, dialog) {
     const row = dialog.buttonLayout;
     const [first] = dialog.contentLayout.get_children();
     const icon = first.has_style_class_name('apex-end-session-icon') ? first.child.icon_name : 'none';
-    fact(label, `buttons=${row.get_children().map(b => b.label).join(',')} icon=${icon} ` +
+    fact(label, `buttons=${row.get_children().filter(b => b.visible).map(b => b.label).join(',')} icon=${icon} ` +
         `spacing=${row.layout_manager.spacing} homogeneous=${row.layout_manager.homogeneous} ` +
         `row=${row.has_style_class_name('apex-end-session-row')}`);
+}
+
+function updateCardState(label, dialog) {
+    const card = dialog.contentLayout.get_children().find(c => c.has_style_class_name('apex-update-card'));
+    const described = card ? `card=${card.update.state} on=${card.on} subtitle=${card.subtitle}` : 'card=none';
+    fact(label, `buttons=${dialog.buttonLayout.get_children().filter(b => b.visible).map(b => b.label).join(',')} ${described}`);
+    return card;
+}
+
+// Board 14's update card, against update.js's stub: which dialogs show it, and what each
+// button does with Update1's Apply.
+async function exerciseUpdateCard(dialog, contents) {
+    const {powerOff, restart, logout} = contents;
+    const {stockMethods} = dialog;
+    const restored = label => fact(label,
+        `close=${dialog.close === stockMethods.close} confirm=${dialog._confirm === stockMethods._confirm}`);
+    const staged = {state: 'staged', digest: 'sha256:9e41aa07', version: '45.20261010.133'};
+    const open = async (content, update) => {
+        globalThis.update1 = update;
+        dialog.open(content);
+        await spin(50);
+    };
+    const calls = label => fact(`${label}.calls`, (globalThis.endSessionCalls ?? []).splice(0).join(' ') || 'none');
+    const press = async (label, name) => {
+        globalThis.endSessionCalls = [];
+        dialog.buttonLayout.get_children().find(b => b.label === name).action();
+        await spin(50);
+        calls(label);
+    };
+    await open(powerOff, {read: null});
+    updateCardState('update.none', dialog);
+    await open(logout, {read: staged});
+    updateCardState('update.logout', dialog);
+    await open(restart, {read: staged});
+    updateCardState('update.staged', dialog);
+    await press('update.staged', 'Restart & Update');
+    restored('update.staged.restored');
+    await open(powerOff, {read: staged});
+    updateCardState('update.staged-power-off', dialog).setOn(false);
+    updateCardState('update.switched-off', dialog);
+    await press('update.switched-off', 'Power Off');
+    await open(restart, {read: {...staged, state: 'ready-for-reboot'}});
+    updateCardState('update.ready', dialog).setOn(false);
+    updateCardState('update.ready-switched', dialog);
+    await press('update.ready', 'Restart & Update');
+    await open(powerOff, {read: staged, applyError: 'Plug in the charger to install the update.'});
+    await press('update.apply-failed', 'Power Off');
+    updateCardState('update.apply-failed', dialog);
+    await press('update.after-failure', 'Power Off');
+    const failing = {read: staged, applyError: 'Plug in the charger to install the update.'};
+    await open(powerOff, failing);
+    await press('update.failed-then', 'Power Off');
+    await press('update.failed-then-cancel', 'Cancel');
+    await open(powerOff, failing);
+    await press('update.failed-before-off', 'Power Off');
+    settings.set_boolean('layer-enabled', false);
+    await spin(200);
+    await press('update.failed-off-cancel', 'Cancel');
+    restored('update.failed-off.restored');
+    settings.set_boolean('layer-enabled', true);
+    await spin(200);
+    await open(restart, failing);
+    dialog._rebootButtonAlt.visible = true;
+    await press('update.boot-options-failed', 'Boot Options');
+    await press('update.boot-options-cancel', 'Cancel');
+    await open(restart, failing);
+    globalThis.endSessionCalls = [];
+    await dialog._confirm('ConfirmedReboot');
+    await spin(50);
+    calls('update.countdown-failed');
+    await open(restart, {read: staged});
+    settings.set_boolean('layer-enabled', false);
+    await spin(200);
+    updateCardState('update.off', dialog);
+    await press('update.off', 'Restart');
+    settings.set_boolean('layer-enabled', true);
+    await spin(200);
 }
 
 async function exerciseEndSession() {
@@ -742,6 +886,7 @@ async function exerciseEndSession() {
     await spin(200);
     dialog.open(powerOff);
     endSessionState('end-session.on', dialog);
+    await exerciseUpdateCard(dialog, {powerOff, restart, logout});
 }
 
 // A surface two actors below the stage's child, its sheet naming one further layer.
@@ -781,6 +926,18 @@ async function exerciseShadows() {
     surface.emit('notify::mapped');
     await spin(50);
     layers('mapped-again');
+    const [kept] = Registry.layersOf(surface);
+    surface.emit('style-changed');
+    await spin(50);
+    fact('shadows.restyled-alike', Registry.layersOf(surface)[0] === kept ? 'the same layer' : 'rebuilt');
+    const sheet = surface._themeNode;
+    surface._themeNode = {...sheet, get_shadow: p => p === '-apex-shadow-layer' ? {...sheet.get_shadow(p), blur: 12} : null};
+    surface.emit('style-changed');
+    await spin(50);
+    layers('restyled');
+    surface._themeNode = sheet;
+    surface.emit('style-changed');
+    await spin(50);
     settings.set_boolean('layer-enabled', false);
     await spin(200);
     layers('off');

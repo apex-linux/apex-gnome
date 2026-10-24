@@ -253,6 +253,7 @@ REPORT_OF_QUICK_SETTINGS_DRAWN_FROM_TOKENS='
 | ($t.apex_quick_toggle_height | px) as $th | ($t.apex_quick_settings_button_size | px) as $bs | ($t.apex_quick_settings_icon_size | px) as $icon
 | ((($t.apex_quick_settings_width | px) - 2 * $qp - $gap) / 2) as $tw | ($t.apex_quick_toggle_padding | px) as $tp
 | ($t.apex_quick_toggle_menu_button_shade | rtrimstr("%") | tonumber / 100) as $shade
+| ($t.apex_quick_toggle_checked_shade | rtrimstr("%") | tonumber / 100) as $checked
 | {size: ($t.apex_font_quick_toggle_title_size | px), weight: ($t.apex_font_heading_weight | tonumber)} as $title
 | {topBar: {accent: "#3584e4ff"}, surfaces: {quickSettings: {
     box: {width: ($t.apex_quick_settings_width | px), radius: ($t.apex_radius_quick_settings | px), background: ($t.apex_panel | hex),
@@ -266,11 +267,11 @@ REPORT_OF_QUICK_SETTINGS_DRAWN_FROM_TOKENS='
             box: {padding: {left: ($t.apex_quick_settings_battery_padding | px), right: ($t.apex_quick_settings_battery_padding | px)}, spacing: ($t.apex_quick_settings_battery_gap | px)},
             title: {font: {size: ($t.apex_font_quick_settings_battery_size | px), weight: ($t.apex_font_label_weight | tonumber)}}}},
     wifi: {y: (44 + $bs + ($t.apex_quick_settings_section_gap | px)), width: $tw, height: $th,
-        toggle: {background: "#3584e4ff", foreground: "#ffffffff", icon: $icon, title: {font: $title},
+        toggle: {background: ([53, 132, 228] | map(. * (1 - $checked) | round) | "rgb(\(.[0]), \(.[1]), \(.[2]))" | hex), foreground: "#ffffffff", icon: $icon, title: {font: $title},
             subtitle: {foreground: ("rgba(255, 255, 255, \($t.apex_quick_toggle_subtitle_opacity))" | hex), font: {size: ($t.apex_font_quick_toggle_subtitle_size | px)}},
             box: {padding: {left: $tp, right: ($t.apex_quick_toggle_menu_padding | px)}, spacing: ($t.apex_quick_toggle_gap | px)}},
         separator: {width: 0},
-        menuButton: {width: ($t.apex_quick_toggle_menu_button_width | px), background: ([53, 132, 228] | map(. * (1 - $shade) | round) | "rgb(\(.[0]), \(.[1]), \(.[2]))" | hex)}},
+        menuButton: {width: ($t.apex_quick_toggle_menu_button_width | px), background: ([53, 132, 228] | map(. * (1 - $checked) * (1 - $shade) | round) | "rgb(\(.[0]), \(.[1]), \(.[2]))" | hex)}},
     unchecked: {width: $tw, height: $th, radius: 999, background: ($t.apex_button | hex), foreground: ($t.apex_fg | hex),
         hover: {background: ($t.apex_button_hover | hex)}, icon: $icon, box: {padding: {left: $tp, right: $tp}, spacing: ($t.apex_quick_toggle_gap | px)}},
     slider: {spacing: ($t.apex_quick_slider_gap | px), trackHeight: ($t.apex_quick_slider_track_height | px), track: ($t.apex_button_hover | hex),
@@ -314,6 +315,18 @@ REPORT_OF_A_DIALOG_DRAWN_FROM_TOKENS='
             {text: "Restart", width: ($u * 1.4), background: ($t.apex_button | hex), hover: {background: ($t.apex_button_hover | hex)}},
             {text: "Power Off", width: ($u * 1.2), background: ($t.apex_destructive | hex), foreground: ($t.apex_destructive_fg | hex),
                 hover: {background: ($t.apex_destructive_hover | hex)}}]}),
+    updateCard: ({below: true, padding: {top: ($t.apex_update_card_padding_y | px), left: ($t.apex_update_card_padding_x | px)},
+        border: {top: 1}, radius: ($t.apex_radius_update_card | px), spacing: ($t.apex_update_card_gap | px),
+        background: ($t.apex_card | hex), borderColor: ($t.apex_card_border | hex),
+        icon: {iconName: "system-software-update", size: ($t.apex_update_card_icon_size | px)}, textSpacing: ($t.apex_update_card_text_gap | px),
+        title: {text: "Start the new version next time", foreground: ($t.apex_fg | hex),
+            font: {size: ($t.apex_font_update_card_title_size | px), weight: ($t.apex_font_update_card_title_weight | tonumber)}},
+        subtitle: {text: "45.20261010.133 · GNOME 51.1, Linux 7.2.9, Mesa 26.1.2", foreground: ($t.apex_fg_dim | hex),
+            font: {size: ($t.apex_font_update_card_subtitle_size | px)}},
+        toggle: {on: true, sensitive: true, width: ($t.apex_update_switch_width | px), height: ($t.apex_update_switch_height | px),
+            background: "#3584e4ff", knob: {width: ($t.apex_update_switch_knob | px)}, opacity: 1, focusable: true, a11ySensitive: true},
+        buttons: ["Cancel", "Restart & Update"]}
+        | {staged: ., ready: (.toggle += {sensitive: false, opacity: ($t.apex_update_switch_insensitive_opacity | tonumber), focusable: false, a11ySensitive: false})}),
     contentSpacing: ($t.apex_dialog_gap | px), textSpacing: ($t.apex_dialog_text_gap | px),
     title: {font: {size: ($t.apex_font_dialog_title_size | px), weight: ($t.apex_font_heading_weight | tonumber)}},
     description: {font: {size: ($t.apex_font_size | px)}, foreground: ($t.apex_fg_dim | hex)},
@@ -545,6 +558,18 @@ REPORT_OF_A_LAUNCHER_SEARCH_FROM_TOKENS='
         hint: {text: "The launcher searches apps only. Super+Space searches everything.", font: {size: ($t.apex_font_launcher_empty_hint_size | px)},
             foreground: ($t.apex_fg_dim | hex)}}}}}'
 # shellcheck disable=SC2016 # a jq program
+REPORT_OF_LIVE_KEYS_FROM_TOKENS='
+($t.apex_dock_icon_size | px) as $m | ($t.apex_dock_dot | hex) as $dot
+| def shown($size; $dots; $trash): {focusedApp: {visible: true, name: "G2 maximised window"}, iconSizes: [$size, $size, $size, $size],
+    kinds: (["app", "app", "separator", "show-apps"] + (if $trash then ["trash"] else [] end)), dots: [{app: "G2 maximised window", colour: $dots}]};
+shown($m; $dot; true) as $stock
+| {steps: {liveKeys: {
+    focusedAppOff: {set: ($stock | .focusedApp.visible = false), reset: $stock},
+    small: {set: shown(46; $dot; true), reset: $stock},
+    large: {set: shown(62; $dot; true), reset: $stock},
+    dotsOff: {set: shown($m; "#00000000"; true), reset: $stock},
+    trashOff: {set: shown($m; $dot; false), reset: $stock}}}}'
+# shellcheck disable=SC2016 # a jq program
 REPORT_OF_INDICATORS_DRAWN_FROM_TOKENS='
 ($t.apex_indicator_width | px) as $w | ($t.apex_bar_pill_height | px) as $h | ($t.apex_bar_gap | px) as $g
 | ($t.apex_bar_icon_size | px) as $i | ($t.apex_radius_bar_pill | px) as $r | ($t.apex_indicator_dot_size | px) as $ds
@@ -654,6 +679,7 @@ assert_run() {
     [[ $assertions == spotlight_keys ]] && report=$REPORT_OF_SPOTLIGHT_KEYS
     [[ $assertions == shadow_layers ]] && report=$REPORT_OF_SHADOW_LAYERS_FROM_TOKENS
     [[ $assertions == indicator_metrics ]] && report=$REPORT_OF_INDICATORS_DRAWN_FROM_TOKENS prefix=APEXG2-INDICATORS
+    [[ $assertions == dock_live_keys ]] && report=$REPORT_OF_LIVE_KEYS_FROM_TOKENS prefix=APEXG2-DOCK
     tokens=$(tokens_for "$variant")
     jq -nc --argjson t "$tokens" "$JQ_DEFS $HEX_DEF $report | $change" | sed "s/^/$prefix /" >"$T/top-bar.log"
     # shellcheck disable=SC2016 # expanded by the inner bash
@@ -668,7 +694,9 @@ REPORT_OF_LEGIBLE_SURFACES='
 | ($text + {kind: "icon", name: "glyph-symbolic", ratio: 4, box: {x: 80, y: 10, width: 16, height: 16}}) as $icon
 | {box: {x: 0, y: 0, width: 200, height: 100}, targets: [$text, $icon]} as $s
 | {textScalingFactor: 1.25, monitor: {x: 0, y: 0, width: 1440, height: 900},
-    bar: $s, dock: $s, popupMenu: $s, osd: $s, banner: $s, quickSettings: $s, wifiMenu: $s, dateMenu: $s}'
+    quickSettingsAccents: (["blue", "teal", "green", "yellow", "orange", "red", "pink", "purple", "slate"] | map({key: ., value: $s}) | from_entries),
+    bar: $s, dock: $s, popupMenu: $s, osd: $s, banner: $s, quickSettings: $s, wifiMenu: $s, dateMenu: $s, switcher: $s,
+    dialog: $s, endSession: $s, spotlight: {popup: $s, toast: $s}, overview: $s, appGrid: $s}'
 
 a11y_run() {
     local assertions=$1 change=${2:-.}
@@ -680,7 +708,7 @@ a11y_run() {
 
 test_a11y() {
     local assertions expected change what passes failures open_gaps want
-    for assertions in a11y_contrast:8 a11y_layout:9; do
+    for assertions in a11y_contrast:24 a11y_layout:25; do
         expected=${assertions#*:}
         read -r passes failures open_gaps <<<"$(a11y_run "${assertions%:*}")"
         if ((failures == 0 && open_gaps == 0 && passes == expected)); then
@@ -700,6 +728,10 @@ test_a11y() {
 a11y_contrast|1|.bar.targets[0].ratio = 4.4|text at 4.4:1
 a11y_contrast|1|.dock.targets[1].ratio = 2.9|a glyph at 2.9:1
 a11y_contrast|1|.wifiMenu.targets[0].ratio = 3|a menu row's text at 3:1
+a11y_contrast|1|.spotlight.toast.targets[0].ratio = 3|the toast's text at 3:1
+a11y_contrast|1|.quickSettingsAccents.yellow.targets[0].ratio = 4.49|a checked toggle on the yellow accent at 4.49:1
+a11y_contrast|1|del(.quickSettingsAccents.slate)|an accent left unmeasured
+a11y_contrast|1|.endSession.targets[1].ratio = 2|the end-session glyph at 2:1
 a11y_contrast|1|.banner = {error: "not shown"}|a surface that never showed
 a11y_contrast|1|.popupMenu.targets = []|a surface with nothing measured
 a11y_contrast|0|.osd.targets[0] += {inactive: true, ratio: 1}|a disabled control's text
@@ -712,6 +744,40 @@ a11y_layout|1|.textScalingFactor = 1|text at its default size
 a11y_layout|0|.dateMenu.targets += [.dateMenu.targets[0] + {card: 1} + {box: {x: 20, y: 14, width: 60, height: 20}}]|a stacked card's text
 a11y_layout|0|.banner.targets[0] += {ellipsized: true, expandable: true}|a collapsed notification's body
 CHANGES
+}
+
+# signoff.sh's last step on stand-in captures: each board's two scenes, then one gone.
+test_signoff() {
+    local dir=$T/signoff scene
+    rm -rf "$dir"
+    mkdir -p "$dir/g2/captures" "$dir/shots"
+    for scene in switcher surfaces quick-settings screenshot tile-preview datemenu overview appgrid desktop spotlight-search; do
+        printf '\x89PNG\r\n\x1a\n' >"$dir/g2/captures/default-$scene.png"
+        printf '\x89PNG\r\n\x1a\n' >"$dir/g2/captures/dark-style-$scene.png"
+    done
+    for scene in indicators-indicators-everything indicators-dark-indicators-everything; do
+        printf '\x89PNG\r\n\x1a\n' >"$dir/g2/captures/$scene.png"
+    done
+    for scene in greeter-%s-list polkit-%s-open end-session-%s-power-off lock-%s-open; do
+        # shellcheck disable=SC2059 # the scene names carry the variant's %s
+        printf '\x89PNG\r\n\x1a\n' | tee "$dir/shots/$(printf "$scene" light).png" >"$dir/shots/$(printf "$scene" dark).png"
+    done
+    printf 'Apex: feature panel enabled\nApex: feature dock enabled\n' >"$dir/g2/default.log"
+    if "$HERE/signoff.sh" --collect "$dir/g2" "$dir/shots" "$dir/out" >"$T/signoff.out" 2>&1 &&
+        [[ $(find "$dir/out" -name 'board-*.png' | wc -l) == 30 ]] &&
+        jq -e '(.boards | length) == 15 and .scale == 2 and .features == ["dock", "panel"]
+            and .boards[0].files.dark == "board-12-greeter-dark.png"' "$dir/out/signoff.json" >/dev/null; then
+        ok "signoff: fifteen boards, light and dark, and signoff.json from their captures"
+    else
+        not_ok "signoff: fifteen boards, light and dark, and signoff.json from their captures: $(tail -n 3 "$T/signoff.out")"
+    fi
+    rm "$dir/g2/captures/dark-style-tile-preview.png"
+    if ! "$HERE/signoff.sh" --collect "$dir/g2" "$dir/shots" "$dir/out2" >"$T/signoff.out" 2>&1 &&
+        grep -q 'board 22 (Edge tiling), dark: no capture of dark-style-tile-preview' "$T/signoff.out"; then
+        ok "signoff: a scene that did not open fails the run with its board's name"
+    else
+        not_ok "signoff: a scene that did not open fails the run with its board's name: $(tail -n 3 "$T/signoff.out")"
+    fi
 }
 
 test_top_bar() {
@@ -830,6 +896,35 @@ test_dock() {
 CHANGES
     assert_run dock_metrics light 'del(.dock)' >/dev/null
     expect_eq "dock: a report without the dock passes none" 0 "$(grep -c '^PASS' "$T/top-bar.out")"
+}
+
+test_live_keys() {
+    local variant change what passes failures open_gaps
+    for variant in light dark; do
+        read -r passes failures open_gaps <<<"$(assert_run dock_live_keys "$variant")"
+        if ((failures == 0 && passes == 5)); then
+            ok "live keys ($variant): a dock and bar that follow the keys pass all $passes assertions"
+        else
+            not_ok "live keys ($variant): they pass (passed/failed/gaps $passes/$failures/$open_gaps): $(grep -m3 '^FAIL' "$T/top-bar.out" | paste -sd'|' -)"
+        fi
+    done
+    while IFS='|' read -r change what; do
+        read -r passes failures open_gaps <<<"$(assert_run dock_live_keys light "$change")"
+        if ((failures == 1)); then
+            ok "live keys: $what fails one assertion"
+        else
+            not_ok "live keys: $what fails one assertion (passed/failed/gaps $passes/$failures/$open_gaps)"
+        fi
+    done <<'CHANGES'
+.steps.liveKeys.focusedAppOff.set.focusedApp.visible = true|a focused-app name that ignores its key
+.steps.liveKeys.focusedAppOff.reset.focusedApp.visible = false|a focused-app name its reset leaves hidden
+.steps.liveKeys.small.set.iconSizes[0] = 54|an icon left at medium
+.steps.liveKeys.large.reset.iconSizes = [62, 62, 62, 62]|large icons after the reset
+.steps.liveKeys.dotsOff.set.dots[0].colour = "#1d1d21b3"|a running dot left drawn
+.steps.liveKeys.dotsOff.reset.dots = []|no running dot after the reset
+.steps.liveKeys.trashOff.set.kinds += ["trash"]|Trash left in
+.steps.liveKeys.trashOff.reset.kinds = ["app", "app", "separator", "show-apps"]|no Trash after the reset
+CHANGES
 }
 
 test_indicators() {
@@ -1009,7 +1104,7 @@ test_modal_dialog() {
     local variant change what passes failures open_gaps
     for variant in light dark; do
         read -r passes failures open_gaps <<<"$(assert_run modal_dialog "$variant")"
-        if ((failures == 0 && open_gaps == 0 && passes == 12)); then
+        if ((failures == 0 && open_gaps == 0 && passes == 17)); then
             ok "modal dialog ($variant): drawn from the tokens it passes all $passes assertions"
         else
             not_ok "modal dialog ($variant): drawn from the tokens it passes (passed/failed/gaps $passes/$failures/$open_gaps): $(grep -m3 '^FAIL' "$T/top-bar.out" | paste -sd'|' -)"
@@ -1043,6 +1138,17 @@ del(.surfaces.dialog.endSession.buttons[1])|stock's row, without Restart
 .surfaces.dialog.entry.focus.boxShadow.color = "#3584e4cc"|upstream's 80 % focus ring
 .surfaces.dialog.buttons[0].radius = 12|upstream's square-ish buttons
 .surfaces.dialog.buttons[1].background = "#00000a10"|a default button without the accent
+.surfaces.dialog.updateCard.staged.icon.size = 16|a symbolic-sized update icon
+.surfaces.dialog.updateCard.staged.below = false|the card above the dialog's text
+.surfaces.dialog.updateCard.staged.radius = 18|a card at the menus' radius
+.surfaces.dialog.updateCard.staged.subtitle.text = "45.20261010.133"|a subtitle without the versions
+.surfaces.dialog.updateCard.staged.title.foreground = "#1d1d219e"|a dimmed title
+.surfaces.dialog.updateCard.staged.toggle.on = false|the switch off by default
+.surfaces.dialog.updateCard.staged.buttons = ["Cancel", "Restart"]|Restart not relabelled while the switch is on
+.surfaces.dialog.updateCard.ready.toggle.sensitive = true|a ready-for-reboot switch that turns off
+.surfaces.dialog.updateCard.ready.toggle.opacity = 1|a ready-for-reboot switch drawn like an active one
+.surfaces.dialog.updateCard.ready.toggle.focusable = true|a ready-for-reboot switch that takes focus
+.surfaces.dialog.updateCard.ready.toggle.a11ySensitive = true|a ready-for-reboot switch announced as available
 CHANGES
 }
 
@@ -1115,17 +1221,29 @@ readonly NOTIFICATIONS_REPORT='{surfaces: {notificationsLayer: {header: false, c
   dnd: {x: 4, y: 604, width: 180, height: 32, label: "Do Not Disturb"}, dndClick: {showBanners: false, checked: true},
   empty: {placeholder: true, clearVisible: true, clearReactive: false},
   calendar: {label: {x: 8, y: 60, width: 90, height: 20}, back: {x: 230, y: 56, width: 32, height: 32},
-    forward: {x: 266, y: 56, width: 32, height: 32}, days: 2, dots: [{x: 20, y: 120, width: 4, height: 4}, {x: 60, y: 120, width: 4, height: 4}]}}}}'
+    forward: {x: 266, y: 56, width: 32, height: 32}, days: 2, dots: [{x: 20, y: 120, width: 4, height: 4}, {x: 60, y: 120, width: 4, height: 4}]},
+  trees: [range(3) | "box[apex-message-row[message-icon,box[message-header,message-box[message-content,box]]],message-action-bin]"],
+  layout: {collapsed: {card: {x: 0, y: 0, width: 400, height: 80}, icon: {x: 14, y: 12, width: 32, height: 32},
+      header: {x: 58, y: 12, width: 280, height: 16}, title: {x: 58, y: 30, width: 200, height: 20},
+      close: {x: 362, y: 10, width: 24, height: 24}, actions: null},
+    expanded: {card: {x: 0, y: 0, width: 400, height: 124}, icon: {x: 14, y: 12, width: 32, height: 32},
+      header: {x: 58, y: 12, width: 280, height: 16}, title: {x: 58, y: 30, width: 200, height: 20},
+      close: {x: 362, y: 10, width: 24, height: 24}, actions: {x: 14, y: 80, width: 376, height: 32},
+      tree: "box[apex-message-row[message-icon,box[message-header,message-box[message-content,box]]],message-action-bin]"},
+    collapsedAgain: {card: {x: 0, y: 0, width: 400, height: 80}, icon: {x: 14, y: 12, width: 32, height: 32},
+      header: {x: 58, y: 12, width: 280, height: 16}, title: {x: 58, y: 30, width: 200, height: 20},
+      close: {x: 362, y: 10, width: 24, height: 24}, actions: null,
+      tree: "box[apex-message-row[message-icon,box[message-header,message-box[message-content,box]]],message-action-bin]"}}}}}'
 
 test_notifications_layer() {
     local change what passes failures
     jq -nc "$NOTIFICATIONS_REPORT" | sed 's/^/APEXG2-SCENES /' >"$T/notifications.log"
     read -r passes failures <<<"$(assertion_counts notifications_layer case "$T/notifications.log" apex)"
-    expect_eq "notifications: the feature's list, cards, footer and calendar pass all six assertions" "6/0" "$passes/$failures"
+    expect_eq "notifications: the feature's list, cards, footer and calendar pass all ten assertions" "10/0" "$passes/$failures"
     while IFS='|' read -r change what; do
         jq -nc "$NOTIFICATIONS_REPORT | .surfaces.notificationsLayer |= ($change)" | sed 's/^/APEXG2-SCENES /' >"$T/notifications.log"
         read -r passes failures <<<"$(assertion_counts notifications_layer case "$T/notifications.log" apex)"
-        expect_eq "notifications: $what fails one assertion" "5/1" "$passes/$failures"
+        expect_eq "notifications: $what fails one assertion" "9/1" "$passes/$failures"
     done <<'CHANGES'
 .messages[1].y = 10|a stacked group
 .header = true|a group header
@@ -1137,12 +1255,19 @@ test_notifications_layer() {
 .empty.clearVisible = false|Clear hidden with nothing to clear
 .calendar.label.x = 250|the month between its chevrons
 .calendar.dots = [.calendar.dots[0]]|a day without its dot
+.trees[2] = "box[message-header,message-box[message-icon,message-content,box],message-action-bin]"|a back card in upstream's tree
+.layout.collapsed.header.x = 50|the header 4 px from the icon's column
+.layout.collapsed.icon.width = 48|a 48 px icon tile
+.layout.expanded.actions.x = 58|the action row under the text column alone
+.layout.expanded.actions = null|an expanded card without its action row
+.layout.collapsedAgain.actions = {x: 14, y: 80, width: 376, height: 32}|the action row left shown, collapsed
 CHANGES
     jq -nc "$NOTIFICATIONS_REPORT | .surfaces.notificationsLayer |= (.messages[1].y = 10 | .dnd = null | .empty.clearVisible = false
-        | .cardHeader.sourceIcon = true | .icon = null | .calendar.label.x = 250 | .calendar.dots = [])" |
+        | .cardHeader.sourceIcon = true | .icon = null | .calendar.label.x = 250 | .calendar.dots = []
+        | .trees = [range(3) | \"box[message-header,message-box[message-icon,message-content,box],message-action-bin]\"])" |
         sed 's/^/APEXG2-SCENES /' >"$T/notifications.log"
     read -r passes failures <<<"$(assertion_counts notifications_layer case "$T/notifications.log" stock)"
-    expect_eq "notifications: stock's stacked list, lone Clear and centred month pass all three stock assertions" "3/0" "$passes/$failures"
+    expect_eq "notifications: stock's stacked list, lone Clear and centred month pass all four stock assertions" "4/0" "$passes/$failures"
 }
 
 test_shadow_layers() {
@@ -1435,6 +1560,7 @@ test_spotlight_keys() {
 .surfaces.spotlightKeys.early.ms = 1100|the sections seen only past the budget
 .surfaces.spotlightKeys.late.rows = 0|every section hidden once the budget runs out
 .surfaces.spotlightKeys.settings.cancelledMs = null|Settings never cancelled
+.surfaces.spotlightKeys.settings.cancelledMs = 1250|Settings cancelled only after the sections were read
 .surfaces.spotlightKeys.down4 = "Applications/org.gnome.baobab.desktop"|Down kept inside its section
 .surfaces.spotlightKeys.down20 = null|Down past the last row
 .surfaces.spotlightKeys.enter.activated = []|Enter opening nothing
@@ -1799,20 +1925,34 @@ EOF
     dbus-daemon --config-file="$T/bus.conf" --fork --print-address=3 --print-pid=4 3>"$T/bus.address" 4>"$T/bus.pid"
 }
 
+test_one_gpu() {
+    local failures what menu passes
+    while IFS='|' read -r failures what menu; do
+        printf 'APEXG2-GPU %s\n' "$menu" >"$T/one-gpu.log"
+        read -r passes _ <<<"$(assertion_counts one_gpu_menu dock-one-gpu "$T/one-gpu.log")"
+        expect_eq "one GPU: $what fails $failures of 2" "$failures" $((2 - passes))
+    done <<'MENUS'
+0|stock's menu without the discrete GPU|{"app": "Files", "hasDualGpu": false, "items": ["Open Windows", "New Window", "Unpin", "App Details"]}
+1|a menu that still offers it|{"app": "Files", "hasDualGpu": false, "items": ["New Window", "Launch Using Discrete Graphics Card", "Unpin"]}
+1|a switcheroo-control still reporting two GPUs|{"app": "Files", "hasDualGpu": true, "items": ["New Window", "Unpin"]}
+2|no menu at all|null
+MENUS
+}
+
 test_fixtures() {
     local passes failures address missing=()
     mkdir -p "$T/fixtures"
     local report='G2-FIXTURES {"battery": {"percentage": 87.0, "present": true, "onBattery": true}, '
     report+='"wifi": {"primary": "Apex-5G", "ssid": "Apex-5G", "strength": 90, "inRange": ["Apex-5G", "Apex-2.4G", "Library Guest"], '
     report+='"state": 70, "connectivity": 4}, "keyboard": {"alias": "Keychron K3", "connected": true, "icon": "input-keyboard"}, '
-    report+='"gpus": {"hasDualGpu": true, "names": ["Intel Graphics", "NVIDIA GeForce RTX 4060"]}, '
+    report+='"gpus": {"hasDualGpu": true, "names": ["AMD Radeon Graphics", "NVIDIA GeForce RTX 3050 Laptop GPU"]}, '
     report+='"powerProfiles": {"active": "balanced", "profiles": ["power-saver", "balanced", "performance"]}}'
     fixtures_report "$report"
     read -r passes failures <<<"$(assertion_counts fixtures_on_the_bus "$T/fixtures")"
     expect_eq "fixtures: what fixtures.py reports passes each part's six assertions" "18/0" "$passes/$failures"
     report='G2-FIXTURES {"battery": {"percentage": 0.0, "present": false, "onBattery": false}, '
     report+='"wifi": {"primary": "Apex-5G", "ssid": "Apex-5G", "strength": 30, "inRange": ["Apex-5G"], "state": 70, "connectivity": 4}, '
-    report+='"keyboard": {"alias": "Keychron K3", "connected": false, "icon": "phone"}, "gpus": {"hasDualGpu": false, "names": ["Intel Graphics"]}, '
+    report+='"keyboard": {"alias": "Keychron K3", "connected": false, "icon": "phone"}, "gpus": {"hasDualGpu": false, "names": ["AMD Radeon Graphics"]}, '
     report+='"powerProfiles": null}'
     fixtures_report "$report"
     read -r passes failures <<<"$(assertion_counts fixtures_on_the_bus "$T/fixtures")"
@@ -2068,12 +2208,14 @@ test_incomplete_compare
 test_token_file
 test_top_bar
 test_dock
+test_live_keys
 test_indicators
 test_shell_surfaces
 test_quick_settings
 test_window_switcher
 test_modal_dialog
 test_a11y
+test_signoff
 test_date_menu
 test_overview_style
 test_app_grid
@@ -2096,6 +2238,7 @@ test_layer_cycles
 test_motion
 test_idle
 test_spotlight_key
+test_one_gpu
 test_fixtures
 test_glass
 test_shadows_under_glass
