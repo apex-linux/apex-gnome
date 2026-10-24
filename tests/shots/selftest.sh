@@ -924,6 +924,45 @@ CHANGES
     expect_eq "layer cycles: a switch the layer did not log fails one assertion" "$((all - 1))/1" "$passes/$failures"
 }
 
+# shellcheck disable=SC2016 # a jq program
+readonly MOTION_REPORT='{enableAnimations: false,
+  animated: {maximise: {maximised: true, transition: {mode: "CUBIC_BEZIER", duration: 300, curve: [0.2, 0.8, 0.2, 1]}},
+             overview: {visible: true, transition: {mode: "CUBIC_BEZIER", duration: 200, curve: [0.2, 0.8, 0.2, 1]}}},
+  still: {maximise: {maximised: true, transition: null}, overview: {visible: true, transition: null}}}'
+
+write_motion_run() {
+    local change=$1 dir=$T/motion
+    rm -rf "$dir" && mkdir -p "$dir"
+    {
+        printf 'APEXG2 %s\n' "$APEX_LIGHT_REPORT"
+        printf 'APEXG2-MOTION %s\n' "$(jq -nc "$MOTION_REPORT | $change")"
+    } >"$dir/motion.log"
+    echo 'motion exit=0 secs=24 marker-after-exit=no' >"$dir/results-main.txt"
+}
+
+test_motion() {
+    local change what passes failures all
+    write_motion_run .
+    read -r all failures <<<"$(assertion_counts motion_curve "$T/motion")"
+    if ((failures == 0 && all > 5)); then
+        ok "motion: the Apex curve and durations, and 0 ms without animations, pass all $all assertions"
+    else
+        not_ok "motion: a clean run passes (passed/failed $all/$failures): $(grep -m3 '^FAIL' "$T/assertions.out" | paste -sd'|' -)"
+    fi
+    while IFS='|' read -r change what; do
+        write_motion_run "$change"
+        read -r passes failures <<<"$(assertion_counts motion_curve "$T/motion")"
+        expect_eq "motion: $what fails one assertion" "$((all - 1))/1" "$passes/$failures"
+    done <<'CHANGES'
+.animated.maximise.transition.mode = "EASE_OUT_QUAD"|stock's maximise mode
+.animated.maximise.transition.curve = [0, 0, 0, 0]|the curve's mode without its control points
+.animated.overview.transition.duration = 250|stock's overview duration
+.animated.overview.transition = null|an overview that did not animate
+.still.maximise.transition = {mode: "CUBIC_BEZIER", duration: 1}|a transition left with animations off
+.animated.maximise.maximised = false|a window that did not maximise
+CHANGES
+}
+
 fixtures_report() {
     local part
     for part in main kernel fedora; do
@@ -1153,6 +1192,7 @@ test_fixed_clock
 test_clock_c
 test_overview_below_bar
 test_layer_cycles
+test_motion
 test_spotlight_key
 test_fixtures
 

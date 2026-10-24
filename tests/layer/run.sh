@@ -48,12 +48,15 @@ mkdir -p "$T/schemas" "$T/noschema" "$T/nochild" "$T/data" "$T/home" "$T/shell" 
 # main.js and the Meta and Shell typelibs come only with gnome-shell and mutter.
 cp -R "$REPO/desktop/shell/js" "$T/shell/"
 cp "$HERE/main-stub.js" "$T/shell/js/ui/main.js"
-cp "$HERE/stubs/panelMenu.js" "$T/shell/js/ui/panelMenu.js"
-cp "$HERE"/stubs/St.js "$HERE"/stubs/Clutter.js "$HERE"/stubs/Shell.js "$T/"
+for stub in panelMenu boxpointer overview overviewControls windowManager; do
+    cp "$HERE/stubs/$stub.js" "$T/shell/js/ui/$stub.js"
+done
+cp "$HERE"/stubs/St.js "$HERE"/stubs/Clutter.js "$HERE"/stubs/Shell.js "$HERE"/stubs/Graphene.js "$T/"
 # gjs outside the shell has no St or Clutter typelib, and the fixture's Shell no
 # WindowTracker: the features get stubs instead.
 find "$T/shell/js/ui/apex" -name '*.js' -exec sed -i -e "s|'gi://St'|'file://$T/St.js'|" \
-    -e "s|'gi://Clutter'|'file://$T/Clutter.js'|" -e "s|'gi://Shell'|'file://$T/Shell.js'|" {} +
+    -e "s|'gi://Clutter'|'file://$T/Clutter.js'|" -e "s|'gi://Shell'|'file://$T/Shell.js'|" \
+    -e "s|'gi://Graphene'|'file://$T/Graphene.js'|" {} +
 for gir in "$HERE"/fixtures/*.gir; do
     gir_name=${gir##*/}
     "$GI_COMPILER" "$gir" -o "$T/typelib/${gir_name%.gir}.typelib"
@@ -159,6 +162,17 @@ keybindings_are "spotlight: registered once" add
 has "spotlight: a press opens the overview with its search entry focused" '^probe: overview=shown, search focused$'
 fact "spotlight: so the overview is up" 'press\.1=overview=true'
 fact "spotlight: pressed again while it is up, it hides the overview" 'press\.2=overview=false'
+has "motion: the feature enables" 'Apex: feature motion enabled'
+fact "motion: window geometry takes the curve and .3 s" 'motion\.window=CUBIC_BEZIER 300'
+fact "motion: the overview takes the curve and .2 s" 'motion\.overview=CUBIC_BEZIER 200'
+fact "motion: a popover takes the curve and .18 s" 'motion\.popover=CUBIC_BEZIER 180'
+fact "motion: 250 ms outside windows and the overview keeps its duration" 'motion\.other-250=CUBIC_BEZIER 250'
+fact "motion: an actor's default ease takes the curve" 'motion\.actor-default=CUBIC_BEZIER 100'
+fact "motion: linear stays linear" 'motion\.linear=LINEAR 100'
+fact "motion: an adjustment eases by its actor" 'motion\.adjustment=CUBIC_BEZIER 200'
+fact "motion: an adjustment without a mode keeps Clutter's linear" 'motion\.adjustment-default=none 100'
+fact "motion: an ease without parameters passes through" 'motion\.no-params=undefined'
+fact "motion: the eased hook sets cubic-bezier(.2,.8,.2,1)" 'motion\.curve=0\.2,0\.8 0\.2,1'
 if [[ $(run_guard_unit_like_systemd default) == skipped ]]; then
     ok "default: a later shell failure does not trip the guard (no marker)"
 else
@@ -291,6 +305,13 @@ fact "FAULT=everything: no fault feature" 'test-fault=stock'
 probe disabled "$CMDLINE_PLAIN" APEX_SHELL_TEST_FAULT=enable PROBE_DISABLED=fault PROBE_ENABLE=1
 has "disabled-features skips a feature" 'Apex: feature fault is in disabled-features'
 fact "and its hook gives stock" 'test-fault=stock'
+
+probe motion-disabled "$CMDLINE_PLAIN" PROBE_DISABLED=motion PROBE_ENABLE=1
+has "disabled-features=['motion']: skips the feature" 'Apex: feature motion is in disabled-features'
+fact "disabled-features=['motion']: window geometry keeps stock's mode and 250 ms" 'motion\.window=EASE_OUT_QUAD 250'
+fact "disabled-features=['motion']: a popover keeps 150 ms" 'motion\.popover=EASE_OUT_QUAD 150'
+fact "disabled-features=['motion']: an actor's default stays Clutter's" 'motion\.actor-default=none 100'
+fact "disabled-features=['motion']: no curve is set" 'motion\.curve=stock'
 
 probe spotlight-disabled "$CMDLINE_PLAIN" PROBE_DISABLED=spotlight PROBE_ENABLE=1 PROBE_PRESS=1
 has "disabled-features=['spotlight']: skips the feature" 'Apex: feature spotlight is in disabled-features'

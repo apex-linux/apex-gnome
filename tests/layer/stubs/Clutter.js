@@ -5,6 +5,10 @@
 import GLib from 'gi://GLib';
 
 const TextDirection = {DEFAULT: 0, LTR: 1, RTL: 2};
+const AnimationMode = {LINEAR: 1, EASE_OUT_QUAD: 3, EASE_OUT_CUBIC: 6, EASE_OUT_EXPO: 21,
+    STEPS: 46, STEP_START: 47, STEP_END: 48, CUBIC_BEZIER: 49};
+
+class Actor {}
 
 class ClickGesture {
     connect(signal, fn) {
@@ -14,6 +18,8 @@ class ClickGesture {
 }
 
 export default {
+    Actor,
+    AnimationMode,
     ClickGesture,
     ActorAlign: {FILL: 0, START: 1, CENTER: 2, END: 3},
     TextDirection,

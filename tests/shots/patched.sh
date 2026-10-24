@@ -154,7 +154,7 @@ echo "# direct.sh main: exit $rc"
 set +e
 # shellcheck source=tests/shots/assert.sh
 . "$HERE/assert.sh"
-for c in default default-scale1 dark-style stock-light stock-dark safe-env layer-disabled layer-cycles; do
+for c in default default-scale1 dark-style stock-light stock-dark safe-env layer-disabled layer-cycles motion; do
     no_js_error "$c" "$run/$c.log"
     fixed_clock "$c" "$run/$c.log"
 done
@@ -183,5 +183,6 @@ for c in default:light default-scale1:light dark-style:dark; do
     derived_surfaces "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
 done
 layer_cycles "$run"
+motion_curve "$run"
 echo "# logs and captures: $run"
 summary
