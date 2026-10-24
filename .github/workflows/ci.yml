@@ -210,6 +210,14 @@ jobs:
       - name: tests/lib/lane.sh libadwaita
         run: tests/lib/lane.sh libadwaita
 
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: libadwaita-rpms
+          path: |
+            _build/libadwaita/out/libadwaita-[0-9]*.x86_64.rpm
+          if-no-files-found: error
+          retention-days: 3
+
       - name: tests/libadwaita/radius-test.sh on Fedora's libadwaita
         run: |
           dnf5 -y -q --setopt=install_weak_deps=False --repo=fedora --repo=updates install \
@@ -231,7 +239,7 @@ jobs:
   control-center-lane:
     # The gnome-control-center recipe through apex-lane's own container half, built from
     # a pinned apex-image; the builder VM adds only the signing and the store.
-    name: tests/control-center/lane.sh (Fedora 45, gnome-control-center rebuilt)
+    name: tests/lib/lane.sh gnome-control-center (Fedora 45, gnome-control-center rebuilt)
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     permissions:
@@ -251,14 +259,23 @@ jobs:
       - name: tests/control-center/selftest.sh
         run: tests/control-center/selftest.sh
 
-      - name: tests/control-center/lane.sh
-        run: tests/control-center/lane.sh
+      - name: tests/lib/lane.sh gnome-control-center
+        run: tests/lib/lane.sh gnome-control-center
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: gnome-control-center-rpms
+          path: |
+            _build/gnome-control-center/out/gnome-control-center-[0-9]*.x86_64.rpm
+            _build/gnome-control-center/out/gnome-control-center-filesystem-[0-9]*.noarch.rpm
+          if-no-files-found: error
+          retention-days: 3
 
       - name: tests/control-center/run.sh on the built RPMs
         run: |
           dnf5 -y -q --setopt=install_weak_deps=False --repo=fedora --repo=updates install \
             gnome-shell mesa-dri-drivers dbus-daemon python3-dbusmock python3-gobject at-spi2-core gcc util-linux adwaita-sans-fonts
-          tests/control-center/run.sh _build/control-center/out
+          tests/control-center/run.sh _build/gnome-control-center/out
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
@@ -271,13 +288,13 @@ jobs:
         if: failure()
         with:
           name: control-center-lane
-          path: _build/control-center/out/
+          path: _build/gnome-control-center/out/
           if-no-files-found: ignore
 
   nautilus-lane:
     # The nautilus recipe through apex-lane's own container half, built from a pinned
     # apex-image; the builder VM adds only the signing and the store.
-    name: tests/nautilus/lane.sh (Fedora 45, nautilus rebuilt)
+    name: tests/lib/lane.sh nautilus (Fedora 45, nautilus rebuilt)
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     permissions:
@@ -297,8 +314,17 @@ jobs:
       - name: tests/nautilus/selftest.sh
         run: tests/nautilus/selftest.sh
 
-      - name: tests/nautilus/lane.sh
-        run: tests/nautilus/lane.sh
+      - name: tests/lib/lane.sh nautilus
+        run: tests/lib/lane.sh nautilus
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: nautilus-rpms
+          path: |
+            _build/nautilus/out/nautilus-[0-9]*.x86_64.rpm
+            _build/nautilus/out/nautilus-extensions-[0-9]*.x86_64.rpm
+          if-no-files-found: error
+          retention-days: 3
 
       - name: tests/nautilus/format-test.sh
         env:
@@ -326,6 +352,50 @@ jobs:
         with:
           name: nautilus-lane
           path: _build/nautilus/out/
+          if-no-files-found: ignore
+
+  s2c-radius:
+    # S2c's live window radius end to end: the lanes' libadwaita, Settings and Files with
+    # apex-session-agent from the pinned apex-system, under one headless shell.
+    name: tests/s2c/radius-test.sh (Fedora 45, S2c live radius)
+    needs: [libadwaita-lane, control-center-lane, nautilus-lane]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    container:
+      image: registry.fedoraproject.org/fedora:45@sha256:1e13e11f63e147a40a935c9046c79d53a30b861a3cf05ebb023bb53c562382cb
+    steps:
+      - name: git for the checkout and apex-system
+        run: >-
+          dnf5 -y --setopt=install_weak_deps=False --repo=fedora --repo=updates install
+          git-core bash coreutils findutils sed grep
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: tests/s2c/agent.sh
+        run: tests/s2c/agent.sh
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: '*-rpms'
+          path: _build/s2c/rpms
+          merge-multiple: true
+
+      - name: tests/s2c/radius-test.sh on the lanes' RPMs
+        run: |
+          dnf5 -y -q --setopt=install_weak_deps=False --repo=fedora --repo=updates install \
+            ptyxis gnome-shell mesa-dri-drivers dbus-daemon dconf python3-dbusmock python3-gobject at-spi2-core \
+            gcc util-linux jq adwaita-sans-fonts
+          tests/s2c/radius-test.sh _build/s2c/rpms _build/s2c/apex-session-agent
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: s2c-radius
+          path: _build/s2c/radius/
           if-no-files-found: ignore
 
   scripts:
