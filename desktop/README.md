@@ -91,7 +91,13 @@ the key turns off the `panel` feature, logged.
 does what Super+Space does (`toggleSpotlight()` of `spotlight`): the overview with its
 search entry focused, or, while the overview is up, hides it. It works with `spotlight`
 in `disabled-features` too. The lock screen hides it; keyboard focus reaches it, but
-Super+Space is its key.
+Super+Space is its key. Hovered, it shows the tooltip "Search (Super+Space)" below it, a
+`dash-label` in the chrome, as the dash's labels are.
+
+`panel/search-hint.js` posts "Press Super+Space to search" once per user (ROADMAP S1b), as
+a stock transient notification, at the first enable of the panel outside the lock screen,
+and sets `search-hint-shown`. A schema without that key means no hint, logged once; the
+rest of the panel runs.
 
 The layer also does what every feature relies on:
 

@@ -34,6 +34,7 @@ function newEmitter(props = {}) {
 const windows = [];
 globalThis.global = {
     display: newEmitter(),
+    stage: {width: 1440},
     window_manager: newEmitter(),
     workspace_manager: newEmitter({get_active_workspace: () => ({list_windows: () => windows})}),
     session_mode: GLib.getenv('PROBE_MODE') ?? 'user',
@@ -52,6 +53,8 @@ const settings = schema ? new Gio.Settings({settings_schema: schema}) : null;
 if (settings) {
     if (GLib.getenv('PROBE_LAYER_OFF') === '1')
         settings.set_boolean('layer-enabled', false);
+    if (GLib.getenv('PROBE_HINT_SHOWN') === '1')
+        settings.set_boolean('search-hint-shown', true);
     const disabled = GLib.getenv('PROBE_DISABLED');
     if (disabled)
         settings.set_strv('disabled-features', disabled.split(','));
@@ -231,6 +234,19 @@ async function exerciseSearchButton() {
             `visible=${item.container.visible}`);
     };
     report('enabled');
+    const button = Main.panel.statusArea['apex-search'];
+    if (button) {
+        const tooltip = () => {
+            const label = Main.layoutManager.lastChrome;
+            return label ? `${label.visible} at ${label.x},${label.y}` : 'none';
+        };
+        button.hover = true;
+        button.emit('notify::hover');
+        fact('search.tooltip.hover', tooltip());
+        button.hover = false;
+        button.emit('notify::hover');
+        fact('search.tooltip.unhover', tooltip());
+    }
     Main.panel.statusArea['apex-search']?.actions[0].recognize();
     fact('search.click.1', `overview=${Main.overview.visible}`);
     Main.panel.statusArea['apex-search']?.actions[0].recognize();
@@ -324,6 +340,8 @@ fact('boom', `${Hooks.value('boom', 'stock')},${Hooks.value('boom', 'stock')}`);
 fact('run-without-provider', Hooks.run('nothing'));
 
 if (layer && GLib.getenv('PROBE_ENABLE') === '1') {
+    if (GLib.getenv('PROBE_LOCKED') === '1')
+        (await import(`file://${shellDir}/js/ui/main.js`)).sessionMode.isLocked = true;
     layer.enable();
     const marker = GLib.build_filenamev([GLib.get_user_runtime_dir(), 'apex-shell-starting']);
     fact('starting-file', GLib.file_test(marker, GLib.FileTest.EXISTS));
@@ -353,6 +371,8 @@ if (layer && GLib.getenv('PROBE_ENABLE') === '1') {
             fn();
     }
     fact('starting-file.after-shutdown', GLib.file_test(marker, GLib.FileTest.EXISTS));
+    if (settings.settings_schema.has_key('search-hint-shown'))
+        fact('search-hint-shown', settings.get_boolean('search-hint-shown'));
 }
 if (!layer && settings)
     await switchLayer();

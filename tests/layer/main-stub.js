@@ -103,10 +103,21 @@ export const panel = {
     },
 };
 
+export function notify(title) {
+    fact('notify', title);
+}
+
+// layout.js's chrome parameters: Params.parse throws on any other.
+const CHROME_PARAMS = ['trackFullscreen', 'affectsStruts'];
+
 export const layoutManager = {
     _updateHotCorners: () => fact('hot-corners', 'rebuilt'),
-    addChrome(actor, params) {
-        fact('chrome.add', `${actor.name} trackFullscreen=${params?.trackFullscreen ?? false}`);
+    addChrome(actor, params = {}) {
+        const unknown = Object.keys(params).filter(key => !CHROME_PARAMS.includes(key));
+        if (unknown.length > 0)
+            throw new Error(`Unrecognized parameter "${unknown[0]}"`);
+        this.lastChrome = actor;
+        fact('chrome.add', `${actor.name ?? actor.text} trackFullscreen=${params.trackFullscreen ?? false}`);
     },
 };
 
