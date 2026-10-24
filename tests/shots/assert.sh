@@ -681,6 +681,25 @@ overview_layer() {
 }
 
 # shellcheck disable=SC2016 # jq programs and token names, not shell expansions
+tile_preview() {
+    local label=$1 log=$2 variant=$3 scenes tokens
+    scenes=$(report_of "$log" APEXG2-SCENES)
+    tokens=$(tokens_for "$variant")
+    local -a metric=(top_bar_metric "$label tile preview" "$scenes" "$tokens")
+    local tp=.surfaces.tilePreview
+    local tinted='def tinted($a; $opacity): rgba as $c | ($a | rgba) as $w | ($c[0:3] == $w[0:3]) and ($c[3] - ($opacity | num) * 255 | fabs <= 1);'
+
+    "${metric[@]}" 'the preview over the left half fills the tile mutter gives it, behind a clear $apex_tile_preview_inset border, so it shows $apex_tile_preview_inset inside the tile' \
+        "$tp" '.tile as $tile | .preview | (.styleClass | split(" ") | index("tile-preview-left") != null)
+            and .x == $tile.x and .y == $tile.y and .width == $tile.width and .height == $tile.height
+            and (.border | [.top, .right, .bottom, .left] | all(px_is($t.apex_tile_preview_inset))) and (.borderColor | rgba | .[3] == 0)'
+    "${metric[@]}" 'it is rounded $apex_radius_tile_preview inside that border, filled with the accent at $apex_tile_preview_fill_opacity and ringed $apex_tile_preview_ring in the accent at $apex_tile_preview_ring_opacity' \
+        "{p: $tp.preview, accent: .topBar.accent}" "$tinted"' .accent as $a | .p | (.radius - .border.top | px_is($t.apex_radius_tile_preview))
+            and (.background | tinted($a; $t.apex_tile_preview_fill_opacity))
+            and (.boxShadow | .inset and (.spread | px_is($t.apex_tile_preview_ring)) and .blur == 0 and (.color | tinted($a; $t.apex_tile_preview_ring_opacity)))'
+}
+
+# shellcheck disable=SC2016 # jq programs and token names, not shell expansions
 derived_surfaces() {
     local label=$1 log=$2 variant=$3 scenes tokens
     scenes=$(report_of "$log" APEXG2-SCENES)
@@ -961,6 +980,7 @@ direct_cases() {
     app_grid default "$f" light
     overview_layer default "$f" light
     derived_surfaces default "$f" light
+    tile_preview default "$f" light
     spotlight_style default "$f" light
 
     f=$run/default-scale1.log
@@ -981,6 +1001,7 @@ direct_cases() {
     app_grid default-scale1 "$f" light
     overview_layer default-scale1 "$f" light
     derived_surfaces default-scale1 "$f" light
+    tile_preview default-scale1 "$f" light
     spotlight_style default-scale1 "$f" light
 
     f=$run/dark-style.log
@@ -1004,6 +1025,7 @@ direct_cases() {
     app_grid dark-style "$f" dark
     overview_layer dark-style "$f" dark
     derived_surfaces dark-style "$f" dark
+    tile_preview dark-style "$f" dark
     spotlight_style dark-style "$f" dark
     dark_style_off dark-style "$f"
 

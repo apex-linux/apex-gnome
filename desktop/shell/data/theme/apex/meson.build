@@ -18,6 +18,7 @@ theme_sources += files(
   '_lock.scss',
   '_derived.scss',
   '_dock.scss',
+  '_tile-preview.scss',
   '_spotlight.scss',
   '_glass.scss',
   '_apex-structure.scss',

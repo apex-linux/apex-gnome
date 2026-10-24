@@ -398,6 +398,16 @@ REPORT_OF_AN_OVERVIEW_LAYER_FROM_TOKENS='
                 font: {size: ($t.apex_font_workspace_empty_size | px), weight: ($t.apex_font_heading_weight | tonumber)}}}},
     appGrid: {grid: {columns: 7, rows: 4, iconSize: 88}}}}'
 # shellcheck disable=SC2016 # a jq program
+REPORT_OF_A_TILE_PREVIEW_DRAWN_FROM_TOKENS='
+($t.apex_tile_preview_inset | px) as $i
+| def tint($o): "rgba(53, 132, 228, \($o))" | hex;
+{topBar: {accent: "#3584e4ff"}, surfaces: {tilePreview: {
+    tile: {x: 0, y: 32, width: 720, height: 868},
+    preview: {styleClass: "tile-preview on-primary tile-preview-left", x: 0, y: 32, width: 720, height: 868,
+        border: {top: $i, right: $i, bottom: $i, left: $i}, borderColor: "#00000000",
+        radius: (($t.apex_radius_tile_preview | px) + $i), background: tint($t.apex_tile_preview_fill_opacity),
+        boxShadow: {inset: true, x: 0, y: 0, blur: 0, spread: ($t.apex_tile_preview_ring | px), color: tint($t.apex_tile_preview_ring_opacity)}}}}}'
+# shellcheck disable=SC2016 # a jq program
 REPORT_OF_DERIVED_SURFACES_DRAWN_FROM_TOKENS='
 ($t.apex_surface_border | px) as $b
 | {border: {top: $b}, borderColor: ($t.apex_panel_border | hex),
@@ -481,6 +491,7 @@ assert_run() {
     [[ $assertions == overview_style ]] && report=$REPORT_OF_AN_OVERVIEW_DRAWN_FROM_TOKENS
     [[ $assertions == app_grid ]] && report=$REPORT_OF_A_LAUNCHER_DRAWN_FROM_TOKENS
     [[ $assertions == derived_surfaces ]] && report=$REPORT_OF_DERIVED_SURFACES_DRAWN_FROM_TOKENS
+    [[ $assertions == tile_preview ]] && report=$REPORT_OF_A_TILE_PREVIEW_DRAWN_FROM_TOKENS
     [[ $assertions == overview_layer ]] && report=$REPORT_OF_AN_OVERVIEW_LAYER_FROM_TOKENS
     [[ $assertions == spotlight_style ]] && report=$REPORT_OF_A_SPOTLIGHT_DRAWN_FROM_TOKENS
     tokens=$(tokens_for "$variant")
@@ -865,6 +876,33 @@ test_app_grid() {
 .surfaces.appGrid.dialog.width = 720|upstream's 720 px folder
 .surfaces.appGrid.dialog.title.font.size = 26.667|upstream's title 1 folder name
 .surfaces.appGrid.pageHint.gradient = 1|upstream's gradient page hint
+CHANGES
+}
+
+test_tile_preview() {
+    local variant change what passes failures open_gaps
+    for variant in light dark; do
+        read -r passes failures open_gaps <<<"$(assert_run tile_preview "$variant")"
+        if ((failures == 0 && open_gaps == 0 && passes == 2)); then
+            ok "tile preview ($variant): drawn from the tokens it passes all $passes assertions"
+        else
+            not_ok "tile preview ($variant): drawn from the tokens it passes (passed/failed/gaps $passes/$failures/$open_gaps): $(grep -m3 '^FAIL' "$T/top-bar.out" | paste -sd'|' -)"
+        fi
+    done
+    while IFS='|' read -r change what; do
+        read -r passes failures open_gaps <<<"$(assert_run tile_preview light "$change")"
+        if ((failures == 1)); then
+            ok "tile preview: $what fails one assertion"
+        else
+            not_ok "tile preview: $what fails one assertion (passed/failed/gaps $passes/$failures/$open_gaps)"
+        fi
+    done <<'CHANGES'
+.surfaces.tilePreview.preview.width = 708|a preview shrunk to the inset instead of bordered
+.surfaces.tilePreview.preview.borderColor = "#3584e4ff"|upstream's opaque accent border
+.surfaces.tilePreview.preview.x = 6|a preview moved instead of inset
+.surfaces.tilePreview.preview.radius = 0|upstream's square corners
+.surfaces.tilePreview.preview.background = "#3584e480"|upstream's half-accent fill
+.surfaces.tilePreview.preview.boxShadow = null|no ring
 CHANGES
 }
 
@@ -1417,6 +1455,7 @@ test_overview_style
 test_app_grid
 test_overview_layer
 test_derived_surfaces
+test_tile_preview
 test_spotlight_style
 test_today_pins
 test_known_gaps

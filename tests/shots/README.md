@@ -241,6 +241,11 @@ and the threshold of one workspace, and the launcher's grid at 7 columns, 4 rows
 88 px icons. G2 opens no windows, so the `window-title-visible` hook's answer stands in for
 a title shown without hover.
 
+`tile_preview` runs in the same cases. G2 opens no window to drag, so a stand-in actor in
+the window group plays the window and the stock `TilePreview` opens over the left half of the
+work area, captured with `G2_SURFACE_SCENES=1`. It reads the preview's box against the tile, its
+clear inset border, the radius inside it, the accent fill and the inset accent ring.
+
 `derived_surfaces` reads surfaces with no board, which G2 never opens, from nested
 stand-ins in the same cases: the workspace switcher and its dots, the resize popup, the
 input method's candidates and a candidate, the run dialog's entry, an audio device tile

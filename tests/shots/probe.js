@@ -3,6 +3,7 @@
 import Clutter from 'gi://Clutter';
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
+import Mtk from 'gi://Mtk';
 import Shell from 'gi://Shell';
 import St from 'gi://St';
 
@@ -15,6 +16,7 @@ import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 import * as Scripting from 'resource:///org/gnome/shell/ui/scripting.js';
 import * as Slider from 'resource:///org/gnome/shell/ui/slider.js';
 import * as SwitcherPopup from 'resource:///org/gnome/shell/ui/switcherPopup.js';
+import * as WindowManager from 'resource:///org/gnome/shell/ui/windowManager.js';
 import * as WorkspaceThumbnail from 'resource:///org/gnome/shell/ui/workspaceThumbnail.js';
 
 import * as Png from './png.js';
@@ -1303,6 +1305,38 @@ async function appGrid(unit) {
     }
 }
 
+// G2 opens no window to drag to an edge, so a stand-in actor in the window group plays the
+// window and the stock preview opens over the left half of the work area.
+async function tilePreview(unit) {
+    const {primaryIndex, primaryMonitor} = Main.layoutManager;
+    const area = Main.layoutManager.getWorkAreaForMonitor(primaryIndex);
+    const stand = new Clutter.Actor({x: area.x, y: area.y, width: area.width / 2, height: area.height});
+    global.window_group.add_child(stand);
+    const window = {
+        get_compositor_private: () => stand,
+        get_frame_rect: () => new Mtk.Rectangle({x: area.x + 100, y: area.y + 100, width: 600, height: 400}),
+    };
+    const preview = new WindowManager.TilePreview();
+    try {
+        preview.open(window, new Mtk.Rectangle({x: area.x, y: area.y, width: area.width / 2, height: area.height}), primaryIndex);
+        await settle();
+        const scene = GLib.getenv('G2_SURFACE_SCENES') === '1' ? await capture('tile-preview') : null;
+        if (scene)
+            delete scene.bytes;
+        return {
+            scene,
+            tile: {
+                x: round((area.x - primaryMonitor.x) / unit.length), y: round((area.y - primaryMonitor.y) / unit.length),
+                width: round(area.width / 2 / unit.length), height: round(area.height / unit.length),
+            },
+            preview: styleOf(preview, unit),
+        };
+    } finally {
+        preview.destroy();
+        stand.destroy();
+    }
+}
+
 // Surfaces G2 never opens, as nested stand-ins: each class is the parent of the next.
 function nestedStyle(classes, unit, Leaf = St.Widget) {
     const actors = classes.map((styleClass, i) => i === classes.length - 1
@@ -1371,6 +1405,7 @@ async function scenes() {
     surfaces.dialog = await modalDialog(unit);
     surfaces.dateMenu = await calendarMenu(unit);
     surfaces.derived = derivedSurfaces(unit);
+    surfaces.tilePreview = await tilePreview(unit);
     surfaces.spotlight = await spotlightStyle(unit);
 
     Main.overview.show();
