@@ -396,6 +396,7 @@ def check_polkit(shots, case, want):
 DND_LABEL = "Do Not Disturb"
 ICON_SIZE = 32
 MESSAGE_GAP = 8  # $apex_message_gap
+ROW_GAP = 12  # $apex_banner_gap
 FOOTER_INSET = 8
 DATE_MENU_STEPS = ("none", "one", "many", "cleared")
 DATE_MENU_APPS = ["Settings", "Calendar", "Terminal", "Files"]
@@ -433,6 +434,10 @@ def check_cards(case, step, menu, apex):
         check(f"{case}: {step}: each card shows its app's plain {ICON_SIZE} px icon, no tile, left of its text",
               all(c["icon"] and abs(c["icon"]["size"] - ICON_SIZE) <= 1 and abs(c["icon"]["width"] - ICON_SIZE) <= 1
                   and c["icon"]["x"] + c["icon"]["width"] <= c["text"]["x"]
+                  for c in cards), json.dumps(cards))
+        check(f"{case}: {step}: the icon's column, {ROW_GAP} px from the header over the title",
+              all(c["icon"] and abs(c["header"]["x"] - c["icon"]["x"] - c["icon"]["width"] - ROW_GAP) <= 1
+                  and abs(c["text"]["x"] - c["header"]["x"]) <= 1 and c["text"]["y"] >= c["header"]["y"] + c["header"]["height"] - 1
                   for c in cards), json.dumps(cards))
         boxes = sorted((c["card"] for c in cards), key=lambda b: b["y"])
         gaps = [b["y"] - a["y"] - a["height"] for a, b in zip(boxes, boxes[1:])]

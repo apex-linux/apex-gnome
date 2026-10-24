@@ -32,6 +32,10 @@ readonly EMPTY_WORKSPACE_TEXT='No open windows'
 readonly LAUNCHER_COLUMNS=7
 readonly LAUNCHER_ROWS=4
 readonly LAUNCHER_ICON_SIZE=88
+readonly MESSAGE_ICON_SIZE=32
+readonly MESSAGE_ROW_GAP=12
+readonly CARD_COLUMNS='box[apex-message-row[message-icon,box[message-header,message-box[message-content,box]]],message-action-bin]'
+readonly CARD_UPSTREAM='box[message-header,message-box[message-icon,message-content,box],message-action-bin]'
 readonly LAUNCHER_GRID_TOP=132
 # overviewControls.js: spacing is 2 % of the work area, the stock .search-entry keeps 6 px below it.
 readonly OVERVIEW_SPACING_RATIO=0.02
@@ -595,12 +599,26 @@ notifications_layer() {
         expect "$label notifications" "$scenes" "$q.calendar | .label.x < .back.x and .back.x < .forward.x
             and (.dots | length) == .days and all(.dots[]; .width == 4 and .height == 4)" \
             "the calendar: the month on the left, both chevrons on the right, a 4 px dot laid out under every day"
+        expect "$label notifications" "$scenes" "$q.trees | length == 3 and all(. == \"$CARD_COLUMNS\")" \
+            "every card, the back ones too: the icon's column beside the header over the title and body, the actions under both"
+        expect "$label notifications" "$scenes" "$q.layout.collapsed | .icon.width == $MESSAGE_ICON_SIZE
+            and (.header.x - .icon.x - .icon.width - $MESSAGE_ROW_GAP | fabs <= 1) and (.title.x - .header.x | fabs <= 1)
+            and .title.y >= .header.y + .header.height - 1 and .close.x > .header.x and .close.x + .close.width <= .card.x + .card.width
+            and .actions == null" \
+            "a card: the $MESSAGE_ICON_SIZE px icon, $MESSAGE_ROW_GAP px from the column of the header over the title; the close button on the right"
+        expect "$label notifications" "$scenes" "$q.layout.expanded | .actions != null and (.tree | startswith(\"box[apex-message-row[\"))
+            and .actions.x <= .icon.x + 1 and .actions.x + .actions.width >= .title.x + .title.width - 1 and .actions.y >= .title.y" \
+            "expanded, a card's action row spans both columns, under them"
+        expect "$label notifications" "$scenes" "$q.layout.collapsedAgain | .actions == null and .tree == \"$CARD_COLUMNS\"" \
+            "collapsed again, the same columns, the action row hidden"
     else
         expect "$label notifications" "$scenes" "$q | (.messages | length == 3) and ($flat | not) and .dnd == null
             and .cardHeader.sourceIcon and .icon == null" \
             "stock: an app's notifications stack, each header keeps its glyph, and the footer has Clear alone"
         expect "$label notifications" "$scenes" "$q.empty | .placeholder and (.clearVisible | not)" \
             "stock: with nothing to clear, Clear hides"
+        expect "$label notifications" "$scenes" "$q.trees | length == 3 and all(. == \"$CARD_UPSTREAM\")" \
+            "stock: upstream's card, exactly: the header, then the icon beside the title and body, then the actions"
         expect "$label notifications" "$scenes" "$q.calendar | .back.x < .label.x and .label.x < .forward.x and (.dots | length) == 0" \
             "stock: the month between its chevrons, no dot widgets"
     fi

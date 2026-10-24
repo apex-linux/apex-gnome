@@ -428,6 +428,15 @@ has "notifications: the feature enables" 'Apex: feature notifications enabled'
 readonly FLAT='expanded=true layout=box cover=false header=false stacked=false'
 readonly STACKED='expanded=false layout=expander cover=true header=false'
 fact "notifications: a group lays its cards out flat, without its header or cover" "nf\.groups=Mail:$FLAT"
+readonly COLUMNS='vbox\[apex-message-row\[icon,box\[header,message-box\[content,media\]\]\],action-bin'
+readonly UPSTREAM='vbox\[header,message-box\[icon,content,media\],action-bin'
+readonly REPLY='action-bin\[actions\[Reply\]\]'
+fact "notifications: every card, the back ones too: the icon's column beside the header over the title and body, the actions under both" \
+    "nf\.cards=${COLUMNS}\] \| ${COLUMNS}\] \| ${COLUMNS}\]"
+fact "notifications: expanded, a card's action row spans both columns" "nf\.expanded=${COLUMNS/%action-bin/$REPLY}\] actions=true"
+fact "notifications: collapsed again, the same tree, the action row hidden" "nf\.unexpanded=${COLUMNS/%action-bin/$REPLY}\] actions=false"
+fact "notifications: a card added to a flat group gets the columns too" \
+    "nf\.added\.cards=${COLUMNS/%action-bin/$REPLY}\] \| ${COLUMNS}\] \| ${COLUMNS}\] \| ${COLUMNS}\]"
 fact "notifications: the header reads app · time, without the source glyph" 'nf\.header=icon=false line=Mail · now'
 fact "notifications: Do Not Disturb, then Clear on the right" 'nf\.footer=apex-dnd-button,clear clear=align:3 visible:true'
 fact "notifications: a card shows the source's icon without one of its own, else its own" 'nf\.icons=fallback=mail-icon own=photo-icon'
@@ -441,6 +450,10 @@ fact "notifications: layer off: stock's day buttons" 'nf\.off\.days=27 28 29'
 fact "notifications: layer back on: the header and dots again" 'nf\.on\.calendar=header=month,back,forward align=1 class=true'
 fact "notifications: layer off: stock's groups, a new one too" "nf\.off\.groups=Mail:$STACKED stacked=true \| Chat:$STACKED stacked=true"
 fact "notifications: layer off: stock's header" 'nf\.off\.header=icon=true line=Mail now'
+fact "notifications: layer off: upstream's tree, exactly, on every card" \
+    "nf\.off\.cards=${UPSTREAM/%action-bin/$REPLY}\] \| ${UPSTREAM}\] \| ${UPSTREAM}\] \| ${UPSTREAM}\]"
+fact "notifications: layer back on: the columns again" \
+    "nf\.on\.cards=${COLUMNS/%action-bin/$REPLY}\] \| ${COLUMNS}\] \| ${COLUMNS}\] \| ${COLUMNS}\]"
 fact "notifications: layer off: stock's footer, Clear hidden with the placeholder shown" 'nf\.off\.footer=clear clear=align:1 visible:false'
 fact "notifications: layer off: no fallback icon" 'nf\.off\.icons=fallback=null own=photo-icon'
 fact "notifications: layer back on: flat again; a group built while every hook was stock stays stock" \

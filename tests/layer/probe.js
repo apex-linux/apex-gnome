@@ -612,6 +612,20 @@ function notificationsState(label, list, groups) {
         `clear=align:${clear.x_align} visible:${clear.visible}`);
 }
 
+// A card's tree to two levels below its box, the header as one node.
+function cardTree(actor) {
+    if (actor.has_style_class_name?.('message-header'))
+        return 'header';
+    const children = actor.get_children();
+    const name = actor.name ?? actor.style_class ?? 'box';
+    return children.length ? `${name}[${children.map(cardTree).join(',')}]` : name;
+}
+
+function cardsState(label, group) {
+    const cards = group.get_children().map(c => c.child).filter(Boolean);
+    fact(`${label}.cards`, cards.map(c => cardTree(c.get_child())).join(' | '));
+}
+
 async function exerciseNotifications() {
     if (GLib.getenv('PROBE_NOTIFICATIONS') !== '1')
         return;
@@ -620,6 +634,15 @@ async function exerciseNotifications() {
     const list = MessageList.newCalendarMessageList();
     const groups = [new MessageList.NotificationMessageGroup(mail, 3)];
     notificationsState('nf', list, groups);
+    cardsState('nf', groups[0]);
+    const [card] = groups[0].get_children().map(c => c.child);
+    card.addAction('Reply');
+    card.expand();
+    fact('nf.expanded', `${cardTree(card.get_child())} actions=${card._actionBin.visible}`);
+    card.unexpand();
+    fact('nf.unexpanded', `${cardTree(card.get_child())} actions=${card._actionBin.visible}`);
+    groups[0].addNotification(mail);
+    cardsState('nf.added', groups[0]);
     const own = new MessageList.Message(mail, 'photo-icon');
     fact('nf.icons', `fallback=${groups[0].get_children()[0].child.icon} own=${own.icon}`);
     list.placeholder.visible = true;
@@ -645,10 +668,12 @@ async function exerciseNotifications() {
     calendarState('nf.off');
     groups.push(new MessageList.NotificationMessageGroup({title: 'Chat', icon: 'chat-icon'}, 2));
     notificationsState('nf.off', list, groups);
+    cardsState('nf.off', groups[0]);
     fact('nf.off.icons', `fallback=${groups[0].get_children()[0].child.icon} own=${own.icon}`);
     settings.set_boolean('layer-enabled', true);
     await spin(200);
     notificationsState('nf.on', list, groups);
+    cardsState('nf.on', groups[0]);
     calendarState('nf.on');
 }
 
