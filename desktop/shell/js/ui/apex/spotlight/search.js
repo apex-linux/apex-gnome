@@ -6,6 +6,8 @@
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 
+import {tileOf} from './tiles.js';
+
 export const BUDGET_MS = 1000;
 export const CALCULATOR_APP = 'org.gnome.Calculator.desktop';
 
@@ -63,6 +65,7 @@ function rowsOf(section, provider, metas, terms) {
         createIcon: size => meta.createIcon?.(size) ?? null,
         // gnome-calculator gives its result a copy glyph; board 38 draws the app's icon.
         gicon: calculator ? provider.appInfo?.get_icon() ?? null : null,
+        tile: section.name === 'Settings' ? tileOf(meta.id) : undefined,
         copyText: calculator ? meta.clipboardText ?? meta.name : null,
         activate: () => provider.activateResult(meta.id, terms),
     }));

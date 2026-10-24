@@ -268,6 +268,14 @@ Mode lit through `apex-lit` with `checked` stock, the power-profile indicator ou
 pill, "Off" under a toggle without a subtitle of its own, and the clicks switching to the
 last profile and back, still lit. Stock keeps VPN before Airplane Mode and nothing lit.
 
+`shadow_layers` checks the `shadows` layer feature in the same cases. The probe opens
+Quick Settings, the calendar and a stock `ModalDialog`, and reads each one's layer: shown,
+on the surface's box, `0 $apex_shadow_2_y $apex_shadow_2_blur $apex_shadow_2`, Quick
+Settings' at its radius, and the dialog's beside its box (above the lightbox). It counts
+the stage's paints in the quieter of two idle 2 s windows with the feature on and with
+`shadows` in `disabled-features`: the layers add none. The `motion` case, which opens the overview with a
+window, checks the window preview's two layers and the `apex-window-preview` radius.
+
 `derived_surfaces` reads surfaces with no board, which G2 never opens, from nested
 stand-ins in the same cases: the workspace switcher and its dots, the resize popup, the
 input method's candidates and a candidate, the run dialog's entry, an audio device tile
@@ -279,7 +287,8 @@ find), types board 38's queries and, with `G2_SURFACE_SCENES=1`, captures each s
 `spotlight-none` for a query with no results). It
 reads the panel's width, its distance from the monitor's top edge, radius, tint, ring and
 shadow; the field, its glyph, text and hint; the results' line and inset; the section
-headers in board order; the rows, the selected row's accent tint, verb and Enter chip; the
+headers in board order; the rows, the selected row's accent tint, verb and Enter chip;
+the Settings rows' tiles, their colours read from `settings-tiles.json`; the
 calculator's result in tabular figures with Calculator as the first application; that an
 empty query shows only the field, and the row of a query with no results; and, after Enter on the result, that Spotlight closed and the toast's size, tint,
 inset, check circle, text and distance from the bottom edge. In the overview scene, after its capture, the probe
@@ -303,10 +312,10 @@ damages the tile alone:
 
 | Step | Asserts |
 |---|---|
-| a tile changes | the first frame's redraw clip leaves the box out and the effect redraws it on the next; that frame is `blur-ref.js`'s reference per channel within 4/255 inside, 12/255 in the band ds/2 px wide along the edges (ds the effect's own downscale) and 1/255 on average over the box. The first run fixed these (ROADMAP S2b): at ds 16 the edge band is the low-resolution blur's own clamping and upsampling, the interior's 4 is 8-bit intermediates times the saturation; llvmpipe is the reference renderer |
+| a tile changes | in each step below that needs a frame whose clip misses the box, another redraw can cover it (then a full redraw): the tile is damaged again, up to 5 times. The first frame's redraw clip leaves the box out and the effect redraws it on the next; that frame is `blur-ref.js`'s reference per channel within 4/255 inside, 12/255 in the band ds/2 px wide along the edges (ds the effect's own downscale) and 1/255 on average over the box. The first run fixed these (ROADMAP S2b): at ds 16 the edge band is the low-resolution blur's own clamping and upsampling, the interior's 4 is 8-bit intermediates times the saturation; llvmpipe is the reference renderer |
 | a tile changes and the box's redraw is queued, as the glass manager forwards damage | the same frame is the box a full redraw draws, pixel for pixel |
 | a tile changes, nothing forwarded | the frame draws the last result, pixel for pixel, and the next one is the full redraw's |
-| the same with `fine` off | stock's effect in that frame differs from the full redraw and misses the tolerances above: the stale sampling the redraw-clip rule prevents, so the case can see it. When another redraw covers the box in that frame (then a full redraw), it damages the tile again, up to 5 times |
+| the same with `fine` off | stock's effect in that frame differs from the full redraw and misses the tolerances above: the stale sampling the redraw-clip rule prevents, so the case can see it. |
 
 `blur-ref.js` is a clamp-to-edge Gaussian at full resolution, CSS `saturate()` and the
 rounded box's coverage, over the box alone; `blur-ref-test.js` tests it in `selftest.sh`.
@@ -318,6 +327,15 @@ and Quick Settings', the calendar's (each opened) and a banner's `$apex_panel_bl
 actor on the stage carries a `Shell.BlurEffect` and the root carries `apex-solid`; that
 with `disabled-features=['glass']` no actor carries one and the tints stay; and that the
 glass comes back after each.
+
+`shadows_under_glass` checks the `shadows` feature against the glass in the same case, light
+and dark: `glass.js` lays the tile grid under Quick Settings, a popup menu and a dialog and
+reads each box with `framePixels()`, once with the shadows on and once with `shadows` in
+`disabled-features`. The pixels the rounded box covers fully, 2 device px in from its edges,
+are the same in both frames; the 2 px rim's covered pixels are within 12/255; the reactive
+pick just inside the box is the same actor in both, never a layer; the menus draw no arrow.
+It writes `shadow-corners-light.png` and `shadow-corners-dark.png`, Quick Settings' four
+corners at 4×, for review.
 
 `G2_GLASS=1 G2_GLASS_STRESS=SECONDS` runs a stress instead, by hand: for that long a
 stand-in window moves and tiles change under the box, every other change forwarded. Each
