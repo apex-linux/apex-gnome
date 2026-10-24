@@ -1,6 +1,7 @@
 #!/usr/bin/python3
 # SPDX-License-Identifier: GPL-3.0-or-later
 """usage: fixtures.py LOG_DIR
+       fixtures.py --gpus 1|2
 
 G2's python-dbusmock fixtures on the system bus (DBUS_SYSTEM_BUS_ADDRESS, or the
 default): UPower with a battery at 87 %, NetworkManager on the Wi-Fi network
@@ -10,6 +11,10 @@ discrete GPU, and with G2_POWER_PROFILES=1 power-profiles-daemon at Balanced. Th
 keep running after this exits; each logs to LOG_DIR/fixture-NAME.log and leaves
 its pid in LOG_DIR/fixture-NAME.pid.
 Prints one line, G2-FIXTURES and what the bus then reports, as JSON.
+
+--gpus sets the running switcheroo-control mock to the laptop's iGPU alone, as with no
+NVIDIA driver bound (/apex/pair-mode off), or back to both. It prints G2-GPUS and the
+mock's state.
 """
 
 import json
@@ -48,8 +53,10 @@ KEYBOARD_NAME = "Keychron K3"
 KEYBOARD_ADDRESS = "DC:2C:26:4B:33:01"
 BLUETOOTH_CLASS_KEYBOARD = 0x002540
 
-# switcheroo-control lists the default, integrated GPU first; the shell offers the other.
-GPUS = (("Intel Graphics", "pci-0000_00_02_0", True), ("NVIDIA GeForce RTX 4060", "pci-0000_01_00_0", False))
+# The laptop's pair; switcheroo-control lists the default, integrated GPU first, and the
+# shell offers the other.
+GPUS = (("AMD Radeon Graphics", "pci-0000_04_00_0", True),
+        ("NVIDIA GeForce RTX 3050 Laptop GPU", "pci-0000_01_00_0", False))
 
 UPOWER = "org.freedesktop.UPower"
 NM = "org.freedesktop.NetworkManager"
@@ -181,15 +188,23 @@ def keyboard(bus):
             "icon": str(props.Get("org.bluez.Device1", "Icon"))}
 
 
-def gpus(bus):
-    switcheroo = Service(bus, SWITCHEROO)
-    switcheroo.mock(SWITCHEROO_PATH).AddProperties(SWITCHEROO, {
-        "HasDualGpu": True,
-        "NumGPUs": dbus.UInt32(len(GPUS)),
+def gpu_properties(listed):
+    return {
+        "HasDualGpu": len(listed) > 1,
+        "NumGPUs": dbus.UInt32(len(listed)),
         "GPUs": dbus.Array([dbus.Dictionary({
             "Name": name, "Environment": dbus.Array(["DRI_PRIME", prime], signature="s"),
-            "Default": default}, signature="sv") for name, prime, default in GPUS], signature="a{sv}"),
-    })
+            "Default": default}, signature="sv") for name, prime, default in listed], signature="a{sv}"),
+    }
+
+
+def gpus(bus, listed=GPUS, update=False):
+    switcheroo = Service(bus, SWITCHEROO)
+    mock = switcheroo.mock(SWITCHEROO_PATH)
+    if update:
+        mock.UpdateProperties(SWITCHEROO, gpu_properties(listed))
+    else:
+        mock.AddProperties(SWITCHEROO, gpu_properties(listed))
     props = switcheroo.props(SWITCHEROO_PATH)
     return {"hasDualGpu": bool(props.Get(SWITCHEROO, "HasDualGpu")),
             "names": [str(gpu["Name"]) for gpu in props.Get(SWITCHEROO, "GPUs")]}
@@ -204,6 +219,9 @@ def power_profiles(bus):
 
 
 def main():
+    if len(sys.argv) == 3 and sys.argv[1] == "--gpus" and sys.argv[2] in ("1", "2"):
+        print("G2-GPUS " + json.dumps(gpus(dbus.SystemBus(), GPUS[:int(sys.argv[2])], update=True)))
+        return 0
     if len(sys.argv) != 2 or sys.argv[1].startswith("-"):
         print(__doc__, file=sys.stderr)
         return 2

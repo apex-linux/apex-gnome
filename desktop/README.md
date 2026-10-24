@@ -23,7 +23,7 @@ directory with `git archive` and unpacks it at the top of Fedora's gnome-shell t
 | `js/ui/apex/quick-settings/feature.js`, `submenu.js` | DESIGN's Quick Settings (below): VPN after Airplane Mode, Power Mode lit, On/Off subtitles, and board 17's submenus, through patch 0011's hooks |
 | `js/ui/apex/shadows/feature.js`, `registry.js`, `cutout.js` | DESIGN's second shadow layer (below): a shadow-layer actor under each surface whose sheet names `-apex-shadow-layer`, cut out under the surface, and the window previews' two layers |
 | `js/ui/apex/notifications/feature.js` | DESIGN's notifications in the calendar (below): one flat card per notification, "app · time" headers, the app's icon as a fallback, Do Not Disturb and Clear in the footer, through patch 0012's hooks |
-| `js/ui/apex/end-session/feature.js` | DESIGN's end-session dialog (board 14, below): stock's icon in a circle, Restart in the power-off dialog, the theme's gap and widths for the buttons, through patch 0018's hook |
+| `js/ui/apex/end-session/feature.js`, `card.js`, `update.js` | DESIGN's end-session dialog (board 14, below): stock's icon in a circle, Restart in the power-off dialog, the theme's gap and widths for the buttons, and the update card over Update1, through patch 0018's hook |
 | `js/ui/apex/polkit/` | board 13's authentication dialog (below), through patch 0017's hook: `header.js` the shield and the user's role, `fingerprint.js` the fingerprint line, `details.js` Details |
 | `js/ui/apex/panel/feature.js` | the top bar of S2a (below): its parts in `panel/`, one module each |
 | `js/ui/apex/glass/feature.js` | the glass manager of S2b (below), with `glass/surfaces.js`, the layer's own glass, and `glass/registry.js`, where any feature registers an actor |
@@ -235,6 +235,22 @@ gets the theme's widths, and every row the theme's gap, which `Clutter.BoxLayout
 out of CSS's reach. The countdown stays stock's translated text. Disabled, it takes the
 icon and Restart away and gives the row back `dialog.js`'s 12 px and even widths.
 
+In the power-off and restart dialogs (never Log Out) it also offers S2d's update card.
+`end-session/update.js` reads apex-updated's Update1 on the system bus with a 900 ms
+timeout and never holds the dialog: only a State of `staged` or `ready-for-reboot` with a
+staged digest, answered in time, adds `end-session/card.js` under the text. The card shows
+the staged version, then the GNOME, Linux and Mesa versions from `GetChanges` once they
+arrive, and a switch, on as board 14 draws it; Restart reads "Restart & Update" while it
+is on. With `staged` and the switch on, a pressed action first awaits `Apply` with the
+staged digest: stock's buttons close the dialog before they confirm, so the feature
+overrides that dialog's `close` and `_confirm` while it is open. If `Apply` fails, the
+dialog stays open with the error (`PolicyDenied`'s own message, or a generic line), the
+countdown stopped and the switch off, and the failed press's confirmation is skipped when
+the dialog next closes, so Cancel cancels. The countdown confirms through `_confirm` and
+goes ahead whatever `Apply` answers. With the switch off the stage stays locked and boots
+nothing; `ready-for-reboot` is already applied, so its switch is on and insensitive. The
+overrides go back on close and on disable.
+
 `shadows/feature.js` draws DESIGN's two-layer shadows (ROADMAP S3c) without a hook. St
 draws one `box-shadow` per actor, so the sheet gives a surface its first layer and names the
 second as `-apex-shadow-layer` (the `apex-shadow-layer` mixin in `_apex-tokens.scss`: popovers,
@@ -328,7 +344,11 @@ icons and the footer; a group built while every hook was stock (the layer off) s
 - in the overview too, whose own dash is hidden at the dock's height plus its gap, so the
   overview lays its views out above the dock; the dock's Show Apps opens the app grid,
   and the overview's Show Apps button and the dock's follow each other;
-- Ctrl+Alt+Tab reaches it, as upstream's `Dash` registers itself there.
+- Ctrl+Alt+Tab reaches it, as upstream's `Dash` registers itself there;
+- each app's menu is stock's `AppMenu`, so "Launch Using Discrete Graphics Card" shows while
+  switcheroo-control's `HasDualGpu` is true. With `/apex/pair-mode` off no NVIDIA driver is
+  bound, the dGPU has no DRM card and the item is hidden; with the pair, the card's
+  `mutter-device-ignore` keeps it from mutter, not from switcheroo-control.
 
 A schema without one of the keys turns off only this feature, logged.
 

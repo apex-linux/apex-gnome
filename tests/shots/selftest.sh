@@ -314,6 +314,17 @@ REPORT_OF_A_DIALOG_DRAWN_FROM_TOKENS='
             {text: "Restart", width: ($u * 1.4), background: ($t.apex_button | hex), hover: {background: ($t.apex_button_hover | hex)}},
             {text: "Power Off", width: ($u * 1.2), background: ($t.apex_destructive | hex), foreground: ($t.apex_destructive_fg | hex),
                 hover: {background: ($t.apex_destructive_hover | hex)}}]}),
+    updateCard: ({below: true, padding: {top: ($t.apex_update_card_padding_y | px), left: ($t.apex_update_card_padding_x | px)},
+        border: {top: 1}, radius: ($t.apex_radius_update_card | px), spacing: ($t.apex_update_card_gap | px),
+        background: ($t.apex_card | hex), borderColor: ($t.apex_card_border | hex),
+        icon: {iconName: "system-software-update", size: ($t.apex_update_card_icon_size | px)}, textSpacing: ($t.apex_update_card_text_gap | px),
+        title: {text: "Start the new version next time", foreground: ($t.apex_fg | hex),
+            font: {size: ($t.apex_font_update_card_title_size | px), weight: ($t.apex_font_update_card_title_weight | tonumber)}},
+        subtitle: {text: "45.20261010.133 · GNOME 51.1, Linux 7.2.9, Mesa 26.1.2", foreground: ($t.apex_fg_dim | hex),
+            font: {size: ($t.apex_font_update_card_subtitle_size | px)}},
+        toggle: {on: true, sensitive: true, width: ($t.apex_update_switch_width | px), height: ($t.apex_update_switch_height | px),
+            background: "#3584e4ff", knob: {width: ($t.apex_update_switch_knob | px)}},
+        buttons: ["Cancel", "Restart & Update"]} | {staged: ., ready: (.toggle.sensitive = false)}),
     contentSpacing: ($t.apex_dialog_gap | px), textSpacing: ($t.apex_dialog_text_gap | px),
     title: {font: {size: ($t.apex_font_dialog_title_size | px), weight: ($t.apex_font_heading_weight | tonumber)}},
     description: {font: {size: ($t.apex_font_size | px)}, foreground: ($t.apex_fg_dim | hex)},
@@ -1012,7 +1023,7 @@ test_modal_dialog() {
     local variant change what passes failures open_gaps
     for variant in light dark; do
         read -r passes failures open_gaps <<<"$(assert_run modal_dialog "$variant")"
-        if ((failures == 0 && open_gaps == 0 && passes == 12)); then
+        if ((failures == 0 && open_gaps == 0 && passes == 16)); then
             ok "modal dialog ($variant): drawn from the tokens it passes all $passes assertions"
         else
             not_ok "modal dialog ($variant): drawn from the tokens it passes (passed/failed/gaps $passes/$failures/$open_gaps): $(grep -m3 '^FAIL' "$T/top-bar.out" | paste -sd'|' -)"
@@ -1046,6 +1057,14 @@ del(.surfaces.dialog.endSession.buttons[1])|stock's row, without Restart
 .surfaces.dialog.entry.focus.boxShadow.color = "#3584e4cc"|upstream's 80 % focus ring
 .surfaces.dialog.buttons[0].radius = 12|upstream's square-ish buttons
 .surfaces.dialog.buttons[1].background = "#00000a10"|a default button without the accent
+.surfaces.dialog.updateCard.staged.icon.size = 16|a symbolic-sized update icon
+.surfaces.dialog.updateCard.staged.below = false|the card above the dialog's text
+.surfaces.dialog.updateCard.staged.radius = 18|a card at the menus' radius
+.surfaces.dialog.updateCard.staged.subtitle.text = "45.20261010.133"|a subtitle without the versions
+.surfaces.dialog.updateCard.staged.title.foreground = "#1d1d219e"|a dimmed title
+.surfaces.dialog.updateCard.staged.toggle.on = false|the switch off by default
+.surfaces.dialog.updateCard.staged.buttons = ["Cancel", "Restart"]|Restart not relabelled while the switch is on
+.surfaces.dialog.updateCard.ready.toggle.sensitive = true|a ready-for-reboot switch that turns off
 CHANGES
 }
 
@@ -1457,6 +1476,7 @@ test_spotlight_keys() {
 .surfaces.spotlightKeys.early.ms = 1100|the sections seen only past the budget
 .surfaces.spotlightKeys.late.rows = 0|every section hidden once the budget runs out
 .surfaces.spotlightKeys.settings.cancelledMs = null|Settings never cancelled
+.surfaces.spotlightKeys.settings.cancelledMs = 1250|Settings cancelled only after the sections were read
 .surfaces.spotlightKeys.down4 = "Applications/org.gnome.baobab.desktop"|Down kept inside its section
 .surfaces.spotlightKeys.down20 = null|Down past the last row
 .surfaces.spotlightKeys.enter.activated = []|Enter opening nothing
@@ -1821,20 +1841,34 @@ EOF
     dbus-daemon --config-file="$T/bus.conf" --fork --print-address=3 --print-pid=4 3>"$T/bus.address" 4>"$T/bus.pid"
 }
 
+test_one_gpu() {
+    local failures what menu passes
+    while IFS='|' read -r failures what menu; do
+        printf 'APEXG2-GPU %s\n' "$menu" >"$T/one-gpu.log"
+        read -r passes _ <<<"$(assertion_counts one_gpu_menu dock-one-gpu "$T/one-gpu.log")"
+        expect_eq "one GPU: $what fails $failures of 2" "$failures" $((2 - passes))
+    done <<'MENUS'
+0|stock's menu without the discrete GPU|{"app": "Files", "hasDualGpu": false, "items": ["Open Windows", "New Window", "Unpin", "App Details"]}
+1|a menu that still offers it|{"app": "Files", "hasDualGpu": false, "items": ["New Window", "Launch Using Discrete Graphics Card", "Unpin"]}
+1|a switcheroo-control still reporting two GPUs|{"app": "Files", "hasDualGpu": true, "items": ["New Window", "Unpin"]}
+2|no menu at all|null
+MENUS
+}
+
 test_fixtures() {
     local passes failures address missing=()
     mkdir -p "$T/fixtures"
     local report='G2-FIXTURES {"battery": {"percentage": 87.0, "present": true, "onBattery": true}, '
     report+='"wifi": {"primary": "Apex-5G", "ssid": "Apex-5G", "strength": 90, "inRange": ["Apex-5G", "Apex-2.4G", "Library Guest"], '
     report+='"state": 70, "connectivity": 4}, "keyboard": {"alias": "Keychron K3", "connected": true, "icon": "input-keyboard"}, '
-    report+='"gpus": {"hasDualGpu": true, "names": ["Intel Graphics", "NVIDIA GeForce RTX 4060"]}, '
+    report+='"gpus": {"hasDualGpu": true, "names": ["AMD Radeon Graphics", "NVIDIA GeForce RTX 3050 Laptop GPU"]}, '
     report+='"powerProfiles": {"active": "balanced", "profiles": ["power-saver", "balanced", "performance"]}}'
     fixtures_report "$report"
     read -r passes failures <<<"$(assertion_counts fixtures_on_the_bus "$T/fixtures")"
     expect_eq "fixtures: what fixtures.py reports passes each part's six assertions" "18/0" "$passes/$failures"
     report='G2-FIXTURES {"battery": {"percentage": 0.0, "present": false, "onBattery": false}, '
     report+='"wifi": {"primary": "Apex-5G", "ssid": "Apex-5G", "strength": 30, "inRange": ["Apex-5G"], "state": 70, "connectivity": 4}, '
-    report+='"keyboard": {"alias": "Keychron K3", "connected": false, "icon": "phone"}, "gpus": {"hasDualGpu": false, "names": ["Intel Graphics"]}, '
+    report+='"keyboard": {"alias": "Keychron K3", "connected": false, "icon": "phone"}, "gpus": {"hasDualGpu": false, "names": ["AMD Radeon Graphics"]}, '
     report+='"powerProfiles": null}'
     fixtures_report "$report"
     read -r passes failures <<<"$(assertion_counts fixtures_on_the_bus "$T/fixtures")"
@@ -2118,6 +2152,7 @@ test_layer_cycles
 test_motion
 test_idle
 test_spotlight_key
+test_one_gpu
 test_fixtures
 test_glass
 test_shadows_under_glass

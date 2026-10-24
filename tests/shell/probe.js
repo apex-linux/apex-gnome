@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// gnome-shell's automation script for shoot.sh: the lock screen, the greeter or the date menu, captured and
-// described.
+// gnome-shell's automation script for shoot.sh: the lock screen, the greeter, the date menu or the
+// end-session dialog's update card, captured and described.
 
 import Clutter from 'gi://Clutter';
 import Gio from 'gi://Gio';
@@ -342,6 +342,150 @@ async function shootGreeter() {
     await capture('prompt');
 }
 
+const UPDATE1 = ['io.github.apex_linux.Apex.Update1', '/io/github/apex_linux/Apex/Update1'];
+const END_SESSION = ['/org/gnome/SessionManager/EndSessionDialog', 'org.gnome.SessionManager.EndSessionDialog'];
+const DIALOG_TYPE = {logout: 0, powerOff: 1, restart: 2};
+const STAGED_DIGEST = 'sha256:9e41aa07c3b2d1e0f9a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c80c2b';
+const STAGED = {
+    digest: new GLib.Variant('s', STAGED_DIGEST),
+    version: new GLib.Variant('s', '45.20261010.133'),
+    'download-only': new GLib.Variant('b', true),
+};
+const POLICY_DENIED = 'Plug in the charger to install the update.';
+const COUNTDOWN_SECONDS = 3;
+// gnome-shell-perf-helper exits after 30 s idle, and the end-session run is longer.
+const PERF_HELPER_PING_S = 10;
+
+// update1-mock.py through python-dbusmock's own interface.
+function mock(method, params) {
+    return Gio.DBus.system.call(...UPDATE1, 'org.freedesktop.DBus.Mock', method, params, null,
+        Gio.DBusCallFlags.NONE, -1, null);
+}
+
+function setUpdate(state, staged = {}) {
+    return mock('UpdateProperties', new GLib.Variant('(sa{sv})', [UPDATE1[0], {
+        State: new GLib.Variant('s', state), Staged: new GLib.Variant('a{sv}', staged),
+    }]));
+}
+
+function setApply(code) {
+    return mock('AddMethod', new GLib.Variant('(sssss)', [UPDATE1[0], 'Apply', 's', '', code]));
+}
+
+async function applyCalls() {
+    const [calls] = (await mock('GetMethodCalls', new GLib.Variant('(s)', ['Apply']))).deepUnpack();
+    await mock('ClearCalls', null);
+    return calls.map(([, args]) => args.map(a => a.unpack()).join(','));
+}
+
+function endSessionDialog() {
+    return Main.layoutManager.modalDialogGroup.get_children().find(d => d.constructor.name === 'EndSessionDialog');
+}
+
+function describeEndSession(dialog) {
+    const card = dialog?.contentLayout.get_children().find(c => c.has_style_class_name?.('apex-update-card'));
+    const labels = card?.get_children()[1].get_children();
+    return {
+        open: dialog?.state === 0,
+        buttons: dialog?.buttonLayout.get_children().filter(b => b.visible).map(b => b.label) ?? [],
+        card: card ? {
+            title: labels[0].text, subtitle: labels[1].text, on: card.switch.state,
+            sensitive: card.get_children()[2].reactive, icon: card.get_children()[0].icon_name,
+        } : null,
+    };
+}
+
+// Opens the dialog as gnome-session does, then records what it confirms.
+async function openEndSession(type, seconds = 60) {
+    await Gio.DBus.session.call('org.gnome.Shell', ...END_SESSION, 'Open',
+        new GLib.Variant('(uuuao)', [type, 0, seconds, []]), null, Gio.DBusCallFlags.NONE, -1, null);
+    await Scripting.sleep(STEP_MS);
+    const dialog = endSessionDialog();
+    dialog.confirmed = [];
+    // The dialog is the shell's one EndSessionDialog: its signals are recorded once.
+    if (!dialog.recording) {
+        const emit = dialog._dbusImpl.emit_signal;
+        dialog._dbusImpl.emit_signal = (signal, params) => {
+            dialog.confirmed.push(signal);
+            emit.call(dialog._dbusImpl, signal, params);
+        };
+        dialog.recording = true;
+    }
+    return dialog;
+}
+
+async function press(dialog, label) {
+    dialog.buttonLayout.get_children().find(b => b.label === label).emit('clicked', Clutter.BUTTON_PRIMARY);
+    await Scripting.sleep(STEP_MS * 2);
+}
+
+async function endSessionStep(name, dialog) {
+    fact(name, {...describeEndSession(dialog), signals: dialog.confirmed.splice(0), apply: await applyCalls()});
+}
+
+function keepPerfHelperAwake() {
+    return GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, PERF_HELPER_PING_S, () => {
+        Scripting._getPerfHelper().then(helper => helper.DestroyWindowsAsync()).catch(() => {});
+        return GLib.SOURCE_CONTINUE;
+    });
+}
+
+async function shootEndSession() {
+    const pingId = keepPerfHelperAwake();
+    try {
+        await shootEndSessionCases();
+    } finally {
+        GLib.source_remove(pingId);
+    }
+}
+
+async function shootEndSessionCases() {
+    await Scripting.sleep(SETTLE_MS);
+    let dialog = await openEndSession(DIALOG_TYPE.powerOff);
+    await endSessionStep('up-to-date', dialog);
+    await press(dialog, 'Cancel');
+
+    await setUpdate('staged', STAGED);
+    dialog = await openEndSession(DIALOG_TYPE.logout);
+    await endSessionStep('logout', dialog);
+    await press(dialog, 'Cancel');
+
+    dialog = await openEndSession(DIALOG_TYPE.restart);
+    await endSessionStep('staged', dialog);
+    await capture('staged');
+    await press(dialog, 'Restart & Update');
+    await endSessionStep('staged-pressed', dialog);
+
+    dialog = await openEndSession(DIALOG_TYPE.powerOff);
+    dialog.contentLayout.get_children().find(c => c.has_style_class_name?.('apex-update-card'))
+        .get_children()[2].emit('clicked', Clutter.BUTTON_PRIMARY);
+    await Scripting.sleep(STEP_MS);
+    await endSessionStep('switched-off', dialog);
+    await press(dialog, 'Power Off');
+    await endSessionStep('switched-off-pressed', dialog);
+
+    await setUpdate('ready-for-reboot', STAGED);
+    dialog = await openEndSession(DIALOG_TYPE.restart);
+    await endSessionStep('ready', dialog);
+    await capture('ready');
+    await press(dialog, 'Restart & Update');
+    await endSessionStep('ready-pressed', dialog);
+
+    await setUpdate('staged', STAGED);
+    await setApply(`raise dbus.exceptions.DBusException(${JSON.stringify(POLICY_DENIED)}, ` +
+        "name='io.github.apex_linux.Apex.Update1.Error.PolicyDenied')");
+    dialog = await openEndSession(DIALOG_TYPE.powerOff);
+    await press(dialog, 'Power Off');
+    await endSessionStep('apply-failed', dialog);
+    await capture('apply-failed');
+    await press(dialog, 'Cancel');
+    await endSessionStep('apply-failed-cancelled', dialog);
+
+    dialog = await openEndSession(DIALOG_TYPE.restart, COUNTDOWN_SECONDS);
+    await Scripting.sleep((COUNTDOWN_SECONDS + 3) * 1000);
+    await endSessionStep('countdown-failed', dialog);
+}
+
 // Board 34's notification list, from fdo Notify calls to the shell's own notification daemon.
 const NOTIFICATIONS = [
     ['Settings', 'preferences-system-symbolic', 'Update ready', 'Apex 45.20261024.141 starts after the next restart.'],
@@ -459,6 +603,8 @@ export async function run() {
             await shootPolkit();
         else if (GLib.getenv('APEX_DATE_MENU') === '1')
             await shootDateMenu();
+        else if (GLib.getenv('APEX_END_SESSION') === '1')
+            await shootEndSession();
         else
             await shootLock();
     } catch (e) {
