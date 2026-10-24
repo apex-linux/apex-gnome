@@ -49,6 +49,8 @@
     <file alias="shadows/registry.js">js/ui/apex/shadows/registry.js</file>
     <file alias="shadows/cutout.js">js/ui/apex/shadows/cutout.js</file>
     <file alias="quick-settings/feature.js">js/ui/apex/quick-settings/feature.js</file>
+    <file alias="quick-settings/submenu.js">js/ui/apex/quick-settings/submenu.js</file>
+    <file alias="end-session/feature.js">js/ui/apex/end-session/feature.js</file>
     <file alias="polkit/feature.js">js/ui/apex/polkit/feature.js</file>
     <file alias="polkit/header.js">js/ui/apex/polkit/header.js</file>
     <file alias="polkit/fingerprint.js">js/ui/apex/polkit/fingerprint.js</file>

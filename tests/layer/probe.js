@@ -36,6 +36,7 @@ function newEmitter(props = {}) {
 }
 
 globalThis._ = text => text;
+globalThis.C_ = (_context, text) => text;
 
 // mutter's DisplayConfig as the lock reads it, one cached PowerSaveMode; it answers, never
 // answers ('silent') or fails ('error'), as displayConfig.reply says.
@@ -249,8 +250,12 @@ async function exerciseSpotlight() {
         return;
     }
 
+    const Glass = await import(`file://${shellDir}/js/ui/apex/glass/registry.js`);
+    const spotlightGlass = () => Glass.surfaces().map(surface => surface.name)
+        .filter(name => ['spotlight', 'toast'].includes(name)).join(',') || 'none';
     open();
     report('opened');
+    fact('spotlight.glass-open', spotlightGlass());
     fact('spotlight.focus', entry().focused === true);
     await type('disk', 'disk');
     fact('spotlight.tiles', tiles(popup));
@@ -281,8 +286,10 @@ async function exerciseSpotlight() {
     report('enter-on-the-sum');
     const toast = Toast.current();
     fact('spotlight.toast', toast ? `${toast.get_children()[0].accessible_name} in-ui-group=${Main.uiGroup.children.includes(toast)}` : 'none');
+    fact('spotlight.glass-copied', spotlightGlass());
     await spin(2300);
     fact('spotlight.toast-later', Toast.current() ? 'shown' : 'gone');
+    fact('spotlight.glass-later', spotlightGlass());
 
     open();
     await type('apex', 'apex');
@@ -417,6 +424,88 @@ function quickSettingsState(label, quickSettings) {
         `classes=${[...quickSettings.toggles.power.styleClasses].join(',') || 'none'}`);
 }
 
+// NMWirelessNetworkItem's and QuickToggleMenu's actors, as their constructors leave them.
+function networkRow(St, Clutter, active) {
+    const row = new St.Widget({name: 'row'});
+    row.network = new St.Widget({is_active: active});
+    const icons = new St.BoxLayout({name: 'icons'});
+    row._secureIcon = new St.Icon({name: 'lock', y_align: Clutter.ActorAlign.END});
+    [new St.Icon({name: 'signal'}), row._secureIcon].forEach(i => icons.add_child(i));
+    row._label = new St.Label({name: 'label'});
+    [icons, row._label, new St.Icon({name: 'check'})].forEach(c => row.add_child(c));
+    return row;
+}
+
+function toggleMenu(St, Clutter) {
+    const header = new St.Widget();
+    const cells = new Map();
+    const {LEFT, RIGHT, TOP, BOTTOM} = Clutter.GridPosition;
+    const steps = {[LEFT]: [-1, 0], [RIGHT]: [1, 0], [TOP]: [0, -1], [BOTTOM]: [0, 1]};
+    header.layout_manager = {
+        attach(child, column, row) {
+            header.add_child(child);
+            cells.set(child, [column, row]);
+        },
+        attach_next_to(child, sibling, side) {
+            const [column, row] = cells.get(sibling);
+            this.attach(child, column + steps[side][0], row + steps[side][1]);
+        },
+    };
+    const menu = new St.Widget();
+    menu.actor = new St.Widget({_delegate: menu, text_direction: Clutter.TextDirection.LTR});
+    menu.actor.add_child(header);
+    menu._header = header;
+    menu._headerIcon = new St.Icon();
+    menu._headerTitle = new St.Label();
+    menu._headerSubtitle = new St.Label({x_align: Clutter.ActorAlign.FILL});
+    menu._headerSpacer = new St.Widget();
+    header.layout_manager.attach(menu._headerIcon, 0, 0);
+    header.layout_manager.attach_next_to(menu._headerTitle, menu._headerIcon, Clutter.GridPosition.RIGHT);
+    header.layout_manager.attach_next_to(menu._headerSpacer, menu._headerTitle, Clutter.GridPosition.RIGHT);
+    header.layout_manager.attach_next_to(menu._headerSubtitle, menu._headerTitle, Clutter.GridPosition.BOTTOM);
+    menu.subtitleAt = () => `${cells.get(menu._headerSubtitle)} x_align=${menu._headerSubtitle.x_align}`;
+    return menu;
+}
+
+function rowState(row) {
+    const names = actor => actor.get_children().map(c => c.name).join(',');
+    const lock = row._secureIcon;
+    return `children=${names(row)} icons=${names(row.get_children()[0])} checked=${row.has_style_pseudo_class('checked')} ` +
+        `lock=${lock.y_align}/${lock.styleClasses.join(',') || 'none'}`;
+}
+
+async function exerciseSubmenus(Main) {
+    const {default: St} = await import(`file://${GLib.path_get_dirname(shellDir)}/St.js`);
+    const {default: Clutter} = await import(`file://${GLib.path_get_dirname(shellDir)}/Clutter.js`);
+    const {quickSettings} = Main.panel.statusArea;
+    const [active, other, menu] = [networkRow(St, Clutter, true), networkRow(St, Clutter, false), toggleMenu(St, Clutter)];
+    quickSettings.menu.actor.children.push(active, other, menu.actor);
+    Hooks.run('quick-settings-network-item', active);
+    Hooks.run('quick-settings-network-item', other);
+    Hooks.run('quick-settings-toggle-menu', menu);
+    fact('qs.row.active', rowState(active));
+    fact('qs.row.other', rowState(other));
+    fact('qs.menu', menu.subtitleAt());
+    active.network.is_active = false;
+    active.network.emit('notify::is-active');
+    other.network.is_active = true;
+    other.network.emit('notify::is-active');
+    fact('qs.row.switched', `${rowState(active)} | ${rowState(other)}`);
+    const gone = networkRow(St, Clutter, true);
+    Hooks.run('quick-settings-network-item', gone);
+    gone.destroy();
+    settings.set_boolean('layer-enabled', false);
+    await spin(200);
+    fact('qs.off.row', rowState(other));
+    fact('qs.off.menu', menu.subtitleAt());
+    other.network.emit('notify::is-active');
+    fact('qs.off.row-unfollowed', `checked=${other.has_style_pseudo_class('checked')}`);
+    settings.set_boolean('layer-enabled', true);
+    await spin(200);
+    fact('qs.on.row', rowState(other));
+    fact('qs.on.menu', menu.subtitleAt());
+}
+
 async function exerciseQuickSettings() {
     if (GLib.getenv('PROBE_QUICK_SETTINGS') !== '1')
         return;
@@ -430,12 +519,82 @@ async function exerciseQuickSettings() {
     toggles.bluetooth.subtitle = null;
     toggles.bluetooth.checked = true;
     fact('qs.own-subtitle-gone', `bluetooth=${toggles.bluetooth.subtitle}`);
+    await exerciseSubmenus(Main);
     settings.set_boolean('layer-enabled', false);
     await spin(200);
     quickSettingsState('qs.off', quickSettings);
     settings.set_boolean('layer-enabled', true);
     await spin(200);
     quickSettingsState('qs.on', quickSettings);
+}
+
+// endSessionDialog.js as patch 0018's hook sees it: a stock row of Cancel and the confirm
+// button, a theme spacing of 10 once the row is styled.
+function endSessionDialog(St) {
+    const buttonLayout = new St.BoxLayout({style_class: 'modal-dialog-button-box'});
+    buttonLayout.layout_manager = {spacing: 12, homogeneous: true};
+    buttonLayout.peek_theme_node = () => ({lookup_length: p => p === 'spacing' ? [true, 10] : [false, 0]});
+    const dialog = newEmitter({
+        contentLayout: new St.BoxLayout({child: new St.BoxLayout({style_class: 'message-dialog-content'})}),
+        buttonLayout,
+        addButton({label, action}) {
+            const button = new St.Button({style_class: 'modal-dialog-button', label});
+            button.action = action;
+            buttonLayout.add_child(button);
+            return button;
+        },
+        close() {
+            this.emit('closed');
+        },
+        _confirm(signal) {
+            fact('end-session.confirmed', signal);
+            return Promise.resolve();
+        },
+    });
+    dialog.open = content => {
+        buttonLayout.destroy_all_children();
+        dialog.addButton({label: 'Cancel', action: () => {}});
+        for (const {label} of content.confirmButtons)
+            dialog.addButton({label, action: () => {}});
+        Hooks.run('end-session-buttons', dialog, content);
+    };
+    return dialog;
+}
+
+function endSessionState(label, dialog) {
+    const row = dialog.buttonLayout;
+    const [first] = dialog.contentLayout.get_children();
+    const icon = first.has_style_class_name('apex-end-session-icon') ? first.child.icon_name : 'none';
+    fact(label, `buttons=${row.get_children().map(b => b.label).join(',')} icon=${icon} ` +
+        `spacing=${row.layout_manager.spacing} homogeneous=${row.layout_manager.homogeneous} ` +
+        `row=${row.has_style_class_name('apex-end-session-row')}`);
+}
+
+async function exerciseEndSession() {
+    if (GLib.getenv('PROBE_END_SESSION') !== '1')
+        return;
+    const {default: St} = await import(`file://${GLib.path_get_dirname(shellDir)}/St.js`);
+    const dialog = endSessionDialog(St);
+    const powerOff = {confirmButtons: [{signal: 'ConfirmedShutdown', label: 'Power Off'}], iconName: 'system-shutdown-symbolic'};
+    const restart = {confirmButtons: [{signal: 'ConfirmedReboot', label: 'Restart'}], iconName: 'view-refresh-symbolic'};
+    const logout = {confirmButtons: [{signal: 'ConfirmedLogout', label: 'Log Out'}]};
+    dialog.open(powerOff);
+    endSessionState('end-session.power-off', dialog);
+    dialog.buttonLayout.get_children()[1].action();
+    dialog.open(restart);
+    endSessionState('end-session.restart', dialog);
+    dialog.open(logout);
+    endSessionState('end-session.logout', dialog);
+    dialog.open(powerOff);
+    settings.set_boolean('layer-enabled', false);
+    await spin(200);
+    endSessionState('end-session.off', dialog);
+    dialog.open(powerOff);
+    endSessionState('end-session.off.reopened', dialog);
+    settings.set_boolean('layer-enabled', true);
+    await spin(200);
+    dialog.open(powerOff);
+    endSessionState('end-session.on', dialog);
 }
 
 // A surface two actors below the stage's child, its sheet naming one further layer.
@@ -1289,6 +1448,7 @@ if (layer && GLib.getenv('PROBE_ENABLE') === '1') {
     await exercisePolkit();
     await exerciseMotion();
     await exerciseQuickSettings();
+    await exerciseEndSession();
     await exerciseShadows();
     await exerciseSpotlight();
     await exerciseTopBar();

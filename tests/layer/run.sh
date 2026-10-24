@@ -372,6 +372,15 @@ fact "quick-settings: On or Off under a toggle without a subtitle; a toggle's ow
 fact "quick-settings: Power Mode lit at Balanced, its checked state stock" 'qs\.power=checked=false classes=apex-lit'
 fact "quick-settings: the state follows checked; a subtitle the toggle sets wins" 'qs\.live=dnd=On bluetooth=Headphones'
 fact "quick-settings: once the toggle drops its own, ours follows again" 'qs\.own-subtitle-gone=bluetooth=On'
+fact "quick-settings: the active network's row is :checked, its lock after the name" 'qs\.row\.active=children=icons,label,lock,check icons=signal checked=true lock=2/apex-network-lock'
+fact "quick-settings: another network's row is not" 'qs\.row\.other=children=icons,label,lock,check icons=signal checked=false lock=2/apex-network-lock'
+fact "quick-settings: a submenu header's subtitle ends the title's row" 'qs\.menu=3,0 x_align=3'
+fact "quick-settings: :checked follows is-active" 'qs\.row\.switched=children=icons,label,lock,check icons=signal checked=false lock=2/apex-network-lock \| children=icons,label,lock,check icons=signal checked=true lock=2/apex-network-lock'
+fact "quick-settings: layer off: the row stock again" 'qs\.off\.row=children=icons,label,check icons=signal,lock checked=false lock=3/none'
+fact "quick-settings: layer off: the subtitle under the title" 'qs\.off\.menu=1,1 x_align=0'
+fact "quick-settings: layer off: :checked no longer follows" 'qs\.off\.row-unfollowed=checked=false'
+fact "quick-settings: layer back on: rows and menus built before it change again" 'qs\.on\.row=children=icons,label,lock,check icons=signal checked=true lock=2/apex-network-lock'
+fact "quick-settings: layer back on: the subtitle on the title's row" 'qs\.on\.menu=3,0 x_align=3'
 fact "quick-settings: layer off: stock order" \
     'qs\.off\.order=Wi-Fi,VPN,Bluetooth,Power Mode,Night Light,Dark Style,Do Not Disturb,Airplane Mode,Auto Rotate'
 fact "quick-settings: layer off: only the toggles' own subtitles" \
@@ -381,11 +390,35 @@ fact "quick-settings: layer back on: DESIGN's order again" \
     'qs\.on\.order=Wi-Fi,Bluetooth,Power Mode,Night Light,Dark Style,Do Not Disturb,Airplane Mode,VPN,Auto Rotate'
 fact "quick-settings: layer back on: lit again" 'qs\.on\.power=checked=false classes=apex-lit'
 
+probe end-session "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_END_SESSION=1
+has "end-session: the feature enables" 'Apex: feature end-session enabled'
+fact "end-session: power off: Restart between Cancel and Power Off, stock's icon, the theme's gap, the row's widths" \
+    'end-session\.power-off=buttons=Cancel,Restart,Power Off icon=system-shutdown-symbolic spacing=10 homogeneous=false row=true'
+fact "end-session: Restart goes through stock's reboot confirmation" 'end-session\.confirmed=ConfirmedReboot'
+fact "end-session: restart: no second Restart, the icon follows, an even row" \
+    'end-session\.restart=buttons=Cancel,Restart icon=view-refresh-symbolic spacing=10 homogeneous=true row=false'
+fact "end-session: log out: stock has no icon for it" \
+    'end-session\.logout=buttons=Cancel,Log Out icon=none spacing=10 homogeneous=true row=false'
+fact "end-session: layer off: stock's row and no icon, at once" \
+    'end-session\.off=buttons=Cancel,Power Off icon=none spacing=12 homogeneous=true row=false'
+fact "end-session: layer off: reopened, still stock" \
+    'end-session\.off\.reopened=buttons=Cancel,Power Off icon=none spacing=12 homogeneous=true row=false'
+fact "end-session: layer back on: board 14's row again" \
+    'end-session\.on=buttons=Cancel,Restart,Power Off icon=system-shutdown-symbolic spacing=10 homogeneous=false row=true'
+lacks "end-session: no feature fails or disables uncleanly" 'off for this session|did not disable cleanly|cannot restyle'
+
+probe end-session-disabled "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_END_SESSION=1 PROBE_DISABLED=end-session
+has "disabled-features=['end-session']: skips the feature" 'Apex: feature end-session is in disabled-features'
+fact "disabled-features=['end-session']: stock's power-off row" \
+    'end-session\.power-off=buttons=Cancel,Power Off icon=none spacing=12 homogeneous=true row=false'
+
 probe quick-settings-disabled "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_QUICK_SETTINGS=1 PROBE_DISABLED=quick-settings
 has "disabled-features=['quick-settings']: skips the feature" 'Apex: feature quick-settings is in disabled-features'
 fact "disabled-features=['quick-settings']: stock order" \
     'qs\.order=Wi-Fi,VPN,Bluetooth,Power Mode,Night Light,Dark Style,Do Not Disturb,Airplane Mode,Auto Rotate'
 fact "disabled-features=['quick-settings']: Power Mode unlit" 'qs\.power=checked=false classes=none'
+fact "disabled-features=['quick-settings']: a network row stays stock" 'qs\.row\.active=children=icons,label,check icons=signal,lock checked=false lock=3/none'
+fact "disabled-features=['quick-settings']: the subtitle stays under the title" 'qs\.menu=1,1 x_align=0'
 
 probe shadows "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_SHADOWS=1
 has "shadows: the feature enables" 'Apex: feature shadows enabled'
@@ -466,6 +499,9 @@ fact "spotlight: Enter on the result copies it to the clipboard" 'clipboard=1:19
 fact "spotlight: closes Spotlight" 'spotlight\.enter-on-the-sum=closed'
 fact "spotlight: and shows the Copied toast" 'spotlight\.toast=Copied 1920 in-ui-group=true'
 fact "spotlight: the toast goes after a moment" 'spotlight\.toast-later=gone'
+fact "spotlight: the open panel registers its glass" 'spotlight\.glass-open=spotlight'
+fact "spotlight: closed, its glass goes with it; the toast registers its own" 'spotlight\.glass-copied=toast'
+fact "spotlight: and the toast's goes with the toast" 'spotlight\.glass-later=none'
 lacks "spotlight: copying launches nothing" 'spotlight\.activated=org\.gnome\.Calculator'
 fact "spotlight: a query with no results says so" 'spotlight\.none=empty "No results for “zzz”"'
 fact "spotlight: Esc closes" 'spotlight\.escape=closed'

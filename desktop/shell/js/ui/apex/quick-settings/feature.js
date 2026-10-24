@@ -2,6 +2,7 @@
 
 import * as Hooks from '../hooks.js';
 import * as Main from '../../main.js';
+import * as Submenu from './submenu.js';
 
 export const LIT_STYLE_CLASS = 'apex-lit';
 export const ON = 'On';
@@ -87,10 +88,20 @@ function _apply(quickSettings) {
     _moveVpn(quickSettings);
     _light(quickSettings);
     _addSubtitles(quickSettings);
+    Submenu.addExisting(quickSettings.menu.actor);
+}
+
+function _whileEnabled(fn) {
+    return built => {
+        if (_enabled)
+            fn(built);
+    };
 }
 
 export function configure(featureName) {
     Hooks.provide(featureName, 'quick-settings', _apply);
+    Hooks.provide(featureName, 'quick-settings-toggle-menu', _whileEnabled(Submenu.addMenu));
+    Hooks.provide(featureName, 'quick-settings-network-item', _whileEnabled(Submenu.addRow));
 }
 
 export function enable() {
@@ -107,5 +118,6 @@ export function disable() {
     _lit?.remove_style_class_name(LIT_STYLE_CLASS);
     _lit = null;
     _restoreVpn();
+    Submenu.restore();
     _applied = false;
 }
