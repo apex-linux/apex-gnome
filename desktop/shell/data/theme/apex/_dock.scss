@@ -1,0 +1,73 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+//
+// ApexDock (js/ui/apex/dock/): upstream's dash widgets, restyled as a floating dock.
+
+$_item_bottom: $apex_dock_dot_gap + $apex_dock_dot_size;
+
+#apexDock {
+  -apex-bottom-gap: $apex_dock_bottom_gap;
+
+  // The background's height follows the Show Apps icon (dash.js), so its padding adds the
+  // items' room for the dot below the icons.
+  .dash-background {
+    background-color: $apex_dock;
+    border: 1px solid $apex_dock_border;
+    border-radius: $apex_radius_dock;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, .18);
+    padding: ($apex_dock_padding_top - 1px) ($apex_dock_padding_x - $apex_dock_gap / 2 - 1px)
+      ($apex_dock_padding_bottom + $_item_bottom - 1px);
+  }
+
+  .apex-dock-items {
+    padding: $apex_dock_padding_top 0 $apex_dock_padding_bottom;
+    spacing: 0;
+  }
+
+  .overview-tile, .show-apps, .apex-dock-trash {
+    @extend %reset;
+    margin: 0 ($apex_dock_gap / 2);
+    padding-bottom: $_item_bottom;
+
+    .overview-icon {
+      @extend %reset;
+    }
+
+    &:hover, &:focus, &:active, &:checked {
+      .overview-icon { background-color: transparent; box-shadow: none; }
+    }
+  }
+
+  .show-apps-icon {
+    color: $apex_dock_fg;
+  }
+
+  .app-grid-running-dot {
+    width: $apex_dock_dot_size;
+    height: $apex_dock_dot_size;
+    border-radius: $apex_dock_dot_size / 2;
+    background-color: $apex_dock_dot;
+    offset-y: $_item_bottom;
+  }
+
+  &.apex-dock-no-indicators .app-grid-running-dot {
+    background-color: transparent;
+  }
+
+  .apex-dock-separator {
+    width: 1px;
+    height: $apex_dock_separator_height;
+    margin: 0 ($apex_dock_separator_margin_x + $apex_dock_gap / 2) $apex_dock_separator_margin_bottom;
+    background-color: $apex_dock_separator;
+  }
+}
+
+.dash-label.apex-dock-label {
+  -y-offset: $apex_dock_label_gap;
+  padding: 5px $apex_dock_label_padding;
+  border-radius: $apex_radius_dock_label;
+  border: 1px solid $apex_dock_label_border;
+  background-color: $apex_dock_label;
+  color: $apex_dock_fg;
+  font-size: apex-text-size($apex_font_dock_label_size);
+  font-weight: $apex_font_dock_label_weight;
+}

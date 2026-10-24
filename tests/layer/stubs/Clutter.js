@@ -35,6 +35,8 @@ class ClickGesture {
 }
 
 export default {
+    AnimationMode: {EASE_OUT_QUAD: 5, EASE_OUT_CUBIC: 8},
+    BUTTON_SECONDARY: 3,
     BinLayout,
     ClickGesture,
     KeyController,

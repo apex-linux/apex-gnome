@@ -50,6 +50,12 @@ class Widget {
         this.get_children().forEach(child => child.destroy());
     }
 
+    insert_child_below(child, sibling) {
+        const index = this._children.indexOf(sibling);
+        this._children.splice(index < 0 ? 0 : index, 0, child);
+        child._parent = this;
+    }
+
     get_children() {
         return [...this._children];
     }
@@ -68,6 +74,10 @@ class Widget {
 
     get actions() {
         return [...this._actions];
+    }
+
+    get_stage() {
+        return null;
     }
 
     add_style_class_name(name) {
@@ -104,6 +114,10 @@ class Widget {
 
     set_position(x, y) {
         Object.assign(this, {x, y});
+    }
+
+    ease(props) {
+        Object.assign(this, props);
     }
 
     destroy() {
@@ -153,11 +167,13 @@ export default {
     Bin,
     BoxLayout,
     Button,
+    ButtonMask: {ONE: 1, TWO: 2, THREE: 4},
     Clipboard: {get_default: () => clipboard},
     ClipboardType: {PRIMARY: 0, CLIPBOARD: 1},
     Entry,
     Icon,
     Label,
+    Side: {TOP: 0, RIGHT: 1, BOTTOM: 2, LEFT: 3},
     ThemeContext: {get_for_stage: () => ({scale_factor: scaleFactor})},
     Widget,
 };

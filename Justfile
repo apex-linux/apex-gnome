@@ -58,15 +58,16 @@ libadwaita-radius:
 
 control_center_image := "registry.fedoraproject.org/fedora:45@sha256:1e13e11f63e147a40a935c9046c79d53a30b861a3cf05ebb023bb53c562382cb"
 
-# desktop/control-center: its licence lines, the recipe's source1_paths, its series and the patches' From: lines.
+# desktop/control-center: its licence lines, the recipe's source1_paths, its series and the patches' From: lines; the Software Updates logic (gcc, glib2-devel).
 control-center-test:
     tests/control-center/selftest.sh
+    tests/control-center/state-test.sh
 
 # gnome-control-center rebuilt as the lane builds it (apex-lane's container half), in fedora:45 with podman or docker; RPMs in _build/gnome-control-center/out.
 control-center-lane:
     engine=$(command -v podman || command -v docker) && "$engine" run --rm -v "{{justfile_directory()}}:/apex-gnome:z" -w /apex-gnome {{control_center_image}} tests/lib/lane.sh gnome-control-center
 
-control_center_run_packages := "gnome-shell mesa-dri-drivers dbus-daemon python3-dbusmock python3-gobject at-spi2-core gcc util-linux adwaita-sans-fonts"
+control_center_run_packages := "gnome-shell mesa-dri-drivers dbus-daemon python3-dbusmock python3-gobject at-spi2-core gcc util-linux adwaita-sans-fonts python3-dbus systemd"
 
 # The Settings that control-center-lane built, in a headless gnome-shell: board 11's captures, light and dark, and every row's binding; in _build/control-center/shots.
 control-center-run:

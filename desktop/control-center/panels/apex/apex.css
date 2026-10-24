@@ -1,11 +1,12 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
 /*! apex-control-center */
 
-apex-header {
+apex-header,
+.apex-updates-hero {
   padding: 28px 20px 22px;
 }
 
-apex-header .apex-tile {
+apex-tile .frame {
   border-radius: 20px;
   background-color: var(--view-bg-color);
   outline: 1px solid var(--border-color);
@@ -13,7 +14,7 @@ apex-header .apex-tile {
   box-shadow: 0 6px 18px rgb(0 0 0 / 12%);
 }
 
-apex-header .apex-diamond {
+apex-tile .diamond {
   min-width: 20px;
   min-height: 20px;
   border: 3px solid var(--accent-bg-color);
@@ -21,12 +22,63 @@ apex-header .apex-diamond {
   transform: rotate(45deg);
 }
 
-apex-header .apex-title {
+apex-tile.badged > overlay > clamp {
+  margin: 6px;
+}
+
+apex-tile .badge {
+  min-width: 26px;
+  min-height: 26px;
+  border-radius: 13px;
+  color: white;
+  background-color: var(--accent-bg-color);
+  box-shadow: 0 0 0 3px var(--card-bg-color);
+  -gtk-icon-size: 14px;
+}
+
+apex-tile .badge.good {
+  background-color: var(--success-bg-color);
+}
+
+apex-tile .badge.warning {
+  background-color: var(--warning-bg-color);
+}
+
+apex-tile .badge.error {
+  background-color: var(--error-bg-color);
+}
+
+.apex-title {
   font-size: 20px;
   font-weight: 800;
   letter-spacing: -0.3px;
 }
 
-apex-header .apex-versions {
+.apex-versions,
+.apex-updates-hero .apex-subtitle {
   font-size: 12.5px;
+}
+
+.apex-updates-hero .apex-progress trough,
+.apex-updates-hero .apex-progress progress {
+  min-height: 6px;
+  border-radius: 3px;
+}
+
+.apex-note {
+  padding: 14px 16px;
+  border-radius: 12px;
+  background-color: color-mix(in srgb, var(--warning-bg-color) 14%, transparent);
+}
+
+.apex-note .apex-note-icon {
+  color: var(--warning-color);
+}
+
+.apex-note .apex-note-title {
+  font-weight: 700;
+}
+
+button.apex-link {
+  color: var(--accent-color);
 }

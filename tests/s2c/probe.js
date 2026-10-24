@@ -29,6 +29,9 @@ const LAYOUT = {
     settings: {x: 964, y: 120, width: 460, height: 740},
 };
 
+const STEADY = ['maximised', ...Object.keys(LAYOUT)];
+const ON_TOP = ['tiled', 'fullscreen'];
+
 const appWindows = id => global.get_window_actors().map(a => a.meta_window)
     .filter(w => `${w.get_wm_class()} ${w.get_gtk_application_id()}`.includes(id));
 
@@ -119,6 +122,33 @@ async function scrollToEnd(window) {
     await Scripting.sleep(1000);
 }
 
+function tap(keyvals) {
+    const keyboard = global.stage.context.get_backend().get_default_seat()
+        .create_virtual_device(Clutter.InputDeviceType.KEYBOARD_DEVICE);
+    const now = () => GLib.get_monotonic_time();
+    for (const k of keyvals)
+        keyboard.notify_keyval(now(), k, Clutter.KeyState.PRESSED);
+    for (const k of [...keyvals].reverse())
+        keyboard.notify_keyval(now(), k, Clutter.KeyState.RELEASED);
+}
+
+function isHalfTiled(window) {
+    const r = window.get_frame_rect();
+    const work = window.get_work_area_current_monitor();
+    return r.x === work.x && r.y === work.y && r.height === work.height && Math.abs(r.width - work.width / 2) <= 2;
+}
+
+// A focused fullscreen window covers the shell's panel and the other windows, so each state is sampled on top.
+async function sampleOnTop(window, shot) {
+    window.activate(global.get_current_time());
+    await Scripting.sleep(1000);
+    const s = await square(window);
+    if (shot)
+        await captureScreen(shot);
+    window.lower();
+    return s;
+}
+
 async function click(label) {
     const proc = Gio.Subprocess.new(['python3', GLib.getenv('APEX_CLICK'), label],
         Gio.SubprocessFlags.STDOUT_PIPE);
@@ -147,13 +177,27 @@ async function measure() {
             windows[name].move_resize_frame(false, r.x, r.y, r.width, r.height);
         await Scripting.sleep(SETTLE_MS);
     }
+
+    windows.tiled = await open(['ptyxis', '--new-window'], 'Ptyxis', 3);
+    windows.tiled.activate(global.get_current_time());
+    await Scripting.sleep(500);
+    tap([Clutter.KEY_Super_L, Clutter.KEY_Left]);
+    await Scripting.sleep(SETTLE_MS);
+    windows.fullscreen = await open(['ptyxis', '--new-window'], 'Ptyxis', 4);
+    windows.fullscreen.make_fullscreen();
+    await Scripting.sleep(SETTLE_MS);
+
+    const result = {windows: {}, maximised: windows.maximised.is_maximized(), agent_running: agent.running,
+        tiled: isHalfTiled(windows.tiled), fullscreen: windows.fullscreen.is_fullscreen()};
+    for (const name of ON_TOP)
+        result.windows[name] = {before: await sampleOnTop(windows[name])};
     for (const name of Object.keys(LAYOUT))
         windows[name].raise();
+    windows.settings.activate(global.get_current_time());
     await scrollToEnd(windows.settings);
 
-    const result = {windows: {}, maximised: windows.maximised.is_maximized(), agent_running: agent.running};
-    for (const [name, w] of Object.entries(windows))
-        result.windows[name] = {before: await square(w)};
+    for (const name of STEADY)
+        result.windows[name] = {before: await square(windows[name])};
     await captureScreen('s2c-14.png');
 
     const clickedUs = await click('0');
@@ -170,10 +214,14 @@ async function measure() {
         }
         await Scripting.sleep(POLL_MS);
     }
-    for (const [name, w] of Object.entries(windows))
-        result.windows[name].after = await square(w);
+    for (const name of STEADY)
+        result.windows[name].after = await square(windows[name]);
     await Scripting.sleep(500);
     await captureScreen('s2c-0.png');
+    for (const name of ON_TOP)
+        result.windows[name].after = await sampleOnTop(windows[name], `s2c-${name}-0.png`);
+    result.tiled_after = isHalfTiled(windows.tiled);
+    result.fullscreen_after = windows.fullscreen.is_fullscreen();
 
     result.key = new Gio.Settings({schema_id: 'io.github.apex_linux.Apex.Desktop'}).get_uint('window-corner-radius');
     result.css = readCss();

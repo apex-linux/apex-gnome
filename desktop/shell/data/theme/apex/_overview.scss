@@ -34,6 +34,7 @@
 
 .workspace-thumbnails {
   spacing: $apex_thumbnail_gap;
+  padding: $apex_thumbnails_padding;
 
   .workspace-thumbnail {
     border: $apex_surface_border solid $apex_pill_border;
@@ -54,6 +55,12 @@
   color: $apex_fg;
   background-color: $apex_pill;
   font-size: apex-text-size($apex_font_caption_size);
+  font-weight: $apex_font_heading_weight;
+}
+
+.apex-workspace-empty {
+  color: $apex_fg_dim;
+  font-size: apex-text-size($apex_font_workspace_empty_size);
   font-weight: $apex_font_heading_weight;
 }
 
