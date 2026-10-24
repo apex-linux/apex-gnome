@@ -314,6 +314,8 @@ dock_metrics() {
         '{dash: .dock.overviewDashVisible, overview: .scenes.overview.dockVisible}' '.dash == false and .overview == true'
     "${metric[@]}" 'and lays its workspaces out above the dock' \
         '{dock: .dock, clearance: .scenes.overview.dockClearance}' '.dock != null and .clearance != null and .clearance >= 0'
+    "${metric[@]}" "its apps' menu offers Launch Using Discrete Graphics Card while switcheroo-control reports two GPUs" \
+        '.dock.appMenu' '.hasDualGpu == true and (.items | any(. == "Launch Using Discrete Graphics Card"))'
 }
 
 no_dock() {
@@ -807,6 +809,8 @@ fixtures_on_the_bus() {
             "NetworkManager: \"Apex-2.4G\" and the open \"Library Guest\" are in range too"
         expect "fixtures ($part)" "$fixtures" '.keyboard | .alias == "Keychron K3" and .connected and .icon == "input-keyboard"' \
             "BlueZ: the keyboard \"Keychron K3\" is connected"
+        expect "fixtures ($part)" "$fixtures" '.gpus | .hasDualGpu and .names == ["Intel Graphics", "NVIDIA GeForce RTX 4060"]' \
+            "switcheroo-control: an integrated and a discrete GPU"
     done
 }
 
