@@ -1320,11 +1320,34 @@ async function calendarMenu(unit) {
 }
 
 // The notifications feature: three notifications from one app, the footer, then an empty list.
+// A card's tree by each actor's first style class, down to the header, icon, text and actions.
+const CARD_LEAVES = ['message-header', 'message-icon', 'message-content', 'message-action-bin'];
+function cardTree(actor) {
+    const name = actor.get_style_class_name?.()?.split(' ')[0] || 'box';
+    if (CARD_LEAVES.includes(name))
+        return name;
+    const children = actor.get_children();
+    return children.length ? `${name}[${children.map(cardTree).join(',')}]` : name;
+}
+
+// Board 34's card, in boxes: the icon's column, the header over the title, the close button, the actions.
+function cardLayout(message, unit) {
+    const find = styleClass => findDescendant(message, a => a.has_style_class_name?.(styleClass));
+    return {
+        card: boxOf(message, unit), icon: boxOf(message._icon, unit), header: boxOf(find('message-header-content'), unit),
+        title: boxOf(message.titleLabel, unit), close: boxOf(find('message-close-button'), unit),
+        actions: message._actionBin.visible ? boxOf(message._actionBin, unit) : null,
+    };
+}
+
 async function notificationsLayer(unit) {
     const source = new MessageTray.Source({title: 'G2 Chat', iconName: 'mail-unread-symbolic'});
     Main.messageTray.add(source);
-    for (const title of ['Lunch?', 'Standup moved', 'Build passed'])
-        source.addNotification(new MessageTray.Notification({source, title, body: 'Just now.', urgency: MessageTray.Urgency.LOW}));
+    for (const title of ['Lunch?', 'Standup moved', 'Build passed']) {
+        const notification = new MessageTray.Notification({source, title, body: 'Just now.', urgency: MessageTray.Urgency.LOW});
+        notification.addAction('Reply', () => {});
+        source.addNotification(notification);
+    }
     const {menu, _messageList: list} = Main.panel.statusArea.dateMenu;
     const notifications = new Gio.Settings({schema_id: 'org.gnome.desktop.notifications'});
     menu.open(BoxPointer.PopupAnimation.NONE);
@@ -1334,6 +1357,17 @@ async function notificationsLayer(unit) {
         const messages = group.get_children().map(c => c.child).filter(m => m?.constructor.name === 'NotificationMessage');
         const footer = list._clearButton.get_parent();
         const dnd = footer.get_children().find(c => c.has_style_class_name('apex-dnd-button')) ?? null;
+        const trees = messages.map(m => cardTree(m.get_child()));
+        const layout = {collapsed: cardLayout(messages[0], unit)};
+        // A stock stack would expand the whole group: only a flat group's card expands alone.
+        if (group.expanded) {
+            messages[0].expand(false);
+            await settle();
+            layout.expanded = {...cardLayout(messages[0], unit), tree: cardTree(messages[0].get_child())};
+            messages[0].unexpand(false);
+            await settle();
+            layout.collapsedAgain = {...cardLayout(messages[0], unit), tree: cardTree(messages[0].get_child())};
+        }
         const header = findDescendant(messages[0], a => a.has_style_class_name?.('message-header'));
         const line = findDescendant(header, a => a.has_style_class_name?.('message-header-content'));
         const result = {
@@ -1344,6 +1378,7 @@ async function notificationsLayer(unit) {
             },
             icon: messages[0].icon?.to_string() ?? null,
             messages: messages.map(m => boxOf(m, unit)),
+            trees, layout,
             footer: boxOf(footer, unit),
             clear: {...boxOf(list._clearButton, unit), visible: list._clearButton.visible},
             dnd: dnd && {...boxOf(dnd, unit), label: findDescendant(dnd, a => a instanceof St.Label)?.text ?? null},
