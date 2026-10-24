@@ -17,7 +17,8 @@ gnome-control-center runs. For a user '$USER_NAME', with apex-desktop's schema f
 tests/layer/fixtures, it captures board 11 at both scroll positions, light and dark, and
 checks every row against its key both ways through AT-SPI (bindings.py). Without the
 schema it captures and checks the explanation the panel shows instead. It captures
-Appearance (board 23) light and dark on a gnome-backgrounds wallpaper. Then, with
+Appearance (board 23) light and dark on a gnome-backgrounds wallpaper, and appearance.py
+checks that the name and note follow the wallpaper. Then, with
 update1.py standing in for apex-updated on the system bus, it opens System > Software
 Updates and captures board 18 light and dark, and updates.py checks each state's texts
 and that each button makes its Update1 call. The captures and logs land in
@@ -70,8 +71,10 @@ amber="org.gnome.desktop.background picture-uri 'file:///usr/share/backgrounds/g
 org.gnome.desktop.background picture-uri-dark 'file:///usr/share/backgrounds/gnome/amber-d.jxl'
 org.gnome.desktop.background primary-color '#F57511'
 org.gnome.desktop.background secondary-color '#DD4C38'"
-CASE_SETTINGS=$amber run_case appearance-light default APEX_OPEN=background || status=1
-CASE_SETTINGS=$amber run_case appearance-dark prefer-dark APEX_OPEN=background || status=1
+CASE_SETTINGS=$amber run_case appearance-light default APEX_OPEN=background APEX_SCROLL=1 \
+    "APEX_CHECK=appearance.py amber" || status=1
+CASE_SETTINGS=$amber run_case appearance-dark prefer-dark APEX_OPEN=background APEX_SCROLL=1 || status=1
+run_case appearance-custom default APEX_OPEN=background "APEX_CHECK=appearance.py custom" || status=1
 
 # update_case SCENARIO NAME SCHEME [NAME=VALUE...]: System > Software Updates on update1.py's SCENARIO.
 update_case() {
@@ -93,4 +96,4 @@ done
 headless_update1_stop
 grep -h '^ok \|^FAIL \|APEXCC-' "$out"/*.log || true
 ((status == 0)) || die "run.sh: a case failed; see ${out#"$APEX_ROOT/"}/*.log"
-log "run.sh: every row is bound and every Software Updates state checked; captures in ${out#"$APEX_ROOT/"}"
+log "run.sh: every row is bound, Appearance names its wallpaper and every Software Updates state is checked; captures in ${out#"$APEX_ROOT/"}"
