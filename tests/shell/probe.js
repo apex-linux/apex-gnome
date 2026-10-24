@@ -110,6 +110,13 @@ async function shootLock() {
     await setPowerSaveMode(POWER_SAVE_ON);
     await Scripting.sleep(STEP_MS * 2);
     fact('wake', describeLock(dialog));
+
+    tap(Clutter.KEY_Escape);
+    await Scripting.sleep(STEP_MS * 2);
+    fact('escape', describeLock(dialog));
+    tap(Clutter.KEY_Return);
+    await Scripting.sleep(STEP_MS * 2);
+    fact('key-after-escape', describeLock(dialog));
     await Scripting.sleep(SETTLE_MS);
     fact('end', {locked: Main.screenShield.locked});
 }

@@ -483,6 +483,8 @@ fact "lock: and waking again builds another" 'lock\.wake-again=page=prompt promp
 fact "lock: suspend is blank too" 'lock\.suspend=page=clock prompt=none cancelled=conversation-1,conversation-2,conversation-3'
 fact "lock: a display without power saving keeps a prompt" \
     'lock\.unsupported=page=prompt prompt=conversation-4 cancelled=conversation-1,conversation-2,conversation-3'
+count_is "lock: each teardown is logged once, for the VM tests" '^.*Apex: lock: screen blank, prompt torn down$' 4
+count_is "lock: each rebuild too" '^.*Apex: lock: screen on, prompt rebuilt$' 4
 fact "lock: the hint stays after the rebuilt prompt" 'lock\.prompt-box\.after-wake=conversation-4,Press Enter to unlock'
 fact "lock: locked while blank, the first conversation ends as DisplayConfig answers" \
     'lock\.open-blank=page=clock prompt=none cancelled=conversation-1'

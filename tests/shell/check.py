@@ -32,6 +32,7 @@ LOCK_CASES = {
 }
 GREETER_CASES = ["greeter-light", "greeter-dark"]
 AUTH_ERROR = "Authentication error"
+WRONG_ANSWER = "not-the-password"
 
 failed = 0
 
@@ -79,11 +80,12 @@ def check_lock(shots, case, want):
     log = read(shots, f"{case}.log")
     gdm = read(shots, f"{case}.gdm.log")
     f = facts(log)
-    for step in ("opened", "wrong-answer", "blank", "wake", "end"):
+    steps = ("opened", "wrong-answer", "blank", "wake", "escape", "key-after-escape", "end")
+    for step in steps:
         check(f"{case}: {step} is reported", step in f)
     if failed:
         return
-    for step in ("opened", "wrong-answer", "blank", "wake", "end"):
+    for step in steps:
         check(f"{case}: {step}: locked", f[step]["locked"] is True)
     check(f"{case}: GDM never completes a verification", "VerificationComplete" not in gdm)
     check(f"{case}: no JS error", "JS ERROR" not in until(log, "end") and "APEXLOCK-ERROR" not in log)
@@ -91,7 +93,8 @@ def check_lock(shots, case, want):
     check(f"{case}: the date and the time", (opened["date"], opened["time"]) == (DATE, TIME),
           f"{opened['date']} {opened['time']}")
     calls = channels(gdm)
-    answered = [c for c, lines in calls.items() if any(x.startswith("AnswerQuery") for x in lines)]
+    # The probe's wrong answer, by its length; stock may also take the Return after Esc as an empty one.
+    answered = [c for c, lines in calls.items() if f"AnswerQuery gdm-password ({len(WRONG_ANSWER)} characters)" in lines]
     check(f"{case}: the wrong answer reached GDM once", len(answered) == 1, str(answered))
     if answered:
         lines = calls[answered[0]]
@@ -116,6 +119,12 @@ def check_lock(shots, case, want):
         check(f"{case}: waking starts a new conversation", bool(later) and wake["prompt"] is not None,
               f"channels {sorted(calls)}")
         check(f"{case}: the layer loaded", LOAD_WITNESS in log)
+        check(f"{case}: the teardown is logged once", log.count("Apex: lock: screen blank, prompt torn down") == 1)
+        check(f"{case}: and the rebuild", log.count("Apex: lock: screen on, prompt rebuilt") == 1)
+        check(f"{case}: Esc ends the conversation", f["escape"]["prompt"] is None, json.dumps(f["escape"]["prompt"]))
+        check(f"{case}: a key starts another", f["key-after-escape"]["prompt"] is not None and
+              sum(any(x.startswith("BeginVerificationForUser") for x in lines) for lines in calls.values()) >= 3,
+              f"channels {sorted(calls)}")
     else:
         check(f"{case}: upstream's two stages", "apex-lock" not in opened["classes"].split())
         check(f"{case}: upstream's clock with its hint", opened["clock"] == STOCK_CLOCK, opened["clock"])
@@ -129,7 +138,7 @@ def check_lock(shots, case, want):
 def check_refused(shots, case):
     log = read(shots, f"{case}.log")
     f = facts(log)
-    steps = ("opened", "wrong-answer", "blank", "wake", "end")
+    steps = ("opened", "wrong-answer", "blank", "wake", "escape", "key-after-escape", "end")
     check(f"{case}: every step is reported", all(s in f for s in steps))
     check(f"{case}: GDM refused every channel", "OpenReauthenticationChannel" in read(shots, f"{case}.gdm.log")
           and "channel " not in read(shots, f"{case}.gdm.log"))

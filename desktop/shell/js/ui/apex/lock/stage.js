@@ -39,11 +39,18 @@ export function tearDownPrompt(dialog) {
     dialog._maybeDestroyAuthPrompt();
 }
 
+// The lines mark each change for the VM tests (apex-image's qualify.sh).
 export function followScreen(dialog, displayConfig) {
-    if (_screenIsBlank(displayConfig))
+    const hadPrompt = Boolean(dialog._authPrompt);
+    if (_screenIsBlank(displayConfig)) {
         tearDownPrompt(dialog);
-    else
+        if (hadPrompt)
+            console.log('Apex: lock: screen blank, prompt torn down');
+    } else {
         dialog._showPrompt();
+        if (!hadPrompt)
+            console.log('Apex: lock: screen on, prompt rebuilt');
+    }
 }
 
 function _restack(dialog) {
@@ -90,7 +97,6 @@ function _addHint(dialog) {
     promptBox.connect('child-added', () => promptBox.set_child_above_sibling(hint, null));
 }
 
-// connectObject() disconnects when the dialog is destroyed.
 async function _followDisplayConfig(dialog) {
     const cancellable = new Gio.Cancellable();
     dialog.connect('destroy', () => cancellable.cancel());
