@@ -242,7 +242,11 @@ function describePolkit(dialog) {
         initial: dialog._userAvatar.child instanceof St.Label ? dialog._userAvatar.child.text : null,
         name: {...box(dialog._userLabel), text: visibleText(dialog._userLabel)},
         role: role ? {...box(role), text: visibleText(role)} : null,
-        field: {...box(dialog._passwordEntry), hint: dialog._passwordEntry.hint_text, focused: dialog._passwordEntry.has_key_focus()},
+        field: {
+            ...box(dialog._passwordEntry), hint: dialog._passwordEntry.hint_text,
+            focused: [dialog._passwordEntry, dialog._passwordEntry.clutter_text].includes(global.stage.key_focus),
+            focus: global.stage.key_focus?.constructor.name ?? null,
+        },
         info: {text: visibleText(info), line: line.style_class, glyph: line.get_children().find(c => c instanceof St.Icon && c.visible)?.icon_name ?? null},
         details: details ? {
             ...box(details),

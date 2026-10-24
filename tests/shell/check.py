@@ -345,14 +345,14 @@ def check_polkit(shots, case, want):
           json.dumps(d["buttons"]))
     if not want["apex"]:
         check(f"{case}: upstream's dialog: no shield, no role, no Details",
-              "apex-polkit" not in d["classes"] and d["shield"] is None and d["role"] is None and d["details"] is None,
+              "apex-polkit" not in (d["classes"] or "") and d["shield"] is None and d["role"] is None and d["details"] is None,
               json.dumps(d))
         check(f"{case}: upstream's {STOCK_POLKIT_AVATAR} px avatar over the name",
               near(d["avatar"]["height"], STOCK_POLKIT_AVATAR) and d["avatar"]["y"] + d["avatar"]["height"] <= d["name"]["y"] + 1,
               json.dumps([d["avatar"], d["name"]]))
         return
     box, shield = d["box"], d["shield"] or {}
-    check(f"{case}: board 13's {POLKIT_WIDTH} px dialog", "apex-polkit" in d["classes"] and near(box["width"], POLKIT_WIDTH),
+    check(f"{case}: board 13's {POLKIT_WIDTH} px dialog", "apex-polkit" in (d["classes"] or "") and near(box["width"], POLKIT_WIDTH),
           json.dumps(box))
     check(f"{case}: the shield in a {POLKIT_SHIELD} px accent circle, centred",
           shield.get("icon") == "dialog-password-symbolic" and near(shield.get("width", 0), POLKIT_SHIELD)
