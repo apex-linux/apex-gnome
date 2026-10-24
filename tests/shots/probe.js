@@ -31,6 +31,7 @@ const CRASH_GUARD_MARKER = 'apex-shell-starting';
 const REPORT_AFTER_MS = 1500;
 const SETTLE_TIMEOUT_MS = 20000;
 const SETTLE_EXTRA_MS = 500;
+const PERF_HELPER_PING_S = 10;
 const DEFERRED_WORK_TIMEOUT_MS = 21000;
 const CALIBRATION_PX = 100;
 const INK_MAX_RGB_DISTANCE = 60;
@@ -42,6 +43,10 @@ const STRUCTURE_MARKER = '/*! apex-shell-structure */';
 const LAYER_ENABLED_KEY = 'layer-enabled';
 const SEARCH_HINT_KEY = 'search-hint-shown';
 const OSD_LEVEL = 0.62;
+const POWER_PROFILE_WAIT_MS = 3000;
+const MOTION_WINDOW_ID = 'io.github.apex_linux.G2Window';
+const MOTION_WAIT_MS = 10000;
+const MOTION_SETTLE_MS = 1000;
 const OSD_GLYPH = 'audio-volume-medium-symbolic';
 const SWITCHER_APPS = ['Text Editor', 'Terminal', 'Web', 'Files', 'Settings'];
 const SWITCHER_ICON_SIZE = 96;
@@ -899,6 +904,44 @@ async function quickSettings(unit) {
     }
 }
 
+// The quick-settings feature: the toggles' order, Power Mode lit, On/Off subtitles; then two
+// clicks on Power Mode, which stock answers by switching to the last profile and back.
+async function quickSettingsLayer() {
+    const indicator = Main.panel.statusArea.quickSettings;
+    // Without a VPN connection the VPN toggle is hidden and has no title.
+    const name = t => t.constructor.name === 'NMVpnToggle' ? 'VPN' : t.title;
+    const toggles = indicator.menu._grid.get_children().filter(t => 'checked' in t && name(t));
+    const power = indicator._powerProfiles?.quickSettingsItems[0] ?? null;
+    const dnd = toggles.find(t => t.constructor.name === 'DoNotDisturbToggle');
+    const powerState = () => power && {
+        lit: power.has_style_class_name('apex-lit'),
+        checked: power.checked,
+        subtitle: power.subtitle,
+        visible: power.visible,
+    };
+    const clickPower = async () => {
+        const before = power.checked;
+        power.emit('clicked', Clutter.BUTTON_PRIMARY);
+        for (let waited = 0; power.checked === before && waited < POWER_PROFILE_WAIT_MS; waited += 50)
+            // eslint-disable-next-line no-await-in-loop
+            await Scripting.sleep(50);
+        await settle();
+        return powerState();
+    };
+    const state = {
+        order: toggles.map(t => ({title: name(t), visible: t.visible})),
+        power: powerState(),
+        pillShowsPower: indicator._powerProfiles?.get_parent() === indicator._indicators &&
+            indicator._powerProfiles.visible,
+        dndSubtitle: dnd?.subtitle ?? null,
+    };
+    if (power?.visible) {
+        state.switched = await clickPower();
+        state.back = await clickPower();
+    }
+    return state;
+}
+
 // G2 opens no windows, so the switcher is a stock SwitcherList of AppIcon-shaped items.
 async function windowSwitcher(unit) {
     const list = new SwitcherPopup.SwitcherList(true);
@@ -1350,6 +1393,74 @@ async function tilePreview(unit) {
     }
 }
 
+// The stock screenshot UI in its selection mode, as board 19 opens it, then its screen
+// mode; G2 opens no windows, so a checked window frame is a stand-in.
+async function screenshotUI(unit) {
+    const ui = Main.screenshotUI;
+    await ui.open();
+    try {
+        await settle();
+        global.stage.set_key_focus(null);
+        const scene = GLib.getenv('G2_SURFACE_SCENES') === '1' ? await capture('screenshot') : null;
+        if (scene)
+            delete scene.bytes;
+        const types = [ui._selectionButton, ui._screenButton, ui._windowButton];
+        const typeContent = types[0].get_child();
+        const circle = ui._captureButton.get_child();
+        const area = ui._areaSelector;
+        const measured = {
+            scene,
+            monitorHeight: round(Main.layoutManager.primaryMonitor.height / unit.length),
+            panel: styleOf(ui._panel, unit),
+            close: styleOf(ui._closeButton, unit),
+            types: types.map(b => ({...styleOf(b, unit), checked: b.checked})),
+            typeContent: {
+                spacing: lengthOrNull(typeContent.get_theme_node(), 'spacing', unit),
+                icon: boxOf(typeContent.get_first_child(), unit),
+                labelFont: font(typeContent.get_last_child().get_theme_node(), unit),
+            },
+            checkedType: underPseudoClass(types[1], 'checked', () => paint(types[1].get_theme_node(), unit)),
+            pointer: {
+                ...styleOf(ui._showPointerButton, unit),
+                checked: underPseudoClass(ui._showPointerButton, 'checked', () => ({
+                    ...paint(ui._showPointerButton.get_theme_node(), unit),
+                    foreground: hex(ui._showPointerButton.get_theme_node().get_foreground_color()),
+                })),
+            },
+            capture: {
+                ...styleOf(ui._captureButton, unit),
+                circle: styleOf(circle, unit),
+                cast: underPseudoClass(ui._captureButton, 'cast', () => {
+                    const node = circle.get_theme_node();
+                    return {
+                        margin: lengthOrNull(node, 'margin', unit),
+                        radius: round(node.get_border_radius(St.Corner.TOPLEFT) / unit.length),
+                        background: hex(node.get_background_color()),
+                    };
+                }),
+            },
+            switcher: styleOf(ui._shotCastContainer, unit),
+            shot: {...styleOf(ui._shotButton, unit), checked: ui._shotButton.checked},
+            shade: styleOf(area._areaIndicator._topRect, unit),
+            selection: styleOf(area._areaIndicator._selectionRect, unit),
+            handle: styleOf(area._topLeftHandle, unit),
+        };
+        ui._screenButton.checked = true;
+        await settle();
+        const screen = ui._screenSelectors[Main.layoutManager.primaryIndex];
+        measured.screen = {...styleOf(screen, unit), checked: screen.checked};
+        measured.windowSelector = styleOf(ui._windowSelectors[Main.layoutManager.primaryIndex], unit);
+        const frame = new St.Widget({style_class: 'screenshot-ui-window-selector-window-border'});
+        const window = new St.Widget({style_class: 'screenshot-ui-window-selector-window'});
+        window.add_child(frame);
+        measured.windowFrame = withStyledActor(window, () => underPseudoClass(window, 'checked', () => styleOf(frame, unit)));
+        return measured;
+    } finally {
+        ui.close(true);
+        await settle();
+    }
+}
+
 // Surfaces G2 never opens, as nested stand-ins: each class is the parent of the next.
 function nestedStyle(classes, unit, Leaf = St.Widget) {
     const actors = classes.map((styleClass, i) => i === classes.length - 1
@@ -1414,12 +1525,14 @@ async function scenes() {
     bar.largeText = await withLargeText();
     const surfaces = await shellSurfaces(unit);
     surfaces.quickSettings = await quickSettings(unit);
+    surfaces.quickSettingsLayer = await quickSettingsLayer();
     surfaces.switcher = await windowSwitcher(unit);
     surfaces.dialog = await modalDialog(unit);
     surfaces.dateMenu = await calendarMenu(unit);
     surfaces.derived = derivedSurfaces(unit);
     surfaces.tilePreview = await tilePreview(unit);
     surfaces.spotlight = await spotlightStyle(unit);
+    surfaces.screenshot = await screenshotUI(unit);
 
     Main.overview.show();
     await settle();
@@ -1522,6 +1635,94 @@ async function withLayerCycles(cycles) {
 
 // main.js connects to startup-complete only after importing this module, so a startup that
 // completes during the import would never run the script and leave the shell up.
+function transitionInfo(transition) {
+    if (!transition)
+        return null;
+    const mode = transition.get_progress_mode();
+    const [, c1, c2] = transition.get_cubic_bezier_progress();
+    return {
+        mode: Object.keys(Clutter.AnimationMode).find(k => Clutter.AnimationMode[k] === mode) ?? mode,
+        duration: transition.get_duration(),
+        curve: [c1.x, c1.y, c2.x, c2.y].map(round),
+    };
+}
+
+// The transition the ease created, read right after the call; none when the ease took 0 ms.
+async function firstTransition(read) {
+    for (let waited = 0; waited < MOTION_SETTLE_MS; waited += 10) {
+        const transition = read();
+        if (transition)
+            return transitionInfo(transition);
+        // eslint-disable-next-line no-await-in-loop
+        await Scripting.sleep(10);
+    }
+    return null;
+}
+
+async function maximiseTransition(window) {
+    const actor = window.get_compositor_private();
+    window.maximize();
+    // _sizeChangedWindow marks the actor resizing just before it eases the size change.
+    const transition = await firstTransition(() =>
+        Main.wm._resizing.has(actor) ? actor.get_transition('scale-x') : null);
+    await Scripting.sleep(MOTION_SETTLE_MS);
+    const maximised = window.is_maximized();
+    window.unmaximize();
+    await Scripting.sleep(MOTION_SETTLE_MS);
+    return {transition, maximised};
+}
+
+async function overviewTransition() {
+    const adjustment = Main.overview._overview._controls._stateAdjustment;
+    Main.overview.show();
+    const transition = await firstTransition(() => adjustment.get_transition('value'));
+    await Scripting.sleep(MOTION_SETTLE_MS);
+    const visible = Main.overview.visible;
+    Main.overview.hide();
+    await Scripting.sleep(MOTION_SETTLE_MS);
+    return {transition, visible};
+}
+
+async function motion() {
+    Main.overview.hide();
+    await Scripting.sleep(MOTION_SETTLE_MS);
+    const client = Gio.File.new_for_uri(import.meta.url).get_parent().get_child('window.js').get_path();
+    Gio.Subprocess.new(['gjs', '-m', client], Gio.SubprocessFlags.NONE);
+    const find = () => global.get_window_actors().map(a => a.meta_window)
+        .find(w => w.get_gtk_application_id() === MOTION_WINDOW_ID);
+    let window;
+    for (let waited = 0; !(window = find()) && waited < MOTION_WAIT_MS; waited += 100)
+        // eslint-disable-next-line no-await-in-loop
+        await Scripting.sleep(100);
+    if (!window)
+        throw new Error(`no ${MOTION_WINDOW_ID} window in ${MOTION_WAIT_MS} ms`);
+    // Mutter gives a window's first size change a 0 x 0 old frame, which stock never animates.
+    window.maximize();
+    await Scripting.sleep(MOTION_SETTLE_MS);
+    window.unmaximize();
+    await Scripting.sleep(MOTION_SETTLE_MS);
+    const interfaceSettings = new Gio.Settings({schema_id: 'org.gnome.desktop.interface'});
+    // main.js inhibits animations without hardware-accelerated rendering, as G2's headless shell has.
+    const stSettings = St.Settings.get();
+    const uninhibited = interfaceSettings.get_boolean('enable-animations') && !stSettings.enable_animations;
+    if (uninhibited)
+        stSettings.uninhibit_animations();
+    const animated = {maximise: await maximiseTransition(window), overview: await overviewTransition()};
+    interfaceSettings.set_boolean('enable-animations', false);
+    await Scripting.sleep(MOTION_SETTLE_MS);
+    const still = {maximise: await maximiseTransition(window), overview: await overviewTransition()};
+    // Locate Pointer's ripples are animationRequired: an a11y aid that animates regardless.
+    interfaceSettings.set_boolean('locate-pointer', true);
+    await Scripting.sleep(MOTION_SETTLE_MS);
+    Main.locatePointer.show();
+    still.locatePointer = transitionInfo(Main.locatePointer._ripples?._ripple1.get_transition('scale-x') ?? null);
+    interfaceSettings.set_boolean('locate-pointer', false);
+    const enableAnimations = stSettings.enable_animations;
+    if (uninhibited)
+        stSettings.inhibit_animations();
+    return {uninhibited, enableAnimations, animated, still};
+}
+
 export function init() {
     if (Main.layoutManager._startingUp)
         return;
@@ -1529,7 +1730,25 @@ export function init() {
     import(import.meta.url).then(self => Scripting.runPerfScript(self, GLib.getenv('SHELL_PERF_OUTPUT')));
 }
 
+// gnome-shell-perf-helper quits after 30 s without a call, and scripting.js's last call to it
+// then fails the shell: a probe that runs longer pings it.
+function keepPerfHelperAwake() {
+    return GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, PERF_HELPER_PING_S, () => {
+        Scripting._getPerfHelper().then(helper => helper.DestroyWindowsAsync()).catch(() => {});
+        return GLib.SOURCE_CONTINUE;
+    });
+}
+
 export async function run() {
+    const pingId = keepPerfHelperAwake();
+    try {
+        await runProbe();
+    } finally {
+        GLib.source_remove(pingId);
+    }
+}
+
+async function runProbe() {
     await Scripting.sleep(REPORT_AFTER_MS);
     console.log(`APEXG2 ${JSON.stringify(await report())}`);
 
@@ -1551,6 +1770,16 @@ export async function run() {
             toggled = {error: `${e.message}\n${e.stack}`};
         }
         console.log(`APEXG2-TOGGLED ${JSON.stringify(toggled)}`);
+    }
+
+    if (GLib.getenv('G2_MOTION') === '1') {
+        let result;
+        try {
+            result = await motion();
+        } catch (e) {
+            result = {error: `${e.message}\n${e.stack}`};
+        }
+        console.log(`APEXG2-MOTION ${JSON.stringify(result)}`);
     }
 
     if (GLib.getenv('G2_GLASS') === '1') {

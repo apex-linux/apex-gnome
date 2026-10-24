@@ -188,6 +188,83 @@ const QUICK_SETTINGS_INDICATORS = ['_remoteAccess', '_camera', '_volumeInput', '
 
 const rightBox = box([{name: 'a11y'}, {name: 'keyboard'}]);
 
+// A QuickToggle's checked and subtitle notify, as GObject properties do.
+class Toggle {
+    constructor(name, {checked = false, subtitle = null} = {}) {
+        this.name = name;
+        this._checked = checked;
+        this._subtitle = subtitle;
+        this._handlers = new Map();
+        this._nextId = 1;
+        this.styleClasses = new Set();
+    }
+
+    get checked() {
+        return this._checked;
+    }
+
+    set checked(value) {
+        this._checked = value;
+        this._notify('checked');
+    }
+
+    get subtitle() {
+        return this._subtitle;
+    }
+
+    set subtitle(value) {
+        this._subtitle = value;
+        this._notify('subtitle');
+    }
+
+    _notify(property) {
+        for (const [signal, fn] of [...this._handlers.values()]) {
+            if (signal === `notify::${property}`)
+                fn();
+        }
+    }
+
+    connect(signal, fn) {
+        this._handlers.set(this._nextId, [signal, fn]);
+        return this._nextId++;
+    }
+
+    disconnect(id) {
+        this._handlers.delete(id);
+    }
+
+    add_style_class_name(name) {
+        this.styleClasses.add(name);
+    }
+
+    remove_style_class_name(name) {
+        this.styleClasses.delete(name);
+    }
+
+    get_parent() {
+        return this.grid;
+    }
+
+    get_next_sibling() {
+        return this.grid.children[this.grid.children.indexOf(this) + 1] ?? null;
+    }
+}
+
+// QuickSettingsMenu's grid lays its items out in child order.
+function quickSettingsGrid(toggles) {
+    const grid = box(toggles);
+    toggles.forEach(t => (t.grid = grid));
+    grid.set_child_above_sibling = (child, sibling) => {
+        grid.remove_child(child);
+        grid.children.splice(grid.children.indexOf(sibling) + 1, 0, child);
+    };
+    grid.set_child_below_sibling = (child, sibling) => {
+        grid.remove_child(child);
+        grid.children.splice(grid.children.indexOf(sibling), 0, child);
+    };
+    return grid;
+}
+
 export function newQuickSettings() {
     const quickSettings = {
         _indicators: box([]), container: {get_parent: () => rightBox},
@@ -198,6 +275,22 @@ export function newQuickSettings() {
         quickSettings[field] = {name: field.slice(1)};
         quickSettings._indicators.children.push(quickSettings[field]);
     }
+    const toggles = {
+        wifi: new Toggle('Wi-Fi', {checked: true, subtitle: 'Home'}),
+        vpn: new Toggle('VPN'),
+        bluetooth: new Toggle('Bluetooth'),
+        power: new Toggle('Power Mode', {subtitle: 'Balanced'}),
+        nightLight: new Toggle('Night Light'),
+        darkMode: new Toggle('Dark Style'),
+        doNotDisturb: new Toggle('Do Not Disturb'),
+        airplane: new Toggle('Airplane Mode'),
+        autoRotate: new Toggle('Auto Rotate'),
+    };
+    quickSettings.menu._grid = quickSettingsGrid(Object.values(toggles));
+    quickSettings._network._vpnToggle = toggles.vpn;
+    quickSettings._rfkill.quickSettingsItems = [toggles.airplane];
+    quickSettings._powerProfiles.quickSettingsItems = [toggles.power];
+    quickSettings.toggles = toggles;
     return quickSettings;
 }
 

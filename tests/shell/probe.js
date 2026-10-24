@@ -123,11 +123,48 @@ async function shootLock() {
     fact('end', {locked: Main.screenShield.locked});
 }
 
+function scale() {
+    return St.ThemeContext.get_for_stage(global.stage).scale_factor;
+}
+
+function box(actor) {
+    const [x, y] = actor.get_transformed_position();
+    const [width, height] = actor.get_transformed_size();
+    return {x: x / scale(), y: y / scale(), width: width / scale(), height: height / scale()};
+}
+
+function color(c) {
+    return `#${[c.red, c.green, c.blue, c.alpha].map(v => v.toString(16).padStart(2, '0')).join('')}`;
+}
+
+// Board 12's background, footer and bottom buttons, as the theme and the dialog give them.
+function describeGreeterStyle(dialog) {
+    const node = dialog.get_theme_node();
+    const buttons = dialog._bottomButtonGroup.get_children();
+    return {
+        screen: box(dialog),
+        background: {color: color(node.get_background_color()), image: node.get_background_image()?.get_uri() ?? null},
+        logo: dialog._logoBin.visible && dialog._logoBin.get_n_children() > 0
+            ? {file: dialog._logoFile?.get_path() ?? null, ...box(dialog._logoBin.get_first_child())} : null,
+        buttons: buttons.filter(b => b.visible).map(button),
+        back: dialog._authPrompt?.cancelButton.mapped ? button(dialog._authPrompt.cancelButton) : null,
+    };
+}
+
+function button(b) {
+    const n = b.get_theme_node();
+    return {
+        ...box(b), radius: n.get_border_radius(St.Corner.TOPLEFT) / scale(), background: color(n.get_background_color()),
+        border: n.get_border_width(St.Side.TOP) / scale(), borderColor: color(n.get_border_color(St.Side.TOP)),
+    };
+}
+
 function describeGreeter(dialog) {
     const items = [...dialog._userList._items.values()];
     return {
         users: items.map(i => i.user.get_user_name()).join(' '),
         prompt: describePrompt(dialog._authPrompt?.visible ? dialog._authPrompt : null),
+        style: describeGreeterStyle(dialog),
     };
 }
 

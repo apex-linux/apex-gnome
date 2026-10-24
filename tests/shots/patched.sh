@@ -169,7 +169,7 @@ echo "# direct.sh main: exit $rc"
 set +e
 # shellcheck source=tests/shots/assert.sh
 . "$HERE/assert.sh"
-for c in default default-scale1 dark-style stock-light stock-dark safe-env layer-disabled layer-cycles; do
+for c in default default-scale1 dark-style stock-light stock-dark safe-env layer-disabled layer-cycles motion; do
     no_js_error "$c" "$run/$c.log"
     fixed_clock "$c" "$run/$c.log"
 done
@@ -195,6 +195,7 @@ no_dock stock-dark "$run/stock-dark.log"
 for c in default:light default-scale1:light dark-style:dark; do
     shell_surfaces "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
     quick_settings "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
+    quick_settings_layer "${c%:*}" "$run/${c%:*}.log" apex
     window_switcher "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
     modal_dialog "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
     date_menu "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
@@ -205,8 +206,13 @@ for c in default:light default-scale1:light dark-style:dark; do
     tile_preview "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
     spotlight_style "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
     spotlight_glass "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
+    screenshot_ui "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
+done
+for c in stock-light stock-dark; do
+    quick_settings_layer "$c" "$run/$c.log" stock
 done
 layer_cycles "$run"
+motion_curve "$run"
 no_js_error glass "$run/glass.log"
 glass_frames glass "$run/glass.log"
 glass_manager glass "$run/glass.log" light
