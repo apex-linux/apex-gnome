@@ -51,7 +51,7 @@ The direct cases:
 | `high-contrast` | the capture settings with `org.gnome.desktop.a11y.interface high-contrast` true | every Apex surface's contrast in the high-contrast sheet (see "Accessibility") |
 | `large-text` | the capture settings with `text-scaling-factor` 1.25 | every Apex surface's text whole, on the screen, inside its surface and clear of the rest (see "Accessibility") |
 | `dock-intellihide`, `dock-intellihide-dark` | the capture settings, light or dark, without hot corners (the headless pointer starts at 0,0, in the corner); the probe starts `maximised-window.js`, one maximised GTK window | the dock shows, then hides behind the maximised window as the bar turns solid; a virtual pointer pushing against the bottom edge under it reveals it, under the pointer; moving away hides it; the overview shows it; with `dock-intellihide` off it stays, and hides again when it is back on; the window gone, it shows. The maximised and revealed scenes are captured beside board 37's |
-| `stock-light`, `stock-dark` | `APEX_SHELL_SAFE=1` with `prefer-light` or `prefer-dark` | upstream's sheet of that variant from `theme/stock/`; the overview's thumbnails at upstream's maximum scale 0.05 and at the effective scale of Fedora's build; the rebuilt high-contrast sheet, which safe mode keeps, is Fedora's apart from the structure marker; no Super+Space binding |
+| `stock-light`, `stock-dark` | `APEX_SHELL_SAFE=1` with `prefer-light` or `prefer-dark` | upstream's sheet of that variant from `theme/stock/`; the overview's thumbnails at upstream's maximum scale 0.05 and at the effective scale of Fedora's build; the rebuilt high-contrast sheet, which safe mode keeps, is Fedora's up to the structure marker (Apex only appends); no Super+Space binding |
 | `safe-env`, `layer-disabled`, `kernel-safe` | the three kill switches | upstream's dark sheet from `theme/stock/`, the stock colour scheme, every hook stock, no Super+Space binding, the reason logged; the same sheet in all three; `safe-env`: no search hint |
 | `layer-cycles` | the capture settings; the probe sets `layer-enabled` false, then true, three times | while off: upstream's dark sheet from `theme/stock/`, the stock colour scheme, every hook stock, no Super+Space binding; while on: the Apex light sheet, `prefer-light` and Super+Space; each time it is on the stage holds the same actors, type by type, as at startup, and each time it is off the same as the first time (the first count waits out main.js's 20 s timeout for deferred work, which fills the overview's hidden dash; an `St.Icon` counts, not the texture child St gives it once it is first styled, which a dash hidden since startup decides); the layer logs each switch |
 | `motion` | the capture settings with `enable-animations` true; the probe lifts the inhibit `main.js` puts on animations without hardware-accelerated rendering, starts `window.js`, a plain GTK 4 window, maximises and restores it once (mutter gives a first size change a 0 × 0 old frame, which stock never animates), maximises it and opens the overview, then sets `enable-animations` false, does both again and plays Locate Pointer | DESIGN's motion (ROADMAP S3c): the window actor's size-change transition and the overview's state transition are `CUBIC_BEZIER` with the control points (.2, .8) and (.2, 1), over 300 and 200 ms; with animations off, neither creates a transition, while Locate Pointer's ripple (`animationRequired`, an a11y aid) still takes stock's 830 ms |
@@ -430,9 +430,10 @@ default: `glass-unlock.png` against `fedora-glass-unlock.png` differs by 0 pixel
 ## Accessibility
 
 `G2_A11Y=1` (the `default`, `dark-style`, `high-contrast` and `large-text` cases) runs
-`a11y.js`, which opens each of the panel's surfaces in turn: the bar, the dock, a popup
-menu, the OSD, a banner, Quick Settings and its Wi-Fi menu, and the date menu with two
-notifications. Its targets are the visible
+`a11y.js`, which opens each Apex surface in turn: the bar, the dock, a popup menu, the OSD,
+a banner, Quick Settings and its Wi-Fi menu, the date menu with two notifications, the
+window switcher, a polkit-shaped dialog, the shell's own power-off dialog, Spotlight with
+"disk" typed and its toast, the overview and the app grid. Its targets are the visible
 labels, entries and symbolic icons under the surface. Their ink is hidden while the shell
 draws the surface, so the capture holds what is behind them, glass and its blur included,
 with an icon's own fill put back over it. Each target's foreground colour, times its alpha
@@ -451,6 +452,9 @@ copy of the sheet for safe mode. A report for upstream, which is the owner's to 
 > high-contrast sheet, a checked quick toggle draws white text on the accent: 3.15:1 for the
 > default blue (WCAG 1.4.3 wants 4.5:1), and the menu arrow beside it 2.31:1 (1.4.11 wants
 > 3:1). Measured from the stage's pixels with the toggle's own colours.
+>
+> **High contrast: the overview search entry's glyph is invisible.** The search glyph draws
+> white at 70 % opacity on the entry's near-white fill: 1.01:1 (1.4.11 wants 3:1).
 
 ## The idle desktop
 
