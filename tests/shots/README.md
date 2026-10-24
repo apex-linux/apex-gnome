@@ -456,6 +456,9 @@ copy of the sheet for safe mode. A report for upstream, which is the owner's to 
 > **High contrast: the overview search entry's glyph is invisible.** The search glyph draws
 > white at 70 % opacity on the entry's near-white fill: 1.01:1 (1.4.11 wants 3:1).
 
+The Apex sheet's own high-contrast styles (`_apex-structure.scss`) restyle the overview's search
+entry, so on Apex that glyph passes and only the checked toggle stays a gap.
+
 ## The idle desktop
 
 ROADMAP S3c's last exit: an idle desktop shows no extra repaints. The `idle` case runs the
