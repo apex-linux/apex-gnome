@@ -337,6 +337,30 @@ fact "disabled-features=['motion']: an actor's default stays Clutter's" 'motion\
 fact "disabled-features=['motion']: no curve is set" 'motion\.curve=stock'
 fact "disabled-features=['motion']: stock durations" 'motion\.durations=window=250 overview=250 popover=250 unknown=250'
 
+probe quick-settings "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_QUICK_SETTINGS=1
+has "quick-settings: the feature enables" 'Apex: feature quick-settings enabled'
+fact "quick-settings: VPN after Airplane Mode (DESIGN's order)" \
+    'qs\.order=Wi-Fi,Bluetooth,Power Mode,Night Light,Dark Style,Do Not Disturb,Airplane Mode,VPN,Auto Rotate'
+fact "quick-settings: On or Off under a toggle without a subtitle; a toggle's own subtitle stays" \
+    'qs\.subtitles=Wi-Fi=Home,Bluetooth=Off,Power Mode=Balanced,Night Light=Off,Dark Style=Off,Do Not Disturb=Off,Airplane Mode=Off,VPN=Off,Auto Rotate=Off'
+fact "quick-settings: Power Mode lit at Balanced, its checked state stock" 'qs\.power=checked=false classes=apex-lit'
+fact "quick-settings: the state follows checked; a subtitle the toggle sets wins" 'qs\.live=dnd=On bluetooth=Headphones'
+fact "quick-settings: once the toggle drops its own, ours follows again" 'qs\.own-subtitle-gone=bluetooth=On'
+fact "quick-settings: layer off: stock order" \
+    'qs\.off\.order=Wi-Fi,VPN,Bluetooth,Power Mode,Night Light,Dark Style,Do Not Disturb,Airplane Mode,Auto Rotate'
+fact "quick-settings: layer off: only the toggles' own subtitles" \
+    'qs\.off\.subtitles=Wi-Fi=Home,VPN=-,Bluetooth=-,Power Mode=Balanced,Night Light=-,Dark Style=-,Do Not Disturb=-,Airplane Mode=-,Auto Rotate=-'
+fact "quick-settings: layer off: Power Mode unlit" 'qs\.off\.power=checked=false classes=none'
+fact "quick-settings: layer back on: DESIGN's order again" \
+    'qs\.on\.order=Wi-Fi,Bluetooth,Power Mode,Night Light,Dark Style,Do Not Disturb,Airplane Mode,VPN,Auto Rotate'
+fact "quick-settings: layer back on: lit again" 'qs\.on\.power=checked=false classes=apex-lit'
+
+probe quick-settings-disabled "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_QUICK_SETTINGS=1 PROBE_DISABLED=quick-settings
+has "disabled-features=['quick-settings']: skips the feature" 'Apex: feature quick-settings is in disabled-features'
+fact "disabled-features=['quick-settings']: stock order" \
+    'qs\.order=Wi-Fi,VPN,Bluetooth,Power Mode,Night Light,Dark Style,Do Not Disturb,Airplane Mode,Auto Rotate'
+fact "disabled-features=['quick-settings']: Power Mode unlit" 'qs\.power=checked=false classes=none'
+
 probe spotlight-disabled "$CMDLINE_PLAIN" PROBE_DISABLED=spotlight PROBE_ENABLE=1 PROBE_PRESS=1
 has "disabled-features=['spotlight']: skips the feature" 'Apex: feature spotlight is in disabled-features'
 keybindings_are "disabled-features=['spotlight']: no Super+Space binding" ''

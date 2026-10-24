@@ -367,6 +367,35 @@ function topBarHooks(label) {
     fact(`${label}.dots`, `${widths.join(' ')} inactive=${JSON.stringify(Hooks.value('workspace-dot-inactive', 'stock'))}`);
 }
 
+function quickSettingsState(label, quickSettings) {
+    const grid = quickSettings.menu._grid;
+    fact(`${label}.order`, grid.get_children().map(t => t.name).join(','));
+    fact(`${label}.subtitles`, grid.get_children().map(t => `${t.name}=${t.subtitle ?? '-'}`).join(','));
+    fact(`${label}.power`, `checked=${quickSettings.toggles.power.checked} ` +
+        `classes=${[...quickSettings.toggles.power.styleClasses].join(',') || 'none'}`);
+}
+
+async function exerciseQuickSettings() {
+    if (GLib.getenv('PROBE_QUICK_SETTINGS') !== '1')
+        return;
+    const Main = await import(`file://${shellDir}/js/ui/main.js`);
+    const {quickSettings} = Main.panel.statusArea;
+    const {toggles} = quickSettings;
+    quickSettingsState('qs', quickSettings);
+    toggles.doNotDisturb.checked = true;
+    toggles.bluetooth.subtitle = 'Headphones';
+    fact('qs.live', `dnd=${toggles.doNotDisturb.subtitle} bluetooth=${toggles.bluetooth.subtitle}`);
+    toggles.bluetooth.subtitle = null;
+    toggles.bluetooth.checked = true;
+    fact('qs.own-subtitle-gone', `bluetooth=${toggles.bluetooth.subtitle}`);
+    settings.set_boolean('layer-enabled', false);
+    await spin(200);
+    quickSettingsState('qs.off', quickSettings);
+    settings.set_boolean('layer-enabled', true);
+    await spin(200);
+    quickSettingsState('qs.on', quickSettings);
+}
+
 async function exerciseTopBar() {
     if (GLib.getenv('PROBE_TOP_BAR') !== '1')
         return;
@@ -943,6 +972,7 @@ if (layer && GLib.getenv('PROBE_ENABLE') === '1') {
     await pressToggleSpotlight();
     await exerciseLock();
     await exerciseMotion();
+    await exerciseQuickSettings();
     await exerciseSpotlight();
     await exerciseTopBar();
     await exerciseSolidBar();
