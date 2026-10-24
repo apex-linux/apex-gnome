@@ -312,9 +312,7 @@ readonly KEPT_PILL='remoteAccess,camera,volumeInput,location,network,volumeOutpu
 readonly STOCK_PILL='remoteAccess,camera,volumeInput,location,brightness,thunderbolt,nightLight,network,darkMode,doNotDisturb,backlight,bluetooth,rfkill,autoRotate,volumeOutput,unsafeMode,powerProfiles,system'
 probe top-bar "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_TOP_BAR=1 PROBE_SCALE=2
 rc_is "top bar: the probe runs" 0
-for feature in workspace-dots hot-corner status-pill; do
-    has "top bar: $feature enables" "Apex: feature $feature enabled"
-done
+has "top bar: the panel feature enables" 'Apex: feature panel enabled'
 fact "workspace-dots: the active dot widens from its own width to the sheet's -apex-active-width as it expands; the others stay full size at .45" \
     'top-bar\.dots=7 15 22 inactive=\{"opacity":0\.45,"scale":1\}'
 fact "status-pill: network, volume, battery, the privacy and the unsafe-mode indicators stay" "pill=$KEPT_PILL"
@@ -334,11 +332,17 @@ lacks "top bar: no feature fails or disables uncleanly" 'off for this session|di
 probe top-bar-rtl "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_TOP_BAR=1 PROBE_SCALE=1 PROBE_RTL=1
 fact "hot-corner, right to left: the zone lies left of the corner" 'hot-corner\.zone=hot-corner reactive=true x=-4 y=0 4x4'
 
-probe top-bar-disabled "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_TOP_BAR=1 PROBE_DISABLED=workspace-dots,hot-corner,status-pill
-fact "disabled-features: the dot hooks give stock" 'top-bar\.dots=99 99 99 inactive="stock"'
-fact "disabled-features: the status pill keeps every indicator" "pill=$STOCK_PILL"
-fact "disabled-features: the corner stays stock" 'hot-corner\.zone=none reactive=false x=undefined y=undefined undefinedxundefined'
-lacks "disabled-features: nothing is rebuilt or restyled" 'hot-corners=rebuilt|workspace-dot=restyled'
+probe top-bar-disabled "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_TOP_BAR=1 PROBE_DISABLED=panel
+has "disabled-features=['panel']: skips the feature" 'Apex: feature panel is in disabled-features'
+fact "disabled-features=['panel']: the dot hooks give stock" 'top-bar\.dots=99 99 99 inactive="stock"'
+fact "disabled-features=['panel']: the status pill keeps every indicator" "pill=$STOCK_PILL"
+fact "disabled-features=['panel']: the corner stays stock" 'hot-corner\.zone=none reactive=false x=undefined y=undefined undefinedxundefined'
+lacks "disabled-features=['panel']: nothing is rebuilt or restyled" 'hot-corners=rebuilt|workspace-dot=restyled'
+
+probe panel-live "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_DISABLE_LIVE=panel
+count_is "panel in and out of disabled-features while enabled: it says so" 'Apex: feature panel is in disabled-features' 2
+count_is "panel live: the hot corners are rebuilt at each enable and disable" '^probe: hot-corners=rebuilt$' 5
+lacks "panel live: the feature disables cleanly" 'off for this session|did not disable cleanly|cannot restyle'
 
 panel_classes_are() {
     local got
@@ -347,13 +351,13 @@ panel_classes_are() {
 }
 
 probe solid-bar "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_SOLID_BAR=1
-has "solid-bar: the feature enables" 'Apex: feature solid-bar enabled'
+has "solid-bar: the panel feature enables" 'Apex: feature panel enabled'
 panel_classes_are "solid-bar: the bar is solid exactly while translucent-top-bar is off and the layer on" \
     'none [translucent-top-bar=false] apex-solid-bar [translucent-top-bar=true] none [translucent-top-bar=false] apex-solid-bar [layer-enabled=false] none [layer-enabled=true] apex-solid-bar'
 lacks "solid-bar: no feature fails or disables uncleanly" 'off for this session|did not disable cleanly|cannot restyle'
 
-probe solid-bar-disabled "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_SOLID_BAR=1 PROBE_DISABLED=solid-bar
-panel_classes_are "disabled-features=['solid-bar']: the bar stays translucent" \
+probe solid-bar-disabled "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_SOLID_BAR=1 PROBE_DISABLED=panel
+panel_classes_are "disabled-features=['panel']: the bar stays translucent" \
     '[translucent-top-bar=false] [translucent-top-bar=true] [translucent-top-bar=false] [layer-enabled=false] [layer-enabled=true]'
 
 printf '1..%d\n' "$tests"
