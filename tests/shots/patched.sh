@@ -179,6 +179,7 @@ for c in default:light default-scale1:light dark-style:dark; do
     modal_dialog "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
     date_menu "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
     overview_style "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
+    app_grid "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
 done
 layer_cycles "$run"
 echo "# logs and captures: $run"

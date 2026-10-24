@@ -586,6 +586,37 @@ overview_style() {
         "$o.section" '(.background | colour_is($t.apex_glass_card)) and (.borderColor | colour_is($t.apex_glass_card_border)) and (.radius | px_is($t.apex_radius_message)) and (.foreground | colour_is($t.apex_fg))'
 }
 
+# shellcheck disable=SC2016 # jq programs and token names, not shell expansions
+app_grid() {
+    local label=$1 log=$2 variant=$3 scenes tokens
+    scenes=$(report_of "$log" APEXG2-SCENES)
+    tokens=$(tokens_for "$variant")
+    local -a metric=(top_bar_metric "$label launcher" "$scenes" "$tokens")
+    local g=.surfaces.appGrid
+
+    "${metric[@]}" 'an app tile is unfilled, radius $apex_radius_app_tile, padded $apex_app_tile_padding, $apex_app_tile_gap above its name at $apex_font_app_label_size $apex_font_label_weight in $apex_fg' \
+        "$g.app" '(.background | rgba | .[3] == 0) and (.radius | px_is($t.apex_radius_app_tile)) and (.padding.top | px_is($t.apex_app_tile_padding))
+            and (.spacing | px_is($t.apex_app_tile_gap)) and (.labelFont.size | px_is($t.apex_font_app_label_size)) and .labelFont.weight == ($t.apex_font_label_weight | tonumber)
+            and (.foreground | colour_is($t.apex_fg))'
+    "${metric[@]}" 'hovered it is $apex_button; focused, $apex_button in a $apex_entry_focus_ring raw-accent ring' \
+        "{a: $g.app, accent: .topBar.accent}" '.accent as $c | .a | (.hover.background | colour_is($t.apex_button)) and (.focus.background | colour_is($t.apex_button))
+            and (.focus.boxShadow | .inset and (.spread | px_is($t.apex_entry_focus_ring)) and (.color | colour_is($c)))'
+    "${metric[@]}" 'a folder tile is $apex_folder ringed in $apex_pill_border' \
+        "$g.folder" '(.background | colour_is($t.apex_folder)) and (.borderColor | colour_is($t.apex_pill_border)) and (.border.top | px_is($t.apex_surface_border))'
+    "${metric[@]}" 'the folder dialog is $apex_folder_dialog_width of $apex_folder_panel glass ringed in $apex_panel_border, radius $apex_radius_folder_dialog, inset $apex_folder_dialog_padding ($apex_folder_dialog_padding_bottom at the bottom)' \
+        "$g.dialog" '(.width | px_is($t.apex_folder_dialog_width)) and (.background | colour_is($t.apex_folder_panel)) and (.borderColor | colour_is($t.apex_panel_border))
+            and (.radius | px_is($t.apex_radius_folder_dialog)) and (.padding.left + .border.left | px_is($t.apex_folder_dialog_padding))
+            and (.padding.bottom + .border.bottom | px_is($t.apex_folder_dialog_padding_bottom))
+            and (.boxShadow | .y == ($t.apex_shadow_y | px) and .blur == ($t.apex_shadow_blur | px) and (.color | colour_is($t.apex_shadow)))'
+    "${metric[@]}" 'its title is $apex_font_folder_title_size $apex_font_heading_weight in $apex_fg; its button a $apex_folder_close_size circle in $apex_button' \
+        "$g.dialog" '(.title.font.size | px_is($t.apex_font_folder_title_size)) and .title.font.weight == ($t.apex_font_heading_weight | tonumber) and (.title.foreground | colour_is($t.apex_fg))
+            and (.button | (.width | px_is($t.apex_folder_close_size)) and (.height | px_is($t.apex_folder_close_size)) and (.background | colour_is($t.apex_button)))'
+    "${metric[@]}" 'running dots are $apex_running_dot_size round in $apex_fg at $apex_running_dot_opacity; page indicators $apex_fg; page hints flat, no gradient' \
+        "$g" '(.runningDot | (.width | px_is($t.apex_running_dot_size)) and (.height | px_is($t.apex_running_dot_size)) and (.radius * 2 | px_is($t.apex_running_dot_size))
+            and (.background | rgba | .[3] - (($t.apex_running_dot_opacity | num) * 255) | fabs <= 1))
+            and (.pageIndicator.background | colour_is($t.apex_fg)) and .pageHint.gradient == 0'
+}
+
 scenes_captured() {
     local run=$1 case_name=$2
     local log=$run/$case_name.log scene
@@ -766,6 +797,7 @@ direct_cases() {
     modal_dialog default "$f" light
     date_menu default "$f" light
     overview_style default "$f" light
+    app_grid default "$f" light
 
     f=$run/default-scale1.log
     exits "$run" default-scale1 0
@@ -781,6 +813,7 @@ direct_cases() {
     modal_dialog default-scale1 "$f" light
     date_menu default-scale1 "$f" light
     overview_style default-scale1 "$f" light
+    app_grid default-scale1 "$f" light
 
     f=$run/dark-style.log
     exits "$run" dark-style 0
@@ -799,6 +832,7 @@ direct_cases() {
     modal_dialog dark-style "$f" dark
     date_menu dark-style "$f" dark
     overview_style dark-style "$f" dark
+    app_grid dark-style "$f" dark
     dark_style_off dark-style "$f"
 
     for c in stock-light stock-dark; do

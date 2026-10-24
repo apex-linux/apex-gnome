@@ -14,5 +14,6 @@ theme_sources += files(
   '_dialogs.scss',
   '_date-menu.scss',
   '_overview.scss',
+  '_app-grid.scss',
   '_apex-structure.scss',
 )

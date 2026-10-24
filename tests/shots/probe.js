@@ -1005,6 +1005,68 @@ function overviewStyle(unit) {
     }
 }
 
+function standInStyle(styleClass, parentClass, unit) {
+    const parent = new St.BoxLayout({style_class: parentClass ?? ''});
+    const actor = new St.Widget({style_class: styleClass});
+    parent.add_child(actor);
+    return withStyledActor(parent, () => {
+        const node = actor.get_theme_node();
+        const [type] = node.get_background_gradient();
+        return {
+            width: lengthOrNull(node, 'width', unit), height: lengthOrNull(node, 'height', unit),
+            radius: round(node.get_border_radius(St.Corner.TOPLEFT) / unit.length),
+            background: hex(node.get_background_color()), gradient: type,
+        };
+    });
+}
+
+// The launcher of the fixture image: a few apps and the System folder, opened as board 36 does.
+async function appGrid(unit) {
+    const {showAppsButton} = Main.overview.dash;
+    const appDisplay = Main.overview._overview.controls._appDisplay;
+    showAppsButton.checked = true;
+    let folder = null;
+    try {
+        await settle();
+        const tiles = appDisplay._orderedItems ?? [];
+        const app = tiles.find(t => t.constructor.name === 'AppIcon');
+        folder = tiles.find(t => t.constructor.name === 'FolderIcon');
+        const label = app ? firstVisibleLabel(app) : null;
+        const measured = {
+            app: app ? {
+                ...styleOf(app, unit),
+                labelFont: label ? font(label.get_theme_node(), unit) : null,
+                spacing: lengthOrNull(findDescendant(app, a => a.has_style_class_name?.('overview-icon'))
+                    .get_first_child().get_theme_node(), 'spacing', unit),
+                hover: underPseudoClass(app, 'hover', () => paint(app.get_theme_node(), unit)),
+                focus: underPseudoClass(app, 'focus', () => paint(app.get_theme_node(), unit)),
+            } : null,
+            folder: folder ? styleOf(folder, unit) : null,
+            runningDot: standInStyle('app-grid-running-dot', null, unit),
+            pageIndicator: standInStyle('page-indicator-icon', 'page-indicator', unit),
+            pageHint: standInStyle('page-navigation-hint next', null, unit),
+        };
+        if (folder) {
+            folder.open();
+            await settle();
+            const dialog = findDescendant(Main.layoutManager.overviewGroup, a => a.has_style_class_name?.('app-folder-dialog'));
+            measured.scene = GLib.getenv('G2_SURFACE_SCENES') === '1' ? await capture('appgrid') : null;
+            if (measured.scene)
+                delete measured.scene.bytes;
+            measured.dialog = dialog ? {
+                ...styleOf(dialog, unit),
+                title: styleOf(findDescendant(dialog, a => a.has_style_class_name?.('folder-name-label')), unit),
+                button: styleOf(findDescendant(dialog, a => a.has_style_class_name?.('icon-button')), unit),
+            } : null;
+        }
+        return measured;
+    } finally {
+        folder?._dialog?.popdown();
+        showAppsButton.checked = false;
+        await settle();
+    }
+}
+
 // Without GDM the shell posts "Screen Lock disabled" at startup; its banner would cover
 // the scenes for as long as it happens to stay.
 function dropStartupNotifications() {
@@ -1042,6 +1104,7 @@ async function scenes() {
     const overviewIdle = await settle();
     const overview = {idle: overviewIdle, ...await capture('overview'), thumbnails: thumbnails(), workArea: workArea(unit)};
     surfaces.overview = overviewStyle(unit);
+    surfaces.appGrid = await appGrid(unit);
     delete overview.bytes;
     Main.overview.hide();
 
