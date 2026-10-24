@@ -661,6 +661,62 @@ assert_run() {
         _ "$HERE" "$assertions" "$T/top-bar.log" "$variant" "$T/top-bar.out"
 }
 
+# shellcheck disable=SC2016 # a jq program
+REPORT_OF_LEGIBLE_SURFACES='
+{kind: "text", name: "Label", inactive: false, offscreen: false, ratio: 7, ellipsized: false, expandable: false, card: 0,
+    box: {x: 10, y: 10, width: 60, height: 20}} as $text
+| ($text + {kind: "icon", name: "glyph-symbolic", ratio: 4, box: {x: 80, y: 10, width: 16, height: 16}}) as $icon
+| {box: {x: 0, y: 0, width: 200, height: 100}, targets: [$text, $icon]} as $s
+| {textScalingFactor: 1.25, monitor: {x: 0, y: 0, width: 1440, height: 900},
+    bar: $s, dock: $s, popupMenu: $s, osd: $s, banner: $s, quickSettings: $s, wifiMenu: $s, dateMenu: $s, switcher: $s,
+    dialog: $s, endSession: $s, spotlight: {popup: $s, toast: $s}, overview: $s, appGrid: $s}'
+
+a11y_run() {
+    local assertions=$1 change=${2:-.}
+    jq -nc "$REPORT_OF_LEGIBLE_SURFACES | $change" | sed 's/^/APEXG2-A11Y /' >"$T/a11y.log"
+    # shellcheck disable=SC2016 # expanded by the inner bash
+    bash -c '. "$1/assert.sh"; "$2" case "$3" >"$4" 2>&1; summary >>"$4"; echo "$npass $nfail $ngap"' \
+        _ "$HERE" "$assertions" "$T/a11y.log" "$T/a11y.out"
+}
+
+test_a11y() {
+    local assertions expected change what passes failures open_gaps want
+    for assertions in a11y_contrast:15 a11y_layout:16; do
+        expected=${assertions#*:}
+        read -r passes failures open_gaps <<<"$(a11y_run "${assertions%:*}")"
+        if ((failures == 0 && open_gaps == 0 && passes == expected)); then
+            ok "accessibility (${assertions%:*}): legible surfaces pass all $passes assertions"
+        else
+            not_ok "accessibility (${assertions%:*}): legible surfaces pass (passed/failed/gaps $passes/$failures/$open_gaps): $(grep -m3 '^FAIL' "$T/a11y.out" | paste -sd'|' -)"
+        fi
+    done
+    while IFS='|' read -r assertions want change what; do
+        read -r passes failures open_gaps <<<"$(a11y_run "$assertions" "$change")"
+        if ((failures == want)); then
+            ok "accessibility: $what fails $want assertion(s)"
+        else
+            not_ok "accessibility: $what fails $want assertion(s) (passed/failed/gaps $passes/$failures/$open_gaps)"
+        fi
+    done <<'CHANGES'
+a11y_contrast|1|.bar.targets[0].ratio = 4.4|text at 4.4:1
+a11y_contrast|1|.dock.targets[1].ratio = 2.9|a glyph at 2.9:1
+a11y_contrast|1|.wifiMenu.targets[0].ratio = 3|a menu row's text at 3:1
+a11y_contrast|1|.spotlight.toast.targets[0].ratio = 3|the toast's text at 3:1
+a11y_contrast|1|.endSession.targets[1].ratio = 2|the end-session glyph at 2:1
+a11y_contrast|1|.banner = {error: "not shown"}|a surface that never showed
+a11y_contrast|1|.popupMenu.targets = []|a surface with nothing measured
+a11y_contrast|0|.osd.targets[0] += {inactive: true, ratio: 1}|a disabled control's text
+a11y_contrast|0|.dateMenu.targets[0] += {offscreen: true, ratio: null}|another workspace's label
+a11y_layout|1|.bar.targets[0].ellipsized = true|text cut short
+a11y_layout|1|.dock.targets[0].box.x = 1430|text over the screen's edge
+a11y_layout|1|.osd.targets[0].box.y = 95|text leaving its surface
+a11y_layout|1|.quickSettings.targets += [.quickSettings.targets[0] + {name: "Other"} + {box: {x: 20, y: 10, width: 60, height: 20}}]|overlapping text
+a11y_layout|1|.textScalingFactor = 1|text at its default size
+a11y_layout|0|.dateMenu.targets += [.dateMenu.targets[0] + {card: 1} + {box: {x: 20, y: 14, width: 60, height: 20}}]|a stacked card's text
+a11y_layout|0|.banner.targets[0] += {ellipsized: true, expandable: true}|a collapsed notification's body
+CHANGES
+}
+
 test_top_bar() {
     local variant change what passes failures open_gaps
     for variant in light dark; do
@@ -2114,6 +2170,7 @@ test_shell_surfaces
 test_quick_settings
 test_window_switcher
 test_modal_dialog
+test_a11y
 test_date_menu
 test_overview_style
 test_app_grid

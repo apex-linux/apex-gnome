@@ -1,0 +1,13 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+//
+// The end-session feature's circle; the high-contrast sheet imports it too.
+
+.apex-end-session-icon {
+  width: $apex_end_session_icon_size;
+  height: $apex_end_session_icon_size;
+  border-radius: $apex_end_session_icon_size / 2;
+  color: $apex_fg;
+  background-color: $apex_button;
+
+  StIcon { icon-size: $apex_end_session_icon_glyph_size; }
+}

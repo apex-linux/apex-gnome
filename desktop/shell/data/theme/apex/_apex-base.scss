@@ -1,0 +1,27 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+//
+// What every Apex partial uses, in the light and dark sheets and in the high-contrast one.
+
+// In pt, so that Large Text (text-scaling-factor) still scales the text: at the default
+// factor 0.75pt is one logical pixel.
+@function apex-text-size($px) {
+  @return $px / 1px * .75pt;
+}
+
+// St draws one box-shadow, so the board's inset ring is the border.
+@mixin apex-surface($fill) {
+  color: $apex_fg;
+  background-color: $fill;
+  border: $apex_surface_border solid $apex_panel_border;
+  box-shadow: 0 $apex_shadow_y $apex_shadow_blur 0 $apex_shadow;
+}
+
+// Upstream's %reset as a mixin: an @extend would rewrite upstream's selector lists.
+@mixin apex-reset {
+  background: none;
+  box-shadow: none;
+  border: none;
+  border-radius: 0;
+  padding: 0;
+  margin: 0;
+}

@@ -111,7 +111,7 @@ function sheetInfo(uri) {
         const text = new TextDecoder().decode(bytes);
         return {
             sha256: GLib.compute_checksum_for_data(GLib.ChecksumType.SHA256, bytes),
-            sha256WithoutStructureMarker: sha256OfText(text.replace(STRUCTURE_MARKER, '').trimEnd()),
+            sha256BeforeStructure: sha256OfText(text.split(STRUCTURE_MARKER)[0].trimEnd()),
             bytes: bytes.length,
             markers: ['light', 'dark'].filter(v => text.includes(`/*! apex-shell-theme ${v} */`)),
             structure: text.includes(STRUCTURE_MARKER),
@@ -721,6 +721,7 @@ function openPopupMenu() {
     [...rows, separator, iconRow].forEach(item => menu.addMenuItem(item));
     menu.open(BoxPointer.PopupAnimation.NONE);
     return {
+        root: menu.box,
         measure: unit => {
             const line = separator.get_children().find(c => c.has_style_class_name('popup-separator-menu-item-separator'));
             return {
@@ -789,6 +790,7 @@ async function openOsd() {
     const settled = gone && await settledOverTwoFrames(window._hbox,
         () => window.visible && window._hbox.mapped && window._level.visible, OSD_SETTLE_TIMEOUT_MS);
     return {
+        root: window._hbox,
         measure: unit => {
             if (!settled)
                 return {error: 'the OSD never settled'};
@@ -1152,12 +1154,16 @@ async function endSessionDialog(unit) {
     }
 }
 
-async function openEndSessionDialog(unit) {
+async function openShellEndSession() {
     await Gio.DBus.session.call('org.gnome.Shell', '/org/gnome/SessionManager/EndSessionDialog',
         'org.gnome.SessionManager.EndSessionDialog', 'Open', new GLib.Variant('(uuuao)', [1, 0, 60, []]),
         null, Gio.DBusCallFlags.NONE, -1, null);
-    const dialog = Main.layoutManager.modalDialogGroup.get_children()
+    return Main.layoutManager.modalDialogGroup.get_children()
         .find(c => c.dialogLayout?._dialog?.has_style_class_name('end-session-dialog'));
+}
+
+async function openEndSessionDialog(unit) {
+    const dialog = await openShellEndSession();
     try {
         await settle();
         global.stage.set_key_focus(null);
@@ -1190,7 +1196,7 @@ async function openEndSessionDialog(unit) {
 }
 
 // A stock ModalDialog shaped like polkit's: title, description, password entry, two buttons.
-async function modalDialog(unit) {
+function promptDialog() {
     const dialog = new ModalDialog.ModalDialog({styleClass: 'prompt-dialog'});
     const content = new Dialog.MessageDialogContent({
         title: 'Authentication Required',
@@ -1203,6 +1209,23 @@ async function modalDialog(unit) {
         dialog.addButton({label: 'Cancel', action: () => {}, key: Clutter.KEY_Escape}),
         dialog.addButton({label: 'Authenticate', action: () => {}, default: true}),
     ];
+    return {dialog, content, entry, buttons};
+}
+
+function openPromptDialog() {
+    const {dialog} = promptDialog();
+    dialog.open();
+    return {
+        root: dialog.dialogLayout._dialog,
+        close: () => {
+            dialog.close();
+            dialog.destroy();
+        },
+    };
+}
+
+async function modalDialog(unit) {
+    const {dialog, content, entry, buttons} = promptDialog();
     dialog.open();
     try {
         await settle();
@@ -1607,6 +1630,28 @@ async function spotlightKeys() {
         await pressKeys(keyboard, Clutter.KEY_Escape, 1);
         keys.escape = {open: popup.isOpen, modal: Main.modalCount};
         return keys;
+    } finally {
+        popup.destroy();
+        await settle();
+    }
+}
+
+// Spotlight's popup, and its toast once a calculation is copied, for G2_A11Y.
+async function withSpotlight(read) {
+    if ((await apexHooks())?.safe() !== false)
+        return null;
+    const {Popup} = await import('resource:///org/gnome/shell/ui/apex/spotlight/popup.js');
+    const Toast = await import('resource:///org/gnome/shell/ui/apex/spotlight/toast.js');
+    const popup = new Popup(spotlightProviders, 0);
+    popup.open();
+    try {
+        return await read(popup, async () => {
+            popup.panel.get_children()[0].get_children()[1].set_text('2880 / 1.5');
+            await settle();
+            popup.activateSelected();
+            await settle();
+            return Toast.current()?.get_first_child() ?? null;
+        });
     } finally {
         popup.destroy();
         await settle();
@@ -2430,6 +2475,20 @@ async function runProbe() {
             result = {error: `${e.message}\n${e.stack}`};
         }
         console.log(`APEXG2-SCENES ${JSON.stringify(result)}`);
+    }
+
+    if (GLib.getenv('G2_A11Y') === '1') {
+        let result;
+        try {
+            const A11y = await import('./a11y.js');
+            result = await A11y.a11yReport({
+                settle, unit: cssUnit(), apexDock, findDescendant, openPopupMenu, openOsd, openBanner,
+                openModalDialog: openPromptDialog, openEndSessionDialog: openShellEndSession, withSpotlight,
+            });
+        } catch (e) {
+            result = {error: `${e.message}\n${e.stack}`};
+        }
+        console.log(`APEXG2-A11Y ${JSON.stringify(result)}`);
     }
 
     if (GLib.getenv('G2_INDICATORS') === '1') {
