@@ -23,12 +23,13 @@ usage: tests/s2c/radius-test.sh RPM_DIR AGENT
 S2c's live window radius, end to end, in a headless gnome-shell at scale 2: with
 apex-session-agent (AGENT, from tests/s2c/agent.sh) running and window-corner-radius
 at 14, it opens Ptyxis, Files and Settings' Apex Desktop panel beside a maximised Ptyxis,
-presses the Corner Radius row's "0" through AT-SPI, and fails unless every open window
-turns square within $DEADLINE_MS ms of the press while the maximised one stays square.
+a Ptyxis half-tiled with Super+Left and a fullscreen one, presses the Corner Radius row's
+"0" through AT-SPI, and fails unless the three open windows turn square within
+$DEADLINE_MS ms of the press and the maximised, tiled and fullscreen ones stay square.
 RPM_DIR holds the lanes' libadwaita, gnome-control-center and nautilus RPMs. As root in a
 throwaway fedora:$APEX_FEDORA container with ptyxis, gnome-shell, mesa-dri-drivers,
 dbus-daemon, dconf, python3-dbusmock, python3-gobject, at-spi2-core, gcc, util-linux and
-jq; the captures (s2c-14.png, s2c-0.png) and logs land in _build/s2c/radius/.
+jq; the captures (s2c-14.png, s2c-0.png, s2c-tiled-0.png, s2c-fullscreen-0.png) and logs land in _build/s2c/radius/.
 EOF
 }
 
@@ -96,6 +97,10 @@ check '.error == null' "the probe failed"
 check '.agent_running and .agent_running_after' "apex-session-agent was not running throughout"
 check '.maximised and .windows.maximised.before.square and .windows.maximised.after.square' \
     "the maximised window was not square before and after"
+check '.tiled and .tiled_after and .fullscreen and .fullscreen_after' \
+    "Super+Left did not half-tile a window, or the fullscreen one left fullscreen"
+check '[.windows.tiled, .windows.fullscreen] | all(.before.square and .after.square)' \
+    "the half-tiled or the fullscreen window was not square before and after"
 check '[.windows.ptyxis, .windows.files, .windows.settings] | all(.before.square == false)' \
     "a window was not rounded at 14 px before the press"
 check '.key == 0 and (.css | test(":root \\{ --window-radius: 0px;"))' "the press did not reach window-corner-radius and apex.css"

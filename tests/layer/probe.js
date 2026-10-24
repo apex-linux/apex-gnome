@@ -28,6 +28,10 @@ function newEmitter(props = {}) {
                     fn();
             }
         },
+        connectObject(...args) {
+            for (let i = 0; i + 1 < args.length; i += 2)
+                this.connect(args[i], args[i + 1]);
+        },
     };
 }
 
@@ -53,8 +57,13 @@ Gio.DBusProxy.new_for_bus = (_bus, _flags, _info, name, _path, _iface, cancellab
         resolve(displayConfig);
 });
 const windows = [];
+const TOGGLE_KEYCODE = 65;
+let mainModule = null;
 globalThis.global = {
-    display: newEmitter(),
+    display: newEmitter({
+        get_keybinding_action: keycode =>
+            keycode === TOGGLE_KEYCODE ? mainModule?.wm.actionOf('toggle-spotlight') ?? 0 : 0,
+    }),
     stage: {width: 1440},
     window_manager: newEmitter(),
     workspace_manager: newEmitter({get_active_workspace: () => ({list_windows: () => windows})}),
@@ -120,13 +129,174 @@ async function setDisabledLive() {
     await spin(200);
 }
 
+async function spotlightPopup() {
+    return (await import(`file://${shellDir}/js/ui/apex/spotlight/feature.js`)).popup();
+}
+
 async function pressToggleSpotlight() {
     const presses = Number(GLib.getenv('PROBE_PRESS') ?? '0');
     const Main = await import(`file://${shellDir}/js/ui/main.js`);
     for (let press = 1; press <= presses; press++) {
         Main.wm.press('toggle-spotlight');
-        fact(`press.${press}`, `overview=${Main.overview.visible}`);
+        // eslint-disable-next-line no-await-in-loop
+        fact(`press.${press}`, `overview=${Main.overview.visible} spotlight=${(await spotlightPopup())?.isOpen ?? false}`);
     }
+}
+
+// What the popup shows: each section's rows, the selected one starred with its verb.
+function shown(popup) {
+    if (!popup?.isOpen)
+        return 'closed';
+    const [, results, empty] = popup.panel.get_children();
+    if (empty.visible)
+        return `empty "${empty.get_children()[0].text}"`;
+    if (!results.visible)
+        return 'field only';
+    const parts = [];
+    for (const child of results.get_children()) {
+        if (child.has_style_class_name('apex-spotlight-header')) {
+            parts.push(`${child.get_children()[0].text}:`);
+            continue;
+        }
+        const [, text, action] = child.get_children();
+        const [title, subtitle] = text.get_children();
+        const result = title.has_style_class_name('apex-spotlight-result') ? `(${subtitle.text})` : '';
+        const selected = child.has_style_pseudo_class('selected') ? `*${action.get_children()[0].text}` : '';
+        parts[parts.length - 1] += ` ${title.text}${result}${selected}`;
+    }
+    return parts.join(' | ');
+}
+
+const SEARCH_SETTLE_MS = 300;
+
+async function exerciseSpotlight() {
+    const mode = GLib.getenv('PROBE_SPOTLIGHT');
+    if (mode === null)
+        return;
+    const Main = await import(`file://${shellDir}/js/ui/main.js`);
+    const Toast = await import(`file://${shellDir}/js/ui/apex/spotlight/toast.js`);
+    const popup = await spotlightPopup();
+    const entry = () => popup.panel.get_children()[0].get_children()[1];
+    const key = (symbol, keycode) => entry().actions[0].press(symbol, keycode);
+    const report = label => fact(`spotlight.${label}`, shown(popup));
+    const type = async (label, text) => {
+        entry().set_text(text);
+        await spin(SEARCH_SETTLE_MS);
+        report(label);
+    };
+    const open = () => {
+        Main.overview.visible = false;
+        Main.wm.press('toggle-spotlight');
+    };
+    const {default: Clutter} = await import(`file://${GLib.path_get_dirname(shellDir)}/Clutter.js`);
+
+    if (mode === 'slow') {
+        open();
+        entry().set_text('disk');
+        await spin(700);
+        report('slow.at-700ms');
+        await spin(600);
+        report('slow.at-1300ms');
+        return;
+    }
+    if (mode === 'late') {
+        open();
+        entry().set_text('disk');
+        await spin(300);
+        report('late.at-300ms');
+        for (let i = 0; i < 5; i++)
+            key(Clutter.KEY_Down);
+        report('late.down-5');
+        await spin(600);
+        report('late.at-900ms');
+        return;
+    }
+    if (mode === 'late-sum') {
+        open();
+        entry().set_text('2880 / 1.5');
+        await spin(300);
+        report('late-sum.at-300ms');
+        await spin(600);
+        report('late-sum.at-900ms');
+        return;
+    }
+
+    open();
+    report('opened');
+    fact('spotlight.focus', entry().focused === true);
+    await type('disk', 'disk');
+    for (let i = 0; i < 4; i++)
+        key(Clutter.KEY_Down);
+    report('down-4');
+    key(Clutter.KEY_Up);
+    report('up-1');
+    for (let i = 0; i < 20; i++)
+        key(Clutter.KEY_Down);
+    report('down-20');
+    for (let i = 0; i < 20; i++)
+        key(Clutter.KEY_Up);
+    report('up-20');
+    for (let i = 0; i < 4; i++)
+        key(Clutter.KEY_Down);
+    key(Clutter.KEY_Return);
+    report('enter-on-a-setting');
+
+    open();
+    await type('app', 'disk');
+    key(Clutter.KEY_KP_Enter);
+    report('enter-on-an-app');
+
+    open();
+    await type('sum', '2880 / 1.5');
+    key(Clutter.KEY_Return);
+    report('enter-on-the-sum');
+    const toast = Toast.current();
+    fact('spotlight.toast', toast ? `${toast.get_children()[0].accessible_name} in-ui-group=${Main.uiGroup.children.includes(toast)}` : 'none');
+    await spin(2300);
+    fact('spotlight.toast-later', Toast.current() ? 'shown' : 'gone');
+
+    open();
+    await type('none', 'zzz');
+    key(Clutter.KEY_Escape);
+    report('escape');
+
+    open();
+    await type('cleared-before', 'disk');
+    await type('cleared', '');
+    entry().set_text('disk');
+    await type('superseded', 'zzz');
+    key(0, TOGGLE_KEYCODE);
+    report('toggle-key');
+
+    open();
+    global.display.emit('overlay-key');
+    fact('spotlight.overlay-key', `${shown(popup)} overview=${Main.overview.visible}`);
+
+    open();
+    Main.uiGroup.children.find(a => a.name === 'apexSpotlight').get_children()[0].actions[0].recognize();
+    report('click-outside');
+
+    open();
+    await type('hover-before', 'disk');
+    const row = popup.panel.get_children()[1].get_children()[2];
+    row.hover = true;
+    row.emit('notify::hover');
+    report('hover');
+    row.actions[0].recognize();
+    report('click-row');
+    fact('spotlight.stage', Main.uiGroup.children.filter(a => a.name === 'apexSpotlight').length);
+
+    open();
+    await type('live-before', 'disk');
+    settings.set_strv('disabled-features', ['spotlight']);
+    await spin(200);
+    const gone = await spotlightPopup() === null;
+    fact('spotlight.live-disabled', `${Main.uiGroup.children.filter(a => a.name === 'apexSpotlight').length} popup=${gone}`);
+    settings.set_strv('disabled-features', []);
+    await spin(200);
+    Main.wm.press('toggle-spotlight');
+    fact('spotlight.live-enabled', shown(await spotlightPopup()));
+    Main.wm.press('toggle-spotlight');
 }
 
 function pillNames(quickSettings) {
@@ -258,7 +428,7 @@ async function exerciseSearchButton() {
     const button = Main.panel.statusArea['apex-search'];
     if (button) {
         const tooltip = () => {
-            const label = Main.layoutManager.lastChrome;
+            const label = Main.layoutManager.chrome.find(actor => actor.text === 'Search (Super+Space)' && !actor.destroyed);
             return label ? `${label.visible} at ${label.x},${label.y}` : 'none';
         };
         button.hover = true;
@@ -269,9 +439,9 @@ async function exerciseSearchButton() {
         fact('search.tooltip.unhover', tooltip());
     }
     Main.panel.statusArea['apex-search']?.actions[0].recognize();
-    fact('search.click.1', `overview=${Main.overview.visible}`);
+    fact('search.click.1', `overview=${Main.overview.visible} spotlight=${(await spotlightPopup())?.isOpen ?? false}`);
     Main.panel.statusArea['apex-search']?.actions[0].recognize();
-    fact('search.click.2', `overview=${Main.overview.visible}`);
+    fact('search.click.2', `overview=${Main.overview.visible} spotlight=${(await spotlightPopup())?.isOpen ?? false}`);
     Main.sessionMode.lock(true);
     report('locked');
     Main.sessionMode.lock(false);
@@ -363,6 +533,7 @@ function newUnlockDialog(St) {
             prompt.connect('destroy', () => prompt._userVerifier.destroy());
             this._authPrompt = prompt;
             promptBox.add_child(prompt);
+            promptBox.emit('child-added', prompt);
         },
         _showPrompt() {
             this._ensureAuthPrompt();
@@ -458,6 +629,134 @@ async function exerciseLock() {
     }
 }
 
+function newWorkspace(nWindows) {
+    return {
+        _background: {
+            visible: true,
+            hide() {
+                this.visible = false;
+            },
+        },
+        _container: newEmitter({
+            nWindows,
+            get_n_children() {
+                return this.nWindows;
+            },
+        }),
+        children: [],
+        add_child(child) {
+            this.children.push(child);
+        },
+    };
+}
+
+function workspaceFacts(label, workspace) {
+    const [empty] = workspace.children;
+    fact(`workspace.${label}`, `background=${workspace._background.visible} ` +
+        `${empty ? `"${empty.text}" .${empty.style_class} visible=${empty.visible} opacity=${empty.opacity}` : 'no label'}`);
+}
+
+function buildWorkspaces(label) {
+    const layout = {stateAdjustment: newEmitter({value: 1})};
+    const empty = newWorkspace(0);
+    Hooks.run('workspace', empty, layout);
+    workspaceFacts(`${label}.empty`, empty);
+    empty._container.nWindows = 1;
+    empty._container.emit('child-added');
+    workspaceFacts(`${label}.window-added`, empty);
+    empty._container.nWindows = 0;
+    empty._container.emit('child-removed');
+    layout.stateAdjustment.value = 0.5;
+    layout.stateAdjustment.emit('notify::value');
+    workspaceFacts(`${label}.half-open`, empty);
+    const busy = newWorkspace(2);
+    Hooks.run('workspace', busy, {stateAdjustment: newEmitter({value: 1})});
+    workspaceFacts(`${label}.with-windows`, busy);
+}
+
+async function overviewFacts(label) {
+    const Main = await import(`file://${shellDir}/js/ui/main.js`);
+    const {_thumbnailsBox: box, _appDisplay: {_grid: grid}} = Main.overview._overview._controls;
+    const preview = {_title: 'title', _closeButton: 'close'};
+    fact(`overview.${label}`, `title-visible=${Hooks.value('window-title-visible', false)} ` +
+        `overlay=${Hooks.value('window-overlay', ['title', 'close'], preview).join('+')} ` +
+        `scale=${Hooks.value('thumbnail-scale', 0.05)} threshold=${Hooks.value('thumbnails-threshold', 2)} ` +
+        `box=${box._maxThumbnailScale} grid=${JSON.stringify(grid._gridModes)} ` +
+        `icon=${grid.layout_manager.fixed_icon_size}`);
+    fact(`overview.${label}.relayout`, `mode=${grid._currentMode} page-width=${grid.layout_manager._pageWidth}`);
+    buildWorkspaces(label);
+}
+
+async function exerciseOverview() {
+    if (GLib.getenv('PROBE_OVERVIEW') !== '1')
+        return;
+    await overviewFacts('enabled');
+    settings.set_boolean('layer-enabled', false);
+    await spin(200);
+    await overviewFacts('off');
+    settings.set_boolean('layer-enabled', true);
+    await spin(200);
+    await overviewFacts('on');
+}
+
+function dockState(Main) {
+    const box = Main.layoutManager.chrome.find(actor => actor.name === 'apexDockBox' && !actor.destroyed);
+    const dock = box?.get_children()[0] ?? null;
+    if (!dock)
+        return `none dash=${Main.overview.dash.visible} dash-height=${Main.overview.dash.height}`;
+    const {separator, showApps, trash} = dock.tailItems;
+    const apps = dock._box.get_children().map(item => `${item.name}:${item.child.icon.iconSize}`);
+    return `${[...apps, separator.has_style_class_name('apex-dock-separator') ? 'separator' : '?',
+        `show-apps:${showApps.icon.iconSize}`, `trash:${trash.icon.iconSize}${trash.visible ? '' : '(hidden)'}`].join(' ')} ` +
+        `indicators=${!dock.has_style_class_name('apex-dock-no-indicators')} visible=${dock.visible} ` +
+        `dash=${Main.overview.dash.visible} dash-height=${Main.overview.dash.height}`;
+}
+
+async function exerciseDock() {
+    if (GLib.getenv('PROBE_DOCK') !== '1')
+        return;
+    const Main = await import(`file://${shellDir}/js/ui/main.js`);
+    const report = label => fact(`dock.${label}`, dockState(Main));
+    report('enabled');
+    for (const [key, value] of [['dock-icon-size', 'small'], ['dock-icon-size', 'large'], ['dock-show-trash', false],
+        ['dock-running-indicators', false]]) {
+        if (typeof value === 'string')
+            settings.set_string(key, value);
+        else
+            settings.set_boolean(key, value);
+        // eslint-disable-next-line no-await-in-loop
+        await spin(50);
+        report(`${key}=${value}`);
+    }
+    ['dock-icon-size', 'dock-show-trash', 'dock-running-indicators'].forEach(key => settings.reset(key));
+    await spin(50);
+    Main.sessionMode.lock(true);
+    report('locked');
+    Main.sessionMode.lock(false);
+
+    const dock = Main.layoutManager.chrome.find(actor => actor.name === 'apexDockBox' && !actor.destroyed)
+        ?.get_children()[0];
+    if (dock?.tailItems) {
+        const {showAppsButton} = dock;
+        const overviewButton = Main.overview.dash.showAppsButton;
+        showAppsButton.checked = true;
+        showAppsButton.emit('notify::checked');
+        fact('dock.show-apps', `overview=${Main.overview.visible} overview-button=${overviewButton.checked}`);
+        overviewButton.checked = false;
+        overviewButton.emit('notify::checked');
+        fact('dock.overview-show-apps-off', `dock-button=${showAppsButton.checked}`);
+        fact('dock.hooks', `separator=${Hooks.value('dash-favorites-separator', true, dock)} ` +
+            `stock-separator=${Hooks.value('dash-favorites-separator', true, {})} ` +
+            `show-apps=${Hooks.value('show-apps-icon-name', 'view-app-grid-symbolic', dock.tailItems.showApps)}`);
+    }
+    settings.set_boolean('layer-enabled', false);
+    await spin(200);
+    report('off');
+    settings.set_boolean('layer-enabled', true);
+    await spin(200);
+    report('on');
+}
+
 async function switchLayer() {
     const cycles = Number(GLib.getenv('PROBE_SWITCH') ?? '0');
     for (let cycle = 1; cycle <= cycles; cycle++) {
@@ -484,6 +783,7 @@ Hooks.provide('probe', 'boom', () => {
 fact('boom', `${Hooks.value('boom', 'stock')},${Hooks.value('boom', 'stock')}`);
 fact('run-without-provider', Hooks.run('nothing'));
 
+globalThis.PROBE_FAVOURITES = ['Files', 'Web'];
 if (layer && GLib.getenv('PROBE_ENABLE') === '1') {
     if (GLib.getenv('PROBE_LOCKED') === '1')
         (await import(`file://${shellDir}/js/ui/main.js`)).sessionMode.isLocked = true;
@@ -503,13 +803,17 @@ if (layer && GLib.getenv('PROBE_ENABLE') === '1') {
         loop.run();
         fact('survived', `${waitSeconds}s`);
     }
+    mainModule = await import(`file://${shellDir}/js/ui/main.js`);
     await pressToggleSpotlight();
     await exerciseLock();
+    await exerciseSpotlight();
     await exerciseTopBar();
     await exerciseSolidBar();
     await exerciseFocusedApp();
     await exerciseSearchButton();
     await exerciseMaximisedWindow();
+    await exerciseOverview();
+    await exerciseDock();
     await setDisabledLive();
     await switchLayer();
     for (const [signal, fn] of [...handlers.values()]) {

@@ -1,0 +1,18 @@
+<?xml version="1.0"?>
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+<!-- frame.c, for gi-compile-repository: direct.sh builds both into /run/g2-frame. -->
+<repository version="1.2" xmlns="http://www.gtk.org/introspection/core/1.0" xmlns:c="http://www.gtk.org/introspection/c/1.0">
+  <include name="GObject" version="2.0"/>
+  <namespace name="G2Frame" version="1" shared-library="/run/g2-frame/libg2frame.so" c:identifier-prefixes="G2Frame" c:symbol-prefixes="g2_frame">
+    <function name="read" c:identifier="g2_frame_read">
+      <return-value transfer-ownership="full" nullable="1"><type name="GLib.Bytes" c:type="GBytes*"/></return-value>
+      <parameters>
+        <parameter name="framebuffer" transfer-ownership="none"><type name="GObject.Object" c:type="GObject*"/></parameter>
+        <parameter name="x" transfer-ownership="none"><type name="gint" c:type="int"/></parameter>
+        <parameter name="y" transfer-ownership="none"><type name="gint" c:type="int"/></parameter>
+        <parameter name="width" transfer-ownership="none"><type name="gint" c:type="int"/></parameter>
+        <parameter name="height" transfer-ownership="none"><type name="gint" c:type="int"/></parameter>
+      </parameters>
+    </function>
+  </namespace>
+</repository>

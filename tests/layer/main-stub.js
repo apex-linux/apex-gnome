@@ -7,6 +7,8 @@ import Shell from 'gi://Shell';
 
 const fact = (key, value) => printerr(`probe: ${key}=${value}`);
 const handlers = new Map();
+const actions = new Map();
+let lastAction = 0;
 
 function flagNames(value, flags) {
     const names = Object.entries(flags)
@@ -110,13 +112,40 @@ export function notify(title) {
 // layout.js's chrome parameters: Params.parse throws on any other.
 const CHROME_PARAMS = ['trackFullscreen', 'affectsStruts'];
 
+export const uiGroup = {
+    children: [],
+    add_child(actor) {
+        this.children.push(actor);
+        actor._parent = this;
+    },
+    remove_child(actor) {
+        this.children = this.children.filter(a => a !== actor);
+    },
+};
+
+let modals = 0;
+
+export function pushModal(actor, params) {
+    modals++;
+    fact('modal.push', `${actor.name} actionMode=${params.actionMode} count=${modals}`);
+    return {};
+}
+
+export function popModal() {
+    modals--;
+    fact('modal.pop', `count=${modals}`);
+}
+
 export const layoutManager = {
+    ...emitter({}),
+    primaryMonitor: {x: 0, y: 0, width: 1440, height: 900},
+    chrome: [],
     _updateHotCorners: () => fact('hot-corners', 'rebuilt'),
     addChrome(actor, params = {}) {
         const unknown = Object.keys(params).filter(key => !CHROME_PARAMS.includes(key));
         if (unknown.length > 0)
             throw new Error(`Unrecognized parameter "${unknown[0]}"`);
-        this.lastChrome = actor;
+        this.chrome.push(actor);
         fact('chrome.add', `${actor.name ?? actor.text} trackFullscreen=${params.trackFullscreen ?? false}`);
     },
 };
@@ -124,8 +153,66 @@ export const layoutManager = {
 const overviewHandlers = new Map();
 let nextOverviewHandler = 1;
 
+// The parts of the overview's controls the overview feature changes, as stock leaves them.
+const controls = {
+    _thumbnailsBox: {
+        _maxThumbnailScale: 0.05,
+        _updateShouldShow: () => {},
+        queue_relayout: () => {},
+    },
+    _appDisplay: {
+        _grid: {
+            _gridModes: 'stock',
+            _currentMode: 0,
+            layout_manager: {fixed_icon_size: -1, _pageWidth: 1272},
+            setGridModes(modes) {
+                this._gridModes = modes ?? 'stock';
+            },
+            queue_relayout: () => {},
+        },
+    },
+};
+
+function emitter(props) {
+    const signalHandlers = [];
+    return {
+        ...props,
+        connect(signal, fn) {
+            signalHandlers.push([signal, fn]);
+            return signalHandlers.length;
+        },
+        disconnect(id) {
+            signalHandlers[id - 1] = null;
+        },
+        emit(signal) {
+            for (const handler of [...signalHandlers]) {
+                if (handler?.[0] === signal)
+                    handler[1](this);
+            }
+        },
+    };
+}
+
 export const overview = {
     visible: false,
+    _overview: {_controls: controls},
+    dash: {
+        visible: true,
+        height: -1,
+        showAppsButton: emitter({checked: false}),
+        show() {
+            this.visible = true;
+        },
+        hide() {
+            this.visible = false;
+        },
+    },
+    showApps() {
+        this.visible = true;
+        fact('overview', 'shown, app grid');
+        this.dash.showAppsButton.checked = true;
+        this.dash.showAppsButton.emit('notify::checked');
+    },
     connect(signal, fn) {
         overviewHandlers.set(nextOverviewHandler, [signal, fn]);
         return nextOverviewHandler++;
@@ -138,6 +225,10 @@ export const overview = {
             if (s === signal)
                 fn();
         }
+    },
+    show() {
+        this.visible = true;
+        fact('overview', 'shown');
     },
     focusSearch() {
         this.visible = true;
@@ -156,11 +247,16 @@ export const wm = {
             return Meta.KeyBindingAction.NONE;
         }
         handlers.set(name, handler);
+        actions.set(name, ++lastAction);
         fact('keybinding.add', `${name} accelerators=${settings.get_strv(name).join(',')} ` +
             `flags=${flagNames(flags, Meta.KeyBindingFlags)} modes=${flagNames(modes, Shell.ActionMode)}`);
-        return handlers.size;
+        return actions.get(name);
+    },
+    actionOf(name) {
+        return actions.get(name) ?? 0;
     },
     removeKeybinding(name) {
+        actions.delete(name);
         if (handlers.delete(name))
             fact('keybinding.remove', name);
     },

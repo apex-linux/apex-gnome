@@ -1,0 +1,144 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+
+// Glass: St has no backdrop filter, so S2b's glass manager blurs behind the tint.
+.apex-spotlight {
+  @include apex-surface($apex_panel);
+  width: $apex_spotlight_width - 2 * $apex_surface_border;
+  margin-top: $apex_spotlight_top;
+  border-radius: $apex_radius_spotlight;
+  font-size: apex-text-size($apex_font_size);
+}
+
+.apex-spotlight-field {
+  height: $apex_spotlight_field_height;
+  padding: 0 $apex_spotlight_field_padding;
+  spacing: $apex_spotlight_field_gap;
+}
+
+.apex-spotlight-glyph {
+  icon-size: $apex_spotlight_glyph_size;
+  color: $apex_fg_dim;
+}
+
+.apex-spotlight-entry {
+  &, &:hover, &:focus {
+    min-height: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    color: $apex_fg;
+    background-color: transparent;
+    box-shadow: none;
+    font-size: apex-text-size($apex_font_spotlight_field_size);
+    font-weight: $apex_font_spotlight_field_weight;
+    caret-color: $apex_accent;
+    selection-background-color: st-transparentize($apex_accent, 1 - $apex_selection_opacity);
+    selected-color: $apex_fg;
+  }
+
+  StLabel.hint-text { color: $apex_fg_hint; }
+}
+
+.apex-spotlight-clear {
+  width: $apex_spotlight_clear_size;
+  height: $apex_spotlight_clear_size;
+  border-radius: $apex_spotlight_clear_size / 2;
+  color: $apex_fg_dim;
+  background-color: $apex_button;
+
+  &:hover { background-color: $apex_button_hover; }
+
+  StIcon { icon-size: $apex_spotlight_clear_icon_size; }
+}
+
+.apex-spotlight-results {
+  padding: $apex_spotlight_results_padding_top $apex_spotlight_results_padding $apex_spotlight_results_padding;
+  border-top: $apex_surface_border solid $apex_border;
+}
+
+.apex-spotlight-header {
+  height: $apex_spotlight_header_height - $apex_spotlight_header_padding_bottom;
+  padding: 0 $apex_spotlight_header_padding $apex_spotlight_header_padding_bottom;
+  color: $apex_fg_dim;
+  font-size: apex-text-size($apex_font_spotlight_header_size);
+  font-weight: $apex_font_heading_weight;
+  letter-spacing: $apex_spotlight_header_tracking;
+}
+
+.apex-spotlight-row {
+  height: $apex_spotlight_row_height;
+  padding: 0 $apex_spotlight_row_padding;
+  spacing: $apex_spotlight_row_gap;
+  border-radius: $apex_radius_spotlight_row;
+
+  &:selected { background-color: st-transparentize($apex_accent, 1 - $apex_selection_opacity); }
+}
+
+.apex-spotlight-icon {
+  width: $apex_spotlight_icon_size;
+  height: $apex_spotlight_icon_size;
+}
+
+.apex-spotlight-text { spacing: $apex_spotlight_text_gap; }
+
+.apex-spotlight-title {
+  color: $apex_fg;
+  font-size: apex-text-size($apex_font_spotlight_title_size);
+  font-weight: $apex_font_label_weight;
+}
+
+.apex-spotlight-result {
+  font-size: apex-text-size($apex_font_spotlight_result_size);
+  font-weight: $apex_font_heading_weight;
+  font-feature-settings: "tnum";
+}
+
+.apex-spotlight-subtitle {
+  color: $apex_fg_dim;
+  font-size: apex-text-size($apex_font_spotlight_subtitle_size);
+}
+
+.apex-spotlight-action {
+  spacing: $apex_spotlight_action_gap;
+  color: $apex_fg_dim;
+  font-size: apex-text-size($apex_font_spotlight_action_size);
+  font-weight: $apex_font_label_weight;
+}
+
+.apex-spotlight-chip {
+  height: $apex_spotlight_chip_height;
+  padding: 0 $apex_spotlight_chip_padding;
+  border-radius: $apex_radius_spotlight_chip;
+  background-color: $apex_button;
+  font-size: apex-text-size($apex_font_spotlight_chip_size);
+  font-weight: $apex_font_heading_weight;
+}
+
+.apex-spotlight-empty {
+  height: $apex_spotlight_empty_height - $apex_surface_border;
+  border-top: $apex_surface_border solid $apex_border;
+  color: $apex_fg_dim;
+}
+
+// Glass, like the panel; it sits above the dock.
+.apex-toast {
+  @include apex-surface($apex_panel);
+  height: $apex_toast_height - 2 * $apex_surface_border;
+  margin-bottom: $apex_toast_bottom;
+  padding: 0 ($apex_toast_padding_end - $apex_surface_border) 0 ($apex_toast_padding_start - $apex_surface_border);
+  border-radius: $apex_radius_toast;
+  spacing: $apex_toast_gap;
+  font-size: apex-text-size($apex_font_size);
+  font-weight: $apex_font_label_weight;
+  font-feature-settings: "tnum";
+}
+
+.apex-toast-check {
+  width: $apex_toast_check_size;
+  height: $apex_toast_check_size;
+  border-radius: $apex_toast_check_size / 2;
+  color: -st-accent-fg-color;
+  background-color: $apex_accent;
+}
+
+.apex-toast-check-icon { icon-size: $apex_toast_check_icon_size; }

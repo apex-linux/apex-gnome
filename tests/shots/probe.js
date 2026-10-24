@@ -29,6 +29,7 @@ const CRASH_GUARD_MARKER = 'apex-shell-starting';
 const REPORT_AFTER_MS = 1500;
 const SETTLE_TIMEOUT_MS = 20000;
 const SETTLE_EXTRA_MS = 500;
+const DEFERRED_WORK_TIMEOUT_MS = 21000;
 const CALIBRATION_PX = 100;
 const INK_MAX_RGB_DISTANCE = 60;
 const TRANSLUCENT_BAR_KEY = 'translucent-top-bar';
@@ -438,6 +439,53 @@ function topBar(unit) {
     };
 }
 
+function apexDock() {
+    return findDescendant(Main.layoutManager.uiGroup, actor => actor.get_name() === 'apexDock');
+}
+
+// ApexDock's items in order: the box's apps, then dock.js's tail.
+function dockItem(item, dock) {
+    const iconSize = item.child?._delegate?.icon?.iconSize ?? null;
+    if (item.has_style_class_name?.('apex-dock-separator'))
+        return {kind: 'separator'};
+    if (item === dock._showAppsIcon)
+        return {kind: 'show-apps', iconSize, iconName: item._iconActor?.icon_name ?? null};
+    if (item === dock.tailItems?.trash)
+        return {kind: 'trash', iconSize};
+    if (item.child?._delegate?.app)
+        return {kind: 'app', name: item.child._delegate.app.get_name(), iconSize};
+    return {kind: item.constructor.name};
+}
+
+// How far the overview's workspace view stays above the dock's background.
+function dockClearance(unit) {
+    const dock = apexDock();
+    const workspaces = Main.overview._overview?.controls?._workspacesDisplay;
+    if (!dock || !workspaces)
+        return null;
+    const view = boxOf(workspaces, unit);
+    return round(boxOf(dock._background, unit).y - view.y - view.height);
+}
+
+function dockReport(unit) {
+    const dock = apexDock();
+    if (!dock)
+        return null;
+    const monitor = Main.layoutManager.primaryMonitor;
+    const background = boxOf(dock._background, unit);
+    const items = [...dock._box.get_children(), ...dock._dashContainer.get_children().slice(1)]
+        .filter(item => item.visible);
+    return {
+        visible: dock.visible && dock.get_parent().visible,
+        background,
+        bottomGap: round((monitor.y + monitor.height) / unit.length - background.y - background.height),
+        centreOffset: round(background.x + background.width / 2 - (monitor.x + monitor.width / 2) / unit.length),
+        radius: round(dock._background.get_theme_node().get_border_radius(St.Corner.TOPLEFT) / unit.length),
+        items: items.map(item => dockItem(item, dock)),
+        overviewDashVisible: Main.overview.dash.visible,
+    };
+}
+
 async function settle() {
     let idle = false;
     await Promise.race([
@@ -481,6 +529,7 @@ async function capture(scene) {
         file: name, width, height, bytes,
         boxes: {
             panel: captureBox(Main.panel, scale),
+            dock: captureBox(apexDock(), scale),
             clock: captureBox(Main.panel.statusArea.dateMenu, scale),
         },
     };
@@ -974,6 +1023,145 @@ async function calendarMenu(unit) {
     }
 }
 
+// Board 38's rows, from providers of the probe's own: G2's image has no files or settings
+// to find, so a real query would draw nothing to measure.
+const CALCULATOR = 'org.gnome.Calculator.desktop';
+const SPOTLIGHT_ROWS = {
+    [CALCULATOR]: [{id: '2880 / 1.5', name: '2880 / 1.5', description: ' = 1920', clipboardText: '1920'}],
+    'applications': [
+        {id: 'org.gnome.DiskUtility.desktop', name: 'Disks', description: 'Manage drives and media', icon: 'drive-harddisk'},
+        {id: 'org.gnome.baobab.desktop', name: 'Disk Usage Analyzer', description: 'Check folder sizes and available disk space', icon: 'drive-harddisk'},
+        {id: CALCULATOR, name: 'Calculator', description: 'Perform arithmetic, scientific or financial calculations', icon: 'accessories-calculator'},
+    ],
+    'org.gnome.Settings.desktop': [
+        {id: 'about', name: 'About', description: 'System · name, memory and disk capacity', icon: 'help-about-symbolic'},
+        {id: 'privacy', name: 'File History & Trash', description: 'Privacy & Security', icon: 'user-trash-symbolic', keywords: 'disk'},
+        {id: 'removable', name: 'Removable Media', description: 'Apps · what happens when a disk is plugged in', icon: 'media-removable-symbolic'},
+        {id: 'storage', name: 'Disk Encryption', description: 'Privacy & Security', icon: 'drive-harddisk-symbolic'},
+    ],
+    'org.gnome.Nautilus.desktop': [
+        {id: 'csv', name: 'disk-usage-2026-10.csv', description: '~/Documents', icon: 'text-x-generic'},
+        {id: 'png', name: 'disk-unlock-board.png', description: '~/Pictures/Screenshots', icon: 'image-x-generic'},
+        {id: 'images', name: 'Disk Images', description: '~/Downloads', icon: 'folder'},
+        {id: 'md', name: 'diskspace-notes.md', description: '~/apex/docs', icon: 'text-x-generic'},
+        {id: 'old', name: 'disk-old.md', description: '~/apex/docs', icon: 'text-x-generic'},
+    ],
+};
+
+function spotlightMatches(providerId, row, terms) {
+    if (providerId === CALCULATOR)
+        return row.id === terms.join(' ');
+    const text = `${row.name} ${row.description} ${row.keywords ?? ''}`.toLowerCase();
+    return terms.every(t => text.includes(t));
+}
+
+function spotlightProviders() {
+    return new Map(Object.entries(SPOTLIGHT_ROWS).map(([id, rows]) => [id, {
+        id,
+        appInfo: {get_icon: () => Gio.ThemedIcon.new('accessories-calculator')},
+        getInitialResultSet: terms => Promise.resolve(rows.filter(r => spotlightMatches(id, r, terms)).map(r => r.id)),
+        filterResults: (ids, max) => ids.slice(0, max),
+        getResultMetas: ids => Promise.resolve(rows.filter(r => ids.includes(r.id)).map(r => ({
+            ...r, createIcon: size => new St.Icon({icon_name: r.icon ?? 'image-missing', icon_size: size}),
+        }))),
+        activateResult: () => {},
+    }]));
+}
+
+async function spotlightScene(popup, name, text) {
+    popup.panel.get_children()[0].get_children()[1].set_text(text);
+    await settle();
+    global.stage.set_key_focus(null);
+    const scene = name && GLib.getenv('G2_SURFACE_SCENES') === '1' ? await capture(`spotlight-${name}`) : null;
+    if (scene)
+        delete scene.bytes;
+    return scene;
+}
+
+// Board 38's four scenes: search, calculator, copied and empty, through Spotlight's own popup.
+async function spotlightStyle(unit) {
+    if ((await apexHooks())?.safe() !== false)
+        return null;
+    let Popup, Toast;
+    try {
+        ({Popup} = await import('resource:///org/gnome/shell/ui/apex/spotlight/popup.js'));
+        Toast = await import('resource:///org/gnome/shell/ui/apex/spotlight/toast.js');
+    } catch {
+        return null;
+    }
+    const {primaryMonitor: monitor} = Main.layoutManager;
+    const popup = new Popup(spotlightProviders, 0);
+    popup.open();
+    try {
+        const captured = {};
+        captured.empty = await spotlightScene(popup, 'empty', '');
+        const fieldOnly = popup.panel.get_children().filter(a => a.visible).length === 1;
+        captured.search = await spotlightScene(popup, 'search', 'disk');
+        const [field, results] = popup.panel.get_children();
+        const rows = results.get_children().filter(a => a.has_style_class_name('apex-spotlight-row'));
+        const row = actor => {
+            const [icon, text, action] = actor.get_children();
+            const [title, subtitle] = text.get_children();
+            return {
+                ...styleOf(actor, unit), icon: styleOf(icon, unit), text: styleOf(text, unit),
+                title: {...styleOf(title, unit), text: title.get_text()},
+                subtitle: {...styleOf(subtitle, unit), text: subtitle.get_text()},
+                action: {
+                    ...styleOf(action, unit),
+                    verb: {...styleOf(action.get_children()[0], unit), text: action.get_children()[0].get_text()},
+                    chip: styleOf(action.get_children()[1], unit),
+                },
+            };
+        };
+        const headers = results.get_children().filter(a => a.has_style_class_name('apex-spotlight-header'));
+        const measured = {
+            fieldOnly,
+            panel: {...styleOf(popup.panel, unit), top: round((popup.panel.get_transformed_position()[1] - monitor.y) / unit.length)},
+            field: styleOf(field, unit),
+            glyph: {...styleOf(field.get_children()[0], unit), size: lengthOrNull(field.get_children()[0].get_theme_node(), 'icon-size', unit)},
+            entry: {
+                ...styleOf(field.get_children()[1], unit),
+                hint: hex(field.get_children()[1].get_hint_actor().get_theme_node().get_foreground_color()),
+            },
+            results: styleOf(results, unit),
+            headers: headers.map(h => ({...styleOf(h, unit), tracking: round(h.get_theme_node().get_letter_spacing() / unit.length)})),
+            sections: headers.map(h => h.get_child().get_text()),
+            rows: rows.map(row),
+            selected: rows.map(r => r.has_style_pseudo_class('selected')),
+        };
+        captured.calculator = await spotlightScene(popup, 'calculator', '2880 / 1.5');
+        const [, calculator] = popup.panel.get_children();
+        measured.calculator = {
+            sections: calculator.get_children().filter(a => a.has_style_class_name('apex-spotlight-header')).map(h => h.get_child().get_text()),
+            row: row(calculator.get_children().find(a => a.has_style_class_name('apex-spotlight-row'))),
+        };
+        captured.none = await spotlightScene(popup, 'none', 'zzz');
+        measured.empty = styleOf(popup.panel.get_children()[2], unit);
+        await spotlightScene(popup, null, '2880 / 1.5');
+        popup.activateSelected();
+        await settle();
+        const scene = GLib.getenv('G2_SURFACE_SCENES') === '1' ? await capture('spotlight-copied') : null;
+        if (scene)
+            delete scene.bytes;
+        captured.copied = scene;
+        const pill = Toast.current()?.get_first_child();
+        if (pill) {
+            const check = pill.get_first_child();
+            const box = styleOf(pill, unit);
+            measured.toast = {
+                box, label: {...styleOf(pill.get_last_child(), unit), text: pill.get_last_child().get_text()},
+                bottomGap: round((monitor.y + monitor.height) / unit.length - box.y - box.height),
+                check: {...styleOf(check, unit), icon: lengthOrNull(check.get_child().get_theme_node(), 'icon-size', unit)},
+            };
+        }
+        measured.closedOnCopy = !popup.isOpen;
+        return {scenes: captured, ...measured};
+    } finally {
+        popup.destroy();
+        await settle();
+    }
+}
+
 // What the overview draws without windows; a caption and a search section are stand-ins.
 function overviewStyle(unit) {
     const {controls} = Main.overview._overview;
@@ -1003,6 +1191,30 @@ function overviewStyle(unit) {
         caption.destroy();
         section.destroy();
     }
+}
+
+// What the overview feature changes, in the empty overview the scene captured. With no
+// window to show a title, its hook's answer stands in.
+async function overviewLayer(unit) {
+    const {controls} = Main.overview._overview;
+    const view = controls._workspacesDisplay._getPrimaryView();
+    const workspace = view._workspaces[global.workspace_manager.get_active_workspace_index()];
+    const empty = workspace.get_children().find(a => a.has_style_class_name?.('apex-workspace-empty'));
+    const thumbnailsBox = controls._thumbnailsBox;
+    const hooks = await apexHooks();
+    return {
+        titleVisible: hooks?.value('window-title-visible', false) ?? null,
+        thumbnailsThreshold: hooks?.value('thumbnails-threshold', null) ?? null,
+        thumbnails: {
+            maxScale: thumbnailsBox.maxThumbnailScale,
+            first: thumbnailsBox._thumbnails?.[0] ? boxOf(thumbnailsBox._thumbnails[0], unit) : null,
+        },
+        workspace: {
+            ...boxOf(workspace, unit),
+            background: workspace._background.visible,
+            empty: empty ? {...styleOf(empty, unit), visible: empty.visible, text: empty.text} : null,
+        },
+    };
 }
 
 function standInStyle(styleClass, parentClass, unit) {
@@ -1042,6 +1254,11 @@ async function appGrid(unit) {
                 focus: underPseudoClass(app, 'focus', () => paint(app.get_theme_node(), unit)),
             } : null,
             folder: folder ? styleOf(folder, unit) : null,
+            grid: {
+                columns: appDisplay._grid.layout_manager.columns_per_page,
+                rows: appDisplay._grid.layout_manager.rows_per_page,
+                iconSize: app?.icon.iconSize ?? null,
+            },
             runningDot: standInStyle('app-grid-running-dot', null, unit),
             pageIndicator: standInStyle('page-indicator-icon', 'page-indicator', unit),
             pageHint: standInStyle('page-navigation-hint next', null, unit),
@@ -1121,6 +1338,7 @@ async function scenes() {
     delete desktop.bytes;
     // After the capture: reading the hover and checked styles restyles the pills.
     const bar = topBar(unit);
+    const dock = dockReport(unit);
     bar.withDot = await withUnreadNotification(unit);
     bar.dnd = await withDoNotDisturb();
     bar.opaque = await withOpaqueBar(unit);
@@ -1132,14 +1350,20 @@ async function scenes() {
     surfaces.dialog = await modalDialog(unit);
     surfaces.dateMenu = await calendarMenu(unit);
     surfaces.derived = derivedSurfaces(unit);
+    surfaces.spotlight = await spotlightStyle(unit);
 
     Main.overview.show();
     await settle();
     // The search entry's cursor blinks: without key focus the scene is still.
     global.stage.set_key_focus(null);
     const overviewIdle = await settle();
-    const overview = {idle: overviewIdle, ...await capture('overview'), thumbnails: thumbnails(), workArea: workArea(unit)};
+    const overview = {
+        idle: overviewIdle, ...await capture('overview'), thumbnails: thumbnails(), workArea: workArea(unit),
+        dockVisible: apexDock()?.visible ?? null,
+        dockClearance: dockClearance(unit),
+    };
     surfaces.overview = overviewStyle(unit);
+    surfaces.overviewLayer = await overviewLayer(unit);
     surfaces.appGrid = await appGrid(unit);
     delete overview.bytes;
     Main.overview.hide();
@@ -1149,6 +1373,7 @@ async function scenes() {
         unit, startedInOverview,
         monitorScale: global.display.get_monitor_scale(primary.index),
         topBar: {...bar, diamond},
+        dock,
         surfaces,
         scenes: {desktop, overview},
     };
@@ -1185,12 +1410,14 @@ async function withDarkStyleOffInQuickSettings() {
     };
 }
 
+// An St.Icon counts, not the texture child St gives it once it is first styled.
 function actorCensus() {
     const counts = {};
     const visit = actor => {
         const type = actor.constructor.name;
         counts[type] = (counts[type] ?? 0) + 1;
-        actor.get_children().forEach(visit);
+        if (!(actor instanceof St.Icon))
+            actor.get_children().forEach(visit);
     };
     visit(global.stage);
     return counts;
@@ -1208,6 +1435,8 @@ async function layerState(layerEnabled) {
 async function withLayerCycles(cycles) {
     const settings = new Gio.Settings({schema_id: APEX_SCHEMA});
     dropStartupNotifications();
+    // main.js runs an unmapped actor's deferred work (the overview's hidden dash) 20 s on.
+    await Scripting.sleep(DEFERRED_WORK_TIMEOUT_MS);
     await settle();
     const states = [await layerState(settings.get_boolean(LAYER_ENABLED_KEY))];
     for (let cycle = 1; cycle <= cycles; cycle++) {
@@ -1253,6 +1482,17 @@ export async function run() {
             toggled = {error: `${e.message}\n${e.stack}`};
         }
         console.log(`APEXG2-TOGGLED ${JSON.stringify(toggled)}`);
+    }
+
+    if (GLib.getenv('G2_GLASS') === '1') {
+        let result;
+        try {
+            const Glass = await import('./glass.js');
+            result = await Glass.glassReport();
+        } catch (e) {
+            result = {error: `${e.message}\n${e.stack}`};
+        }
+        console.log(`APEXG2-GLASS ${JSON.stringify(result)}`);
     }
 
     const cycles = Number(GLib.getenv('G2_CYCLES') ?? '0');

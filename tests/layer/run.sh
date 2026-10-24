@@ -48,7 +48,13 @@ mkdir -p "$T/schemas" "$T/noschema" "$T/nochild" "$T/data" "$T/home" "$T/shell" 
 # main.js and the Meta and Shell typelibs come only with gnome-shell and mutter.
 cp -R "$REPO/desktop/shell/js" "$T/shell/"
 cp "$HERE/main-stub.js" "$T/shell/js/ui/main.js"
-cp "$HERE/stubs/panelMenu.js" "$T/shell/js/ui/panelMenu.js"
+for upstream in panelMenu dash iconGrid popupMenu; do
+    cp "$HERE/stubs/$upstream.js" "$T/shell/js/ui/$upstream.js"
+done
+# Spotlight's providers: upstream's app search and remote providers, faked.
+cp "$HERE"/stubs/appDisplay.js "$HERE"/stubs/remoteSearch.js "$HERE"/stubs/searchProviders.js "$T/shell/js/ui/"
+mkdir -p "$T/shell/js/misc"
+cp "$HERE/stubs/systemActions.js" "$T/shell/js/misc/"
 cp "$HERE"/stubs/St.js "$HERE"/stubs/Clutter.js "$HERE"/stubs/Shell.js "$T/"
 # gjs outside the shell has no St or Clutter typelib, and the fixture's Shell no
 # WindowTracker: the features get stubs instead.
@@ -59,16 +65,30 @@ for gir in "$HERE"/fixtures/*.gir; do
     "$GI_COMPILER" "$gir" -o "$T/typelib/${gir_name%.gir}.typelib"
 done
 cp "$SCHEMA_DIR"/*.gschema.xml "$T/schemas/"
+readonly SEARCH_PROVIDERS_SCHEMA=$HERE/fixtures/org.gnome.desktop.search-providers.gschema.xml
+cp "$SEARCH_PROVIDERS_SCHEMA" "$T/schemas/"
 glib-compile-schemas --strict "$T/schemas"
 awk '/<child name="keybindings"/ { next }
     /<schema id="io\.github\.apex_linux\.Apex\.Desktop\.Keybindings"/ { skip = 1 }
     !skip { print }
     skip && /<\/schema>/ { skip = 0 }' "$SCHEMA_DIR/io.github.apex_linux.Apex.Desktop.gschema.xml" \
     >"$T/nochild/io.github.apex_linux.Apex.Desktop.gschema.xml"
+cp "$SEARCH_PROVIDERS_SCHEMA" "$T/nochild/"
 glib-compile-schemas --strict "$T/nochild"
+mkdir -p "$T/nokey"
+awk '/<key name="toggle-spotlight"/ { skip = 1 } !skip { print } skip && /<\/key>/ { skip = 0 }' \
+    "$SCHEMA_DIR/io.github.apex_linux.Apex.Desktop.gschema.xml" >"$T/nokey/io.github.apex_linux.Apex.Desktop.gschema.xml"
+cp "$SEARCH_PROVIDERS_SCHEMA" "$T/nokey/"
+glib-compile-schemas --strict "$T/nokey"
+mkdir -p "$T/nodock"
+awk '/<key name="dock-show-trash"/ { skip = 1 } !skip { print } skip && /<\/key>/ { skip = 0 }' \
+    "$SCHEMA_DIR/io.github.apex_linux.Apex.Desktop.gschema.xml" >"$T/nodock/io.github.apex_linux.Apex.Desktop.gschema.xml"
+cp "$SEARCH_PROVIDERS_SCHEMA" "$T/nodock/"
+glib-compile-schemas --strict "$T/nodock"
 mkdir -p "$T/nohint"
 awk '/<key name="search-hint-shown"/ { skip = 1 } !skip { print } skip && /<\/key>/ { skip = 0 }' \
     "$SCHEMA_DIR/io.github.apex_linux.Apex.Desktop.gschema.xml" >"$T/nohint/io.github.apex_linux.Apex.Desktop.gschema.xml"
+cp "$SEARCH_PROVIDERS_SCHEMA" "$T/nohint/"
 glib-compile-schemas --strict "$T/nohint"
 
 readonly CMDLINE_PLAIN='BOOT_IMAGE=(hd0,gpt2)/boot/ostree/apex/vmlinuz root=UUID=0 rw rhgb quiet'
@@ -156,9 +176,10 @@ fact "spotlight: enable registers Super+Space, without autorepeat, in the normal
     'keybinding\.add=toggle-spotlight accelerators=<Super>space flags=IGNORE_AUTOREPEAT modes=NORMAL\|OVERVIEW'
 has "spotlight: the feature enables" 'Apex: feature spotlight enabled'
 keybindings_are "spotlight: registered once" add
-has "spotlight: a press opens the overview with its search entry focused" '^probe: overview=shown, search focused$'
-fact "spotlight: so the overview is up" 'press\.1=overview=true'
-fact "spotlight: pressed again while it is up, it hides the overview" 'press\.2=overview=false'
+fact "spotlight: a press opens Spotlight, a modal in the popup action mode" 'modal\.push=apexSpotlight actionMode=128 count=1'
+fact "spotlight: over the desktop, not the overview" 'press\.1=overview=false spotlight=true'
+fact "spotlight: pressed again, it closes and gives the grab back" 'press\.2=overview=false spotlight=false'
+count_is "spotlight: one grab taken, one given back" '^probe: modal\.pop=count=0$' 1
 if [[ $(run_guard_unit_like_systemd default) == skipped ]]; then
     ok "default: a later shell failure does not trip the guard (no marker)"
 else
@@ -295,7 +316,7 @@ fact "and its hook gives stock" 'test-fault=stock'
 probe spotlight-disabled "$CMDLINE_PLAIN" PROBE_DISABLED=spotlight PROBE_ENABLE=1 PROBE_PRESS=1
 has "disabled-features=['spotlight']: skips the feature" 'Apex: feature spotlight is in disabled-features'
 keybindings_are "disabled-features=['spotlight']: no Super+Space binding" ''
-fact "disabled-features=['spotlight']: Super+Space opens nothing" 'press\.1=overview=false'
+fact "disabled-features=['spotlight']: Super+Space opens nothing" 'press\.1=overview=false spotlight=false'
 fact "disabled-features=['spotlight']: no handler gets the press" 'unbound-press=toggle-spotlight'
 fact "disabled-features=['spotlight']: the rest of the layer runs" 'scheme\.user\.after-enable=prefer-light'
 
@@ -313,6 +334,76 @@ count_is "no Keybindings child schema: in one log line" 'Apex: .*spotlight' 1
 keybindings_are "no Keybindings child schema: no Super+Space binding" ''
 fact "no Keybindings child schema: the rest of the layer runs" 'scheme\.user\.after-enable=prefer-light'
 fact "no Keybindings child schema: enable still runs" 'starting-file=true'
+
+probe spotlight-nokey "$CMDLINE_PLAIN" GSETTINGS_SCHEMA_DIR="$T/nokey" PROBE_ENABLE=1
+has "a Keybindings schema without toggle-spotlight: only spotlight is off, and says why" \
+    'Apex: feature spotlight off for this session \(configure: Error: schema io\.github\.apex_linux\.Apex\.Desktop\.Keybindings has no key toggle-spotlight\)'
+keybindings_are "a Keybindings schema without toggle-spotlight: no Super+Space binding" ''
+fact "a Keybindings schema without toggle-spotlight: the rest of the layer runs" 'scheme\.user\.after-enable=prefer-light'
+
+readonly APPS='APPLICATIONS: Disks Disk Usage Analyzer Disk Benchmark Disk Images'
+readonly SETTINGS='SETTINGS: Disk Encryption Disk Storage Removable Disks'
+readonly FILES='FILES: disk-usage-2026-10.csv disk-unlock-board.png Disk Images diskspace-notes.md'
+probe spotlight "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_SPOTLIGHT=1
+rc_is "spotlight: the probe runs" 0
+fact "spotlight: an empty query shows only the field" 'spotlight\.opened=field only'
+fact "spotlight: the field has the keyboard focus" 'spotlight\.focus=true'
+fact "spotlight: sections in order, capped at 4 apps, 3 settings, 4 files; the first row selected, Enter to open" \
+    "spotlight\.disk=APPLICATIONS: Disks\*Open Disk Usage Analyzer Disk Benchmark Disk Images \| $SETTINGS \| $FILES"
+lacks "spotlight: a provider without a section shows nothing" 'Characters'
+fact "spotlight: Down moves across sections" \
+    "spotlight\.down-4=$APPS \| SETTINGS: Disk Encryption\*Open Disk Storage Removable Disks \| $FILES"
+fact "spotlight: Up moves back" \
+    "spotlight\.up-1=APPLICATIONS: Disks Disk Usage Analyzer Disk Benchmark Disk Images\*Open \| $SETTINGS \| $FILES"
+fact "spotlight: Down stops at the last row" \
+    "spotlight\.down-20=$APPS \| $SETTINGS \| FILES: disk-usage-2026-10.csv disk-unlock-board.png Disk Images diskspace-notes.md\*Open"
+fact "spotlight: Up stops at the first" "spotlight\.up-20=APPLICATIONS: Disks\*Open .*"
+fact "spotlight: Enter activates the selected result through its provider, with the terms" \
+    'spotlight\.activated=org\.gnome\.Settings\.desktop:disk-encryption terms=disk'
+fact "spotlight: and closes Spotlight" 'spotlight\.enter-on-a-setting=closed'
+fact "spotlight: Enter on an app launches it" 'spotlight\.launched=org\.gnome\.DiskUtility\.desktop'
+fact "spotlight: a sum: its result first, then Calculator as the first application" \
+    'spotlight\.sum=CALCULATOR: 1920\(2880 / 1\.5\)\*Copy \| APPLICATIONS: Calculator'
+fact "spotlight: Enter on the result copies it to the clipboard" 'clipboard=1:1920'
+fact "spotlight: closes Spotlight" 'spotlight\.enter-on-the-sum=closed'
+fact "spotlight: and shows the Copied toast" 'spotlight\.toast=Copied 1920 in-ui-group=true'
+fact "spotlight: the toast goes after a moment" 'spotlight\.toast-later=gone'
+lacks "spotlight: copying launches nothing" 'spotlight\.activated=org\.gnome\.Calculator'
+fact "spotlight: a query with no results says so" 'spotlight\.none=empty "No results for “zzz”"'
+fact "spotlight: Esc closes" 'spotlight\.escape=closed'
+fact "spotlight: clearing the query shows only the field again" 'spotlight\.cleared=field only'
+fact "spotlight: a query typed over a running one shows only the later's results" 'spotlight\.superseded=empty "No results for “zzz”"'
+fact "spotlight: Super+Space inside Spotlight closes it" 'spotlight\.toggle-key=closed'
+fact "spotlight: the Super tap closes it and opens the overview" 'spotlight\.overlay-key=closed overview=true'
+fact "spotlight: a click outside closes it" 'spotlight\.click-outside=closed'
+fact "spotlight: hovering a row selects it" "spotlight\.hover=APPLICATIONS: Disks Disk Usage Analyzer\*Open .*"
+fact "spotlight: clicking a row activates it" 'spotlight\.launched=org\.gnome\.baobab\.desktop'
+fact "spotlight: closing leaves no popup on the stage" 'spotlight\.stage=0'
+fact "spotlight: put in disabled-features while open, it closes and goes" 'spotlight\.live-disabled=0 popup=true'
+fact "spotlight: taken out again, Super+Space opens it afresh" 'spotlight\.live-enabled=field only'
+count_is "spotlight: every grab is given back" '^probe: modal\.push=' "$(grep -c '^probe: modal\.pop=' "$OUT")"
+lacks "spotlight: nothing fails" 'off for this session|did not disable cleanly|Spotlight search failed|JS ERROR|Gjs-WARNING'
+
+probe spotlight-slow "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_SPOTLIGHT=slow PROBE_SPOTLIGHT_SLOW=org.gnome.Settings.desktop
+fact "spotlight: a slow provider does not hold back the sections that answered" \
+    "spotlight\.slow\.at-700ms=APPLICATIONS: Disks\*Open Disk Usage Analyzer Disk Benchmark Disk Images \| $FILES"
+fact "spotlight: past its 1 s budget, its section is left out" \
+    "spotlight\.slow\.at-1300ms=APPLICATIONS: Disks\*Open Disk Usage Analyzer Disk Benchmark Disk Images \| $FILES"
+fact "spotlight: and its call is cancelled" 'spotlight\.cancelled=org\.gnome\.Settings\.desktop'
+
+probe spotlight-late "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_SPOTLIGHT=late PROBE_SPOTLIGHT_SLOW=org.gnome.Settings.desktop PROBE_SPOTLIGHT_SLOW_MS=600
+fact "spotlight: within its budget, a slower section is not there yet" \
+    "spotlight\.late\.at-300ms=APPLICATIONS: Disks\*Open Disk Usage Analyzer Disk Benchmark Disk Images \| $FILES"
+fact "spotlight: the selection moves among the sections shown" \
+    "spotlight\.late\.down-5=$APPS \| FILES: disk-usage-2026-10.csv disk-unlock-board.png\*Open Disk Images diskspace-notes.md"
+fact "spotlight: the section arrives in its place, and the selection stays on its row" \
+    "spotlight\.late\.at-900ms=$APPS \| $SETTINGS \| FILES: disk-usage-2026-10.csv disk-unlock-board.png\*Open Disk Images diskspace-notes.md"
+lacks "spotlight: an answer within budget cancels nothing" 'spotlight\.cancelled='
+
+probe spotlight-late-sum "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_SPOTLIGHT=late-sum PROBE_SPOTLIGHT_SLOW=org.gnome.Calculator.desktop PROBE_SPOTLIGHT_SLOW_MS=600
+fact "spotlight: no rows yet and the query not done: only the field, no 'No results'" 'spotlight\.late-sum\.at-300ms=field only'
+fact "spotlight: a late sum still puts Calculator first among the applications" \
+    'spotlight\.late-sum\.at-900ms=CALCULATOR: 1920\(2880 / 1\.5\)\*Copy \| APPLICATIONS: Calculator'
 
 readonly KEPT_PILL='remoteAccess,camera,volumeInput,location,network,volumeOutput,unsafeMode,system'
 readonly STOCK_PILL='remoteAccess,camera,volumeInput,location,brightness,thunderbolt,nightLight,network,darkMode,doNotDisturb,backlight,bluetooth,rfkill,autoRotate,volumeOutput,unsafeMode,powerProfiles,system'
@@ -391,12 +482,16 @@ fact "search-button: a pill with the search glyph, named for its key" "search\.e
 fact "search-button: hovered, its tooltip shows centred below it" 'search\.tooltip\.hover=true at 1256,32'
 fact "search-button: and hides when the pointer leaves" 'search\.tooltip\.unhover=false at 1256,32'
 fact "search-button: the tooltip names the key, in the chrome as dash.js's labels are" 'chrome\.add=Search \(Super\+Space\) trackFullscreen=false'
-fact "search-button: a click opens the overview with its search entry focused" 'search\.click\.1=overview=true'
-fact "search-button: a second click hides it, as Super+Space does" 'search\.click\.2=overview=false'
+fact "search-button: a click opens Spotlight, as Super+Space does" 'search\.click\.1=overview=false spotlight=true'
+fact "search-button: a second click closes it" 'search\.click\.2=overview=false spotlight=false'
 fact "search-button: the lock screen hides it" "search\.locked=$SEARCH_ITEM visible=false"
 fact "search-button: layer-enabled=false takes it out of the bar" 'search\.off=none'
 fact "search-button: layer-enabled=true brings it back" "search\.on=$SEARCH_ITEM visible=true"
 lacks "search-button: no feature fails or disables uncleanly" 'off for this session|did not disable cleanly|cannot restyle'
+
+probe search-no-spotlight "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_SEARCH_BUTTON=1 PROBE_DISABLED=spotlight
+fact "disabled-features=['spotlight']: the search button opens the overview with its search entry focused" 'search\.click\.1=overview=true spotlight=false'
+fact "disabled-features=['spotlight']: and a second click hides it" 'search\.click\.2=overview=false spotlight=false'
 
 probe search-disabled "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_SEARCH_BUTTON=1 PROBE_DISABLED=panel
 fact "disabled-features=['panel']: no search button" 'search\.enabled=none'
@@ -515,6 +610,65 @@ lock_is_stock "APEX_SHELL_SAFE=1"
 probe lock-gdm "$CMDLINE_PLAIN" PROBE_MODE=gdm PROBE_LOCK=1
 fact "gdm mode: no layer" 'layer=null'
 lock_is_stock "gdm mode"
+
+readonly OVERVIEW_ON='title-visible=true overlay=close scale=0\.081 threshold=1 box=0\.081 grid=\[\{"rows":4,"columns":7\}\] icon=88'
+readonly OVERVIEW_STOCK='title-visible=false overlay=title\+close scale=0\.05 threshold=2 box=0\.05 grid="stock" icon=-1'
+readonly EMPTY_LABEL='"No open windows" \.apex-workspace-empty'
+probe overview "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_OVERVIEW=1
+has "overview: the overview feature enables" 'Apex: feature overview enabled'
+fact "overview: titles always shown, the overlay fades only the close button; thumbnails at .081 from two workspaces; the launcher 7 columns of 88 px" \
+    "overview\.enabled=$OVERVIEW_ON"
+fact "launcher: the grid picks its mode and icon size afresh" 'overview\.enabled\.relayout=mode=-1 page-width=0'
+fact "workspaces: no background card, and an empty workspace says so" "workspace\.enabled\.empty=background=false $EMPTY_LABEL visible=true opacity=255"
+fact "workspaces: the label goes when a window arrives" "workspace\.enabled\.window-added=background=false $EMPTY_LABEL visible=false opacity=255"
+fact "workspaces: and fades with the overview" "workspace\.enabled\.half-open=background=false $EMPTY_LABEL visible=true opacity=128"
+fact "workspaces: a workspace with windows hides it from the start" "workspace\.enabled\.with-windows=background=false $EMPTY_LABEL visible=false opacity=255"
+fact "layer-enabled=false: the stock overview, the primary thumbnails and the launcher restored" "overview\.off=$OVERVIEW_STOCK"
+fact "layer-enabled=false: workspaces keep their background and get no label" 'workspace\.off\.empty=background=true no label'
+fact "layer-enabled=true: the overview again" "overview\.on=$OVERVIEW_ON"
+lacks "overview: no feature fails or disables uncleanly" 'off for this session|did not disable cleanly|cannot restyle'
+
+probe overview-disabled "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_OVERVIEW=1 PROBE_DISABLED=overview
+has "disabled-features=['overview']: skips the feature" 'Apex: feature overview is in disabled-features'
+fact "disabled-features=['overview']: the stock overview and launcher" "overview\.enabled=$OVERVIEW_STOCK"
+fact "disabled-features=['overview']: the grid is left alone" 'overview\.enabled\.relayout=mode=0 page-width=1272'
+fact "disabled-features=['overview']: workspaces stay stock" 'workspace\.enabled\.empty=background=true no label'
+
+probe overview-live "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_DISABLE_LIVE=overview
+count_is "overview in and out of disabled-features while enabled: it says so" 'Apex: feature overview is in disabled-features' 2
+lacks "overview live: the feature disables cleanly" 'off for this session|did not disable cleanly|cannot restyle'
+
+readonly DOCK_TAIL='separator show-apps:54 trash:54'
+probe dock "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_DOCK=1
+has "dock: the feature enables" 'Apex: feature dock enabled'
+fact "dock: the favourites, then the separator, Show Apps and Trash, at 54 (medium); dots on; the overview's dash hidden" \
+    "dock\.enabled=Files:54 Web:54 $DOCK_TAIL indicators=true visible=true dash=false dash-height=0"
+fact "dock: dock-icon-size small is 46" 'dock\.dock-icon-size=small=Files:46 Web:46 separator show-apps:46 trash:46 .*'
+fact "dock: large is 62" 'dock\.dock-icon-size=large=Files:62 Web:62 separator show-apps:62 trash:62 .*'
+fact "dock: dock-show-trash=false hides Trash" 'dock\.dock-show-trash=false=.* trash:62\(hidden\) .*'
+fact "dock: dock-running-indicators=false hides the dots" 'dock\.dock-running-indicators=false=.* indicators=false .*'
+fact "dock: the lock screen hides it" "dock\.locked=Files:54 Web:54 $DOCK_TAIL indicators=true visible=false dash=false dash-height=0"
+fact "dock: its Show Apps opens the overview's app grid" 'dock\.show-apps=overview=true overview-button=true'
+fact "dock: and follows the overview's own button" 'dock\.overview-show-apps-off=dock-button=false'
+fact "dock: no separator between the dock's favourites and running apps, upstream's elsewhere; a full-colour Show Apps" \
+    'dock\.hooks=separator=false stock-separator=true show-apps=view-app-grid'
+fact "dock: layer-enabled=false takes it away and gives the overview its dash back, at its own height" 'dock\.off=none dash=true dash-height=-1'
+fact "dock: layer-enabled=true brings it back" "dock\.on=Files:54 Web:54 $DOCK_TAIL indicators=true visible=true dash=false dash-height=0"
+count_is "dock: the old dock is destroyed" '^probe: dock\.destroyed=apexDock$' 1
+lacks "dock: no feature fails or disables uncleanly" 'off for this session|did not disable cleanly|cannot restyle'
+
+probe dock-disabled "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_DOCK=1 PROBE_DISABLED=dock
+has "disabled-features=['dock']: skips the feature" 'Apex: feature dock is in disabled-features'
+fact "disabled-features=['dock']: no dock, and the overview keeps its dash" 'dock\.enabled=none dash=true dash-height=-1'
+
+probe dock-live "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_DISABLE_LIVE=dock
+count_is "dock in and out of disabled-features while enabled: it says so" 'Apex: feature dock is in disabled-features' 2
+lacks "dock live: the feature disables cleanly" 'off for this session|did not disable cleanly|cannot restyle'
+
+probe dock-nokey "$CMDLINE_PLAIN" GSETTINGS_SCHEMA_DIR="$T/nodock" PROBE_ENABLE=1
+has "a schema without dock-show-trash: only the dock is off, and says why" \
+    'Apex: feature dock off for this session \(configure: Error: io\.github\.apex_linux\.Apex\.Desktop has no key dock-show-trash\)'
+has "and the rest of the layer runs" 'Apex: feature panel enabled'
 
 printf '1..%d\n' "$tests"
 ((failed == 0))

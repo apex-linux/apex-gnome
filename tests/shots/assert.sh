@@ -20,11 +20,17 @@ readonly APEX_DARK_SHEET=resource:///org/gnome/shell/theme/gnome-shell-dark.css
 readonly STOCK_SHEETS=resource:///org/gnome/shell/theme/stock
 readonly FEDORA_SHEETS=resource:///org/gnome/shell/theme
 readonly DIRECT_CASES=(default default-scale1 dark-style stock-light stock-dark safe-env layer-disabled
-    layer-cycles fault-configure fault-enable fault-abort kernel-safe fedora-light fedora-dark)
+    layer-cycles fault-configure fault-enable fault-abort kernel-safe fedora-light fedora-dark glass fedora-glass)
 readonly DIRECT_PARTS=(main kernel fedora)
 readonly CAPTURE_CASES=(default default-scale1 dark-style stock-light stock-dark fedora-light fedora-dark)
 readonly SCENES=(desktop overview)
 readonly STOCK_MAX_THUMBNAIL_SCALE=0.05
+readonly OVERVIEW_THUMBNAIL_SCALE=0.081
+readonly OVERVIEW_THUMBNAILS_THRESHOLD=1
+readonly EMPTY_WORKSPACE_TEXT='No open windows'
+readonly LAUNCHER_COLUMNS=7
+readonly LAUNCHER_ROWS=4
+readonly LAUNCHER_ICON_SIZE=88
 readonly DIAMOND_SQUARE_PX=8
 readonly DIAMOND_STROKE_PX=2
 readonly DIAMOND_STROKE_AREA_PX=$((4 * DIAMOND_SQUARE_PX * DIAMOND_STROKE_PX))
@@ -46,6 +52,11 @@ readonly WIFI_GLYPH=network-wireless-signal-excellent-symbolic
 readonly BATTERY_GLYPH=battery-level-80-symbolic
 readonly BLUETOOTH_GLYPH=bluetooth-active-symbolic
 readonly ALWAYS_LOADED_USER_UNIT=default.target
+# ROADMAP S2b: glass against blur-ref.js after partial damage, per channel out of 255, as the
+# first run fixed them (lead, 2026-10-24). The edge band is ds/2 px wide, ds the effect's own.
+readonly GLASS_INTERIOR_MAX=4
+readonly GLASS_EDGE_MAX=12
+readonly GLASS_MEAN_ERROR=1
 readonly APEX_UNIT_STARTED='(Starting|Started) [^ ]*[Aa]pex|Activating service name=.[^ ]*[Aa]pex'
 
 result_of() {
@@ -284,6 +295,35 @@ top_bar() {
     "${metric[@]}" "and only the text grows: the clock at $LARGE_TEXT_SCALING_FACTOR x \$apex_font_bar_size, within its pill" \
         '.topBar.largeText' "((.clockText.size - $LARGE_TEXT_SCALING_FACTOR * (\$t.apex_font_bar_size | px)) | fabs < 0.05)
             and .clockText.naturalHeight <= .clockPillHeight"
+}
+
+# shellcheck disable=SC2016 # jq programs and token names, not shell expansions
+dock_metrics() {
+    local label=$1 log=$2 variant=$3 scenes tokens
+    scenes=$(report_of "$log" APEXG2-SCENES)
+    tokens=$(tokens_for "$variant")
+    local -a metric=(top_bar_metric "$label dock" "$scenes" "$tokens")
+
+    "${metric[@]}" 'the dock is shown, $apex_dock_bottom_gap above the bottom edge and centred' \
+        '.dock' '.visible == true and (.bottomGap | px_is($t.apex_dock_bottom_gap)) and (.centreOffset | fabs <= 0.5)'
+    "${metric[@]}" 'its background has radius $apex_radius_dock' \
+        '.dock.radius' 'px_is($t.apex_radius_dock)'
+    "${metric[@]}" 'every icon is $apex_dock_icon_size (dock-icon-size medium)' \
+        '.dock.items | map(select(.iconSize != null))' 'length > 0 and all(.iconSize | px_is($t.apex_dock_icon_size))'
+    "${metric[@]}" 'its apps come first, then the separator, Show Apps and Trash, with no other separator' \
+        '.dock.items | map(.kind)' \
+        '(.[-3:] == ["separator", "show-apps", "trash"]) and (.[:-3] | all(. == "app"))'
+    "${metric[@]}" 'the Show Apps tile is full colour (view-app-grid)' \
+        '.dock.items | map(select(.kind == "show-apps")) | .[0].iconName' '. == "view-app-grid"'
+    "${metric[@]}" 'the overview keeps the dock and hides its own dash' \
+        '{dash: .dock.overviewDashVisible, overview: .scenes.overview.dockVisible}' '.dash == false and .overview == true'
+    "${metric[@]}" 'and lays its workspaces out above the dock' \
+        '{dock: .dock, clearance: .scenes.overview.dockClearance}' '.dock != null and .clearance != null and .clearance >= 0'
+}
+
+no_dock() {
+    local label=$1 log=$2
+    expect_report "$label" "$log" '.dock == null' "no Apex dock" APEXG2-SCENES
 }
 
 # shellcheck disable=SC2016 # jq programs and token names, not shell expansions
@@ -617,6 +657,29 @@ app_grid() {
             and (.pageIndicator.background | colour_is($t.apex_fg)) and .pageHint.gradient == 0'
 }
 
+# The overview feature's values are the layer's, not tokens; only the empty label is styled.
+# shellcheck disable=SC2016 # jq programs and token names, not shell expansions
+overview_layer() {
+    local label=$1 log=$2 variant=$3 scenes tokens
+    scenes=$(report_of "$log" APEXG2-SCENES)
+    tokens=$(tokens_for "$variant")
+    local o=.surfaces.overviewLayer
+    expect_report "$label" "$log" "$o.titleVisible == true" \
+        "overview: window titles always shown, not only on hover" APEXG2-SCENES
+    expect_report "$label" "$log" "$o | .thumbnails.maxScale == $OVERVIEW_THUMBNAIL_SCALE and .thumbnailsThreshold == $OVERVIEW_THUMBNAILS_THRESHOLD" \
+        "overview: workspace thumbnails at scale $OVERVIEW_THUMBNAIL_SCALE, shown from $((OVERVIEW_THUMBNAILS_THRESHOLD + 1)) workspaces" APEXG2-SCENES
+    expect_report "$label" "$log" "{f: $o.thumbnails.first, w: .topBar.panel.width, h: .scenes.overview.workArea.height}
+        | (.f.width - .w * $OVERVIEW_THUMBNAIL_SCALE | fabs <= 1) and (.f.height - .h * $OVERVIEW_THUMBNAIL_SCALE | fabs <= 1)" \
+        "overview: and drawn at that scale of the work area (117 x 70 on 1440 x 900)" APEXG2-SCENES
+    expect_report "$label" "$log" "$o.workspace | .background == false and .empty.visible and .empty.text == \"$EMPTY_WORKSPACE_TEXT\"
+        and (.x + .width / 2 - .empty.x - .empty.width / 2 | fabs <= 1) and (.y + .height / 2 - .empty.y - .empty.height / 2 | fabs <= 1)" \
+        "overview: no workspace background card, and \"$EMPTY_WORKSPACE_TEXT\" centred on the empty workspace" APEXG2-SCENES
+    top_bar_metric "$label overview" "$scenes" "$tokens" 'the empty-workspace label is $apex_font_workspace_empty_size $apex_font_heading_weight in $apex_fg_dim' \
+        "$o.workspace.empty" '(.font.size | px_is($t.apex_font_workspace_empty_size)) and .font.weight == ($t.apex_font_heading_weight | tonumber) and (.foreground | colour_is($t.apex_fg_dim))'
+    expect_report "$label" "$log" ".surfaces.appGrid.grid == {columns: $LAUNCHER_COLUMNS, rows: $LAUNCHER_ROWS, iconSize: $LAUNCHER_ICON_SIZE}" \
+        "launcher: $LAUNCHER_COLUMNS columns of $LAUNCHER_ICON_SIZE px icons, $LAUNCHER_ROWS rows a page" APEXG2-SCENES
+}
+
 # shellcheck disable=SC2016 # jq programs and token names, not shell expansions
 derived_surfaces() {
     local label=$1 log=$2 variant=$3 scenes tokens
@@ -643,6 +706,73 @@ derived_surfaces() {
         "$d.monitorLabel.radius" 'px_is($t.apex_radius_osd)'
 }
 
+# shellcheck disable=SC2016 # jq programs and token names, not shell expansions
+spotlight_style() {
+    local label=$1 log=$2 variant=$3 scenes tokens
+    scenes=$(report_of "$log" APEXG2-SCENES)
+    tokens=$(tokens_for "$variant")
+    local -a metric=(top_bar_metric "$label Spotlight" "$scenes" "$tokens")
+    local s=.surfaces.spotlight
+    local surface='(.border | [.top, .right, .bottom, .left] | all(px_is($t.apex_surface_border))) and (.borderColor | colour_is($t.apex_panel_border))
+        and (.boxShadow | .inset == false and .x == 0 and (.y | px_is($t.apex_shadow_y)) and (.blur | px_is($t.apex_shadow_blur)) and (.color | colour_is($t.apex_shadow)))'
+    local selected='(.background | rgba) as $got | ($a | rgba) as $want | ([$got[0:3], $want[0:3]] | transpose | all(.[0] - .[1] | fabs <= 1))
+        and ($got[3] - 255 * ($t.apex_selection_opacity | num) | fabs <= 1)'
+    local tracking='(.tracking - ($t.apex_spotlight_header_tracking | rtrimstr("em") | num) * ($t.apex_font_spotlight_header_size | px) | fabs < 0.05)'
+
+    "${metric[@]}" 'the panel is $apex_spotlight_width wide, $apex_spotlight_top below the monitor'"'"'s top edge, radius $apex_radius_spotlight, tinted $apex_panel with $apex_fg text' \
+        "$s.panel" '(.width | px_is($t.apex_spotlight_width)) and (.top | px_is($t.apex_spotlight_top)) and (.radius | px_is($t.apex_radius_spotlight))
+            and (.background | colour_is($t.apex_panel)) and (.foreground | colour_is($t.apex_fg))'
+    "${metric[@]}" 'its ring is a $apex_surface_border border in $apex_panel_border, its shadow 0 $apex_shadow_y $apex_shadow_blur $apex_shadow' \
+        "$s.panel" "$surface"
+    "${metric[@]}" 'the field is $apex_spotlight_field_height high, inset $apex_spotlight_field_padding, $apex_spotlight_field_gap between its parts; its glyph $apex_spotlight_glyph_size in $apex_fg_dim' \
+        "$s" '(.field | (.height | px_is($t.apex_spotlight_field_height)) and (.padding.left | px_is($t.apex_spotlight_field_padding))
+            and (.padding.right | px_is($t.apex_spotlight_field_padding)) and (.spacing | px_is($t.apex_spotlight_field_gap)))
+            and (.glyph | (.size | px_is($t.apex_spotlight_glyph_size)) and (.foreground | colour_is($t.apex_fg_dim)))'
+    "${metric[@]}" 'its text is $apex_font_spotlight_field_size at $apex_font_spotlight_field_weight in $apex_fg, unframed and unfilled; its hint $apex_fg_hint' \
+        "$s.entry" '(.font.size | px_is($t.apex_font_spotlight_field_size)) and .font.weight == ($t.apex_font_spotlight_field_weight | tonumber)
+            and (.foreground | colour_is($t.apex_fg)) and (.background | rgba | .[3] == 0) and .border.top == 0 and (.hint | colour_is($t.apex_fg_hint))'
+    "${metric[@]}" 'under a $apex_surface_border line in $apex_border, the results are inset $apex_spotlight_results_padding_top at the top and $apex_spotlight_results_padding elsewhere' \
+        "$s.results" '(.border.top | px_is($t.apex_surface_border)) and (.borderColor | colour_is($t.apex_border)) and (.padding.top | px_is($t.apex_spotlight_results_padding_top))
+            and ([.padding.right, .padding.bottom, .padding.left] | all(px_is($t.apex_spotlight_results_padding)))'
+    "${metric[@]}" 'section headers, in board order, are $apex_spotlight_header_height high with their text $apex_spotlight_header_padding_bottom above the bottom and $apex_spotlight_header_padding in, $apex_font_spotlight_header_size $apex_font_heading_weight in $apex_fg_dim, tracked $apex_spotlight_header_tracking' \
+        "$s" ".sections == [\"APPLICATIONS\", \"SETTINGS\", \"FILES\"] and (.headers | all((.height | px_is(\$t.apex_spotlight_header_height))
+            and (.padding.bottom | px_is(\$t.apex_spotlight_header_padding_bottom)) and (.padding.left | px_is(\$t.apex_spotlight_header_padding))
+            and (.font.size | px_is(\$t.apex_font_spotlight_header_size)) and .font.weight == (\$t.apex_font_heading_weight | tonumber)
+            and (.foreground | colour_is(\$t.apex_fg_dim)) and $tracking))"
+    "${metric[@]}" 'rows are $apex_spotlight_row_height high, radius $apex_radius_spotlight_row, inset $apex_spotlight_row_padding, $apex_spotlight_row_gap between icon, text and action; icons $apex_spotlight_icon_size' \
+        "$s.rows" 'length == 9 and all((.height | px_is($t.apex_spotlight_row_height)) and (.radius | px_is($t.apex_radius_spotlight_row))
+            and (.padding.left | px_is($t.apex_spotlight_row_padding)) and (.padding.right | px_is($t.apex_spotlight_row_padding)) and (.spacing | px_is($t.apex_spotlight_row_gap))
+            and (.icon.width | px_is($t.apex_spotlight_icon_size)) and (.icon.height | px_is($t.apex_spotlight_icon_size)))'
+    "${metric[@]}" 'the first row is selected, filled with the accent at $apex_selection_opacity; the others are unfilled' \
+        "{s: $s, accent: .topBar.accent}" ".accent as \$a | .s.selected == [true, false, false, false, false, false, false, false, false]
+            and (.s.rows[0] | $selected) and (.s.rows[1:] | all(.background | rgba | .[3] == 0))"
+    "${metric[@]}" 'a title is $apex_font_spotlight_title_size $apex_font_label_weight in $apex_fg, $apex_spotlight_text_gap over its subtitle, $apex_font_spotlight_subtitle_size in $apex_fg_dim' \
+        "$s.rows" 'all((.title.font.size | px_is($t.apex_font_spotlight_title_size)) and .title.font.weight == ($t.apex_font_label_weight | tonumber) and (.title.foreground | colour_is($t.apex_fg))
+            and (.text.spacing | px_is($t.apex_spotlight_text_gap)) and (.subtitle.font.size | px_is($t.apex_font_spotlight_subtitle_size)) and (.subtitle.foreground | colour_is($t.apex_fg_dim)))'
+    "${metric[@]}" 'the selected row ends in "Open", $apex_font_spotlight_action_size $apex_font_label_weight in $apex_fg_dim, $apex_spotlight_action_gap before an Enter chip $apex_spotlight_chip_height high, radius $apex_radius_spotlight_chip, in $apex_button at $apex_font_spotlight_chip_size $apex_font_heading_weight' \
+        "$s.rows[0].action" '(.verb.text == "Open") and (.font.size | px_is($t.apex_font_spotlight_action_size)) and .font.weight == ($t.apex_font_label_weight | tonumber)
+            and (.foreground | colour_is($t.apex_fg_dim)) and (.spacing | px_is($t.apex_spotlight_action_gap))
+            and (.chip | (.height | px_is($t.apex_spotlight_chip_height)) and (.radius | px_is($t.apex_radius_spotlight_chip)) and (.background | colour_is($t.apex_button))
+                and (.label.text == "Enter") and (.label.font.size | px_is($t.apex_font_spotlight_chip_size)) and .label.font.weight == ($t.apex_font_heading_weight | tonumber))'
+    "${metric[@]}" 'a sum shows its result, $apex_font_spotlight_result_size $apex_font_heading_weight in tabular figures over the sum, then Calculator as the first application' \
+        "$s.calculator" '.sections == ["CALCULATOR", "APPLICATIONS"] and (.row | .title.text == "1920" and .subtitle.text == "2880 / 1.5" and .action.verb.text == "Copy"
+            and (.title.font.size | px_is($t.apex_font_spotlight_result_size)) and .title.font.weight == ($t.apex_font_heading_weight | tonumber) and (.title.font.features | test("tnum")))'
+    "${metric[@]}" 'an empty query shows only the field; a query with no results says so in $apex_fg_dim, $apex_spotlight_empty_height high under a $apex_border line' \
+        "$s" '.fieldOnly and (.empty | (.label.text | startswith("No results for")) and (.height | px_is($t.apex_spotlight_empty_height)) and (.border.top | px_is($t.apex_surface_border))
+            and (.borderColor | colour_is($t.apex_border)) and (.foreground | colour_is($t.apex_fg_dim)))'
+    "${metric[@]}" 'Enter on the result closes Spotlight for a toast $apex_toast_height high, radius $apex_radius_toast, tinted $apex_panel, $apex_toast_bottom above the screen'"'"'s bottom edge' \
+        "$s" '.closedOnCopy and (.toast.box | (.height | px_is($t.apex_toast_height)) and (.radius | px_is($t.apex_radius_toast)) and (.background | colour_is($t.apex_panel)))
+            and (.toast.bottomGap | px_is($t.apex_toast_bottom))'
+    "${metric[@]}" 'the toast'"'"'s ring is a $apex_surface_border border in $apex_panel_border, its shadow 0 $apex_shadow_y $apex_shadow_blur $apex_shadow' \
+        "$s.toast.box" "$surface"
+    "${metric[@]}" 'it is inset $apex_toast_padding_start and $apex_toast_padding_end, $apex_toast_gap between a $apex_toast_check_size accent circle with a $apex_toast_check_icon_size check and "Copied 1920", $apex_font_size $apex_font_label_weight' \
+        "{t: $s.toast, accent: .topBar.accent}" '.accent as $a | .t | (.box | (.padding.left + .border.left | px_is($t.apex_toast_padding_start)) and (.padding.right + .border.right | px_is($t.apex_toast_padding_end))
+            and (.spacing | px_is($t.apex_toast_gap)) and (.font.size | px_is($t.apex_font_size)) and .font.weight == ($t.apex_font_label_weight | tonumber))
+            and (.check | (.width | px_is($t.apex_toast_check_size)) and (.height | px_is($t.apex_toast_check_size)) and .radius >= ($t.apex_toast_check_size | px) / 2
+                and (.background | colour_is($a)) and (.icon | px_is($t.apex_toast_check_icon_size)))
+            and .label.text == "Copied 1920"'
+}
+
 scenes_captured() {
     local run=$1 case_name=$2
     local log=$run/$case_name.log scene
@@ -659,8 +789,8 @@ compare_with_fedora() {
     {
         # The Apex bar is $apex_bar_height, upstream's 2.2em: the overview below it lays out on
         # another work area, so overview_below_bar checks its layout instead.
-        plan_entry apex-light-vs-fedora-desktop "$run" fedora-light "$run" default desktop "$run/compare" panel
-        plan_entry apex-dark-vs-fedora-desktop "$run" fedora-dark "$run" dark-style desktop "$run/compare" panel
+        plan_entry apex-light-vs-fedora-desktop "$run" fedora-light "$run" default desktop "$run/compare" panel dock
+        plan_entry apex-dark-vs-fedora-desktop "$run" fedora-dark "$run" dark-style desktop "$run/compare" panel dock
         for scene in "${SCENES[@]}"; do
             plan_entry "safe-light-vs-fedora-$scene" "$run" fedora-light "$run" stock-light "$scene" "$run/compare"
             plan_entry "safe-dark-vs-fedora-$scene" "$run" fedora-dark "$run" stock-dark "$scene" "$run/compare"
@@ -819,6 +949,7 @@ direct_cases() {
     top_bar default "$f" light
     top_bar_today default "$f" light
     top_bar_gaps default "$f" light
+    dock_metrics default "$f" light
     shell_surfaces default "$f" light
     quick_settings default "$f" light
     window_switcher default "$f" light
@@ -826,7 +957,9 @@ direct_cases() {
     date_menu default "$f" light
     overview_style default "$f" light
     app_grid default "$f" light
+    overview_layer default "$f" light
     derived_surfaces default "$f" light
+    spotlight_style default "$f" light
 
     f=$run/default-scale1.log
     exits "$run" default-scale1 0
@@ -836,6 +969,7 @@ direct_cases() {
     virtual_monitor default-scale1 "$f" 1
     top_bar default-scale1 "$f" light
     top_bar_today default-scale1 "$f" light
+    dock_metrics default-scale1 "$f" light
     shell_surfaces default-scale1 "$f" light
     quick_settings default-scale1 "$f" light
     window_switcher default-scale1 "$f" light
@@ -843,7 +977,9 @@ direct_cases() {
     date_menu default-scale1 "$f" light
     overview_style default-scale1 "$f" light
     app_grid default-scale1 "$f" light
+    overview_layer default-scale1 "$f" light
     derived_surfaces default-scale1 "$f" light
+    spotlight_style default-scale1 "$f" light
 
     f=$run/dark-style.log
     exits "$run" dark-style 0
@@ -856,6 +992,7 @@ direct_cases() {
     top_bar dark-style "$f" dark
     top_bar_today dark-style "$f" dark
     top_bar_gaps dark-style "$f" dark
+    dock_metrics dark-style "$f" dark
     shell_surfaces dark-style "$f" dark
     quick_settings dark-style "$f" dark
     window_switcher dark-style "$f" dark
@@ -863,12 +1000,15 @@ direct_cases() {
     date_menu dark-style "$f" dark
     overview_style dark-style "$f" dark
     app_grid dark-style "$f" dark
+    overview_layer dark-style "$f" dark
     derived_surfaces dark-style "$f" dark
+    spotlight_style dark-style "$f" dark
     dark_style_off dark-style "$f"
 
     for c in stock-light stock-dark; do
         exits "$run" "$c" 0
         stock_view "$c" "$run/$c.log" "${c#stock-}"
+        no_dock "$c" "$run/$c.log"
         no_apex_failure "$c" "$run/$c.log"
     done
     stock_thumbnails "$run"
@@ -931,6 +1071,42 @@ direct_cases() {
         overview_below_bar "$c" "$run/$c.log"
     done
     compare_with_fedora "$run"
+    glass_frames glass "$run/glass.log"
+    glass_unlock_vs_fedora "$run"
+}
+
+# Patch 0003's glass in the frames the shell drew (glass.js, the glass case).
+glass_frames() {
+    local label=$1 log=$2
+    expect_report "$label" "$log" '.error == null and .patched' "the probe ran the glass cases on the patched ShellBlurEffect" APEXG2-GLASS
+    expect_report "$label" "$log" '.pixels.reference | .clippedFirst and .reblurCovered' \
+        "damage under the glass: the first frame's redraw clip leaves the box out, the effect's own redraw covers it" APEXG2-GLASS
+    local within="(.interior.max | max) <= $GLASS_INTERIOR_MAX and (.edge.max | max) <= $GLASS_EDGE_MAX and (.box.mean | max) <= $GLASS_MEAN_ERROR"
+    expect_report "$label" "$log" ".pixels.reference | .downscale > 1 and $within" \
+        "then the box is blur-ref.js's Gaussian, saturate() and corners per channel: within $GLASS_INTERIOR_MAX/255 inside, $GLASS_EDGE_MAX/255 in the ds/2 band along the edges, $GLASS_MEAN_ERROR/255 on average" APEXG2-GLASS
+    expect_report "$label" "$log" '.pixels.sameFrame | .covered and .changed > 0 and .differingFromFull == 0' \
+        "damage forwarded to the glass box re-blurs in the same frame, as a full redraw draws it" APEXG2-GLASS
+    expect_report "$label" "$log" '.pixels.clippedRedraw | (.covered | not) and .differingFromLast == 0 and .nextCovered and .nextDifferingFromFull == 0' \
+        "a redraw clip that misses the box draws the last result, pixel for pixel; the next frame is the full redraw's" APEXG2-GLASS
+    expect_report "$label" "$log" ".pixels.stock | (.covered | not) and .differingFromFull > 0 and (($within) | not)" \
+        "stock's blur in such a frame samples pixels the frame did not repaint and misses those tolerances, so the case can see it" APEXG2-GLASS
+}
+
+fedora_glass() {
+    local run=$1
+    exits "$run" fedora-glass 0
+    expect_report fedora-glass "$run/fedora-glass.log" '.error == null and (.patched | not) and .unlock.file == "fedora-glass-unlock.png"' \
+        "Fedora's ShellBlurEffect has none of 0003's properties; the unlock blur captured" APEXG2-GLASS
+    check "fedora-glass: fedora-glass-unlock.png written" test -s "$run/captures/fedora-glass-unlock.png"
+}
+
+# The stock unlock blur, at default values of 0003's properties, is Fedora's to the pixel.
+glass_unlock_vs_fedora() {
+    local run=$1 plan=$1/compare/glass-plan.json results=$1/compare/glass-results.json
+    mkdir -p "$run/compare"
+    fedora_glass "$run"
+    plan_entry stock-unlock-vs-fedora "$run" fedora-glass "$run" glass unlock "$run/compare" | jq -s . >"$plan"
+    compare_and_expect_equal "$plan" "$results"
 }
 
 g1_on_the_image() {

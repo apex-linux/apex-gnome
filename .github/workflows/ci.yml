@@ -56,11 +56,11 @@ jobs:
     env:
       APEX_SHOTS_TESTS_NO_SKIP: "1"
     steps:
-      - name: gjs, GdkPixbuf, jq, and the fixtures' dbus-daemon, python3-dbusmock and client libraries
+      - name: gjs, GdkPixbuf, jq, the fixtures' dbus-daemon, python3-dbusmock and client libraries, and frame.c's glib2-devel
         run: >-
           dnf5 -y --setopt=install_weak_deps=False --repo=fedora --repo=updates install
           gjs gdk-pixbuf2 jq bash coreutils gawk grep sed
-          dbus-daemon python3-dbusmock NetworkManager-libnm gnome-bluetooth-libs gcc
+          dbus-daemon python3-dbusmock NetworkManager-libnm gnome-bluetooth-libs gcc glib2-devel
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -80,10 +80,10 @@ jobs:
     container:
       image: registry.fedoraproject.org/fedora:45@sha256:1e13e11f63e147a40a935c9046c79d53a30b861a3cf05ebb023bb53c562382cb
     steps:
-      - name: Fedora's gnome-shell, the fixtures' services, gcc for clock.c, gjs and jq
+      - name: Fedora's gnome-shell, the fixtures' services, gcc and glib2-devel for clock.c and frame.c, gjs and jq
         run: >-
           dnf5 -y --setopt=install_weak_deps=False --repo=fedora --repo=updates install
-          gnome-shell mesa-dri-drivers dbus-daemon python3-dbusmock gcc gjs jq bash coreutils gawk grep sed
+          gnome-shell mesa-dri-drivers dbus-daemon python3-dbusmock gcc glib2-devel gjs jq bash coreutils gawk grep sed
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -259,6 +259,13 @@ jobs:
       - name: tests/control-center/selftest.sh
         run: tests/control-center/selftest.sh
 
+      - name: tests/control-center/state-test.sh
+        env:
+          APEX_CONTROL_CENTER_TESTS_NO_SKIP: "1"
+        run: |
+          dnf5 -y -q --setopt=install_weak_deps=False --repo=fedora --repo=updates install gcc glib2-devel pkgconf-pkg-config
+          tests/control-center/state-test.sh
+
       - name: tests/lib/lane.sh gnome-control-center
         run: tests/lib/lane.sh gnome-control-center
 
@@ -274,7 +281,7 @@ jobs:
       - name: tests/control-center/run.sh on the built RPMs
         run: |
           dnf5 -y -q --setopt=install_weak_deps=False --repo=fedora --repo=updates install \
-            gnome-shell mesa-dri-drivers dbus-daemon python3-dbusmock python3-gobject at-spi2-core gcc util-linux adwaita-sans-fonts
+            gnome-shell mesa-dri-drivers dbus-daemon python3-dbusmock python3-gobject at-spi2-core gcc util-linux adwaita-sans-fonts python3-dbus systemd
           tests/control-center/run.sh _build/gnome-control-center/out
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
