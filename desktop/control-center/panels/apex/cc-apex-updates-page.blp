@@ -136,7 +136,7 @@ template $CcApexUpdatesPage: Adw.NavigationPage {
                 orientation: vertical;
                 spacing: 10;
 
-                Adw.PreferencesGroup {
+                Adw.PreferencesGroup versions_group {
                   title: _("Versions");
 
                   Adw.ActionRow running_row {
@@ -194,6 +194,12 @@ template $CcApexUpdatesPage: Adw.NavigationPage {
 
               Adw.PreferencesGroup {
                 title: _("Preferences");
+
+                Adw.SwitchRow automatic_row {
+                  title: _("Automatic Downloads");
+                  subtitle: _("Waits for mains power and an unmetered network");
+                  visible: false;
+                }
 
                 Adw.ActionRow channel_row {
                   title: _("Update Channel");

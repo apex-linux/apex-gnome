@@ -412,6 +412,55 @@ REPORT_OF_DERIVED_SURFACES_DRAWN_FROM_TOKENS='
         hover: {background: ($t.apex_button_hover | hex)}},
     monitorLabel: {radius: ($t.apex_radius_osd | px)}}}}'
 # shellcheck disable=SC2016 # a jq program
+REPORT_OF_A_SPOTLIGHT_DRAWN_FROM_TOKENS='
+($t.apex_surface_border | px) as $b | {top: $b, right: $b, bottom: $b, left: $b} as $border
+| {border: $border, borderColor: ($t.apex_panel_border | hex),
+   boxShadow: {inset: false, x: 0, y: ($t.apex_shadow_y | px), blur: ($t.apex_shadow_blur | px), color: ($t.apex_shadow | hex)}} as $surface
+| ($t.apex_spotlight_row_padding | px) as $rp | ($t.apex_spotlight_icon_size | px) as $icon
+| {height: ($t.apex_spotlight_row_height | px), radius: ($t.apex_radius_spotlight_row | px), padding: {left: $rp, right: $rp},
+   spacing: ($t.apex_spotlight_row_gap | px), background: "#00000000", icon: {width: $icon, height: $icon},
+   text: {spacing: ($t.apex_spotlight_text_gap | px)},
+   title: {font: {size: ($t.apex_font_spotlight_title_size | px), weight: ($t.apex_font_label_weight | tonumber)}, foreground: ($t.apex_fg | hex)},
+   subtitle: {font: {size: ($t.apex_font_spotlight_subtitle_size | px)}, foreground: ($t.apex_fg_dim | hex)}} as $row
+| {height: ($t.apex_spotlight_header_height | px),
+   padding: {bottom: ($t.apex_spotlight_header_padding_bottom | px), left: ($t.apex_spotlight_header_padding | px)},
+   font: {size: ($t.apex_font_spotlight_header_size | px), weight: ($t.apex_font_heading_weight | tonumber)}, foreground: ($t.apex_fg_dim | hex),
+   tracking: (($t.apex_spotlight_header_tracking | rtrimstr("em") | num) * ($t.apex_font_spotlight_header_size | px))} as $header
+| ($t.apex_spotlight_results_padding | px) as $pad
+| {topBar: {accent: "#3584e4ff"}, surfaces: {spotlight: {
+    fieldOnly: true,
+    panel: ({width: ($t.apex_spotlight_width | px), top: ($t.apex_spotlight_top | px), radius: ($t.apex_radius_spotlight | px),
+        background: ($t.apex_panel | hex), foreground: ($t.apex_fg | hex)} + $surface),
+    field: {height: ($t.apex_spotlight_field_height | px), padding: {left: ($t.apex_spotlight_field_padding | px), right: ($t.apex_spotlight_field_padding | px)},
+        spacing: ($t.apex_spotlight_field_gap | px)},
+    glyph: {size: ($t.apex_spotlight_glyph_size | px), foreground: ($t.apex_fg_dim | hex)},
+    entry: {font: {size: ($t.apex_font_spotlight_field_size | px), weight: ($t.apex_font_spotlight_field_weight | tonumber)},
+        foreground: ($t.apex_fg | hex), background: "#00000000", border: {top: 0}, hint: ($t.apex_fg_hint | hex)},
+    results: {border: {top: $b}, borderColor: ($t.apex_border | hex),
+        padding: {top: ($t.apex_spotlight_results_padding_top | px), right: $pad, bottom: $pad, left: $pad}},
+    sections: ["APPLICATIONS", "SETTINGS", "FILES"],
+    headers: [$header, $header, $header],
+    rows: ([$row + {background: "#3584e429", action: {verb: {text: "Open"}, font: {size: ($t.apex_font_spotlight_action_size | px), weight: ($t.apex_font_label_weight | tonumber)},
+            foreground: ($t.apex_fg_dim | hex), spacing: ($t.apex_spotlight_action_gap | px),
+            chip: {height: ($t.apex_spotlight_chip_height | px), radius: ($t.apex_radius_spotlight_chip | px), background: ($t.apex_button | hex),
+                label: {text: "Enter", font: {size: ($t.apex_font_spotlight_chip_size | px), weight: ($t.apex_font_heading_weight | tonumber)}}}}}]
+        + [range(8) | $row]),
+    selected: ([true] + [range(8) | false]),
+    calculator: {sections: ["CALCULATOR", "APPLICATIONS"], row: {title: {text: "1920",
+        font: {size: ($t.apex_font_spotlight_result_size | px), weight: ($t.apex_font_heading_weight | tonumber), features: "\"tnum\""}},
+        subtitle: {text: "2880 / 1.5"}, action: {verb: {text: "Copy"}}}},
+    empty: {label: {text: "No results for “zzz”"}, height: ($t.apex_spotlight_empty_height | px), border: {top: $b},
+        borderColor: ($t.apex_border | hex), foreground: ($t.apex_fg_dim | hex)},
+    closedOnCopy: true,
+    toast: {box: ({height: ($t.apex_toast_height | px), radius: ($t.apex_radius_toast | px), background: ($t.apex_panel | hex),
+            padding: {left: (($t.apex_toast_padding_start | px) - $b), right: (($t.apex_toast_padding_end | px) - $b)},
+            spacing: ($t.apex_toast_gap | px), font: {size: ($t.apex_font_size | px), weight: ($t.apex_font_label_weight | tonumber)}} + $surface),
+        bottomGap: ($t.apex_toast_bottom | px),
+        check: {width: ($t.apex_toast_check_size | px), height: ($t.apex_toast_check_size | px), radius: 11, background: "#3584e4ff",
+            icon: ($t.apex_toast_check_icon_size | px)},
+        label: {text: "Copied 1920"}}}}}'
+# shellcheck disable=SC2016 # a jq program
+# shellcheck disable=SC2016 # a jq program
 HEX_DEF='def hex: rgba | map([., 16] | "0123456789abcdef"[(.[0] / .[1] | floor):(.[0] / .[1] | floor) + 1]
                                     + "0123456789abcdef"[(.[0] % .[1]):(.[0] % .[1]) + 1]) | "#" + join("");'
 
@@ -431,6 +480,7 @@ assert_run() {
     [[ $assertions == app_grid ]] && report=$REPORT_OF_A_LAUNCHER_DRAWN_FROM_TOKENS
     [[ $assertions == derived_surfaces ]] && report=$REPORT_OF_DERIVED_SURFACES_DRAWN_FROM_TOKENS
     [[ $assertions == overview_layer ]] && report=$REPORT_OF_AN_OVERVIEW_LAYER_FROM_TOKENS
+    [[ $assertions == spotlight_style ]] && report=$REPORT_OF_A_SPOTLIGHT_DRAWN_FROM_TOKENS
     tokens=$(tokens_for "$variant")
     jq -nc --argjson t "$tokens" "$JQ_DEFS $HEX_DEF $report | $change" | sed 's/^/APEXG2-SCENES /' >"$T/top-bar.log"
     # shellcheck disable=SC2016 # expanded by the inner bash
@@ -839,6 +889,48 @@ test_derived_surfaces() {
 .surfaces.derived.runEntry.minHeight = null|upstream's padded run entry
 .surfaces.derived.audioDevice.foreground = "#22222666"|a dimmed device name
 .surfaces.derived.monitorLabel.radius = 16|upstream's monitor label radius
+CHANGES
+}
+
+test_spotlight_style() {
+    local variant change what passes failures open_gaps
+    for variant in light dark; do
+        read -r passes failures open_gaps <<<"$(assert_run spotlight_style "$variant")"
+        if ((failures == 0 && open_gaps == 0 && passes == 15)); then
+            ok "Spotlight ($variant): drawn from the tokens it passes all $passes assertions"
+        else
+            not_ok "Spotlight ($variant): drawn from the tokens it passes (passed/failed/gaps $passes/$failures/$open_gaps): $(grep -m3 '^FAIL' "$T/top-bar.out" | paste -sd'|' -)"
+        fi
+    done
+    while IFS='|' read -r change what; do
+        read -r passes failures open_gaps <<<"$(assert_run spotlight_style light "$change")"
+        if ((failures == 1)); then
+            ok "Spotlight: $what fails one assertion"
+        else
+            not_ok "Spotlight: $what fails one assertion (passed/failed/gaps $passes/$failures/$open_gaps)"
+        fi
+    done <<'CHANGES'
+.surfaces.spotlight.panel.width = 640|a 640 px panel
+.surfaces.spotlight.panel.top = 72|a panel 72 px down
+.surfaces.spotlight.panel.boxShadow = null|a panel without its shadow
+.surfaces.spotlight.field.height = 48|a 48 px field
+.surfaces.spotlight.entry.font.size = 14|upstream's 14 px entry text
+.surfaces.spotlight.entry.hint = "#1d1d2166"|the fainter hint of the calendar's other months
+.surfaces.spotlight.results.border.top = 0|no line above the results
+.surfaces.spotlight.headers[1].height = 24|a header without its gap above
+.surfaces.spotlight.sections = ["SETTINGS", "APPLICATIONS", "FILES"]|the sections out of order
+.surfaces.spotlight.rows[3].height = 44|a 44 px row
+.surfaces.spotlight.rows[0].background = "#3584e44d"|a 30 % selection
+.surfaces.spotlight.selected = [false, true, false, false, false, false, false, false, false]|the selection on the second row
+.surfaces.spotlight.rows[2].subtitle.foreground = "#1d1d21ff"|a subtitle at full strength
+.surfaces.spotlight.rows[0].action.chip.radius = 10|a rounder Enter chip
+.surfaces.spotlight.calculator.row.title.font.features = ""|a result in proportional figures
+.surfaces.spotlight.empty.height = 60|a 60 px empty row
+.surfaces.spotlight.fieldOnly = false|results under an empty query
+.surfaces.spotlight.toast.bottomGap = 104|a toast at the OSD's height
+.surfaces.spotlight.closedOnCopy = false|Spotlight left open after the copy
+.surfaces.spotlight.toast.box.borderColor = "#00000000"|a toast without its ring
+.surfaces.spotlight.toast.check.background = "#1d1d21ff"|a check circle without the accent
 CHANGES
 }
 
@@ -1317,6 +1409,7 @@ test_overview_style
 test_app_grid
 test_overview_layer
 test_derived_surfaces
+test_spotlight_style
 test_today_pins
 test_known_gaps
 test_fixed_clock
