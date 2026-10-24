@@ -32,7 +32,7 @@ const OVER_DOCK_AND_POPOVERS = {x: 760, y: 300, width: 600, height: 590};
 const DRAG_SIZE = {width: 360, height: 240};
 const B_LEGS = [
     {popover: null, from: [300, 640], to: [1080, 640]},
-    {popover: 'quickSettings', from: [700, 120], to: [1300, 120]},
+    {popover: 'quickSettings', from: [700, 120], to: [1080, 120]},
     {popover: 'dateMenu', from: [300, 120], to: [900, 120]},
 ];
 // 0014-blurcost.py's model: half the Vega 7's bandwidth and texture rate.
