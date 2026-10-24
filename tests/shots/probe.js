@@ -42,6 +42,7 @@ const SEARCH_HINT_KEY = 'search-hint-shown';
 const OSD_LEVEL = 0.62;
 const POWER_PROFILE_WAIT_MS = 3000;
 const IDLE_PAINT_MS = 2000;
+const PERF_HELPER_PING_MS = 10000;
 const SHADOW_REGISTRY = 'resource:///org/gnome/shell/ui/apex/shadows/registry.js';
 const MOTION_WINDOW_ID = 'io.github.apex_linux.G2Window';
 const MOTION_WAIT_MS = 10000;
@@ -960,7 +961,6 @@ async function shadowLayers(unit) {
     result.dialog = layerReport(Registry, surface, unit)
         .map((layer, i) => ({...layer, besideBox: Registry.layersOf(surface)[i].get_parent() === surface.get_parent()}));
     dialog.close();
-    dialog.destroy();
     await settle();
     return result;
 }
@@ -1680,7 +1680,7 @@ export function init() {
     import(import.meta.url).then(self => Scripting.runPerfScript(self, GLib.getenv('SHELL_PERF_OUTPUT')));
 }
 
-export async function run() {
+async function probe() {
     await Scripting.sleep(REPORT_AFTER_MS);
     console.log(`APEXG2 ${JSON.stringify(await report())}`);
 
@@ -1740,5 +1740,16 @@ export async function run() {
     if (wait > 0) {
         await Scripting.sleep(wait * 1000);
         console.log(`APEXG2-SURVIVED ${wait}s startingMarker=${startingMarker()}`);
+    }
+}
+
+// gnome-shell-perf-helper quits after 30 idle seconds, and the shell exits 1 once it is gone.
+export async function run() {
+    const helper = await Scripting._getPerfHelper();
+    const keepalive = setInterval(() => helper.WaitWindowsAsync().catch(logError), PERF_HELPER_PING_MS);
+    try {
+        await probe();
+    } finally {
+        clearInterval(keepalive);
     }
 }

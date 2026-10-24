@@ -4,6 +4,7 @@
 // shadow-layer actor per further layer its sheet names, below it and following its box.
 
 import Clutter from 'gi://Clutter';
+import GLib from 'gi://GLib';
 import Graphene from 'gi://Graphene';
 import St from 'gi://St';
 
@@ -42,6 +43,10 @@ function _sync(entry) {
     const box = entry.opts.box ?? actor;
     const corner = (x, y) => box.apply_relative_transform_to_point(host.parent, new Graphene.Point3D({x, y, z: 0}));
     const [from, to] = [corner(0, 0), corner(box.width, box.height)];
+    if (![from.x, from.y, to.x, to.y].every(Number.isFinite)) {
+        layers.forEach(l => l.hide());
+        return;
+    }
     for (const layer of layers) {
         layer.set_position(Math.round(from.x), Math.round(from.y));
         layer.set_size(Math.round(to.x - from.x), Math.round(to.y - from.y));
@@ -83,9 +88,18 @@ function _clear(entry) {
     entry.layers = [];
 }
 
+// A style change arrives while St walks the parent's children: adding a sibling then breaks the walk.
+function _queueBuild(entry) {
+    entry.buildId ||= GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
+        entry.buildId = 0;
+        _build(entry);
+        return GLib.SOURCE_REMOVE;
+    });
+}
+
 function _attach(entry) {
     const {actor} = entry;
-    const watched = [[actor, 'style-changed', () => _build(entry)], [actor, 'notify::mapped', () => _sync(entry)]];
+    const watched = [[actor, 'style-changed', () => _queueBuild(entry)], [actor, 'notify::mapped', () => _sync(entry)]];
     for (let a = entry.opts.box ?? actor; a && !(a instanceof Clutter.Stage); a = a.get_parent()) {
         for (const signal of ['notify::allocation', 'notify::translation-x', 'notify::translation-y',
             'notify::scale-x', 'notify::scale-y', 'notify::opacity'])
@@ -98,6 +112,9 @@ function _attach(entry) {
 function _detach(entry) {
     entry.ids.forEach(([emitter, id]) => emitter.disconnect(id));
     entry.ids = [];
+    if (entry.buildId)
+        GLib.source_remove(entry.buildId);
+    entry.buildId = 0;
     _clear(entry);
 }
 
@@ -109,7 +126,7 @@ export function register(actor, opts = {}) {
             _build(known);
         return;
     }
-    const entry = {actor, opts, layers: [], ids: [], host: null};
+    const entry = {actor, opts, layers: [], ids: [], host: null, buildId: 0};
     entry.destroyId = actor.connect('destroy', () => unregister(actor));
     _entries.set(actor, entry);
     if (_drawing)
