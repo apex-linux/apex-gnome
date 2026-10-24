@@ -45,9 +45,9 @@ The direct cases:
 
 | Case | Settings | Asserts |
 |---|---|---|
-| `default` | `color-scheme` `'default'` | the Apex light sheet with its marker, `prefer-light`, no fault feature, the crash guard's marker created and removed; Super+Space (`toggle-spotlight`) registered in the normal and overview modes; the top bar's metrics, light |
-| `default-scale1` | as `default`, on a 1440x900 virtual monitor at scale 1, as the desktop VM runs | the Apex light sheet; the top bar's metrics at scale 1 |
-| `dark-style` | `prefer-dark` | the Apex dark sheet; the top bar's metrics, dark; then the probe clicks Quick Settings' Dark Style toggle (its own `clicked` signal): the toggle turns off, writes `color-scheme` `'default'`, and the running shell loads the Apex light sheet |
+| `default` | `color-scheme` `'default'` | the Apex light sheet with its marker, `prefer-light`, no fault feature, the crash guard's marker created and removed; Super+Space (`toggle-spotlight`) registered in the normal and overview modes; the top bar's and the shell surfaces' metrics, light |
+| `default-scale1` | as `default`, on a 1440x900 virtual monitor at scale 1, as the desktop VM runs | the Apex light sheet; the top bar's and the shell surfaces' metrics at scale 1 |
+| `dark-style` | `prefer-dark` | the Apex dark sheet; the top bar's and the shell surfaces' metrics, dark; then the probe clicks Quick Settings' Dark Style toggle (its own `clicked` signal): the toggle turns off, writes `color-scheme` `'default'`, and the running shell loads the Apex light sheet |
 | `stock-light`, `stock-dark` | `APEX_SHELL_SAFE=1` with `prefer-light` or `prefer-dark` | upstream's sheet of that variant from `theme/stock/`; the overview's thumbnails at upstream's maximum scale 0.05 and at the effective scale of Fedora's build; the rebuilt high-contrast sheet, which safe mode keeps, is Fedora's apart from the structure marker; no Super+Space binding |
 | `safe-env`, `layer-disabled`, `kernel-safe` | the three kill switches | upstream's dark sheet from `theme/stock/`, the stock colour scheme, every hook stock, no Super+Space binding, the reason logged; the same sheet in all three |
 | `layer-cycles` | the capture settings; the probe sets `layer-enabled` false, then true, three times | while off: upstream's dark sheet from `theme/stock/`, the stock colour scheme, every hook stock, no Super+Space binding; while on: the Apex light sheet, `prefer-light` and Super+Space; each time it is on the stage holds the same actors, type by type, as at startup, and each time it is off the same as the first time; the layer logs each switch |
@@ -155,6 +155,40 @@ sizes while the clock text grows to 1.25 × 13.5 px and stays within its pill. T
 measures in CSS px through St itself, so the values hold whether mutter lays the stage
 out in logical or physical pixels.
 
+## The shell surfaces' metrics
+
+`assert.sh`'s `shell_surfaces` runs in `default`, `default-scale1` and `dark-style`. In
+the desktop scene, after its capture, the probe opens a stock popup menu (two rows, a
+separator, a row with a glyph), the volume OSD at 62 % and a normal-urgency banner with
+one action, together as on canvas board 16, measures them and closes them before the
+overview. Every expected value comes from `_apex-tokens.scss`, for the case's variant:
+
+- the popup menu: `$apex_panel_solid`, `$apex_fg`, radius, the ring as a border, the
+  shadow, its inset and minimum width, the rows' height, radius, padding, glyph gap and
+  hover fill, the 1 px gap between rows, the separator's colour, inset and margins, the
+  row glyph's size;
+- the OSD: height, radius, `$apex_panel`, ring and shadow, side inset, gap, type, glyph,
+  the level's size, track and accent fill, and its distance from the bottom edge;
+- the banner: width, radius, `$apex_panel`, ring and shadow, inset, its gap below the
+  bar, the header, title and body type, the icon and its gap, the close button, and the
+  action buttons' height, radius, fill, type and gap (read from the theme: stock shows
+  them only in an expanded banner).
+
+None of these surfaces is in a compared capture, so the comparison with Fedora's build
+is unchanged.
+
+## Without the builder VM: `local.sh`
+
+`tests/shots/local.sh [OUT_DIR]` rebuilds Fedora's gnome-shell SRPM with this working
+tree's `desktop/shell/` in a Fedora 45 container, as the lane does (spec-edit, the series
+from Patch1001, Source1), then runs `direct.sh apex` on it in a second container: the
+`default` and `dark-style` cases, which also capture the `surfaces` scene with the menu,
+the OSD and the banner open. It asserts `top_bar` and `shell_surfaces` and writes the
+RPMs, logs, captures and `assert.txt` to `_build/local/`. It takes about 10 minutes the
+first time, with podman or docker. The shells run on Fedora's packages rather than the
+image, with no wallpaper, so it is a fast check and a source of captures for the
+boards, not G2. `LOCAL_CA` names a CA file to trust inside the containers.
+
 ## Known gaps
 
 `top_bar_gaps` asserts the rest of the designed top bar ([docs/DESIGN.md](https://github.com/apex-linux/apex/blob/main/docs/DESIGN.md)),
@@ -198,6 +232,7 @@ it is at least 4.8:1), and what the goldens judge: the Apex Symbolic glyphs (S1b
 | `fixtures.py` | the direct cases' containers | the python-dbusmock services on the system bus |
 | `clock.c` | the direct cases' shells (`LD_PRELOAD`) | the fixed wall clock |
 | `smoke.sh` | CI's Fedora 45 container | `direct.sh fedora` on Fedora's gnome-shell, and the assertions that need no Apex build |
+| `local.sh` | a host with podman or docker | the Apex build from this tree, `direct.sh apex`, and the top-bar and surface assertions |
 | `probe.js` | the shell (`--automation-script`) | prints `APEXG2 {…}` and, for the capture cases, `APEXG2-SCENES {…}` |
 | `assert.sh`, `stable.sh`, `lib.sh` | the builder VM | the assertions |
 | `png.js`, `compare.js` | gjs | PNG with GLib's zlib only, and the masked comparison |

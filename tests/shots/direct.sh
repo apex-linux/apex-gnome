@@ -4,7 +4,7 @@ set -uo pipefail
 
 usage() {
     cat <<'EOF'
-usage: direct.sh main|kernel|fedora
+usage: direct.sh main|kernel|fedora|apex
 
 G2's direct cases, run by run.sh as root in a throwaway container of its bus image (the
 built image plus dbus-daemon), with tests/shots at /w (read-only) and the run's results
@@ -18,11 +18,12 @@ wall clock that clock.c holds at G2_CLOCK. A case that times out stops the part 
   main     every case, with the VM's real /proc/cmdline
   kernel   the apex.safe=1 case (run.sh binds a fixture over /proc/cmdline)
   fedora   the captures of Fedora's own gnome-shell build (run.sh's baseline image)
+  apex     the Apex capture cases default and dark-style alone (local.sh)
 EOF
 }
 
 case ${1:-} in
-    main | kernel | fedora) part=$1 ;;
+    main | kernel | fedora | apex) part=$1 ;;
     -h | --help) usage; exit 0 ;;
     *) usage >&2; exit 2 ;;
 esac
@@ -123,6 +124,10 @@ case $part in
     fedora)
         run_and_record_case fedora-light "$CAPTURE_SETTINGS;org.gnome.desktop.interface color-scheme prefer-light" G2_SCENES=1
         run_and_record_case fedora-dark "$CAPTURE_SETTINGS;org.gnome.desktop.interface color-scheme prefer-dark" G2_SCENES=1
+        exit 0 ;;
+    apex)
+        run_and_record_case default "$CAPTURE_SETTINGS" G2_SCENES=1 G2_SURFACE_SCENES=1
+        run_and_record_case dark-style "$CAPTURE_SETTINGS;org.gnome.desktop.interface color-scheme prefer-dark" G2_SCENES=1 G2_SURFACE_SCENES=1
         exit 0 ;;
 esac
 

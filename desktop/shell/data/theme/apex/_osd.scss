@@ -1,0 +1,24 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+
+// Glass: St has no backdrop filter, so S2b's glass manager blurs behind the tint.
+.osd-window {
+  @include apex-surface($apex_panel);
+  padding: ($apex_osd_height - 2 * $apex_surface_border - $apex_osd_icon_size) / 2
+    ($apex_osd_padding - $apex_surface_border);
+  border-radius: $apex_radius_osd;
+  spacing: $apex_osd_gap;
+  margin-bottom: $apex_osd_bottom;
+  font-size: apex-text-size($apex_font_size);
+  font-weight: $apex_font_label_weight;
+
+  StIcon { icon-size: $apex_osd_icon_size; }
+
+  .level {
+    margin: 0;
+    min-height: $apex_osd_level_height;
+    min-width: $apex_osd_level_width;
+    -barlevel-height: $apex_osd_level_height;
+    -barlevel-background-color: $apex_button_hover;
+    -barlevel-active-background-color: $apex_accent;
+  }
+}

@@ -1,0 +1,44 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+
+.popup-menu { min-width: $apex_menu_min_width; }
+
+.popup-menu-content {
+  @include apex-surface($apex_panel_solid);
+  padding: $apex_menu_padding - $apex_surface_border;
+  border-radius: $apex_radius_menu;
+  font-size: apex-text-size($apex_font_size);
+}
+
+.popup-menu-content, .popup-menu-section { spacing: $apex_menu_row_gap; }
+
+.popup-menu-item {
+  min-height: $apex_menu_row_height;
+  padding: 0 $apex_menu_row_padding;
+  spacing: $apex_menu_row_spacing;
+  border-radius: $apex_radius_menu_row;
+  color: $apex_fg;
+
+  &:hover, &:focus, &:selected, &:active, &:checked {
+    color: $apex_fg;
+    background-color: $apex_button_hover;
+  }
+
+  &:insensitive { color: $apex_fg_dim; }
+
+  .popup-menu-icon { icon-size: $apex_menu_icon_size; }
+}
+
+.popup-inactive-menu-item { color: $apex_fg; }
+
+.popup-separator-menu-item {
+  min-height: 0;
+  padding: 0;
+  margin: $apex_menu_separator_margin $apex_menu_separator_inset;
+
+  .popup-separator-menu-item-separator { background-color: $apex_border; }
+}
+
+.app-menu .popup-inactive-menu-item:first-child > StLabel {
+  font-size: apex-text-size($apex_font_menu_secondary_size);
+  color: $apex_fg_dim;
+}

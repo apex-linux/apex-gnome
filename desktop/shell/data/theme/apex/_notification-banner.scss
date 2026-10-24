@@ -1,0 +1,72 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+
+// Glass, like the OSD: the tint until S2b's glass manager blurs behind it.
+.notification-banner {
+  @include apex-surface($apex_panel);
+  width: $apex_banner_width - 2 * $apex_banner_padding;
+  min-height: 0;
+  padding: $apex_banner_padding - $apex_surface_border;
+  margin: $apex_banner_top 0 0;
+  border-radius: $apex_radius_banner;
+  font-size: apex-text-size($apex_font_size);
+
+  .message-header {
+    color: $apex_fg_dim;
+    padding: 0;
+    font-size: apex-text-size($apex_font_banner_header_size);
+
+    .message-header-content { padding-bottom: 0; }
+    .message-source-title { font-weight: $apex_font_label_weight; }
+    .event-time { color: $apex_fg_dim; font-size: apex-text-size($apex_font_banner_header_size); }
+
+    .message-close-button {
+      min-width: $apex_banner_close_size;
+      min-height: $apex_banner_close_size;
+      padding: 0;
+      margin: 0;
+      color: $apex_fg;
+      background-color: $apex_button;
+
+      &:hover, &:focus { background-color: $apex_button_hover; }
+
+      StIcon { icon-size: $apex_banner_close_icon_size; }
+    }
+  }
+
+  .message-box {
+    padding: 0;
+    spacing: $apex_banner_gap;
+
+    .message-icon {
+      icon-size: $apex_banner_icon_size;
+
+      &:ltr, &:rtl { margin: 0; }
+    }
+  }
+
+  .message-title { font-weight: $apex_font_heading_weight; }
+
+  .message-body {
+    color: $apex_fg_dim;
+    font-size: apex-text-size($apex_font_banner_body_size);
+  }
+
+  .message-action-bin {
+    padding: $apex_banner_gap 0 0 ($apex_banner_icon_size + $apex_banner_gap);
+    spacing: $apex_banner_button_gap;
+
+    * { margin: 0; }
+  }
+
+  .notification-button {
+    min-height: $apex_banner_button_height;
+    padding: 0;
+    border-radius: $apex_radius_banner_button;
+    color: $apex_fg;
+    background-color: $apex_button;
+    font-size: apex-text-size($apex_font_banner_button_size);
+    font-weight: $apex_font_label_weight;
+
+    &:hover, &:focus { background-color: $apex_button_hover; }
+  }
+}
