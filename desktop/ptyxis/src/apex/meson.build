@@ -2,6 +2,7 @@
 
 ptyxis_sources += files(
   'apex-glyph.c',
+  'apex-palette.c',
   'apex-session-row.c',
   'apex-session-state.c',
   'apex-session.c',
