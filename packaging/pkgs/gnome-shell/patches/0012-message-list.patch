@@ -1,0 +1,76 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Thuong Vo <66083331+SekiroKenjii@users.noreply.github.com>
+Date: Sat, 24 Oct 2026 16:00:00 +0000
+Subject: [PATCH] calendar, messageList: hooks for the Apex notification list
+
+Hooks for the Apex layer's notifications feature (apex ROADMAP S3c,
+board 34): the date menu's message list once built, and each
+notification group as the message view creates it, both behaviour
+hooks; and a value hook over an expanded group's height. Clear's
+visibility binding is kept, so the feature can show Clear while the
+list is empty and bind it back when it is off.
+---
+ js/ui/calendar.js    | 5 ++++-
+ js/ui/messageList.js | 5 ++++-
+ 2 files changed, 8 insertions(+), 2 deletions(-)
+
+diff --git a/js/ui/calendar.js b/js/ui/calendar.js
+index 56e0f8e..04f775f 100644
+--- a/js/ui/calendar.js
++++ b/js/ui/calendar.js
+@@ -7,6 +7,7 @@ import Shell from 'gi://Shell';
+ import St from 'gi://St';
+ 
+ import * as MessageList from './messageList.js';
++import * as ApexHooks from './apex/hooks.js';
+ import {ensureActorVisibleInScrollView} from '../misc/animationUtils.js';
+ 
+ import {formatDateWithCFormatString} from '../misc/dateUtils.js';
+@@ -837,7 +838,7 @@ class CalendarMessageList extends St.Widget {
+         });
+         hbox.add_child(this._clearButton);
+ 
+-        this._placeholder.bind_property('visible',
++        this._clearButtonVisibility = this._placeholder.bind_property('visible',
+             this._clearButton, 'visible',
+             GObject.BindingFlags.INVERT_BOOLEAN);
+ 
+@@ -890,6 +891,8 @@ class CalendarMessageList extends St.Widget {
+             GObject.BindingFlags.SYNC_CREATE,
+             (_bind, value) => [true, value !== null],
+             null);
++
++        ApexHooks.run('message-list', this);
+     }
+ 
+     setCaptureContainer(container) {
+diff --git a/js/ui/messageList.js b/js/ui/messageList.js
+index 83664f4..9e2ed3a 100644
+--- a/js/ui/messageList.js
++++ b/js/ui/messageList.js
+@@ -11,6 +11,7 @@ import St from 'gi://St';
+ import * as Main from './main.js';
+ import * as MessageTray from './messageTray.js';
+ import * as Mpris from './mpris.js';
++import * as ApexHooks from './apex/hooks.js';
+ 
+ import * as Util from '../misc/util.js';
+ import {formatTimeSpan} from '../misc/dateUtils.js';
+@@ -1319,7 +1320,8 @@ const MessageGroupExpanderLayout = GObject.registerClass({
+         minExpanded += ADDITIONAL_BOTTOM_MARGIN_EXPANDED_GROUP;
+         natExpanded += ADDITIONAL_BOTTOM_MARGIN_EXPANDED_GROUP;
+ 
+-        return [minExpanded, natExpanded];
++        return ApexHooks.value('message-group-expanded-height',
++            [minExpanded, natExpanded], container, forWidth);
+     }
+ 
+     vfunc_get_preferred_width(container, forHeight) {
+@@ -1832,6 +1834,7 @@ export const MessageView = GObject.registerClass({
+ 
+     _addNotificationSource(source) {
+         const group = new NotificationMessageGroup(source);
++        ApexHooks.run('notification-group', group);
+ 
+         this._notificationSourceToGroup.set(source, group);
+ 

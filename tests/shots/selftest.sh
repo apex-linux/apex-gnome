@@ -980,6 +980,56 @@ test_tile_preview() {
 CHANGES
 }
 
+# shellcheck disable=SC2016 # a jq program
+readonly NOTIFICATIONS_REPORT='
+def card($apex): {column: $apex, iconSize: 32, iconLeft: true};
+def group($apex; $n): {expanded: ($apex or $n < 2), header: false, cards: [range($n) | card($apex)]};
+def step($apex; $groups; $banners): {empty: ($groups == []), banners: $banners,
+    clear: {visible: ($apex or $groups != []), reactive: ($groups != []), right: $apex, left: ($apex | not)},
+    dnd: (if $apex then {first: true, label: "Do Not Disturb", checked: ($banners | not)} else null end), groups: $groups};
+def layer($apex): [group($apex; 1), group($apex; 1), group($apex; 2), group($apex; 1)] as $many
+    | {none: step($apex; []; true), one: step($apex; [group($apex; 1)]; true), many: step($apex; $many; true),
+       cleared: step($apex; []; true)}
+    + (if $apex then {dndOn: step($apex; $many; false), dndOff: step($apex; $many; true)} else {} end);
+{surfaces: {notificationsLayer: layer($mode == "apex")}}'
+
+notifications_run() {
+    local mode=$1 change=${2:-.}
+    jq -nc --arg mode "$mode" "$NOTIFICATIONS_REPORT | $change" | sed 's/^/APEXG2-SCENES /' >"$T/notifications.log"
+    # shellcheck disable=SC2016 # expanded by the inner bash
+    bash -c '. "$1/assert.sh"; notifications_layer case "$2" "$3" >"$4" 2>&1; echo "$npass $nfail"' \
+        _ "$HERE" "$T/notifications.log" "$mode" "$T/notifications.out"
+}
+
+test_notifications_layer() {
+    local mode change what passes failures
+    for mode in apex stock; do
+        read -r passes failures <<<"$(notifications_run "$mode")"
+        if ((failures == 0 && passes > 0)); then
+            ok "notifications feature ($mode): its date menu passes all $passes assertions"
+        else
+            not_ok "notifications feature ($mode): its date menu passes (passed/failed $passes/$failures): $(grep -m3 '^FAIL' "$T/notifications.out" | paste -sd'|' -)"
+        fi
+    done
+    while IFS='|' read -r mode change what; do
+        read -r passes failures <<<"$(notifications_run "$mode" "$change")"
+        expect_eq "notifications feature ($mode): $what fails one assertion" 1 "$failures"
+    done <<'CHANGES'
+apex|.surfaces.notificationsLayer.many.groups[2].header = true|a group header in the flat list
+apex|.surfaces.notificationsLayer.many.groups[2].expanded = false|a stacked group in the flat list
+apex|.surfaces.notificationsLayer.many.groups[2].cards[1].iconSize = 16|a 16 px icon
+apex|.surfaces.notificationsLayer.one.groups[0].cards[0].column = false|the icon left in the header
+apex|.surfaces.notificationsLayer.none.clear.visible = false|Clear hidden when the list is empty
+apex|.surfaces.notificationsLayer.many.clear.right = false|Clear on the left
+apex|.surfaces.notificationsLayer.none.clear.reactive = true|Clear working on an empty list
+apex|.surfaces.notificationsLayer.many.dnd.first = false|the switch after Clear
+apex|.surfaces.notificationsLayer.dndOn.banners = true|a click that leaves banners on
+apex|.surfaces.notificationsLayer.cleared = .surfaces.notificationsLayer.one|Clear that leaves a card
+stock|.surfaces.notificationsLayer.many.dnd = {first: true, label: "Do Not Disturb", checked: false}|the switch with the layer off
+stock|.surfaces.notificationsLayer.many.clear.left = false|stock's Clear moved right
+CHANGES
+}
+
 test_derived_surfaces() {
     local variant change what passes failures open_gaps
     for variant in light dark; do
@@ -1576,6 +1626,7 @@ test_date_menu
 test_overview_style
 test_app_grid
 test_overview_layer
+test_notifications_layer
 test_derived_surfaces
 test_tile_preview
 test_spotlight_style

@@ -13,13 +13,15 @@ usage() {
     cat <<EOF
 usage: tests/shell/shoot.sh RPM_DIR
 
-The lock screen and the greeter of the gnome-shell RPMs in RPM_DIR (the lane's
+The lock screen, the greeter and the date menu of the gnome-shell RPMs in RPM_DIR (the lane's
 _build/gnome-shell/out), headless at scale 2, as root in a throwaway fedora:$APEX_FEDORA
 container (just lock-shots). gdm-mock.py stands in for GDM: it asks one question and
 fails every answer, so no case can unlock; lock-refused's GDM refuses even to ask, and
 lock-fingerprint's also runs gdm-fingerprint against fprintd-mock.py's reader. Each lock
 case locks, answers wrongly (lock-fingerprint fails a scan), blanks and wakes the screen; each greeter case (--mode=gdm) shows the user list, then the
-prompt. check.py asserts the cases' logs and the mock's. The users apex and guest come
+prompt; date-menu opens the date menu, sends the shell's notification daemon one notification,
+then four more, toggles Do Not Disturb twice and clears the list, and date-menu-disabled does
+the same with the layer's notifications off. check.py asserts the cases' logs and the mock's. The users apex and guest come
 from accounts-daemon; the wallpapers, the greeter's background and its logo are apex-desktop's ($APEX_DESKTOP_REV, or
 APEX_DESKTOP_SRC, a checkout). Captures and logs land in _build/gnome-shell/shots/.
 
@@ -207,6 +209,9 @@ shoot lock-question "$USER_NAME" user default 'Verification code:' || status=1
 shoot lock-disabled "$USER_NAME" user default 'Password:' "$lock_off" || status=1
 shoot lock-safe "$USER_NAME" user default 'Password:' -- APEX_SHELL_SAFE=1 || status=1
 shoot lock-refused "$USER_NAME" user default '' || status=1
+notifications_off="io.github.apex_linux.Apex.Desktop disabled-features ['notifications']"
+shoot date-menu "$USER_NAME" user default 'Password:' -- APEX_DATE_MENU=1 || status=1
+shoot date-menu-disabled "$USER_NAME" user default 'Password:' "$notifications_off" -- APEX_DATE_MENU=1 || status=1
 # authselect locks GDM's fingerprint key off; an image with a reader enables the feature.
 if ! authselect enable-feature with-fingerprint >"$out/authselect.log" 2>&1 || ! dconf update; then
     die "authselect cannot enable with-fingerprint; see ${out#"$APEX_ROOT/"}/authselect.log"

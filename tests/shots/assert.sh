@@ -31,6 +31,8 @@ readonly EMPTY_WORKSPACE_TEXT='No open windows'
 readonly LAUNCHER_COLUMNS=7
 readonly LAUNCHER_ROWS=4
 readonly LAUNCHER_ICON_SIZE=88
+readonly MESSAGE_ICON_SIZE=32
+readonly DND_LABEL='Do Not Disturb'
 readonly DIAMOND_SQUARE_PX=8
 readonly DIAMOND_STROKE_PX=2
 readonly DIAMOND_STROKE_AREA_PX=$((4 * DIAMOND_SQUARE_PX * DIAMOND_STROKE_PX))
@@ -476,6 +478,33 @@ quick_settings_layer() {
             "stock: Power Mode unlit at Balanced, no On/Off subtitles"
         expect "$label Quick Settings" "$scenes" "$q.switched.checked and ($q.back.checked | not)" \
             "stock: a click switches Power Mode to the last profile and back"
+    fi
+}
+
+# shellcheck disable=SC2016 # jq programs
+notifications_layer() {
+    local label=$1 log=$2 mode=$3 scenes n=.surfaces.notificationsLayer
+    scenes=$(report_of "$log" APEXG2-SCENES)
+    local cards='[.groups[].cards[]]' steps='[.none, .one, .many, .cleared]'
+    expect "$label date menu" "$scenes" "$n | (.one.groups | map(.cards | length)) == [1] and (.many.groups | length) == 4
+        and ([.many.groups[].cards[]] | length) == 5 and .cleared.groups == [] and .cleared.empty and .none.empty" \
+        "one notification, then five from four apps; Clear removes them all"
+    if [[ $mode == apex ]]; then
+        expect "$label date menu" "$scenes" "$n | $steps | all(.groups | all(.expanded and (.header | not)))" \
+            "the notifications feature lists flat: every group expanded, no group header"
+        expect "$label date menu" "$scenes" "$n | $steps | all($cards | all(.column and .iconSize == $MESSAGE_ICON_SIZE and .iconLeft))" \
+            "each card has its app's icon in a $MESSAGE_ICON_SIZE px column left of its text"
+        expect "$label date menu" "$scenes" "$n | $steps | all(.clear.visible and .clear.right and .clear.reactive == (.groups != []))" \
+            "Clear is always shown, on the footer's right, and works only with cards"
+        expect "$label date menu" "$scenes" "$n | $steps | all(.dnd.first and .dnd.label == \"$DND_LABEL\" and .dnd.checked == (.banners | not))" \
+            "the footer starts with the $DND_LABEL switch, showing show-banners inverted"
+        expect "$label date menu" "$scenes" "$n | (.dndOn | .dnd.checked and (.banners | not)) and (.dndOff | (.dnd.checked | not) and .banners)" \
+            "a click turns $DND_LABEL on (banners off), another turns it off"
+    else
+        expect "$label date menu" "$scenes" "$n | $steps | all(.dnd == null and (.groups | all((.cards | length) < 2 or (.expanded | not))) and ($cards | all(.column | not)))" \
+            "stock: a group of more than one card stacked, the icon in each card's header, no $DND_LABEL switch"
+        expect "$label date menu" "$scenes" "$n | ($steps | all(.clear.visible == (.groups != []))) and .many.clear.left" \
+            "stock: Clear only with cards, on the footer's left"
     fi
 }
 
@@ -1107,6 +1136,7 @@ direct_cases() {
     shell_surfaces default "$f" light
     quick_settings default "$f" light
     quick_settings_layer default "$f" apex
+    notifications_layer default "$f" apex
     window_switcher default "$f" light
     modal_dialog default "$f" light
     date_menu default "$f" light
@@ -1130,6 +1160,7 @@ direct_cases() {
     shell_surfaces default-scale1 "$f" light
     quick_settings default-scale1 "$f" light
     quick_settings_layer default-scale1 "$f" apex
+    notifications_layer default-scale1 "$f" apex
     window_switcher default-scale1 "$f" light
     modal_dialog default-scale1 "$f" light
     date_menu default-scale1 "$f" light
@@ -1156,6 +1187,7 @@ direct_cases() {
     shell_surfaces dark-style "$f" dark
     quick_settings dark-style "$f" dark
     quick_settings_layer dark-style "$f" apex
+    notifications_layer dark-style "$f" apex
     window_switcher dark-style "$f" dark
     modal_dialog dark-style "$f" dark
     date_menu dark-style "$f" dark
@@ -1179,6 +1211,7 @@ direct_cases() {
         stock_view "$c" "$run/$c.log" "${c#stock-}"
         no_dock "$c" "$run/$c.log"
         quick_settings_layer "$c" "$run/$c.log" stock
+        notifications_layer "$c" "$run/$c.log" stock
         no_apex_failure "$c" "$run/$c.log"
     done
     stock_thumbnails "$run"

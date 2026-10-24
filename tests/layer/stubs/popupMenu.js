@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
-// run.sh installs this as js/ui/popupMenu.js: the menu parts the dock's Trash uses.
+// run.sh installs this as js/ui/popupMenu.js: the menu parts the dock's Trash uses, and the
+// switch the notifications feature puts in the date menu's footer.
 
 import St from '../../../St.js';
 
@@ -27,4 +28,11 @@ export class PopupMenu {
 
 export class PopupMenuManager {
     addMenu() {}
+}
+
+export class Switch extends St.Widget {
+    constructor(state) {
+        super({style_class: 'toggle-switch', reactive: true});
+        this.state = state;
+    }
 }

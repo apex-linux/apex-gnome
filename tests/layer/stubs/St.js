@@ -88,6 +88,55 @@ class Widget {
         return [...this._children];
     }
 
+    get_first_child() {
+        return this._children[0] ?? null;
+    }
+
+    insert_child_at_index(child, index) {
+        this._children.splice(index, 0, child);
+        child._parent = this;
+    }
+
+    // St.Bin's one child.
+    get_child() {
+        return this._children[0] ?? null;
+    }
+
+    set_child(child) {
+        this._children.forEach(c => (c._parent = null));
+        this._children = [];
+        this.add_child(child);
+    }
+
+    set_height(height) {
+        this.height = height;
+    }
+
+    get_preferred_height() {
+        return [this.height, this.height];
+    }
+
+    // GObject's one-way property binding, as calendar.js binds Clear's visibility.
+    bind_property(source, target, property, flags) {
+        const invert = (flags & 4) !== 0;
+        const sync = () => (target[property] = invert ? !this[source] : this[source]);
+        sync();
+        const watched = this;
+        const binding = {
+            bound: true,
+            unbind() {
+                this.bound = false;
+                watched._bindings = watched._bindings.filter(b => b.binding !== binding);
+            },
+        };
+        (this._bindings ??= []).push({binding, source, sync});
+        return binding;
+    }
+
+    notifyProperty(name) {
+        (this._bindings ?? []).filter(b => b.source === name).forEach(b => b.sync());
+    }
+
     get_parent() {
         return this._parent ?? null;
     }

@@ -85,6 +85,9 @@ $_calendar_day_width: ($apex_date_menu_column_width - 2 * $apex_calendar_padding
       }
     }
 
+    // The notifications feature's row: the app's icon in a column beside the card (board 34).
+    .apex-message-row { spacing: $apex_banner_gap; }
+
     .message-title { font-size: apex-text-size($apex_font_size); font-weight: $apex_font_heading_weight; }
     .message-body { color: $apex_fg_dim; font-size: apex-text-size($apex_font_message_body_size); }
   }
@@ -105,6 +108,18 @@ $_calendar_day_width: ($apex_date_menu_column_width - 2 * $apex_calendar_padding
     font-weight: $apex_font_label_weight;
 
     &:hover, &:focus { background-color: $apex_button_hover; }
+    &:insensitive { opacity: $apex_clear_button_disabled_opacity; }
+  }
+
+  .apex-dnd-switch {
+    min-height: $apex_clear_button_height;
+    padding: 0 $apex_date_menu_footer_padding;
+    border-radius: $apex_clear_button_height / 2;
+    color: $apex_fg;
+    font-size: apex-text-size($apex_font_banner_button_size);
+    font-weight: $apex_font_label_weight;
+
+    .apex-dnd-switch-box { spacing: $apex_dnd_switch_gap; }
   }
 }
 

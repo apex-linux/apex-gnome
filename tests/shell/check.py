@@ -6,7 +6,8 @@ Asserts each shoot.sh case from its log's APEXLOCK lines and gdm-mock.py's log: 
 boards 20 and 12 show, that no case unlocks, that a wrong answer leaves the screen
 locked, that a GDM refusing to reauthenticate leaves it locked, that the fingerprint
 conversation stops while the screen is blank, that blanking cancels the conversation and waking starts a new one, that
-stock and safe mode keep upstream's lock, and that the greeter runs no Apex JS.
+stock and safe mode keep upstream's lock, that the greeter runs no Apex JS, and board 34's
+date menu: a flat list of cards with a 32 px icon column, Clear on the right, Do Not Disturb.
 Prints one line per assertion and exits 1 when one fails.
 """
 
@@ -276,6 +277,84 @@ def check_greeter_style(case, style, t):
           json.dumps(buttons))
 
 
+DND_LABEL = "Do Not Disturb"
+ICON_SIZE = 32
+MESSAGE_GAP = 8  # $apex_message_gap
+FOOTER_INSET = 8
+DATE_MENU_STEPS = ("none", "one", "many", "cleared")
+DATE_MENU_APPS = ["Settings", "Calendar", "Terminal", "Files"]
+
+
+def check_footer(case, step, menu, apex):
+    clear, footer, dnd = menu["clear"], menu["footer"], menu["dnd"]
+    empty = not menu["groups"]
+    check(f"{case}: {step}: the placeholder {'shows' if empty else 'hides'}", menu["empty"] is empty)
+    if apex:
+        check(f"{case}: {step}: Clear is shown, and works only with cards",
+              clear["visible"] is True and clear["reactive"] is (not empty), json.dumps(clear))
+        check(f"{case}: {step}: Clear sits at the footer's right",
+              0 <= footer["x"] + footer["width"] - clear["x"] - clear["width"] <= FOOTER_INSET,
+              json.dumps({"clear": clear, "footer": footer}))
+        check(f"{case}: {step}: the Do Not Disturb switch comes first, labelled",
+              dnd is not None and "apex-dnd-switch" in (footer["children"][0] or "") and dnd["label"] == DND_LABEL,
+              json.dumps(dnd))
+        check(f"{case}: {step}: and shows show-banners inverted", dnd is not None and dnd["checked"] is (not menu["banners"]))
+    else:
+        check(f"{case}: {step}: upstream's Clear, shown only with cards", clear["visible"] is (not empty), json.dumps(clear))
+        check(f"{case}: {step}: no Do Not Disturb switch", dnd is None)
+        if not empty:
+            check(f"{case}: {step}: Clear sits at the footer's left", 0 <= clear["x"] - footer["x"] <= FOOTER_INSET,
+                  json.dumps({"clear": clear, "footer": footer}))
+
+
+def check_cards(case, step, menu, apex):
+    cards = [c for g in menu["groups"] for c in g["cards"]]
+    if apex:
+        check(f"{case}: {step}: groups are flat: expanded, no header",
+              all(g["expanded"] and not g["header"] for g in menu["groups"]), json.dumps(menu["groups"]))
+        check(f"{case}: {step}: each card has a {ICON_SIZE} px icon column left of its text",
+              all(c["column"] and c["iconSize"] == ICON_SIZE and c["icon"]["x"] + c["icon"]["width"] <= c["text"]["x"]
+                  and c["icon"]["y"] <= c["text"]["y"] + 1 for c in cards), json.dumps(cards))
+        boxes = sorted((c["card"] for c in cards), key=lambda b: b["y"])
+        gaps = [b["y"] - a["y"] - a["height"] for a, b in zip(boxes, boxes[1:])]
+        check(f"{case}: {step}: the cards follow one another, {MESSAGE_GAP} px apart",
+              all(abs(g - MESSAGE_GAP) <= 1 for g in gaps), str(gaps))
+    else:
+        check(f"{case}: {step}: upstream stacks a group of more than one card",
+              all(not g["expanded"] for g in menu["groups"] if len(g["cards"]) > 1), json.dumps(menu["groups"]))
+        check(f"{case}: {step}: upstream's cards, the icon in the header",
+              all(not c["column"] for c in cards), json.dumps(cards))
+
+
+def check_date_menu(shots, case, apex):
+    log = read(shots, f"{case}.log")
+    f = facts(log)
+    steps = DATE_MENU_STEPS + (("dnd-clicked", "dnd-clicked-again") if apex else ())
+    for step in steps:
+        check(f"{case}: {step} is reported", step in f)
+    check(f"{case}: no JS error", "JS ERROR" not in until(log, "cleared") and "APEXLOCK-ERROR" not in log)
+    check(f"{case}: the layer loaded", LOAD_WITNESS in log)
+    if not all(step in f for step in steps):
+        return
+    for step in DATE_MENU_STEPS:
+        check_footer(case, step, f[step], apex)
+        check_cards(case, step, f[step], apex)
+    apps = [g["app"] for g in f["many"]["groups"]]
+    check(f"{case}: one: one card", [len(g["cards"]) for g in f["one"]["groups"]] == [1], json.dumps(f["one"]["groups"]))
+    check(f"{case}: many: five cards from four apps", sorted(apps) == sorted(DATE_MENU_APPS)
+          and sum(len(g["cards"]) for g in f["many"]["groups"]) == 5, str(apps))
+    check(f"{case}: Clear removes every card", f["cleared"]["groups"] == [], json.dumps(f["cleared"]["groups"]))
+    if apex:
+        # shoot.sh's capture settings turn banners off: Do Not Disturb starts on.
+        before, once, twice = f["many"], f["dnd-clicked"], f["dnd-clicked-again"]
+        check(f"{case}: a click turns Do Not Disturb {'off' if before['dnd']['checked'] else 'on'}, and banners with it",
+              once["dnd"]["checked"] is (not before["dnd"]["checked"]) and once["banners"] is (not before["banners"]),
+              json.dumps(once["dnd"]))
+        check(f"{case}: another turns it back", twice["dnd"]["checked"] is before["dnd"]["checked"]
+              and twice["banners"] is before["banners"], json.dumps(twice["dnd"]))
+        check_footer(case, "dnd-clicked", once, apex)
+
+
 def main():
     if len(sys.argv) != 2:
         print(__doc__, file=sys.stderr)
@@ -287,6 +366,8 @@ def main():
     check_fingerprint(shots, "lock-fingerprint")
     for case in GREETER_CASES:
         check_greeter(shots, case)
+    check_date_menu(shots, "date-menu", True)
+    check_date_menu(shots, "date-menu-disabled", False)
     return 1 if failed else 0
 
 

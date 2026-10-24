@@ -416,6 +416,132 @@ async function exerciseQuickSettings() {
     quickSettingsState('qs.on', quickSettings);
 }
 
+// calendar.js's message list and messageList.js's notification groups, as far as the
+// notifications feature reaches into them, built as upstream builds them.
+function newMessageList(St) {
+    const placeholder = new St.Widget({name: 'placeholder'});
+    const clear = new St.Button({name: 'clear', x_expand: true, x_align: 1});
+    const controls = new St.BoxLayout({name: 'controls'});
+    controls.add_child(clear);
+    const list = new St.Widget({name: 'message-list'});
+    list.add_child(placeholder);
+    list.add_child(controls);
+    Object.assign(list, {_placeholder: placeholder, _clearButton: clear});
+    list._clearButtonVisibility = placeholder.bind_property('visible', clear, 'visible', 4);
+    return list;
+}
+
+function newMessage(St, title) {
+    const header = new St.BoxLayout({name: 'header'});
+    header.add_child(new St.Icon({name: 'source-icon', icon_size: -1, y_align: 2}));
+    header.add_child(new St.BoxLayout({name: 'header-content'}));
+    header.add_child(new St.Button({name: 'close'}));
+    const card = new St.BoxLayout({name: 'card'});
+    card.add_child(header);
+    card.add_child(new St.BoxLayout({name: 'message-box'}));
+    const message = new St.Button({name: title, height: 60});
+    message.set_child(card);
+    message._header = header;
+    return message;
+}
+
+function newGroup(St, titles) {
+    const group = new St.Widget({name: 'group'});
+    group._cover = new St.Widget({name: 'cover', height: 60});
+    group._headerBox = new St.BoxLayout({name: 'group-header', visible: false, height: 30});
+    group._notificationToMessage = new Map();
+    group._expanded = false;
+    group.expand = () => {
+        group._expanded = true;
+        group._headerBox.show();
+        group._cover.hide();
+    };
+    group.collapse = () => {
+        group._expanded = false;
+        group._cover.show();
+        group._headerBox.hide();
+    };
+    group.addMessage = title => {
+        const message = newMessage(St, title);
+        group._notificationToMessage.set(title, message);
+        group.insert_child_at_index(new St.Bin({child: message, height: 60}), 0);
+        group.emit('notification-added');
+    };
+    group.add_child(group._cover);
+    group.add_child(group._headerBox);
+    titles.forEach(group.addMessage);
+    return group;
+}
+
+function messageState(message) {
+    const row = message.get_child();
+    const icon = row.get_first_child();
+    return row.name === 'card' ? `card icon-in-header=${message._header.get_first_child().name}`
+        : `${row.styleClasses.join(',')} ${icon.name}@${icon.icon_size} then ${row.get_children()[1].name}`;
+}
+
+function notificationsState(label, list, group) {
+    const controls = list._clearButton.get_parent();
+    const dnd = controls.get_children().find(c => c.has_style_class_name('apex-dnd-switch'));
+    const footer = controls.get_children().map(c => c.name ?? c.styleClasses.join(',')).join(',');
+    fact(`${label}.footer`,
+        `${footer} clear-visible=${list._clearButton.visible} clear-align=${list._clearButton.x_align}`);
+    fact(`${label}.dnd`, dnd ? `checked=${dnd.checked} switch=${dnd.child.get_first_child().state} ` +
+        `label=${dnd.child.get_children()[1].text}` : 'none');
+    fact(`${label}.group`, `expanded=${group._expanded} header=${group._headerBox.visible} cover=${group._cover.visible} ` +
+        `height=${Hooks.value('message-group-expanded-height', [999, 999], group, 400).join('/')}`);
+    fact(`${label}.messages`, [...group._notificationToMessage.values()].map(messageState).join('; '));
+}
+
+async function exerciseNotifications() {
+    if (GLib.getenv('PROBE_NOTIFICATIONS') !== '1')
+        return;
+    const {default: St} = await import(`file://${GLib.path_get_dirname(shellDir)}/St.js`);
+    const banners = new Gio.Settings({schema_id: 'org.gnome.desktop.notifications'});
+    banners.set_boolean('show-banners', true);
+    const list = newMessageList(St);
+    Hooks.run('message-list', list);
+    const group = newGroup(St, ['Update ready', 'Command finished']);
+    Hooks.run('notification-group', group);
+    notificationsState('notifications', list, group);
+    group.addMessage('Copied 4 items');
+    fact('notifications.added', messageState(group._notificationToMessage.get('Copied 4 items')));
+
+    const controls = list._clearButton.get_parent();
+    const dnd = controls.get_children().find(c => c.has_style_class_name('apex-dnd-switch'));
+    if (dnd) {
+        banners.set_boolean('show-banners', false);
+        await spin(50);
+        fact('notifications.dnd-from-settings', `checked=${dnd.checked} switch=${dnd.child.get_first_child().state}`);
+        dnd.checked = false;
+        dnd.emit('clicked');
+        await spin(50);
+        fact('notifications.dnd-click', `show-banners=${banners.get_boolean('show-banners')} checked=${dnd.checked}`);
+    }
+    list._placeholder.visible = false;
+    list._placeholder.notifyProperty('visible');
+    list._placeholder.visible = true;
+    list._placeholder.notifyProperty('visible');
+    fact('notifications.empty', `clear-visible=${list._clearButton.visible}`);
+
+    settings.set_boolean('layer-enabled', false);
+    await spin(200);
+    notificationsState('notifications.off', list, group);
+    list._placeholder.visible = false;
+    list._placeholder.notifyProperty('visible');
+    fact('notifications.off.not-empty', `clear-visible=${list._clearButton.visible}`);
+    list._placeholder.visible = true;
+    list._placeholder.notifyProperty('visible');
+    settings.set_boolean('layer-enabled', true);
+    await spin(200);
+    notificationsState('notifications.on', list, group);
+    const later = newGroup(St, ['Screenshot captured']);
+    Hooks.run('notification-group', later);
+    fact('notifications.later-group', `expanded=${later._expanded} ` +
+        `${messageState(later._notificationToMessage.get('Screenshot captured'))}`);
+    banners.set_boolean('show-banners', true);
+}
+
 async function exerciseTopBar() {
     if (GLib.getenv('PROBE_TOP_BAR') !== '1')
         return;
@@ -1059,6 +1185,7 @@ if (layer && GLib.getenv('PROBE_ENABLE') === '1') {
     await exerciseLock();
     await exerciseMotion();
     await exerciseQuickSettings();
+    await exerciseNotifications();
     await exerciseSpotlight();
     await exerciseTopBar();
     await exerciseSolidBar();

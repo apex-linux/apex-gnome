@@ -55,6 +55,7 @@ const SWITCHER_APPS = ['Text Editor', 'Terminal', 'Web', 'Files', 'Settings'];
 const SWITCHER_ICON_SIZE = 96;
 
 Gio._promisify(Shell.Screenshot.prototype, 'screenshot');
+Gio._promisify(Gio.DBusConnection.prototype, 'call');
 
 function hex(color) {
     return `#${[color.red, color.green, color.blue, color.alpha]
@@ -1139,6 +1140,74 @@ async function calendarMenu(unit) {
     }
 }
 
+// Board 34's list in the date menu, through the fdo Notify a client calls: none, one, then
+// five from four apps; Do Not Disturb clicked on and off; Clear.
+const DATE_MENU_NOTIFICATIONS = [
+    ['Settings', 'Update ready'], ['Calendar', 'Design review'], ['Terminal', 'Command finished'],
+    ['Terminal', 'Command failed'], ['Files', 'Copied 4 items'],
+];
+
+function notificationsState(list, unit) {
+    const controls = list._clearButton.get_parent();
+    const footer = boxOf(controls, unit);
+    const clear = {...boxOf(list._clearButton, unit), visible: list._clearButton.visible, reactive: list._clearButton.reactive};
+    const dnd = controls.get_children().find(c => c.has_style_class_name('apex-dnd-switch'));
+    const groups = list._messageView.get_children().map(item => item.child ?? item).filter(g => g?._notificationToMessage);
+    const card = message => {
+        const row = message.get_child();
+        const column = row.has_style_class_name('apex-message-row');
+        const icon = column ? row.get_first_child() : message._header.get_first_child();
+        return {column, iconSize: icon.icon_size, iconLeft: boxOf(icon, unit).x + boxOf(icon, unit).width <= boxOf(message.titleLabel, unit).x};
+    };
+    return {
+        empty: list._placeholder.visible,
+        clear: {...clear, right: Math.abs(clear.x + clear.width - footer.x - footer.width) <= 1, left: Math.abs(clear.x - footer.x) <= 1},
+        dnd: dnd ? {first: controls.get_first_child() === dnd, label: dnd.accessible_name, checked: dnd.checked} : null,
+        banners: new Gio.Settings({schema_id: 'org.gnome.desktop.notifications'}).get_boolean('show-banners'),
+        groups: groups.map(g => ({expanded: g.expanded, header: g._headerBox.visible, cards: [...g._notificationToMessage.values()].map(card)})),
+    };
+}
+
+async function notificationsLayer(unit) {
+    dropStartupNotifications();
+    const notify = ([app, title]) => Gio.DBus.session.call('org.freedesktop.Notifications', '/org/freedesktop/Notifications',
+        'org.freedesktop.Notifications', 'Notify', new GLib.Variant('(susssasa{sv}i)', [app, 0, '', title, '', [], {}, -1]),
+        null, Gio.DBusCallFlags.NONE, -1, null);
+    const list = Main.panel.statusArea.dateMenu._messageList;
+    const {menu} = Main.panel.statusArea.dateMenu;
+    menu.open(BoxPointer.PopupAnimation.NONE);
+    try {
+        await settle();
+        const state = {none: notificationsState(list, unit)};
+        await notify(DATE_MENU_NOTIFICATIONS[0]);
+        await settle();
+        state.one = notificationsState(list, unit);
+        for (const n of DATE_MENU_NOTIFICATIONS.slice(1))
+            await notify(n); // eslint-disable-line no-await-in-loop
+        await settle();
+        state.many = notificationsState(list, unit);
+        const dnd = list._clearButton.get_parent().get_first_child();
+        if (dnd.has_style_class_name('apex-dnd-switch')) {
+            for (const step of ['dndOn', 'dndOff']) {
+                // St.Button's click in toggle mode: checked flips, then clicked.
+                dnd.checked = !dnd.checked;
+                dnd.emit('clicked', Clutter.BUTTON_PRIMARY);
+                await settle(); // eslint-disable-line no-await-in-loop
+                state[step] = notificationsState(list, unit);
+            }
+        }
+        list._clearButton.emit('clicked', Clutter.BUTTON_PRIMARY);
+        await settle();
+        state.cleared = notificationsState(list, unit);
+        return state;
+    } finally {
+        menu.close(BoxPointer.PopupAnimation.NONE);
+        new Gio.Settings({schema_id: 'org.gnome.desktop.notifications'}).reset('show-banners');
+        dropStartupNotifications();
+        await settle();
+    }
+}
+
 // Board 38's rows, from providers of the probe's own: G2's image has no files or settings
 // to find, so a real query would draw nothing to measure.
 const CALCULATOR = 'org.gnome.Calculator.desktop';
@@ -1587,6 +1656,7 @@ async function scenes() {
     surfaces.switcher = await windowSwitcher(unit);
     surfaces.dialog = await modalDialog(unit);
     surfaces.dateMenu = await calendarMenu(unit);
+    surfaces.notificationsLayer = await notificationsLayer(unit);
     surfaces.derived = derivedSurfaces(unit);
     surfaces.tilePreview = await tilePreview(unit);
     surfaces.spotlight = await spotlightStyle(unit);

@@ -67,7 +67,9 @@ for gir in "$HERE"/fixtures/*.gir; do
 done
 cp "$SCHEMA_DIR"/*.gschema.xml "$T/schemas/"
 readonly SEARCH_PROVIDERS_SCHEMA=$HERE/fixtures/org.gnome.desktop.search-providers.gschema.xml
+readonly NOTIFICATIONS_SCHEMA=$HERE/fixtures/org.gnome.desktop.notifications.gschema.xml
 cp "$SEARCH_PROVIDERS_SCHEMA" "$T/schemas/"
+cp "$NOTIFICATIONS_SCHEMA" "$T/schemas/"
 glib-compile-schemas --strict "$T/schemas"
 awk '/<child name="keybindings"/ { next }
     /<schema id="io\.github\.apex_linux\.Apex\.Desktop\.Keybindings"/ { skip = 1 }
@@ -75,25 +77,30 @@ awk '/<child name="keybindings"/ { next }
     skip && /<\/schema>/ { skip = 0 }' "$SCHEMA_DIR/io.github.apex_linux.Apex.Desktop.gschema.xml" \
     >"$T/nochild/io.github.apex_linux.Apex.Desktop.gschema.xml"
 cp "$SEARCH_PROVIDERS_SCHEMA" "$T/nochild/"
+cp "$NOTIFICATIONS_SCHEMA" "$T/nochild/"
 glib-compile-schemas --strict "$T/nochild"
 mkdir -p "$T/nokey"
 awk '/<key name="toggle-spotlight"/ { skip = 1 } !skip { print } skip && /<\/key>/ { skip = 0 }' \
     "$SCHEMA_DIR/io.github.apex_linux.Apex.Desktop.gschema.xml" >"$T/nokey/io.github.apex_linux.Apex.Desktop.gschema.xml"
 cp "$SEARCH_PROVIDERS_SCHEMA" "$T/nokey/"
+cp "$NOTIFICATIONS_SCHEMA" "$T/nokey/"
 glib-compile-schemas --strict "$T/nokey"
 mkdir -p "$T/nodock"
 awk '/<key name="dock-show-trash"/ { skip = 1 } !skip { print } skip && /<\/key>/ { skip = 0 }' \
     "$SCHEMA_DIR/io.github.apex_linux.Apex.Desktop.gschema.xml" >"$T/nodock/io.github.apex_linux.Apex.Desktop.gschema.xml"
 cp "$SEARCH_PROVIDERS_SCHEMA" "$T/nodock/"
+cp "$NOTIFICATIONS_SCHEMA" "$T/nodock/"
 glib-compile-schemas --strict "$T/nodock"
 mkdir -p "$T/nohint"
 awk '/<key name="search-hint-shown"/ { skip = 1 } !skip { print } skip && /<\/key>/ { skip = 0 }' \
     "$SCHEMA_DIR/io.github.apex_linux.Apex.Desktop.gschema.xml" >"$T/nohint/io.github.apex_linux.Apex.Desktop.gschema.xml"
 cp "$SEARCH_PROVIDERS_SCHEMA" "$T/nohint/"
+cp "$NOTIFICATIONS_SCHEMA" "$T/nohint/"
 glib-compile-schemas --strict "$T/nohint"
 mkdir -p "$T/noreduce"
 awk '/<key name="reduce-transparency"/ { skip = 1 } !skip { print } skip && /<\/key>/ { skip = 0 }' \
     "$SCHEMA_DIR/io.github.apex_linux.Apex.Desktop.gschema.xml" >"$T/noreduce/io.github.apex_linux.Apex.Desktop.gschema.xml"
+cp "$NOTIFICATIONS_SCHEMA" "$T/noreduce/"
 glib-compile-schemas --strict "$T/noreduce"
 
 readonly CMDLINE_PLAIN='BOOT_IMAGE=(hd0,gpt2)/boot/ostree/apex/vmlinuz root=UUID=0 rw rhgb quiet'
@@ -360,6 +367,47 @@ has "disabled-features=['quick-settings']: skips the feature" 'Apex: feature qui
 fact "disabled-features=['quick-settings']: stock order" \
     'qs\.order=Wi-Fi,VPN,Bluetooth,Power Mode,Night Light,Dark Style,Do Not Disturb,Airplane Mode,Auto Rotate'
 fact "disabled-features=['quick-settings']: Power Mode unlit" 'qs\.power=checked=false classes=none'
+
+probe notifications "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_NOTIFICATIONS=1
+has "notifications: the feature enables" 'Apex: feature notifications enabled'
+fact "notifications: Do Not Disturb first in the footer, then Clear, shown and on the right (board 34)" \
+    'notifications\.footer=apex-dnd-switch,clear clear-visible=true clear-align=3'
+fact "notifications: the switch reads show-banners: off while banners show" \
+    'notifications\.dnd=checked=false switch=false label=Do Not Disturb'
+fact "notifications: a flat group: expanded, no group header or cover, no extra margin" \
+    'notifications\.group=expanded=true header=false cover=false height=120/120'
+fact "notifications: each card's app icon in a 32 px column beside it" \
+    'notifications\.messages=apex-message-row source-icon@32 then card; apex-message-row source-icon@32 then card'
+fact "notifications: a notification added later gets the column too" \
+    'notifications\.added=apex-message-row source-icon@32 then card'
+fact "notifications: the switch follows show-banners" 'notifications\.dnd-from-settings=checked=true switch=true'
+fact "notifications: a click on the switch writes show-banners" 'notifications\.dnd-click=show-banners=true checked=false'
+fact "notifications: Clear stays shown with the list empty" 'notifications\.empty=clear-visible=true'
+fact "notifications: layer off: stock's footer, Clear at the start and bound to the placeholder" \
+    'notifications\.off\.footer=clear clear-visible=false clear-align=1'
+fact "notifications: layer off: no switch" 'notifications\.off\.dnd=none'
+fact "notifications: layer off: the group stacks again, its height stock's" \
+    'notifications\.off\.group=expanded=false header=false cover=true height=999/999'
+fact "notifications: layer off: every icon back in its card's header" \
+    'notifications\.off\.messages=card icon-in-header=source-icon; card icon-in-header=source-icon; card icon-in-header=source-icon'
+fact "notifications: layer off: Clear shows again only with notifications" 'notifications\.off\.not-empty=clear-visible=true'
+fact "notifications: layer back on: board 34's footer again" \
+    'notifications\.on\.footer=apex-dnd-switch,clear clear-visible=true clear-align=3'
+fact "notifications: layer back on: the group flat again" \
+    'notifications\.on\.group=expanded=true header=false cover=false height=180/180'
+fact "notifications: layer back on: every card in the column again" \
+    'notifications\.on\.messages=apex-message-row source-icon@32 then card; apex-message-row source-icon@32 then card; apex-message-row source-icon@32 then card'
+fact "notifications: a group made while enabled is flat at once" \
+    'notifications\.later-group=expanded=true apex-message-row source-icon@32 then card'
+lacks "notifications: nothing fails or disables uncleanly" 'off for this session|did not disable cleanly|JS ERROR|Gjs-WARNING'
+
+probe notifications-disabled "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_NOTIFICATIONS=1 PROBE_DISABLED=notifications
+has "disabled-features=['notifications']: skips the feature" 'Apex: feature notifications is in disabled-features'
+fact "disabled-features=['notifications']: stock's footer" 'notifications\.footer=clear clear-visible=false clear-align=1'
+fact "disabled-features=['notifications']: the group stacks" \
+    'notifications\.group=expanded=false header=false cover=true height=999/999'
+fact "disabled-features=['notifications']: icons stay in the headers" \
+    'notifications\.messages=card icon-in-header=source-icon; card icon-in-header=source-icon'
 
 probe spotlight-disabled "$CMDLINE_PLAIN" PROBE_DISABLED=spotlight PROBE_ENABLE=1 PROBE_PRESS=1 PROBE_OVERVIEW_SEARCH=1
 has "disabled-features=['spotlight']: skips the feature" 'Apex: feature spotlight is in disabled-features'
