@@ -1267,12 +1267,19 @@ glass_frames() {
         "stock's blur in such a frame samples pixels the frame did not repaint and misses those tolerances, so the case can see it" APEXG2-GLASS
 }
 
+# shellcheck disable=SC2016 # jq programs
 shadows_under_glass() {
-    local label=$1 log=$2
-    expect_report "$label" "$log" '.shadows | .covered and .sameSize and .interiorDiffering == 0' \
-        "the shadows feature keeps its layers out from under glass: Quick Settings over the pattern draws its interior pixel for pixel as with shadows in disabled-features" APEXG2-GLASS
-    expect_report "$label" "$log" "(.shadows.edge.max | max) <= $GLASS_EDGE_MAX" \
-        "and its 2 px rim within $GLASS_EDGE_MAX/255" APEXG2-GLASS
+    local label=$1 log=$2 all='[.shadows.light, .shadows.dark | .quickSettings, .popupMenu, .dialog]'
+    expect_report "$label" "$log" "$all | length == 6 and all(.covered and .sameSize and .interiorDiffering == 0)" \
+        "the shadow layers sit above their surfaces, cut out inside them: Quick Settings (glass, over the pattern), a popup menu and a dialog, light and dark, draw their interiors pixel for pixel as with shadows in disabled-features" APEXG2-GLASS
+    expect_report "$label" "$log" "$all | all((.edge.max | max) <= $GLASS_EDGE_MAX)" \
+        "and the cut-out's ramp keeps their 2 px rims within $GLASS_EDGE_MAX/255" APEXG2-GLASS
+    expect_report "$label" "$log" "$all | all(.picked)" \
+        "a click just inside a surface's edge reaches the surface, not its layer" APEXG2-GLASS
+    expect_report "$label" "$log" "[.shadows.light, .shadows.dark | .quickSettings, .popupMenu | .arrowless] | length == 4 and all" \
+        "the menus' BoxPointers draw nothing of their own outside the box: no arrow colour or border for a layer to cover" APEXG2-GLASS
+    expect_report "$label" "$log" '[.shadows.light, .shadows.dark | .quickSettings.corners] == ["shadow-corners-light.png", "shadow-corners-dark.png"]' \
+        "Quick Settings' corners captured at 400 %, light and dark, for review (captures/shadow-corners-*.png)" APEXG2-GLASS
 }
 
 fedora_glass() {

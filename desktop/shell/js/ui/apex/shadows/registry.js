@@ -37,7 +37,8 @@ function _css(shadow, radius, scale) {
         `rgba(${red}, ${green}, ${blue}, ${alpha / 255}); border-radius: ${px(radius)};`;
 }
 
-// The layers go into the container (uiGroup unless named), just below the actor's ancestor there.
+// The layers go into the container (uiGroup unless named), just above the actor's ancestor there:
+// painted after the surface, they are never in its glass's backdrop, as CSS keeps a box-shadow out.
 function _host(actor, opts) {
     if (opts.box)
         return {parent: opts.box.get_parent(), below: opts.box};
@@ -99,7 +100,7 @@ function _build(entry) {
             y_align: Clutter.ActorAlign.START,
         });
         Cutout.addCutout(layer, radius);
-        entry.host.parent.insert_child_below(layer, entry.host.below);
+        entry.host.parent.insert_child_above(layer, entry.host.below);
         entry.layers.push(layer);
     }
     _sync(entry);

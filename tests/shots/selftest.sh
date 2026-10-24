@@ -1511,18 +1511,23 @@ REPORTS
 }
 
 test_shadows_under_glass() {
-    local good='{"patched": true, "shadows": {"covered": true, "sameSize": true, "interiorDiffering": 0,
-        "edge": {"max": [9, 7, 8], "mean": [2, 1, 2]}}}' passes failures what change
+    local surface='{"covered": true, "sameSize": true, "interiorDiffering": 0, "edge": {"max": [9, 7, 8]}, "picked": true}'
+    local good passes failures what change
+    good=$(jq -nc --argjson s "$surface" '{patched: true, shadows: ({quickSettings: ($s + {arrowless: true}), popupMenu: ($s + {arrowless: true}),
+        dialog: ($s + {arrowless: null})} as $v | {light: ($v | .quickSettings.corners = "shadow-corners-light.png"),
+        dark: ($v | .quickSettings.corners = "shadow-corners-dark.png")})}')
     while IFS='|' read -r failures what change; do
         jq -c "$change" <<<"$good" | sed 's/^/APEXG2-GLASS /' >"$T/glass.log"
         read -r passes _ <<<"$(assertion_counts shadows_under_glass glass "$T/glass.log")"
-        expect_eq "shadows under glass: $what fails $failures of 2" "$failures" $((2 - passes))
+        expect_eq "shadows over surfaces: $what fails $failures of 5" "$failures" $((5 - passes))
     done <<'CHANGES'
-0|the same interior, a rim within the tolerance|.
-1|one interior pixel the layer darkened|.shadows.interiorDiffering = 1
-1|a rim 12.5/255 off|.shadows.edge.max[1] = 12.5
-1|a frame that missed the box|.shadows.covered = false
-2|a probe that never read the frames|.shadows = null
+0|exact interiors, rims within the tolerance, clicks through, no arrows, corners captured|.
+1|one dark dialog pixel the layer darkened|.shadows.dark.dialog.interiorDiffering = 1
+1|a popup menu rim 12.5/255 off|.shadows.light.popupMenu.edge.max[1] = 12.5
+1|a layer that takes the click|.shadows.light.quickSettings.picked = false
+1|a BoxPointer that draws an arrow|.shadows.dark.popupMenu.arrowless = false
+1|no dark corner crops|.shadows.dark.quickSettings.corners = null
+5|a probe that never read the frames|.shadows = null
 CHANGES
 }
 

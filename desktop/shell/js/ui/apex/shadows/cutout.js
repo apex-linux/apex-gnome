@@ -5,28 +5,25 @@ import Cogl from 'gi://Cogl';
 import GObject from 'gi://GObject';
 
 export const EFFECT_NAME = 'apex-shadow-cutout';
-// Device pixels: the blur rounds its box outward by one, the layer's rounded position one more.
-const MARGIN = 2;
 
 const DECLARATIONS = `
 uniform vec4 apex_rect;
 uniform vec2 apex_size;
 uniform float apex_radius;
-uniform float apex_margin;
 `;
 
-// A rounded box's signed distance: nothing inside it or within the margin, then a one-pixel ramp.
+// A rounded box's signed distance: nothing inside it, a one-device-pixel ramp outside.
 const CODE = `
 vec2 apex_p = cogl_tex_coord_in[0].xy * apex_size;
 vec2 apex_lo = apex_rect.xy * apex_size;
 vec2 apex_hi = apex_rect.zw * apex_size;
 vec2 apex_q = abs(apex_p - (apex_lo + apex_hi) * 0.5) - ((apex_hi - apex_lo) * 0.5 - apex_radius);
 float apex_d = length(max(apex_q, 0.0)) + min(max(apex_q.x, apex_q.y), 0.0) - apex_radius;
-cogl_color_out *= clamp(apex_d - apex_margin, 0.0, 1.0);
+cogl_color_out *= clamp(apex_d, 0.0, 1.0);
 `;
 
-// The layer keeps nothing inside its surface's rounded box: glass over it samples what
-// it samples without shadows. The offscreen covers the layer's paint box, shadow included.
+// The layer, above its surface, keeps nothing inside the surface's rounded box. The offscreen
+// covers the layer's paint box, shadow included.
 const CutoutEffect = GObject.registerClass(
 class CutoutEffect extends Clutter.ShaderEffect {
     constructor(radius) {
@@ -64,7 +61,6 @@ class CutoutEffect extends Clutter.ShaderEffect {
         this.set_uniform_float('apex_rect', 4, rect);
         this.set_uniform_float('apex_size', 2, [width, height]);
         this.set_uniform_float('apex_radius', 1, [radius]);
-        this.set_uniform_float('apex_margin', 1, [MARGIN]);
     }
 });
 

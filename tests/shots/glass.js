@@ -3,6 +3,7 @@
 // G2's glass cases (G2_GLASS=1): with patch 0003, frames as the shell drew them (frame.c);
 // in every shell, a capture of the stock unlock blur. tests/shots/README.md, "Glass".
 
+import Clutter from 'gi://Clutter';
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import Mtk from 'gi://Mtk';
@@ -12,9 +13,12 @@ import St from 'gi://St';
 import * as BoxPointer from 'resource:///org/gnome/shell/ui/boxpointer.js';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import * as MessageTray from 'resource:///org/gnome/shell/ui/messageTray.js';
+import * as ModalDialog from 'resource:///org/gnome/shell/ui/modalDialog.js';
+import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 import * as Scripting from 'resource:///org/gnome/shell/ui/scripting.js';
 
 import * as BlurRef from './blur-ref.js';
+import * as Png from './png.js';
 
 Gio._promisify(Shell.Screenshot.prototype, 'screenshot_area');
 
@@ -40,7 +44,8 @@ const GLASS_EFFECT = 'apex-glass';
 const STOCK_TRIES = 5;
 const SOLID_STYLE_CLASS = 'apex-solid';
 const SHADOW_RIM = 2;
-const SHADOW_REGISTRY = 'resource:///org/gnome/shell/ui/apex/shadows/registry.js';
+const SHADOW_CROP = 20;
+const SHADOW_ZOOM = 4;
 
 function colourOf(column, row, generation = 0) {
     return PALETTE[(column * 7 + row * 5 + generation) % PALETTE.length];
@@ -406,70 +411,139 @@ function interiorMask(width, height, radius, band) {
     return mask;
 }
 
-// How far in from the box's edges the frames differ, and by how much at most.
-function deepestDifference(a, b, width, height) {
-    let depth = -1, max = 0;
-    const bins = [];
-    for (let i = 0; i < a.length; i += 4) {
-        const diff = Math.max(...[0, 1, 2].map(c => Math.abs(a[i + c] - b[i + c])));
-        if (diff === 0)
-            continue;
-        const x = (i / 4) % width, y = Math.floor(i / 4 / width);
-        depth = Math.max(depth, Math.min(x, y, width - 1 - x, height - 1 - y));
-        max = Math.max(max, diff);
-        const corner = Math.min(...[[0, 0], [width - 1, 0], [0, height - 1], [width - 1, height - 1]]
-            .map(([cx, cy]) => Math.hypot(x - cx, y - cy)));
-        const bin = Math.min(Math.floor(corner / 50), 9);
-        bins[bin] = (bins[bin] ?? 0) + 1;
-    }
-    return {depth, max, byCornerDistance: bins};
+// A surface's frame with its shadows and with `shadows` in disabled-features: the same pixels
+// wherever the rounded box covers fully, but for a 2 px band in from its edges.
+function compareFrames(on, off) {
+    const {width, height, radius} = on;
+    return {
+        covered: on.covered && off.covered,
+        sameSize: width === off.width && height === off.height,
+        interiorDiffering: BlurRef.differing(on.rgba, off.rgba, interiorMask(width, height, radius, SHADOW_RIM)),
+        edge: BlurRef.errors(on.rgba, BlurRef.rgbOf(off.rgba), width, height, SHADOW_RIM).edge,
+    };
 }
 
-// The shadows feature keeps its layers out from under glass: Quick Settings over the pattern
-// reads the same with shadows on as in disabled-features, its antialiased rim aside.
-async function shadowsUnderGlass() {
+// The four corners of a box and SHADOW_CROP px around them, each four times over, in one PNG.
+async function writeCorners(box, name) {
+    const [x, y] = box.get_transformed_position().map(Math.round);
+    const [width, height] = box.get_transformed_size().map(Math.round);
+    const scale = box.get_resource_scale();
+    const c = SHADOW_CROP;
+    const rect = {x: x - c, y: y - c, width: width + 2 * c, height: height + 2 * c};
+    global.stage.queue_redraw();
+    const frame = await nextFrame(scale, `corners ${name}`, rect);
+    const [fw, side] = [rect.width * scale, 2 * c * scale];
+    const out = 2 * side * SHADOW_ZOOM;
+    const rgba = new Uint8Array(out * out * 4);
+    const origins = [[0, 0], [fw - side, 0], [0, rect.height * scale - side], [fw - side, rect.height * scale - side]];
+    origins.forEach(([ox, oy], i) => {
+        for (let py = 0; py < side * SHADOW_ZOOM; py++) {
+            for (let px = 0; px < side * SHADOW_ZOOM; px++) {
+                const from = 4 * ((oy + Math.floor(py / SHADOW_ZOOM)) * fw + ox + Math.floor(px / SHADOW_ZOOM));
+                const to = 4 * (((i >> 1) * side * SHADOW_ZOOM + py) * out + (i & 1) * side * SHADOW_ZOOM + px);
+                rgba.set(frame.rgba.subarray(from, from + 4), to);
+            }
+        }
+    });
+    const file = Gio.File.new_for_path(`${GLib.getenv('G2_CAPTURES')}/shadow-corners-${name}.png`);
+    file.replace_contents(Png.encode({width: out, height: out, rgba}), null, false, Gio.FileCreateFlags.NONE, null);
+    return file.get_basename();
+}
+
+// What lies at a point just inside the box's left edge for a click: the surface, not its layer.
+function pickedInside(box) {
+    const [x, y] = box.get_transformed_position();
+    const [, height] = box.get_transformed_size();
+    const actor = global.stage.get_actor_at_pos(Clutter.PickMode.REACTIVE, Math.round(x) + 1, Math.round(y + height / 2));
+    return box.contains(actor);
+}
+
+// A BoxPointer draws a background and border of its own only with an arrow colour or border.
+function drawsNothingOutside(boxPointer) {
+    const node = boxPointer.get_theme_node();
+    const [hasColour, colour] = node.lookup_color('-arrow-background-color', false);
+    return (!hasColour || colour.alpha === 0) && node.get_length('-arrow-border-width') === 0;
+}
+
+async function popupMenuOver(read) {
+    const source = new St.Widget({x: 400, y: 300, width: 40, height: 20, reactive: true});
+    Main.uiGroup.add_child(source);
+    const menu = new PopupMenu.PopupMenu(source, 0.5, St.Side.TOP);
+    ['Open', 'Rename', 'Move to Trash'].forEach(label => menu.addAction(label, () => {}));
+    Main.uiGroup.add_child(menu.actor);
+    try {
+        return await withMenuOpen(menu, box => read(box, menu.actor));
+    } finally {
+        menu.destroy();
+        source.destroy();
+    }
+}
+
+async function dialogOver(read) {
+    const dialog = new ModalDialog.ModalDialog();
+    dialog.contentLayout.add_child(new St.Label({text: 'Move "Report.pdf" to the Trash?'}));
+    dialog.addButton({label: 'Cancel', action: () => {}});
+    dialog.open();
+    try {
+        await Scripting.waitLeisure();
+        return await read(dialog.dialogLayout._dialog, null);
+    } finally {
+        dialog.close();
+        await Scripting.waitLeisure();
+    }
+}
+
+// The shadow layers, above their surfaces and cut out inside them, leave each surface's own
+// pixels alone: Quick Settings (glass, over the pattern), a popup menu and a dialog, light and dark.
+async function shadowsOverSurfaces() {
     const apex = new Gio.Settings({schema_id: APEX_SCHEMA});
     const disabled = apex.get_strv('disabled-features');
-    const {menu} = Main.panel.statusArea.quickSettings;
     const group = new St.Widget();
     Main.uiGroup.insert_child_above(group, global.window_group);
     buildPattern(group);
-    const read = async box => {
-        const [x, y] = box.get_transformed_position();
-        group.set_position(Math.round(x) - PATTERN.x, Math.round(y) - PATTERN.y);
-        await Scripting.waitLeisure();
-        const layers = (await import(SHADOW_REGISTRY)).layersOf(box)
-            .map(l => ({effect: Boolean(l.get_effect('apex-shadow-cutout')), box: [l.x, l.y, l.width, l.height]}));
-        return {...await framePixels(box), layers, box: [...box.get_transformed_position(), ...box.get_transformed_size()]};
+    const surfaces = {
+        quickSettings: read => withMenuOpen(Main.panel.statusArea.quickSettings.menu,
+            box => read(box, Main.panel.statusArea.quickSettings.menu.actor)),
+        popupMenu: popupMenuOver,
+        dialog: dialogOver,
     };
-    try {
-        const on = await withMenuOpen(menu, read);
-        const again = await withMenuOpen(menu, read);
-        const hidden = await withMenuOpen(menu, async box => {
-            const Registry = await import(SHADOW_REGISTRY);
-            const [x, y] = box.get_transformed_position();
-            group.set_position(Math.round(x) - PATTERN.x, Math.round(y) - PATTERN.y);
-            await Scripting.waitLeisure();
-            Registry.layersOf(box).forEach(l => (l.opacity = 0));
-            return framePixels(box);
-        });
+    const readAll = async withShadows => {
+        const frames = {};
+        for (const [name, open] of Object.entries(surfaces)) {
+            // eslint-disable-next-line no-await-in-loop
+            frames[name] = await open(async (box, boxPointer) => {
+                const [x, y] = box.get_transformed_position();
+                group.set_position(Math.round(x) - PATTERN.x, Math.round(y) - PATTERN.y);
+                await Scripting.waitLeisure();
+                const radius = box.get_theme_node().get_border_radius(St.Corner.TOPLEFT) * box.get_resource_scale();
+                return {
+                    ...await framePixels(box), radius,
+                    picked: withShadows ? pickedInside(box) : null,
+                    arrowless: boxPointer ? drawsNothingOutside(boxPointer) : null,
+                    corners: withShadows && name === 'quickSettings' ? await writeCorners(box, readAll.variant) : null,
+                };
+            });
+        }
+        return frames;
+    };
+    const compareVariant = async variant => {
+        readAll.variant = variant;
+        const on = await readAll(true);
         apex.set_strv('disabled-features', [...disabled, 'shadows']);
         await Scripting.waitLeisure();
-        const off = await withMenuOpen(menu, read);
-        const {width, height} = on;
-        const radius = menu.box.get_theme_node().get_border_radius(St.Corner.TOPLEFT) * menu.box.get_resource_scale();
+        const off = await readAll(false);
+        apex.set_strv('disabled-features', disabled);
+        await Scripting.waitLeisure();
+        return Object.fromEntries(Object.keys(surfaces).map(name => [name, {
+            ...compareFrames(on[name], off[name]),
+            picked: on[name].picked, arrowless: on[name].arrowless, corners: on[name].corners,
+        }]));
+    };
+    const iface = new Gio.Settings({schema_id: 'org.gnome.desktop.interface'});
+    try {
         return {
-            covered: on.covered && off.covered,
-            sameSize: width === off.width && height === off.height,
-            interiorDiffering: BlurRef.differing(on.rgba, off.rgba, interiorMask(width, height, radius, SHADOW_RIM)),
-            edge: BlurRef.errors(on.rgba, BlurRef.rgbOf(off.rgba), width, height, SHADOW_RIM).edge,
-            depth: deepestDifference(on.rgba, off.rgba, width, height),
-            control: {
-                again: BlurRef.differing(on.rgba, again.rgba), hiddenVsOff: BlurRef.differing(hidden.rgba, off.rgba),
-                onVsHidden: deepestDifference(on.rgba, hidden.rgba, width, height),
-            },
-            layers: on.layers,
-            box: on.box,
+            light: await compareVariant('light'),
+            dark: await withSetting(iface, 'color-scheme', new GLib.Variant('s', 'prefer-dark'), () => compareVariant('dark')),
         };
     } finally {
         apex.set_strv('disabled-features', disabled);
@@ -503,6 +577,6 @@ export async function glassReport() {
         unlock: await unlockCapture(),
         pixels: patched ? await pixelTests() : null,
         manager: patched ? await managerTests() : null,
-        shadows: patched ? await shadowsUnderGlass() : null,
+        shadows: patched ? await shadowsOverSurfaces() : null,
     };
 }
