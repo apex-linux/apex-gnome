@@ -1067,6 +1067,41 @@ async function appGrid(unit) {
     }
 }
 
+// Surfaces G2 never opens, as nested stand-ins: each class is the parent of the next.
+function nestedStyle(classes, unit, Leaf = St.Widget) {
+    const actors = classes.map((styleClass, i) => i === classes.length - 1
+        ? new Leaf({style_class: styleClass}) : new St.BoxLayout({style_class: styleClass}));
+    actors.slice(1).forEach((actor, i) => actors[i].add_child(actor));
+    const leaf = actors[actors.length - 1];
+    return withStyledActor(actors[0], () => {
+        const node = leaf.get_theme_node();
+        return {
+            ...paint(node, unit),
+            foreground: hex(node.get_foreground_color()),
+            border: sides(side => node.get_border_width(side), unit),
+            borderColor: hex(node.get_border_color(St.Side.TOP)),
+            radius: round(node.get_border_radius(St.Corner.TOPLEFT) / unit.length),
+            minHeight: lengthOrNull(node, 'min-height', unit),
+            hover: underPseudoClass(leaf, 'hover', () => paint(leaf.get_theme_node(), unit)),
+            active: underPseudoClass(leaf, 'active', () => paint(leaf.get_theme_node(), unit)),
+            focus: underPseudoClass(leaf, 'focus', () => paint(leaf.get_theme_node(), unit)),
+        };
+    });
+}
+
+function derivedSurfaces(unit) {
+    return {
+        workspaceSwitcher: nestedStyle(['workspace-switcher'], unit),
+        wsIndicator: nestedStyle(['workspace-switcher', 'ws-switcher-indicator'], unit),
+        resizePopup: nestedStyle(['resize-popup'], unit),
+        candidatePopup: nestedStyle(['candidate-popup-content'], unit),
+        candidateBox: nestedStyle(['candidate-popup-content', 'candidate-box'], unit),
+        runEntry: nestedStyle(['modal-dialog run-dialog', 'run-dialog-entry'], unit, St.Entry),
+        audioDevice: nestedStyle(['modal-dialog audio-device-selection-dialog', 'audio-selection-box', 'audio-selection-device'], unit, St.Button),
+        monitorLabel: nestedStyle(['osd-monitor-label'], unit),
+    };
+}
+
 // Without GDM the shell posts "Screen Lock disabled" at startup; its banner would cover
 // the scenes for as long as it happens to stay.
 function dropStartupNotifications() {
@@ -1096,6 +1131,7 @@ async function scenes() {
     surfaces.switcher = await windowSwitcher(unit);
     surfaces.dialog = await modalDialog(unit);
     surfaces.dateMenu = await calendarMenu(unit);
+    surfaces.derived = derivedSurfaces(unit);
 
     Main.overview.show();
     await settle();
