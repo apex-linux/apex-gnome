@@ -1254,7 +1254,9 @@ async function firstTransition(read) {
 async function maximiseTransition(window) {
     const actor = window.get_compositor_private();
     window.maximize();
-    const transition = await firstTransition(() => actor.get_transition('scale-x'));
+    // _sizeChangedWindow marks the actor resizing just before it eases the size change.
+    const transition = await firstTransition(() =>
+        Main.wm._resizing.has(actor) ? actor.get_transition('scale-x') : null);
     await Scripting.sleep(MOTION_SETTLE_MS);
     const maximised = window.is_maximized();
     window.unmaximize();
@@ -1286,13 +1288,25 @@ async function motion() {
         await Scripting.sleep(100);
     if (!window)
         throw new Error(`no ${MOTION_WINDOW_ID} window in ${MOTION_WAIT_MS} ms`);
+    // Mutter gives a window's first size change a 0 x 0 old frame, which stock never animates.
+    window.maximize();
+    await Scripting.sleep(MOTION_SETTLE_MS);
+    window.unmaximize();
     await Scripting.sleep(MOTION_SETTLE_MS);
     const interfaceSettings = new Gio.Settings({schema_id: 'org.gnome.desktop.interface'});
+    // main.js inhibits animations without hardware-accelerated rendering, as G2's headless shell has.
+    const stSettings = St.Settings.get();
+    const uninhibited = interfaceSettings.get_boolean('enable-animations') && !stSettings.enable_animations;
+    if (uninhibited)
+        stSettings.uninhibit_animations();
     const animated = {maximise: await maximiseTransition(window), overview: await overviewTransition()};
     interfaceSettings.set_boolean('enable-animations', false);
     await Scripting.sleep(MOTION_SETTLE_MS);
     const still = {maximise: await maximiseTransition(window), overview: await overviewTransition()};
-    return {enableAnimations: St.Settings.get().enable_animations, animated, still};
+    const enableAnimations = stSettings.enable_animations;
+    if (uninhibited)
+        stSettings.inhibit_animations();
+    return {uninhibited, enableAnimations, animated, still};
 }
 
 export function init() {
