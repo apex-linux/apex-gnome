@@ -890,8 +890,12 @@ async function quickSettingsLayer() {
     const toggles = indicator.menu._grid.get_children().filter(t => 'checked' in t && t.title);
     const power = indicator._powerProfiles?.quickSettingsItems[0] ?? null;
     const dnd = toggles.find(t => t.constructor.name === 'DoNotDisturbToggle');
-    const powerState = () => power && {lit: power.has_style_class_name('apex-lit'), checked: power.checked,
-        subtitle: power.subtitle, visible: power.visible};
+    const powerState = () => power && {
+        lit: power.has_style_class_name('apex-lit'),
+        checked: power.checked,
+        subtitle: power.subtitle,
+        visible: power.visible,
+    };
     const clickPower = async () => {
         const before = power.checked;
         power.emit('clicked', Clutter.BUTTON_PRIMARY);
