@@ -11,7 +11,8 @@ rebuilds Fedora's gnome-shell SRPM with this checkout's recipe (spec-edit, the s
 desktop/shell/ from the working tree as Source1), installs it with the layer's schema
 fixture, runs direct.sh's main part, then asserts what needs no image: each case's log and
 the top bar's metrics, today's pins and the known gaps of default, default-scale1 and
-dark-style, their shell surfaces, and the glass case. Before that, Fedora's gnome-shell of
+dark-style, their shell surfaces, every Apex surface's contrast and Large Text layout,
+and the glass case. Before that, Fedora's gnome-shell of
 the same version runs direct.sh's fedora part, the baseline of the glass case's unlock
 blur. The lane's own checks, signing and the mutter pin's mirror are apex-image's. -e G2_SURFACE_SCENES=1 also captures the surfaces' scenes.
 
@@ -218,6 +219,7 @@ done
 for c in stock-light stock-dark; do
     quick_settings_layer "$c" "$run/$c.log" stock
 done
+a11y_cases "$run"
 layer_cycles "$run"
 motion_curve "$run"
 no_js_error glass "$run/glass.log"
