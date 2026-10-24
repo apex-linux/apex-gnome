@@ -22,6 +22,7 @@ directory with `git archive` and unpacks it at the top of Fedora's gnome-shell t
 | `js/ui/apex/spotlight/` | Spotlight (below): `feature.js` (Super+Space), `search.js` (the sections, caps and budget), `providers.js` (the stock providers), `popup.js`, `toast.js`, and `tiles.js` with `settings-tiles.json`, the Settings tile colours by panel id. That JSON mirrors gnome-control-center's `panels/apex/settings-tiles.json` byte for byte and is the one file here without an SPDX line, since JSON has no comments |
 | `js/ui/apex/quick-settings/feature.js`, `submenu.js` | DESIGN's Quick Settings (below): VPN after Airplane Mode, Power Mode lit, On/Off subtitles, and board 17's submenus, through patch 0011's hooks |
 | `js/ui/apex/shadows/feature.js`, `registry.js`, `cutout.js` | DESIGN's second shadow layer (below): a shadow-layer actor under each surface whose sheet names `-apex-shadow-layer`, cut out under the surface, and the window previews' two layers |
+| `js/ui/apex/notifications/feature.js` | DESIGN's notifications in the calendar (below): one flat card per notification, "app · time" headers, the app's icon as a fallback, Do Not Disturb and Clear in the footer, through patch 0012's hooks |
 | `js/ui/apex/end-session/feature.js` | DESIGN's end-session dialog (board 14, below): stock's icon in a circle, Restart in the power-off dialog, the theme's gap and widths for the buttons, through patch 0018's hook |
 | `js/ui/apex/polkit/` | board 13's authentication dialog (below), through patch 0017's hook: `header.js` the shield and the user's role, `fingerprint.js` the fingerprint line, `details.js` Details |
 | `js/ui/apex/panel/feature.js` | the top bar of S2a (below): its parts in `panel/`, one module each |
@@ -135,6 +136,26 @@ stock bar when it is disabled:
   pill. Network, volume, battery, the camera, microphone, location and remote-access
   indicators, unsafe mode and other panel buttons (input source, accessibility,
   recording) stay. Their Quick Settings toggles stay too.
+- `panel/privacy-group.js`, from `status-pill.js`'s hook: board 39's privacy group. The
+  remote-access, camera, microphone and location indicators move into one
+  `apex-privacy-group` box at the start of the status pill, a `$apex_privacy_height`
+  `$apex_privacy` pill (radius `$apex_radius_privacy`, padded `$apex_privacy_padding`) with
+  `$apex_privacy_icon_size` glyphs in `$apex_privacy_fg`, `$apex_privacy_gap` apart. It shows
+  only while one of them does, and then the status pill starts `$apex_bar_pill_padding_privacy`
+  in instead of `$apex_bar_pill_padding` (`apex-privacy-in-use`).
+- `panel/screen-pills.js`: stock's screen-recording and screen-sharing buttons become board 39's
+  pills, each with a `$apex_screen_stop_size` white square (radius `$apex_radius_screen_stop`) in
+  place of its stop glyph. The recording's square leads its timer, set at
+  `$apex_font_recording_size`/`$apex_font_recording_weight` in tabular figures on
+  `$apex_recording`. Sharing's follows its `$apex_sharing_icon_size` glyph on `$apex_privacy`, and
+  its button, named "Stop screen sharing", moves right before the status pill, again after each
+  session-mode change, since panel.js then re-adds its items in stock order. Both keep their
+  clicks, so the shell keeps a control that stops a share.
+- `panel/input-chip.js`: the input source's short names in capitals ("EN", "VI"), however
+  keyboard.js sets them. `_top-bar.scss` draws the chip at
+  `$apex_font_input_chip_size`/`$apex_font_input_chip_weight`, tracked
+  `$apex_font_input_chip_tracking`, at least `$apex_input_chip_min_width` wide; stock shows it
+  only with two or more sources.
 
 `panel/solid-bar.js` makes the bar solid while `translucent-top-bar` is off (live), or while
 a window on the primary monitor's active workspace is maximised, showing and not the
@@ -150,7 +171,8 @@ the name of `Shell.WindowTracker`'s focus app, or "Desktop" while nothing has fo
 clicks, and `show-focused-app-name` (live) and the lock screen hide it. A schema without
 the key turns off the `panel` feature, logged.
 
-`panel/search-button.js` adds a pill just before the status pill (role `apex-search`), named
+`panel/search-button.js` adds a pill at the start of the right box (role `apex-search`), after
+the app indicators and before the recording, accessibility and input-source buttons (board 39), named
 "Search (Super+Space)", `$apex_bar_search_width` wide with the 16 px search glyph. A click
 does what Super+Space does (`toggleSpotlight()` of `spotlight`): it opens or closes
 Spotlight. With `spotlight` in `disabled-features` it opens the overview with its search
@@ -272,6 +294,17 @@ An actor without `-apex-glass-blur` gets no blur. The manager then:
   `disabled-features=['glass']` the effects go and the tints stay.
 
 A schema without `reduce-transparency` turns off the `glass` feature, logged.
+
+`notifications/feature.js` follows DESIGN's notification list (ROADMAP S3c; board 34)
+through patch 0012's hooks. A notification group lays its cards out one under another (a
+vertical `Clutter.BoxLayout` in place of the stacking layout, the cover and header hidden) and
+counts as expanded, so a click never asks `MessageView` to expand it. A card's header reads
+"app · time" without the 16 px source glyph, and a card without an icon of its own shows the
+app's (the source's) in its 32 px column. The footer gets Do Not Disturb on the left, a label
+and a switch on `org.gnome.desktop.notifications` `show-banners` (inverted, the setting the
+Quick Settings toggle uses), and Clear on the right, shown even with nothing to clear, then
+insensitive. Disabled, the feature restores the groups' layout and stack, the headers, the
+icons and the footer; a group built while every hook was stock (the layer off) stays stock.
 
 `dock` is the dock (DESIGN.md, "Dock"; board 37). `dock/dock.js`'s ApexDock is upstream's
 `Dash` (`js/ui/dash.js`) with the hooks of patch 0014-dash, which the feature provides:

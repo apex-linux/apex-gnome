@@ -40,6 +40,7 @@ export default defineConfig([
             'tests/shots/glass.js',
             'tests/shots/a11y.js',
             'tests/shots/indicators.js',
+            'tests/shots/idle.js',
         ],
         languageOptions: {
             globals: {

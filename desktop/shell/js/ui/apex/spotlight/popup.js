@@ -4,6 +4,7 @@
 
 import Clutter from 'gi://Clutter';
 import GLib from 'gi://GLib';
+import Meta from 'gi://Meta';
 import Shell from 'gi://Shell';
 import St from 'gi://St';
 
@@ -166,8 +167,9 @@ export class Popup {
     _onKeyPress(keys) {
         const [, symbol, keycode] = keys.get_key();
         const [, pressed, latched, locked] = keys.get_state();
-        if (symbol === Clutter.KEY_Escape ||
-            global.display.get_keybinding_action(keycode, pressed | latched | locked) === this._toggleAction) {
+        // Unbound keys map to NONE, so without a toggle action of its own none of them toggles.
+        const action = global.display.get_keybinding_action(keycode, pressed | latched | locked);
+        if (symbol === Clutter.KEY_Escape || (action !== Meta.KeyBindingAction.NONE && action === this._toggleAction)) {
             this.close();
         } else if (symbol === Clutter.KEY_Down || symbol === Clutter.KEY_Up) {
             const step = symbol === Clutter.KEY_Down ? 1 : -1;

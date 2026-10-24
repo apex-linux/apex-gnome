@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
-// run.sh installs this as js/ui/popupMenu.js: the menu parts the dock's Trash and the
-// app indicators use.
+// run.sh installs this as js/ui/popupMenu.js: the menu parts the dock's Trash, the app
+// indicators and the notifications footer use.
 
 import St from '../../../St.js';
 
@@ -120,4 +120,11 @@ export class PopupSubMenuMenuItem extends PopupBaseMenuItem {
 
 export class PopupMenuManager {
     addMenu() {}
+}
+
+export class Switch extends St.Widget {
+    constructor(state) {
+        super({style_class: 'toggle-switch'});
+        this.state = state;
+    }
 }

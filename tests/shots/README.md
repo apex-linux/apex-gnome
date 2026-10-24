@@ -55,6 +55,7 @@ The direct cases:
 | `safe-env`, `layer-disabled`, `kernel-safe` | the three kill switches | upstream's dark sheet from `theme/stock/`, the stock colour scheme, every hook stock, no Super+Space binding, the reason logged; the same sheet in all three; `safe-env`: no search hint |
 | `layer-cycles` | the capture settings; the probe sets `layer-enabled` false, then true, three times | while off: upstream's dark sheet from `theme/stock/`, the stock colour scheme, every hook stock, no Super+Space binding; while on: the Apex light sheet, `prefer-light` and Super+Space; each time it is on the stage holds the same actors, type by type, as at startup, and each time it is off the same as the first time (the first count waits out main.js's 20 s timeout for deferred work, which fills the overview's hidden dash; an `St.Icon` counts, not the texture child St gives it once it is first styled, which a dash hidden since startup decides); the layer logs each switch |
 | `motion` | the capture settings with `enable-animations` true; the probe lifts the inhibit `main.js` puts on animations without hardware-accelerated rendering, starts `window.js`, a plain GTK 4 window, maximises and restores it once (mutter gives a first size change a 0 × 0 old frame, which stock never animates), maximises it and opens the overview, then sets `enable-animations` false, does both again and plays Locate Pointer | DESIGN's motion (ROADMAP S3c): the window actor's size-change transition and the overview's state transition are `CUBIC_BEZIER` with the control points (.2, .8) and (.2, 1), over 300 and 200 ms; with animations off, neither creates a transition, while Locate Pointer's ripple (`animationRequired`, an a11y aid) still takes stock's 830 ms |
+| `idle` | the capture settings without hot corners, every feature of `layer.js`'s `FEATURES_IN_ENABLE_ORDER` on; `idle.js` lets the session settle, then watches the stage for 10 s | ROADMAP S3c's exit: an idle desktop paints no frame and queues no relayout (below, "The idle desktop") |
 | `fault-configure`, `fault-enable` | `APEX_SHELL_TEST_FAULT` | only the fault feature is off; the `witness` feature after it still enables; the rest of the layer runs, Super+Space included, and the shell survives |
 | `fault-abort` | `abort-after-enable` | SIGABRT (exit 134) with the crash guard's marker left behind |
 | `fedora-light`, `fedora-dark` | Fedora's build, `prefer-light` or `prefer-dark` | no Apex module; upstream's sheet at its own path, byte for byte the one safe mode loads from `theme/stock/` |
@@ -162,7 +163,7 @@ bar's glass, a `Shell.BlurEffect` of radius 2 × `$apex_bar_blur` × the monitor
 workspace dots' gap, height and radius, the active dot `$apex_bar_dot_active_width` wide and
 the others `$apex_bar_dot_size` square at .45; that the top-left pixel reaches the reactive
 4 × 4 hot-corner zone; "Desktop" at `$apex_font_bar_emphasis_weight` after the Activities pill,
-as nothing has focus; the search button just before the status pill, a
+as nothing has focus; the search button at the start of the right box and the status pill at its end, a
 `$apex_bar_search_width` × `$apex_bar_pill_height` pill named "Search (Super+Space)" (both
 the `panel` feature); the clock's unread-notification dot (the probe
 posts one low-urgency notification); that the diamond is drawn (at least a quarter of
@@ -189,8 +190,9 @@ bar, against Fedora's, whose desktop has none.
 
 ## App indicators
 
-In `default`, `default-scale1` and `dark-style`, `G2_INDICATORS=1` runs `indicators.js`
-after the scenes. It starts `sni-items.js`, a gjs process that exports four
+The cases `indicators`, `indicators-scale1` and `indicators-dark` are shells of their own,
+set as `default`, `default-scale1` and `dark-style` are plus two input sources (US and
+French). `G2_INDICATORS=1` runs `indicators.js`, which starts `sni-items.js`, a gjs process that exports four
 StatusNotifierItems, each with a DBusMenu and on its own session-bus connection as separate
 apps are, and registers them with the shell's watcher. Every call an item gets lands in
 `<case>-sni.log`. `indicator_metrics` asserts, against the token file:
@@ -209,10 +211,18 @@ apps are, and registers them with the shell's watcher. Every call an item gets l
   app's states, "Ctrl+Shift+C" dimmed; the opened, clicked and closed events in the log;
 - Activate on a primary click;
 - with a fifth item, three shown and "+2", and the overflow menu's two rows: glyph, title
-  and chevron.
+  and chevron;
+- board 39's "everything", with the camera and microphone indicators, the recording and
+  the sharing buttons shown by the probe: the right box's order (indicators, divider,
+  search, recording, input chip, sharing, status pill); the privacy group's size, colour,
+  glyphs and place in the status pill, whose start narrows for it and widens again once
+  nothing is in use; the recording pill's stop square and tabular timer; the sharing
+  pill's glyph, square, name and gap to the status pill; the input chip's "EN", font,
+  tracking and minimum width.
 
-The captures `<case>-indicators.png`, `<case>-indicator-menu.png` and
-`<case>-indicator-overflow.png` show the bar, Chat's menu and the overflow menu.
+The captures `<case>-indicators.png`, `<case>-indicators-everything.png`,
+`<case>-indicator-menu.png` and `<case>-indicator-overflow.png` show the bar, the bar in
+"everything", Chat's menu and the overflow menu.
 
 ## The shell surfaces' metrics
 
@@ -322,6 +332,15 @@ read the transitions each call left, by the property's canonical name, and wheth
 no ease, Apex's or stock's, leaves a transition above 0 ms but `animationRequired` ones, and a
 failure names each that did. St skips CSS transitions itself with animations off
 (`st-widget.c`), the top bar's `$apex_bar_transition` included.
+
+`notifications_layer` checks the `notifications` layer feature in the same cases, and stock
+in the stock cases. The probe posts three low-urgency notifications from one app, opens the
+calendar and reads the cards' boxes, the first card's header line, glyph and icon, and the
+footer; clicks Do Not Disturb; then empties the list. The feature lays the cards out one under
+another without a group header, the header reads "app · time" without the glyph, a card
+without an icon shows the app's, Do Not Disturb sits left of Clear, which ends at the footer's
+right edge, the click turns banners off, and Clear stays shown, insensitive, once the list is
+empty. Stock stacks the cards, keeps the glyph and hides Clear.
 
 `derived_surfaces` reads surfaces with no board, which G2 never opens, from nested
 stand-ins in the same cases: the workspace switcher and its dots, the resize popup, the
@@ -437,6 +456,24 @@ copy of the sheet for safe mode. A report for upstream, which is the owner's to 
 > **High contrast: the overview search entry's glyph is invisible.** The search glyph draws
 > white at 70 % opacity on the entry's near-white fill: 1.01:1 (1.4.11 wants 3:1).
 
+## The idle desktop
+
+ROADMAP S3c's last exit: an idle desktop shows no extra repaints. The `idle` case runs the
+patched shell with every feature `layer.js` lists in `FEATURES_IN_ENABLE_ORDER`, and
+`assert.sh` reads that list from the source, so a new feature is idle-tested as soon as it
+joins it. `idle.js` lets the session settle first: startup over, the overview hidden, the
+startup notifications dropped, the dock at rest (no transition on its box), the bar's and
+the dock's glass on, no actor easing, and the pointer left at 0,0 (hot corners off). Then it
+counts the stage's `after-paint` over 10 s, on the fixed clock, and expects none.
+
+A failure names what repainted. Each frame's `paint-view` hands over its redraw clip, an
+`MtkRegion`: the probe takes its extents by bisecting it with `intersect_rectangle`, since
+gjs cannot take the region's rectangles, which its getters return by value, and names the
+actors a pick finds inside it, innermost first. `queue-relayout`, which runs up the tree, is
+counted on every actor, so the innermost entry is the one that asked. `assert.sh` adds the
+`ui/apex/` file of each JS class and `apex-` style class among them. The control opens Quick
+Settings inside a window of the same counter: it must count frames and name their damage.
+
 ## Known gaps
 
 `top_bar_gaps` asserts the rest of the designed top bar ([docs/DESIGN.md](https://github.com/apex-linux/apex/blob/main/docs/DESIGN.md)),
@@ -479,6 +516,7 @@ it is at least 4.8:1), and what the goldens judge: the Apex Symbolic glyphs (S1b
 | `glass.js`, `blur-ref.js` | the shell; gjs | the glass cases, and their CPU reference |
 | `a11y.js` | the shell | the accessibility cases: contrast against what is drawn, and the Large Text layout |
 | `indicators.js`, `sni-items.js` | the shell; gjs | the app-indicator part of `default`, `default-scale1` and `dark-style`, and the StatusNotifierItems it starts |
+| `idle.js` | the `idle` case's shell | the settled desktop, its paints and relayouts over 10 s, and the counter's control |
 | `frame.c`, `G2Frame-1.gir` | the glass cases' shells | `G2Frame.read()`, a region of the frame the shell drew |
 | `selftest.sh`, `png-test.js`, `blur-ref-test.js` | CI and the host | the tests of the above |
 

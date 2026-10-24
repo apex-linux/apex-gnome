@@ -247,6 +247,22 @@ async function exerciseSpotlight() {
         report('late.at-900ms');
         return;
     }
+    // A popup whose toggle action is NONE, the action every unbound key maps to.
+    if (mode === 'no-action') {
+        const {Popup} = await import(`file://${shellDir}/js/ui/apex/spotlight/popup.js`);
+        const {default: Meta} = await import('gi://Meta');
+        const bare = new Popup(popup._loadProviders, Meta.KeyBindingAction.NONE);
+        bare.open();
+        const bareEntry = bare.panel.get_children()[0].get_children()[1];
+        bareEntry.set_text('disk');
+        await spin(SEARCH_SETTLE_MS);
+        bareEntry.actions[0].press(Clutter.KEY_Down);
+        fact('spotlight.no-action.down', shown(bare));
+        bareEntry.actions[0].press(Clutter.KEY_Escape);
+        fact('spotlight.no-action.escape', shown(bare));
+        bare.destroy();
+        return;
+    }
     if (mode === 'late-sum') {
         open();
         entry().set_text('2880 / 1.5');
@@ -409,7 +425,30 @@ async function exerciseLauncher() {
 }
 
 function pillNames(quickSettings) {
-    return quickSettings._indicators.get_children().map(i => i.name).join(',');
+    return quickSettings._indicators.get_children().map(i => i.name === 'apexPrivacyGroup'
+        ? `privacy(${i.get_children().map(c => c.name).join(' ')})` : i.name).join(',');
+}
+
+function privacyState(quickSettings) {
+    const box = quickSettings._indicators;
+    const group = box.get_children().find(i => i.name === 'apexPrivacyGroup');
+    return `group=${group ? group.visible : 'none'} in-use=${box.has_style_class_name('apex-privacy-in-use')}`;
+}
+
+function showIndicator(indicator, visible) {
+    indicator.visible = visible;
+    indicator.emit('notify::visible');
+}
+
+function screenParts(button) {
+    const children = button.get_first_child().get_children();
+    const part = c => c.has_style_class_name('apex-screen-stop') ? 'square' : c.text ?? c.icon_name;
+    const hidden = children.filter(c => !c.visible).map(part).join(',') || 'none';
+    return `${children.filter(c => c.visible).map(part).join(',')} hidden=${hidden} name=${button.accessible_name}`;
+}
+
+function inputChipTexts({_container: container}) {
+    return container.get_children().map(label => label.text).join(',');
 }
 
 function newHotCorner() {
@@ -585,6 +624,57 @@ async function exerciseQuickSettings() {
     quickSettingsState('qs.on', quickSettings);
 }
 
+function notificationsState(label, list, groups) {
+    fact(`${label}.groups`, groups.map(g => `${g.name}:expanded=${g.expanded} layout=${g.layout_manager.name ?? 'box'} ` +
+        `cover=${g.cover.visible} header=${g.header.visible} ` +
+        `stacked=${g.get_children().some(c => c.child?.has_style_pseudo_class('second-in-stack'))}`).join(' | '));
+    const header = groups[0].get_children()[0].child.header;
+    fact(`${label}.header`, `icon=${header.sourceIcon.visible} line=${header.content.get_children().map(c => c.text).join(' ')}`);
+    const {clear} = list;
+    fact(`${label}.footer`, `${list.footer.get_children().map(c => c.name ?? c.style_class).join(',')} ` +
+        `clear=align:${clear.x_align} visible:${clear.visible}`);
+}
+
+async function exerciseNotifications() {
+    if (GLib.getenv('PROBE_NOTIFICATIONS') !== '1')
+        return;
+    const MessageList = await import(`file://${shellDir}/js/ui/messageList.js`);
+    const mail = {title: 'Mail', icon: 'mail-icon'};
+    const list = MessageList.newCalendarMessageList();
+    const groups = [new MessageList.NotificationMessageGroup(mail, 3)];
+    notificationsState('nf', list, groups);
+    const own = new MessageList.Message(mail, 'photo-icon');
+    fact('nf.icons', `fallback=${groups[0].get_children()[0].child.icon} own=${own.icon}`);
+    list.placeholder.visible = true;
+    list.clear.visible = false;
+    list.clear.emit('notify::visible');
+    const notifications = new Gio.Settings({schema_id: 'org.gnome.desktop.notifications'});
+    const dnd = list.footer.get_children()[0];
+    notifications.set_boolean('show-banners', false);
+    fact('nf.dnd-from-settings', `checked=${dnd.checked} switch=${dnd.child.get_children()[1].state} clear=${list.clear.visible}`);
+    dnd.emit('clicked', 1);
+    fact('nf.dnd-click', `show-banners=${notifications.get_boolean('show-banners')} checked=${dnd.checked}`);
+    const month = MessageList.newCalendar();
+    const calendarState = label => {
+        fact(`${label}.calendar`, `header=${month.topBox.get_children().map(c => c.name).join(',')} ` +
+            `align=${month.topBox.get_children().find(c => c.name === 'month').x_align} ` +
+            `class=${month.calendar.has_style_class_name('apex-calendar')}`);
+        const day = child => child.get_children().map(c => c.text ?? c.style_class).join('/') || child.text;
+        fact(`${label}.days`, month.days.map(b => day(b.get_child())).join(' '));
+    };
+    calendarState('nf');
+    settings.set_boolean('layer-enabled', false);
+    await spin(200);
+    calendarState('nf.off');
+    groups.push(new MessageList.NotificationMessageGroup({title: 'Chat', icon: 'chat-icon'}, 2));
+    notificationsState('nf.off', list, groups);
+    fact('nf.off.icons', `fallback=${groups[0].get_children()[0].child.icon} own=${own.icon}`);
+    settings.set_boolean('layer-enabled', true);
+    await spin(200);
+    notificationsState('nf.on', list, groups);
+    calendarState('nf.on');
+}
+
 // endSessionDialog.js as patch 0018's hook sees it: a stock row of Cancel and the confirm
 // button, a theme spacing of 10 once the row is styled.
 function endSessionDialog(St) {
@@ -708,9 +798,33 @@ async function exerciseTopBar() {
     const {quickSettings} = Main.panel.statusArea;
     topBarHooks('top-bar');
     fact('pill', pillNames(quickSettings));
+    fact('privacy.idle', privacyState(quickSettings));
+    showIndicator(quickSettings._camera, true);
+    fact('privacy.camera', privacyState(quickSettings));
+    showIndicator(quickSettings._camera, false);
+    fact('privacy.camera-off', privacyState(quickSettings));
     const later = Main.newQuickSettings();
     Hooks.run('status-indicators', later);
     fact('pill.set-up-after-enable', pillNames(later));
+
+    const {default: St} = await import(`file://${GLib.path_get_dirname(shellDir)}/St.js`);
+    const {screenRecording, screenSharing, keyboard} = Main.panel.statusArea;
+    fact('recording', screenParts(screenRecording));
+    fact('sharing', screenParts(screenSharing));
+    fact('right-box', rightBoxOrder(Main));
+    // panel.js puts its own items back in stock order at each session-mode change.
+    Main.panel.rightBox.set_child_above_sibling(screenSharing.container, screenRecording.container);
+    Main.sessionMode.lock(false);
+    fact('right-box.after-session-update', rightBoxOrder(Main));
+    fact('input-chip', inputChipTexts(keyboard));
+    // keyboard.js renames a label for an IBus input mode, and adds one for a new source.
+    const [, vietnamese] = keyboard._container.get_children();
+    vietnamese.text = 'vi₂';
+    vietnamese.emit('notify::text');
+    const french = new St.Label({text: 'fr'});
+    keyboard._container.add_child(french);
+    keyboard._container.emit('child-added', french);
+    fact('input-chip.changed', inputChipTexts(keyboard));
 
     const corner = newHotCorner();
     Hooks.run('hot-corner', corner, Main.layoutManager);
@@ -731,9 +845,17 @@ async function exerciseTopBar() {
     await spin(200);
     topBarHooks('top-bar.off');
     fact('pill.off', pillNames(quickSettings));
+    fact('privacy.off', privacyState(quickSettings));
+    fact('recording.off', screenParts(screenRecording));
+    fact('sharing.off', screenParts(screenSharing));
+    fact('right-box.off', rightBoxOrder(Main));
+    fact('input-chip.off', inputChipTexts(keyboard));
     settings.set_boolean('layer-enabled', true);
     await spin(200);
     fact('pill.on', pillNames(quickSettings));
+    fact('recording.on', screenParts(screenRecording));
+    fact('sharing.on', screenParts(screenSharing));
+    fact('input-chip.on', inputChipTexts(keyboard));
 }
 
 async function exerciseSolidBar() {
@@ -1717,6 +1839,7 @@ if (layer && GLib.getenv('PROBE_ENABLE') === '1') {
     await exercisePolkit();
     await exerciseMotion();
     await exerciseQuickSettings();
+    await exerciseNotifications();
     await exerciseEndSession();
     await exerciseShadows();
     await exerciseSpotlight();
