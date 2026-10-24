@@ -204,6 +204,8 @@ REPORT_OF_A_BAR_DRAWN_FROM_TOKENS='
             {kind: "separator"},
             {kind: "show-apps", iconSize: ($t.apex_dock_icon_size | px), iconName: "view-app-grid"},
             {kind: "trash", iconSize: ($t.apex_dock_icon_size | px)}],
+    appMenu: {app: "Files", hasDualGpu: true,
+      items: ["Open Windows", "New Window", "Launch Using Discrete Graphics Card", "Unpin", "App Details"]},
     overviewDashVisible: false},
   scenes: {overview: {dockVisible: true, dockClearance: 12}}}'
 # shellcheck disable=SC2016 # a jq program
@@ -396,6 +398,16 @@ REPORT_OF_AN_OVERVIEW_LAYER_FROM_TOKENS='
                 font: {size: ($t.apex_font_workspace_empty_size | px), weight: ($t.apex_font_heading_weight | tonumber)}}}},
     appGrid: {grid: {columns: 7, rows: 4, iconSize: 88}}}}'
 # shellcheck disable=SC2016 # a jq program
+REPORT_OF_A_TILE_PREVIEW_DRAWN_FROM_TOKENS='
+($t.apex_tile_preview_inset | px) as $i
+| def tint($o): "rgba(53, 132, 228, \($o))" | hex;
+{topBar: {accent: "#3584e4ff"}, surfaces: {tilePreview: {
+    tile: {x: 0, y: 32, width: 720, height: 868},
+    preview: {styleClass: "tile-preview on-primary tile-preview-left", x: 0, y: 32, width: 720, height: 868,
+        border: {top: $i, right: $i, bottom: $i, left: $i}, borderColor: "#00000000",
+        radius: (($t.apex_radius_tile_preview | px) + $i), background: tint($t.apex_tile_preview_fill_opacity),
+        boxShadow: {inset: true, x: 0, y: 0, blur: 0, spread: ($t.apex_tile_preview_ring | px), color: tint($t.apex_tile_preview_ring_opacity)}}}}}'
+# shellcheck disable=SC2016 # a jq program
 REPORT_OF_DERIVED_SURFACES_DRAWN_FROM_TOKENS='
 ($t.apex_surface_border | px) as $b
 | {border: {top: $b}, borderColor: ($t.apex_panel_border | hex),
@@ -479,6 +491,7 @@ assert_run() {
     [[ $assertions == overview_style ]] && report=$REPORT_OF_AN_OVERVIEW_DRAWN_FROM_TOKENS
     [[ $assertions == app_grid ]] && report=$REPORT_OF_A_LAUNCHER_DRAWN_FROM_TOKENS
     [[ $assertions == derived_surfaces ]] && report=$REPORT_OF_DERIVED_SURFACES_DRAWN_FROM_TOKENS
+    [[ $assertions == tile_preview ]] && report=$REPORT_OF_A_TILE_PREVIEW_DRAWN_FROM_TOKENS
     [[ $assertions == overview_layer ]] && report=$REPORT_OF_AN_OVERVIEW_LAYER_FROM_TOKENS
     [[ $assertions == spotlight_style ]] && report=$REPORT_OF_A_SPOTLIGHT_DRAWN_FROM_TOKENS
     tokens=$(tokens_for "$variant")
@@ -573,7 +586,7 @@ test_dock() {
     local variant change what passes failures open_gaps
     for variant in light dark; do
         read -r passes failures open_gaps <<<"$(assert_run dock_metrics "$variant")"
-        if ((failures == 0 && passes == 7)); then
+        if ((failures == 0 && passes == 8)); then
             ok "dock ($variant): a dock drawn from the tokens passes all $passes assertions"
         else
             not_ok "dock ($variant): a dock drawn from the tokens passes (passed/failed/gaps $passes/$failures/$open_gaps): $(grep -m3 '^FAIL' "$T/top-bar.out" | paste -sd'|' -)"
@@ -600,6 +613,7 @@ test_dock() {
 .dock.overviewDashVisible = true|the overview's own dash beside the dock
 .scenes.overview.dockVisible = false|no dock in the overview
 .scenes.overview.dockClearance = -15|workspaces under the dock in the overview
+.dock.appMenu.items -= ["Launch Using Discrete Graphics Card"]|an app menu without the discrete GPU
 CHANGES
     assert_run dock_metrics light 'del(.dock)' >/dev/null
     expect_eq "dock: a report without the dock passes none" 0 "$(grep -c '^PASS' "$T/top-bar.out")"
@@ -865,6 +879,33 @@ test_app_grid() {
 CHANGES
 }
 
+test_tile_preview() {
+    local variant change what passes failures open_gaps
+    for variant in light dark; do
+        read -r passes failures open_gaps <<<"$(assert_run tile_preview "$variant")"
+        if ((failures == 0 && open_gaps == 0 && passes == 2)); then
+            ok "tile preview ($variant): drawn from the tokens it passes all $passes assertions"
+        else
+            not_ok "tile preview ($variant): drawn from the tokens it passes (passed/failed/gaps $passes/$failures/$open_gaps): $(grep -m3 '^FAIL' "$T/top-bar.out" | paste -sd'|' -)"
+        fi
+    done
+    while IFS='|' read -r change what; do
+        read -r passes failures open_gaps <<<"$(assert_run tile_preview light "$change")"
+        if ((failures == 1)); then
+            ok "tile preview: $what fails one assertion"
+        else
+            not_ok "tile preview: $what fails one assertion (passed/failed/gaps $passes/$failures/$open_gaps)"
+        fi
+    done <<'CHANGES'
+.surfaces.tilePreview.preview.width = 708|a preview shrunk to the inset instead of bordered
+.surfaces.tilePreview.preview.borderColor = "#3584e4ff"|upstream's opaque accent border
+.surfaces.tilePreview.preview.x = 6|a preview moved instead of inset
+.surfaces.tilePreview.preview.radius = 0|upstream's square corners
+.surfaces.tilePreview.preview.background = "#3584e480"|upstream's half-accent fill
+.surfaces.tilePreview.preview.boxShadow = null|no ring
+CHANGES
+}
+
 test_derived_surfaces() {
     local variant change what passes failures open_gaps
     for variant in light dark; do
@@ -1098,6 +1139,47 @@ CHANGES
     expect_eq "layer cycles: a switch the layer did not log fails one assertion" "$((all - 1))/1" "$passes/$failures"
 }
 
+# shellcheck disable=SC2016 # a jq program
+readonly MOTION_REPORT='{enableAnimations: false,
+  animated: {maximise: {maximised: true, transition: {mode: "CUBIC_BEZIER", duration: 300, curve: [0.2, 0.8, 0.2, 1]}},
+             overview: {visible: true, transition: {mode: "CUBIC_BEZIER", duration: 200, curve: [0.2, 0.8, 0.2, 1]}}},
+  still: {maximise: {maximised: true, transition: null}, overview: {visible: true, transition: null},
+         locatePointer: {mode: "CUBIC_BEZIER", duration: 830, curve: [0.2, 0.8, 0.2, 1]}}}'
+
+write_motion_run() {
+    local change=$1 dir=$T/motion
+    rm -rf "$dir" && mkdir -p "$dir"
+    {
+        printf 'APEXG2 %s\n' "$APEX_LIGHT_REPORT"
+        printf 'APEXG2-MOTION %s\n' "$(jq -nc "$MOTION_REPORT | $change")"
+    } >"$dir/motion.log"
+    echo 'motion exit=0 secs=24 marker-after-exit=no' >"$dir/results-main.txt"
+}
+
+test_motion() {
+    local change what passes failures all
+    write_motion_run .
+    read -r all failures <<<"$(assertion_counts motion_curve "$T/motion")"
+    if ((failures == 0 && all > 5)); then
+        ok "motion: the Apex curve and durations, and 0 ms without animations, pass all $all assertions"
+    else
+        not_ok "motion: a clean run passes (passed/failed $all/$failures): $(grep -m3 '^FAIL' "$T/assertions.out" | paste -sd'|' -)"
+    fi
+    while IFS='|' read -r change what; do
+        write_motion_run "$change"
+        read -r passes failures <<<"$(assertion_counts motion_curve "$T/motion")"
+        expect_eq "motion: $what fails one assertion" "$((all - 1))/1" "$passes/$failures"
+    done <<'CHANGES'
+.animated.maximise.transition.mode = "EASE_OUT_QUAD"|stock's maximise mode
+.animated.maximise.transition.curve = [0, 0, 0, 0]|the curve's mode without its control points
+.animated.overview.transition.duration = 250|stock's overview duration
+.animated.overview.transition = null|an overview that did not animate
+.still.maximise.transition = {mode: "CUBIC_BEZIER", duration: 1}|a transition left with animations off
+.animated.maximise.maximised = false|a window that did not maximise
+.still.locatePointer = null|a Locate Pointer ripple that no longer animates with animations off
+CHANGES
+}
+
 fixtures_report() {
     local part
     for part in main kernel fedora; do
@@ -1105,8 +1187,8 @@ fixtures_report() {
     done
 }
 
-# What the shell's indicators read: network.js through libnm, bluetooth.js through
-# gnome-bluetooth, system.js the display device's properties.
+# What the shell reads: network.js through libnm, bluetooth.js through gnome-bluetooth,
+# system.js the display device's properties and appMenu.js switcheroo-control's.
 write_fixture_reader() {
     cat >"$T/read-fixtures.js" <<'EOF'
 import Gio from 'gi://Gio';
@@ -1125,6 +1207,8 @@ const listed = (device?.get_access_points() ?? []).filter(a => securityTypes.som
     .map(a => NM.utils_ssid_to_utf8(a.get_ssid().get_data()));
 const upower = Gio.DBusProxy.new_for_bus_sync(Gio.BusType.SYSTEM, Gio.DBusProxyFlags.NONE, null,
     'org.freedesktop.UPower', '/org/freedesktop/UPower/devices/DisplayDevice', 'org.freedesktop.UPower.Device', null);
+const switcheroo = Gio.DBusProxy.new_for_bus_sync(Gio.BusType.SYSTEM, Gio.DBusProxyFlags.NONE, null,
+    'net.hadess.SwitcherooControl', '/net/hadess/SwitcherooControl', 'net.hadess.SwitcherooControl', null);
 const bluetooth = new GnomeBluetooth.Client();
 const loop = new GLib.MainLoop(null, false);
 GLib.timeout_add(GLib.PRIORITY_DEFAULT, 1000, () => {
@@ -1140,6 +1224,7 @@ GLib.timeout_add(GLib.PRIORITY_DEFAULT, 1000, () => {
         battery: {present: upower.get_cached_property('IsPresent')?.unpack() ?? null,
             percentage: upower.get_cached_property('Percentage')?.unpack() ?? null},
         connectedBluetooth: connected,
+        hasDualGpu: switcheroo.get_cached_property('HasDualGpu')?.unpack() ?? null,
     }));
     loop.quit();
     return GLib.SOURCE_REMOVE;
@@ -1163,15 +1248,22 @@ EOF
 test_fixtures() {
     local passes failures address missing=()
     mkdir -p "$T/fixtures"
-    fixtures_report 'G2-FIXTURES {"battery": {"percentage": 87.0, "present": true, "onBattery": true}, "wifi": {"primary": "Apex-5G", "ssid": "Apex-5G", "strength": 90, "inRange": ["Apex-5G", "Apex-2.4G", "Library Guest"], "state": 70, "connectivity": 4}, "keyboard": {"alias": "Keychron K3", "connected": true, "icon": "input-keyboard"}}'
+    local report='G2-FIXTURES {"battery": {"percentage": 87.0, "present": true, "onBattery": true}, '
+    report+='"wifi": {"primary": "Apex-5G", "ssid": "Apex-5G", "strength": 90, "inRange": ["Apex-5G", "Apex-2.4G", "Library Guest"], '
+    report+='"state": 70, "connectivity": 4}, "keyboard": {"alias": "Keychron K3", "connected": true, "icon": "input-keyboard"}, '
+    report+='"gpus": {"hasDualGpu": true, "names": ["Intel Graphics", "NVIDIA GeForce RTX 4060"]}}'
+    fixtures_report "$report"
     read -r passes failures <<<"$(assertion_counts fixtures_on_the_bus "$T/fixtures")"
-    expect_eq "fixtures: what fixtures.py reports passes each part's four assertions" "12/0" "$passes/$failures"
-    fixtures_report 'G2-FIXTURES {"battery": {"percentage": 0.0, "present": false, "onBattery": false}, "wifi": {"primary": "Apex-5G", "ssid": "Apex-5G", "strength": 30, "inRange": ["Apex-5G"], "state": 70, "connectivity": 4}, "keyboard": {"alias": "Keychron K3", "connected": false, "icon": "phone"}}'
+    expect_eq "fixtures: what fixtures.py reports passes each part's five assertions" "15/0" "$passes/$failures"
+    report='G2-FIXTURES {"battery": {"percentage": 0.0, "present": false, "onBattery": false}, '
+    report+='"wifi": {"primary": "Apex-5G", "ssid": "Apex-5G", "strength": 30, "inRange": ["Apex-5G"], "state": 70, "connectivity": 4}, '
+    report+='"keyboard": {"alias": "Keychron K3", "connected": false, "icon": "phone"}, "gpus": {"hasDualGpu": false, "names": ["Intel Graphics"]}}'
+    fixtures_report "$report"
     read -r passes failures <<<"$(assertion_counts fixtures_on_the_bus "$T/fixtures")"
-    expect_eq "fixtures: no battery, a weak signal, one network in range and a keyboard left unconnected fail all four" "0/12" "$passes/$failures"
+    expect_eq "fixtures: no battery, a weak signal, one network in range, a keyboard left unconnected and one GPU fail all five" "0/15" "$passes/$failures"
     fixtures_report 'fixtures.py: no owner for org.bluez after 20 s'
     read -r passes failures <<<"$(assertion_counts fixtures_on_the_bus "$T/fixtures")"
-    expect_eq "fixtures: a fixtures.py that failed fails them" "0/12" "$passes/$failures"
+    expect_eq "fixtures: a fixtures.py that failed fails them" "0/15" "$passes/$failures"
 
     command -v dbus-daemon >/dev/null 2>&1 || missing+=(dbus-daemon)
     python3 -c 'import dbusmock' >/dev/null 2>&1 || missing+=(python3-dbusmock)
@@ -1188,10 +1280,10 @@ test_fixtures() {
     cp "$T/fixtures/fixtures-main.txt" "$T/fixtures/fixtures-kernel.txt"
     cp "$T/fixtures/fixtures-main.txt" "$T/fixtures/fixtures-fedora.txt"
     read -r passes failures <<<"$(assertion_counts fixtures_on_the_bus "$T/fixtures")"
-    expect_eq "fixtures: fixtures.py on a private bus passes the fixture assertions" "12/0" "$passes/$failures"
+    expect_eq "fixtures: fixtures.py on a private bus passes the fixture assertions" "15/0" "$passes/$failures"
     write_fixture_reader
-    expect_eq "fixtures: libnm, gnome-bluetooth and UPower's display device read them as the shell does" \
-        '{"wifi":{"id":"Apex-5G","strength":90,"listed":["Apex-5G","Apex-2.4G","Library Guest"],"full":true,"wireless":true},"battery":{"present":true,"percentage":87},"connectedBluetooth":["Keychron K3"]}' \
+    expect_eq "fixtures: libnm, gnome-bluetooth, UPower's display device and switcheroo-control read them as the shell does" \
+        '{"wifi":{"id":"Apex-5G","strength":90,"listed":["Apex-5G","Apex-2.4G","Library Guest"],"full":true,"wireless":true},"battery":{"present":true,"percentage":87},"connectedBluetooth":["Keychron K3"],"hasDualGpu":true}' \
         "$(DBUS_SYSTEM_BUS_ADDRESS=$address gjs -m "$T/read-fixtures.js" 2>"$T/read-fixtures.err")"
     local -a pids
     mapfile -t pids < <(cat "$T/bus.pid" "$T"/fixtures/fixture-*.pid 2>/dev/null)
@@ -1338,12 +1430,12 @@ test_glass() {
             "edge": {"max": [11.03, 6.23, 11.67], "mean": [1.4, 0.9, 1.3]}},
         "sameFrame": {"covered": true, "changed": 44893, "differingFromFull": 0},
         "clippedRedraw": {"covered": false, "differingFromLast": 0, "nextCovered": true, "nextDifferingFromFull": 0},
-        "stock": {"covered": false, "differingFromLast": 2304, "differingFromFull": 43927,
+        "stock": {"covered": false, "tries": 1, "differingFromLast": 2304, "differingFromFull": 43927,
             "box": {"max": [180, 150, 170], "mean": [9, 7, 8]}, "interior": {"max": [180, 150, 170], "mean": [9, 7, 8]}, "edge": {"max": [60, 50, 40], "mean": [5, 4, 4]}}}}'
     while IFS='|' read -r failures what change; do
         jq -c "$change" <<<"$good" | sed 's/^/APEXG2-GLASS /' >"$T/glass.log"
         read -r passes _ <<<"$(assertion_counts glass_frames glass "$T/glass.log")"
-        expect_eq "glass: $what fails $failures of 6" "$failures" $((6 - passes))
+        expect_eq "glass: $what fails $failures of 7" "$failures" $((7 - passes))
     done <<'CHANGES'
 0|a run within the tolerance, the frames as drawn|.
 0|the 4/255 the lead accepted inside|.pixels.reference.interior.max[2] = 4
@@ -1358,8 +1450,10 @@ test_glass() {
 1|a clipped frame never followed by its redraw|.pixels.clippedRedraw.nextCovered = false
 1|a stock control that sees nothing|.pixels.stock.differingFromFull = 0
 1|a stock control within the tolerances|.pixels.stock += (.pixels.reference | {box, interior, edge})
-6|Fedora's effect|{patched: false, pixels: null}
-6|a probe that failed|{error: "no frame within 2000 ms"}
+0|a stock control that needed 3 tries|.pixels.stock.tries = 3
+2|5 tries that never obtained a partial redraw|.pixels.stock += {covered: true, tries: 5, differingFromFull: 0}
+7|Fedora's effect|{patched: false, pixels: null}
+7|a probe that failed|{error: "no frame within 2000 ms"}
 CHANGES
 
     local on='{"radius": 96, "saturation": 1.6, "enabled": true, "fine": true, "followOpacity": true, "background": true}'
@@ -1402,6 +1496,7 @@ test_overview_style
 test_app_grid
 test_overview_layer
 test_derived_surfaces
+test_tile_preview
 test_spotlight_style
 test_today_pins
 test_known_gaps
@@ -1409,6 +1504,7 @@ test_fixed_clock
 test_clock_c
 test_overview_below_bar
 test_layer_cycles
+test_motion
 test_spotlight_key
 test_fixtures
 test_glass

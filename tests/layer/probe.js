@@ -332,6 +332,39 @@ function newHotCorner() {
     };
 }
 
+// The ease hook's mode for each kind of target, the eased hook's curve, and the durations by role.
+async function exerciseMotion() {
+    const Clutter = (await import(`file://${shellDir}/../Clutter.js`)).default;
+    const M = Clutter.AnimationMode;
+    const modeName = mode => Object.keys(M).find(k => M[k] === mode) ?? 'none';
+    const actor = new Clutter.Actor();
+    const adjustment = {get_actor: () => actor};
+    const cases = [
+        ['quad', actor, {mode: M.EASE_OUT_QUAD, duration: 250}],
+        ['expo', actor, {mode: M.EASE_OUT_EXPO, duration: 400}],
+        ['actor-default', actor, {duration: 100}],
+        ['linear', actor, {mode: M.LINEAR, duration: 100}],
+        ['steps', actor, {mode: M.STEPS, duration: 100}],
+        ['adjustment', adjustment, {mode: M.EASE_OUT_QUAD, duration: 250}],
+        ['adjustment-default', adjustment, {duration: 100}],
+    ];
+    for (const [label, target, params] of cases) {
+        const eased = Hooks.value('ease', params, target);
+        fact(`motion.${label}`, `${modeName(eased.mode)} ${eased.duration}`);
+    }
+    fact('motion.no-params', Hooks.value('ease', undefined, actor));
+    const transition = {
+        get_progress_mode: () => M.CUBIC_BEZIER,
+        set_cubic_bezier_progress(c1, c2) {
+            this.points = [c1, c2];
+        },
+    };
+    Hooks.run('eased', [transition]);
+    fact('motion.curve', transition.points?.map(p => `${p.x},${p.y}`).join(' ') ?? 'stock');
+    const roles = ['window', 'overview', 'popover', 'unknown'];
+    fact('motion.durations', roles.map(r => `${r}=${Hooks.value('motion-duration', 250, r)}`).join(' '));
+}
+
 function topBarHooks(label) {
     const dot = {get_theme_node: () => ({get_length: p => p === '-apex-active-width' ? 22 : 0})};
     const widths = [0, 0.5, 1].map(e => Hooks.value('workspace-dot-width', [99, 99], [7, 7], dot, e)[0]);
@@ -663,6 +696,10 @@ async function exerciseGlass() {
     panel.add_style_class_name('apex-solid-bar');
     report('solid-bar');
     panel.remove_style_class_name('apex-solid-bar');
+    Main.sessionMode.lock(true);
+    report('locked');
+    Main.sessionMode.lock(false);
+    report('unlocked');
     quickSettings.menu.box.mapped = false;
     quickSettings.menu.box.emit('notify::mapped');
     report('menu-closed');
@@ -972,6 +1009,7 @@ if (layer && GLib.getenv('PROBE_ENABLE') === '1') {
     mainModule = await import(`file://${shellDir}/js/ui/main.js`);
     await pressToggleSpotlight();
     await exerciseLock();
+    await exerciseMotion();
     await exerciseSpotlight();
     await exerciseTopBar();
     await exerciseSolidBar();

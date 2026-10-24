@@ -3,6 +3,7 @@
 import Clutter from 'gi://Clutter';
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
+import Mtk from 'gi://Mtk';
 import Shell from 'gi://Shell';
 import St from 'gi://St';
 
@@ -15,6 +16,7 @@ import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 import * as Scripting from 'resource:///org/gnome/shell/ui/scripting.js';
 import * as Slider from 'resource:///org/gnome/shell/ui/slider.js';
 import * as SwitcherPopup from 'resource:///org/gnome/shell/ui/switcherPopup.js';
+import * as WindowManager from 'resource:///org/gnome/shell/ui/windowManager.js';
 import * as WorkspaceThumbnail from 'resource:///org/gnome/shell/ui/workspaceThumbnail.js';
 
 import * as Png from './png.js';
@@ -42,6 +44,9 @@ const SEARCH_HINT_KEY = 'search-hint-shown';
 const DOCK_INTELLIHIDE_KEY = 'dock-intellihide';
 const G2_WINDOW_TITLE = 'G2 maximised window';
 const OSD_LEVEL = 0.62;
+const MOTION_WINDOW_ID = 'io.github.apex_linux.G2Window';
+const MOTION_WAIT_MS = 10000;
+const MOTION_SETTLE_MS = 1000;
 const OSD_GLYPH = 'audio-volume-medium-symbolic';
 const SWITCHER_APPS = ['Text Editor', 'Terminal', 'Web', 'Files', 'Settings'];
 const SWITCHER_ICON_SIZE = 96;
@@ -485,6 +490,25 @@ function dockReport(unit) {
         radius: round(dock._background.get_theme_node().get_border_radius(St.Corner.TOPLEFT) / unit.length),
         items: items.map(item => dockItem(item, dock)),
         overviewDashVisible: Main.overview.dash.visible,
+    };
+}
+
+// The menu a right click opens on the dock's first app: stock's AppMenu, which offers the
+// other GPU while switcheroo-control reports two.
+async function dockAppMenu() {
+    const icon = apexDock()?._box.get_children().find(item => item.child?._delegate?.app)?.child;
+    if (!icon)
+        return null;
+    icon.popupMenu();
+    await settle();
+    const items = icon._menu._getMenuItems()
+        .filter(item => item.visible && item.label?.text).map(item => item.label.text);
+    icon._menu.close(BoxPointer.PopupAnimation.NONE);
+    await settle();
+    return {
+        app: icon.app.get_name(),
+        hasDualGpu: global.get_switcheroo_control()?.get_cached_property('HasDualGpu')?.unpack() ?? null,
+        items,
     };
 }
 
@@ -1286,6 +1310,38 @@ async function appGrid(unit) {
     }
 }
 
+// G2 opens no window to drag to an edge, so a stand-in actor in the window group plays the
+// window and the stock preview opens over the left half of the work area.
+async function tilePreview(unit) {
+    const {primaryIndex, primaryMonitor} = Main.layoutManager;
+    const area = Main.layoutManager.getWorkAreaForMonitor(primaryIndex);
+    const stand = new Clutter.Actor({x: area.x, y: area.y, width: area.width / 2, height: area.height});
+    global.window_group.add_child(stand);
+    const window = {
+        get_compositor_private: () => stand,
+        get_frame_rect: () => new Mtk.Rectangle({x: area.x + 100, y: area.y + 100, width: 600, height: 400}),
+    };
+    const preview = new WindowManager.TilePreview();
+    try {
+        preview.open(window, new Mtk.Rectangle({x: area.x, y: area.y, width: area.width / 2, height: area.height}), primaryIndex);
+        await settle();
+        const scene = GLib.getenv('G2_SURFACE_SCENES') === '1' ? await capture('tile-preview') : null;
+        if (scene)
+            delete scene.bytes;
+        return {
+            scene,
+            tile: {
+                x: round((area.x - primaryMonitor.x) / unit.length), y: round((area.y - primaryMonitor.y) / unit.length),
+                width: round(area.width / 2 / unit.length), height: round(area.height / unit.length),
+            },
+            preview: styleOf(preview, unit),
+        };
+    } finally {
+        preview.destroy();
+        stand.destroy();
+    }
+}
+
 // Surfaces G2 never opens, as nested stand-ins: each class is the parent of the next.
 function nestedStyle(classes, unit, Leaf = St.Widget) {
     const actors = classes.map((styleClass, i) => i === classes.length - 1
@@ -1341,6 +1397,8 @@ async function scenes() {
     // After the capture: reading the hover and checked styles restyles the pills.
     const bar = topBar(unit);
     const dock = dockReport(unit);
+    if (dock)
+        dock.appMenu = await dockAppMenu();
     bar.withDot = await withUnreadNotification(unit);
     bar.dnd = await withDoNotDisturb();
     bar.opaque = await withOpaqueBar(unit);
@@ -1352,6 +1410,7 @@ async function scenes() {
     surfaces.dialog = await modalDialog(unit);
     surfaces.dateMenu = await calendarMenu(unit);
     surfaces.derived = derivedSurfaces(unit);
+    surfaces.tilePreview = await tilePreview(unit);
     surfaces.spotlight = await spotlightStyle(unit);
 
     Main.overview.show();
@@ -1455,6 +1514,94 @@ async function withLayerCycles(cycles) {
 
 // main.js connects to startup-complete only after importing this module, so a startup that
 // completes during the import would never run the script and leave the shell up.
+function transitionInfo(transition) {
+    if (!transition)
+        return null;
+    const mode = transition.get_progress_mode();
+    const [, c1, c2] = transition.get_cubic_bezier_progress();
+    return {
+        mode: Object.keys(Clutter.AnimationMode).find(k => Clutter.AnimationMode[k] === mode) ?? mode,
+        duration: transition.get_duration(),
+        curve: [c1.x, c1.y, c2.x, c2.y].map(round),
+    };
+}
+
+// The transition the ease created, read right after the call; none when the ease took 0 ms.
+async function firstTransition(read) {
+    for (let waited = 0; waited < MOTION_SETTLE_MS; waited += 10) {
+        const transition = read();
+        if (transition)
+            return transitionInfo(transition);
+        // eslint-disable-next-line no-await-in-loop
+        await Scripting.sleep(10);
+    }
+    return null;
+}
+
+async function maximiseTransition(window) {
+    const actor = window.get_compositor_private();
+    window.maximize();
+    // _sizeChangedWindow marks the actor resizing just before it eases the size change.
+    const transition = await firstTransition(() =>
+        Main.wm._resizing.has(actor) ? actor.get_transition('scale-x') : null);
+    await Scripting.sleep(MOTION_SETTLE_MS);
+    const maximised = window.is_maximized();
+    window.unmaximize();
+    await Scripting.sleep(MOTION_SETTLE_MS);
+    return {transition, maximised};
+}
+
+async function overviewTransition() {
+    const adjustment = Main.overview._overview._controls._stateAdjustment;
+    Main.overview.show();
+    const transition = await firstTransition(() => adjustment.get_transition('value'));
+    await Scripting.sleep(MOTION_SETTLE_MS);
+    const visible = Main.overview.visible;
+    Main.overview.hide();
+    await Scripting.sleep(MOTION_SETTLE_MS);
+    return {transition, visible};
+}
+
+async function motion() {
+    Main.overview.hide();
+    await Scripting.sleep(MOTION_SETTLE_MS);
+    const client = Gio.File.new_for_uri(import.meta.url).get_parent().get_child('window.js').get_path();
+    Gio.Subprocess.new(['gjs', '-m', client], Gio.SubprocessFlags.NONE);
+    const find = () => global.get_window_actors().map(a => a.meta_window)
+        .find(w => w.get_gtk_application_id() === MOTION_WINDOW_ID);
+    let window;
+    for (let waited = 0; !(window = find()) && waited < MOTION_WAIT_MS; waited += 100)
+        // eslint-disable-next-line no-await-in-loop
+        await Scripting.sleep(100);
+    if (!window)
+        throw new Error(`no ${MOTION_WINDOW_ID} window in ${MOTION_WAIT_MS} ms`);
+    // Mutter gives a window's first size change a 0 x 0 old frame, which stock never animates.
+    window.maximize();
+    await Scripting.sleep(MOTION_SETTLE_MS);
+    window.unmaximize();
+    await Scripting.sleep(MOTION_SETTLE_MS);
+    const interfaceSettings = new Gio.Settings({schema_id: 'org.gnome.desktop.interface'});
+    // main.js inhibits animations without hardware-accelerated rendering, as G2's headless shell has.
+    const stSettings = St.Settings.get();
+    const uninhibited = interfaceSettings.get_boolean('enable-animations') && !stSettings.enable_animations;
+    if (uninhibited)
+        stSettings.uninhibit_animations();
+    const animated = {maximise: await maximiseTransition(window), overview: await overviewTransition()};
+    interfaceSettings.set_boolean('enable-animations', false);
+    await Scripting.sleep(MOTION_SETTLE_MS);
+    const still = {maximise: await maximiseTransition(window), overview: await overviewTransition()};
+    // Locate Pointer's ripples are animationRequired: an a11y aid that animates regardless.
+    interfaceSettings.set_boolean('locate-pointer', true);
+    await Scripting.sleep(MOTION_SETTLE_MS);
+    Main.locatePointer.show();
+    still.locatePointer = transitionInfo(Main.locatePointer._ripples?._ripple1.get_transition('scale-x') ?? null);
+    interfaceSettings.set_boolean('locate-pointer', false);
+    const enableAnimations = stSettings.enable_animations;
+    if (uninhibited)
+        stSettings.inhibit_animations();
+    return {uninhibited, enableAnimations, animated, still};
+}
+
 export function init() {
     if (Main.layoutManager._startingUp)
         return;
@@ -1500,7 +1647,7 @@ async function withDockIntellihide() {
     await settle();
     const steps = {initial: {hidden: dockHidden()}};
     const here = GLib.path_get_dirname(GLib.filename_from_uri(import.meta.url)[0]);
-    const client = Gio.Subprocess.new(['gjs', '-m', GLib.build_filenamev([here, 'window.js'])],
+    const client = Gio.Subprocess.new(['gjs', '-m', GLib.build_filenamev([here, 'maximised-window.js'])],
         Gio.SubprocessFlags.NONE);
     try {
         steps.maximised = {window: await until(maximisedWindowShown)};
@@ -1576,6 +1723,16 @@ export async function run() {
             toggled = {error: `${e.message}\n${e.stack}`};
         }
         console.log(`APEXG2-TOGGLED ${JSON.stringify(toggled)}`);
+    }
+
+    if (GLib.getenv('G2_MOTION') === '1') {
+        let result;
+        try {
+            result = await motion();
+        } catch (e) {
+            result = {error: `${e.message}\n${e.stack}`};
+        }
+        console.log(`APEXG2-MOTION ${JSON.stringify(result)}`);
     }
 
     if (GLib.getenv('G2_GLASS') === '1') {

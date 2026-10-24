@@ -20,7 +20,7 @@ readonly APEX_DARK_SHEET=resource:///org/gnome/shell/theme/gnome-shell-dark.css
 readonly STOCK_SHEETS=resource:///org/gnome/shell/theme/stock
 readonly FEDORA_SHEETS=resource:///org/gnome/shell/theme
 readonly DIRECT_CASES=(default default-scale1 dark-style dock-intellihide dock-intellihide-dark stock-light stock-dark safe-env
-    layer-disabled layer-cycles fault-configure fault-enable fault-abort kernel-safe fedora-light fedora-dark glass fedora-glass)
+    layer-disabled layer-cycles motion fault-configure fault-enable fault-abort kernel-safe fedora-light fedora-dark glass fedora-glass)
 readonly DIRECT_PARTS=(main kernel fedora)
 readonly CAPTURE_CASES=(default default-scale1 dark-style stock-light stock-dark fedora-light fedora-dark)
 readonly SCENES=(desktop overview)
@@ -44,6 +44,11 @@ readonly TODAY_CLOCK_PILL_EXTRA=13
 readonly LAYER_CYCLES=3
 readonly SPOTLIGHT_ACCELERATORS='["<Super>space"]'
 readonly SPOTLIGHT_MODES='["NORMAL", "OVERVIEW"]'
+# DESIGN's motion: cubic-bezier(.2,.8,.2,1); window geometry .3 s, the overview .2 s.
+readonly MOTION_CURVE='[0.2, 0.8, 0.2, 1]'
+readonly MOTION_WINDOW_MS=300
+readonly MOTION_OVERVIEW_MS=200
+readonly LOCATE_POINTER_RIPPLE_MS=830
 # direct.sh's G2_CLOCK, in UTC; the clock shows it as weekday, date, EN SPACE, 24-hour time.
 readonly FIXED_CLOCK=2026-09-28T09:41:00Z
 readonly FIXED_CLOCK_TEXT='Mon Sep 28\u200209:41'
@@ -322,6 +327,8 @@ dock_metrics() {
         '{dash: .dock.overviewDashVisible, overview: .scenes.overview.dockVisible}' '.dash == false and .overview == true'
     "${metric[@]}" 'and lays its workspaces out above the dock' \
         '{dock: .dock, clearance: .scenes.overview.dockClearance}' '.dock != null and .clearance != null and .clearance >= 0'
+    "${metric[@]}" "its apps' menu offers Launch Using Discrete Graphics Card while switcheroo-control reports two GPUs" \
+        '.dock.appMenu' '.hasDualGpu == true and (.items | any(. == "Launch Using Discrete Graphics Card"))'
 }
 
 dock_intellihide() {
@@ -698,6 +705,25 @@ overview_layer() {
 }
 
 # shellcheck disable=SC2016 # jq programs and token names, not shell expansions
+tile_preview() {
+    local label=$1 log=$2 variant=$3 scenes tokens
+    scenes=$(report_of "$log" APEXG2-SCENES)
+    tokens=$(tokens_for "$variant")
+    local -a metric=(top_bar_metric "$label tile preview" "$scenes" "$tokens")
+    local tp=.surfaces.tilePreview
+    local tinted='def tinted($a; $opacity): rgba as $c | ($a | rgba) as $w | ($c[0:3] == $w[0:3]) and ($c[3] - ($opacity | num) * 255 | fabs <= 1);'
+
+    "${metric[@]}" 'the preview over the left half fills the tile mutter gives it, behind a clear $apex_tile_preview_inset border, so it shows $apex_tile_preview_inset inside the tile' \
+        "$tp" '.tile as $tile | .preview | (.styleClass | split(" ") | index("tile-preview-left") != null)
+            and .x == $tile.x and .y == $tile.y and .width == $tile.width and .height == $tile.height
+            and (.border | [.top, .right, .bottom, .left] | all(px_is($t.apex_tile_preview_inset))) and (.borderColor | rgba | .[3] == 0)'
+    "${metric[@]}" 'it is rounded $apex_radius_tile_preview inside that border, filled with the accent at $apex_tile_preview_fill_opacity and ringed $apex_tile_preview_ring in the accent at $apex_tile_preview_ring_opacity' \
+        "{p: $tp.preview, accent: .topBar.accent}" "$tinted"' .accent as $a | .p | (.radius - .border.top | px_is($t.apex_radius_tile_preview))
+            and (.background | tinted($a; $t.apex_tile_preview_fill_opacity))
+            and (.boxShadow | .inset and (.spread | px_is($t.apex_tile_preview_ring)) and .blur == 0 and (.color | tinted($a; $t.apex_tile_preview_ring_opacity)))'
+}
+
+# shellcheck disable=SC2016 # jq programs and token names, not shell expansions
 derived_surfaces() {
     local label=$1 log=$2 variant=$3 scenes tokens
     scenes=$(report_of "$log" APEXG2-SCENES)
@@ -896,6 +922,8 @@ fixtures_on_the_bus() {
             "NetworkManager: \"Apex-2.4G\" and the open \"Library Guest\" are in range too"
         expect "fixtures ($part)" "$fixtures" '.keyboard | .alias == "Keychron K3" and .connected and .icon == "input-keyboard"' \
             "BlueZ: the keyboard \"Keychron K3\" is connected"
+        expect "fixtures ($part)" "$fixtures" '.gpus | .hasDualGpu and .names == ["Intel Graphics", "NVIDIA GeForce RTX 4060"]' \
+            "switcheroo-control: an integrated and a discrete GPU"
     done
 }
 
@@ -930,6 +958,27 @@ layer_cycles() {
     check "layer-cycles: the layer logs each switch ($LAYER_CYCLES x off, $LAYER_CYCLES x on)" bash -c \
         "[[ \$(grep -c 'Apex: layer-enabled is false: the stock shell' '$f') == $LAYER_CYCLES && \$(grep -c 'Apex: layer-enabled is true: the Apex shell' '$f') == $LAYER_CYCLES ]]"
     check "layer-cycles: the marker is removed at shutdown" grep -q '^layer-cycles .*marker-after-exit=no' "$run/results-main.txt"
+}
+
+# shellcheck disable=SC2016 # jq programs
+motion_curve() {
+    local run=$1 f=$1/motion.log m
+    exits "$run" motion 0
+    apex_light motion "$f"
+    no_apex_failure motion "$f"
+    m=$(report_of "$f" APEXG2-MOTION)
+    expect motion "$m" '.error == null and .animated.maximise.maximised and .animated.overview.visible' \
+        "the probe maximised a GTK window and opened the overview, with animations on"
+    expect motion "$m" ".animated.maximise.transition | .mode == \"CUBIC_BEZIER\" and .curve == $MOTION_CURVE and .duration == $MOTION_WINDOW_MS" \
+        "maximise eases the window in cubic-bezier(.2,.8,.2,1) over ${MOTION_WINDOW_MS} ms"
+    expect motion "$m" ".animated.overview.transition | .mode == \"CUBIC_BEZIER\" and .curve == $MOTION_CURVE and .duration == $MOTION_OVERVIEW_MS" \
+        "the overview transition eases in cubic-bezier(.2,.8,.2,1) over ${MOTION_OVERVIEW_MS} ms"
+    expect motion "$m" '.enableAnimations == false and .still.maximise.maximised and .still.overview.visible' \
+        "then enable-animations=false, and the window maximised and the overview opened again"
+    expect motion "$m" '.still.maximise.transition == null and .still.overview.transition == null' \
+        "with enable-animations=false neither creates a transition: both take 0 ms"
+    expect motion "$m" ".still.locatePointer.duration == $LOCATE_POINTER_RIPPLE_MS" \
+        "and Locate Pointer's ripple, an animationRequired a11y aid, still takes stock's ${LOCATE_POINTER_RIPPLE_MS} ms"
 }
 
 direct_cases() {
@@ -976,6 +1025,7 @@ direct_cases() {
     app_grid default "$f" light
     overview_layer default "$f" light
     derived_surfaces default "$f" light
+    tile_preview default "$f" light
     spotlight_style default "$f" light
 
     f=$run/default-scale1.log
@@ -996,6 +1046,7 @@ direct_cases() {
     app_grid default-scale1 "$f" light
     overview_layer default-scale1 "$f" light
     derived_surfaces default-scale1 "$f" light
+    tile_preview default-scale1 "$f" light
     spotlight_style default-scale1 "$f" light
 
     f=$run/dark-style.log
@@ -1019,6 +1070,7 @@ direct_cases() {
     app_grid dark-style "$f" dark
     overview_layer dark-style "$f" dark
     derived_surfaces dark-style "$f" dark
+    tile_preview dark-style "$f" dark
     spotlight_style dark-style "$f" dark
     dark_style_off dark-style "$f"
 
@@ -1052,6 +1104,7 @@ direct_cases() {
     stock_scheme layer-disabled "$f"
 
     layer_cycles "$run"
+    motion_curve "$run"
 
     f=$run/kernel-safe.log
     check "kernel-safe: /proc/cmdline carries apex.safe=1" grep -qw 'apex.safe=1' "$run/cmdline-kernel.txt"
@@ -1112,6 +1165,8 @@ glass_frames() {
         "damage forwarded to the glass box re-blurs in the same frame, as a full redraw draws it" APEXG2-GLASS
     expect_report "$label" "$log" '.pixels.clippedRedraw | (.covered | not) and .differingFromLast == 0 and .nextCovered and .nextDifferingFromFull == 0' \
         "a redraw clip that misses the box draws the last result, pixel for pixel; the next frame is the full redraw's" APEXG2-GLASS
+    expect_report "$label" "$log" '.pixels.stock | (.covered | not) and .tries >= 1' \
+        "the stock control obtained a partial redraw, a frame whose redraw clip misses the box (it damages again up to 5 times; else: could not obtain a partial redraw)" APEXG2-GLASS
     expect_report "$label" "$log" ".pixels.stock | (.covered | not) and .differingFromFull > 0 and (($within) | not)" \
         "stock's blur in such a frame samples pixels the frame did not repaint and misses those tolerances, so the case can see it" APEXG2-GLASS
 }

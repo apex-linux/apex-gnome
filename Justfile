@@ -67,7 +67,7 @@ control-center-test:
 control-center-lane:
     engine=$(command -v podman || command -v docker) && "$engine" run --rm -v "{{justfile_directory()}}:/apex-gnome:z" -w /apex-gnome {{control_center_image}} tests/lib/lane.sh gnome-control-center
 
-control_center_run_packages := "gnome-shell mesa-dri-drivers dbus-daemon python3-dbusmock python3-gobject at-spi2-core gcc util-linux adwaita-sans-fonts python3-dbus systemd"
+control_center_run_packages := "gnome-shell mesa-dri-drivers dbus-daemon python3-dbusmock python3-gobject at-spi2-core gcc util-linux adwaita-sans-fonts python3-dbus systemd gnome-backgrounds umockdev"
 
 # The Settings that control-center-lane built, in a headless gnome-shell: board 11's captures, light and dark, and every row's binding; in _build/control-center/shots.
 control-center-run:

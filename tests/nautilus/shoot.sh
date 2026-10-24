@@ -37,7 +37,7 @@ esac
 readonly USER_NAME=apex
 readonly SHELL_TIMEOUT=120
 readonly CLOCK_LIB=/run/apex-files-clock.so
-readonly FIXTURE_NAMES=(org.freedesktop.UPower org.freedesktop.NetworkManager org.bluez)
+readonly FIXTURE_NAMES=(org.freedesktop.UPower org.freedesktop.NetworkManager org.bluez net.hadess.SwitcherooControl)
 readonly CLOCK='2026-10-21 10:24:00'
 readonly MONITOR=2880x1800
 readonly SCALE=2

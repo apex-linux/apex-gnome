@@ -1,15 +1,16 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//
-// One maximised GTK window for the dock's intellihide case: probe.js starts it in the
-// shell's session and stops it.
+// A plain GTK 4 window for the probe's motion case to maximise; it lives until the shell ends.
 
 import Gtk from 'gi://Gtk?version=4.0';
-import GLib from 'gi://GLib';
 
 const app = new Gtk.Application({application_id: 'io.github.apex_linux.G2Window'});
 app.connect('activate', () => {
-    const window = new Gtk.ApplicationWindow({application: app, title: 'G2 maximised window'});
-    window.maximize();
+    const window = new Gtk.ApplicationWindow({
+        application: app,
+        title: 'G2',
+        default_width: 640,
+        default_height: 400,
+    });
     window.present();
 });
-app.run([GLib.get_prgname() ?? 'g2-window']);
+app.run([]);

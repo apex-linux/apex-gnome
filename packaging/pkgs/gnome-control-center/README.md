@@ -87,6 +87,44 @@ the one table of Settings tile colours: the shell's Spotlight keeps a byte-ident
 `desktop/shell/js/ui/apex/spotlight/settings-tiles.json`, and compares the two. The selftest checks
 its format (sorted keys, two-space indent, a final newline, `#rrggbb` or `accent`).
 
+## Appearance
+
+Board 23 is stock 51.0's Appearance panel (`background`) with its rows unchanged: a
+block of `apex.css` restyles stock's own classes, and 0004 adds the board's two texts. Accent swatches are
+32 px, and the chosen one gets a 2 px ring in the card colour and a 4 px one in the accent.
+The style previews and wallpaper thumbnails are rounded to 10 px, thumbnails get a 1 px
+border, and the active wallpaper gets a 3 px accent ring. Stock's check mark stays on the
+active wallpaper as a cue that does not rely on colour; the board shows only the ring.
+The active wallpaper's name sits beside the Background header and a note under the
+chooser says whether it has a dark version and follows the style
+(`panels/apex/cc-apex-background.c`); a wallpaper the chooser does not list shows neither.
+Stock's chooser lays thumbnails out at a fixed size, so the grid holds as many as fit,
+three at the window size the captures use, where the board has four.
+
+## Power
+
+Board 24 is stock 51.0's Power panel, its two pages and every row kept, with one group
+added after Power Mode (0005): **Graphics and Display**, `panels/apex/cc-apex-power.c`.
+
+- **The graphics card**, shown only when the machine has an NVIDIA display controller (PCI
+  vendor `0x10de`, class `0x03xxxx`, found through gudev): its hwdb name, "GA107M [GeForce
+  RTX 3050 Mobile]" shown as "NVIDIA GeForce RTX 3050 Mobile", and a pill with its state
+  from `power/runtime_status`: Off and green while the card is suspended, On and amber
+  while it draws power. The kernel sends no uevent when runtime PM changes the state, so
+  the row reads the attribute every 2 s while it is on screen; reading it does not wake
+  the card.
+- **Lower Refresh Rate on Battery**, bound to apex-desktop's
+  `lower-refresh-rate-on-battery` and hidden without that key. Its subtitle names the
+  rates apex-session-agent switches between, "60 Hz on battery, 90 Hz when plugged in": the
+  built-in panel's (`is-builtin`) rates of 60 Hz or more at its current resolution, from
+  Mutter's `DisplayConfig.GetCurrentState`, read again on `MonitorsChanged`. Without a
+  built-in panel it states the rule instead.
+
+The group's logic is GLib-only, `cc-apex-power-state.c`, and `state-test.sh` covers it.
+Stock's headings (Battery Level, General), its charging radio pair and its two pages stay
+where the board draws one page with a hero card; that is option A, which keeps every
+stock feature.
+
 ## The Software Updates page
 
 System's Software Updates row opens it (0003), and so does
@@ -165,6 +203,9 @@ copy keeps apex-system's bytes and licence, GPL-3.0-or-later, so the built packa
 | `panels/apex/cc-apex-tile.{c,h}` | the wallpaper tile with the Apex diamond, and a badge, shared by the panel's header and the updates page |
 | `panels/apex/cc-apex-updates-page.{c,h,blp}` | the Software Updates page |
 | `panels/apex/cc-apex-updates-state.{c,h}` | its logic, without GTK |
+| `panels/apex/cc-apex-background.{c,h}` | Appearance's wallpaper name and note (0004) |
+| `panels/apex/cc-apex-power.{c,h}` | Power's Graphics and Display group (0005) |
+| `panels/apex/cc-apex-power-state.{c,h}` | its logic, without GTK |
 | `panels/apex/io.github.apex_linux.Apex.Update1.xml` | apex-system's interface, the one file without an SPDX line: a byte-identical copy |
 
 ## The series
@@ -174,13 +215,15 @@ copy keeps apex-system's bytes and licence, GPL-3.0-or-later, so the built packa
 | `0001-apex-desktop` | `panels/meson.build`, `shell/meson.build`, `shell/cc-panel-loader.c`, `shell/cc-panel-list.c` | +7 | `subdir('apex')` after upstream's panels; `apex_shell_sources` added to `shell_sources`; the panel registered as `apex`; `"apex"` and a separator at the head of `panel_order[]` |
 | `0002-sidebar-tiles` | `shell/cc-panel-list.c` | +8 −7 | the include; each row's icon handed to `cc_apex_sidebar_tile()`; `panel_order[]` in the design's order |
 | `0003-software-updates` | `panels/system/cc-system-panel.c`, `panels/system/cc-system-panel.blp` | +6 −3 | the include; the `software-updates` subpage; the Software Updates group always shown; its row pushes the page (`navigation.push`) instead of spawning gnome-software, with a forward arrow for the external-link one |
+| `0004-appearance` | `panels/background/cc-background-chooser.c` | +4 | the include; the active item's name and whether it has a dark version handed to `cc_apex_background_show()` where the chooser marks it, and cleared when it gets a new one |
+| `0005-power` | `panels/power/cc-power-panel.c` | +2 | the include; `cc_apex_power_add()` after `setup_general_section()`, handed the General page and Power Mode's group |
 
 The resource goes into the executable as sources, not as a static library in
 `panels_libs`: the linker takes an archive member only when something references it,
 and nothing upstream does.
 
 Budget (ADR 0014): at most 150 changed lines in upstream files, in hook hunks only; the
-added files under `panels/apex/` do not count. In use: 31 lines in 6 files.
+added files under `panels/apex/` do not count. In use: 37 lines in 8 files.
 
 The patches are `git format-patch` output against Fedora's `%prep` tree, with `a/` and
 `b/` prefixes, applied with `-p1`. Write them with apex-image's

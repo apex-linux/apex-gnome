@@ -55,12 +55,12 @@ done
 cp "$HERE"/stubs/appDisplay.js "$HERE"/stubs/remoteSearch.js "$HERE"/stubs/searchProviders.js "$T/shell/js/ui/"
 mkdir -p "$T/shell/js/misc"
 cp "$HERE/stubs/systemActions.js" "$T/shell/js/misc/"
-cp "$HERE"/stubs/St.js "$HERE"/stubs/Clutter.js "$HERE"/stubs/Shell.js "$HERE"/stubs/Meta.js "$T/"
+cp "$HERE"/stubs/St.js "$HERE"/stubs/Clutter.js "$HERE"/stubs/Shell.js "$HERE"/stubs/Meta.js "$HERE"/stubs/Graphene.js "$T/"
 # gjs outside the shell has no St or Clutter typelib, and the fixtures' Shell and Meta no
 # WindowTracker or Barrier: the features get stubs instead.
 find "$T/shell/js/ui/apex" -name '*.js' -exec sed -i -e "s|'gi://St'|'file://$T/St.js'|" \
     -e "s|'gi://Clutter'|'file://$T/Clutter.js'|" -e "s|'gi://Shell'|'file://$T/Shell.js'|" \
-    -e "s|'gi://Meta'|'file://$T/Meta.js'|" {} +
+    -e "s|'gi://Meta'|'file://$T/Meta.js'|" -e "s|'gi://Graphene'|'file://$T/Graphene.js'|" {} +
 for gir in "$HERE"/fixtures/*.gir; do
     gir_name=${gir##*/}
     "$GI_COMPILER" "$gir" -o "$T/typelib/${gir_name%.gir}.typelib"
@@ -185,6 +185,18 @@ fact "spotlight: a press opens Spotlight, a modal in the popup action mode" 'mod
 fact "spotlight: over the desktop, not the overview" 'press\.1=overview=false spotlight=true'
 fact "spotlight: pressed again, it closes and gives the grab back" 'press\.2=overview=false spotlight=false'
 count_is "spotlight: one grab taken, one given back" '^probe: modal\.pop=count=0$' 1
+has "motion: the feature enables" 'Apex: feature motion enabled'
+fact "motion: a curved mode becomes CUBIC_BEZIER, its duration kept" 'motion\.quad=CUBIC_BEZIER 250'
+fact "motion: so does stock's expo" 'motion\.expo=CUBIC_BEZIER 400'
+fact "motion: an actor's default ease takes the curve" 'motion\.actor-default=CUBIC_BEZIER 100'
+fact "motion: linear stays linear" 'motion\.linear=LINEAR 100'
+fact "motion: stepped stays stepped" 'motion\.steps=STEPS 100'
+fact "motion: an adjustment's curved ease takes the curve" 'motion\.adjustment=CUBIC_BEZIER 250'
+fact "motion: an adjustment without a mode keeps Clutter's linear" 'motion\.adjustment-default=none 100'
+fact "motion: an ease without parameters passes through" 'motion\.no-params=undefined'
+fact "motion: the eased hook sets cubic-bezier(.2,.8,.2,1)" 'motion\.curve=0\.2,0\.8 0\.2,1'
+fact "motion: window geometry .3 s, the overview .2 s, popovers .18 s; other roles stock" \
+    'motion\.durations=window=300 overview=200 popover=180 unknown=250'
 if [[ $(run_guard_unit_like_systemd default) == skipped ]]; then
     ok "default: a later shell failure does not trip the guard (no marker)"
 else
@@ -317,6 +329,13 @@ fact "FAULT=everything: no fault feature" 'test-fault=stock'
 probe disabled "$CMDLINE_PLAIN" APEX_SHELL_TEST_FAULT=enable PROBE_DISABLED=fault PROBE_ENABLE=1
 has "disabled-features skips a feature" 'Apex: feature fault is in disabled-features'
 fact "and its hook gives stock" 'test-fault=stock'
+
+probe motion-disabled "$CMDLINE_PLAIN" PROBE_DISABLED=motion PROBE_ENABLE=1
+has "disabled-features=['motion']: skips the feature" 'Apex: feature motion is in disabled-features'
+fact "disabled-features=['motion']: stock's mode" 'motion\.quad=EASE_OUT_QUAD 250'
+fact "disabled-features=['motion']: an actor's default stays Clutter's" 'motion\.actor-default=none 100'
+fact "disabled-features=['motion']: no curve is set" 'motion\.curve=stock'
+fact "disabled-features=['motion']: stock durations" 'motion\.durations=window=250 overview=250 popover=250 unknown=250'
 
 probe spotlight-disabled "$CMDLINE_PLAIN" PROBE_DISABLED=spotlight PROBE_ENABLE=1 PROBE_PRESS=1
 has "disabled-features=['spotlight']: skips the feature" 'Apex: feature spotlight is in disabled-features'
@@ -517,6 +536,9 @@ fact "glass: the bar, Quick Settings and the calendar blur behind them: radius 2
 fact "glass: a banner blurs from the moment it is shown" "glass\.banner=$GLASS_ON $BANNER_ON solid=false redirects=0,0"
 fact "glass: the bar's glass pauses while the bar is solid" \
     "glass\.solid-bar=panel:r96/s1\.6/c0/paused/background quick-settings:r120/s1\.8/c52/on/background calendar:r120/s1\.8/c52/on/background $BANNER_ON solid=false redirects=0,0"
+fact "glass: the bar's glass pauses on the lock screen and in the unlock dialog (isLocked)" \
+    "glass\.locked=panel:r96/s1\.6/c0/paused/background quick-settings:r120/s1\.8/c52/on/background calendar:r120/s1\.8/c52/on/background $BANNER_ON solid=false redirects=0,0"
+fact "glass: and comes back on unlock" "glass\.unlocked=$GLASS_ON $BANNER_ON solid=false redirects=0,0"
 fact "glass: a closed popover's glass pauses" \
     "glass\.menu-closed=panel:r96/s1\.6/c0/on/background quick-settings:r120/s1\.8/c52/paused/background calendar:r120/s1\.8/c52/on/background $BANNER_ON solid=false redirects=0,0"
 fact "glass: a second register() replaces the first's opts, one surface per actor" 'glass\.registered-twice=dock:r112/s1\.8/c44/paused/background 1'
