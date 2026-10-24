@@ -63,13 +63,15 @@ the wall clock stands at the fixed time and the top bar's clock shows it (`Mon S
 
 Before the first case, `direct.sh` lets root own and call the fixtures' names on the
 container's system bus (`/etc/dbus-1/system-local.conf`) and runs `fixtures.py`, which
-starts python-dbusmock's `upower`, `networkmanager` and `bluez5` templates there:
+starts python-dbusmock's `upower`, `networkmanager` and `bluez5` templates there, and a bare
+mock of switcheroo-control, which has no template:
 
 | Service | Fixture | The shell shows |
 |---|---|---|
 | UPower | a battery at 87 %, discharging (the display device) | `battery-level-80-symbolic` and, with `show-battery-percentage`, "87%" |
 | NetworkManager | the primary connection: Wi-Fi "Apex-5G" at signal 90, connected globally, with "Apex-2.4G" (72) and the open "Library Guest" (48) in range, each with WPA2's ciphers or none, as libnm needs to list a network | `network-wireless-signal-excellent-symbolic`, and three networks in the Wi-Fi menu |
 | BlueZ | the Bluetooth keyboard "Keychron K3", paired and connected | no glyph: the status pill shows network, volume and battery only (the `panel` feature) |
+| switcheroo-control | two GPUs, "Intel Graphics" the default and "NVIDIA GeForce RTX 4060" (`HasDualGpu`) | "Launch Using Discrete Graphics Card" in an app's menu, the dock's included |
 
 `fixtures-PART.txt` holds what the bus reports afterwards, and `assert.sh` checks it for
 each container. `direct.sh` builds `clock.c` and preloads it into each shell with
@@ -170,7 +172,9 @@ and `$apex_dock_bottom_gap` above the bottom edge; its background's radius
 `$apex_radius_dock`; every icon `$apex_dock_icon_size` (`dock-icon-size` medium); the apps
 first, then the separator, Show Apps and Trash, with no separator among the apps; the
 full-colour Show Apps icon; and in the overview the dock shown, the overview's own dash
-hidden and its workspaces laid out above the dock. The safe-mode cases have no dock, and the Apex captures mask it, as they mask the
+hidden and its workspaces laid out above the dock. Its first app's menu, stock's app menu,
+offers "Launch Using Discrete Graphics Card" while the fixtures' switcheroo-control
+reports two GPUs. The safe-mode cases have no dock, and the Apex captures mask it, as they mask the
 bar, against Fedora's, whose desktop has none.
 
 ## The shell surfaces' metrics
