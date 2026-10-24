@@ -84,7 +84,7 @@ The colours are `panels/apex/settings-tiles.json`, `{"<panel id>": "#rrggbb" | "
 compiled into the resource and turned into one CSS rule per panel when Settings starts;
 `accent` is the user's accent colour, and a panel the table lacks gets a slate tile. It is
 the one table of Settings tile colours: the shell's Spotlight keeps a byte-identical copy,
-`desktop/shell/data/apex/settings-tiles.json`, and compares the two. The selftest checks
+`desktop/shell/js/ui/apex/spotlight/settings-tiles.json`, and compares the two. The selftest checks
 its format (sorted keys, two-space indent, a final newline, `#rrggbb` or `accent`).
 
 ## Appearance
