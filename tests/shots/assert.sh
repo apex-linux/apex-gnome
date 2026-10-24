@@ -31,8 +31,10 @@ readonly EMPTY_WORKSPACE_TEXT='No open windows'
 readonly LAUNCHER_COLUMNS=7
 readonly LAUNCHER_ROWS=4
 readonly LAUNCHER_ICON_SIZE=88
-readonly LAUNCHER_GRID_TOP=128
-readonly LAUNCHER_GRID_TOP_TOLERANCE=8
+readonly LAUNCHER_GRID_TOP=132
+# overviewControls.js: spacing is 2 % of the work area, the stock .search-entry keeps 6 px below it.
+readonly OVERVIEW_SPACING_RATIO=0.02
+readonly STOCK_SEARCH_MARGIN_BOTTOM=6
 readonly DIAMOND_SQUARE_PX=8
 readonly DIAMOND_STROKE_PX=2
 readonly DIAMOND_STROKE_AREA_PX=$((4 * DIAMOND_SQUARE_PX * DIAMOND_STROKE_PX))
@@ -751,8 +753,9 @@ overview_layer() {
         "$o.workspace.empty" '(.font.size | px_is($t.apex_font_workspace_empty_size)) and .font.weight == ($t.apex_font_heading_weight | tonumber) and (.foreground | colour_is($t.apex_fg_dim))'
     expect_report "$label" "$log" ".surfaces.appGrid.grid == {columns: $LAUNCHER_COLUMNS, rows: $LAUNCHER_ROWS, iconSize: $LAUNCHER_ICON_SIZE}" \
         "launcher: $LAUNCHER_COLUMNS columns of $LAUNCHER_ICON_SIZE px icons, $LAUNCHER_ROWS rows a page" APEXG2-SCENES
-    expect_report "$label" "$log" ".surfaces.appGrid | .strip == 0 and (.box.y - $LAUNCHER_GRID_TOP | fabs) <= $LAUNCHER_GRID_TOP_TOLERANCE" \
-        "launcher: no workspace strip above the grid, which starts at board 36's ${LAUNCHER_GRID_TOP} px (within $LAUNCHER_GRID_TOP_TOLERANCE)" APEXG2-SCENES
+    top_bar_metric "$label overview" "$scenes" "$tokens" "launcher: no workspace strip; the grid starts at the work area + \$apex_search_top + \$apex_search_height + $STOCK_SEARCH_MARGIN_BOTTOM + twice the spacing, board 36's $LAUNCHER_GRID_TOP px" \
+        "{g: .surfaces.appGrid, wa: .scenes.overview.workArea}" "(.wa.y + (\$t.apex_search_top | px) + (\$t.apex_search_height | px) + $STOCK_SEARCH_MARGIN_BOTTOM
+            + 2 * (.wa.height * $OVERVIEW_SPACING_RATIO | round)) as \$top | .g.strip == 0 and (.g.box.y - \$top | fabs) <= 1 and \$top == $LAUNCHER_GRID_TOP"
 }
 
 # shellcheck disable=SC2016 # jq programs and token names, not shell expansions

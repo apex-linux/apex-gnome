@@ -928,6 +928,7 @@ test_overview_layer() {
 .surfaces.overviewLayer.workspace.empty.foreground = "#1d1d21ff"|the empty label in full $apex_fg
 .surfaces.appGrid.grid.iconSize = 96|upstream's 96 px launcher icons
 .surfaces.appGrid.box.y = 262|upstream's workspace strip above the grid
+.surfaces.appGrid.box.y = 128|the grid at board 36's old 128, which assumed an 18 px spacing
 CHANGES
 }
 
