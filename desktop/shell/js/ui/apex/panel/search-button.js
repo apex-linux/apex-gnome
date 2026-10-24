@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 //
-// DESIGN: the search button before the status pill. It does what Super+Space does: the
-// stock overview search until S3a's Spotlight.
+// DESIGN: the search button before the status pill. It does what Super+Space does, and
+// opens the stock overview search while Spotlight is in disabled-features.
 
 import Clutter from 'gi://Clutter';
 import St from 'gi://St';
