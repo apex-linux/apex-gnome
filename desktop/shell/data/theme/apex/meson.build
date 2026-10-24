@@ -12,5 +12,6 @@ theme_sources += files(
   '_quick-settings.scss',
   '_switcher.scss',
   '_dialogs.scss',
+  '_date-menu.scss',
   '_apex-structure.scss',
 )

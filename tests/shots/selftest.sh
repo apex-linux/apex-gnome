@@ -302,6 +302,44 @@ REPORT_OF_A_DIALOG_DRAWN_FROM_TOKENS='
     buttons: [$button + {default: false, background: ($t.apex_button | hex), foreground: ($t.apex_fg | hex), hover: {background: ($t.apex_button_hover | hex)}},
         $button + {default: true, background: "#3584e4ff", foreground: "#ffffffff"}]}}}'
 # shellcheck disable=SC2016 # a jq program
+REPORT_OF_A_DATE_MENU_DRAWN_FROM_TOKENS='
+($t.apex_surface_border | px) as $b | {top: $b, right: $b, bottom: $b, left: $b} as $border
+| def inset($top; $right; $bottom; $left): {top: ($top - $b), right: ($right - $b), bottom: ($bottom - $b), left: ($left - $b)};
+($t.apex_quick_settings_padding | px) as $qp | ($t.apex_calendar_padding | px) as $cp
+| ($t.apex_message_padding | px) as $mp | ($t.apex_events_padding | px) as $ep
+| {size: ($t.apex_font_size | px), weight: ($t.apex_font_heading_weight | tonumber)} as $heading
+| {topBar: {accent: "#3584e4ff"}, surfaces: {dateMenu: {
+    box: {background: ($t.apex_panel | hex), radius: ($t.apex_radius_quick_settings | px), border: $border, padding: inset($qp; $qp; $qp; $qp)},
+    area: {spacing: ($t.apex_date_menu_gap | px)},
+    list: {width: ($t.apex_date_menu_list_width | px), border: {right: 0}},
+    column: {width: ($t.apex_date_menu_column_width | px), spacing: ($t.apex_date_menu_column_gap | px)},
+    message: {background: ($t.apex_message_card | hex), borderColor: ($t.apex_glass_card_border | hex), border: $border, boxShadow: null,
+        radius: ($t.apex_radius_message | px), marginBottom: ($t.apex_message_gap | px),
+        padding: inset($mp; ($t.apex_message_padding_end | px); $mp; ($t.apex_message_padding_start | px)),
+        header: {font: {size: ($t.apex_font_banner_header_size | px)}, foreground: ($t.apex_fg_dim | hex)},
+        title: {font: $heading}, body: {font: {size: ($t.apex_font_message_body_size | px)}, foreground: ($t.apex_fg_dim | hex)},
+        icon: ($t.apex_message_icon_size | px),
+        close: {width: ($t.apex_banner_close_size | px), height: ($t.apex_banner_close_size | px), background: ($t.apex_button | hex)}},
+    controls: {height: ($t.apex_date_menu_footer_height | px)},
+    clear: {height: ($t.apex_clear_button_height | px), radius: 16, background: ($t.apex_button | hex), padding: {left: ($t.apex_clear_button_padding | px)}},
+    dayLabel: {font: {size: ($t.apex_font_date_menu_weekday_size | px), weight: ($t.apex_font_heading_weight | tonumber)}, foreground: ($t.apex_fg_dim | hex)},
+    dateLabel: {font: {size: ($t.apex_font_date_menu_date_size | px), weight: ($t.apex_font_date_menu_date_weight | tonumber)}},
+    calendar: {background: ($t.apex_glass_card | hex), borderColor: ($t.apex_glass_card_border | hex), radius: ($t.apex_radius_calendar | px),
+        border: $border, padding: inset($cp; $cp; $cp; $cp)},
+    monthLabel: {background: "#00000000", font: {size: ($t.apex_font_calendar_month_size | px), weight: ($t.apex_font_heading_weight | tonumber)}},
+    pager: {width: ($t.apex_calendar_pager_size | px)},
+    heading: {height: ($t.apex_calendar_heading_height | px), background: "#00000000", foreground: ($t.apex_fg_dim | hex),
+        font: {size: ($t.apex_font_calendar_heading_size | px), weight: ($t.apex_font_heading_weight | tonumber)}},
+    day: {width: ((($t.apex_date_menu_column_width | px) - 2 * $cp - 7 * ($t.apex_calendar_day_gap | px)) / 7 | floor),
+        height: ($t.apex_calendar_day_height | px), radius: 18, background: "#00000000", foreground: ($t.apex_fg | hex),
+        font: {size: ($t.apex_font_calendar_day_size | px)}},
+    weekend: {foreground: ($t.apex_fg | hex)},
+    otherMonth: {foreground: ($t.apex_fg_faint | hex)},
+    today: {background: "#3584e4ff", foreground: "#ffffffff", font: {weight: ($t.apex_font_heading_weight | tonumber)}},
+    events: {background: ($t.apex_glass_card | hex), radius: ($t.apex_radius_calendar | px), border: $border,
+        padding: inset(($t.apex_events_padding_top | px); $ep; ($t.apex_events_padding_bottom | px); $ep)},
+    eventsTitle: {font: {size: ($t.apex_font_events_title_size | px), weight: ($t.apex_font_heading_weight | tonumber)}, foreground: ($t.apex_fg_dim | hex)}}}}'
+# shellcheck disable=SC2016 # a jq program
 HEX_DEF='def hex: rgba | map([., 16] | "0123456789abcdef"[(.[0] / .[1] | floor):(.[0] / .[1] | floor) + 1]
                                     + "0123456789abcdef"[(.[0] % .[1]):(.[0] % .[1]) + 1]) | "#" + join("");'
 
@@ -317,6 +355,7 @@ assert_run() {
     [[ $assertions == quick_settings ]] && report=$REPORT_OF_QUICK_SETTINGS_DRAWN_FROM_TOKENS
     [[ $assertions == window_switcher ]] && report=$REPORT_OF_A_SWITCHER_DRAWN_FROM_TOKENS
     [[ $assertions == modal_dialog ]] && report=$REPORT_OF_A_DIALOG_DRAWN_FROM_TOKENS
+    [[ $assertions == date_menu ]] && report=$REPORT_OF_A_DATE_MENU_DRAWN_FROM_TOKENS
     tokens=$(tokens_for "$variant")
     jq -nc --argjson t "$tokens" "$JQ_DEFS $HEX_DEF $report | $change" | sed 's/^/APEXG2-SCENES /' >"$T/top-bar.log"
     # shellcheck disable=SC2016 # expanded by the inner bash
@@ -543,6 +582,40 @@ test_modal_dialog() {
 .surfaces.dialog.entry.focus.boxShadow.color = "#3584e4cc"|upstream's 80 % focus ring
 .surfaces.dialog.buttons[0].radius = 12|upstream's square-ish buttons
 .surfaces.dialog.buttons[1].background = "#00000a10"|a default button without the accent
+CHANGES
+}
+
+test_date_menu() {
+    local variant change what passes failures open_gaps
+    for variant in light dark; do
+        read -r passes failures open_gaps <<<"$(assert_run date_menu "$variant")"
+        if ((failures == 0 && open_gaps == 0 && passes == 12)); then
+            ok "calendar ($variant): drawn from the tokens it passes all $passes assertions"
+        else
+            not_ok "calendar ($variant): drawn from the tokens it passes (passed/failed/gaps $passes/$failures/$open_gaps): $(grep -m3 '^FAIL' "$T/top-bar.out" | paste -sd'|' -)"
+        fi
+    done
+    while IFS='|' read -r change what; do
+        read -r passes failures open_gaps <<<"$(assert_run date_menu light "$change")"
+        if ((failures == 1)); then
+            ok "calendar: $what fails one assertion"
+        else
+            not_ok "calendar: $what fails one assertion (passed/failed/gaps $passes/$failures/$open_gaps)"
+        fi
+    done <<'CHANGES'
+.surfaces.dateMenu.list.border.right = 1|upstream's line between the columns
+.surfaces.dateMenu.message.background = "#ffffffb8"|a translucent card under a stacked one
+.surfaces.dateMenu.message.marginBottom = 12|upstream's gap between cards
+.surfaces.dateMenu.message.padding.left = 5|upstream's card padding
+.surfaces.dateMenu.message.icon = 48|upstream's 48 px icon
+.surfaces.dateMenu.message.close.width = 32|upstream's close button
+.surfaces.dateMenu.clear.height = 40|a Clear button stretched to the footer
+.surfaces.dateMenu.dateLabel.font.weight = 700|a lighter date
+.surfaces.dateMenu.calendar.borderColor = "#00000000"|upstream's transparent card border
+.surfaces.dateMenu.heading.background = "#fafafbff"|upstream's filled headings
+.surfaces.dateMenu.day.height = 33|upstream's 3 em days
+.surfaces.dateMenu.otherMonth.foreground = "#1d1d2180"|upstream's half-opacity other months
+.surfaces.dateMenu.eventsTitle.foreground = "#1d1d21ff"|an events title at full strength
 CHANGES
 }
 
@@ -923,6 +996,7 @@ test_shell_surfaces
 test_quick_settings
 test_window_switcher
 test_modal_dialog
+test_date_menu
 test_today_pins
 test_known_gaps
 test_fixed_clock
