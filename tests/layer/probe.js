@@ -28,6 +28,10 @@ function newEmitter(props = {}) {
                     fn();
             }
         },
+        connectObject(...args) {
+            for (let i = 0; i + 1 < args.length; i += 2)
+                this.connect(args[i], args[i + 1]);
+        },
     };
 }
 
@@ -317,6 +321,76 @@ async function exerciseMaximisedWindow() {
     global.display.emit('restacked');
 }
 
+function newWorkspace(nWindows) {
+    return {
+        _background: {
+            visible: true,
+            hide() {
+                this.visible = false;
+            },
+        },
+        _container: newEmitter({
+            nWindows,
+            get_n_children() {
+                return this.nWindows;
+            },
+        }),
+        children: [],
+        add_child(child) {
+            this.children.push(child);
+        },
+    };
+}
+
+function workspaceFacts(label, workspace) {
+    const [empty] = workspace.children;
+    fact(`workspace.${label}`, `background=${workspace._background.visible} ` +
+        `${empty ? `"${empty.text}" .${empty.style_class} visible=${empty.visible} opacity=${empty.opacity}` : 'no label'}`);
+}
+
+function buildWorkspaces(label) {
+    const layout = {stateAdjustment: newEmitter({value: 1})};
+    const empty = newWorkspace(0);
+    Hooks.run('workspace', empty, layout);
+    workspaceFacts(`${label}.empty`, empty);
+    empty._container.nWindows = 1;
+    empty._container.emit('child-added');
+    workspaceFacts(`${label}.window-added`, empty);
+    empty._container.nWindows = 0;
+    empty._container.emit('child-removed');
+    layout.stateAdjustment.value = 0.5;
+    layout.stateAdjustment.emit('notify::value');
+    workspaceFacts(`${label}.half-open`, empty);
+    const busy = newWorkspace(2);
+    Hooks.run('workspace', busy, {stateAdjustment: newEmitter({value: 1})});
+    workspaceFacts(`${label}.with-windows`, busy);
+}
+
+async function overviewFacts(label) {
+    const Main = await import(`file://${shellDir}/js/ui/main.js`);
+    const {_thumbnailsBox: box, _appDisplay: {_grid: grid}} = Main.overview._overview._controls;
+    const preview = {_title: 'title', _closeButton: 'close'};
+    fact(`overview.${label}`, `title-visible=${Hooks.value('window-title-visible', false)} ` +
+        `overlay=${Hooks.value('window-overlay', ['title', 'close'], preview).join('+')} ` +
+        `scale=${Hooks.value('thumbnail-scale', 0.05)} threshold=${Hooks.value('thumbnails-threshold', 2)} ` +
+        `box=${box._maxThumbnailScale} grid=${JSON.stringify(grid._gridModes)} ` +
+        `icon=${grid.layout_manager.fixed_icon_size}`);
+    fact(`overview.${label}.relayout`, `mode=${grid._currentMode} page-width=${grid.layout_manager._pageWidth}`);
+    buildWorkspaces(label);
+}
+
+async function exerciseOverview() {
+    if (GLib.getenv('PROBE_OVERVIEW') !== '1')
+        return;
+    await overviewFacts('enabled');
+    settings.set_boolean('layer-enabled', false);
+    await spin(200);
+    await overviewFacts('off');
+    settings.set_boolean('layer-enabled', true);
+    await spin(200);
+    await overviewFacts('on');
+}
+
 function dockState(Main) {
     const box = Main.layoutManager.chrome.find(actor => actor.name === 'apexDockBox' && !actor.destroyed);
     const dock = box?.get_children()[0] ?? null;
@@ -492,6 +566,7 @@ if (layer && GLib.getenv('PROBE_ENABLE') === '1') {
     await exerciseFocusedApp();
     await exerciseSearchButton();
     await exerciseMaximisedWindow();
+    await exerciseOverview();
     await exerciseDock();
     await exerciseIntellihide();
     await setDisabledLive();

@@ -432,6 +432,33 @@ count_is "search hint: a schema without search-hint-shown shows none" "$SEARCH_H
 count_is "search hint: and says so once" 'has no key search-hint-shown: no search hint' 1
 has "search hint: the rest of the panel runs" 'Apex: feature panel enabled'
 
+readonly OVERVIEW_ON='title-visible=true overlay=close scale=0\.081 threshold=1 box=0\.081 grid=\[\{"rows":4,"columns":7\}\] icon=88'
+readonly OVERVIEW_STOCK='title-visible=false overlay=title\+close scale=0\.05 threshold=2 box=0\.05 grid="stock" icon=-1'
+readonly EMPTY_LABEL='"No open windows" \.apex-workspace-empty'
+probe overview "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_OVERVIEW=1
+has "overview: the overview feature enables" 'Apex: feature overview enabled'
+fact "overview: titles always shown, the overlay fades only the close button; thumbnails at .081 from two workspaces; the launcher 7 columns of 88 px" \
+    "overview\.enabled=$OVERVIEW_ON"
+fact "launcher: the grid picks its mode and icon size afresh" 'overview\.enabled\.relayout=mode=-1 page-width=0'
+fact "workspaces: no background card, and an empty workspace says so" "workspace\.enabled\.empty=background=false $EMPTY_LABEL visible=true opacity=255"
+fact "workspaces: the label goes when a window arrives" "workspace\.enabled\.window-added=background=false $EMPTY_LABEL visible=false opacity=255"
+fact "workspaces: and fades with the overview" "workspace\.enabled\.half-open=background=false $EMPTY_LABEL visible=true opacity=128"
+fact "workspaces: a workspace with windows hides it from the start" "workspace\.enabled\.with-windows=background=false $EMPTY_LABEL visible=false opacity=255"
+fact "layer-enabled=false: the stock overview, the primary thumbnails and the launcher restored" "overview\.off=$OVERVIEW_STOCK"
+fact "layer-enabled=false: workspaces keep their background and get no label" 'workspace\.off\.empty=background=true no label'
+fact "layer-enabled=true: the overview again" "overview\.on=$OVERVIEW_ON"
+lacks "overview: no feature fails or disables uncleanly" 'off for this session|did not disable cleanly|cannot restyle'
+
+probe overview-disabled "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_OVERVIEW=1 PROBE_DISABLED=overview
+has "disabled-features=['overview']: skips the feature" 'Apex: feature overview is in disabled-features'
+fact "disabled-features=['overview']: the stock overview and launcher" "overview\.enabled=$OVERVIEW_STOCK"
+fact "disabled-features=['overview']: the grid is left alone" 'overview\.enabled\.relayout=mode=0 page-width=1272'
+fact "disabled-features=['overview']: workspaces stay stock" 'workspace\.enabled\.empty=background=true no label'
+
+probe overview-live "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_DISABLE_LIVE=overview
+count_is "overview in and out of disabled-features while enabled: it says so" 'Apex: feature overview is in disabled-features' 2
+lacks "overview live: the feature disables cleanly" 'off for this session|did not disable cleanly|cannot restyle'
+
 readonly DOCK_TAIL='separator show-apps:54 trash:54'
 probe dock "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_DOCK=1
 has "dock: the feature enables" 'Apex: feature dock enabled'

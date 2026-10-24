@@ -251,10 +251,14 @@ $apex_search_gap: 10px;
 $apex_font_search_size: 14px;
 $apex_radius_thumbnail: 8px;
 $apex_thumbnail_gap: 10px;
+// Unpadded, so the overview's height cap leaves the thumbnails their full .081 scale.
+$apex_thumbnails_padding: 0px;
 $apex_thumbnail_indicator: 2px;
 $apex_caption_height: 28px;
 $apex_caption_padding: 12px;
 $apex_font_caption_size: 12.5px;
+// Board 35 draws no empty workspace: board 36's empty state, at its heading size.
+$apex_font_workspace_empty_size: 18px;
 
 $apex_folder: if($variant == 'light', rgba(255, 255, 255, .55), rgba(255, 255, 255, .1));
 $apex_folder_panel: if($variant == 'light', rgba(248, 248, 250, .86), rgba(38, 38, 42, .82));
