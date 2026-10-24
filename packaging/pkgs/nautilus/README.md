@@ -118,7 +118,7 @@ just nautilus-lane   # podman or docker: apex-lane's container half in fedora:45
 just nautilus-shots  # podman or docker: that nautilus captured in a headless gnome-shell, light and dark
 ```
 
-`tests/nautilus/lane.sh` is `tests/lib/lane.sh` copied for this recipe: it builds
+`tests/lib/lane.sh nautilus` builds
 `apex-lane` from a pinned apex-image commit and runs its container half,
 `apex-lane in-container build nautilus`, as the builder VM does: the SRPM's signature,
 `spec-edit`, the series at fuzz 0, the exact-tree check, `rpmbuild -ba` with Fedora's

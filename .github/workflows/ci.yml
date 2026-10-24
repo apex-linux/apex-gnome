@@ -231,7 +231,7 @@ jobs:
   control-center-lane:
     # The gnome-control-center recipe through apex-lane's own container half, built from
     # a pinned apex-image; the builder VM adds only the signing and the store.
-    name: tests/control-center/lane.sh (Fedora 45, gnome-control-center rebuilt)
+    name: tests/lib/lane.sh gnome-control-center (Fedora 45, gnome-control-center rebuilt)
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     permissions:
@@ -251,14 +251,14 @@ jobs:
       - name: tests/control-center/selftest.sh
         run: tests/control-center/selftest.sh
 
-      - name: tests/control-center/lane.sh
-        run: tests/control-center/lane.sh
+      - name: tests/lib/lane.sh gnome-control-center
+        run: tests/lib/lane.sh gnome-control-center
 
       - name: tests/control-center/run.sh on the built RPMs
         run: |
           dnf5 -y -q --setopt=install_weak_deps=False --repo=fedora --repo=updates install \
             gnome-shell mesa-dri-drivers dbus-daemon python3-dbusmock python3-gobject at-spi2-core gcc util-linux adwaita-sans-fonts
-          tests/control-center/run.sh _build/control-center/out
+          tests/control-center/run.sh _build/gnome-control-center/out
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
@@ -271,13 +271,13 @@ jobs:
         if: failure()
         with:
           name: control-center-lane
-          path: _build/control-center/out/
+          path: _build/gnome-control-center/out/
           if-no-files-found: ignore
 
   nautilus-lane:
     # The nautilus recipe through apex-lane's own container half, built from a pinned
     # apex-image; the builder VM adds only the signing and the store.
-    name: tests/nautilus/lane.sh (Fedora 45, nautilus rebuilt)
+    name: tests/lib/lane.sh nautilus (Fedora 45, nautilus rebuilt)
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     permissions:
@@ -297,8 +297,8 @@ jobs:
       - name: tests/nautilus/selftest.sh
         run: tests/nautilus/selftest.sh
 
-      - name: tests/nautilus/lane.sh
-        run: tests/nautilus/lane.sh
+      - name: tests/lib/lane.sh nautilus
+        run: tests/lib/lane.sh nautilus
 
       - name: tests/nautilus/format-test.sh
         env:
