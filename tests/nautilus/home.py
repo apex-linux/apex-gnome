@@ -96,6 +96,9 @@ IMAGE_COLOURS = {
     "apex-mono.png": (0x1B, 0x1E, 0x25),
     "logo@2x.png": (0x0F, 0x11, 0x15),
 }
+# Written as text, so content sniffing types them as the board does: documents.
+TEXT_EXTENSIONS = {".md", ".scss", ".json", ".js", ".plymouth", ".script"}
+
 DEFAULT_IMAGE_COLOUR = (0xE8, 0xEB, 0xF0)
 IMAGE_SIZE = (320, 200)
 
@@ -123,7 +126,7 @@ def when(clock, spec):
         date = clock.date() - datetime.timedelta(days=1 if day == "yesterday" else 0)
         return datetime.datetime(date.year, date.month, date.day, hour, minute, tzinfo=datetime.timezone.utc)
     month, day = map(int, spec.split("-"))
-    return datetime.datetime(clock.year, month, day, 12, 0, tzinfo=datetime.timezone.utc)
+    return datetime.datetime(clock.year, month, day, 8, 0, tzinfo=datetime.timezone.utc)
 
 
 def png_chunk(kind, data):
@@ -144,6 +147,11 @@ def png(colour, size):
 
 
 def write_file(path, size):
+    if os.path.splitext(path)[1] in TEXT_EXTENSIONS or os.path.basename(path) == "Makefile":
+        line = f"# {os.path.basename(path)}\n".encode()
+        with open(path, "wb") as f:
+            f.write((line * (size // len(line) + 1))[:size])
+        return
     if path.endswith(".png"):
         data = png(IMAGE_COLOURS.get(os.path.basename(path), DEFAULT_IMAGE_COLOUR), size)
         with open(path, "wb") as f:
@@ -220,6 +228,8 @@ def main():
     os.makedirs(data, exist_ok=True)
     with open(os.path.join(data, "recently-used.xbel"), "w") as f:
         f.write(recent_xbel(home, clock))
+    os.makedirs(os.path.join(home, ".cache"), exist_ok=True)
+    set_time(home, when(clock, "today 09:12"))
     print(f"home.py: {len(FOLDERS)} folders, {len(FILES)} files under {home}")
     return 0
 

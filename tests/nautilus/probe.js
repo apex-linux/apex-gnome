@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // gnome-shell's automation script for shoot.sh: one Files window at board 27's geometry.
 
+import Clutter from 'gi://Clutter';
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import Shell from 'gi://Shell';
@@ -15,6 +16,28 @@ const WINDOW = {x: 100, y: 48, width: 1240, height: 762};
 const MAP_MS = 2500;
 const SETTLE_MS = 4000;
 const WINDOW_WAIT_MS = 30000;
+const KEY_MS = 15;
+
+let keyboard;
+
+function tap(keyval, modifiers = []) {
+    const now = () => GLib.get_monotonic_time();
+    for (const m of modifiers)
+        keyboard.notify_keyval(now(), m, Clutter.KeyState.PRESSED);
+    keyboard.notify_keyval(now(), keyval, Clutter.KeyState.PRESSED);
+    keyboard.notify_keyval(now(), keyval, Clutter.KeyState.RELEASED);
+    for (const m of modifiers.reverse())
+        keyboard.notify_keyval(now(), m, Clutter.KeyState.RELEASED);
+}
+
+async function search(text) {
+    tap(Clutter.KEY_f, [Clutter.KEY_Control_L]);
+    await Scripting.sleep(500);
+    for (const ch of text) {
+        tap(Clutter.unicode_to_keysym(ch.codePointAt(0)));
+        await Scripting.sleep(KEY_MS);
+    }
+}
 
 function filesWindows() {
     return global.get_window_actors().map(a => a.meta_window)
@@ -43,6 +66,8 @@ async function capture(window, name) {
 }
 
 async function shoot() {
+    keyboard = global.stage.context.get_backend().get_default_seat()
+        .create_virtual_device(Clutter.InputDeviceType.KEYBOARD_DEVICE);
     Main.overview.hide();
     await Scripting.sleep(500);
     const shot = GLib.getenv('APEX_SHOT');
@@ -50,12 +75,20 @@ async function shoot() {
     await Scripting.sleep(MAP_MS);
     window.move_resize_frame(false, WINDOW.x, WINDOW.y, WINDOW.width, WINDOW.height);
     await Scripting.sleep(SETTLE_MS);
+    const query = GLib.getenv('APEX_FILES_SEARCH');
+    if (query) {
+        window.activate(global.get_current_time());
+        await search(query);
+        await Scripting.sleep(SETTLE_MS);
+    }
     const r = window.get_frame_rect();
     if (r.width !== WINDOW.width || r.height !== WINDOW.height)
         throw new Error(`the window is ${r.width}x${r.height}, not ${WINDOW.width}x${WINDOW.height}`);
 
     const tree = GLib.build_filenamev([GLib.getenv('APEX_SHOTS'), `${shot}.a11y.json`]);
-    await Gio.Subprocess.new(['python3', GLib.getenv('APEX_A11Y'), tree], Gio.SubprocessFlags.NONE)
+    const press = GLib.getenv('APEX_A11Y_PRESS');
+    await Gio.Subprocess.new(['python3', GLib.getenv('APEX_A11Y'), tree, ...press ? [press] : []],
+        Gio.SubprocessFlags.NONE)
         .wait_check_async(null);
     await capture(window, `${shot}.png`);
     console.log(`APEXFILES ${JSON.stringify({shot: `${shot}.png`, frame: [r.x, r.y, r.width, r.height]})}`);

@@ -1,0 +1,46 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Thuong Vo <66083331+SekiroKenjii@users.noreply.github.com>
+Date: Sat, 24 Oct 2026 08:40:30 +0000
+Subject: [PATCH] view-model: the unfiltered results, for the search chips
+
+The Apex search chips (src/apex/, Source1) filter the shown results
+through the slot's filter, and count each group from the results the
+filter has not touched. nautilus_view_model_get_unfiltered() hands them
+the root store under the model's filter.
+---
+ src/nautilus-view-model.c | 6 ++++++
+ src/nautilus-view-model.h | 1 +
+ 2 files changed, 7 insertions(+)
+
+diff --git a/src/nautilus-view-model.c b/src/nautilus-view-model.c
+index 98f8f4b..3b363f5 100644
+--- a/src/nautilus-view-model.c
++++ b/src/nautilus-view-model.c
+@@ -452,6 +452,12 @@ nautilus_view_model_get_filter (NautilusViewModel *self)
+     return gtk_filter_list_model_get_filter (self->root_filter_model);
+ }
+ 
++GListModel *
++nautilus_view_model_get_unfiltered (NautilusViewModel *self)
++{
++    return gtk_filter_list_model_get_model (self->root_filter_model);
++}
++
+ void
+ nautilus_view_model_set_filter (NautilusViewModel *self,
+                                 GtkFilter         *filter)
+diff --git a/src/nautilus-view-model.h b/src/nautilus-view-model.h
+index 010b8ad..1637990 100644
+--- a/src/nautilus-view-model.h
++++ b/src/nautilus-view-model.h
+@@ -15,6 +15,7 @@ G_DECLARE_FINAL_TYPE (NautilusViewModel, nautilus_view_model, NAUTILUS, VIEW_MOD
+ NautilusViewModel * nautilus_view_model_new (gboolean single_selection);
+ 
+ GtkFilter *nautilus_view_model_get_filter (NautilusViewModel *self);
++GListModel *nautilus_view_model_get_unfiltered (NautilusViewModel *self);
+ void nautilus_view_model_set_filter (NautilusViewModel *self,
+                                      GtkFilter         *filter);
+ gboolean nautilus_view_model_get_single_selection (NautilusViewModel *self);
+-- 
+2.43.0
+

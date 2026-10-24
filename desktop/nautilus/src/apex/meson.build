@@ -3,8 +3,14 @@
 libnautilus_sources += files(
   'apex.c',
   'apex-count-bar.c',
+  'apex-details-pane.c',
   'apex-disk-footer.c',
   'apex-format.c',
+  'apex-recent-strip.c',
+  'apex-search-chips.c',
+  'apex-settings.c',
+  'apex-slot-watch.c',
+  'apex-view-controls.c',
   'apex-window.c',
 )
 
