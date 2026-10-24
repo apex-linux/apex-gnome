@@ -226,6 +226,14 @@ tile (at rest, hovered, focused) and the fixture image's System folder, opens th
 and reads its dialog, captures it with `G2_SURFACE_SCENES=1`, and reads the hidden
 running dot, page indicator and page hint from stand-ins.
 
+`overview_layer` checks the `overview` layer feature in the same cases, in the empty
+overview the scene captured: no background card behind the active workspace, "No open
+windows" centred on it in `$apex_fg_dim` at `$apex_font_workspace_empty_size`, the
+thumbnails at scale .081 (one drawn at .081 of the work area, 117 × 70 on 1440 × 900)
+and the threshold of one workspace, and the launcher's grid at 7 columns, 4 rows and
+88 px icons. G2 opens no windows, so the `window-title-visible` hook's answer stands in for
+a title shown without hover.
+
 `derived_surfaces` reads surfaces with no board, which G2 never opens, from nested
 stand-ins in the same cases: the workspace switcher and its dots, the resize popup, the
 input method's candidates and a candidate, the run dialog's entry, an audio device tile

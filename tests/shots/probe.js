@@ -1054,6 +1054,30 @@ function overviewStyle(unit) {
     }
 }
 
+// What the overview feature changes, in the empty overview the scene captured. With no
+// window to show a title, its hook's answer stands in.
+async function overviewLayer(unit) {
+    const {controls} = Main.overview._overview;
+    const view = controls._workspacesDisplay._getPrimaryView();
+    const workspace = view._workspaces[global.workspace_manager.get_active_workspace_index()];
+    const empty = workspace.get_children().find(a => a.has_style_class_name?.('apex-workspace-empty'));
+    const thumbnailsBox = controls._thumbnailsBox;
+    const hooks = await apexHooks();
+    return {
+        titleVisible: hooks?.value('window-title-visible', false) ?? null,
+        thumbnailsThreshold: hooks?.value('thumbnails-threshold', null) ?? null,
+        thumbnails: {
+            maxScale: thumbnailsBox.maxThumbnailScale,
+            first: thumbnailsBox._thumbnails?.[0] ? boxOf(thumbnailsBox._thumbnails[0], unit) : null,
+        },
+        workspace: {
+            ...boxOf(workspace, unit),
+            background: workspace._background.visible,
+            empty: empty ? {...styleOf(empty, unit), visible: empty.visible, text: empty.text} : null,
+        },
+    };
+}
+
 function standInStyle(styleClass, parentClass, unit) {
     const parent = new St.BoxLayout({style_class: parentClass ?? ''});
     const actor = new St.Widget({style_class: styleClass});
@@ -1091,6 +1115,11 @@ async function appGrid(unit) {
                 focus: underPseudoClass(app, 'focus', () => paint(app.get_theme_node(), unit)),
             } : null,
             folder: folder ? styleOf(folder, unit) : null,
+            grid: {
+                columns: appDisplay._grid.layout_manager.columns_per_page,
+                rows: appDisplay._grid.layout_manager.rows_per_page,
+                iconSize: app?.icon.iconSize ?? null,
+            },
             runningDot: standInStyle('app-grid-running-dot', null, unit),
             pageIndicator: standInStyle('page-indicator-icon', 'page-indicator', unit),
             pageHint: standInStyle('page-navigation-hint next', null, unit),
@@ -1194,6 +1223,7 @@ async function scenes() {
         dockClearance: dockClearance(unit),
     };
     surfaces.overview = overviewStyle(unit);
+    surfaces.overviewLayer = await overviewLayer(unit);
     surfaces.appGrid = await appGrid(unit);
     delete overview.bytes;
     Main.overview.hide();

@@ -185,6 +185,7 @@ for c in default:light default-scale1:light dark-style:dark; do
     date_menu "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
     overview_style "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
     app_grid "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
+    overview_layer "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
     derived_surfaces "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
 done
 layer_cycles "$run"
