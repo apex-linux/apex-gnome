@@ -721,6 +721,7 @@ function openPopupMenu() {
     [...rows, separator, iconRow].forEach(item => menu.addMenuItem(item));
     menu.open(BoxPointer.PopupAnimation.NONE);
     return {
+        root: menu.box,
         measure: unit => {
             const line = separator.get_children().find(c => c.has_style_class_name('popup-separator-menu-item-separator'));
             return {
@@ -789,6 +790,7 @@ async function openOsd() {
     const settled = gone && await settledOverTwoFrames(window._hbox,
         () => window.visible && window._hbox.mapped && window._level.visible, OSD_SETTLE_TIMEOUT_MS);
     return {
+        root: window._hbox,
         measure: unit => {
             if (!settled)
                 return {error: 'the OSD never settled'};
@@ -2430,6 +2432,17 @@ async function runProbe() {
             result = {error: `${e.message}\n${e.stack}`};
         }
         console.log(`APEXG2-SCENES ${JSON.stringify(result)}`);
+    }
+
+    if (GLib.getenv('G2_A11Y') === '1') {
+        let result;
+        try {
+            const A11y = await import('./a11y.js');
+            result = await A11y.a11yReport({settle, unit: cssUnit(), apexDock, findDescendant, openPopupMenu, openOsd, openBanner});
+        } catch (e) {
+            result = {error: `${e.message}\n${e.stack}`};
+        }
+        console.log(`APEXG2-A11Y ${JSON.stringify(result)}`);
     }
 
     if (GLib.getenv('G2_INDICATORS') === '1') {

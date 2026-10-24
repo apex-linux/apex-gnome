@@ -48,6 +48,8 @@ The direct cases:
 | `default` | `color-scheme` `'default'` | the Apex light sheet with its marker, `prefer-light`, no fault feature, the crash guard's marker created and removed; Super+Space (`toggle-spotlight`) registered in the normal and overview modes; the panel showed the one-time search hint (`search-hint-shown` true; until apex-desktop's schema has the key, the shell reports `no-key`); the top bar's, the dock's and the shell surfaces' metrics, light |
 | `default-scale1` | as `default`, on a 1440x900 virtual monitor at scale 1, as the desktop VM runs | the Apex light sheet; the top bar's, the dock's and the shell surfaces' metrics at scale 1 |
 | `dark-style` | `prefer-dark` | the Apex dark sheet; the top bar's, the dock's and the shell surfaces' metrics, dark; then the probe clicks Quick Settings' Dark Style toggle (its own `clicked` signal): the toggle turns off, writes `color-scheme` `'default'`, and the running shell loads the Apex light sheet |
+| `high-contrast` | the capture settings with `org.gnome.desktop.a11y.interface high-contrast` true | every Apex surface's contrast in the high-contrast sheet (see "Accessibility") |
+| `large-text` | the capture settings with `text-scaling-factor` 1.25 | every Apex surface's text whole, on the screen, inside its surface and clear of the rest (see "Accessibility") |
 | `dock-intellihide`, `dock-intellihide-dark` | the capture settings, light or dark, without hot corners (the headless pointer starts at 0,0, in the corner); the probe starts `maximised-window.js`, one maximised GTK window | the dock shows, then hides behind the maximised window as the bar turns solid; a virtual pointer pushing against the bottom edge under it reveals it, under the pointer; moving away hides it; the overview shows it; with `dock-intellihide` off it stays, and hides again when it is back on; the window gone, it shows. The maximised and revealed scenes are captured beside board 37's |
 | `stock-light`, `stock-dark` | `APEX_SHELL_SAFE=1` with `prefer-light` or `prefer-dark` | upstream's sheet of that variant from `theme/stock/`; the overview's thumbnails at upstream's maximum scale 0.05 and at the effective scale of Fedora's build; the rebuilt high-contrast sheet, which safe mode keeps, is Fedora's apart from the structure marker; no Super+Space binding |
 | `safe-env`, `layer-disabled`, `kernel-safe` | the three kill switches | upstream's dark sheet from `theme/stock/`, the stock colour scheme, every hook stock, no Super+Space binding, the reason logged; the same sheet in all three; `safe-env`: no search hint |
@@ -425,6 +427,31 @@ Both shells capture `unlockDialog.js`'s blur (actor mode, radius 90 × scale, br
 .65) over a grid, with a background-mode blur over it, every property of 0003 at its
 default: `glass-unlock.png` against `fedora-glass-unlock.png` differs by 0 pixels.
 
+## Accessibility
+
+`G2_A11Y=1` (the `default`, `dark-style`, `high-contrast` and `large-text` cases) runs
+`a11y.js`, which opens each of the panel's surfaces in turn: the bar, the dock, a popup
+menu, the OSD, a banner, Quick Settings and its Wi-Fi menu, and the date menu with two
+notifications. Its targets are the visible
+labels, entries and symbolic icons under the surface. Their ink is hidden while the shell
+draws the surface, so the capture holds what is behind them, glass and its blur included,
+with an icon's own fill put back over it. Each target's foreground colour, times its alpha
+and paint opacity, is composited over every sampled pixel of its box, and the pixel at the
+5th percentile counts, which drops an antialiased corner. `a11y_contrast` wants WCAG AA:
+4.5:1 for text and 3:1 for a glyph (1.4.3 and 1.4.11). A disabled button's content is exempt,
+and so is a target wholly outside the capture, another workspace's label. `a11y_layout`
+wants, at 1.25, no text cut short (a collapsed notification's body expands, so it may),
+none partly off the screen or outside its surface, and none overlapping text in the same
+filled box (a notification stack's cards overlap by design). The failures the checks found
+on landing are known gaps (`A11Y_GAPS`), each named after the fix that closes it. Those in
+upstream's high-contrast sheet stay gaps: restyling an upstream actor there would need a stock
+copy of the sheet for safe mode. A report for upstream, which is the owner's to file:
+
+> **High contrast: checked quick toggles fall below WCAG AA.** In gnome-shell 51.0's
+> high-contrast sheet, a checked quick toggle draws white text on the accent: 3.15:1 for the
+> default blue (WCAG 1.4.3 wants 4.5:1), and the menu arrow beside it 2.31:1 (1.4.11 wants
+> 3:1). Measured from the stage's pixels with the toggle's own colours.
+
 ## The idle desktop
 
 ROADMAP S3c's last exit: an idle desktop shows no extra repaints. The `idle` case runs the
@@ -483,6 +510,7 @@ it is at least 4.8:1), and what the goldens judge: the Apex Symbolic glyphs (S1b
 | `assert.sh`, `stable.sh`, `lib.sh` | the builder VM | the assertions |
 | `png.js`, `compare.js` | gjs | PNG with GLib's zlib only, and the masked comparison |
 | `glass.js`, `blur-ref.js` | the shell; gjs | the glass cases, and their CPU reference |
+| `a11y.js` | the shell | the accessibility cases: contrast against what is drawn, and the Large Text layout |
 | `indicators.js`, `sni-items.js` | the shell; gjs | the app-indicator part of `default`, `default-scale1` and `dark-style`, and the StatusNotifierItems it starts |
 | `idle.js` | the `idle` case's shell | the settled desktop, its paints and relayouts over 10 s, and the counter's control |
 | `frame.c`, `G2Frame-1.gir` | the glass cases' shells | `G2Frame.read()`, a region of the frame the shell drew |
