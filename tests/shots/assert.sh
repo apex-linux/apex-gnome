@@ -25,6 +25,12 @@ readonly DIRECT_PARTS=(main kernel fedora)
 readonly CAPTURE_CASES=(default default-scale1 dark-style stock-light stock-dark fedora-light fedora-dark)
 readonly SCENES=(desktop overview)
 readonly STOCK_MAX_THUMBNAIL_SCALE=0.05
+readonly OVERVIEW_THUMBNAIL_SCALE=0.104
+readonly OVERVIEW_THUMBNAILS_THRESHOLD=1
+readonly EMPTY_WORKSPACE_TEXT='No open windows'
+readonly LAUNCHER_COLUMNS=7
+readonly LAUNCHER_ROWS=4
+readonly LAUNCHER_ICON_SIZE=88
 readonly DIAMOND_SQUARE_PX=8
 readonly DIAMOND_STROKE_PX=2
 readonly DIAMOND_STROKE_AREA_PX=$((4 * DIAMOND_SQUARE_PX * DIAMOND_STROKE_PX))
@@ -617,6 +623,29 @@ app_grid() {
             and (.pageIndicator.background | colour_is($t.apex_fg)) and .pageHint.gradient == 0'
 }
 
+# The overview feature's values are the layer's, not tokens; only the empty label is styled.
+# shellcheck disable=SC2016 # jq programs and token names, not shell expansions
+overview_layer() {
+    local label=$1 log=$2 variant=$3 scenes tokens
+    scenes=$(report_of "$log" APEXG2-SCENES)
+    tokens=$(tokens_for "$variant")
+    local o=.surfaces.overviewLayer
+    expect_report "$label" "$log" "$o.titleVisible == true" \
+        "overview: window titles always shown, not only on hover" APEXG2-SCENES
+    expect_report "$label" "$log" "$o | .thumbnails.maxScale == $OVERVIEW_THUMBNAIL_SCALE and .thumbnailsThreshold == $OVERVIEW_THUMBNAILS_THRESHOLD" \
+        "overview: workspace thumbnails at scale $OVERVIEW_THUMBNAIL_SCALE, shown from $((OVERVIEW_THUMBNAILS_THRESHOLD + 1)) workspaces" APEXG2-SCENES
+    expect_report "$label" "$log" "{f: $o.thumbnails.first, w: .topBar.panel.width, h: .scenes.overview.workArea.height}
+        | (.f.width - .w * $OVERVIEW_THUMBNAIL_SCALE | fabs <= 1) and (.f.height - .h * $OVERVIEW_THUMBNAIL_SCALE | fabs <= 1)" \
+        "overview: and drawn at that scale of the work area (150 x 90 on 1440 x 900)" APEXG2-SCENES
+    expect_report "$label" "$log" "$o.workspace | .background == false and .empty.visible and .empty.text == \"$EMPTY_WORKSPACE_TEXT\"
+        and (.x + .width / 2 - .empty.x - .empty.width / 2 | fabs <= 1) and (.y + .height / 2 - .empty.y - .empty.height / 2 | fabs <= 1)" \
+        "overview: no workspace background card, and \"$EMPTY_WORKSPACE_TEXT\" centred on the empty workspace" APEXG2-SCENES
+    top_bar_metric "$label overview" "$scenes" "$tokens" 'the empty-workspace label is $apex_font_workspace_empty_size $apex_font_heading_weight in $apex_fg_dim' \
+        "$o.workspace.empty" '(.font.size | px_is($t.apex_font_workspace_empty_size)) and .font.weight == ($t.apex_font_heading_weight | tonumber) and (.foreground | colour_is($t.apex_fg_dim))'
+    expect_report "$label" "$log" ".surfaces.appGrid.grid == {columns: $LAUNCHER_COLUMNS, rows: $LAUNCHER_ROWS, iconSize: $LAUNCHER_ICON_SIZE}" \
+        "launcher: $LAUNCHER_COLUMNS columns of $LAUNCHER_ICON_SIZE px icons, $LAUNCHER_ROWS rows a page" APEXG2-SCENES
+}
+
 # shellcheck disable=SC2016 # jq programs and token names, not shell expansions
 derived_surfaces() {
     local label=$1 log=$2 variant=$3 scenes tokens
@@ -826,6 +855,7 @@ direct_cases() {
     date_menu default "$f" light
     overview_style default "$f" light
     app_grid default "$f" light
+    overview_layer default "$f" light
     derived_surfaces default "$f" light
 
     f=$run/default-scale1.log
@@ -843,6 +873,7 @@ direct_cases() {
     date_menu default-scale1 "$f" light
     overview_style default-scale1 "$f" light
     app_grid default-scale1 "$f" light
+    overview_layer default-scale1 "$f" light
     derived_surfaces default-scale1 "$f" light
 
     f=$run/dark-style.log
@@ -863,6 +894,7 @@ direct_cases() {
     date_menu dark-style "$f" dark
     overview_style dark-style "$f" dark
     app_grid dark-style "$f" dark
+    overview_layer dark-style "$f" dark
     derived_surfaces dark-style "$f" dark
     dark_style_off dark-style "$f"
 

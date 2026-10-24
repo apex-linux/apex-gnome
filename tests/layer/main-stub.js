@@ -124,8 +124,29 @@ export const layoutManager = {
 const overviewHandlers = new Map();
 let nextOverviewHandler = 1;
 
+// The parts of the overview's controls the overview feature changes, as stock leaves them.
+const controls = {
+    _thumbnailsBox: {
+        _maxThumbnailScale: 0.05,
+        _updateShouldShow: () => {},
+        queue_relayout: () => {},
+    },
+    _appDisplay: {
+        _grid: {
+            _gridModes: 'stock',
+            _currentMode: 0,
+            layout_manager: {fixed_icon_size: -1, _pageWidth: 1272},
+            setGridModes(modes) {
+                this._gridModes = modes ?? 'stock';
+            },
+            queue_relayout: () => {},
+        },
+    },
+};
+
 export const overview = {
     visible: false,
+    _overview: {_controls: controls},
     connect(signal, fn) {
         overviewHandlers.set(nextOverviewHandler, [signal, fn]);
         return nextOverviewHandler++;

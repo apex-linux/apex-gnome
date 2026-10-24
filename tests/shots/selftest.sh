@@ -379,6 +379,14 @@ REPORT_OF_A_LAUNCHER_DRAWN_FROM_TOKENS='
     pageIndicator: {background: ($t.apex_fg | hex)},
     pageHint: {gradient: 0}}}}'
 # shellcheck disable=SC2016 # a jq program
+REPORT_OF_AN_OVERVIEW_LAYER_FROM_TOKENS='
+{topBar: {panel: {width: 1440}}, scenes: {overview: {workArea: {y: 32, height: 868}}}, surfaces: {
+    overviewLayer: {titleVisible: true, thumbnailsThreshold: 1, thumbnails: {maxScale: 0.104, first: {width: 150, height: 90}},
+        workspace: {x: 250, y: 205, width: 939, height: 566, background: false,
+            empty: {x: 644, y: 477, width: 150, height: 22, visible: true, text: "No open windows", foreground: ($t.apex_fg_dim | hex),
+                font: {size: ($t.apex_font_workspace_empty_size | px), weight: ($t.apex_font_heading_weight | tonumber)}}}},
+    appGrid: {grid: {columns: 7, rows: 4, iconSize: 88}}}}'
+# shellcheck disable=SC2016 # a jq program
 REPORT_OF_DERIVED_SURFACES_DRAWN_FROM_TOKENS='
 ($t.apex_surface_border | px) as $b
 | {border: {top: $b}, borderColor: ($t.apex_panel_border | hex),
@@ -414,6 +422,7 @@ assert_run() {
     [[ $assertions == overview_style ]] && report=$REPORT_OF_AN_OVERVIEW_DRAWN_FROM_TOKENS
     [[ $assertions == app_grid ]] && report=$REPORT_OF_A_LAUNCHER_DRAWN_FROM_TOKENS
     [[ $assertions == derived_surfaces ]] && report=$REPORT_OF_DERIVED_SURFACES_DRAWN_FROM_TOKENS
+    [[ $assertions == overview_layer ]] && report=$REPORT_OF_AN_OVERVIEW_LAYER_FROM_TOKENS
     tokens=$(tokens_for "$variant")
     jq -nc --argjson t "$tokens" "$JQ_DEFS $HEX_DEF $report | $change" | sed 's/^/APEXG2-SCENES /' >"$T/top-bar.log"
     # shellcheck disable=SC2016 # expanded by the inner bash
@@ -702,6 +711,35 @@ test_overview_style() {
 .surfaces.overview.indicator.border.top = 3|upstream's 3 px indicator
 .surfaces.overview.caption.background = "#000000e6"|upstream's dark tooltip caption
 .surfaces.overview.section.background = "#2e2e33ff"|upstream's dark search section
+CHANGES
+}
+
+test_overview_layer() {
+    local variant change what passes failures open_gaps
+    for variant in light dark; do
+        read -r passes failures open_gaps <<<"$(assert_run overview_layer "$variant")"
+        if ((failures == 0 && open_gaps == 0 && passes == 6)); then
+            ok "overview feature ($variant): the layer's overview passes all $passes assertions"
+        else
+            not_ok "overview feature ($variant): the layer's overview passes (passed/failed/gaps $passes/$failures/$open_gaps): $(grep -m3 '^FAIL' "$T/top-bar.out" | paste -sd'|' -)"
+        fi
+    done
+    while IFS='|' read -r change what; do
+        read -r passes failures open_gaps <<<"$(assert_run overview_layer light "$change")"
+        if ((failures == 1)); then
+            ok "overview feature: $what fails one assertion"
+        else
+            not_ok "overview feature: $what fails one assertion (passed/failed/gaps $passes/$failures/$open_gaps)"
+        fi
+    done <<'CHANGES'
+.surfaces.overviewLayer.titleVisible = false|titles only on hover
+.surfaces.overviewLayer.thumbnails.maxScale = 0.05|upstream's thumbnail scale
+.surfaces.overviewLayer.thumbnailsThreshold = 2|thumbnails only from three workspaces
+.surfaces.overviewLayer.thumbnails.first.height = 78|thumbnails cut down by the box's padding
+.surfaces.overviewLayer.workspace.background = true|the workspace background card
+.surfaces.overviewLayer.workspace.empty.y = 300|the empty label off centre
+.surfaces.overviewLayer.workspace.empty.foreground = "#1d1d21ff"|the empty label in full $apex_fg
+.surfaces.appGrid.grid.iconSize = 96|upstream's 96 px launcher icons
 CHANGES
 }
 
@@ -1146,6 +1184,7 @@ test_modal_dialog
 test_date_menu
 test_overview_style
 test_app_grid
+test_overview_layer
 test_derived_surfaces
 test_today_pins
 test_known_gaps
