@@ -1011,7 +1011,8 @@ CHANGES
 readonly MOTION_REPORT='{enableAnimations: false,
   animated: {maximise: {maximised: true, transition: {mode: "CUBIC_BEZIER", duration: 300, curve: [0.2, 0.8, 0.2, 1]}},
              overview: {visible: true, transition: {mode: "CUBIC_BEZIER", duration: 200, curve: [0.2, 0.8, 0.2, 1]}}},
-  still: {maximise: {maximised: true, transition: null}, overview: {visible: true, transition: null}}}'
+  still: {maximise: {maximised: true, transition: null}, overview: {visible: true, transition: null},
+         locatePointer: {mode: "CUBIC_BEZIER", duration: 830, curve: [0.2, 0.8, 0.2, 1]}}}'
 
 write_motion_run() {
     local change=$1 dir=$T/motion
@@ -1043,6 +1044,7 @@ test_motion() {
 .animated.overview.transition = null|an overview that did not animate
 .still.maximise.transition = {mode: "CUBIC_BEZIER", duration: 1}|a transition left with animations off
 .animated.maximise.maximised = false|a window that did not maximise
+.still.locatePointer = null|a Locate Pointer ripple that no longer animates with animations off
 CHANGES
 }
 

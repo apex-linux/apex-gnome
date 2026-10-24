@@ -1392,6 +1392,12 @@ async function motion() {
     interfaceSettings.set_boolean('enable-animations', false);
     await Scripting.sleep(MOTION_SETTLE_MS);
     const still = {maximise: await maximiseTransition(window), overview: await overviewTransition()};
+    // Locate Pointer's ripples are animationRequired: an a11y aid that animates regardless.
+    interfaceSettings.set_boolean('locate-pointer', true);
+    await Scripting.sleep(MOTION_SETTLE_MS);
+    Main.locatePointer.show();
+    still.locatePointer = transitionInfo(Main.locatePointer._ripples?._ripple1.get_transition('scale-x') ?? null);
+    interfaceSettings.set_boolean('locate-pointer', false);
     const enableAnimations = stSettings.enable_animations;
     if (uninhibited)
         stSettings.inhibit_animations();
