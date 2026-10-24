@@ -81,6 +81,48 @@ $_end_session_share: $_end_session_row /
 
 @import "end-session-icon";
 
+// St draws one box-shadow: the card's 1 px ring is its border.
+.apex-update-card {
+  padding: $apex_update_card_padding_y $apex_update_card_padding_x;
+  spacing: $apex_update_card_gap;
+  border: 1px solid $apex_card_border;
+  border-radius: $apex_radius_update_card;
+  background-color: $apex_card;
+  box-shadow: 0 1px 3px $apex_update_card_shadow;
+
+  .apex-update-card-icon { icon-size: $apex_update_card_icon_size; }
+  .apex-update-card-text { spacing: $apex_update_card_text_gap; }
+
+  .apex-update-card-title {
+    color: $apex_fg;
+    font-size: apex-text-size($apex_font_update_card_title_size);
+    font-weight: $apex_font_update_card_title_weight;
+  }
+
+  .apex-update-card-subtitle {
+    color: $apex_fg_dim;
+    font-size: apex-text-size($apex_font_update_card_subtitle_size);
+  }
+
+  .toggle-switch {
+    width: $apex_update_switch_width;
+    height: $apex_update_switch_height;
+    background-color: $apex_button_hover;
+
+    StIcon { color: transparent; }
+
+    .handle {
+      margin: ($apex_update_switch_height - $apex_update_switch_knob) / 2;
+      width: $apex_update_switch_knob;
+      height: $apex_update_switch_knob;
+      background-color: white;
+      box-shadow: 0 1px 3px $apex_update_switch_knob_shadow;
+    }
+
+    &:checked { background-color: $apex_accent; }
+  }
+}
+
 @mixin apex-entry {
   min-height: $apex_entry_height;
   padding: 0 $apex_entry_padding;

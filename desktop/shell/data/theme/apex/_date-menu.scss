@@ -75,20 +75,22 @@ $_calendar_day_width: ($apex_date_menu_column_width - 2 * $apex_calendar_padding
       }
     }
 
+    .apex-message-row { spacing: $apex_banner_gap; }
+
+    .message-icon {
+      icon-size: $apex_message_icon_size;
+      width: $apex_message_icon_size;
+      height: $apex_message_icon_size;
+      min-width: $apex_message_icon_size;
+      min-height: $apex_message_icon_size;
+
+      &:ltr, &:rtl { margin: 0; }
+      &.message-themed-icon { padding: 0; background-color: transparent; }
+    }
+
     .message-box {
       padding: 0;
       spacing: $apex_banner_gap;
-
-      .message-icon {
-        icon-size: $apex_message_icon_size;
-        width: $apex_message_icon_size;
-        height: $apex_message_icon_size;
-        min-width: $apex_message_icon_size;
-        min-height: $apex_message_icon_size;
-
-        &:ltr, &:rtl { margin: 0; }
-        &.message-themed-icon { padding: 0; background-color: transparent; }
-      }
     }
 
     .message-title { font-size: apex-text-size($apex_font_size); font-weight: $apex_font_heading_weight; }
