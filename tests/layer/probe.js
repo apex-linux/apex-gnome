@@ -513,6 +513,10 @@ async function exerciseGlass() {
     panel.add_style_class_name('apex-solid-bar');
     report('solid-bar');
     panel.remove_style_class_name('apex-solid-bar');
+    Main.sessionMode.lock(true);
+    report('locked');
+    Main.sessionMode.lock(false);
+    report('unlocked');
     quickSettings.menu.box.mapped = false;
     quickSettings.menu.box.emit('notify::mapped');
     report('menu-closed');
