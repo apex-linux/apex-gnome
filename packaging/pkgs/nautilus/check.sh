@@ -49,7 +49,16 @@ ok "every resource file of Source1 ($n) is in $APEX_PREFIX"
 
 css=$(gresource extract "$bin" "$APEX_PREFIX/apex.css") || fail "nautilus has no $APEX_PREFIX/apex.css"
 grep -Fq '/*! apex-nautilus */' <<<"$css" || fail "$APEX_PREFIX/apex.css has no Apex marker"
-ok "$APEX_PREFIX/apex.css carries the Apex marker"
+for selector in apex-disk-footer apex-count-bar; do
+    grep -Fq "$selector" <<<"$css" || fail "$APEX_PREFIX/apex.css has no $selector rules"
+done
+ok "$APEX_PREFIX/apex.css carries the Apex marker and the footer's and count bar's sheet"
+
+schema=$root/usr/share/glib-2.0/schemas/org.gnome.nautilus.gschema.xml
+for line in 'nick="apex"' "<default>'apex'</default>"; do
+    grep -Fq -- "$line" "$schema" || fail "org.gnome.nautilus.gschema.xml has no $line (0003-zoom)"
+done
+ok "the grid's default zoom level is the 72 px one"
 
 grep -aFq org.gnome.Ptyxis "$bin" || fail "Fedora's default-terminal.patch is missing from /usr/bin/nautilus"
 ok "Fedora's default-terminal.patch is still applied"

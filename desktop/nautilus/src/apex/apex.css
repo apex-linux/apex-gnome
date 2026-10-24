@@ -1,2 +1,45 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 /*! apex-nautilus */
+
+apex-disk-footer {
+  padding: 12px 16px 16px;
+}
+
+apex-disk-footer .apex-disk-name {
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+apex-disk-footer levelbar trough,
+apex-disk-footer levelbar block {
+  min-height: 4px;
+  border-radius: 2px;
+}
+
+apex-disk-footer levelbar trough {
+  padding: 0;
+  border: none;
+  background: alpha(currentColor, 0.12);
+}
+
+apex-disk-footer levelbar block.filled {
+  border: none;
+  background: var(--accent-bg-color);
+}
+
+apex-disk-footer levelbar block.empty {
+  background: none;
+}
+
+apex-disk-footer .apex-disk-free {
+  font-size: 11.5px;
+  color: alpha(currentColor, 0.62);
+}
+
+apex-count-bar {
+  min-height: 30px;
+  border-top: 1px solid var(--border-color);
+  font-size: 11.5px;
+  color: alpha(currentColor, 0.62);
+  font-feature-settings: "tnum";
+}

@@ -2,6 +2,10 @@
 
 libnautilus_sources += files(
   'apex.c',
+  'apex-count-bar.c',
+  'apex-disk-footer.c',
+  'apex-format.c',
+  'apex-window.c',
 )
 
 libnautilus_sources += gnome.compile_resources('apex-resources',

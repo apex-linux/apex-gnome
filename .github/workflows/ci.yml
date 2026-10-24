@@ -225,7 +225,7 @@ jobs:
     # apex-image; the builder VM adds only the signing and the store.
     name: tests/nautilus/lane.sh (Fedora 45, nautilus rebuilt)
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 60
     permissions:
       contents: read
     container:
@@ -245,6 +245,27 @@ jobs:
 
       - name: tests/nautilus/lane.sh
         run: tests/nautilus/lane.sh
+
+      - name: tests/nautilus/format-test.sh
+        env:
+          APEX_NAUTILUS_TESTS_NO_SKIP: "1"
+        run: |
+          dnf5 -y -q --setopt=install_weak_deps=False --repo=fedora --repo=updates install gcc glib2-devel pkgconf-pkg-config
+          tests/nautilus/format-test.sh
+
+      - name: tests/nautilus/shoot.sh on the built RPMs
+        run: |
+          dnf5 -y -q --setopt=install_weak_deps=False --repo=fedora --repo=updates install \
+            gnome-shell mesa-dri-drivers dbus-daemon python3-dbusmock gcc util-linux at-spi2-core python3-gobject \
+            inkscape glycin-thumbnailer adwaita-sans-fonts jetbrains-mono-fonts-all
+          tests/nautilus/shoot.sh _build/nautilus/out
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: nautilus-shots
+          path: _build/nautilus/shots/
+          if-no-files-found: ignore
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: failure()
