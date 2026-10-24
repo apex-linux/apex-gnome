@@ -20,6 +20,8 @@ HINT = "Press Enter to unlock"
 PROBLEM = "Sorry, that didn't work. Please try again."
 APEX_CLOCK = "unlock-dialog-clock-date unlock-dialog-clock-time"
 STOCK_CLOCK = "unlock-dialog-clock-time unlock-dialog-clock-date unlock-dialog-clock-hint"
+APEX_BLUR = "radius=60 brightness=1.00 saturation=1.30"
+STOCK_BLUR = "radius=90 brightness=0.65 saturation=1.00"
 LOAD_WITNESS = "Apex: APEX_SHELL_TEST_FAULT=load-witness names no phase"
 
 # Per lock case: the layer's lock or upstream's, and the question its prompt shows.
@@ -83,7 +85,7 @@ def check_lock(shots, case, want):
     steps = ("opened", "wrong-answer", "blank", "wake", "escape", "key-after-escape", "end")
     for step in steps:
         check(f"{case}: {step} is reported", step in f)
-    if failed:
+    if not all(step in f for step in steps):
         return
     for step in steps:
         check(f"{case}: {step}: locked", f[step]["locked"] is True)
@@ -105,6 +107,7 @@ def check_lock(shots, case, want):
           json.dumps(wrong["prompt"]))
     if want["apex"]:
         check(f"{case}: one stage", "apex-lock" in opened["classes"].split())
+        check(f"{case}: sigma 30, saturation 1.3, no darkening", opened["blur"] == APEX_BLUR, str(opened["blur"]))
         check(f"{case}: date above time, no upstream hint", opened["clock"] == APEX_CLOCK, opened["clock"])
         check(f"{case}: the unlock hint", opened["hint"] == HINT, str(opened["hint"]))
         check(f"{case}: the prompt is up at once", opened["prompt"] is not None)
@@ -127,6 +130,7 @@ def check_lock(shots, case, want):
               f"channels {sorted(calls)}")
     else:
         check(f"{case}: upstream's two stages", "apex-lock" not in opened["classes"].split())
+        check(f"{case}: upstream's blur", opened["blur"] == STOCK_BLUR, str(opened["blur"]))
         check(f"{case}: upstream's clock with its hint", opened["clock"] == STOCK_CLOCK, opened["clock"])
         check(f"{case}: no prompt until a key", opened["prompt"] is None)
         check(f"{case}: upstream's avatar icon", (wrong["prompt"] or {}).get("avatar") == "avatar-default-symbolic")

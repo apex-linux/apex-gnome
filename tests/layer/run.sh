@@ -589,7 +589,7 @@ fact "lock: a DisplayConfig that never answers leaves the prompt up" \
 fact "lock: so does one that fails" 'lock\.display-config-error=page=prompt prompt=conversation-1 cancelled=none'
 has "lock: and says so" 'Apex: lock: no org\.gnome\.Mutter\.DisplayConfig, so the prompt stays at blank'
 fact "lock: the clock never slides away" 'lock\.clock-progress=0 0 0'
-fact "lock: blur sigma 30 (radius 60), no darkening" 'lock\.blur=\{"brightness":1,"radius":60\}'
+fact "lock: blur sigma 30 (radius 60), saturation 1.3, no darkening" 'lock\.blur=\{"brightness":1,"radius":60,"saturation":1\.3\}'
 fact "lock: PAM's exact \"Password:\" reads \"Enter Password\"" 'lock\.question\."Password:"="Enter Password"'
 fact "lock: \"Password: \" with a space is PAM's question verbatim" 'lock\.question\."Password: "="Password: "'
 fact "lock: other questions verbatim" 'lock\.question\."Verification code:"="Verification code:"'

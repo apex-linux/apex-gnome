@@ -290,7 +290,7 @@ $apex_lock_list: rgba(255, 255, 255, .14);
 $apex_lock_list_border: rgba(255, 255, 255, .22);
 $apex_lock_list_separator: rgba(255, 255, 255, .12);
 $apex_lock_greeter_base: #0c1122;
-// lock/background.js applies the same sigma; the saturation waits for S2b's glass manager.
+// lock/background.js applies the same sigma and saturation to the lock's blur.
 $apex_lock_blur: 30px;
 $apex_lock_saturation: 130%;
 

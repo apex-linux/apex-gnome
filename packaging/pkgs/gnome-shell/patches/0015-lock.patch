@@ -86,7 +86,7 @@ index 21b4736..8c77b98 100644
                  effect.set({
 -                    brightness: BLUR_BRIGHTNESS,
 -                    radius: BLUR_RADIUS * themeContext.scale_factor,
-+                    brightness: blur.brightness,
++                    ...blur,
 +                    radius: blur.radius * themeContext.scale_factor,
                  });
              }

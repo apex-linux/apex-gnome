@@ -85,6 +85,8 @@ function describeLock(dialog) {
         date: clock._date.text,
         time: clock._time.text,
         hint: hint?.text ?? null,
+        blur: dialog._backgroundGroup.get_children().map(b => b.get_effect('blur'))
+            .map(e => e && `radius=${e.radius} brightness=${e.brightness.toFixed(2)} saturation=${e.saturation.toFixed(2)}`)[0] ?? null,
         prompt: describePrompt(dialog._authPrompt),
     };
 }
