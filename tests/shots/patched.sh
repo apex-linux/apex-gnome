@@ -11,8 +11,9 @@ rebuilds Fedora's gnome-shell SRPM with this checkout's recipe (spec-edit, the s
 desktop/shell/ from the working tree as Source1), installs it with the layer's schema
 fixture, runs direct.sh's main part, then asserts what needs no image: each case's log and
 the top bar's metrics, today's pins and the known gaps of default, default-scale1 and
-dark-style, and their shell surfaces. The lane's own checks, signing and the mutter pin's
-mirror are apex-image's. -e G2_SURFACE_SCENES=1 also captures the surfaces' scenes.
+dark-style, their shell surfaces, and the glass case. Before that, Fedora's gnome-shell of
+the same version runs direct.sh's fedora part, the baseline of the glass case's unlock
+blur. The lane's own checks, signing and the mutter pin's mirror are apex-image's. -e G2_SURFACE_SCENES=1 also captures the surfaces' scenes.
 
   PATCHED_RPMS=DIR   install the gnome-shell RPMs in DIR instead of building them
   PATCHED_OUT=DIR    keep the RPMs and the run's logs in DIR (default: a temporary one)
@@ -120,12 +121,25 @@ build_rpms() {
     PATCHED_RPMS=$OUT/rpms
 }
 
+# Fedora's own shell of the same version first, for the glass case's unlock blur.
+fedora_part() {
+    local fedora_vr
+    fedora_vr=$(rpm -qp --qf '%{VERSION}-%{RELEASE}' "$PATCHED_RPMS"/gnome-shell-[0-9]*.x86_64.rpm | sed -E 's/\.apex[0-9.]*(\.local)?$//')
+    step "Fedora's gnome-shell $fedora_vr: direct.sh fedora"
+    quietly dnf5 -y "${REPOS[@]}" install "gnome-shell-$fedora_vr" mesa-dri-drivers dbus-daemon python3-dbusmock gcc glib2-devel gjs jq procps-ng
+    bash /w/direct.sh fedora || echo "# direct.sh fedora: exit $?"
+    # direct.sh main starts the system bus and the fixtures afresh.
+    pkill -f /w/fixtures.py || true
+    pkill -x dbus-daemon || true
+    rm -f /run/dbus/pid
+}
+
 install_shell() {
     local rpms
     rpms=("$PATCHED_RPMS"/gnome-shell-[0-9]*.x86_64.rpm "$PATCHED_RPMS"/gnome-shell-common-*.noarch.rpm)
     [[ -f ${rpms[0]} && -f ${rpms[1]} ]] || die "no gnome-shell and gnome-shell-common RPMs in $PATCHED_RPMS"
     step "the patched shell, the fixtures' services, gjs and jq"
-    quietly dnf5 -y "${REPOS[@]}" install "${rpms[@]}" mesa-dri-drivers dbus-daemon python3-dbusmock gcc gjs jq
+    quietly dnf5 -y "${REPOS[@]}" install "${rpms[@]}" mesa-dri-drivers dbus-daemon python3-dbusmock gcc glib2-devel gjs jq nautilus
     rpm -q gnome-shell | grep -q "\.apex" ||
         die "the installed gnome-shell is not an Apex build: $(rpm -q gnome-shell)"
     # What apex-desktop ships: the schema (the layer's fixture) and the weekday override.
@@ -138,14 +152,15 @@ mkdir -p "$OUT"
 if [[ -z ${PATCHED_RPMS:-} ]]; then
     build_rpms
 fi
-install_shell
-
-step "direct.sh main"
 run=$OUT/run
 rm -rf "$run"
 mkdir -p "$run/captures"
 ln -sfn "$HERE" /w
 ln -sfn "$run" /out
+fedora_part
+install_shell
+
+step "direct.sh main"
 rc=0
 bash /w/direct.sh main || rc=$?
 echo "# direct.sh main: exit $rc"
@@ -172,6 +187,11 @@ top_bar_today default-scale1 "$run/default-scale1.log" light
 top_bar dark-style "$run/dark-style.log" dark
 top_bar_today dark-style "$run/dark-style.log" dark
 top_bar_gaps dark-style "$run/dark-style.log" dark
+dock_metrics default "$run/default.log" light
+dock_metrics default-scale1 "$run/default-scale1.log" light
+dock_metrics dark-style "$run/dark-style.log" dark
+no_dock stock-light "$run/stock-light.log"
+no_dock stock-dark "$run/stock-dark.log"
 for c in default:light default-scale1:light dark-style:dark; do
     shell_surfaces "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
     quick_settings "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
@@ -181,6 +201,7 @@ for c in default:light default-scale1:light dark-style:dark; do
     date_menu "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
     overview_style "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
     app_grid "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
+    overview_layer "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
     derived_surfaces "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
 done
 for c in stock-light stock-dark; do
@@ -188,5 +209,8 @@ for c in stock-light stock-dark; do
 done
 layer_cycles "$run"
 motion_curve "$run"
+no_js_error glass "$run/glass.log"
+glass_frames glass "$run/glass.log"
+glass_unlock_vs_fedora "$run"
 echo "# logs and captures: $run"
 summary

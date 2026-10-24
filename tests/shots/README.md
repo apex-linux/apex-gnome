@@ -45,16 +45,17 @@ The direct cases:
 
 | Case | Settings | Asserts |
 |---|---|---|
-| `default` | `color-scheme` `'default'` | the Apex light sheet with its marker, `prefer-light`, no fault feature, the crash guard's marker created and removed; Super+Space (`toggle-spotlight`) registered in the normal and overview modes; the panel showed the one-time search hint (`search-hint-shown` true; until apex-desktop's schema has the key, the shell reports `no-key`); the top bar's and the shell surfaces' metrics, light |
-| `default-scale1` | as `default`, on a 1440x900 virtual monitor at scale 1, as the desktop VM runs | the Apex light sheet; the top bar's and the shell surfaces' metrics at scale 1 |
-| `dark-style` | `prefer-dark` | the Apex dark sheet; the top bar's and the shell surfaces' metrics, dark; then the probe clicks Quick Settings' Dark Style toggle (its own `clicked` signal): the toggle turns off, writes `color-scheme` `'default'`, and the running shell loads the Apex light sheet |
+| `default` | `color-scheme` `'default'` | the Apex light sheet with its marker, `prefer-light`, no fault feature, the crash guard's marker created and removed; Super+Space (`toggle-spotlight`) registered in the normal and overview modes; the panel showed the one-time search hint (`search-hint-shown` true; until apex-desktop's schema has the key, the shell reports `no-key`); the top bar's, the dock's and the shell surfaces' metrics, light |
+| `default-scale1` | as `default`, on a 1440x900 virtual monitor at scale 1, as the desktop VM runs | the Apex light sheet; the top bar's, the dock's and the shell surfaces' metrics at scale 1 |
+| `dark-style` | `prefer-dark` | the Apex dark sheet; the top bar's, the dock's and the shell surfaces' metrics, dark; then the probe clicks Quick Settings' Dark Style toggle (its own `clicked` signal): the toggle turns off, writes `color-scheme` `'default'`, and the running shell loads the Apex light sheet |
 | `stock-light`, `stock-dark` | `APEX_SHELL_SAFE=1` with `prefer-light` or `prefer-dark` | upstream's sheet of that variant from `theme/stock/`; the overview's thumbnails at upstream's maximum scale 0.05 and at the effective scale of Fedora's build; the rebuilt high-contrast sheet, which safe mode keeps, is Fedora's apart from the structure marker; no Super+Space binding |
 | `safe-env`, `layer-disabled`, `kernel-safe` | the three kill switches | upstream's dark sheet from `theme/stock/`, the stock colour scheme, every hook stock, no Super+Space binding, the reason logged; the same sheet in all three; `safe-env`: no search hint |
-| `layer-cycles` | the capture settings; the probe sets `layer-enabled` false, then true, three times | while off: upstream's dark sheet from `theme/stock/`, the stock colour scheme, every hook stock, no Super+Space binding; while on: the Apex light sheet, `prefer-light` and Super+Space; each time it is on the stage holds the same actors, type by type, as at startup, and each time it is off the same as the first time; the layer logs each switch |
+| `layer-cycles` | the capture settings; the probe sets `layer-enabled` false, then true, three times | while off: upstream's dark sheet from `theme/stock/`, the stock colour scheme, every hook stock, no Super+Space binding; while on: the Apex light sheet, `prefer-light` and Super+Space; each time it is on the stage holds the same actors, type by type, as at startup, and each time it is off the same as the first time (the first count waits out main.js's 20 s timeout for deferred work, which fills the overview's hidden dash; an `St.Icon` counts, not the texture child St gives it once it is first styled, which a dash hidden since startup decides); the layer logs each switch |
 | `motion` | the capture settings with `enable-animations` true; the probe lifts the inhibit `main.js` puts on animations without hardware-accelerated rendering, starts `window.js`, a plain GTK 4 window, maximises and restores it once (mutter gives a first size change a 0 × 0 old frame, which stock never animates), maximises it and opens the overview, then sets `enable-animations` false and does both again | DESIGN's motion (ROADMAP S3c): the window actor's size-change transition and the overview's state transition are `CUBIC_BEZIER` with the control points (.2, .8) and (.2, 1), over 300 and 200 ms; with animations off, neither creates a transition |
 | `fault-configure`, `fault-enable` | `APEX_SHELL_TEST_FAULT` | only the fault feature is off; the `witness` feature after it still enables; the rest of the layer runs, Super+Space included, and the shell survives |
 | `fault-abort` | `abort-after-enable` | SIGABRT (exit 134) with the crash guard's marker left behind |
 | `fedora-light`, `fedora-dark` | Fedora's build, `prefer-light` or `prefer-dark` | no Apex module; upstream's sheet at its own path, byte for byte the one safe mode loads from `theme/stock/` |
+| `glass`, `fedora-glass` | the capture settings, `G2_GLASS=1` | patch 0003's glass in the frames the shell drew; the stock unlock blur captured in both shells (see "Glass") |
 
 Every case: the probe ran (so the static import graph loaded), from `startup-complete`, and no `JS ERROR`;
 the wall clock stands at the fixed time and the top bar's clock shows it (`Mon Sep 28`, EN SPACE, `09:41`).
@@ -122,7 +123,7 @@ masks, and writes a difference image to `compare/` when they differ.
 
 | Pair | Masks | Why |
 |---|---|---|
-| Apex light (`default`) against `fedora-light`; Apex dark against `fedora-dark`, the desktop scene | `panel`: the top bar's box in either capture | ROADMAP S1a: the captures equal Fedora's stock shell outside the masks; S1a restyles only the top bar |
+| Apex light (`default`) against `fedora-light`; Apex dark against `fedora-dark`, the desktop scene | `panel` and `dock`: the top bar's and the dock's boxes in either capture | ROADMAP S1a: the captures equal Fedora's stock shell outside the masks; S1a and S2a restyle the top bar and add the dock |
 | `stock-light` against `fedora-light`; `stock-dark` against `fedora-dark`, each scene | none | safe mode draws exactly Fedora's shell, its clock and status glyphs included |
 | each capture case of run 2 against run 1 | none | the clock stands still |
 
@@ -162,6 +163,14 @@ fill of the status button is centred on its pill; and with Large Text (the probe
 sizes while the clock text grows to 1.25 × 13.5 px and stays within its pill. The probe
 measures in CSS px through St itself, so the values hold whether mutter lays the stage
 out in logical or physical pixels.
+
+`dock_metrics` reads the dock the same way, against the same token file: shown, centred
+and `$apex_dock_bottom_gap` above the bottom edge; its background's radius
+`$apex_radius_dock`; every icon `$apex_dock_icon_size` (`dock-icon-size` medium); the apps
+first, then the separator, Show Apps and Trash, with no separator among the apps; the
+full-colour Show Apps icon; and in the overview the dock shown, the overview's own dash
+hidden and its workspaces laid out above the dock. The safe-mode cases have no dock, and the Apex captures mask it, as they mask the
+bar, against Fedora's, whose desktop has none.
 
 ## The shell surfaces' metrics
 
@@ -219,6 +228,14 @@ tile (at rest, hovered, focused) and the fixture image's System folder, opens th
 and reads its dialog, captures it with `G2_SURFACE_SCENES=1`, and reads the hidden
 running dot, page indicator and page hint from stand-ins.
 
+`overview_layer` checks the `overview` layer feature in the same cases, in the empty
+overview the scene captured: no background card behind the active workspace, "No open
+windows" centred on it in `$apex_fg_dim` at `$apex_font_workspace_empty_size`, the
+thumbnails at scale .081 (one drawn at .081 of the work area, 117 × 70 on 1440 × 900)
+and the threshold of one workspace, and the launcher's grid at 7 columns, 4 rows and
+88 px icons. G2 opens no windows, so the `window-title-visible` hook's answer stands in for
+a title shown without hover.
+
 `derived_surfaces` reads surfaces with no board, which G2 never opens, from nested
 stand-ins in the same cases: the workspace switcher and its dots, the resize popup, the
 input method's candidates and a candidate, the run dialog's entry, an audio device tile
@@ -226,6 +243,31 @@ and the monitor number.
 
 None of these surfaces is in a capture compared with Fedora, so the comparison with Fedora's build
 is unchanged: the Apex overview is compared only run to run, and safe mode's with Fedora's.
+
+## Glass
+
+`glass.js` runs in the `glass` case on the Apex build and in `fedora-glass` on Fedora's.
+It reads the frames the shell drew, as they went out, at the stage's `after-paint`: Cogl's
+`read_pixels` writes to a caller's buffer, which gjs cannot pass, so `frame.c` wraps it
+and `G2Frame-1.gir` declares it. `direct.sh` builds both into `/run/g2-frame` with gcc
+and glib2-devel's `gi-compile-repository`; `paint-view` gives each frame's redraw clip.
+
+A grid of 24 px tiles lies under a 320×80 glass box with the top bar's glass (ADR 0014:
+σ 24, saturation 1.6, corners 18), `fine` on. Tiles under the box change colour, which
+damages the tile alone:
+
+| Step | Asserts |
+|---|---|
+| a tile changes | the first frame's redraw clip leaves the box out and the effect redraws it on the next; that frame is `blur-ref.js`'s reference per channel within 4/255 inside, 12/255 in the band ds/2 px wide along the edges (ds the effect's own downscale) and 1/255 on average over the box. The first run fixed these (ROADMAP S2b): at ds 16 the edge band is the low-resolution blur's own clamping and upsampling, the interior's 4 is 8-bit intermediates times the saturation; llvmpipe is the reference renderer |
+| a tile changes and the box's redraw is queued, as the glass manager forwards damage | the same frame is the box a full redraw draws, pixel for pixel |
+| a tile changes, nothing forwarded | the frame draws the last result, pixel for pixel, and the next one is the full redraw's |
+| the same with `fine` off | stock's effect in that frame differs from the full redraw and misses the tolerances above: the stale sampling the redraw-clip rule prevents, so the case can see it |
+
+`blur-ref.js` is a clamp-to-edge Gaussian at full resolution, CSS `saturate()` and the
+rounded box's coverage, over the box alone; `blur-ref-test.js` tests it in `selftest.sh`.
+Both shells capture `unlockDialog.js`'s blur (actor mode, radius 90 × scale, brightness
+.65) over a grid, with a background-mode blur over it, every property of 0003 at its
+default: `glass-unlock.png` against `fedora-glass-unlock.png` differs by 0 pixels.
 
 ## Known gaps
 
@@ -266,7 +308,9 @@ it is at least 4.8:1), and what the goldens judge: the Apex Symbolic glyphs (S1b
 | `probe.js` | the shell (`--automation-script`) | prints `APEXG2 {…}` and, for the capture cases, `APEXG2-SCENES {…}` |
 | `assert.sh`, `stable.sh`, `lib.sh` | the builder VM | the assertions |
 | `png.js`, `compare.js` | gjs | PNG with GLib's zlib only, and the masked comparison |
-| `selftest.sh`, `png-test.js` | CI and the host | the tests of the above |
+| `glass.js`, `blur-ref.js` | the shell; gjs | the glass cases, and their CPU reference |
+| `frame.c`, `G2Frame-1.gir` | the glass cases' shells | `G2Frame.read()`, a region of the frame the shell drew |
+| `selftest.sh`, `png-test.js`, `blur-ref-test.js` | CI and the host | the tests of the above |
 
 ## The patched shell without a VM
 
@@ -292,5 +336,5 @@ cases also save a scene per surface group (`surfaces`, `quick-settings`, `switch
 ## Not yet
 
 - A bar-text contrast check over the fixture wallpapers.
-- The metrics of the other surfaces (dock, launcher, overview, notifications, windows, keys),
-  and approved goldens.
+- The metrics of the other surfaces (launcher, overview, notifications, windows, keys),
+  the dock's intellihide and edge reveal, and approved goldens.

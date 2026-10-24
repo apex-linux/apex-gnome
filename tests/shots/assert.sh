@@ -20,11 +20,17 @@ readonly APEX_DARK_SHEET=resource:///org/gnome/shell/theme/gnome-shell-dark.css
 readonly STOCK_SHEETS=resource:///org/gnome/shell/theme/stock
 readonly FEDORA_SHEETS=resource:///org/gnome/shell/theme
 readonly DIRECT_CASES=(default default-scale1 dark-style stock-light stock-dark safe-env layer-disabled
-    layer-cycles motion fault-configure fault-enable fault-abort kernel-safe fedora-light fedora-dark)
+    layer-cycles motion fault-configure fault-enable fault-abort kernel-safe fedora-light fedora-dark glass fedora-glass)
 readonly DIRECT_PARTS=(main kernel fedora)
 readonly CAPTURE_CASES=(default default-scale1 dark-style stock-light stock-dark fedora-light fedora-dark)
 readonly SCENES=(desktop overview)
 readonly STOCK_MAX_THUMBNAIL_SCALE=0.05
+readonly OVERVIEW_THUMBNAIL_SCALE=0.081
+readonly OVERVIEW_THUMBNAILS_THRESHOLD=1
+readonly EMPTY_WORKSPACE_TEXT='No open windows'
+readonly LAUNCHER_COLUMNS=7
+readonly LAUNCHER_ROWS=4
+readonly LAUNCHER_ICON_SIZE=88
 readonly DIAMOND_SQUARE_PX=8
 readonly DIAMOND_STROKE_PX=2
 readonly DIAMOND_STROKE_AREA_PX=$((4 * DIAMOND_SQUARE_PX * DIAMOND_STROKE_PX))
@@ -50,6 +56,11 @@ readonly WIFI_GLYPH=network-wireless-signal-excellent-symbolic
 readonly BATTERY_GLYPH=battery-level-80-symbolic
 readonly BLUETOOTH_GLYPH=bluetooth-active-symbolic
 readonly ALWAYS_LOADED_USER_UNIT=default.target
+# ROADMAP S2b: glass against blur-ref.js after partial damage, per channel out of 255, as the
+# first run fixed them (lead, 2026-10-24). The edge band is ds/2 px wide, ds the effect's own.
+readonly GLASS_INTERIOR_MAX=4
+readonly GLASS_EDGE_MAX=12
+readonly GLASS_MEAN_ERROR=1
 readonly APEX_UNIT_STARTED='(Starting|Started) [^ ]*[Aa]pex|Activating service name=.[^ ]*[Aa]pex'
 
 result_of() {
@@ -288,6 +299,35 @@ top_bar() {
     "${metric[@]}" "and only the text grows: the clock at $LARGE_TEXT_SCALING_FACTOR x \$apex_font_bar_size, within its pill" \
         '.topBar.largeText' "((.clockText.size - $LARGE_TEXT_SCALING_FACTOR * (\$t.apex_font_bar_size | px)) | fabs < 0.05)
             and .clockText.naturalHeight <= .clockPillHeight"
+}
+
+# shellcheck disable=SC2016 # jq programs and token names, not shell expansions
+dock_metrics() {
+    local label=$1 log=$2 variant=$3 scenes tokens
+    scenes=$(report_of "$log" APEXG2-SCENES)
+    tokens=$(tokens_for "$variant")
+    local -a metric=(top_bar_metric "$label dock" "$scenes" "$tokens")
+
+    "${metric[@]}" 'the dock is shown, $apex_dock_bottom_gap above the bottom edge and centred' \
+        '.dock' '.visible == true and (.bottomGap | px_is($t.apex_dock_bottom_gap)) and (.centreOffset | fabs <= 0.5)'
+    "${metric[@]}" 'its background has radius $apex_radius_dock' \
+        '.dock.radius' 'px_is($t.apex_radius_dock)'
+    "${metric[@]}" 'every icon is $apex_dock_icon_size (dock-icon-size medium)' \
+        '.dock.items | map(select(.iconSize != null))' 'length > 0 and all(.iconSize | px_is($t.apex_dock_icon_size))'
+    "${metric[@]}" 'its apps come first, then the separator, Show Apps and Trash, with no other separator' \
+        '.dock.items | map(.kind)' \
+        '(.[-3:] == ["separator", "show-apps", "trash"]) and (.[:-3] | all(. == "app"))'
+    "${metric[@]}" 'the Show Apps tile is full colour (view-app-grid)' \
+        '.dock.items | map(select(.kind == "show-apps")) | .[0].iconName' '. == "view-app-grid"'
+    "${metric[@]}" 'the overview keeps the dock and hides its own dash' \
+        '{dash: .dock.overviewDashVisible, overview: .scenes.overview.dockVisible}' '.dash == false and .overview == true'
+    "${metric[@]}" 'and lays its workspaces out above the dock' \
+        '{dock: .dock, clearance: .scenes.overview.dockClearance}' '.dock != null and .clearance != null and .clearance >= 0'
+}
+
+no_dock() {
+    local label=$1 log=$2
+    expect_report "$label" "$log" '.dock == null' "no Apex dock" APEXG2-SCENES
 }
 
 # shellcheck disable=SC2016 # jq programs and token names, not shell expansions
@@ -647,6 +687,29 @@ app_grid() {
             and (.pageIndicator.background | colour_is($t.apex_fg)) and .pageHint.gradient == 0'
 }
 
+# The overview feature's values are the layer's, not tokens; only the empty label is styled.
+# shellcheck disable=SC2016 # jq programs and token names, not shell expansions
+overview_layer() {
+    local label=$1 log=$2 variant=$3 scenes tokens
+    scenes=$(report_of "$log" APEXG2-SCENES)
+    tokens=$(tokens_for "$variant")
+    local o=.surfaces.overviewLayer
+    expect_report "$label" "$log" "$o.titleVisible == true" \
+        "overview: window titles always shown, not only on hover" APEXG2-SCENES
+    expect_report "$label" "$log" "$o | .thumbnails.maxScale == $OVERVIEW_THUMBNAIL_SCALE and .thumbnailsThreshold == $OVERVIEW_THUMBNAILS_THRESHOLD" \
+        "overview: workspace thumbnails at scale $OVERVIEW_THUMBNAIL_SCALE, shown from $((OVERVIEW_THUMBNAILS_THRESHOLD + 1)) workspaces" APEXG2-SCENES
+    expect_report "$label" "$log" "{f: $o.thumbnails.first, w: .topBar.panel.width, h: .scenes.overview.workArea.height}
+        | (.f.width - .w * $OVERVIEW_THUMBNAIL_SCALE | fabs <= 1) and (.f.height - .h * $OVERVIEW_THUMBNAIL_SCALE | fabs <= 1)" \
+        "overview: and drawn at that scale of the work area (117 x 70 on 1440 x 900)" APEXG2-SCENES
+    expect_report "$label" "$log" "$o.workspace | .background == false and .empty.visible and .empty.text == \"$EMPTY_WORKSPACE_TEXT\"
+        and (.x + .width / 2 - .empty.x - .empty.width / 2 | fabs <= 1) and (.y + .height / 2 - .empty.y - .empty.height / 2 | fabs <= 1)" \
+        "overview: no workspace background card, and \"$EMPTY_WORKSPACE_TEXT\" centred on the empty workspace" APEXG2-SCENES
+    top_bar_metric "$label overview" "$scenes" "$tokens" 'the empty-workspace label is $apex_font_workspace_empty_size $apex_font_heading_weight in $apex_fg_dim' \
+        "$o.workspace.empty" '(.font.size | px_is($t.apex_font_workspace_empty_size)) and .font.weight == ($t.apex_font_heading_weight | tonumber) and (.foreground | colour_is($t.apex_fg_dim))'
+    expect_report "$label" "$log" ".surfaces.appGrid.grid == {columns: $LAUNCHER_COLUMNS, rows: $LAUNCHER_ROWS, iconSize: $LAUNCHER_ICON_SIZE}" \
+        "launcher: $LAUNCHER_COLUMNS columns of $LAUNCHER_ICON_SIZE px icons, $LAUNCHER_ROWS rows a page" APEXG2-SCENES
+}
+
 # shellcheck disable=SC2016 # jq programs and token names, not shell expansions
 derived_surfaces() {
     local label=$1 log=$2 variant=$3 scenes tokens
@@ -689,8 +752,8 @@ compare_with_fedora() {
     {
         # The Apex bar is $apex_bar_height, upstream's 2.2em: the overview below it lays out on
         # another work area, so overview_below_bar checks its layout instead.
-        plan_entry apex-light-vs-fedora-desktop "$run" fedora-light "$run" default desktop "$run/compare" panel
-        plan_entry apex-dark-vs-fedora-desktop "$run" fedora-dark "$run" dark-style desktop "$run/compare" panel
+        plan_entry apex-light-vs-fedora-desktop "$run" fedora-light "$run" default desktop "$run/compare" panel dock
+        plan_entry apex-dark-vs-fedora-desktop "$run" fedora-dark "$run" dark-style desktop "$run/compare" panel dock
         for scene in "${SCENES[@]}"; do
             plan_entry "safe-light-vs-fedora-$scene" "$run" fedora-light "$run" stock-light "$scene" "$run/compare"
             plan_entry "safe-dark-vs-fedora-$scene" "$run" fedora-dark "$run" stock-dark "$scene" "$run/compare"
@@ -870,6 +933,7 @@ direct_cases() {
     top_bar default "$f" light
     top_bar_today default "$f" light
     top_bar_gaps default "$f" light
+    dock_metrics default "$f" light
     shell_surfaces default "$f" light
     quick_settings default "$f" light
     quick_settings_layer default "$f" apex
@@ -878,6 +942,7 @@ direct_cases() {
     date_menu default "$f" light
     overview_style default "$f" light
     app_grid default "$f" light
+    overview_layer default "$f" light
     derived_surfaces default "$f" light
 
     f=$run/default-scale1.log
@@ -888,6 +953,7 @@ direct_cases() {
     virtual_monitor default-scale1 "$f" 1
     top_bar default-scale1 "$f" light
     top_bar_today default-scale1 "$f" light
+    dock_metrics default-scale1 "$f" light
     shell_surfaces default-scale1 "$f" light
     quick_settings default-scale1 "$f" light
     quick_settings_layer default-scale1 "$f" apex
@@ -896,6 +962,7 @@ direct_cases() {
     date_menu default-scale1 "$f" light
     overview_style default-scale1 "$f" light
     app_grid default-scale1 "$f" light
+    overview_layer default-scale1 "$f" light
     derived_surfaces default-scale1 "$f" light
 
     f=$run/dark-style.log
@@ -909,6 +976,7 @@ direct_cases() {
     top_bar dark-style "$f" dark
     top_bar_today dark-style "$f" dark
     top_bar_gaps dark-style "$f" dark
+    dock_metrics dark-style "$f" dark
     shell_surfaces dark-style "$f" dark
     quick_settings dark-style "$f" dark
     quick_settings_layer dark-style "$f" apex
@@ -917,12 +985,14 @@ direct_cases() {
     date_menu dark-style "$f" dark
     overview_style dark-style "$f" dark
     app_grid dark-style "$f" dark
+    overview_layer dark-style "$f" dark
     derived_surfaces dark-style "$f" dark
     dark_style_off dark-style "$f"
 
     for c in stock-light stock-dark; do
         exits "$run" "$c" 0
         stock_view "$c" "$run/$c.log" "${c#stock-}"
+        no_dock "$c" "$run/$c.log"
         quick_settings_layer "$c" "$run/$c.log" stock
         no_apex_failure "$c" "$run/$c.log"
     done
@@ -987,6 +1057,42 @@ direct_cases() {
         overview_below_bar "$c" "$run/$c.log"
     done
     compare_with_fedora "$run"
+    glass_frames glass "$run/glass.log"
+    glass_unlock_vs_fedora "$run"
+}
+
+# Patch 0003's glass in the frames the shell drew (glass.js, the glass case).
+glass_frames() {
+    local label=$1 log=$2
+    expect_report "$label" "$log" '.error == null and .patched' "the probe ran the glass cases on the patched ShellBlurEffect" APEXG2-GLASS
+    expect_report "$label" "$log" '.pixels.reference | .clippedFirst and .reblurCovered' \
+        "damage under the glass: the first frame's redraw clip leaves the box out, the effect's own redraw covers it" APEXG2-GLASS
+    local within="(.interior.max | max) <= $GLASS_INTERIOR_MAX and (.edge.max | max) <= $GLASS_EDGE_MAX and (.box.mean | max) <= $GLASS_MEAN_ERROR"
+    expect_report "$label" "$log" ".pixels.reference | .downscale > 1 and $within" \
+        "then the box is blur-ref.js's Gaussian, saturate() and corners per channel: within $GLASS_INTERIOR_MAX/255 inside, $GLASS_EDGE_MAX/255 in the ds/2 band along the edges, $GLASS_MEAN_ERROR/255 on average" APEXG2-GLASS
+    expect_report "$label" "$log" '.pixels.sameFrame | .covered and .changed > 0 and .differingFromFull == 0' \
+        "damage forwarded to the glass box re-blurs in the same frame, as a full redraw draws it" APEXG2-GLASS
+    expect_report "$label" "$log" '.pixels.clippedRedraw | (.covered | not) and .differingFromLast == 0 and .nextCovered and .nextDifferingFromFull == 0' \
+        "a redraw clip that misses the box draws the last result, pixel for pixel; the next frame is the full redraw's" APEXG2-GLASS
+    expect_report "$label" "$log" ".pixels.stock | (.covered | not) and .differingFromFull > 0 and (($within) | not)" \
+        "stock's blur in such a frame samples pixels the frame did not repaint and misses those tolerances, so the case can see it" APEXG2-GLASS
+}
+
+fedora_glass() {
+    local run=$1
+    exits "$run" fedora-glass 0
+    expect_report fedora-glass "$run/fedora-glass.log" '.error == null and (.patched | not) and .unlock.file == "fedora-glass-unlock.png"' \
+        "Fedora's ShellBlurEffect has none of 0003's properties; the unlock blur captured" APEXG2-GLASS
+    check "fedora-glass: fedora-glass-unlock.png written" test -s "$run/captures/fedora-glass-unlock.png"
+}
+
+# The stock unlock blur, at default values of 0003's properties, is Fedora's to the pixel.
+glass_unlock_vs_fedora() {
+    local run=$1 plan=$1/compare/glass-plan.json results=$1/compare/glass-results.json
+    mkdir -p "$run/compare"
+    fedora_glass "$run"
+    plan_entry stock-unlock-vs-fedora "$run" fedora-glass "$run" glass unlock "$run/compare" | jq -s . >"$plan"
+    compare_and_expect_equal "$plan" "$results"
 }
 
 g1_on_the_image() {

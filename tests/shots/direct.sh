@@ -15,6 +15,8 @@ HOME and XDG_RUNTIME_DIR, a 2880x1800 virtual monitor at scale 2 (default-scale1
 fixtures.py's python-dbusmock services on the system bus (/out/fixtures-PART.txt) and a
 wall clock that clock.c holds at G2_CLOCK. A case that times out stops the part (exit 3).
 G2_SURFACE_SCENES=1 in direct.sh's environment also captures the shell surfaces' scenes.
+The glass cases read frames through frame.c, built with glib2-devel's headers and
+gi-compile-repository.
 
   main     every case, with the VM's real /proc/cmdline
   kernel   the apex.safe=1 case (run.sh binds a fixture over /proc/cmdline)
@@ -33,6 +35,7 @@ esac
 readonly SHELL_TIMEOUT=150
 readonly EXIT_HUNG=3
 readonly CLOCK_LIB=/run/g2-clock.so
+readonly FRAME_DIR=/run/g2-frame
 readonly G2_CLOCK='2026-09-28 09:41:00'
 G2_CLOCK_EPOCH=$(date -u -d "$G2_CLOCK" +%s)
 readonly G2_CLOCK_EPOCH
@@ -67,6 +70,14 @@ gcc -O2 -Wall -Werror -shared -fPIC -o "$CLOCK_LIB" /w/clock.c || { echo "direct
 # ld.so only warns when a preload is missing, and the shells would keep the real clock.
 held=$(env LD_PRELOAD="$CLOCK_LIB" G2_CLOCK_EPOCH="$G2_CLOCK_EPOCH" date -u '+%F %T' 2>&1)
 [[ $held == "$G2_CLOCK" ]] || { echo "direct.sh: $CLOCK_LIB does not hold the clock at $G2_CLOCK: $held" >&2; exit 1; }
+# The glass cases read the frames the shell drew through frame.c (G2Frame-1.gir).
+mkdir -p "$FRAME_DIR"
+# shellcheck disable=SC2046 # pkg-config prints several flags
+if ! gcc -O2 -Wall -Werror -shared -fPIC $(pkg-config --cflags glib-2.0) -o "$FRAME_DIR/libg2frame.so" /w/frame.c ||
+    ! gi-compile-repository --includedir=/usr/share/gir-1.0 -o "$FRAME_DIR/G2Frame-1.typelib" /w/G2Frame-1.gir; then
+    echo "direct.sh: cannot build frame.c and its typelib" >&2
+    exit 1
+fi
 
 run_case() {
     local name=$1 gsettings_triples=$2
@@ -129,6 +140,7 @@ case $part in
     fedora)
         run_and_record_case fedora-light "$CAPTURE_SETTINGS;org.gnome.desktop.interface color-scheme prefer-light" G2_SCENES=1
         run_and_record_case fedora-dark "$CAPTURE_SETTINGS;org.gnome.desktop.interface color-scheme prefer-dark" G2_SCENES=1
+        run_and_record_case fedora-glass "$CAPTURE_SETTINGS" G2_GLASS=1
         exit 0 ;;
 esac
 
@@ -144,3 +156,4 @@ run_and_record_case motion "$MOTION_SETTINGS" G2_MOTION=1
 run_and_record_case fault-configure '' APEX_SHELL_TEST_FAULT=configure
 run_and_record_case fault-enable '' APEX_SHELL_TEST_FAULT=enable PROBE_WAIT=10
 run_and_record_case fault-abort '' APEX_SHELL_TEST_FAULT=abort-after-enable PROBE_WAIT=20
+run_and_record_case glass "$CAPTURE_SETTINGS" G2_GLASS=1 GI_TYPELIB_PATH="$FRAME_DIR"
