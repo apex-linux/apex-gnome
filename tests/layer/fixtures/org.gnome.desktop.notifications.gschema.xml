@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+<!-- gsettings-desktop-schemas' key that Do Not Disturb turns off. -->
+<schemalist>
+  <schema id="org.gnome.desktop.notifications" path="/org/gnome/desktop/notifications/">
+    <key name="show-banners" type="b">
+      <default>true</default>
+    </key>
+  </schema>
+</schemalist>

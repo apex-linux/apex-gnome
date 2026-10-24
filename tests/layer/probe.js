@@ -435,6 +435,57 @@ async function exerciseQuickSettings() {
     quickSettingsState('qs.on', quickSettings);
 }
 
+function notificationsState(label, list, groups) {
+    fact(`${label}.groups`, groups.map(g => `${g.name}:expanded=${g.expanded} layout=${g.layout_manager.name ?? 'box'} ` +
+        `cover=${g.cover.visible} header=${g.header.visible} ` +
+        `stacked=${g.get_children().some(c => c.child?.has_style_pseudo_class('second-in-stack'))}`).join(' | '));
+    const header = groups[0].get_children()[0].child.header;
+    fact(`${label}.header`, `icon=${header.sourceIcon.visible} line=${header.content.get_children().map(c => c.text).join(' ')}`);
+    const {clear} = list;
+    fact(`${label}.footer`, `${list.footer.get_children().map(c => c.name ?? c.style_class).join(',')} ` +
+        `clear=align:${clear.x_align} visible:${clear.visible}`);
+}
+
+async function exerciseNotifications() {
+    if (GLib.getenv('PROBE_NOTIFICATIONS') !== '1')
+        return;
+    const MessageList = await import(`file://${shellDir}/js/ui/messageList.js`);
+    const mail = {title: 'Mail', icon: 'mail-icon'};
+    const list = MessageList.newCalendarMessageList();
+    const groups = [new MessageList.NotificationMessageGroup(mail, 3)];
+    notificationsState('nf', list, groups);
+    const own = new MessageList.Message(mail, 'photo-icon');
+    fact('nf.icons', `fallback=${groups[0].get_children()[0].child.icon} own=${own.icon}`);
+    list.placeholder.visible = true;
+    list.clear.visible = false;
+    list.clear.emit('notify::visible');
+    const notifications = new Gio.Settings({schema_id: 'org.gnome.desktop.notifications'});
+    const dnd = list.footer.get_children()[0];
+    notifications.set_boolean('show-banners', false);
+    fact('nf.dnd-from-settings', `checked=${dnd.checked} switch=${dnd.child.get_children()[1].state} clear=${list.clear.visible}`);
+    dnd.emit('clicked', 1);
+    fact('nf.dnd-click', `show-banners=${notifications.get_boolean('show-banners')} checked=${dnd.checked}`);
+    const month = MessageList.newCalendar();
+    const calendarState = label => {
+        fact(`${label}.calendar`, `header=${month.topBox.get_children().map(c => c.name).join(',')} ` +
+            `align=${month.topBox.get_children().find(c => c.name === 'month').x_align} ` +
+            `class=${month.calendar.has_style_class_name('apex-calendar')}`);
+        const day = child => child.get_children().map(c => c.text ?? c.style_class).join('/') || child.text;
+        fact(`${label}.days`, month.days.map(b => day(b.get_child())).join(' '));
+    };
+    calendarState('nf');
+    settings.set_boolean('layer-enabled', false);
+    await spin(200);
+    calendarState('nf.off');
+    groups.push(new MessageList.NotificationMessageGroup({title: 'Chat', icon: 'chat-icon'}, 2));
+    notificationsState('nf.off', list, groups);
+    fact('nf.off.icons', `fallback=${groups[0].get_children()[0].child.icon} own=${own.icon}`);
+    settings.set_boolean('layer-enabled', true);
+    await spin(200);
+    notificationsState('nf.on', list, groups);
+    calendarState('nf.on');
+}
+
 async function exerciseTopBar() {
     if (GLib.getenv('PROBE_TOP_BAR') !== '1')
         return;
@@ -1078,6 +1129,7 @@ if (layer && GLib.getenv('PROBE_ENABLE') === '1') {
     await exerciseLock();
     await exerciseMotion();
     await exerciseQuickSettings();
+    await exerciseNotifications();
     await exerciseSpotlight();
     await exerciseTopBar();
     await exerciseSolidBar();
