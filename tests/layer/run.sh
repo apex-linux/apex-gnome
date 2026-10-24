@@ -48,9 +48,7 @@ mkdir -p "$T/schemas" "$T/noschema" "$T/nochild" "$T/data" "$T/home" "$T/shell" 
 # main.js and the Meta and Shell typelibs come only with gnome-shell and mutter.
 cp -R "$REPO/desktop/shell/js" "$T/shell/"
 cp "$HERE/main-stub.js" "$T/shell/js/ui/main.js"
-for stub in panelMenu boxpointer overview overviewControls windowManager; do
-    cp "$HERE/stubs/$stub.js" "$T/shell/js/ui/$stub.js"
-done
+cp "$HERE/stubs/panelMenu.js" "$T/shell/js/ui/panelMenu.js"
 cp "$HERE"/stubs/St.js "$HERE"/stubs/Clutter.js "$HERE"/stubs/Shell.js "$HERE"/stubs/Graphene.js "$T/"
 # gjs outside the shell has no St or Clutter typelib, and the fixture's Shell no
 # WindowTracker: the features get stubs instead.
@@ -163,16 +161,17 @@ has "spotlight: a press opens the overview with its search entry focused" '^prob
 fact "spotlight: so the overview is up" 'press\.1=overview=true'
 fact "spotlight: pressed again while it is up, it hides the overview" 'press\.2=overview=false'
 has "motion: the feature enables" 'Apex: feature motion enabled'
-fact "motion: window geometry takes the curve and .3 s" 'motion\.window=CUBIC_BEZIER 300'
-fact "motion: the overview takes the curve and .2 s" 'motion\.overview=CUBIC_BEZIER 200'
-fact "motion: a popover takes the curve and .18 s" 'motion\.popover=CUBIC_BEZIER 180'
-fact "motion: 250 ms outside windows and the overview keeps its duration" 'motion\.other-250=CUBIC_BEZIER 250'
+fact "motion: a curved mode becomes CUBIC_BEZIER, its duration kept" 'motion\.quad=CUBIC_BEZIER 250'
+fact "motion: so does stock's expo" 'motion\.expo=CUBIC_BEZIER 400'
 fact "motion: an actor's default ease takes the curve" 'motion\.actor-default=CUBIC_BEZIER 100'
 fact "motion: linear stays linear" 'motion\.linear=LINEAR 100'
-fact "motion: an adjustment eases by its actor" 'motion\.adjustment=CUBIC_BEZIER 200'
+fact "motion: stepped stays stepped" 'motion\.steps=STEPS 100'
+fact "motion: an adjustment's curved ease takes the curve" 'motion\.adjustment=CUBIC_BEZIER 250'
 fact "motion: an adjustment without a mode keeps Clutter's linear" 'motion\.adjustment-default=none 100'
 fact "motion: an ease without parameters passes through" 'motion\.no-params=undefined'
 fact "motion: the eased hook sets cubic-bezier(.2,.8,.2,1)" 'motion\.curve=0\.2,0\.8 0\.2,1'
+fact "motion: window geometry .3 s, the overview .2 s, popovers .18 s; other roles stock" \
+    'motion\.durations=window=300 overview=200 popover=180 unknown=250'
 if [[ $(run_guard_unit_like_systemd default) == skipped ]]; then
     ok "default: a later shell failure does not trip the guard (no marker)"
 else
@@ -308,10 +307,10 @@ fact "and its hook gives stock" 'test-fault=stock'
 
 probe motion-disabled "$CMDLINE_PLAIN" PROBE_DISABLED=motion PROBE_ENABLE=1
 has "disabled-features=['motion']: skips the feature" 'Apex: feature motion is in disabled-features'
-fact "disabled-features=['motion']: window geometry keeps stock's mode and 250 ms" 'motion\.window=EASE_OUT_QUAD 250'
-fact "disabled-features=['motion']: a popover keeps 150 ms" 'motion\.popover=EASE_OUT_QUAD 150'
+fact "disabled-features=['motion']: stock's mode" 'motion\.quad=EASE_OUT_QUAD 250'
 fact "disabled-features=['motion']: an actor's default stays Clutter's" 'motion\.actor-default=none 100'
 fact "disabled-features=['motion']: no curve is set" 'motion\.curve=stock'
+fact "disabled-features=['motion']: stock durations" 'motion\.durations=window=250 overview=250 popover=250 unknown=250'
 
 probe spotlight-disabled "$CMDLINE_PLAIN" PROBE_DISABLED=spotlight PROBE_ENABLE=1 PROBE_PRESS=1
 has "disabled-features=['spotlight']: skips the feature" 'Apex: feature spotlight is in disabled-features'

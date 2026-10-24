@@ -111,7 +111,6 @@ export function notify(title) {
 const CHROME_PARAMS = ['trackFullscreen', 'affectsStruts'];
 
 export const layoutManager = {
-    overviewGroup: {contains: actor => actor?.inOverview === true},
     _updateHotCorners: () => fact('hot-corners', 'rebuilt'),
     addChrome(actor, params = {}) {
         const unknown = Object.keys(params).filter(key => !CHROME_PARAMS.includes(key));

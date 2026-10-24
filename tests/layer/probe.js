@@ -35,7 +35,6 @@ const windows = [];
 globalThis.global = {
     display: newEmitter(),
     stage: {width: 1440},
-    get_window_actors: () => [],
     window_manager: newEmitter(),
     workspace_manager: newEmitter({get_active_workspace: () => ({list_windows: () => windows})}),
     session_mode: GLib.getenv('PROBE_MODE') ?? 'user',
@@ -135,30 +134,27 @@ function newHotCorner() {
     };
 }
 
-// The ease hook's mode and duration for each kind of easing target, and the eased hook's curve.
+// The ease hook's mode for each kind of target, the eased hook's curve, and the durations by role.
 async function exerciseMotion() {
     const Clutter = (await import(`file://${shellDir}/../Clutter.js`)).default;
-    const {BoxPointer} = await import(`file://${shellDir}/js/ui/boxpointer.js`);
     const M = Clutter.AnimationMode;
     const modeName = mode => Object.keys(M).find(k => M[k] === mode) ?? 'none';
-    const actor = props => Object.assign(new Clutter.Actor(), props);
-    const plain = actor({});
-    const inOverview = actor({inOverview: true});
+    const actor = new Clutter.Actor();
+    const adjustment = {get_actor: () => actor};
     const cases = [
-        ['window', actor({meta_window: {}}), {mode: M.EASE_OUT_QUAD, duration: 250}],
-        ['overview', inOverview, {mode: M.EASE_OUT_QUAD, duration: 250}],
-        ['popover', new BoxPointer(), {mode: M.EASE_OUT_QUAD, duration: 150}],
-        ['other-250', plain, {mode: M.EASE_OUT_EXPO, duration: 250}],
-        ['actor-default', plain, {duration: 100}],
-        ['linear', plain, {mode: M.LINEAR, duration: 100}],
-        ['adjustment', {get_actor: () => inOverview}, {mode: M.EASE_OUT_QUAD, duration: 250}],
-        ['adjustment-default', {get_actor: () => plain}, {duration: 100}],
+        ['quad', actor, {mode: M.EASE_OUT_QUAD, duration: 250}],
+        ['expo', actor, {mode: M.EASE_OUT_EXPO, duration: 400}],
+        ['actor-default', actor, {duration: 100}],
+        ['linear', actor, {mode: M.LINEAR, duration: 100}],
+        ['steps', actor, {mode: M.STEPS, duration: 100}],
+        ['adjustment', adjustment, {mode: M.EASE_OUT_QUAD, duration: 250}],
+        ['adjustment-default', adjustment, {duration: 100}],
     ];
     for (const [label, target, params] of cases) {
         const eased = Hooks.value('ease', params, target);
         fact(`motion.${label}`, `${modeName(eased.mode)} ${eased.duration}`);
     }
-    fact('motion.no-params', Hooks.value('ease', undefined, plain));
+    fact('motion.no-params', Hooks.value('ease', undefined, actor));
     const transition = {
         get_progress_mode: () => M.CUBIC_BEZIER,
         set_cubic_bezier_progress(c1, c2) {
@@ -167,6 +163,8 @@ async function exerciseMotion() {
     };
     Hooks.run('eased', [transition]);
     fact('motion.curve', transition.points?.map(p => `${p.x},${p.y}`).join(' ') ?? 'stock');
+    const roles = ['window', 'overview', 'popover', 'unknown'];
+    fact('motion.durations', roles.map(r => `${r}=${Hooks.value('motion-duration', 250, r)}`).join(' '));
 }
 
 function topBarHooks(label) {
