@@ -114,12 +114,12 @@ just control-center-lane   # podman or docker: apex-lane's container half in fed
 just control-center-run    # podman or docker: the built Settings in a headless gnome-shell
 ```
 
-`tests/control-center/lane.sh` builds `apex-lane` from a pinned apex-image commit and
+`tests/lib/lane.sh gnome-control-center` builds `apex-lane` from a pinned apex-image commit and
 runs its container half, `apex-lane in-container build gnome-control-center`, as the
 builder VM does: the SRPM's signature, `spec-edit`, the series at fuzz 0, the exact-tree
 check, `rpmbuild -ba` with Fedora's `%check`, the lane checks and `check.sh`. It leaves
 out what the VM adds, the signing and the store. The RPMs and logs land in
-`_build/control-center/out/`. CI runs it on every push.
+`_build/gnome-control-center/out/`. CI runs it on every push.
 
 `tests/control-center/run.sh` installs those RPMs in a fedora:45 container and runs
 gnome-shell headless at scale 2 for the user `apex`, with apex-desktop's schema from
