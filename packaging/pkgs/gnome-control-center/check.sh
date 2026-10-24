@@ -21,6 +21,11 @@ readonly SOURCE1_DIR=panels/apex/
 root=$CHECK_WORK/root
 mkdir -p -- "$root"
 shopt -s nullglob
+licence=$(rpm -qp --qf '%{LICENSE}' "$RPMS_DIR"/gnome-control-center-[0-9]*.x86_64.rpm 2>/dev/null) ||
+    cannot "cannot read the gnome-control-center RPM's licence"
+[[ $licence == *GPL-3.0-or-later* ]] || fail "License: lacks GPL-3.0-or-later, the Update1 proxy's licence: $licence"
+ok "License: $licence"
+
 unpack() {
     local what=$1
     shift
@@ -43,7 +48,7 @@ members=$(tar -tf "$SOURCE1") || cannot "cannot list $SOURCE1"
 n=0
 while IFS= read -r m; do
     [[ $m == "$SOURCE1_DIR"* && $m != */ ]] || continue
-    case ${m#"$SOURCE1_DIR"} in meson.build | *.gresource.xml | *.[ch] | *.blp | *.desktop.in | icons/*) continue ;; esac
+    case ${m#"$SOURCE1_DIR"} in meson.build | *.gresource.xml | *.[ch] | *.blp | *.desktop.in | icons/* | io.github.*.xml) continue ;; esac
     grep -Fxq -- "$APEX_PREFIX/${m#"$SOURCE1_DIR"}" <<<"$resources" ||
         fail "$m is in desktop/control-center but not in the resource (apex.gresource.xml)"
     n=$((n + 1))
@@ -56,7 +61,9 @@ css=$(gresource extract "$bin" "$APEX_PREFIX/apex.css") ||
 grep -Fq '/*! apex-control-center */' <<<"$css" || fail "$APEX_PREFIX/apex.css has no Apex marker"
 ok "$APEX_PREFIX/apex.css carries the Apex marker"
 
-grep -Fxq -- "$APEX_PREFIX/cc-apex-panel.ui" <<<"$resources" || fail "the resource has no cc-apex-panel.ui"
+for ui in cc-apex-panel.ui cc-apex-updates-page.ui; do
+    grep -Fxq -- "$APEX_PREFIX/$ui" <<<"$resources" || fail "the resource has no $ui"
+done
 apps=$root/usr/share/applications
 grep -Fxq 'Exec=gnome-control-center apex' "$apps/gnome-apex-panel.desktop" ||
     fail "gnome-apex-panel.desktop is missing or does not open the panel"

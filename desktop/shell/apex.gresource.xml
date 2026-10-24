@@ -19,6 +19,14 @@
     <file alias="panel/focused-app.js">js/ui/apex/panel/focused-app.js</file>
     <file alias="panel/search-button.js">js/ui/apex/panel/search-button.js</file>
     <file alias="panel/search-hint.js">js/ui/apex/panel/search-hint.js</file>
+    <file alias="dock/feature.js">js/ui/apex/dock/feature.js</file>
+    <file alias="dock/dock.js">js/ui/apex/dock/dock.js</file>
+    <file alias="dock/trash.js">js/ui/apex/dock/trash.js</file>
+    <file alias="overview/feature.js">js/ui/apex/overview/feature.js</file>
+    <file alias="overview/window-titles.js">js/ui/apex/overview/window-titles.js</file>
+    <file alias="overview/workspaces.js">js/ui/apex/overview/workspaces.js</file>
+    <file alias="overview/thumbnails.js">js/ui/apex/overview/thumbnails.js</file>
+    <file alias="overview/launcher.js">js/ui/apex/overview/launcher.js</file>
   </gresource>
   <gresource prefix="/org/gnome/shell/theme/apex">
     <file alias="diamond-light.svg">data/theme/apex/diamond-light.svg</file>

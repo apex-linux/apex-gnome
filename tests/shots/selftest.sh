@@ -196,7 +196,16 @@ REPORT_OF_A_BAR_DRAWN_FROM_TOKENS='
             pill: {x: 1303, y: 4, width: ($t.apex_bar_search_width | px), height: 24, radius: 12}},
         {accessibleName: "System", label: null, pill: {x: 1337, y: 4, width: 95, height: 24, radius: 12}}],
     opaque: {background: ($t.apex_bar_solid | hex), boxShadow: {color: ($t.apex_border | hex), inset: false, x: 0, y: 1, blur: 0, spread: 0}},
-    glass: []}}'
+    glass: []},
+  dock: {visible: true, bottomGap: ($t.apex_dock_bottom_gap | px), centreOffset: 0, radius: ($t.apex_radius_dock | px),
+    background: {x: 470, y: 820, width: 500, height: 70},
+    items: [{kind: "app", name: "Files", iconSize: ($t.apex_dock_icon_size | px)},
+            {kind: "app", name: "Web", iconSize: ($t.apex_dock_icon_size | px)},
+            {kind: "separator"},
+            {kind: "show-apps", iconSize: ($t.apex_dock_icon_size | px), iconName: "view-app-grid"},
+            {kind: "trash", iconSize: ($t.apex_dock_icon_size | px)}],
+    overviewDashVisible: false},
+  scenes: {overview: {dockVisible: true, dockClearance: 12}}}'
 # shellcheck disable=SC2016 # a jq program
 REPORT_OF_SURFACES_DRAWN_FROM_TOKENS='
 ($t.apex_surface_border | px) as $b | {top: $b, right: $b, bottom: $b, left: $b} as $border | ($t.apex_panel_border | hex) as $ring
@@ -358,6 +367,51 @@ REPORT_OF_AN_OVERVIEW_DRAWN_FROM_TOKENS='
     section: {background: ($t.apex_glass_card | hex), borderColor: ($t.apex_glass_card_border | hex),
         radius: ($t.apex_radius_message | px), foreground: ($t.apex_fg | hex)}}}}'
 # shellcheck disable=SC2016 # a jq program
+REPORT_OF_A_LAUNCHER_DRAWN_FROM_TOKENS='
+($t.apex_surface_border | px) as $b | {top: $b, right: $b, bottom: $b, left: $b} as $border
+| ($t.apex_folder_dialog_padding | px) as $dp
+| {topBar: {accent: "#3584e4ff"}, surfaces: {appGrid: {
+    app: {background: "#00000000", radius: ($t.apex_radius_app_tile | px), padding: {top: ($t.apex_app_tile_padding | px)},
+        spacing: ($t.apex_app_tile_gap | px), foreground: ($t.apex_fg | hex),
+        labelFont: {size: ($t.apex_font_app_label_size | px), weight: ($t.apex_font_label_weight | tonumber)},
+        hover: {background: ($t.apex_button | hex)},
+        focus: {background: ($t.apex_button | hex), boxShadow: {inset: true, spread: ($t.apex_entry_focus_ring | px), color: "#3584e4ff"}}},
+    folder: {background: ($t.apex_folder | hex), borderColor: ($t.apex_pill_border | hex), border: $border},
+    dialog: {width: ($t.apex_folder_dialog_width | px), background: ($t.apex_folder_panel | hex), borderColor: ($t.apex_panel_border | hex),
+        radius: ($t.apex_radius_folder_dialog | px), border: $border,
+        padding: {left: ($dp - $b), bottom: (($t.apex_folder_dialog_padding_bottom | px) - $b)},
+        boxShadow: {color: ($t.apex_shadow | hex), y: ($t.apex_shadow_y | px), blur: ($t.apex_shadow_blur | px)},
+        title: {font: {size: ($t.apex_font_folder_title_size | px), weight: ($t.apex_font_heading_weight | tonumber)}, foreground: ($t.apex_fg | hex)},
+        button: {width: ($t.apex_folder_close_size | px), height: ($t.apex_folder_close_size | px), background: ($t.apex_button | hex)}},
+    runningDot: {width: ($t.apex_running_dot_size | px), height: ($t.apex_running_dot_size | px), radius: (($t.apex_running_dot_size | px) / 2),
+        background: (($t.apex_fg | rgba) as $c | "rgba(\($c[0]), \($c[1]), \($c[2]), \($t.apex_running_dot_opacity))" | hex)},
+    pageIndicator: {background: ($t.apex_fg | hex)},
+    pageHint: {gradient: 0}}}}'
+# shellcheck disable=SC2016 # a jq program
+REPORT_OF_AN_OVERVIEW_LAYER_FROM_TOKENS='
+{topBar: {panel: {width: 1440}}, scenes: {overview: {workArea: {y: 32, height: 868}}}, surfaces: {
+    overviewLayer: {titleVisible: true, thumbnailsThreshold: 1, thumbnails: {maxScale: 0.081, first: {width: 117, height: 70}},
+        workspace: {x: 250, y: 205, width: 939, height: 566, background: false,
+            empty: {x: 644, y: 477, width: 150, height: 22, visible: true, text: "No open windows", foreground: ($t.apex_fg_dim | hex),
+                font: {size: ($t.apex_font_workspace_empty_size | px), weight: ($t.apex_font_heading_weight | tonumber)}}}},
+    appGrid: {grid: {columns: 7, rows: 4, iconSize: 88}}}}'
+# shellcheck disable=SC2016 # a jq program
+REPORT_OF_DERIVED_SURFACES_DRAWN_FROM_TOKENS='
+($t.apex_surface_border | px) as $b
+| {border: {top: $b}, borderColor: ($t.apex_panel_border | hex),
+   boxShadow: {color: ($t.apex_shadow | hex), y: ($t.apex_shadow_y | px), blur: ($t.apex_shadow_blur | px)}} as $ring
+| ($ring + {background: ($t.apex_panel | hex), radius: ($t.apex_radius_osd | px)}) as $osd
+| {topBar: {accent: "#3584e4ff"}, surfaces: {derived: {
+    workspaceSwitcher: $osd, resizePopup: $osd,
+    wsIndicator: {background: ($t.apex_fg_faint | hex), active: {background: ($t.apex_fg | hex)}},
+    candidatePopup: ($ring + {background: ($t.apex_panel_solid | hex), radius: ($t.apex_radius_menu | px)}),
+    candidateBox: {radius: ($t.apex_radius_menu_row | px), hover: {background: ($t.apex_button_hover | hex)}},
+    runEntry: {minHeight: ($t.apex_entry_height | px), background: ($t.apex_button | hex), boxShadow: null,
+        focus: {boxShadow: {inset: true, spread: ($t.apex_entry_focus_ring | px), color: "#3584e4ff"}}},
+    audioDevice: {radius: ($t.apex_radius_switcher_item | px), background: "#00000000", foreground: ($t.apex_fg | hex),
+        hover: {background: ($t.apex_button_hover | hex)}},
+    monitorLabel: {radius: ($t.apex_radius_osd | px)}}}}'
+# shellcheck disable=SC2016 # a jq program
 HEX_DEF='def hex: rgba | map([., 16] | "0123456789abcdef"[(.[0] / .[1] | floor):(.[0] / .[1] | floor) + 1]
                                     + "0123456789abcdef"[(.[0] % .[1]):(.[0] % .[1]) + 1]) | "#" + join("");'
 
@@ -375,6 +429,9 @@ assert_run() {
     [[ $assertions == modal_dialog ]] && report=$REPORT_OF_A_DIALOG_DRAWN_FROM_TOKENS
     [[ $assertions == date_menu ]] && report=$REPORT_OF_A_DATE_MENU_DRAWN_FROM_TOKENS
     [[ $assertions == overview_style ]] && report=$REPORT_OF_AN_OVERVIEW_DRAWN_FROM_TOKENS
+    [[ $assertions == app_grid ]] && report=$REPORT_OF_A_LAUNCHER_DRAWN_FROM_TOKENS
+    [[ $assertions == derived_surfaces ]] && report=$REPORT_OF_DERIVED_SURFACES_DRAWN_FROM_TOKENS
+    [[ $assertions == overview_layer ]] && report=$REPORT_OF_AN_OVERVIEW_LAYER_FROM_TOKENS
     tokens=$(tokens_for "$variant")
     jq -nc --argjson t "$tokens" "$JQ_DEFS $HEX_DEF $report | $change" | sed 's/^/APEXG2-SCENES /' >"$T/top-bar.log"
     # shellcheck disable=SC2016 # expanded by the inner bash
@@ -461,6 +518,42 @@ CHANGES
     expect_eq "top bar: and fewer fail" 1 "$(grep -c '^FAIL' "$T/top-bar.out")"
     assert_run top_bar light 'del(.topBar)' >/dev/null
     expect_eq "top bar: a report without the top bar passes none" 0 "$(grep -c '^PASS' "$T/top-bar.out")"
+}
+
+test_dock() {
+    local variant change what passes failures open_gaps
+    for variant in light dark; do
+        read -r passes failures open_gaps <<<"$(assert_run dock_metrics "$variant")"
+        if ((failures == 0 && passes == 7)); then
+            ok "dock ($variant): a dock drawn from the tokens passes all $passes assertions"
+        else
+            not_ok "dock ($variant): a dock drawn from the tokens passes (passed/failed/gaps $passes/$failures/$open_gaps): $(grep -m3 '^FAIL' "$T/top-bar.out" | paste -sd'|' -)"
+        fi
+    done
+    while IFS='|' read -r change what; do
+        read -r passes failures open_gaps <<<"$(assert_run dock_metrics light "$change")"
+        if ((failures == 1)); then
+            ok "dock: $what fails one assertion"
+        else
+            not_ok "dock: $what fails one assertion (passed/failed/gaps $passes/$failures/$open_gaps)"
+        fi
+    done <<'CHANGES'
+.dock.bottomGap = 0|a dock on the screen's edge
+.dock.centreOffset = 12|an off-centre dock
+.dock.visible = false|a hidden dock
+.dock.radius = 16|upstream's dash radius
+.dock.items[0].iconSize = 64|upstream's fitted icon size
+.dock.items[3].iconSize = 46|a Show Apps tile at another size
+.dock.items = [.dock.items[0], {kind: "separator"}] + .dock.items[1:]|upstream's separator between favourites and running apps
+.dock.items = .dock.items[:-1]|no Trash
+.dock.items = .dock.items[:2] + [.dock.items[3], .dock.items[2], .dock.items[4]]|Show Apps before the separator
+.dock.items[3].iconName = "view-app-grid-symbolic"|a symbolic Show Apps tile
+.dock.overviewDashVisible = true|the overview's own dash beside the dock
+.scenes.overview.dockVisible = false|no dock in the overview
+.scenes.overview.dockClearance = -15|workspaces under the dock in the overview
+CHANGES
+    assert_run dock_metrics light 'del(.dock)' >/dev/null
+    expect_eq "dock: a report without the dock passes none" 0 "$(grep -c '^PASS' "$T/top-bar.out")"
 }
 
 test_shell_surfaces() {
@@ -663,6 +756,90 @@ test_overview_style() {
 .surfaces.overview.indicator.border.top = 3|upstream's 3 px indicator
 .surfaces.overview.caption.background = "#000000e6"|upstream's dark tooltip caption
 .surfaces.overview.section.background = "#2e2e33ff"|upstream's dark search section
+CHANGES
+}
+
+test_overview_layer() {
+    local variant change what passes failures open_gaps
+    for variant in light dark; do
+        read -r passes failures open_gaps <<<"$(assert_run overview_layer "$variant")"
+        if ((failures == 0 && open_gaps == 0 && passes == 6)); then
+            ok "overview feature ($variant): the layer's overview passes all $passes assertions"
+        else
+            not_ok "overview feature ($variant): the layer's overview passes (passed/failed/gaps $passes/$failures/$open_gaps): $(grep -m3 '^FAIL' "$T/top-bar.out" | paste -sd'|' -)"
+        fi
+    done
+    while IFS='|' read -r change what; do
+        read -r passes failures open_gaps <<<"$(assert_run overview_layer light "$change")"
+        if ((failures == 1)); then
+            ok "overview feature: $what fails one assertion"
+        else
+            not_ok "overview feature: $what fails one assertion (passed/failed/gaps $passes/$failures/$open_gaps)"
+        fi
+    done <<'CHANGES'
+.surfaces.overviewLayer.titleVisible = false|titles only on hover
+.surfaces.overviewLayer.thumbnails.maxScale = 0.05|upstream's thumbnail scale
+.surfaces.overviewLayer.thumbnailsThreshold = 2|thumbnails only from three workspaces
+.surfaces.overviewLayer.thumbnails.first.height = 58|thumbnails cut down by the box's padding
+.surfaces.overviewLayer.workspace.background = true|the workspace background card
+.surfaces.overviewLayer.workspace.empty.y = 300|the empty label off centre
+.surfaces.overviewLayer.workspace.empty.foreground = "#1d1d21ff"|the empty label in full $apex_fg
+.surfaces.appGrid.grid.iconSize = 96|upstream's 96 px launcher icons
+CHANGES
+}
+
+test_app_grid() {
+    local variant change what passes failures open_gaps
+    for variant in light dark; do
+        read -r passes failures open_gaps <<<"$(assert_run app_grid "$variant")"
+        if ((failures == 0 && open_gaps == 0 && passes == 6)); then
+            ok "launcher ($variant): drawn from the tokens it passes all $passes assertions"
+        else
+            not_ok "launcher ($variant): drawn from the tokens it passes (passed/failed/gaps $passes/$failures/$open_gaps): $(grep -m3 '^FAIL' "$T/top-bar.out" | paste -sd'|' -)"
+        fi
+    done
+    while IFS='|' read -r change what; do
+        read -r passes failures open_gaps <<<"$(assert_run app_grid light "$change")"
+        if ((failures == 1)); then
+            ok "launcher: $what fails one assertion"
+        else
+            not_ok "launcher: $what fails one assertion (passed/failed/gaps $passes/$failures/$open_gaps)"
+        fi
+    done <<'CHANGES'
+.surfaces.appGrid.app.radius = 24|upstream's tile radius
+.surfaces.appGrid.app.foreground = "#fafafbff"|upstream's white labels on the light scrim
+.surfaces.appGrid.app.focus.boxShadow.color = "#3584e4cc"|upstream's 80 % focus ring
+.surfaces.appGrid.folder.background = "#3a3a3eff"|upstream's raised dark folder
+.surfaces.appGrid.dialog.width = 720|upstream's 720 px folder
+.surfaces.appGrid.dialog.title.font.size = 26.667|upstream's title 1 folder name
+.surfaces.appGrid.pageHint.gradient = 1|upstream's gradient page hint
+CHANGES
+}
+
+test_derived_surfaces() {
+    local variant change what passes failures open_gaps
+    for variant in light dark; do
+        read -r passes failures open_gaps <<<"$(assert_run derived_surfaces "$variant")"
+        if ((failures == 0 && open_gaps == 0 && passes == 6)); then
+            ok "derived surfaces ($variant): drawn from the tokens they pass all $passes assertions"
+        else
+            not_ok "derived surfaces ($variant): drawn from the tokens they pass (passed/failed/gaps $passes/$failures/$open_gaps): $(grep -m3 '^FAIL' "$T/top-bar.out" | paste -sd'|' -)"
+        fi
+    done
+    while IFS='|' read -r change what; do
+        read -r passes failures open_gaps <<<"$(assert_run derived_surfaces light "$change")"
+        if ((failures == 1)); then
+            ok "derived surfaces: $what fails one assertion"
+        else
+            not_ok "derived surfaces: $what fails one assertion (passed/failed/gaps $passes/$failures/$open_gaps)"
+        fi
+    done <<'CHANGES'
+.surfaces.derived.resizePopup.radius = 999|upstream's round OSD panel
+.surfaces.derived.wsIndicator.active.background = "#ffffffff"|upstream's white current workspace
+.surfaces.derived.candidatePopup.background = "#fafafbff"|upstream's menu fill on the candidates
+.surfaces.derived.runEntry.minHeight = null|upstream's padded run entry
+.surfaces.derived.audioDevice.foreground = "#22222666"|a dimmed device name
+.surfaces.derived.monitorLabel.radius = 16|upstream's monitor label radius
 CHANGES
 }
 
@@ -1045,12 +1222,16 @@ test_compare_js
 test_incomplete_compare
 test_token_file
 test_top_bar
+test_dock
 test_shell_surfaces
 test_quick_settings
 test_window_switcher
 test_modal_dialog
 test_date_menu
 test_overview_style
+test_app_grid
+test_overview_layer
+test_derived_surfaces
 test_today_pins
 test_known_gaps
 test_fixed_clock

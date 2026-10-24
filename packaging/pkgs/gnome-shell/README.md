@@ -38,9 +38,11 @@ Fedora's gnome-shell SRPM, rebuilt with the Apex layer inside it
 | `0002-loader` | `js/ui/main.js`, `js/ui/sessionMode.js` | +16 −1 | the static import of `ui/apex/hooks.js`; the layer loaded (configure) before the session mode exists; `enable()` at `startup-prepared`; the stock sheets in safe mode; a value hook over each session mode's parameters |
 | `0003-blur` | `src/shell-blur-effect.c` | +289 −10 | ADR 0014's items a–f as four properties of `ShellBlurEffect`: `saturation` (CSS `saturate()`) and `corner-radius` (antialiased coverage) in the final pass, `follow-opacity`, and `fine` (the downscale without the 256 px floor, box-filtered in one pass; in background mode, the redraw-clip rule and the last result per stage view). At their defaults the effect is stock's, byte for byte |
 | `0010-panel` | `js/ui/panel.js`, `js/ui/layout.js` | +13 −4 | value hooks over the workspace dots' inactive opacity and scale and over a dot's width; a behaviour hook once Quick Settings has set up its indicators (the status-pill filter); a behaviour hook once a hot corner is built (the 4 × 4 zone) |
+| `0013-overview` | `js/ui/windowPreview.js`, `js/ui/workspace.js`, `js/ui/workspaceThumbnail.js` | +10 −6 | value hooks over a window title's initial visibility and over the actors the overlay fades (always-visible titles); a behaviour hook once a workspace is built (no background card, the empty label); value hooks over the thumbnails' maximum scale and the dynamic-workspace threshold |
+| `0014-dash` | `js/ui/dash.js` | +3 −2 | value hooks over the Show Apps icon's name and over whether a dash puts its separator between the favourites and the running apps, for ApexDock |
 
 Budget (ADR 0014): at most 450 changed lines of hook hunks in at most 33 upstream files.
-In use: 47 lines in 10 files. The C budget for `shell-blur-effect.{c,h}` (300 lines): 299
+In use: 68 lines in 14 files. The C budget for `shell-blur-effect.{c,h}` (300 lines): 299
 lines, all in 0003-blur.
 
 The patches are `git format-patch` output against Fedora's `%prep` tree (upstream
