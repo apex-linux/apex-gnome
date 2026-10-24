@@ -176,6 +176,7 @@ for c in default:light default-scale1:light dark-style:dark; do
     shell_surfaces "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
     quick_settings "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
     window_switcher "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
+    modal_dialog "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
 done
 layer_cycles "$run"
 echo "# logs and captures: $run"

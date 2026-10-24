@@ -7,8 +7,10 @@ import Shell from 'gi://Shell';
 import St from 'gi://St';
 
 import * as BoxPointer from 'resource:///org/gnome/shell/ui/boxpointer.js';
+import * as Dialog from 'resource:///org/gnome/shell/ui/dialog.js';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import * as MessageTray from 'resource:///org/gnome/shell/ui/messageTray.js';
+import * as ModalDialog from 'resource:///org/gnome/shell/ui/modalDialog.js';
 import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 import * as Scripting from 'resource:///org/gnome/shell/ui/scripting.js';
 import * as Slider from 'resource:///org/gnome/shell/ui/slider.js';
@@ -862,6 +864,55 @@ async function windowSwitcher(unit) {
     }
 }
 
+// A stock ModalDialog shaped like polkit's: title, description, password entry, two buttons.
+async function modalDialog(unit) {
+    const dialog = new ModalDialog.ModalDialog({styleClass: 'prompt-dialog'});
+    const content = new Dialog.MessageDialogContent({
+        title: 'Authentication Required',
+        description: 'Booting the previous version needs an administrator password.',
+    });
+    const entry = new St.PasswordEntry({style_class: 'prompt-dialog-password-entry', hint_text: 'Password', can_focus: true});
+    content.add_child(entry);
+    dialog.contentLayout.add_child(content);
+    const buttons = [
+        dialog.addButton({label: 'Cancel', action: () => {}, key: Clutter.KEY_Escape}),
+        dialog.addButton({label: 'Authenticate', action: () => {}, default: true}),
+    ];
+    dialog.open();
+    try {
+        await settle();
+        global.stage.set_key_focus(null);
+        const scene = GLib.getenv('G2_SURFACE_SCENES') === '1' ? await capture('dialog') : null;
+        if (scene)
+            delete scene.bytes;
+        const find = styleClass => findDescendant(content, a => a.has_style_class_name?.(styleClass));
+        const endSession = withStyledActor(new St.BoxLayout({style_class: 'modal-dialog end-session-dialog'}),
+            node => lengthOrNull(node, 'width', unit));
+        return {
+            scene,
+            box: styleOf(dialog.dialogLayout._dialog, unit),
+            contentSpacing: lengthOrNull(dialog.contentLayout.get_theme_node(), 'spacing', unit),
+            textSpacing: lengthOrNull(content.get_theme_node(), 'spacing', unit),
+            title: styleOf(find('message-dialog-title'), unit),
+            description: styleOf(find('message-dialog-description'), unit),
+            entry: {
+                ...styleOf(entry, unit),
+                focus: underPseudoClass(entry, 'focus', () => paint(entry.get_theme_node(), unit)),
+            },
+            buttons: buttons.map(b => ({
+                ...styleOf(b, unit),
+                default: b.has_style_pseudo_class('default'),
+                hover: underPseudoClass(b, 'hover', () => paint(b.get_theme_node(), unit)),
+            })),
+            endSessionWidth: endSession,
+        };
+    } finally {
+        dialog.close();
+        dialog.destroy();
+        await settle();
+    }
+}
+
 // Without GDM the shell posts "Screen Lock disabled" at startup; its banner would cover
 // the scenes for as long as it happens to stay.
 function dropStartupNotifications() {
@@ -889,6 +940,7 @@ async function scenes() {
     const surfaces = await shellSurfaces(unit);
     surfaces.quickSettings = await quickSettings(unit);
     surfaces.switcher = await windowSwitcher(unit);
+    surfaces.dialog = await modalDialog(unit);
 
     Main.overview.show();
     await settle();

@@ -195,6 +195,12 @@ The fixtures' NetworkManager lists no access points, so the card's network list 
 builds them) with the second selected, and reads the list's tint, radius, inset, ring and
 shadow, the tiles' gap, radius, padding and fills, and the names' type.
 
+`modal_dialog` runs in the same cases. The probe opens a stock `ModalDialog` shaped like
+polkit's (a `MessageDialogContent`, a password entry, Cancel and a default Authenticate),
+captures it with `G2_SURFACE_SCENES=1`, and reads the box's fill, radius, width, ring,
+shadow, inset and gaps, the title and text, the entry at rest and focused, and both buttons; the
+end-session width comes from a stand-in `.end-session-dialog` box.
+
 None of these surfaces is in a compared capture, so the comparison with Fedora's build
 is unchanged.
 
@@ -257,7 +263,7 @@ the captures against Fedora's and `rpm -V` stay with G2 in the builder VM. With
 `PATCHED_RPMS=DIR` it installs built RPMs instead; `PATCHED_OUT=DIR` keeps the RPMs and logs.
 It also asserts the shell surfaces of the same three cases (below). With
 `-e G2_SURFACE_SCENES=1`, `direct.sh` passes the variable to the shells, and the capture
-cases also save a scene per surface group (`surfaces`, `quick-settings`, `switcher`), for
+cases also save a scene per surface group (`surfaces`, `quick-settings`, `switcher`, `dialog`), for
 placing beside the boards.
 
 ## Not yet

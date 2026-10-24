@@ -283,6 +283,25 @@ REPORT_OF_A_SWITCHER_DRAWN_FROM_TOKENS='
     items: [$item + {pseudoClass: "first-child"}, $item + {pseudoClass: "selected", background: ($t.apex_button_hover | hex)}, $item],
     app: {spacing: ($t.apex_switcher_item_spacing | px), label: {size: ($t.apex_font_size | px), weight: ($t.apex_font_label_weight | tonumber)}}}}}'
 # shellcheck disable=SC2016 # a jq program
+REPORT_OF_A_DIALOG_DRAWN_FROM_TOKENS='
+($t.apex_surface_border | px) as $b | ($t.apex_dialog_padding | px) as $p | ($t.apex_dialog_button_height | px) as $bh
+| {height: $bh, radius: 999, font: {size: ($t.apex_font_dialog_button_size | px), weight: ($t.apex_font_label_weight | tonumber)}} as $button
+| {topBar: {accent: "#3584e4ff"}, surfaces: {dialog: {
+    box: {background: ($t.apex_panel_solid | hex), radius: ($t.apex_radius_dialog | px), width: ($t.apex_dialog_width | px),
+        border: {top: $b, right: $b, bottom: $b, left: $b}, borderColor: ($t.apex_panel_border | hex),
+        boxShadow: {color: ($t.apex_shadow | hex), y: ($t.apex_shadow_y | px), blur: ($t.apex_shadow_blur | px)},
+        padding: {top: ($p - $b), right: ($p - $b), bottom: (($t.apex_dialog_padding_bottom | px) - $b), left: ($p - $b)}, spacing: ($t.apex_dialog_gap | px)},
+    endSessionWidth: (($t.apex_end_session_dialog_width | px) - 2 * $p),
+    contentSpacing: ($t.apex_dialog_gap | px), textSpacing: ($t.apex_dialog_text_gap | px),
+    title: {font: {size: ($t.apex_font_dialog_title_size | px), weight: ($t.apex_font_heading_weight | tonumber)}},
+    description: {font: {size: ($t.apex_font_size | px)}, foreground: ($t.apex_fg_dim | hex)},
+    entry: {height: ($t.apex_entry_height | px), radius: 999, background: ($t.apex_button | hex), boxShadow: null,
+        padding: {left: ($t.apex_entry_padding | px), right: ($t.apex_entry_padding | px)},
+        font: {size: ($t.apex_font_entry_size | px), weight: ($t.apex_font_entry_weight | tonumber)},
+        focus: {boxShadow: {inset: true, spread: ($t.apex_entry_focus_ring | px), color: "#3584e4ff"}}},
+    buttons: [$button + {default: false, background: ($t.apex_button | hex), foreground: ($t.apex_fg | hex), hover: {background: ($t.apex_button_hover | hex)}},
+        $button + {default: true, background: "#3584e4ff", foreground: "#ffffffff"}]}}}'
+# shellcheck disable=SC2016 # a jq program
 HEX_DEF='def hex: rgba | map([., 16] | "0123456789abcdef"[(.[0] / .[1] | floor):(.[0] / .[1] | floor) + 1]
                                     + "0123456789abcdef"[(.[0] % .[1]):(.[0] % .[1]) + 1]) | "#" + join("");'
 
@@ -297,6 +316,7 @@ assert_run() {
     [[ $assertions == shell_surfaces ]] && report=$REPORT_OF_SURFACES_DRAWN_FROM_TOKENS
     [[ $assertions == quick_settings ]] && report=$REPORT_OF_QUICK_SETTINGS_DRAWN_FROM_TOKENS
     [[ $assertions == window_switcher ]] && report=$REPORT_OF_A_SWITCHER_DRAWN_FROM_TOKENS
+    [[ $assertions == modal_dialog ]] && report=$REPORT_OF_A_DIALOG_DRAWN_FROM_TOKENS
     tokens=$(tokens_for "$variant")
     jq -nc --argjson t "$tokens" "$JQ_DEFS $HEX_DEF $report | $change" | sed 's/^/APEXG2-SCENES /' >"$T/top-bar.log"
     # shellcheck disable=SC2016 # expanded by the inner bash
@@ -494,6 +514,35 @@ test_window_switcher() {
 .surfaces.switcher.items[1].foreground = "#ffffffff"|upstream's white selected name
 .surfaces.switcher.items[0].background = "#00000a1e"|a second tile filled as selected
 .surfaces.switcher.app.label.weight = 400|names at body weight
+CHANGES
+}
+
+test_modal_dialog() {
+    local variant change what passes failures open_gaps
+    for variant in light dark; do
+        read -r passes failures open_gaps <<<"$(assert_run modal_dialog "$variant")"
+        if ((failures == 0 && open_gaps == 0 && passes == 8)); then
+            ok "modal dialog ($variant): drawn from the tokens it passes all $passes assertions"
+        else
+            not_ok "modal dialog ($variant): drawn from the tokens it passes (passed/failed/gaps $passes/$failures/$open_gaps): $(grep -m3 '^FAIL' "$T/top-bar.out" | paste -sd'|' -)"
+        fi
+    done
+    while IFS='|' read -r change what; do
+        read -r passes failures open_gaps <<<"$(assert_run modal_dialog light "$change")"
+        if ((failures == 1)); then
+            ok "modal dialog: $what fails one assertion"
+        else
+            not_ok "modal dialog: $what fails one assertion (passed/failed/gaps $passes/$failures/$open_gaps)"
+        fi
+    done <<'CHANGES'
+.surfaces.dialog.box.radius = 18|upstream's dialog radius
+.surfaces.dialog.box.boxShadow.blur = 8|upstream's dialog shadow
+.surfaces.dialog.box.padding.bottom = 23|upstream's even padding
+.surfaces.dialog.title.font.weight = 800|upstream's title weight
+.surfaces.dialog.entry.height = 41|upstream's entry padding
+.surfaces.dialog.entry.focus.boxShadow.color = "#3584e4cc"|upstream's 80 % focus ring
+.surfaces.dialog.buttons[0].radius = 12|upstream's square-ish buttons
+.surfaces.dialog.buttons[1].background = "#00000a10"|a default button without the accent
 CHANGES
 }
 
@@ -873,6 +922,7 @@ test_top_bar
 test_shell_surfaces
 test_quick_settings
 test_window_switcher
+test_modal_dialog
 test_today_pins
 test_known_gaps
 test_fixed_clock
