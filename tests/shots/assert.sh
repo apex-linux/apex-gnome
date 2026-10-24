@@ -287,6 +287,35 @@ top_bar() {
 }
 
 # shellcheck disable=SC2016 # jq programs and token names, not shell expansions
+dock_metrics() {
+    local label=$1 log=$2 variant=$3 scenes tokens
+    scenes=$(report_of "$log" APEXG2-SCENES)
+    tokens=$(tokens_for "$variant")
+    local -a metric=(top_bar_metric "$label dock" "$scenes" "$tokens")
+
+    "${metric[@]}" 'the dock is shown, $apex_dock_bottom_gap above the bottom edge and centred' \
+        '.dock' '.visible == true and (.bottomGap | px_is($t.apex_dock_bottom_gap)) and (.centreOffset | fabs <= 0.5)'
+    "${metric[@]}" 'its background has radius $apex_radius_dock' \
+        '.dock.radius' 'px_is($t.apex_radius_dock)'
+    "${metric[@]}" 'every icon is $apex_dock_icon_size (dock-icon-size medium)' \
+        '.dock.items | map(select(.iconSize != null))' 'length > 0 and all(.iconSize | px_is($t.apex_dock_icon_size))'
+    "${metric[@]}" 'its apps come first, then the separator, Show Apps and Trash, with no other separator' \
+        '.dock.items | map(.kind)' \
+        '(.[-3:] == ["separator", "show-apps", "trash"]) and (.[:-3] | all(. == "app"))'
+    "${metric[@]}" 'the Show Apps tile is full colour (view-app-grid)' \
+        '.dock.items | map(select(.kind == "show-apps")) | .[0].iconName' '. == "view-app-grid"'
+    "${metric[@]}" 'the overview keeps the dock and hides its own dash' \
+        '{dash: .dock.overviewDashVisible, overview: .scenes.overview.dockVisible}' '.dash == false and .overview == true'
+    "${metric[@]}" 'and lays its workspaces out above the dock' \
+        '{dock: .dock, clearance: .scenes.overview.dockClearance}' '.dock != null and .clearance != null and .clearance >= 0'
+}
+
+no_dock() {
+    local label=$1 log=$2
+    expect_report "$label" "$log" '.dock == null' "no Apex dock" APEXG2-SCENES
+}
+
+# shellcheck disable=SC2016 # jq programs and token names, not shell expansions
 top_bar_today() {
     local label=$1 log=$2 variant=$3 scenes tokens
     scenes=$(report_of "$log" APEXG2-SCENES)
@@ -341,8 +370,8 @@ compare_with_fedora() {
     {
         # The Apex bar is $apex_bar_height, upstream's 2.2em: the overview below it lays out on
         # another work area, so overview_below_bar checks its layout instead.
-        plan_entry apex-light-vs-fedora-desktop "$run" fedora-light "$run" default desktop "$run/compare" panel
-        plan_entry apex-dark-vs-fedora-desktop "$run" fedora-dark "$run" dark-style desktop "$run/compare" panel
+        plan_entry apex-light-vs-fedora-desktop "$run" fedora-light "$run" default desktop "$run/compare" panel dock
+        plan_entry apex-dark-vs-fedora-desktop "$run" fedora-dark "$run" dark-style desktop "$run/compare" panel dock
         for scene in "${SCENES[@]}"; do
             plan_entry "safe-light-vs-fedora-$scene" "$run" fedora-light "$run" stock-light "$scene" "$run/compare"
             plan_entry "safe-dark-vs-fedora-$scene" "$run" fedora-dark "$run" stock-dark "$scene" "$run/compare"
@@ -499,6 +528,7 @@ direct_cases() {
     top_bar default "$f" light
     top_bar_today default "$f" light
     top_bar_gaps default "$f" light
+    dock_metrics default "$f" light
 
     f=$run/default-scale1.log
     exits "$run" default-scale1 0
@@ -508,6 +538,7 @@ direct_cases() {
     virtual_monitor default-scale1 "$f" 1
     top_bar default-scale1 "$f" light
     top_bar_today default-scale1 "$f" light
+    dock_metrics default-scale1 "$f" light
 
     f=$run/dark-style.log
     exits "$run" dark-style 0
@@ -520,11 +551,13 @@ direct_cases() {
     top_bar dark-style "$f" dark
     top_bar_today dark-style "$f" dark
     top_bar_gaps dark-style "$f" dark
+    dock_metrics dark-style "$f" dark
     dark_style_off dark-style "$f"
 
     for c in stock-light stock-dark; do
         exits "$run" "$c" 0
         stock_view "$c" "$run/$c.log" "${c#stock-}"
+        no_dock "$c" "$run/$c.log"
         no_apex_failure "$c" "$run/$c.log"
     done
     stock_thumbnails "$run"
