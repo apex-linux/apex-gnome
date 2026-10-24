@@ -185,6 +185,8 @@ $apex_quick_menu_header_gap: 10px;
 $apex_quick_menu_header_padding: 6px;
 $apex_quick_menu_header_bottom: 8px;
 $apex_font_quick_menu_title_size: 15px;
+// Board 17's rows hover lighter than popup menus elsewhere (board 16).
+$apex_quick_menu_row_hover: if($variant == 'light', rgba(0, 0, 10, .035), rgba(255, 255, 255, .035));
 
 $apex_radius_switcher: 26px;
 $apex_radius_switcher_item: 16px;
@@ -349,6 +351,17 @@ $apex_lock_list_item_padding: 12px;
 $apex_lock_list_avatar_size: 48px;
 $apex_font_lock_list_name_size: 15px;
 
+// apex-desktop renders board 12's blurred Facets at build time: gdm runs no JS to blur.
+$apex_greeter_background: 'file:///usr/share/backgrounds/apex/apex-greeter-light.png';
+// The mean of that render, for a greeter without the file.
+$apex_greeter_fallback: #8a909a;
+$apex_greeter_bottom: 44px;
+$apex_greeter_button: rgba(255, 255, 255, .12);
+$apex_greeter_button_border: rgba(255, 255, 255, .2);
+$apex_greeter_button_size: 38px;
+$apex_greeter_button_icon_size: 16px;
+$apex_greeter_button_gap: 8px;
+
 // Spotlight and its toast (board 38).
 $apex_fg_hint: if($variant == 'light', rgba(29, 29, 33, .45), rgba(244, 244, 246, .45));
 $apex_selection_opacity: .16;
@@ -402,3 +415,40 @@ $apex_toast_gap: 10px;
 $apex_toast_check_size: 22px;
 $apex_toast_check_icon_size: 12px;
 $apex_toast_bottom: 92px;
+
+$apex_screenshot_width: 440px;
+$apex_screenshot_padding: 14px;
+$apex_screenshot_gap: 12px;
+$apex_screenshot_bottom: 48px;
+$apex_radius_screenshot: 26px;
+$apex_screenshot_close_size: 30px;
+$apex_screenshot_close_inset: 2px;
+$apex_screenshot_icon_size: 16px;
+$apex_screenshot_type_height: 64px;
+$apex_radius_screenshot_type: 16px;
+$apex_screenshot_type_icon_size: 20px;
+$apex_screenshot_type_label_gap: 5px;
+$apex_font_screenshot_type_size: 12.5px;
+$apex_screenshot_pointer_size: 38px;
+$apex_screenshot_capture_size: 64px;
+$apex_screenshot_capture_ring: 4px;
+$apex_screenshot_capture_gap: 4px;
+$apex_screenshot_record: #e62d42;
+$apex_screenshot_record_dot: 26px;
+$apex_radius_screenshot_record_dot: 8px;
+$apex_screenshot_switch_padding: 3px;
+$apex_screenshot_switch_button_width: 40px;
+$apex_screenshot_switch_button_height: 32px;
+$apex_screenshot_switch_shadow: rgba(0, 0, 0, .15);
+$apex_screenshot_switch_shadow_y: 1px;
+$apex_screenshot_switch_shadow_blur: 3px;
+$apex_screenshot_shade: rgba(0, 0, 0, .45);
+$apex_screenshot_selection: rgba(255, 255, 255, .9);
+$apex_screenshot_selection_border: 1px;
+$apex_screenshot_handle_size: 14px;
+$apex_screenshot_handle_shadow: rgba(0, 0, 0, .35);
+$apex_screenshot_handle_shadow_y: 1px;
+$apex_screenshot_handle_shadow_blur: 4px;
+$apex_screenshot_frame: 3px;
+$apex_radius_screenshot_window: 14px;
+$apex_screenshot_screen_tint: rgba(0, 0, 0, .12);

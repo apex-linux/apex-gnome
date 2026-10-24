@@ -7,7 +7,7 @@ readonly SHOTS=$HERE/../shots
 . "$HERE/../../.github/scripts/lib.sh"
 
 readonly APEX_DESKTOP_URL=https://github.com/apex-linux/apex-desktop
-readonly APEX_DESKTOP_REV=c8afa2efaf597c6183932ff77cfde38a550e54f8
+readonly APEX_DESKTOP_REV=f1a2f930f7e16ab7c7fde8f3a178d2e3ad9666ac
 
 usage() {
     cat <<EOF
@@ -19,7 +19,7 @@ container (just lock-shots). gdm-mock.py stands in for GDM: it asks one question
 fails every answer, so no case can unlock; lock-refused's GDM refuses even to ask. Each lock case locks, answers wrongly, blanks
 and wakes the screen; each greeter case (--mode=gdm) shows the user list, then the
 prompt. check.py asserts the cases' logs and the mock's. The users apex and guest come
-from accounts-daemon; the wallpapers are apex-desktop's ($APEX_DESKTOP_REV, or
+from accounts-daemon; the wallpapers, the greeter's background and its logo are apex-desktop's ($APEX_DESKTOP_REV, or
 APEX_DESKTOP_SRC, a checkout). Captures and logs land in _build/gnome-shell/shots/.
 
 It needs mesa-dri-drivers, dbus-daemon, python3-dbusmock, python3-gobject, gcc,
@@ -80,7 +80,7 @@ grep -q '\.apex' "$out/gnome-shell.txt" ||
 cp "$APEX_ROOT/tests/layer/fixtures/io.github.apex_linux.Apex.Desktop.gschema.xml" /usr/share/glib-2.0/schemas/
 glib-compile-schemas --strict /usr/share/glib-2.0/schemas || die "glib-compile-schemas failed"
 
-group "apex-desktop $APEX_DESKTOP_REV: the wallpapers"
+group "apex-desktop $APEX_DESKTOP_REV: the wallpapers and the greeter's background and logo"
 desktop=${APEX_DESKTOP_SRC:-$APEX_ROOT/_build/gnome-shell/apex-desktop}
 if [[ -z ${APEX_DESKTOP_SRC:-} ]]; then
     [[ -d $desktop/.git ]] || git_ init -q "$desktop"
@@ -94,7 +94,15 @@ mkdir -p "$BACKGROUNDS"
 for variant in light dark; do
     rsvg-convert -w 3840 -h 2400 -o "$BACKGROUNDS/apex-facets-$variant.png" \
         "$desktop/desktop/wallpapers/apex-facets-$variant.svg" || die "cannot render the $variant wallpaper"
+    rsvg-convert -w 2880 -h 1800 -o "$BACKGROUNDS/apex-greeter-$variant.png" \
+        "$desktop/desktop/wallpapers/apex-greeter-$variant.svg" || die "cannot render the $variant greeter background"
 done
+# build-logo.sh outlines the text with inkscape and fits the width to it; this keeps the
+# template's text as text, in a width it cannot outgrow.
+sed -e 's/@WIDTH@/240/g' -e 's/@WORDMARK_X@/84/' -e 's/@CENTER@/120/' -e "s/@VERSION@/$APEX_FEDORA/" \
+    "$desktop/desktop/gdm/logo.svg" >/usr/share/pixmaps/apex-gdm-logo.svg || die "cannot write the gdm logo"
+cp "$desktop/desktop/gdm/zz_apex-login-screen.gschema.override" /usr/share/glib-2.0/schemas/
+glib-compile-schemas --strict /usr/share/glib-2.0/schemas || die "glib-compile-schemas failed"
 endgroup
 
 add_user() {
