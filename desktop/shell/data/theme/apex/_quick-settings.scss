@@ -202,6 +202,7 @@ $_toggle_states: hover, focus, active;
     min-height: $apex_quick_menu_row_height;
     spacing: $apex_quick_menu_row_spacing;
 
+    &:hover, &:focus, &:selected, &:active { background-color: $apex_quick_menu_row_hover; }
     & > StIcon { icon-size: $apex_quick_settings_icon_size; }
   }
 
