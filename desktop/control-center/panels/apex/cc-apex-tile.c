@@ -3,6 +3,7 @@
 
 #include <adwaita.h>
 
+#include "cc-apex-sidebar.h"
 #include "cc-apex-tile.h"
 
 #define TILE_SIZE 72
@@ -129,17 +130,13 @@ cc_apex_tile_class_init (CcApexTileClass *klass)
 {
     GObjectClass *object_class = G_OBJECT_CLASS (klass);
     GtkWidgetClass *widget_class = GTK_WIDGET_CLASS (klass);
-    g_autoptr(GtkCssProvider) provider = gtk_css_provider_new ();
-
     object_class->dispose = cc_apex_tile_dispose;
     object_class->finalize = cc_apex_tile_finalize;
 
     gtk_widget_class_set_layout_manager_type (widget_class, GTK_TYPE_BIN_LAYOUT);
     gtk_widget_class_set_css_name (widget_class, "apex-tile");
 
-    gtk_css_provider_load_from_resource (provider, "/org/gnome/Settings/apex/apex.css");
-    gtk_style_context_add_provider_for_display (gdk_display_get_default (), GTK_STYLE_PROVIDER (provider),
-                                                GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
+    cc_apex_load_css ();
 }
 
 static void

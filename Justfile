@@ -67,7 +67,7 @@ control-center-test:
 control-center-lane:
     engine=$(command -v podman || command -v docker) && "$engine" run --rm -v "{{justfile_directory()}}:/apex-gnome:z" -w /apex-gnome {{control_center_image}} tests/lib/lane.sh gnome-control-center
 
-control_center_run_packages := "gnome-shell mesa-dri-drivers dbus-daemon python3-dbusmock python3-gobject at-spi2-core gcc util-linux adwaita-sans-fonts python3-dbus systemd"
+control_center_run_packages := "gnome-shell mesa-dri-drivers dbus-daemon python3-dbusmock python3-gobject at-spi2-core gcc util-linux adwaita-sans-fonts python3-dbus systemd gnome-backgrounds"
 
 # The Settings that control-center-lane built, in a headless gnome-shell: board 11's captures, light and dark, and every row's binding; in _build/control-center/shots.
 control-center-run:
@@ -88,6 +88,17 @@ nautilus-lane:
 # The nautilus that nautilus-lane built, captured in a headless gnome-shell with board 27's home, light and dark, and its assertions (podman or docker); in _build/nautilus/shots.
 nautilus-shots:
     engine=$(command -v podman || command -v docker) && "$engine" run --rm -v "{{justfile_directory()}}:/apex-gnome:z" -w /apex-gnome {{nautilus_image}} bash -c 'dnf5 -y -q --setopt=install_weak_deps=False install {{nautilus_shots_packages}} && tests/nautilus/shoot.sh _build/nautilus/out'
+
+shell_image := "registry.fedoraproject.org/fedora:45@sha256:1e13e11f63e147a40a935c9046c79d53a30b861a3cf05ebb023bb53c562382cb"
+shell_shots_packages := "mesa-dri-drivers dbus-daemon python3-dbusmock python3-gobject gcc accountsservice librsvg2-tools openssl git-core adwaita-sans-fonts jetbrains-mono-fonts-all"
+
+# gnome-shell rebuilt as the lane builds it (apex-lane's container half), in fedora:45 with podman or docker; RPMs in _build/gnome-shell/out.
+gnome-shell-lane:
+    engine=$(command -v podman || command -v docker) && "$engine" run --rm -v "{{justfile_directory()}}:/apex-gnome:z" -w /apex-gnome {{shell_image}} tests/lib/lane.sh gnome-shell
+
+# The lock screen and the greeter of the gnome-shell that gnome-shell-lane built, against a GDM mock, light and dark, and their assertions (podman or docker); in _build/gnome-shell/shots.
+lock-shots:
+    engine=$(command -v podman || command -v docker) && "$engine" run --rm -v "{{justfile_directory()}}:/apex-gnome:z" -w /apex-gnome {{shell_image}} bash -c 'dnf5 -y -q --setopt=install_weak_deps=False install {{shell_shots_packages}} && tests/shell/shoot.sh _build/gnome-shell/out'
 
 s2c_image := "registry.fedoraproject.org/fedora:45@sha256:1e13e11f63e147a40a935c9046c79d53a30b861a3cf05ebb023bb53c562382cb"
 s2c_packages := "ptyxis gnome-shell mesa-dri-drivers dbus-daemon dconf python3-dbusmock python3-gobject at-spi2-core gcc util-linux jq adwaita-sans-fonts"
