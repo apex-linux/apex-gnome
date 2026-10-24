@@ -4,7 +4,8 @@
 
 G2's python-dbusmock fixtures on the system bus (DBUS_SYSTEM_BUS_ADDRESS, or the
 default): UPower with a battery at 87 %, NetworkManager on the Wi-Fi network
-"Apex-5G", and BlueZ with the Bluetooth keyboard "Keychron K3" connected. The
+"Apex-5G" with "Apex-2.4G" and the open "Library Guest" in range, and BlueZ with the
+Bluetooth keyboard "Keychron K3" connected. The
 mocks keep running after this exits; each logs to LOG_DIR/fixture-NAME.log and leaves
 its pid in LOG_DIR/fixture-NAME.pid.
 Prints one line, G2-FIXTURES and what the bus then reports, as JSON.
@@ -32,7 +33,12 @@ WIFI_STRENGTH = 90
 WIFI_FREQUENCY_MHZ = 5180
 WIFI_RATE_KBPS = 866700
 NM_80211_MODE_INFRA = 2
+NM_80211_AP_SEC_NONE = 0
 NM_80211_AP_SEC_KEY_MGMT_PSK = 0x100
+# libnm takes WPA2 only with its ciphers: key management alone is an invalid network.
+NM_80211_AP_SEC_WPA2_PSK = NM_80211_AP_SEC_KEY_MGMT_PSK | 0x8 | 0x80
+WIFI_IN_RANGE = (("apex24g", "Apex-2.4G", "02:A5:E0:00:00:02", 2437, 300000, 72, NM_80211_AP_SEC_WPA2_PSK),
+                 ("guest", "Library Guest", "02:A5:E0:00:00:03", 2412, 144400, 48, NM_80211_AP_SEC_NONE))
 NM_DEVICE_STATE_ACTIVATED = 100
 NM_ACTIVE_CONNECTION_STATE_ACTIVATED = 2
 
@@ -115,9 +121,15 @@ def wifi(bus):
         device, "apex5g", WIFI_SSID, "02:A5:E0:00:00:01", dbus.UInt32(NM_80211_MODE_INFRA),
         dbus.UInt32(WIFI_FREQUENCY_MHZ), dbus.UInt32(WIFI_RATE_KBPS), dbus.Byte(WIFI_STRENGTH),
         dbus.UInt32(NM_80211_AP_SEC_KEY_MGMT_PSK))
+    for name, ssid, address, frequency, rate, strength, security in WIFI_IN_RANGE:
+        root.AddAccessPoint(device, name, ssid, address, dbus.UInt32(NM_80211_MODE_INFRA), dbus.UInt32(frequency),
+                            dbus.UInt32(rate), dbus.Byte(strength), dbus.UInt32(security))
     connection = root.AddWiFiConnection(device, "apex5g", WIFI_SSID, "wpa-psk")
     active = root.AddActiveConnection([device], connection, access_point, "apex5g",
                                       dbus.UInt32(NM_ACTIVE_CONNECTION_STATE_ACTIVATED))
+    # The template's connection knows plain PSK only: the ciphers come after it.
+    wpa2 = dbus.UInt32(NM_80211_AP_SEC_WPA2_PSK)
+    nm.put(access_point, f"{NM}.AccessPoint", {"WpaFlags": wpa2, "RsnFlags": wpa2})
     nm.put(device, f"{NM}.Device.Wireless", {"ActiveAccessPoint": dbus.ObjectPath(access_point)})
     nm.put(NM_PATH, NM, {"PrimaryConnection": dbus.ObjectPath(active),
                          "PrimaryConnectionType": "802-11-wireless"})
@@ -127,6 +139,8 @@ def wifi(bus):
     return {"primary": str(nm.props(primary).Get(f"{NM}.Connection.Active", "Id")),
             "ssid": bytes(ap.Get(f"{NM}.AccessPoint", "Ssid")).decode(),
             "strength": int(ap.Get(f"{NM}.AccessPoint", "Strength")),
+            "inRange": [bytes(nm.props(path).Get(f"{NM}.AccessPoint", "Ssid")).decode()
+                        for path in nm.props(device).Get(f"{NM}.Device.Wireless", "AccessPoints")],
             "state": int(manager.Get(NM, "State")),
             "connectivity": int(manager.Get(NM, "Connectivity"))}
 
