@@ -18,5 +18,6 @@ theme_sources += files(
   '_derived.scss',
   '_dock.scss',
   '_tile-preview.scss',
+  '_screenshot.scss',
   '_apex-structure.scss',
 )

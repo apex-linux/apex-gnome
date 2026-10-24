@@ -239,6 +239,12 @@ the window group plays the window and the stock `TilePreview` opens over the lef
 work area, captured with `G2_SURFACE_SCENES=1`. It reads the preview's box against the tile, its
 clear inset border, the radius inside it, the accent fill and the inset accent ring.
 
+`screenshot_ui` runs in the same cases. The probe opens the stock screenshot UI in its
+selection mode, captures it with `G2_SURFACE_SCENES=1`, and reads the panel, the close button
+in the heading row, the area buttons (Window insensitive with no window), the pointer toggle,
+the capture button and its recording state, the screenshot/screencast switch, the selection's
+shade, outline and handles, then the screen mode's frame; a checked window frame is a stand-in.
+
 `derived_surfaces` reads surfaces with no board, which G2 never opens, from nested
 stand-ins in the same cases: the workspace switcher and its dots, the resize popup, the
 input method's candidates and a candidate, the run dialog's entry, an audio device tile

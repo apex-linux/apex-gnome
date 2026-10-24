@@ -188,6 +188,7 @@ for c in default:light default-scale1:light dark-style:dark; do
     overview_layer "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
     derived_surfaces "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
     tile_preview "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
+    screenshot_ui "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
 done
 layer_cycles "$run"
 echo "# logs and captures: $run"

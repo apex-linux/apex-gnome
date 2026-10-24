@@ -406,6 +406,46 @@ REPORT_OF_A_TILE_PREVIEW_DRAWN_FROM_TOKENS='
         radius: (($t.apex_radius_tile_preview | px) + $i), background: tint($t.apex_tile_preview_fill_opacity),
         boxShadow: {inset: true, x: 0, y: 0, blur: 0, spread: ($t.apex_tile_preview_ring | px), color: tint($t.apex_tile_preview_ring_opacity)}}}}}'
 # shellcheck disable=SC2016 # a jq program
+REPORT_OF_A_SCREENSHOT_UI_DRAWN_FROM_TOKENS='
+($t.apex_surface_border | px) as $b | ($t.apex_screenshot_padding | px) as $pad | ($t.apex_screenshot_close_size | px) as $close
+| ($t.apex_screenshot_capture_size | px) as $cap | ($cap - 2 * (($t.apex_screenshot_capture_ring | px) + ($t.apex_screenshot_capture_gap | px))) as $dot
+| (900 - ($t.apex_screenshot_bottom | px) - 210) as $py | (720 - ($t.apex_screenshot_width | px) / 2) as $px
+| ($t.apex_screenshot_type_height | px) as $th | ($t.apex_radius_screenshot_type | px) as $tr
+| {topBar: {accent: "#3584e4ff"}, surfaces: {screenshot: {
+    monitorHeight: 900,
+    panel: {x: $px, y: $py, width: ($t.apex_screenshot_width | px), height: 210, background: ($t.apex_panel | hex),
+        borderColor: ($t.apex_panel_border | hex), border: {top: $b, left: $b}, radius: ($t.apex_radius_screenshot | px),
+        boxShadow: {color: ($t.apex_shadow | hex), y: ($t.apex_shadow_y | px), blur: ($t.apex_shadow_blur | px)},
+        padding: {top: ($pad + $close + ($t.apex_screenshot_gap | px) - $b), left: ($pad - $b)}, spacing: ($t.apex_screenshot_gap | px)},
+    close: {x: ($px + ($t.apex_screenshot_width | px) - $pad - ($t.apex_screenshot_close_inset | px) - $close), y: ($py + $pad),
+        width: $close, height: $close, radius: 999, background: ($t.apex_button | hex), foreground: ($t.apex_fg | hex), boxShadow: null},
+    types: [
+        {height: $th, radius: $tr, checked: true, background: ($t.apex_button_hover | hex)},
+        {height: $th, radius: $tr, checked: false, background: ($t.apex_button | hex)},
+        {height: $th, radius: $tr, checked: false, background: ($t.apex_button | hex), foreground: ($t.apex_fg_faint | hex)}],
+    checkedType: {background: ($t.apex_button_hover | hex)},
+    typeContent: {icon: {height: ($t.apex_screenshot_type_icon_size | px)}, spacing: ($t.apex_screenshot_type_label_gap | px),
+        labelFont: {size: ($t.apex_font_screenshot_type_size | px), weight: ($t.apex_font_label_weight | tonumber)}},
+    pointer: {width: ($t.apex_screenshot_pointer_size | px), height: ($t.apex_screenshot_pointer_size | px), radius: 999,
+        background: ($t.apex_button | hex), checked: {background: "#3584e4ff"}},
+    capture: {width: $cap, height: $cap, border: {top: ($t.apex_screenshot_capture_ring | px)}, borderColor: ($t.apex_fg | hex),
+        padding: {top: ($t.apex_screenshot_capture_gap | px)},
+        circle: {width: $dot, radius: 999, background: ($t.apex_fg | hex)},
+        cast: {margin: (($dot - ($t.apex_screenshot_record_dot | px)) / 2), radius: ($t.apex_radius_screenshot_record_dot | px),
+            background: ($t.apex_screenshot_record | hex)}},
+    switcher: {padding: {top: ($t.apex_screenshot_switch_padding | px)}, background: ($t.apex_button | hex),
+        radius: (($t.apex_screenshot_switch_button_height | px) / 2 + ($t.apex_screenshot_switch_padding | px))},
+    shot: {checked: true, width: ($t.apex_screenshot_switch_button_width | px), height: ($t.apex_screenshot_switch_button_height | px),
+        background: ($t.apex_panel_solid | hex), foreground: ($t.apex_fg | hex),
+        boxShadow: {y: ($t.apex_screenshot_switch_shadow_y | px), blur: ($t.apex_screenshot_switch_shadow_blur | px), color: ($t.apex_screenshot_switch_shadow | hex)}},
+    shade: {background: ($t.apex_screenshot_shade | hex)},
+    selection: {border: {top: ($t.apex_screenshot_selection_border | px)}, borderColor: ($t.apex_screenshot_selection | hex)},
+    handle: {width: ($t.apex_screenshot_handle_size | px), height: ($t.apex_screenshot_handle_size | px), radius: 999, background: "#ffffffff",
+        boxShadow: {y: ($t.apex_screenshot_handle_shadow_y | px), blur: ($t.apex_screenshot_handle_shadow_blur | px), color: ($t.apex_screenshot_handle_shadow | hex)}},
+    screen: {checked: true, border: {top: ($t.apex_screenshot_frame | px)}, borderColor: "#3584e4ff", background: ($t.apex_screenshot_screen_tint | hex)},
+    windowSelector: {background: ($t.apex_screenshot_shade | hex)},
+    windowFrame: {border: {top: ($t.apex_screenshot_frame | px)}, borderColor: "#3584e4ff", radius: ($t.apex_radius_screenshot_window | px)}}}}'
+# shellcheck disable=SC2016 # a jq program
 REPORT_OF_DERIVED_SURFACES_DRAWN_FROM_TOKENS='
 ($t.apex_surface_border | px) as $b
 | {border: {top: $b}, borderColor: ($t.apex_panel_border | hex),
@@ -442,6 +482,7 @@ assert_run() {
     [[ $assertions == app_grid ]] && report=$REPORT_OF_A_LAUNCHER_DRAWN_FROM_TOKENS
     [[ $assertions == derived_surfaces ]] && report=$REPORT_OF_DERIVED_SURFACES_DRAWN_FROM_TOKENS
     [[ $assertions == tile_preview ]] && report=$REPORT_OF_A_TILE_PREVIEW_DRAWN_FROM_TOKENS
+    [[ $assertions == screenshot_ui ]] && report=$REPORT_OF_A_SCREENSHOT_UI_DRAWN_FROM_TOKENS
     [[ $assertions == overview_layer ]] && report=$REPORT_OF_AN_OVERVIEW_LAYER_FROM_TOKENS
     tokens=$(tokens_for "$variant")
     jq -nc --argjson t "$tokens" "$JQ_DEFS $HEX_DEF $report | $change" | sed 's/^/APEXG2-SCENES /' >"$T/top-bar.log"
@@ -824,6 +865,36 @@ test_app_grid() {
 .surfaces.appGrid.dialog.width = 720|upstream's 720 px folder
 .surfaces.appGrid.dialog.title.font.size = 26.667|upstream's title 1 folder name
 .surfaces.appGrid.pageHint.gradient = 1|upstream's gradient page hint
+CHANGES
+}
+
+test_screenshot_ui() {
+    local variant change what passes failures open_gaps
+    for variant in light dark; do
+        read -r passes failures open_gaps <<<"$(assert_run screenshot_ui "$variant")"
+        if ((failures == 0 && open_gaps == 0 && passes == 8)); then
+            ok "screenshot UI ($variant): drawn from the tokens it passes all $passes assertions"
+        else
+            not_ok "screenshot UI ($variant): drawn from the tokens it passes (passed/failed/gaps $passes/$failures/$open_gaps): $(grep -m3 '^FAIL' "$T/top-bar.out" | paste -sd'|' -)"
+        fi
+    done
+    while IFS='|' read -r change what; do
+        read -r passes failures open_gaps <<<"$(assert_run screenshot_ui light "$change")"
+        if ((failures == 1)); then
+            ok "screenshot UI: $what fails one assertion"
+        else
+            not_ok "screenshot UI: $what fails one assertion (passed/failed/gaps $passes/$failures/$open_gaps)"
+        fi
+    done <<'CHANGES'
+.surfaces.screenshot.panel.background = "#222226ff"|upstream's dark OSD panel
+.surfaces.screenshot.panel.padding.top = 17|no heading row
+.surfaces.screenshot.close.y -= 29|upstream's close button on the panel's corner
+.surfaces.screenshot.types[2].background = "#2e2e33ff"|upstream's insensitive Window button
+.surfaces.screenshot.pointer.checked.background = "#00000a1e"|a pointer toggle that is not the accent when on
+.surfaces.screenshot.capture.width = 48|upstream's 48 px capture button
+.surfaces.screenshot.shot.background = "#ffffffff"|upstream's white checked switch
+.surfaces.screenshot.handle.width = 24|upstream's 24 px handles
+.surfaces.screenshot.screen.borderColor = "#ffffffff"|upstream's white screen frame
 CHANGES
 }
 
@@ -1271,6 +1342,7 @@ test_app_grid
 test_overview_layer
 test_derived_surfaces
 test_tile_preview
+test_screenshot_ui
 test_today_pins
 test_known_gaps
 test_fixed_clock
