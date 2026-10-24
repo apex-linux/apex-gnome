@@ -591,6 +591,15 @@ def glass($b; $s): {blur: ($b | px), saturation: ($s | rtrimstr("%") | tonumber 
     panelBeforeCopy: glass($t.apex_spotlight_blur; $t.apex_spotlight_saturation),
     toast: glass($t.apex_toast_blur; $t.apex_toast_saturation)}}}}'
 # shellcheck disable=SC2016 # a jq program
+REPORT_OF_SPOTLIGHT_KEYS='
+{surfaces: {spotlightKeys: {budgetMs: 1000, slowMs: 1600, modalBefore: 0, modalOpen: 1,
+    early: {ms: 301, sections: ["APPLICATIONS", "FILES"], rows: 6, selected: "Applications/org.gnome.DiskUtility.desktop"},
+    late: {ms: 1201, sections: ["APPLICATIONS", "FILES"], rows: 6, selected: "Applications/org.gnome.DiskUtility.desktop"},
+    settings: {askedMs: 52, cancelledMs: 1053},
+    down4: "Files/images", up1: "Files/png", down20: "Files/md",
+    enter: {open: false, modal: 0, activated: [{provider: "org.gnome.Nautilus.desktop", id: "md", terms: ["disk"]}]},
+    escape: {open: false, modal: 0}}}}'
+# shellcheck disable=SC2016 # a jq program
 HEX_DEF='def hex: rgba | map([., 16] | "0123456789abcdef"[(.[0] / .[1] | floor):(.[0] / .[1] | floor) + 1]
                                     + "0123456789abcdef"[(.[0] % .[1]):(.[0] % .[1]) + 1]) | "#" + join("");'
 
@@ -615,6 +624,7 @@ assert_run() {
     [[ $assertions == spotlight_style ]] && report=$REPORT_OF_A_SPOTLIGHT_DRAWN_FROM_TOKENS
     [[ $assertions == launcher_search ]] && report=$REPORT_OF_A_LAUNCHER_SEARCH_FROM_TOKENS
     [[ $assertions == spotlight_glass ]] && report=$REPORT_OF_SPOTLIGHT_GLASS_FROM_TOKENS
+    [[ $assertions == spotlight_keys ]] && report=$REPORT_OF_SPOTLIGHT_KEYS
     [[ $assertions == shadow_layers ]] && report=$REPORT_OF_SHADOW_LAYERS_FROM_TOKENS
     [[ $assertions == indicator_metrics ]] && report=$REPORT_OF_INDICATORS_DRAWN_FROM_TOKENS prefix=APEXG2-INDICATORS
     tokens=$(tokens_for "$variant")
@@ -1271,6 +1281,36 @@ test_spotlight_glass() {
 CHANGES
 }
 
+test_spotlight_keys() {
+    local variant change what passes failures open_gaps
+    for variant in light dark; do
+        read -r passes failures open_gaps <<<"$(assert_run spotlight_keys "$variant")"
+        if ((failures == 0 && open_gaps == 0 && passes == 5)); then
+            ok "Spotlight keys ($variant): a slow provider and real key presses pass all $passes assertions"
+        else
+            not_ok "Spotlight keys ($variant): a slow provider and real key presses pass (passed/failed/gaps $passes/$failures/$open_gaps): $(grep -m3 '^FAIL' "$T/top-bar.out" | paste -sd'|' -)"
+        fi
+    done
+    while IFS='|' read -r change what; do
+        read -r passes failures open_gaps <<<"$(assert_run spotlight_keys light "$change")"
+        if ((failures == 1)); then
+            ok "Spotlight keys: $what fails one assertion"
+        else
+            not_ok "Spotlight keys: $what fails one assertion (passed/failed/gaps $passes/$failures/$open_gaps)"
+        fi
+    done <<'CHANGES'
+.surfaces.spotlightKeys.early.sections = ["APPLICATIONS"]|Files held back by the slow Settings
+.surfaces.spotlightKeys.early.ms = 1100|the sections seen only past the budget
+.surfaces.spotlightKeys.late.rows = 0|every section hidden once the budget runs out
+.surfaces.spotlightKeys.settings.cancelledMs = null|Settings never cancelled
+.surfaces.spotlightKeys.down4 = "Applications/org.gnome.baobab.desktop"|Down kept inside its section
+.surfaces.spotlightKeys.down20 = null|Down past the last row
+.surfaces.spotlightKeys.enter.activated = []|Enter opening nothing
+.surfaces.spotlightKeys.enter.modal += 1|a modal left behind after Enter
+.surfaces.spotlightKeys.escape.open = true|Esc ignored
+CHANGES
+}
+
 test_today_pins() {
     local pin_count what change passes failures open_gaps
     read -r passes failures open_gaps <<<"$(assert_run top_bar_today light)"
@@ -1834,6 +1874,7 @@ test_tile_preview
 test_spotlight_style
 test_launcher_search
 test_spotlight_glass
+test_spotlight_keys
 test_screenshot_ui
 test_today_pins
 test_known_gaps
