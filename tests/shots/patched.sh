@@ -191,11 +191,11 @@ top_bar_gaps dark-style "$run/dark-style.log" dark
 dock_metrics default "$run/default.log" light
 dock_metrics default-scale1 "$run/default-scale1.log" light
 dock_metrics dark-style "$run/dark-style.log" dark
-for c in dock-intellihide dock-intellihide-dark; do
-    exits "$run" "$c" 0
-    no_js_error "$c" "$run/$c.log"
-    no_apex_failure "$c" "$run/$c.log"
-    dock_intellihide "$c" "$run/$c.log" "$run"
+for c in dock-intellihide:light dock-intellihide-dark:dark; do
+    exits "$run" "${c%:*}" 0
+    no_js_error "${c%:*}" "$run/${c%:*}.log"
+    no_apex_failure "${c%:*}" "$run/${c%:*}.log"
+    dock_intellihide "${c%:*}" "$run/${c%:*}.log" "$run" "${c#*:}"
 done
 no_dock stock-light "$run/stock-light.log"
 no_dock stock-dark "$run/stock-dark.log"
