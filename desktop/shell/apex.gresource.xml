@@ -12,6 +12,10 @@
     <file alias="fault/feature.js">js/ui/apex/fault/feature.js</file>
     <file alias="witness/feature.js">js/ui/apex/witness/feature.js</file>
     <file alias="spotlight/feature.js">js/ui/apex/spotlight/feature.js</file>
+    <file alias="spotlight/search.js">js/ui/apex/spotlight/search.js</file>
+    <file alias="spotlight/providers.js">js/ui/apex/spotlight/providers.js</file>
+    <file alias="spotlight/popup.js">js/ui/apex/spotlight/popup.js</file>
+    <file alias="spotlight/toast.js">js/ui/apex/spotlight/toast.js</file>
     <file alias="panel/feature.js">js/ui/apex/panel/feature.js</file>
     <file alias="panel/workspace-dots.js">js/ui/apex/panel/workspace-dots.js</file>
     <file alias="panel/hot-corner.js">js/ui/apex/panel/hot-corner.js</file>

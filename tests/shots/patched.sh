@@ -208,6 +208,7 @@ for c in default:light default-scale1:light dark-style:dark; do
     app_grid "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
     overview_layer "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
     derived_surfaces "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
+    spotlight_style "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
 done
 layer_cycles "$run"
 no_js_error glass "$run/glass.log"
