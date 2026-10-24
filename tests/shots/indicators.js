@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
 // G2's app indicators (G2_INDICATORS=1): sni-items.js's StatusNotifierItems in the bar, a
-// DBusMenu and its events, and the overflow at five. tests/shots/README.md, "App indicators".
+// DBusMenu and its events, the overflow at five, and the privacy group, recording pill and input chip.
 
 import Clutter from 'gi://Clutter';
 import Gio from 'gi://Gio';
@@ -191,6 +191,54 @@ async function click(actor, mouseButton) {
     await Scripting.sleep(100);
 }
 
+function textOf(label, unit) {
+    const node = label.get_theme_node();
+    const font = node.get_font();
+    return {
+        text: label.text, size: round(font.get_size() / unit.fontSize), weight: font.get_weight(),
+        tracking: round(node.get_letter_spacing() / unit.length), features: node.get_font_features(),
+        colour: hex(node.get_foreground_color()),
+    };
+}
+
+function filled(actor, unit) {
+    return {...boxOf(actor, unit), radius: radiusOf(actor, unit), colour: hex(actor.get_theme_node().get_background_color())};
+}
+
+// Board 39's "everything": the camera and microphone in use, a recording, and two input sources.
+async function everything(unit, settle, capture) {
+    const {quickSettings, screenRecording, keyboard} = Main.panel.statusArea;
+    const inUse = [quickSettings._camera._indicator, quickSettings._volumeInput._indicator];
+    inUse.forEach(icon => icon.show());
+    screenRecording.show();
+    screenRecording._label.text = '0:42';
+    await settle();
+    const pill = quickSettings.get_first_child();
+    const group = pill.get_children().find(a => a.name === 'apexPrivacyGroup') ?? null;
+    const glyphs = (group?.get_children() ?? []).filter(i => i.visible)
+        .flatMap(indicator => indicator.get_children().filter(icon => icon.visible));
+    const next = pill.get_children().find(a => a !== group && a.visible);
+    const [stop, timer] = screenRecording._box.get_children().filter(c => c.visible);
+    const chip = keyboard._container.get_children().find(label => label.visible);
+    const report = {
+        order: rightBoxOrder(),
+        pill: {...boxOf(pill, unit), paddingLeft: round(pill.get_theme_node().get_padding(St.Side.LEFT) / unit.length)},
+        privacy: group?.visible ? {
+            ...filled(group, unit), next: boxOf(next, unit),
+            glyphs: glyphs.map(g => ({...boxOf(g, unit), iconName: g.icon_name, colour: hex(g.get_theme_node().get_foreground_color())})),
+        } : null,
+        recording: {...filled(screenRecording._box, unit), stop: filled(stop, unit), timer: {...boxOf(timer, unit), ...textOf(timer, unit)}},
+        input: {pill: {...boxOf(keyboard._container, unit), radius: radiusOf(keyboard._container, unit)}, ...textOf(chip, unit)},
+        search: boxOf(Main.panel.statusArea[SEARCH_ROLE].get_first_child(), unit),
+    };
+    report.capture = (await capture('indicators-everything')).file;
+    inUse.forEach(icon => icon.hide());
+    screenRecording.hide();
+    await settle();
+    report.after = {privacy: group?.visible ?? null, paddingLeft: round(pill.get_theme_node().get_padding(St.Side.LEFT) / unit.length)};
+    return report;
+}
+
 async function until(condition, timeoutMs = 10000) {
     for (let waited = 0; waited < timeoutMs && !condition(); waited += 100)
         // eslint-disable-next-line no-await-in-loop
@@ -215,6 +263,7 @@ export async function indicatorsReport({cssUnit, settle, capture}) {
         const captured = await capture('indicators');
         report.four.mask = maskInk(captured);
         report.four.capture = captured.file;
+        report.everything = await everything(unit, settle, capture);
 
         await click(button('Chat'), Clutter.BUTTON_SECONDARY);
         await settle();

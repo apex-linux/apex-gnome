@@ -568,7 +568,7 @@ fact "launcher: with spotlight in disabled-features the app grid keeps the stock
 fact "launcher: taken out again, the launcher's pill is back" 'launcher\.enabled-again=hint=Search apps pill=true grid'
 lacks "launcher: nothing fails" 'off for this session|did not disable cleanly|JS ERROR'
 
-readonly KEPT_PILL='remoteAccess,camera,volumeInput,location,network,volumeOutput,unsafeMode,system'
+readonly KEPT_PILL='privacy\(remoteAccess camera volumeInput location\),network,volumeOutput,unsafeMode,system'
 readonly STOCK_PILL='remoteAccess,camera,volumeInput,location,brightness,thunderbolt,nightLight,network,darkMode,doNotDisturb,backlight,bluetooth,rfkill,autoRotate,volumeOutput,unsafeMode,powerProfiles,system'
 probe top-bar "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_TOP_BAR=1 PROBE_SCALE=2
 rc_is "top bar: the probe runs" 0
@@ -577,6 +577,12 @@ fact "workspace-dots: the active dot widens from its own width to the sheet's -a
     'top-bar\.dots=7 15 22 inactive=\{"opacity":0\.45,"scale":1\}'
 fact "status-pill: network, volume, battery, the privacy and the unsafe-mode indicators stay" "pill=$KEPT_PILL"
 fact "status-pill: and so for indicators set up after enable" "pill\.set-up-after-enable=$KEPT_PILL"
+fact "privacy group: hidden while no privacy indicator shows" 'privacy\.idle=group=false in-use=false'
+fact "privacy group: the camera in use shows it, and the pill narrows its start for it" 'privacy\.camera=group=true in-use=true'
+fact "privacy group: hidden again once the camera is off" 'privacy\.camera-off=group=false in-use=false'
+fact "recording pill: a stop square before the timer, with stock's glyph hidden" 'recording=stop,0:42 stock-icon=false'
+fact "input chip: the sources' short names in capitals" 'input-chip=EN,VI'
+fact "input chip: and so after keyboard.js renames one or adds a source" 'input-chip\.changed=EN,VI₂,FR'
 fact "hot-corner: the corner becomes a reactive 4 x 4 zone at its own position, in scaled px" \
     'hot-corner\.zone=hot-corner reactive=true x=0 y=0 8x8'
 fact "hot-corner: in the chrome, hidden under fullscreen windows" 'chrome\.add=hot-corner trackFullscreen=true'
@@ -584,7 +590,12 @@ count_is "hot-corner: entering it triggers the barrier once, until the pointer l
 fact "hot-corner: leaving it while on the barrier keeps the barrier's trigger" 'hot-corner\.after-leave-on-the-barrier=true'
 fact "layer-enabled=false: the dot hooks give stock" 'top-bar\.off\.dots=99 99 99 inactive="stock"'
 fact "layer-enabled=false: the status pill gets every indicator back, in order" "pill\.off=$STOCK_PILL"
+fact "layer-enabled=false: no privacy group, and the pill's start is stock" 'privacy\.off=group=none in-use=false'
+fact "layer-enabled=false: the recording button is stock's, timer then glyph" 'recording\.off=0:42,screencast-stop-symbolic stock-icon=true'
+fact "layer-enabled=false: the input chip has stock's names back" 'input-chip\.off=en,vi₂,fr'
 fact "layer-enabled=true: the filter again" "pill\.on=$KEPT_PILL"
+fact "layer-enabled=true: the stop square again" 'recording\.on=stop,0:42 stock-icon=false'
+fact "layer-enabled=true: capitals again" 'input-chip\.on=EN,VI₂,FR'
 count_is "both dots restyle at each enable and disable" '^probe: workspace-dot=restyled$' 6
 count_is "the hot corners are rebuilt at each enable and disable" '^probe: hot-corners=rebuilt$' 3
 lacks "top bar: no feature fails or disables uncleanly" 'off for this session|did not disable cleanly|cannot restyle'
@@ -596,6 +607,8 @@ probe top-bar-disabled "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_TOP_BAR=1 PROBE_DIS
 has "disabled-features=['panel']: skips the feature" 'Apex: feature panel is in disabled-features'
 fact "disabled-features=['panel']: the dot hooks give stock" 'top-bar\.dots=99 99 99 inactive="stock"'
 fact "disabled-features=['panel']: the status pill keeps every indicator" "pill=$STOCK_PILL"
+fact "disabled-features=['panel']: the recording button stays stock's" 'recording=0:42,screencast-stop-symbolic stock-icon=true'
+fact "disabled-features=['panel']: the input chip keeps stock's names" 'input-chip\.changed=en,vi₂,fr'
 fact "disabled-features=['panel']: the corner stays stock" 'hot-corner\.zone=none reactive=false x=undefined y=undefined undefinedxundefined'
 lacks "disabled-features=['panel']: nothing is rebuilt or restyled" 'hot-corners=rebuilt|workspace-dot=restyled'
 
@@ -640,7 +653,7 @@ fact "disabled-features=['panel']: nothing follows the focus" 'focused-app\.file
 readonly SEARCH_ITEM='Search \(Super\+Space\) pill=apex-search-pill icon=system-search-symbolic'
 probe search-button "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_SEARCH_BUTTON=1
 has "search-button: the panel feature enables" 'Apex: feature panel enabled'
-fact "search-button: just before the status pill in the right box" 'panel\.add=apex-search at 2 in right'
+fact "search-button: at the start of the right box" 'panel\.add=apex-search at 0 in right'
 fact "search-button: a pill with the search glyph, named for its key" "search\.enabled=$SEARCH_ITEM visible=true"
 fact "search-button: hovered, its tooltip shows centred below it" 'search\.tooltip\.hover=true at 1256,32'
 fact "search-button: and hides when the pointer leaves" 'search\.tooltip\.unhover=false at 1256,32'

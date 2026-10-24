@@ -409,7 +409,29 @@ async function exerciseLauncher() {
 }
 
 function pillNames(quickSettings) {
-    return quickSettings._indicators.get_children().map(i => i.name).join(',');
+    return quickSettings._indicators.get_children().map(i => i.name === 'apexPrivacyGroup'
+        ? `privacy(${i.get_children().map(c => c.name).join(' ')})` : i.name).join(',');
+}
+
+function privacyState(quickSettings) {
+    const box = quickSettings._indicators;
+    const group = box.get_children().find(i => i.name === 'apexPrivacyGroup');
+    return `group=${group ? group.visible : 'none'} in-use=${box.has_style_class_name('apex-privacy-in-use')}`;
+}
+
+function showIndicator(indicator, visible) {
+    indicator.visible = visible;
+    indicator.emit('notify::visible');
+}
+
+function recordingParts({_box: box, _icon: icon}) {
+    const parts = box.get_children().filter(c => c.visible)
+        .map(c => c.has_style_class_name('apex-recording-stop') ? 'stop' : c.text ?? c.icon_name);
+    return `${parts.join(',')} stock-icon=${icon.visible}`;
+}
+
+function inputChipTexts({_container: container}) {
+    return container.get_children().map(label => label.text).join(',');
 }
 
 function newHotCorner() {
@@ -708,9 +730,27 @@ async function exerciseTopBar() {
     const {quickSettings} = Main.panel.statusArea;
     topBarHooks('top-bar');
     fact('pill', pillNames(quickSettings));
+    fact('privacy.idle', privacyState(quickSettings));
+    showIndicator(quickSettings._camera, true);
+    fact('privacy.camera', privacyState(quickSettings));
+    showIndicator(quickSettings._camera, false);
+    fact('privacy.camera-off', privacyState(quickSettings));
     const later = Main.newQuickSettings();
     Hooks.run('status-indicators', later);
     fact('pill.set-up-after-enable', pillNames(later));
+
+    const {default: St} = await import(`file://${GLib.path_get_dirname(shellDir)}/St.js`);
+    const {screenRecording, keyboard} = Main.panel.statusArea;
+    fact('recording', recordingParts(screenRecording));
+    fact('input-chip', inputChipTexts(keyboard));
+    // keyboard.js renames a label for an IBus input mode, and adds one for a new source.
+    const [, vietnamese] = keyboard._container.get_children();
+    vietnamese.text = 'vi₂';
+    vietnamese.emit('notify::text');
+    const french = new St.Label({text: 'fr'});
+    keyboard._container.add_child(french);
+    keyboard._container.emit('child-added', french);
+    fact('input-chip.changed', inputChipTexts(keyboard));
 
     const corner = newHotCorner();
     Hooks.run('hot-corner', corner, Main.layoutManager);
@@ -731,9 +771,14 @@ async function exerciseTopBar() {
     await spin(200);
     topBarHooks('top-bar.off');
     fact('pill.off', pillNames(quickSettings));
+    fact('privacy.off', privacyState(quickSettings));
+    fact('recording.off', recordingParts(screenRecording));
+    fact('input-chip.off', inputChipTexts(keyboard));
     settings.set_boolean('layer-enabled', true);
     await spin(200);
     fact('pill.on', pillNames(quickSettings));
+    fact('recording.on', recordingParts(screenRecording));
+    fact('input-chip.on', inputChipTexts(keyboard));
 }
 
 async function exerciseSolidBar() {

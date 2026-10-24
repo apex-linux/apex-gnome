@@ -562,7 +562,28 @@ REPORT_OF_INDICATORS_DRAWN_FROM_TOKENS='
 | {x: $dx, y: 9, width: ($t.apex_indicators_divider_width | px), height: ($t.apex_indicators_divider_height | px),
    colour: ("rgba(\($fg[0]), \($fg[1]), \($fg[2]), \($t.apex_indicators_divider_opacity))" | hex)} as $divider
 | {width: ($t.apex_indicator_switch_width | px), height: ($t.apex_indicator_switch_height | px), radius: 9} as $switch
+| ($t.apex_privacy_height | px) as $ph | ($t.apex_privacy_icon_size | px) as $pi | ($t.apex_privacy_padding | px) as $pp
+| ($t.apex_privacy_gap | px) as $pg | ($t.apex_recording_stop_size | px) as $ss
+| {x: 1240, y: 4, width: 160, height: $h, paddingLeft: ($t.apex_bar_pill_padding_privacy | px)} as $pill
+| ($pill.x + $pill.paddingLeft) as $gx
+| {x: $gx, y: (4 + ($h - $ph) / 2), width: (2 * $pp + 2 * $pi + $pg), height: $ph, radius: ($t.apex_radius_privacy | px),
+   colour: ($t.apex_privacy | hex)} as $group
+| ($group + {next: {x: ($gx + $group.width + ($t.apex_privacy_margin | px) + ($t.apex_bar_status_gap | px)), y: 8, width: $i, height: $i},
+   glyphs: [range(2) as $k | {x: ($gx + $pp + $k * ($pi + $pg)), y: (4 + ($h - $pi) / 2), width: $pi, height: $pi,
+     iconName: "camera-web-symbolic", colour: ($t.apex_privacy_fg | hex)}]}) as $privacy
+| (1100 + ($t.apex_recording_padding_start | px)) as $sx | ($sx + $ss + ($t.apex_recording_gap | px)) as $tx
+| {x: 1100, y: 4, width: ($tx + 26 + ($t.apex_recording_padding_end | px) - 1100), height: $h, radius: $r, colour: ($t.apex_recording | hex),
+   stop: {x: $sx, y: (4 + ($h - $ss) / 2), width: $ss, height: $ss, radius: ($t.apex_radius_recording_stop | px), colour: ($t.apex_recording_fg | hex)},
+   timer: {x: $tx, y: 8, width: 26, height: 16, text: "0:42", size: ($t.apex_font_recording_size | px),
+     weight: ($t.apex_font_recording_weight | tonumber), tracking: 0, features: "tnum", colour: ($t.apex_recording_fg | hex)}} as $recording
+| {pill: {x: 1190, y: 4, width: ($t.apex_input_chip_min_width | px), height: $h, radius: $r}, text: "EN",
+   size: ($t.apex_font_input_chip_size | px), weight: ($t.apex_font_input_chip_weight | tonumber),
+   tracking: (($t.apex_font_input_chip_tracking | rtrimstr("em") | num) * ($t.apex_font_input_chip_size | px)), features: "",
+   colour: ($t.apex_bar_fg | hex)} as $input
 | {empty: {visible: false, divider: null}, accent: "#3584e4ff",
+   everything: {order: ["indicators", "divider", "apex-search", "screenRecording", "keyboard", "quickSettings"], pill: $pill,
+     privacy: $privacy, recording: $recording, input: $input, search: {x: 1060, y: 4, width: 32, height: $h},
+     after: {privacy: false, paddingLeft: ($t.apex_bar_pill_padding | px)}},
    four: {visible: true, order: ["indicators", "divider", "apex-search", "quickSettings"], items: $items, divider: $divider,
      search: {x: ($dx + $divider.width + $around), y: 4, width: 32, height: $h},
      mask: {colour: ($t.apex_bar_fg | hex), inkPixels: 64, redPixels: 0}},
@@ -756,7 +777,7 @@ test_indicators() {
     local variant change what passes failures open_gaps
     for variant in light dark; do
         read -r passes failures open_gaps <<<"$(assert_run indicator_metrics "$variant")"
-        if ((failures == 0 && passes == 18)); then
+        if ((failures == 0 && passes == 28)); then
             ok "indicators ($variant): indicators drawn from the tokens pass all $passes assertions"
         else
             not_ok "indicators ($variant): indicators drawn from the tokens pass (passed/failed/gaps $passes/$failures/$open_gaps): $(grep -m3 '^FAIL' "$T/top-bar.out" | paste -sd'|' -)"
@@ -792,8 +813,20 @@ test_indicators() {
 .five.overflow.text = "+1"|the wrong overflow count
 .overflowMenu.rows[1].chevron = null|a row without its chevron
 .gone.visible = true|indicators left after the apps quit
+.everything.order = ["indicators", "divider", "screenRecording", "keyboard", "apex-search", "quickSettings"]|the search button after the stock items
+.everything.privacy.colour = "#c01c28ff"|a privacy group in the recording's red
+.everything.pill.paddingLeft = 10|the pill's stock start beside the group
+.everything.privacy.glyphs[0].colour = "#c64600ff"|a privacy glyph in the group's orange
+.everything.privacy.next.x += 4|the next status glyph further from the group
+.everything.after.privacy = true|a privacy group left once nothing is in use
+.everything.recording.radius = 4|a recording pill with a square's corners
+.everything.recording.stop.radius = 4|a stop dot instead of a square
+.everything.recording.timer.features = ""|a timer in proportional figures
+.everything.input.text = "en"|the source's short name in lower case
+.everything.input.tracking = 0|an untracked input chip
+.everything.input.pill.width = 24|an input chip under the board's minimum width
 CHANGES
-    assert_run indicator_metrics light 'del(.four, .menu, .five, .overflowMenu, .gone, .empty, .log)' >/dev/null
+    assert_run indicator_metrics light 'del(.four, .menu, .five, .overflowMenu, .gone, .empty, .log, .everything)' >/dev/null
     expect_eq "indicators: a report without them passes none" 0 "$(grep -c '^PASS' "$T/top-bar.out")"
 }
 

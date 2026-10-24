@@ -27,6 +27,9 @@
     <file alias="panel/focused-app.js">js/ui/apex/panel/focused-app.js</file>
     <file alias="panel/search-button.js">js/ui/apex/panel/search-button.js</file>
     <file alias="panel/search-hint.js">js/ui/apex/panel/search-hint.js</file>
+    <file alias="panel/privacy-group.js">js/ui/apex/panel/privacy-group.js</file>
+    <file alias="panel/recording-pill.js">js/ui/apex/panel/recording-pill.js</file>
+    <file alias="panel/input-chip.js">js/ui/apex/panel/input-chip.js</file>
     <file alias="dock/feature.js">js/ui/apex/dock/feature.js</file>
     <file alias="dock/dock.js">js/ui/apex/dock/dock.js</file>
     <file alias="dock/trash.js">js/ui/apex/dock/trash.js</file>
