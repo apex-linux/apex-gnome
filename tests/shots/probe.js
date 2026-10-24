@@ -1045,6 +1045,8 @@ async function spotlightStyle(unit) {
     popup.open();
     try {
         const captured = {};
+        captured.empty = await spotlightScene(popup, 'empty', '');
+        const fieldOnly = popup.panel.get_children().filter(a => a.visible).length === 1;
         captured.search = await spotlightScene(popup, 'search', 'disk');
         const [field, results] = popup.panel.get_children();
         const rows = results.get_children().filter(a => a.has_style_class_name('apex-spotlight-row'));
@@ -1064,6 +1066,7 @@ async function spotlightStyle(unit) {
         };
         const headers = results.get_children().filter(a => a.has_style_class_name('apex-spotlight-header'));
         const measured = {
+            fieldOnly,
             panel: {...styleOf(popup.panel, unit), top: round((popup.panel.get_transformed_position()[1] - monitor.y) / unit.length)},
             field: styleOf(field, unit),
             glyph: {...styleOf(field.get_children()[0], unit), size: lengthOrNull(field.get_children()[0].get_theme_node(), 'icon-size', unit)},
@@ -1083,7 +1086,7 @@ async function spotlightStyle(unit) {
             sections: calculator.get_children().filter(a => a.has_style_class_name('apex-spotlight-header')).map(h => h.get_child().get_text()),
             row: row(calculator.get_children().find(a => a.has_style_class_name('apex-spotlight-row'))),
         };
-        captured.empty = await spotlightScene(popup, 'empty', 'zzz');
+        captured.none = await spotlightScene(popup, 'none', 'zzz');
         measured.empty = styleOf(popup.panel.get_children()[2], unit);
         await spotlightScene(popup, null, '2880 / 1.5');
         popup.activateSelected();

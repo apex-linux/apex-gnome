@@ -411,6 +411,7 @@ REPORT_OF_A_SPOTLIGHT_DRAWN_FROM_TOKENS='
    tracking: (($t.apex_spotlight_header_tracking | rtrimstr("em") | num) * ($t.apex_font_spotlight_header_size | px))} as $header
 | ($t.apex_spotlight_results_padding | px) as $pad
 | {topBar: {accent: "#3584e4ff"}, surfaces: {spotlight: {
+    fieldOnly: true,
     panel: ({width: ($t.apex_spotlight_width | px), top: ($t.apex_spotlight_top | px), radius: ($t.apex_radius_spotlight | px),
         background: ($t.apex_panel | hex), foreground: ($t.apex_fg | hex)} + $surface),
     field: {height: ($t.apex_spotlight_field_height | px), padding: {left: ($t.apex_spotlight_field_padding | px), right: ($t.apex_spotlight_field_padding | px)},
@@ -843,6 +844,7 @@ test_spotlight_style() {
 .surfaces.spotlight.rows[0].action.chip.radius = 10|a rounder Enter chip
 .surfaces.spotlight.calculator.row.title.font.features = ""|a result in proportional figures
 .surfaces.spotlight.empty.height = 60|a 60 px empty row
+.surfaces.spotlight.fieldOnly = false|results under an empty query
 .surfaces.spotlight.toast.bottomGap = 104|a toast at the OSD's height
 .surfaces.spotlight.closedOnCopy = false|Spotlight left open after the copy
 .surfaces.spotlight.toast.box.borderColor = "#00000000"|a toast without its ring

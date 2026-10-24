@@ -225,12 +225,13 @@ and the monitor number.
 `spotlight_style` runs in the same cases. The probe opens Spotlight's own popup over
 providers of its own, which return board 38's rows (G2's image has no files or settings to
 find), types board 38's queries and, with `G2_SURFACE_SCENES=1`, captures each scene
-(`spotlight-search`, `spotlight-calculator`, `spotlight-empty`, `spotlight-copied`). It
+(`spotlight-empty`, `spotlight-search`, `spotlight-calculator`, `spotlight-copied`, and
+`spotlight-none` for a query with no results). It
 reads the panel's width, its distance from the monitor's top edge, radius, tint, ring and
 shadow; the field, its glyph, text and hint; the results' line and inset; the section
 headers in board order; the rows, the selected row's accent tint, verb and Enter chip; the
-calculator's result in tabular figures with Calculator as the first application; the empty
-row; and, after Enter on the result, that Spotlight closed and the toast's size, tint,
+calculator's result in tabular figures with Calculator as the first application; that an
+empty query shows only the field, and the row of a query with no results; and, after Enter on the result, that Spotlight closed and the toast's size, tint,
 inset, check circle, text and distance from the bottom edge.
 
 None of these surfaces is in a capture compared with Fedora, so the comparison with Fedora's build
