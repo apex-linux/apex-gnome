@@ -6,9 +6,12 @@ import GLib from 'gi://GLib';
 import Shell from 'gi://Shell';
 import St from 'gi://St';
 
+import * as BoxPointer from 'resource:///org/gnome/shell/ui/boxpointer.js';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import * as MessageTray from 'resource:///org/gnome/shell/ui/messageTray.js';
+import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 import * as Scripting from 'resource:///org/gnome/shell/ui/scripting.js';
+import * as Slider from 'resource:///org/gnome/shell/ui/slider.js';
 import * as WorkspaceThumbnail from 'resource:///org/gnome/shell/ui/workspaceThumbnail.js';
 
 import * as Png from './png.js';
@@ -32,6 +35,8 @@ const HIGH_CONTRAST_SHEET = 'resource:///org/gnome/shell/theme/gnome-shell-high-
 const STRUCTURE_MARKER = '/*! apex-shell-structure */';
 const LAYER_ENABLED_KEY = 'layer-enabled';
 const SEARCH_HINT_KEY = 'search-hint-shown';
+const OSD_LEVEL = 0.62;
+const OSD_GLYPH = 'audio-volume-medium-symbolic';
 
 Gio._promisify(Shell.Screenshot.prototype, 'screenshot');
 
@@ -250,6 +255,7 @@ function styleOf(actor, unit) {
         width: round(width / unit.length),
         height: round(height / unit.length),
         border: sides(side => node.get_border_width(side), unit),
+        borderColor: hex(node.get_border_color(St.Side.TOP)),
         padding: sides(side => node.get_padding(side), unit),
         hpadding: {
             natural: lengthOrNull(node, '-natural-hpadding', unit),
@@ -613,6 +619,211 @@ async function withOpaqueBar(unit) {
     return measured;
 }
 
+// A stock PopupMenu holding the board's rows: two adjacent rows, a separator, an icon row.
+function openPopupMenu() {
+    const anchor = new St.Widget({x: 400, y: 300, width: 1, height: 1});
+    Main.uiGroup.add_child(anchor);
+    const menu = new PopupMenu.PopupMenu(anchor, 0.5, St.Side.TOP);
+    Main.uiGroup.add_child(menu.actor);
+    const rows = [new PopupMenu.PopupMenuItem('Unpin'), new PopupMenu.PopupMenuItem('App Details')];
+    const separator = new PopupMenu.PopupSeparatorMenuItem();
+    const iconRow = new PopupMenu.PopupImageMenuItem('Home', 'user-home-symbolic');
+    [...rows, separator, iconRow].forEach(item => menu.addMenuItem(item));
+    menu.open(BoxPointer.PopupAnimation.NONE);
+    return {
+        measure: unit => {
+            const line = separator.get_children().find(c => c.has_style_class_name('popup-separator-menu-item-separator'));
+            return {
+                content: styleOf(menu.box, unit),
+                rows: [...rows, iconRow].map(row => ({
+                    ...styleOf(row, unit),
+                    hover: underPseudoClass(row, 'hover', () => paint(row.get_theme_node(), unit)),
+                })),
+                separator: {...boxOf(line, unit), background: hex(line.get_theme_node().get_background_color())},
+                icon: lengthOrNull(iconRow._icon.get_theme_node(), 'icon-size', unit),
+            };
+        },
+        close: () => {
+            menu.close(BoxPointer.PopupAnimation.NONE);
+            menu.destroy();
+            anchor.destroy();
+        },
+    };
+}
+
+function openOsd() {
+    const {primaryIndex, primaryMonitor} = Main.layoutManager;
+    Main.osdWindowManager.showOne(primaryIndex, Gio.ThemedIcon.new(OSD_GLYPH), null, OSD_LEVEL);
+    const window = Main.osdWindowManager._osdWindows[primaryIndex];
+    return {
+        measure: unit => {
+            const box = styleOf(window._hbox, unit);
+            const levelNode = window._level.get_theme_node();
+            return {
+                box,
+                bottomGap: round((primaryMonitor.y + primaryMonitor.height) / unit.length - box.y - box.height),
+                icon: lengthOrNull(window._icon.get_theme_node(), 'icon-size', unit),
+                level: {
+                    ...boxOf(window._level, unit),
+                    barHeight: lengthOrNull(levelNode, '-barlevel-height', unit),
+                    background: hex(levelNode.get_color('-barlevel-background-color')),
+                    active: hex(levelNode.get_color('-barlevel-active-background-color')),
+                },
+            };
+        },
+        close: () => window.cancel(),
+    };
+}
+
+// A normal-urgency notification with an action shows a banner under the bar.
+function openBanner() {
+    const source = new MessageTray.Source({title: 'G2 Updates', iconName: 'software-update-available-symbolic'});
+    Main.messageTray.add(source);
+    const notification = new MessageTray.Notification({
+        source, title: 'Updates Ready', body: 'They start at the next restart.',
+        gicon: Gio.ThemedIcon.new('system-software-install'), urgency: MessageTray.Urgency.NORMAL,
+    });
+    notification.addAction('Restart Now', () => {});
+    source.addNotification(notification);
+    return {
+        measure: unit => {
+            const message = Main.messageTray._banner;
+            if (!message)
+                return {error: 'no banner'};
+            const find = styleClass => findDescendant(message, a => a.has_style_class_name?.(styleClass));
+            const box = styleOf(message, unit);
+            return {
+                box,
+                topGap: round(box.y - (Main.layoutManager.primaryMonitor.y + Main.panel.height) / unit.length),
+                header: styleOf(find('message-header'), unit),
+                title: styleOf(find('message-title'), unit),
+                body: styleOf(find('message-body'), unit),
+                icon: lengthOrNull(find('message-icon').get_theme_node(), 'icon-size', unit),
+                close: styleOf(find('message-close-button'), unit),
+                actions: styleOf(find('message-action-bin'), unit),
+                button: {
+                    ...styleOf(find('notification-button'), unit),
+                    minHeight: lengthOrNull(find('notification-button').get_theme_node(), 'min-height', unit),
+                },
+            };
+        },
+        close: () => source.destroy(),
+    };
+}
+
+// Open together as on board 16; G2_SURFACE_SCENES=1 also captures them.
+async function shellSurfaces(unit) {
+    const opened = {popupMenu: openPopupMenu(), osd: openOsd(), banner: openBanner()};
+    try {
+        await settle();
+        const scene = GLib.getenv('G2_SURFACE_SCENES') === '1' ? await capture('surfaces') : null;
+        if (scene)
+            delete scene.bytes;
+        return {scene, ...Object.fromEntries(Object.entries(opened).map(([name, s]) => [name, s.measure(unit)]))};
+    } finally {
+        Object.values(opened).forEach(s => s.close());
+        await settle();
+    }
+}
+
+// A slider never shows in the container (no audio, no backlight): one in a stand-in row.
+function quickSlider(unit) {
+    const box = new St.BoxLayout({style_class: 'popup-menu-content quick-settings'});
+    const row = new St.BoxLayout();
+    const slider = new Slider.Slider(OSD_LEVEL);
+    row.add_child(slider);
+    box.add_child(new St.Bin({style_class: 'quick-slider', child: row}));
+    return withStyledActor(box, () => {
+        const node = slider.get_theme_node();
+        return {
+            spacing: lengthOrNull(row.get_theme_node(), 'spacing', unit),
+            trackHeight: lengthOrNull(node, '-barlevel-height', unit),
+            track: hex(node.get_color('-barlevel-background-color')),
+            fill: hex(node.get_color('-barlevel-active-background-color')),
+            handleRadius: lengthOrNull(node, '-slider-handle-radius', unit),
+            handle: hex(node.get_foreground_color()),
+        };
+    });
+}
+
+function quickToggle(toggle, unit) {
+    const box = toggle.get_first_child();
+    const [title, subtitle] = findDescendant(box, a => a.has_style_class_name?.('quick-toggle-title'))
+        ?.get_parent().get_children() ?? [];
+    return {
+        ...styleOf(toggle, unit),
+        box: styleOf(box, unit),
+        icon: lengthOrNull(findDescendant(box, a => a.has_style_class_name?.('quick-toggle-icon')).get_theme_node(), 'icon-size', unit),
+        title: styleOf(title, unit),
+        subtitle: subtitle?.visible ? styleOf(subtitle, unit) : null,
+        hover: underPseudoClass(toggle, 'hover', () => paint(toggle.get_theme_node(), unit)),
+    };
+}
+
+// The fixtures' Wi-Fi makes the network toggle checked, with a menu: board 17 opens it.
+async function quickSettings(unit) {
+    const {quickSettings: indicator} = Main.panel.statusArea;
+    const {menu} = indicator;
+    const grid = findDescendant(menu.box, a => a.has_style_class_name?.('quick-settings-grid'));
+    const byType = name => findDescendant(menu.box, a => a.constructor.name === name);
+    menu.open(BoxPointer.PopupAnimation.NONE);
+    const wifi = byType('NMWirelessToggle');
+    try {
+        await settle();
+        wifi?.menu.open(BoxPointer.PopupAnimation.NONE);
+        await settle();
+        const scene = GLib.getenv('G2_SURFACE_SCENES') === '1' ? await capture('quick-settings') : null;
+        if (scene)
+            delete scene.bytes;
+        const system = byType('SystemItem');
+        const wifiToggle = wifi && findDescendant(wifi, a => a.has_style_class_name?.('quick-toggle'));
+        const menuButton = wifi && findDescendant(wifi, a => a.has_style_class_name?.('quick-toggle-menu-button'));
+        const header = wifi && findDescendant(wifi.menu.box, a => a.has_style_class_name?.('header'));
+        const find = (root, styleClass) => findDescendant(root, a => a.has_style_class_name?.(styleClass));
+        return {
+            scene,
+            box: styleOf(menu.box, unit),
+            grid: {
+                rows: lengthOrNull(grid.get_theme_node(), 'spacing-rows', unit),
+                columns: lengthOrNull(grid.get_theme_node(), 'spacing-columns', unit),
+            },
+            system: {
+                ...boxOf(system, unit),
+                spacing: lengthOrNull(system.get_first_child().get_theme_node(), 'spacing', unit),
+                battery: quickToggle(byType('PowerToggle'), unit),
+                screenshot: {
+                    ...styleOf(byType('ScreenshotItem'), unit),
+                    icon: lengthOrNull(byType('ScreenshotItem').get_first_child().get_theme_node(), 'icon-size', unit),
+                },
+            },
+            wifi: wifi ? {
+                ...boxOf(wifi, unit),
+                toggle: quickToggle(wifiToggle, unit),
+                separator: boxOf(find(wifi, 'quick-toggle-separator'), unit),
+                menuButton: styleOf(menuButton, unit),
+            } : null,
+            unchecked: quickToggle(byType('DoNotDisturbToggle'), unit),
+            slider: quickSlider(unit),
+            wifiMenu: wifi ? {
+                box: styleOf(wifi.menu.box, unit),
+                header: styleOf(header, unit),
+                headerIcon: {
+                    ...styleOf(find(header, 'icon'), unit),
+                    iconSize: lengthOrNull(find(header, 'icon').get_theme_node(), 'icon-size', unit),
+                },
+                title: styleOf(find(header, 'title'), unit),
+                subtitle: styleOf(find(header, 'subtitle'), unit),
+                rows: wifi.menu._getMenuItems().filter(i => i.visible && i.label?.text).map(i => styleOf(i, unit)),
+                separator: styleOf(wifi.menu._getMenuItems().find(i => i instanceof PopupMenu.PopupSeparatorMenuItem), unit),
+            } : null,
+        };
+    } finally {
+        wifi?.menu.close(BoxPointer.PopupAnimation.NONE);
+        menu.close(BoxPointer.PopupAnimation.NONE);
+        await settle();
+    }
+}
+
 // Without GDM the shell posts "Screen Lock disabled" at startup; its banner would cover
 // the scenes for as long as it happens to stay.
 function dropStartupNotifications() {
@@ -637,6 +848,8 @@ async function scenes() {
     bar.opaque = await withOpaqueBar(unit);
     bar.lockScreen = await withLockScreenPanel(unit);
     bar.largeText = await withLargeText();
+    const surfaces = await shellSurfaces(unit);
+    surfaces.quickSettings = await quickSettings(unit);
 
     Main.overview.show();
     await settle();
@@ -652,6 +865,7 @@ async function scenes() {
         unit, startedInOverview,
         monitorScale: global.display.get_monitor_scale(primary.index),
         topBar: {...bar, diamond},
+        surfaces,
         scenes: {desktop, overview},
     };
 }

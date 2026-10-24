@@ -198,6 +198,79 @@ REPORT_OF_A_BAR_DRAWN_FROM_TOKENS='
     opaque: {background: ($t.apex_bar_solid | hex), boxShadow: {color: ($t.apex_border | hex), inset: false, x: 0, y: 1, blur: 0, spread: 0}},
     glass: []}}'
 # shellcheck disable=SC2016 # a jq program
+REPORT_OF_SURFACES_DRAWN_FROM_TOKENS='
+($t.apex_surface_border | px) as $b | {top: $b, right: $b, bottom: $b, left: $b} as $border | ($t.apex_panel_border | hex) as $ring
+| {color: ($t.apex_shadow | hex), inset: false, x: 0, y: ($t.apex_shadow_y | px), blur: ($t.apex_shadow_blur | px), spread: 0} as $shadow
+| ($t.apex_menu_padding | px) as $mp | ($t.apex_menu_row_height | px) as $row | ($t.apex_menu_row_gap | px) as $gap
+| ($t.apex_menu_row_padding | px) as $rp | ($t.apex_menu_separator_margin | px) as $sm
+| {height: $row, radius: ($t.apex_radius_menu_row | px), padding: {left: $rp, right: $rp}, spacing: ($t.apex_menu_row_spacing | px),
+   background: "#00000000", hover: {background: ($t.apex_button_hover | hex)}} as $r
+| ($t.apex_osd_padding | px) as $op | ($t.apex_banner_padding | px) as $bp | ($t.apex_banner_icon_size | px) as $icon
+| ($t.apex_banner_close_size | px) as $close
+| {topBar: {accent: "#3584e4ff"}, surfaces: {
+    popupMenu: {
+        content: {x: 290, y: 307, width: 220, border: $border, borderColor: $ring, padding: {top: ($mp - $b), right: ($mp - $b), bottom: ($mp - $b), left: ($mp - $b)},
+            radius: ($t.apex_radius_menu | px), background: ($t.apex_panel_solid | hex), foreground: ($t.apex_fg | hex),
+            boxShadow: $shadow, font: {size: ($t.apex_font_size | px)}},
+        rows: [$r + {y: 313}, $r + {y: (313 + $row + $gap)},
+            $r + {y: (313 + 2 * $row + 2 * $gap + 2 * $sm + 1 + $gap)}],
+        separator: {x: (290 + $mp + ($t.apex_menu_separator_inset | px)), y: (313 + 2 * $row + 2 * $gap + $sm), height: 1,
+            background: ($t.apex_border | hex)},
+        icon: ($t.apex_menu_icon_size | px)},
+    osd: {
+        box: {height: ($t.apex_osd_height | px), radius: ($t.apex_radius_osd | px), background: ($t.apex_panel | hex), foreground: ($t.apex_fg | hex),
+            border: $border, borderColor: $ring, boxShadow: $shadow, padding: {left: ($op - $b), right: ($op - $b)}, spacing: ($t.apex_osd_gap | px),
+            font: {size: ($t.apex_font_size | px), weight: ($t.apex_font_label_weight | tonumber)}},
+        bottomGap: ($t.apex_osd_bottom | px), icon: ($t.apex_osd_icon_size | px),
+        level: {width: ($t.apex_osd_level_width | px), barHeight: ($t.apex_osd_level_height | px),
+            background: ($t.apex_button_hover | hex), active: "#3584e4ff"}},
+    banner: {
+        box: {x: 490, width: ($t.apex_banner_width | px), radius: ($t.apex_radius_banner | px), background: ($t.apex_panel | hex),
+            border: $border, borderColor: $ring, boxShadow: $shadow, padding: {top: ($bp - $b), right: ($bp - $b), bottom: ($bp - $b), left: ($bp - $b)}},
+        topGap: ($t.apex_banner_top | px),
+        header: {font: {size: ($t.apex_font_banner_header_size | px)}, foreground: ($t.apex_fg_dim | hex)},
+        title: {x: (490 + $bp + $icon + ($t.apex_banner_gap | px)), font: {size: ($t.apex_font_size | px), weight: ($t.apex_font_heading_weight | tonumber)}},
+        body: {font: {size: ($t.apex_font_banner_body_size | px)}, foreground: ($t.apex_fg_dim | hex)},
+        icon: $icon,
+        close: {width: $close, height: $close, radius: 999, background: ($t.apex_button | hex)},
+        actions: {spacing: ($t.apex_banner_button_gap | px), padding: {left: ($icon + ($t.apex_banner_gap | px))}},
+        button: {minHeight: ($t.apex_banner_button_height | px), radius: ($t.apex_radius_banner_button | px), background: ($t.apex_button | hex),
+            font: {size: ($t.apex_font_banner_button_size | px), weight: ($t.apex_font_label_weight | tonumber)}}}}}'
+# shellcheck disable=SC2016 # a jq program
+REPORT_OF_QUICK_SETTINGS_DRAWN_FROM_TOKENS='
+($t.apex_surface_border | px) as $b | ($t.apex_quick_settings_padding | px) as $qp | ($t.apex_quick_settings_grid_gap | px) as $gap
+| ($t.apex_quick_toggle_height | px) as $th | ($t.apex_quick_settings_button_size | px) as $bs | ($t.apex_quick_settings_icon_size | px) as $icon
+| ((($t.apex_quick_settings_width | px) - 2 * $qp - $gap) / 2) as $tw | ($t.apex_quick_toggle_padding | px) as $tp
+| ($t.apex_quick_toggle_menu_button_shade | rtrimstr("%") | tonumber / 100) as $shade
+| {size: ($t.apex_font_quick_toggle_title_size | px), weight: ($t.apex_font_heading_weight | tonumber)} as $title
+| {topBar: {accent: "#3584e4ff"}, surfaces: {quickSettings: {
+    box: {width: ($t.apex_quick_settings_width | px), radius: ($t.apex_radius_quick_settings | px), background: ($t.apex_panel | hex),
+        padding: {top: ($qp - $b), right: ($qp - $b), bottom: ($qp - $b), left: ($qp - $b)}, border: {top: $b, right: $b, bottom: $b, left: $b},
+        borderColor: ($t.apex_panel_border | hex),
+        boxShadow: {color: ($t.apex_shadow | hex), inset: false, x: 0, y: ($t.apex_shadow_y | px), blur: ($t.apex_shadow_blur | px), spread: 0}},
+    grid: {rows: $gap, columns: $gap},
+    system: {y: 44, height: $bs, spacing: ($t.apex_quick_settings_button_gap | px),
+        screenshot: {width: $bs, height: $bs, radius: 999, background: ($t.apex_button | hex), icon: $icon},
+        battery: {height: $bs, radius: 999, background: ($t.apex_button | hex),
+            box: {padding: {left: ($t.apex_quick_settings_battery_padding | px), right: ($t.apex_quick_settings_battery_padding | px)}, spacing: ($t.apex_quick_settings_battery_gap | px)},
+            title: {font: {size: ($t.apex_font_quick_settings_battery_size | px), weight: ($t.apex_font_label_weight | tonumber)}}}},
+    wifi: {y: (44 + $bs + ($t.apex_quick_settings_section_gap | px)), width: $tw, height: $th,
+        toggle: {background: "#3584e4ff", foreground: "#ffffffff", icon: $icon, title: {font: $title},
+            subtitle: {foreground: ("rgba(255, 255, 255, \($t.apex_quick_toggle_subtitle_opacity))" | hex), font: {size: ($t.apex_font_quick_toggle_subtitle_size | px)}},
+            box: {padding: {left: $tp, right: ($t.apex_quick_toggle_menu_padding | px)}, spacing: ($t.apex_quick_toggle_gap | px)}},
+        separator: {width: 0},
+        menuButton: {width: ($t.apex_quick_toggle_menu_button_width | px), background: ([53, 132, 228] | map(. * (1 - $shade) | round) | "rgb(\(.[0]), \(.[1]), \(.[2]))" | hex)}},
+    unchecked: {width: $tw, height: $th, radius: 999, background: ($t.apex_button | hex), foreground: ($t.apex_fg | hex),
+        hover: {background: ($t.apex_button_hover | hex)}, icon: $icon, box: {padding: {left: $tp, right: $tp}, spacing: ($t.apex_quick_toggle_gap | px)}},
+    slider: {spacing: ($t.apex_quick_slider_gap | px), trackHeight: ($t.apex_quick_slider_track_height | px), track: ($t.apex_button_hover | hex),
+        fill: "#3584e4ff", handleRadius: (($t.apex_quick_slider_handle_size | px) / 2), handle: ($t.apex_slider_handle | hex)},
+    wifiMenu: {
+        box: {y: (44 + $bs + ($t.apex_quick_settings_section_gap | px) + $th + $gap), background: ($t.apex_card | hex), borderColor: ($t.apex_card_border | hex),
+            border: {top: $b, left: $b}, radius: ($t.apex_radius_quick_menu | px), padding: {left: (($t.apex_quick_menu_padding | px) - $b)}, boxShadow: null},
+        headerIcon: {width: ($t.apex_quick_menu_header_icon_size | px), height: ($t.apex_quick_menu_header_icon_size | px), background: "#3584e4ff", iconSize: $icon},
+        title: {font: {size: ($t.apex_font_quick_menu_title_size | px), weight: ($t.apex_font_heading_weight | tonumber)}},
+        rows: [{height: ($t.apex_quick_menu_row_height | px), padding: {left: ($t.apex_menu_row_padding | px)}, radius: ($t.apex_radius_menu_row | px)}]}}}}'
+# shellcheck disable=SC2016 # a jq program
 HEX_DEF='def hex: rgba | map([., 16] | "0123456789abcdef"[(.[0] / .[1] | floor):(.[0] / .[1] | floor) + 1]
                                     + "0123456789abcdef"[(.[0] % .[1]):(.[0] % .[1]) + 1]) | "#" + join("");'
 
@@ -208,9 +281,11 @@ the clock pill without the pad|.topBar.withDot.pillWidth -= ($t.apex_bar_clock_g
 the raw accent dot|.topBar.withDot.dot.background = .topBar.accent'
 
 assert_run() {
-    local assertions=$1 variant=$2 change=${3:-.} tokens
+    local assertions=$1 variant=$2 change=${3:-.} tokens report=$REPORT_OF_A_BAR_DRAWN_FROM_TOKENS
+    [[ $assertions == shell_surfaces ]] && report=$REPORT_OF_SURFACES_DRAWN_FROM_TOKENS
+    [[ $assertions == quick_settings ]] && report=$REPORT_OF_QUICK_SETTINGS_DRAWN_FROM_TOKENS
     tokens=$(tokens_for "$variant")
-    jq -nc --argjson t "$tokens" "$JQ_DEFS $HEX_DEF $REPORT_OF_A_BAR_DRAWN_FROM_TOKENS | $change" | sed 's/^/APEXG2-SCENES /' >"$T/top-bar.log"
+    jq -nc --argjson t "$tokens" "$JQ_DEFS $HEX_DEF $report | $change" | sed 's/^/APEXG2-SCENES /' >"$T/top-bar.log"
     # shellcheck disable=SC2016 # expanded by the inner bash
     bash -c '. "$1/assert.sh"; "$2" case "$3" "$4" >"$5" 2>&1; summary >>"$5"; echo "$npass $nfail $ngap"' \
         _ "$HERE" "$assertions" "$T/top-bar.log" "$variant" "$T/top-bar.out"
@@ -295,6 +370,91 @@ CHANGES
     expect_eq "top bar: and fewer fail" 1 "$(grep -c '^FAIL' "$T/top-bar.out")"
     assert_run top_bar light 'del(.topBar)' >/dev/null
     expect_eq "top bar: a report without the top bar passes none" 0 "$(grep -c '^PASS' "$T/top-bar.out")"
+}
+
+test_shell_surfaces() {
+    local variant change what passes failures open_gaps
+    for variant in light dark; do
+        read -r passes failures open_gaps <<<"$(assert_run shell_surfaces "$variant")"
+        if ((failures == 0 && open_gaps == 0 && passes > 10)); then
+            ok "shell surfaces ($variant): a menu, an OSD and a banner drawn from the tokens pass all $passes assertions"
+        else
+            not_ok "shell surfaces ($variant): drawn from the tokens they pass (passed/failed/gaps $passes/$failures/$open_gaps): $(grep -m3 '^FAIL' "$T/top-bar.out" | paste -sd'|' -)"
+        fi
+    done
+    while IFS='|' read -r change what; do
+        read -r passes failures open_gaps <<<"$(assert_run shell_surfaces light "$change")"
+        if ((failures == 1)); then
+            ok "shell surfaces: $what fails one assertion"
+        else
+            not_ok "shell surfaces: $what fails one assertion (passed/failed/gaps $passes/$failures/$open_gaps)"
+        fi
+    done <<'CHANGES'
+.surfaces.popupMenu.content.background = "#fafafbff"|upstream's menu fill
+.surfaces.popupMenu.content.radius = 20|upstream's menu radius
+.surfaces.popupMenu.content.boxShadow.blur = 4|upstream's menu shadow
+.surfaces.popupMenu.content.padding.top = 6|a menu inset by its border too
+.surfaces.popupMenu.content.width = 200|a menu narrower than the board's
+.surfaces.popupMenu.rows[2].height = 39|upstream's row height
+.surfaces.popupMenu.rows[0].hover.background = "#d8d8e0ff"|upstream's hover fill
+.surfaces.popupMenu.rows[0].y -= 1|rows 2 px apart
+.surfaces.popupMenu.separator.x -= 8|a separator across the whole menu
+.surfaces.popupMenu.icon = 16.364|upstream's em-sized row glyph
+.surfaces.osd.box.radius = 999|upstream's round OSD
+.surfaces.osd.box.border.top = 0|an OSD without its ring
+.surfaces.banner.box.borderColor = "#e6e6ebff"|upstream's grey border on the banner
+.surfaces.osd.box.spacing = 8|parts too close in the OSD
+.surfaces.osd.level.active = "#ffffffff"|upstream's white level
+.surfaces.osd.bottomGap = 59|upstream's OSD position
+.surfaces.banner.box.width = 513|upstream's banner width
+.surfaces.banner.box.boxShadow = null|a banner without its shadow
+.surfaces.banner.box.padding.top = 6|upstream's banner padding
+.surfaces.banner.title.font.weight = 400|a title at body weight
+.surfaces.banner.title.x += 6|upstream's margin beside the icon
+.surfaces.banner.close.background = "#22222626"|upstream's close button
+.surfaces.banner.button.radius = 8|upstream's square-ish action button
+CHANGES
+    assert_run shell_surfaces light 'del(.surfaces)' >/dev/null
+    expect_eq "shell surfaces: a report without them passes none" 0 "$(grep -c '^PASS' "$T/top-bar.out")"
+}
+
+test_quick_settings() {
+    local variant change what passes failures open_gaps
+    for variant in light dark; do
+        read -r passes failures open_gaps <<<"$(assert_run quick_settings "$variant")"
+        if ((failures == 0 && open_gaps == 0 && passes > 10)); then
+            ok "Quick Settings ($variant): drawn from the tokens it passes all $passes assertions"
+        else
+            not_ok "Quick Settings ($variant): drawn from the tokens it passes (passed/failed/gaps $passes/$failures/$open_gaps): $(grep -m3 '^FAIL' "$T/top-bar.out" | paste -sd'|' -)"
+        fi
+    done
+    while IFS='|' read -r change what; do
+        read -r passes failures open_gaps <<<"$(assert_run quick_settings light "$change")"
+        if ((failures == 1)); then
+            ok "Quick Settings: $what fails one assertion"
+        else
+            not_ok "Quick Settings: $what fails one assertion (passed/failed/gaps $passes/$failures/$open_gaps)"
+        fi
+    done <<'CHANGES'
+.surfaces.quickSettings.box.radius = 36|upstream's panel radius
+.surfaces.quickSettings.box.width = 348|a panel narrower than the board's
+.surfaces.quickSettings.box.borderColor = "#e6e6ebff"|upstream's grey border
+.surfaces.quickSettings.grid.rows = 12|upstream's grid gap
+.surfaces.quickSettings.system.screenshot.radius = 8|square round buttons
+.surfaces.quickSettings.system.battery.title.font.weight = 700|a bold battery percentage
+.surfaces.quickSettings.unchecked.height = 44|upstream's toggle height
+.surfaces.quickSettings.unchecked.background = "#ebebedff"|upstream's toggle fill
+.surfaces.quickSettings.wifi.toggle.subtitle.foreground = "#ffffffff"|a subtitle at full opacity
+.surfaces.quickSettings.wifi.toggle.box.padding.right = 8|upstream's padding before the arrow
+.surfaces.quickSettings.wifi.toggle.title.font.size = 14.667|upstream's 11 pt title
+.surfaces.quickSettings.wifi.separator.width = 1|upstream's separator
+.surfaces.quickSettings.slider.trackHeight = 4|upstream's slider track
+.surfaces.quickSettings.wifiMenu.box.boxShadow = {color: "#00000010", inset: false, x: 0, y: 1, blur: 2, spread: 0}|upstream's card shadow
+.surfaces.quickSettings.wifiMenu.headerIcon.width = 36|upstream's header glyph circle
+.surfaces.quickSettings.wifiMenu.rows[0].height = 37|upstream's menu row
+CHANGES
+    assert_run quick_settings light 'del(.surfaces)' >/dev/null
+    expect_eq "Quick Settings: a report without it passes none" 0 "$(grep -c '^PASS' "$T/top-bar.out")"
 }
 
 test_today_pins() {
@@ -670,6 +830,8 @@ test_compare_js
 test_incomplete_compare
 test_token_file
 test_top_bar
+test_shell_surfaces
+test_quick_settings
 test_today_pins
 test_known_gaps
 test_fixed_clock

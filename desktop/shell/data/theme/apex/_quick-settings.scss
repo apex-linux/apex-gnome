@@ -1,0 +1,200 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+
+$_quick_toggle_width: ($apex_quick_settings_width - 2 * $apex_quick_settings_padding - $apex_quick_settings_grid_gap) / 2;
+$_toggle_states: hover, focus, active;
+
+// Glass, like the OSD: the tint until S2b's glass manager blurs behind it.
+.popup-menu-content.quick-settings {
+  @include apex-surface($apex_panel);
+  width: $apex_quick_settings_width - 2 * $apex_quick_settings_padding;
+  padding: $apex_quick_settings_padding - $apex_surface_border;
+  border-radius: $apex_radius_quick_settings;
+
+  .icon-button, .button { padding: 0; }
+}
+
+.quick-settings-grid {
+  spacing-rows: $apex_quick_settings_grid_gap;
+  spacing-columns: $apex_quick_settings_grid_gap;
+}
+
+.quick-settings-system-item {
+  margin-bottom: $apex_quick_settings_section_gap - $apex_quick_settings_grid_gap;
+
+  & > StBoxLayout { spacing: $apex_quick_settings_button_gap; }
+
+  .icon-button {
+    min-width: $apex_quick_settings_button_size;
+    min-height: $apex_quick_settings_button_size;
+    border-radius: $apex_quick_settings_button_size / 2;
+    color: $apex_fg;
+    background-color: $apex_button;
+
+    @each $state in $_toggle_states {
+      &:#{$state} { background-color: $apex_button_hover; }
+    }
+
+    StIcon { icon-size: $apex_quick_settings_icon_size; }
+  }
+
+  .quick-toggle.power-item {
+    min-width: 0;
+    max-width: none;
+    min-height: $apex_quick_settings_button_size;
+    border-radius: $apex_quick_settings_button_size / 2;
+
+    & > StBoxLayout {
+      padding: 0 $apex_quick_settings_battery_padding;
+      spacing: $apex_quick_settings_battery_gap;
+    }
+
+    .quick-toggle-title {
+      font-size: apex-text-size($apex_font_quick_settings_battery_size);
+      font-weight: $apex_font_label_weight;
+    }
+  }
+}
+
+.quick-toggle, .quick-toggle-has-menu {
+  min-width: $_quick_toggle_width;
+  max-width: $_quick_toggle_width;
+  min-height: $apex_quick_toggle_height;
+}
+
+.quick-toggle {
+  border-radius: $apex_quick_toggle_height / 2;
+  color: $apex_fg;
+  background-color: $apex_button;
+
+  @each $state in $_toggle_states {
+    &:#{$state} { color: $apex_fg; background-color: $apex_button_hover; }
+  }
+
+  &:checked, &:checked:hover, &:checked:focus, &:checked:active {
+    color: -st-accent-fg-color;
+    background-color: $apex_accent;
+  }
+
+  & > StBoxLayout, &:ltr > StBoxLayout, &:rtl > StBoxLayout {
+    padding: 0 $apex_quick_toggle_padding;
+    spacing: $apex_quick_toggle_gap;
+  }
+
+  .quick-toggle-icon { icon-size: $apex_quick_settings_icon_size; }
+
+  .quick-toggle-title {
+    font-size: apex-text-size($apex_font_quick_toggle_title_size);
+    font-weight: $apex_font_heading_weight;
+  }
+
+  .quick-toggle-subtitle {
+    font-size: apex-text-size($apex_font_quick_toggle_subtitle_size);
+    color: transparentize($apex_fg, 1 - $apex_quick_toggle_subtitle_opacity);
+  }
+
+  &:checked .quick-toggle-subtitle {
+    color: st-transparentize(-st-accent-fg-color, 1 - $apex_quick_toggle_subtitle_opacity);
+  }
+}
+
+// The board shades the arrow half with black over the toggle's fill, and draws no separator.
+.quick-toggle-has-menu {
+  .quick-toggle {
+    min-width: 0;
+    max-width: none;
+
+    &:ltr > StBoxLayout { padding-right: $apex_quick_toggle_menu_padding; }
+    &:rtl > StBoxLayout { padding-left: $apex_quick_toggle_menu_padding; }
+  }
+
+  .quick-toggle-separator { width: 0; }
+
+  .quick-toggle-menu-button {
+    min-width: $apex_quick_toggle_menu_button_width;
+    padding: 0;
+    color: $apex_fg;
+    background-color: $apex_button;
+
+    @each $state in $_toggle_states {
+      &:#{$state} { background-color: $apex_button_hover; }
+    }
+
+    &:checked, &:checked:hover, &:checked:focus, &:checked:active {
+      color: -st-accent-fg-color;
+      background-color: st-mix(black, $apex_accent, $apex_quick_toggle_menu_button_shade);
+    }
+
+    StIcon { icon-size: $apex_quick_settings_icon_size; }
+  }
+}
+
+.quick-slider {
+  & > StBoxLayout { spacing: $apex_quick_slider_gap; }
+
+  .icon-button { padding: 0; color: $apex_fg; }
+  .icon-button StIcon { icon-size: $apex_quick_settings_icon_size; }
+  .slider-bin { padding: 0; }
+
+  .slider {
+    color: $apex_slider_handle;
+    -barlevel-height: $apex_quick_slider_track_height;
+    -barlevel-background-color: $apex_button_hover;
+    -barlevel-active-background-color: $apex_accent;
+    -slider-handle-radius: $apex_quick_slider_handle_size / 2;
+    -slider-handle-border-width: 1px;
+    -slider-handle-border-color: $apex_slider_handle_border;
+  }
+}
+
+.quick-toggle-menu {
+  margin: $apex_quick_settings_grid_gap 0 0;
+  padding: $apex_quick_menu_padding - $apex_surface_border;
+  spacing: $apex_quick_menu_row_gap;
+  border: $apex_surface_border solid $apex_card_border;
+  border-radius: $apex_radius_quick_menu;
+  color: $apex_fg;
+  background-color: $apex_card;
+  box-shadow: none;
+  font-size: apex-text-size($apex_font_size);
+
+  &:insensitive { color: $apex_fg; background-color: $apex_card; }
+
+  .header {
+    spacing-columns: $apex_quick_menu_header_gap;
+    padding: 0 $apex_quick_menu_header_padding $apex_quick_menu_header_bottom;
+
+    .icon {
+      icon-size: $apex_quick_settings_icon_size;
+      padding: ($apex_quick_menu_header_icon_size - $apex_quick_settings_icon_size) / 2;
+      color: $apex_fg;
+      background-color: $apex_button;
+
+      &.active {
+        color: -st-accent-fg-color;
+        background-color: $apex_accent;
+      }
+    }
+
+    .title {
+      font-size: apex-text-size($apex_font_quick_menu_title_size);
+      font-weight: $apex_font_heading_weight;
+    }
+
+    .subtitle {
+      font-size: apex-text-size($apex_font_quick_toggle_subtitle_size);
+      font-weight: normal;
+      color: $apex_fg_dim;
+    }
+  }
+
+  .popup-menu-section { spacing: $apex_quick_menu_row_gap; }
+
+  .popup-menu-item {
+    min-height: $apex_quick_menu_row_height;
+    spacing: $apex_quick_menu_row_spacing;
+
+    & > StIcon { icon-size: $apex_quick_settings_icon_size; }
+  }
+
+  .popup-separator-menu-item { min-height: 0; }
+}

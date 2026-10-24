@@ -1,0 +1,122 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Thuong Vo <66083331+SekiroKenjii@users.noreply.github.com>
+Date: Sat, 24 Oct 2026 08:01:39 +0000
+Subject: [PATCH] grid-view: a 72 px zoom level, the default
+
+The Apex Files window draws the grid at 72 px. A new level, "apex",
+sits between small-plus (64 px) and medium (96 px); it is the schema's
+default and the level Ctrl+0 resets to. The schema stores the level by
+its nick, so renumbering the levels above it keeps every stored value.
+The dashed border of an empty-folder icon at 72 px uses the 64 px
+metrics.
+---
+ data/org.gnome.nautilus.gschema.xml | 9 +++++----
+ src/nautilus-enums.h                | 2 ++
+ src/nautilus-grid-view.c            | 8 +++++++-
+ src/nautilus-ui-utilities.c         | 3 +++
+ 4 files changed, 17 insertions(+), 5 deletions(-)
+
+diff --git a/data/org.gnome.nautilus.gschema.xml b/data/org.gnome.nautilus.gschema.xml
+index 3c14aa4..18145a3 100644
+--- a/data/org.gnome.nautilus.gschema.xml
++++ b/data/org.gnome.nautilus.gschema.xml
+@@ -44,9 +44,10 @@
+   <enum id="org.gnome.nautilus.GridZoomLevel">
+     <value value="0" nick="small"/>
+     <value value="1" nick="small-plus"/>
+-    <value value="2" nick="medium"/>
+-    <value value="3" nick="large"/>
+-    <value value="4" nick="extra-large"/>
++    <value value="2" nick="apex"/>
++    <value value="3" nick="medium"/>
++    <value value="4" nick="large"/>
++    <value value="5" nick="extra-large"/>
+   </enum>
+ 
+   <enum id="org.gnome.nautilus.ListZoomLevel">
+@@ -210,7 +211,7 @@
+         <alias value='larger' target='extra-large'/>
+         <alias value='largest' target='extra-large'/>
+       </aliases>
+-      <default>'medium'</default>
++      <default>'apex'</default>
+       <summary>Default icon view zoom level</summary>
+     </key>
+   </schema>
+diff --git a/src/nautilus-enums.h b/src/nautilus-enums.h
+index 921c74b..bbbffac 100644
+--- a/src/nautilus-enums.h
++++ b/src/nautilus-enums.h
+@@ -34,6 +34,7 @@ typedef enum
+ {
+     NAUTILUS_GRID_ICON_SIZE_SMALL       = 48,
+     NAUTILUS_GRID_ICON_SIZE_SMALL_PLUS  = 64,
++    NAUTILUS_GRID_ICON_SIZE_APEX        = 72,
+     NAUTILUS_GRID_ICON_SIZE_MEDIUM      = 96,
+     NAUTILUS_GRID_ICON_SIZE_LARGE       = 168,
+     NAUTILUS_GRID_ICON_SIZE_EXTRA_LARGE = 256,
+@@ -43,6 +44,7 @@ typedef enum
+ {
+     NAUTILUS_GRID_ZOOM_LEVEL_SMALL,
+     NAUTILUS_GRID_ZOOM_LEVEL_SMALL_PLUS,
++    NAUTILUS_GRID_ZOOM_LEVEL_APEX,
+     NAUTILUS_GRID_ZOOM_LEVEL_MEDIUM,
+     NAUTILUS_GRID_ZOOM_LEVEL_LARGE,
+     NAUTILUS_GRID_ZOOM_LEVEL_EXTRA_LARGE,
+diff --git a/src/nautilus-grid-view.c b/src/nautilus-grid-view.c
+index b10bce1..f3ada82 100644
+--- a/src/nautilus-grid-view.c
++++ b/src/nautilus-grid-view.c
+@@ -42,7 +42,7 @@ static const NautilusViewInfo grid_view_info =
+     .view_id = NAUTILUS_VIEW_GRID_ID,
+     .zoom_level_min = NAUTILUS_GRID_ZOOM_LEVEL_SMALL,
+     .zoom_level_max = NAUTILUS_GRID_ZOOM_LEVEL_EXTRA_LARGE,
+-    .zoom_level_standard = NAUTILUS_GRID_ZOOM_LEVEL_MEDIUM,
++    .zoom_level_standard = NAUTILUS_GRID_ZOOM_LEVEL_APEX,
+ };
+ 
+ static NautilusViewInfo
+@@ -122,6 +122,12 @@ get_icon_size_for_zoom_level (NautilusGridZoomLevel zoom_level)
+         }
+         break;
+ 
++        case NAUTILUS_GRID_ZOOM_LEVEL_APEX:
++        {
++            return NAUTILUS_GRID_ICON_SIZE_APEX;
++        }
++        break;
++
+         case NAUTILUS_GRID_ZOOM_LEVEL_MEDIUM:
+         {
+             return NAUTILUS_GRID_ICON_SIZE_MEDIUM;
+diff --git a/src/nautilus-ui-utilities.c b/src/nautilus-ui-utilities.c
+index 34211d9..43a8609 100644
+--- a/src/nautilus-ui-utilities.c
++++ b/src/nautilus-ui-utilities.c
+@@ -744,6 +744,7 @@ get_dash_width (guint size)
+ 
+         /* case NAUTILUS_LIST_ICON_SIZE_LARGE */
+         case NAUTILUS_GRID_ICON_SIZE_SMALL_PLUS:
++        case NAUTILUS_GRID_ICON_SIZE_APEX:
+         {
+             return 2.0;
+         }
+@@ -794,6 +795,7 @@ get_dash_length (guint size)
+ 
+         /* case NAUTILUS_LIST_ICON_SIZE_LARGE */
+         case NAUTILUS_GRID_ICON_SIZE_SMALL_PLUS:
++        case NAUTILUS_GRID_ICON_SIZE_APEX:
+         {
+             return 10.0;
+         }
+@@ -844,6 +846,7 @@ get_dash_radius (guint size)
+ 
+         /* case NAUTILUS_LIST_ICON_SIZE_LARGE */
+         case NAUTILUS_GRID_ICON_SIZE_SMALL_PLUS:
++        case NAUTILUS_GRID_ICON_SIZE_APEX:
+         {
+             return 5.33;
+         }
+-- 
+2.43.0
+
