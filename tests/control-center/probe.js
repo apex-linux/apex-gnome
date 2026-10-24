@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // gnome-shell's automation script for run.sh: opens a Settings page (APEX_OPEN), captures it, runs a checker (APEX_CHECK).
+// APEX_LAUNCH prefixes the command, as umockdev-run does for Power's graphics card.
 
 import Clutter from 'gi://Clutter';
 import Gio from 'gi://Gio';
@@ -70,7 +71,8 @@ async function probe() {
     await Scripting.sleep(500);
     const launcher = new Gio.SubprocessLauncher({flags: Gio.SubprocessFlags.NONE});
     const page = (GLib.getenv('APEX_OPEN') ?? 'apex').split(' ');
-    launcher.spawnv(['gnome-control-center', ...page]);
+    const prefix = (GLib.getenv('APEX_LAUNCH') ?? '').split(' ').filter(word => word);
+    launcher.spawnv([...prefix, 'gnome-control-center', ...page]);
     for (let i = 0; i < WINDOW_WAIT_MS / 100 && settingsWindows().length === 0; i++)
         await Scripting.sleep(100);
     const [window] = settingsWindows();
