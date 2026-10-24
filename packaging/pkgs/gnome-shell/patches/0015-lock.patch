@@ -1,0 +1,152 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Thuong Vo <66083331+SekiroKenjii@users.noreply.github.com>
+Date: Sat, 24 Oct 2026 09:36:45 +0000
+Subject: [PATCH] lock: hooks for the Apex lock screen (unlock path)
+
+Review label: unlock path.
+
+Value and behaviour hooks for the single-stage lock screen of DESIGN.md,
+which the Apex layer's lock feature provides (ROADMAP S3b). They change
+what the lock screen shows, never whether it unlocks: unlocking stays
+GDM's, through logind's Unlock signal after PAM succeeds, and a hook
+that throws gives the stock value or code at its call site.
+
+- UnlockDialog: a value hook over the background blur's brightness and
+  radius; one over the clock's share of the transition progress, so the
+  clock can stay shown with the prompt; a behaviour hook at the end of
+  _init(), through which the layer lays the dialog out and shows or
+  tears down the prompt as the screen wakes or blanks;
+- AuthPrompt: a value hook over the question shown for a PAM question,
+  given upstream's text and PAM's own;
+- Avatar: a value hook over the child shown when the user has no
+  picture.
+---
+ js/gdm/authPrompt.js  |  9 +++++----
+ js/ui/unlockDialog.js | 18 +++++++++++-------
+ js/ui/userWidget.js   |  5 +++--
+ 3 files changed, 19 insertions(+), 13 deletions(-)
+
+diff --git a/js/gdm/authPrompt.js b/js/gdm/authPrompt.js
+index 06a8758..6e870a6 100644
+--- a/js/gdm/authPrompt.js
++++ b/js/gdm/authPrompt.js
+@@ -17,6 +17,7 @@ import * as UserVerifier from './userVerifier.js';
+ import * as UserWidget from '../ui/userWidget.js';
+ import * as WebLogin from './webLogin.js';
+ import {wiggle} from '../misc/animationUtils.js';
++import * as ApexHooks from '../ui/apex/hooks.js';
+ 
+ import {loadInterfaceXML} from '../misc/fileUtils.js';
+ 
+@@ -529,10 +530,10 @@ export const AuthPrompt = GObject.registerClass({
+         // Hack: The question string comes directly from PAM, if it's "Password:"
+         // we replace it with our own to allow localization, if it's something
+         // else we remove the last colon and any trailing or leading spaces.
+-        if (question === 'Password:' || question === 'Password: ')
+-            this.setQuestion(_('Password'));
+-        else
+-            this.setQuestion(question.replace(/[:：] *$/, '').trim());
++        const stockQuestion = question === 'Password:' || question === 'Password: '
++            ? _('Password')
++            : question.replace(/[:：] *$/, '').trim();
++        this.setQuestion(ApexHooks.value('auth-prompt-question', stockQuestion, question));
+ 
+         this.emit('prompted');
+     }
+diff --git a/js/ui/unlockDialog.js b/js/ui/unlockDialog.js
+index 21b4736..8c77b98 100644
+--- a/js/ui/unlockDialog.js
++++ b/js/ui/unlockDialog.js
+@@ -21,6 +21,7 @@ import * as AuthPrompt from '../gdm/authPrompt.js';
+ import {AuthPromptStatus} from '../gdm/authPrompt.js';
+ import {MprisSource} from './mpris.js';
+ import {MediaMessage} from './messageList.js';
++import * as ApexHooks from './apex/hooks.js';
+ 
+ const PRIMARY_UNLOCK_METHOD_SECTION_NAME = _('Unlock Options');
+ 
+@@ -740,6 +741,7 @@ export const UnlockDialog = GObject.registerClass({
+         this._idleWatchId = this._idleMonitor.add_idle_watch(IDLE_TIMEOUT * 1000, this._escape.bind(this));
+ 
+         this.connect('destroy', this._onDestroy.bind(this));
++        ApexHooks.run('unlock-dialog', this);
+     }
+ 
+     _onKeyPress() {
+@@ -802,14 +804,15 @@ export const UnlockDialog = GObject.registerClass({
+ 
+     _updateBackgroundEffects() {
+         const themeContext = St.ThemeContext.get_for_stage(global.stage);
++        const blur = ApexHooks.value('unlock-blur', {brightness: BLUR_BRIGHTNESS, radius: BLUR_RADIUS});
+ 
+         for (const widget of this._backgroundGroup) {
+             const effect = widget.get_effect('blur');
+ 
+             if (effect) {
+                 effect.set({
+-                    brightness: BLUR_BRIGHTNESS,
+-                    radius: BLUR_RADIUS * themeContext.scale_factor,
++                    brightness: blur.brightness,
++                    radius: blur.radius * themeContext.scale_factor,
+                 });
+             }
+         }
+@@ -894,8 +897,9 @@ export const UnlockDialog = GObject.registerClass({
+     }
+ 
+     _setTransitionProgress(progress) {
++        const clockProgress = ApexHooks.value('unlock-clock-progress', progress);
+         this._promptBox.visible = progress > 0;
+-        this._clock.visible = progress < 1;
++        this._clock.visible = clockProgress < 1;
+ 
+         this._otherUserButton.set({
+             reactive: progress > 0,
+@@ -926,13 +930,13 @@ export const UnlockDialog = GObject.registerClass({
+ 
+         const clockMotionParams = useMotion
+             ? {
+-                scale_x: FADE_OUT_SCALE + (1 - FADE_OUT_SCALE) * (1 - progress),
+-                scale_y: FADE_OUT_SCALE + (1 - FADE_OUT_SCALE) * (1 - progress),
+-                translation_y: -FADE_OUT_TRANSLATION * progress * scaleFactor,
++                scale_x: FADE_OUT_SCALE + (1 - FADE_OUT_SCALE) * (1 - clockProgress),
++                scale_y: FADE_OUT_SCALE + (1 - FADE_OUT_SCALE) * (1 - clockProgress),
++                translation_y: -FADE_OUT_TRANSLATION * clockProgress * scaleFactor,
+             } : {};
+ 
+         this._clock.set({
+-            opacity: 255 * (1 - progress),
++            opacity: 255 * (1 - clockProgress),
+             ...clockMotionParams,
+         });
+ 
+diff --git a/js/ui/userWidget.js b/js/ui/userWidget.js
+index cb4150a..6e65896 100644
+--- a/js/ui/userWidget.js
++++ b/js/ui/userWidget.js
+@@ -7,6 +7,7 @@ import GObject from 'gi://GObject';
+ import St from 'gi://St';
+ 
+ import * as Params from '../misc/params.js';
++import * as ApexHooks from './apex/hooks.js';
+ 
+ const AVATAR_ICON_SIZE = 64;
+ 
+@@ -88,12 +89,12 @@ class Avatar extends St.Bin {
+                 background-size: cover;`;
+         } else {
+             this.style = null;
+-            this.child = new St.Icon({
++            this.child = ApexHooks.value('avatar-fallback', new St.Icon({
+                 icon_name: 'avatar-default-symbolic',
+                 icon_size: this._iconSize,
+                 x_expand: true,
+                 y_expand: true,
+-            });
++            }), this._user, this._iconSize);
+         }
+     }
+ });
+-- 
+2.43.0
+

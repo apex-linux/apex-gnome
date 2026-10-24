@@ -31,8 +31,12 @@ function newEmitter(props = {}) {
     };
 }
 
+globalThis._ = text => text;
+
+const monitorManager = newEmitter({power_save_mode: 0});
 const windows = [];
 globalThis.global = {
+    backend: {get_monitor_manager: () => monitorManager},
     display: newEmitter(),
     stage: {width: 1440},
     window_manager: newEmitter(),
@@ -313,6 +317,113 @@ async function exerciseMaximisedWindow() {
     global.display.emit('restacked');
 }
 
+// The parts of upstream's UnlockDialog the lock feature touches, with its prompt lifecycle:
+// destroying an AuthPrompt destroys its verifier, which cancels the PAM conversation.
+function newUnlockDialog(St) {
+    const clock = new St.BoxLayout({style_class: 'unlock-dialog-clock'});
+    for (const part of ['time', 'date', 'hint']) {
+        clock[`_${part}`] = new St.Label({name: part});
+        clock.add_child(clock[`_${part}`]);
+    }
+    const promptBox = new St.BoxLayout({name: 'prompt-box'});
+    const stack = new St.Widget({name: 'stack'});
+    stack.add_child(promptBox);
+    stack.add_child(clock);
+    const dialog = new St.Widget({style_class: 'unlock-dialog'});
+    Object.assign(dialog, {
+        _clock: clock, _promptBox: promptBox, _stack: stack, _authPrompt: null,
+        _backgroundGroup: new St.Widget({name: 'backgrounds'}), conversations: 0, cancelled: [],
+        _ensureAuthPrompt() {
+            if (this._authPrompt)
+                return;
+            const prompt = new St.Widget({name: `conversation-${++this.conversations}`});
+            prompt._userVerifier = {
+                destroy() {
+                    this.cancel();
+                },
+                cancel: () => this.cancelled.push(prompt.name),
+            };
+            prompt.connect('destroy', () => prompt._userVerifier.destroy());
+            this._authPrompt = prompt;
+            promptBox.add_child(prompt);
+        },
+        _showPrompt() {
+            this._ensureAuthPrompt();
+            this.page = 'prompt';
+        },
+        _showClock() {
+            this.page = 'clock';
+        },
+        _maybeDestroyAuthPrompt() {
+            if (!this._authPrompt)
+                return;
+            promptBox.remove_child(this._authPrompt);
+            this._authPrompt.destroy();
+            this._authPrompt = null;
+        },
+    });
+    dialog.add_child(dialog._backgroundGroup);
+    dialog.add_child(stack);
+    return dialog;
+}
+
+const names = actors => actors.map(a => a.name ?? a.styleClasses?.[0] ?? '?').join(',');
+
+function lockState(dialog) {
+    return `page=${dialog.page ?? 'none'} prompt=${dialog._authPrompt?.name ?? 'none'} cancelled=${dialog.cancelled.join(',') || 'none'}`;
+}
+
+function setScreen(mode) {
+    monitorManager.power_save_mode = mode;
+    monitorManager.emit('power-save-mode-changed');
+}
+
+async function exerciseLock() {
+    if (GLib.getenv('PROBE_LOCK') !== '1')
+        return;
+    const {default: St} = await import(`file://${GLib.path_get_dirname(shellDir)}/St.js`);
+    const {default: Meta} = await import('gi://Meta');
+
+    setScreen(Meta.PowerSaveMode.ON);
+    const dialog = newUnlockDialog(St);
+    fact('lock.run', `${Hooks.run('unlock-dialog', dialog)}`);
+    const stage = dialog._stack.children[0];
+    fact('lock.layout', `dialog=${dialog.styleClasses.join(' ')} stack=${names(dialog._stack.children)} ` +
+        `stage=${names(stage.children ?? [])} clock=${names(dialog._clock.children)} ` +
+        `hint=${dialog._clock._hint.visible} children=${names(dialog.children)}`);
+    fact('lock.open', lockState(dialog));
+    const promptBoxChildren = () => dialog._promptBox.children.map(c => c.text ?? c.name).join(',');
+    fact('lock.prompt-box', promptBoxChildren());
+    for (const [label, mode] of [['blank', Meta.PowerSaveMode.OFF], ['wake', Meta.PowerSaveMode.ON],
+        ['standby', Meta.PowerSaveMode.STANDBY], ['wake-again', Meta.PowerSaveMode.ON]]) {
+        setScreen(mode);
+        fact(`lock.${label}`, lockState(dialog));
+    }
+    fact('lock.prompt-box.after-wake', promptBoxChildren());
+    dialog.emit('destroy');
+
+    setScreen(Meta.PowerSaveMode.OFF);
+    const lockedWhileBlank = newUnlockDialog(St);
+    Hooks.run('unlock-dialog', lockedWhileBlank);
+    fact('lock.open-blank', lockState(lockedWhileBlank));
+    setScreen(Meta.PowerSaveMode.ON);
+    fact('lock.open-blank.wake', lockState(lockedWhileBlank));
+
+    fact('lock.clock-progress', [0, 0.5, 1].map(p => Hooks.value('unlock-clock-progress', p)).join(' '));
+    fact('lock.blur', JSON.stringify(Hooks.value('unlock-blur', {brightness: 0.65, radius: 90})));
+    for (const question of ['Password:', 'Password: ', 'Verification code:', 'PIN', 'password:']) {
+        const stockText = question.startsWith('Password:') ? 'Password' : question.replace(/[:：] *$/, '').trim();
+        fact(`lock.question.${JSON.stringify(question)}`, JSON.stringify(Hooks.value('auth-prompt-question', stockText, question)));
+    }
+    const icon = new St.Icon({icon_name: 'avatar-default-symbolic'});
+    const user = (realName, userName) => ({get_real_name: () => realName, get_user_name: () => userName});
+    for (const [label, who] of [['real-name', user('Apex', 'apex')], ['user-name', user('', 'đức')],
+        ['spaces', user('  zoë', 'z')], ['nobody', user('', '')]]) {
+        const avatar = Hooks.value('avatar-fallback', icon, who, 96);
+        fact(`lock.avatar.${label}`, avatar === icon ? 'stock' : `${avatar.text} ${avatar.style_class} ${avatar.style}`);
+    }
+}
+
 async function switchLayer() {
     const cycles = Number(GLib.getenv('PROBE_SWITCH') ?? '0');
     for (let cycle = 1; cycle <= cycles; cycle++) {
@@ -359,6 +470,7 @@ if (layer && GLib.getenv('PROBE_ENABLE') === '1') {
         fact('survived', `${waitSeconds}s`);
     }
     await pressToggleSpotlight();
+    await exerciseLock();
     await exerciseTopBar();
     await exerciseSolidBar();
     await exerciseFocusedApp();
@@ -376,4 +488,6 @@ if (layer && GLib.getenv('PROBE_ENABLE') === '1') {
 }
 if (!layer && settings)
     await switchLayer();
+if (!layer)
+    await exerciseLock();
 fact('done', 'yes');

@@ -13,8 +13,17 @@ class ClickGesture {
     }
 }
 
+class BindConstraint {
+    constructor(params) {
+        Object.assign(this, params);
+    }
+}
+
 export default {
+    BindConstraint,
+    BindCoordinate: {X: 0, Y: 1, WIDTH: 2, HEIGHT: 3, POSITION: 4, SIZE: 5, ALL: 6},
     ClickGesture,
+    Orientation: {HORIZONTAL: 0, VERTICAL: 1},
     ActorAlign: {FILL: 0, START: 1, CENTER: 2, END: 3},
     TextDirection,
     EVENT_PROPAGATE: false,
