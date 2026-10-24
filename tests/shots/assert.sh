@@ -20,7 +20,7 @@ readonly APEX_DARK_SHEET=resource:///org/gnome/shell/theme/gnome-shell-dark.css
 readonly STOCK_SHEETS=resource:///org/gnome/shell/theme/stock
 readonly FEDORA_SHEETS=resource:///org/gnome/shell/theme
 readonly DIRECT_CASES=(default default-scale1 dark-style stock-light stock-dark safe-env layer-disabled
-    layer-cycles fault-configure fault-enable fault-abort kernel-safe fedora-light fedora-dark glass fedora-glass)
+    layer-cycles motion fault-configure fault-enable fault-abort kernel-safe fedora-light fedora-dark glass fedora-glass)
 readonly DIRECT_PARTS=(main kernel fedora)
 readonly CAPTURE_CASES=(default default-scale1 dark-style stock-light stock-dark fedora-light fedora-dark)
 readonly SCENES=(desktop overview)
@@ -44,6 +44,11 @@ readonly TODAY_CLOCK_PILL_EXTRA=13
 readonly LAYER_CYCLES=3
 readonly SPOTLIGHT_ACCELERATORS='["<Super>space"]'
 readonly SPOTLIGHT_MODES='["NORMAL", "OVERVIEW"]'
+# DESIGN's motion: cubic-bezier(.2,.8,.2,1); window geometry .3 s, the overview .2 s.
+readonly MOTION_CURVE='[0.2, 0.8, 0.2, 1]'
+readonly MOTION_WINDOW_MS=300
+readonly MOTION_OVERVIEW_MS=200
+readonly LOCATE_POINTER_RIPPLE_MS=830
 # direct.sh's G2_CLOCK, in UTC; the clock shows it as weekday, date, EN SPACE, 24-hour time.
 readonly FIXED_CLOCK=2026-09-28T09:41:00Z
 readonly FIXED_CLOCK_TEXT='Mon Sep 28\u200209:41'
@@ -429,6 +434,32 @@ shell_surfaces() {
             and (.actions | (.spacing | px_is($t.apex_banner_button_gap)) and (.padding.left | px_is(($t.apex_banner_icon_size | px) + ($t.apex_banner_gap | px))))'
 }
 
+# shellcheck disable=SC2016 # jq programs
+quick_settings_layer() {
+    local label=$1 log=$2 mode=$3 scenes q=.surfaces.quickSettingsLayer
+    scenes=$(report_of "$log" APEXG2-SCENES)
+    local order='([.order[].title]) as $t | ($t | index("VPN")) as $vpn | ($t | index("Airplane Mode")) as $airplane'
+    if [[ $mode == apex ]]; then
+        expect "$label Quick Settings" "$scenes" "$q | $order | \$vpn != null and \$airplane != null and \$vpn == \$airplane + 1" \
+            "the quick-settings feature puts VPN right after Airplane Mode (DESIGN's order)"
+        expect "$label Quick Settings" "$scenes" "$q.power | .visible and .lit and (.checked | not) and .subtitle == \"Balanced\"" \
+            "Power Mode at Balanced is lit through apex-lit, its checked state stock (unchecked)"
+        expect "$label Quick Settings" "$scenes" "$q.pillShowsPower == false" "the power-profile indicator stays out of the status pill"
+        expect "$label Quick Settings" "$scenes" "$q.dndSubtitle == \"Off\"" "a toggle without a subtitle of its own says Off"
+        expect "$label Quick Settings" "$scenes" "$q.switched | .checked and .lit and .subtitle != \"Balanced\"" \
+            "a click switches Power Mode from Balanced to the last profile, still lit"
+        expect "$label Quick Settings" "$scenes" "$q.back | (.checked | not) and .lit and .subtitle == \"Balanced\"" \
+            "and a second click back to Balanced"
+    else
+        expect "$label Quick Settings" "$scenes" "$q | $order | \$vpn != null and \$airplane != null and \$vpn < \$airplane" \
+            "stock's order: VPN with the network toggles, before Airplane Mode"
+        expect "$label Quick Settings" "$scenes" "($q.power | .visible and (.lit | not) and (.checked | not)) and $q.dndSubtitle == null" \
+            "stock: Power Mode unlit at Balanced, no On/Off subtitles"
+        expect "$label Quick Settings" "$scenes" "$q.switched.checked and ($q.back.checked | not)" \
+            "stock: a click switches Power Mode to the last profile and back"
+    fi
+}
+
 # shellcheck disable=SC2016 # jq programs and token names, not shell expansions
 quick_settings() {
     local label=$1 log=$2 variant=$3 scenes tokens
@@ -700,6 +731,62 @@ tile_preview() {
 }
 
 # shellcheck disable=SC2016 # jq programs and token names, not shell expansions
+screenshot_ui() {
+    local label=$1 log=$2 variant=$3 scenes tokens
+    scenes=$(report_of "$log" APEXG2-SCENES)
+    tokens=$(tokens_for "$variant")
+    local -a metric=(top_bar_metric "$label screenshot UI" "$scenes" "$tokens")
+    local s=.surfaces.screenshot
+
+    "${metric[@]}" 'the panel is $apex_screenshot_width of $apex_panel ringed in $apex_panel_border with the shadow, radius $apex_radius_screenshot, inset $apex_screenshot_padding with a heading row of $apex_screenshot_close_size, rows $apex_screenshot_gap apart, $apex_screenshot_bottom above the bottom edge' \
+        "$s" '.monitorHeight as $h | .panel | (.width | px_is($t.apex_screenshot_width)) and (.background | colour_is($t.apex_panel))
+            and (.borderColor | colour_is($t.apex_panel_border)) and (.border.top | px_is($t.apex_surface_border)) and (.radius | px_is($t.apex_radius_screenshot))
+            and (.boxShadow | .y == ($t.apex_shadow_y | px) and .blur == ($t.apex_shadow_blur | px) and (.color | colour_is($t.apex_shadow)))
+            and (.padding.left + .border.left | px_is($t.apex_screenshot_padding))
+            and (.padding.top + .border.top | px_is(($t.apex_screenshot_padding | px) + ($t.apex_screenshot_close_size | px) + ($t.apex_screenshot_gap | px) | tostring + "px"))
+            and (.spacing | px_is($t.apex_screenshot_gap)) and ($h - .y - .height | px_is($t.apex_screenshot_bottom))'
+    "${metric[@]}" 'the close button is a $apex_screenshot_close_size $apex_button circle in the heading row, $apex_screenshot_padding from the top and $apex_screenshot_padding + $apex_screenshot_close_inset from the side' \
+        "$s" '.panel as $p | .close | (.width | px_is($t.apex_screenshot_close_size)) and (.height | px_is($t.apex_screenshot_close_size)) and .radius * 2 >= .width
+            and (.background | colour_is($t.apex_button)) and (.foreground | colour_is($t.apex_fg)) and .boxShadow == null
+            and (.y - $p.y | px_is($t.apex_screenshot_padding))
+            and ($p.x + $p.width - .x - .width | px_is(($t.apex_screenshot_padding | px) + ($t.apex_screenshot_close_inset | px) | tostring + "px"))'
+    "${metric[@]}" 'the area buttons are $apex_screenshot_type_height high, radius $apex_radius_screenshot_type, in $apex_button ($apex_button_hover checked), a $apex_screenshot_type_icon_size glyph $apex_screenshot_type_label_gap above a $apex_font_screenshot_type_size $apex_font_label_weight name; with no window, Window is $apex_fg_faint' \
+        "$s" '(.types | (map(.height | px_is($t.apex_screenshot_type_height)) | all) and (map(.radius | px_is($t.apex_radius_screenshot_type)) | all)
+                and (.[0].checked and (.[0].background | colour_is($t.apex_button_hover))) and (.[1].background | colour_is($t.apex_button))
+                and (.[2].background | colour_is($t.apex_button)) and (.[2].foreground | colour_is($t.apex_fg_faint)))
+            and (.checkedType.background | colour_is($t.apex_button_hover))
+            and (.typeContent | (.icon.height | px_is($t.apex_screenshot_type_icon_size)) and (.spacing | px_is($t.apex_screenshot_type_label_gap))
+                and (.labelFont.size | px_is($t.apex_font_screenshot_type_size)) and .labelFont.weight == ($t.apex_font_label_weight | tonumber))'
+    "${metric[@]}" 'the pointer toggle is a $apex_screenshot_pointer_size $apex_button circle, the raw accent when on' \
+        "{p: $s.pointer, accent: .topBar.accent}" '.accent as $a | .p | (.width | px_is($t.apex_screenshot_pointer_size)) and (.height | px_is($t.apex_screenshot_pointer_size))
+            and .radius * 2 >= .width and (.background | colour_is($t.apex_button)) and (.checked.background | colour_is($a))'
+    "${metric[@]}" 'the capture button is $apex_screenshot_capture_size, a $apex_screenshot_capture_ring $apex_fg ring around a $apex_fg dot $apex_screenshot_capture_gap inside it; recording, a $apex_screenshot_record_dot $apex_screenshot_record square, radius $apex_radius_screenshot_record_dot' \
+        "$s.capture" '(.width | px_is($t.apex_screenshot_capture_size)) and (.height | px_is($t.apex_screenshot_capture_size))
+            and (.border.top | px_is($t.apex_screenshot_capture_ring)) and (.borderColor | colour_is($t.apex_fg)) and (.padding.top | px_is($t.apex_screenshot_capture_gap))
+            and (.circle | (.background | colour_is($t.apex_fg)) and .radius * 2 >= .width
+                and (.width | px_is(($t.apex_screenshot_capture_size | px) - 2 * (($t.apex_screenshot_capture_ring | px) + ($t.apex_screenshot_capture_gap | px)) | tostring + "px")))
+            and (.circle.width - 2 * .cast.margin | px_is($t.apex_screenshot_record_dot)) and (.cast.radius | px_is($t.apex_radius_screenshot_record_dot))
+            and (.cast.background | colour_is($t.apex_screenshot_record))'
+    "${metric[@]}" 'the screenshot and screencast switch is $apex_button inset $apex_screenshot_switch_padding; its buttons $apex_screenshot_switch_button_width x $apex_screenshot_switch_button_height, the checked one $apex_panel_solid with a $apex_screenshot_switch_shadow shadow' \
+        "$s" '(.switcher | (.padding.top | px_is($t.apex_screenshot_switch_padding)) and (.background | colour_is($t.apex_button))
+                and (.radius | px_is(($t.apex_screenshot_switch_button_height | px) / 2 + ($t.apex_screenshot_switch_padding | px) | tostring + "px")))
+            and (.shot | .checked and (.width | px_is($t.apex_screenshot_switch_button_width)) and (.height | px_is($t.apex_screenshot_switch_button_height))
+                and (.background | colour_is($t.apex_panel_solid)) and (.foreground | colour_is($t.apex_fg))
+                and (.boxShadow | .y == ($t.apex_screenshot_switch_shadow_y | px) and .blur == ($t.apex_screenshot_switch_shadow_blur | px) and (.color | colour_is($t.apex_screenshot_switch_shadow))))'
+    "${metric[@]}" 'the selection is shaded $apex_screenshot_shade, outlined $apex_screenshot_selection_border in $apex_screenshot_selection, with $apex_screenshot_handle_size white handles shadowed $apex_screenshot_handle_shadow' \
+        "$s" '(.shade.background | colour_is($t.apex_screenshot_shade))
+            and (.selection | (.border.top | px_is($t.apex_screenshot_selection_border)) and (.borderColor | colour_is($t.apex_screenshot_selection)))
+            and (.handle | (.width | px_is($t.apex_screenshot_handle_size)) and (.height | px_is($t.apex_screenshot_handle_size)) and .radius * 2 >= .width
+                and (.background | colour_is("#ffffff"))
+                and (.boxShadow | .y == ($t.apex_screenshot_handle_shadow_y | px) and .blur == ($t.apex_screenshot_handle_shadow_blur | px) and (.color | colour_is($t.apex_screenshot_handle_shadow))))'
+    "${metric[@]}" 'the chosen screen is ringed $apex_screenshot_frame in the raw accent over $apex_screenshot_screen_tint; the window selector shades $apex_screenshot_shade and rings the chosen window $apex_screenshot_frame in the accent, radius $apex_radius_screenshot_window' \
+        "{s: $s, accent: .topBar.accent}" '.accent as $a | .s | (.screen | .checked and (.border.top | px_is($t.apex_screenshot_frame)) and (.borderColor | colour_is($a))
+                and (.background | colour_is($t.apex_screenshot_screen_tint)))
+            and (.windowSelector.background | colour_is($t.apex_screenshot_shade))
+            and (.windowFrame | (.border.top | px_is($t.apex_screenshot_frame)) and (.borderColor | colour_is($a)) and (.radius | px_is($t.apex_radius_screenshot_window)))'
+}
+
+# shellcheck disable=SC2016 # jq programs and token names, not shell expansions
 derived_surfaces() {
     local label=$1 log=$2 variant=$3 scenes tokens
     scenes=$(report_of "$log" APEXG2-SCENES)
@@ -900,6 +987,8 @@ fixtures_on_the_bus() {
             "NetworkManager: \"Apex-2.4G\" and the open \"Library Guest\" are in range too"
         expect "fixtures ($part)" "$fixtures" '.keyboard | .alias == "Keychron K3" and .connected and .icon == "input-keyboard"' \
             "BlueZ: the keyboard \"Keychron K3\" is connected"
+        expect "fixtures ($part)" "$fixtures" '.powerProfiles | .active == "balanced" and (.profiles | index("performance") != null)' \
+            "power-profiles-daemon: Balanced, with Performance to switch to"
         expect "fixtures ($part)" "$fixtures" '.gpus | .hasDualGpu and .names == ["Intel Graphics", "NVIDIA GeForce RTX 4060"]' \
             "switcheroo-control: an integrated and a discrete GPU"
     done
@@ -936,6 +1025,27 @@ layer_cycles() {
     check "layer-cycles: the layer logs each switch ($LAYER_CYCLES x off, $LAYER_CYCLES x on)" bash -c \
         "[[ \$(grep -c 'Apex: layer-enabled is false: the stock shell' '$f') == $LAYER_CYCLES && \$(grep -c 'Apex: layer-enabled is true: the Apex shell' '$f') == $LAYER_CYCLES ]]"
     check "layer-cycles: the marker is removed at shutdown" grep -q '^layer-cycles .*marker-after-exit=no' "$run/results-main.txt"
+}
+
+# shellcheck disable=SC2016 # jq programs
+motion_curve() {
+    local run=$1 f=$1/motion.log m
+    exits "$run" motion 0
+    apex_light motion "$f"
+    no_apex_failure motion "$f"
+    m=$(report_of "$f" APEXG2-MOTION)
+    expect motion "$m" '.error == null and .animated.maximise.maximised and .animated.overview.visible' \
+        "the probe maximised a GTK window and opened the overview, with animations on"
+    expect motion "$m" ".animated.maximise.transition | .mode == \"CUBIC_BEZIER\" and .curve == $MOTION_CURVE and .duration == $MOTION_WINDOW_MS" \
+        "maximise eases the window in cubic-bezier(.2,.8,.2,1) over ${MOTION_WINDOW_MS} ms"
+    expect motion "$m" ".animated.overview.transition | .mode == \"CUBIC_BEZIER\" and .curve == $MOTION_CURVE and .duration == $MOTION_OVERVIEW_MS" \
+        "the overview transition eases in cubic-bezier(.2,.8,.2,1) over ${MOTION_OVERVIEW_MS} ms"
+    expect motion "$m" '.enableAnimations == false and .still.maximise.maximised and .still.overview.visible' \
+        "then enable-animations=false, and the window maximised and the overview opened again"
+    expect motion "$m" '.still.maximise.transition == null and .still.overview.transition == null' \
+        "with enable-animations=false neither creates a transition: both take 0 ms"
+    expect motion "$m" ".still.locatePointer.duration == $LOCATE_POINTER_RIPPLE_MS" \
+        "and Locate Pointer's ripple, an animationRequired a11y aid, still takes stock's ${LOCATE_POINTER_RIPPLE_MS} ms"
 }
 
 direct_cases() {
@@ -975,6 +1085,7 @@ direct_cases() {
     dock_metrics default "$f" light
     shell_surfaces default "$f" light
     quick_settings default "$f" light
+    quick_settings_layer default "$f" apex
     window_switcher default "$f" light
     modal_dialog default "$f" light
     date_menu default "$f" light
@@ -984,6 +1095,7 @@ direct_cases() {
     derived_surfaces default "$f" light
     tile_preview default "$f" light
     spotlight_style default "$f" light
+    screenshot_ui default "$f" light
 
     f=$run/default-scale1.log
     exits "$run" default-scale1 0
@@ -996,6 +1108,7 @@ direct_cases() {
     dock_metrics default-scale1 "$f" light
     shell_surfaces default-scale1 "$f" light
     quick_settings default-scale1 "$f" light
+    quick_settings_layer default-scale1 "$f" apex
     window_switcher default-scale1 "$f" light
     modal_dialog default-scale1 "$f" light
     date_menu default-scale1 "$f" light
@@ -1005,6 +1118,7 @@ direct_cases() {
     derived_surfaces default-scale1 "$f" light
     tile_preview default-scale1 "$f" light
     spotlight_style default-scale1 "$f" light
+    screenshot_ui default-scale1 "$f" light
 
     f=$run/dark-style.log
     exits "$run" dark-style 0
@@ -1020,6 +1134,7 @@ direct_cases() {
     dock_metrics dark-style "$f" dark
     shell_surfaces dark-style "$f" dark
     quick_settings dark-style "$f" dark
+    quick_settings_layer dark-style "$f" apex
     window_switcher dark-style "$f" dark
     modal_dialog dark-style "$f" dark
     date_menu dark-style "$f" dark
@@ -1029,12 +1144,14 @@ direct_cases() {
     derived_surfaces dark-style "$f" dark
     tile_preview dark-style "$f" dark
     spotlight_style dark-style "$f" dark
+    screenshot_ui dark-style "$f" dark
     dark_style_off dark-style "$f"
 
     for c in stock-light stock-dark; do
         exits "$run" "$c" 0
         stock_view "$c" "$run/$c.log" "${c#stock-}"
         no_dock "$c" "$run/$c.log"
+        quick_settings_layer "$c" "$run/$c.log" stock
         no_apex_failure "$c" "$run/$c.log"
     done
     stock_thumbnails "$run"
@@ -1055,6 +1172,7 @@ direct_cases() {
     stock_scheme layer-disabled "$f"
 
     layer_cycles "$run"
+    motion_curve "$run"
 
     f=$run/kernel-safe.log
     check "kernel-safe: /proc/cmdline carries apex.safe=1" grep -qw 'apex.safe=1' "$run/cmdline-kernel.txt"
@@ -1136,11 +1254,11 @@ glass_manager() {
     local -a expect_glass=(expect "$label" "$(report_of "$log" APEXG2-GLASS | jq -c --argjson t "$tokens" '. + {t: $t}' 2>/dev/null)")
     glass='def glass($blur; $saturation; $s): .radius == 2 * ($blur | px) * $s and ((.saturation - ($saturation | rtrimstr("%") | tonumber / 100)) | fabs < 0.001)
         and .enabled and .fine and .followOpacity and .background;
-        def none: [.panel, .quickSettings, .calendar, .banner] | all(. == null);'
+        def none: [.panel, .dock, .quickSettings, .calendar, .banner] | all(. == null);'
 
     "${expect_glass[@]}" "$glass"' .t as $t | .manager.monitorScale as $s | .manager.glass | (.panel | glass($t.apex_bar_blur; $t.apex_bar_saturation; $s))
-        and ([.quickSettings, .calendar, .banner] | all(glass($t.apex_panel_blur; $t.apex_panel_saturation; $s))) and (.solidClass | not)' \
-        'the bar blurs at $apex_bar_blur and $apex_bar_saturation; Quick Settings, the calendar and a banner at $apex_panel_blur and $apex_panel_saturation, each as radius 2 x sigma x the monitor scale, fine, following opacity'
+        and (.dock | glass($t.apex_dock_blur; $t.apex_dock_saturation; $s)) and ([.quickSettings, .calendar, .banner] | all(glass($t.apex_panel_blur; $t.apex_panel_saturation; $s))) and (.solidClass | not)' \
+        'the bar blurs at $apex_bar_blur and $apex_bar_saturation, the dock at $apex_dock_blur and $apex_dock_saturation; Quick Settings, the calendar and a banner at $apex_panel_blur and $apex_panel_saturation, each as radius 2 x sigma x the monitor scale, fine, following opacity'
     "${expect_glass[@]}" "$glass"' .manager.reduceTransparency | none and .blurEffects == [] and .solidClass' \
         'with Reduce Transparency no actor carries a blur effect, and the root carries apex-solid'
     "${expect_glass[@]}" "$glass"' .manager.highContrast | none and .blurEffects == [] and .solidClass' \
