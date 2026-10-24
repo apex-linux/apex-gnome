@@ -252,6 +252,11 @@ shadow, inset and gaps, the title and text, the entry at rest and focused, and b
 It then opens the shell's own power-off dialog over D-Bus, as gnome-session does, and reads
 its width and gaps, the end-session feature's icon circle, the title's tracking, the
 countdown's figures, and the row: the buttons' order, widths, gap and fills.
+Last, with `update1-mock.py` (python-dbusmock's Update1, started by `direct.sh`) moved to
+`staged` and then `ready-for-reboot`, it opens the restart dialog and reads board 14's
+update card: its place under the text, inset, radius, gap, fill and ring, the icon, the
+title and the versions, the switch (on, sensitive only when staged) and Restart's label,
+capturing `end-session-update` and `end-session-ready`.
 
 `date_menu` runs in the same cases. The probe posts two low-urgency notifications (no
 banner), opens the calendar menu at the fixed date, captures it with
