@@ -154,7 +154,7 @@ opening and closing) .18 s. The dock's .38 s is the dock's. `adjustAnimationTime
 after the hooks, so `enable-animations=false` keeps stock's 0 ms.
 
 `polkit/feature.js` lays out board 13 (ROADMAP S3b) once patch 0017's `polkit-dialog`
-hook says the authentication dialog is built. It adds the shield above the title, sets the
+hook says the authentication dialog is built. It adds the shield (`dialog-password-symbolic`) above the title, sets the
 user beside the avatar, and shows "Administrator" under the name when AccountsService has
 the identity as an administrator; upstream labels only root, in the name's place, and root
 keeps that. Details, open as on the board, holds the action id and the vendor that polkit's

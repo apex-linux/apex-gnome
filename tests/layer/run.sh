@@ -741,6 +741,8 @@ fact "polkit: nor when polkitd fails" "polkit\.details\.error=$POLKIT_DETAILS_OP
 has "polkit: and says why" "Apex: polkit: no vendor for $ROLLBACK: polkitd is not running"
 fact "polkit: a cancelled lookup shows none either" "polkit\.details\.cancel=$POLKIT_DETAILS_OPEN rows=Action=$ROLLBACK"
 count_is "polkit: silently" 'Apex: polkit: no vendor' 1
+fact "polkit: pam_fprintd's 44 prompt msgids, matched through the fprintd domain" \
+    'polkit\.prompt-msgids=44 Place your finger on %s \| Swipe your right little finger across %s'
 fact "polkit: no line until PAM sends one" 'polkit\.info\.none=apex-polkit-info visible=false glyph=none'
 fact "polkit: pam_fprintd's prompt is the fingerprint line" "polkit\.info\.generic=$POLKIT_FINGERPRINT"
 fact "polkit: for a named finger and reader too" "polkit\.info\.swipe-reader=$POLKIT_FINGERPRINT"
@@ -760,8 +762,9 @@ polkit_is_stock "disabled-features=['polkit']"
 probe polkit-safe "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_POLKIT=1 APEX_SHELL_SAFE=1
 polkit_is_stock "APEX_SHELL_SAFE=1"
 
-# Polkit's verdict is polkitd's, after PAM: no Apex file may answer the agent or end its session.
-readonly POLKIT_ROUTES=(".response(" "_emitDone" "emit('done'" ".complete(" "_onSessionCompleted" "_initiateSession")
+# Polkit's verdict is polkitd's, after PAM: no Apex file may answer the agent, end its session or
+# follow the session's signals.
+readonly POLKIT_ROUTES=(".response(" "_emitDone" "emit('done'" ".complete(" "_onSessionCompleted" "_initiateSession" "._session")
 polkit_routes() {
     local -a args=()
     local route

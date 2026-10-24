@@ -355,7 +355,7 @@ def check_polkit(shots, case, want):
     check(f"{case}: board 13's {POLKIT_WIDTH} px dialog", "apex-polkit" in d["classes"] and near(box["width"], POLKIT_WIDTH),
           json.dumps(box))
     check(f"{case}: the shield in a {POLKIT_SHIELD} px accent circle, centred",
-          shield.get("icon") == "security-high-symbolic" and near(shield.get("width", 0), POLKIT_SHIELD)
+          shield.get("icon") == "dialog-password-symbolic" and near(shield.get("width", 0), POLKIT_SHIELD)
           and near(shield.get("height", 0), POLKIT_SHIELD)
           and near(shield.get("x", 0) + POLKIT_SHIELD / 2, box["x"] + box["width"] / 2)
           and abs(int(shield.get("background", "#00000000")[-2:], 16) - POLKIT_SHIELD_TINT * 255) <= 1,

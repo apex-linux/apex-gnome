@@ -793,6 +793,8 @@ async function exercisePolkit() {
     fact('polkit.details.reopened', polkitDetails(dialog));
 
     const info = dialog._infoMessageLabel;
+    const {PROMPT_MSGIDS} = await import(`file://${shellDir}/js/ui/apex/polkit/fingerprint.js`);
+    fact('polkit.prompt-msgids', `${PROMPT_MSGIDS.length} ${PROMPT_MSGIDS[1]} | ${PROMPT_MSGIDS.at(-1)}`);
     fact('polkit.info.none', polkitInfo(dialog));
     for (const [label, text] of [['generic', 'Place your finger on the fingerprint reader'],
         ['swipe-reader', 'Swipe your right index finger across Goodix MOC Fingerprint Sensor'],

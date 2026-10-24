@@ -6,7 +6,7 @@ import AccountsService from 'gi://AccountsService';
 import Clutter from 'gi://Clutter';
 import St from 'gi://St';
 
-const SHIELD_GLYPH = 'security-high-symbolic';
+const SHIELD_GLYPH = 'dialog-password-symbolic';
 const ROOT = 'root';
 
 export function isAdministrator(user) {

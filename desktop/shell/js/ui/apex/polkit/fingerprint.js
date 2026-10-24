@@ -9,18 +9,30 @@ import St from 'gi://St';
 const FINGERPRINT_GLYPH = 'auth-fingerprint-symbolic';
 const FPRINTD_DOMAIN = 'fprintd';
 
-// fprintd's pam/fingerprint-strings.h: "Place your <finger> on <reader>" and its swipe form.
-const FINGER = '(finger|(left|right) (thumb|(index|middle|ring|little) finger))';
-const PROMPT = new RegExp(`^(Place your ${FINGER} on|Swipe your ${FINGER} across) .+$`);
-const GENERIC_PROMPTS = [
-    'Place your finger on the fingerprint reader',
-    'Swipe your finger across the fingerprint reader',
-];
+// pam_fprintd's prompts are fprintd's pam/fingerprint-strings.h msgids, four per finger.
+const FINGERS = ['finger', 'left thumb', 'left index finger', 'left middle finger', 'left ring finger',
+    'left little finger', 'right thumb', 'right index finger', 'right middle finger', 'right ring finger',
+    'right little finger'];
+export const PROMPT_MSGIDS = FINGERS.flatMap(finger => [
+    `Place your ${finger} on the fingerprint reader`,
+    `Place your ${finger} on %s`,
+    `Swipe your ${finger} across the fingerprint reader`,
+    `Swipe your ${finger} across %s`,
+]);
+
+// In the session's locale, as pam_fprintd formats them: %s is the reader's name.
+let _prompts = null;
+function _promptPatterns() {
+    _prompts ??= PROMPT_MSGIDS.map(msgid => {
+        const [before, after = null] = GLib.dgettext(FPRINTD_DOMAIN, msgid).split('%s');
+        const escape = text => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        return new RegExp(`^${escape(before)}${after === null ? '' : `.+${escape(after)}`}$`);
+    });
+    return _prompts;
+}
 
 export function isFingerprintPrompt(text) {
-    if (!text)
-        return false;
-    return PROMPT.test(text) || GENERIC_PROMPTS.some(p => GLib.dgettext(FPRINTD_DOMAIN, p) === text);
+    return Boolean(text) && _promptPatterns().some(prompt => prompt.test(text));
 }
 
 export function setUp(dialog) {
