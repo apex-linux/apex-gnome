@@ -23,15 +23,19 @@ number of runs, the sha256 of the lane lock the image carries, and the status. a
 
 CI runs what needs no image: shellcheck of these scripts, and `selftest.sh`
 (`just shots-test`), which tests the capture comparison, the reading of the token file,
-the top-bar, clock and layer-cycle assertions, and `fixtures.py` on a private bus, read
+the top-bar, clock and layer-cycle assertions, `clock.c`, and `fixtures.py` on a private bus, read
 back through libnm, gnome-bluetooth and UPower's D-Bus API as the shell reads it.
+`smoke.sh` then runs `direct.sh fedora` on Fedora's own gnome-shell in a Fedora 45
+container, with the assertions that need no Apex build: a harness change that keeps the
+shell from starting or reporting fails in CI, before a builder VM spends a G2 run on it.
+A case that gets no report within `direct.sh`'s timeout stops G2 at once.
 
 ## What one run does
 
 | Step | Where | Asserts |
 |---|---|---|
 | G1's `image/checks/desktop.sh` | a container of the image | it passes on the image under test, so no text file under `/usr` or `/etc` names `APEX_SHELL_TEST_FAULT` |
-| `direct.sh main` | a container of the image plus `dbus-daemon` (the image has no `dbus-run-session`), `python3-dbusmock` and `libfaketime`; `rpm -V` shows the shell's packages unmodified | each case below: one headless shell with a fresh home, dconf and runtime directory, the fixtures on the system bus and the fixed clock (see "Fixtures and the clock") |
+| `direct.sh main` | a container of the image plus `dbus-daemon` (the image has no `dbus-run-session`), `python3-dbusmock` and `gcc` for `clock.c`; `rpm -V` shows the shell's packages unmodified | each case below: one headless shell with a fresh home, dconf and runtime directory, the fixtures on the system bus and the fixed clock (see "Fixtures and the clock") |
 | `direct.sh kernel` | the same, with `apex.safe=1` bound over `/proc/cmdline` | the kernel switch |
 | `direct.sh fedora` | the same image with Fedora's own gnome-shell and gnome-shell-common of the tested NVR in place of the Apex build, downloaded from Fedora's repositories; each RPM must report `digests signatures OK` against a keyring that holds Fedora's key alone, so an unsigned RPM fails | the baseline of the captures |
 | `guard.sh` | a container of the image booted with its own systemd; a test user's `systemd --user` with the image's unmodified units | the crash guard, and that neither the user manager nor the shell's unit sets `APEX_SHELL_TEST_FAULT` |
@@ -67,10 +71,11 @@ starts python-dbusmock's `upower`, `networkmanager` and `bluez5` templates there
 | BlueZ | the Bluetooth keyboard "Keychron K3", paired and connected | `bluetooth-active-symbolic`, until S2a's status-pill filter (a known gap) |
 
 `fixtures-PART.txt` holds what the bus reports afterwards, and `assert.sh` checks it for
-each container. Each shell runs with `LD_PRELOAD` of libfaketime (`/usr/lib64/libfaketime.so.1`;
-`direct.sh` stops before the first case when it does not hold the clock) and
-`FAKETIME='2026-09-28 09:41:00'` in UTC, with `FAKETIME_DONT_FAKE_MONOTONIC=1`: the wall
-clock stands still, while timeouts and frames, which run on the monotonic clock, go on.
+each container. `direct.sh` builds `clock.c` and preloads it into each shell with
+`G2_CLOCK_EPOCH` at 2026-09-28 09:41:00 UTC: reads of the wall clock return that time,
+while timers and frames keep the real clocks. It stops before the first case when the
+clock does not hold. libfaketime cannot do this: it converts every absolute timer as if
+it ran on the wall clock, so mutter's frame timer never fired and no shell started.
 The guard's shells, started by systemd, keep the real clock and have no fixtures.
 
 The layer follows `layer-enabled` live in a shell that started with it on
@@ -116,9 +121,15 @@ masks, and writes a difference image to `compare/` when they differ.
 
 | Pair | Masks | Why |
 |---|---|---|
-| Apex light (`default`) against `fedora-light`; Apex dark against `fedora-dark`, each scene | `panel`: the top bar's box in either capture | ROADMAP S1a: the captures equal Fedora's stock shell outside the masks; S1a restyles only the top bar |
+| Apex light (`default`) against `fedora-light`; Apex dark against `fedora-dark`, the desktop scene | `panel`: the top bar's box in either capture | ROADMAP S1a: the captures equal Fedora's stock shell outside the masks; S1a restyles only the top bar |
 | `stock-light` against `fedora-light`; `stock-dark` against `fedora-dark`, each scene | none | safe mode draws exactly Fedora's shell, its clock and status glyphs included |
 | each capture case of run 2 against run 1 | none | the clock stands still |
+
+The overview is not compared with Fedora's: the Apex bar is `$apex_bar_height` (32 px),
+upstream's 2.2em, so the overview lays out on a work area that starts lower, and every
+edge below the bar moves by a few pixels. Each capture case instead asserts that the
+overview's work area starts at its bar's height; the Apex overview gets an approved
+golden with S1b.
 
 A mask may cover at most 5 % of a capture. A comparison fails unless `compare.js` exits
 0, 1 or 2 and wrote one result for every planned pair: a gjs that cannot start, or dies,
@@ -185,6 +196,8 @@ it is at least 4.8:1), and what the goldens judge: the Apex Symbolic glyphs (S1b
 | `run.sh` | the builder VM | the runs, the bus image, the containers, then `assert.sh` and `stable.sh` |
 | `direct.sh`, `guard.sh` | containers of the image | the cases and the crash-guard phases |
 | `fixtures.py` | the direct cases' containers | the python-dbusmock services on the system bus |
+| `clock.c` | the direct cases' shells (`LD_PRELOAD`) | the fixed wall clock |
+| `smoke.sh` | CI's Fedora 45 container | `direct.sh fedora` on Fedora's gnome-shell, and the assertions that need no Apex build |
 | `probe.js` | the shell (`--automation-script`) | prints `APEXG2 {…}` and, for the capture cases, `APEXG2-SCENES {…}` |
 | `assert.sh`, `stable.sh`, `lib.sh` | the builder VM | the assertions |
 | `png.js`, `compare.js` | gjs | PNG with GLib's zlib only, and the masked comparison |

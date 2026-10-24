@@ -344,14 +344,22 @@ compare_with_fedora() {
     local run=$1 scene plan=$1/compare/fedora-plan.json results=$1/compare/fedora-results.json
     mkdir -p "$run/compare"
     {
+        # The Apex bar is $apex_bar_height, upstream's 2.2em: the overview below it lays out on
+        # another work area, so overview_below_bar checks its layout instead.
+        plan_entry apex-light-vs-fedora-desktop "$run" fedora-light "$run" default desktop "$run/compare" panel
+        plan_entry apex-dark-vs-fedora-desktop "$run" fedora-dark "$run" dark-style desktop "$run/compare" panel
         for scene in "${SCENES[@]}"; do
-            plan_entry "apex-light-vs-fedora-$scene" "$run" fedora-light "$run" default "$scene" "$run/compare" panel
-            plan_entry "apex-dark-vs-fedora-$scene" "$run" fedora-dark "$run" dark-style "$scene" "$run/compare" panel
             plan_entry "safe-light-vs-fedora-$scene" "$run" fedora-light "$run" stock-light "$scene" "$run/compare"
             plan_entry "safe-dark-vs-fedora-$scene" "$run" fedora-dark "$run" stock-dark "$scene" "$run/compare"
         done
     } | jq -s . >"$plan"
     compare_and_expect_equal "$plan" "$results"
+}
+
+overview_below_bar() {
+    local label=$1 log=$2
+    expect_report "$label" "$log" '(.scenes.overview.workArea.y - .topBar.panel.height) | fabs <= 0.5' \
+        "the overview lays out below the bar: its work area starts at the bar's height" APEXG2-SCENES
 }
 
 high_contrast_is_fedoras() {
@@ -416,7 +424,9 @@ same_stock_sheet() {
 
 fixtures_on_the_bus() {
     local run=$1 part fixtures
-    for part in "${DIRECT_PARTS[@]}"; do
+    local -a parts=("${@:2}")
+    ((${#parts[@]})) || parts=("${DIRECT_PARTS[@]}")
+    for part in "${parts[@]}"; do
         fixtures=$(report_of "$run/fixtures-$part.txt" G2-FIXTURES)
         expect "fixtures ($part)" "$fixtures" ".battery | .present and .onBattery and .percentage == $BATTERY_PERCENT" \
             "UPower's display device: a battery at $BATTERY_PERCENT %, discharging"
@@ -429,7 +439,7 @@ fixtures_on_the_bus() {
 
 fixed_clock() {
     local label=$1 log=$2
-    expect_report "$label" "$log" ".clock.now == \"$FIXED_CLOCK\"" "the wall clock stands at $FIXED_CLOCK (libfaketime)"
+    expect_report "$label" "$log" ".clock.now == \"$FIXED_CLOCK\"" "the wall clock stands at $FIXED_CLOCK (clock.c)"
     expect_report "$label" "$log" ".clock.text == \"$FIXED_CLOCK_TEXT\"" "and the top bar's clock shows it"
 }
 
@@ -577,6 +587,7 @@ direct_cases() {
     high_contrast_is_fedoras "$run"
     for c in "${CAPTURE_CASES[@]}"; do
         scenes_captured "$run" "$c"
+        overview_below_bar "$c" "$run/$c.log"
     done
     compare_with_fedora "$run"
 }

@@ -35,14 +35,15 @@ readonly OUT_DIR=${G2_OUT_DIR:-$REPO/_build/g2}
 readonly IMAGE=${1:-localhost/apex:build}
 readonly RUNS=${G2_RUNS:-2}
 # The image has no dbus-daemon, which dbus-run-session and the direct cases' system bus
-# need, nor the fixtures' python3-dbusmock and libfaketime.
+# need, nor the fixtures' python3-dbusmock and the gcc that builds clock.c.
 readonly BUS_IMAGE=localhost/apex-g2-bus
-readonly FIXTURE_PACKAGES=(python3-dbusmock libfaketime)
+readonly FIXTURE_PACKAGES=(python3-dbusmock gcc)
 readonly FEDORA_BUS_IMAGE=localhost/apex-g2-fedora
 readonly SHELL_PACKAGES=(gnome-shell gnome-shell-common mutter mutter-common apex-desktop)
 readonly FEDORA_KEY=/usr/share/pki/rpm-gpg/RPM-GPG-KEY-fedora-45-primary
 readonly KERNEL_FIXTURE='BOOT_IMAGE=(hd0,gpt2)/boot/ostree/apex/vmlinuz root=UUID=0 rw apex.safe=1 rhgb quiet'
 readonly GUARD_TIMEOUT=900
+readonly DIRECT_HUNG=3
 readonly KEEP_G2_STAMPS=5
 # glycin decodes and encodes images in bwrap sandboxes, whose devpts mount SELinux denies
 # to a container; the shell's startup then sometimes never completes.
@@ -144,6 +145,13 @@ working_tree_object() {
     rm -rf -- "${index%/index}"
 }
 
+# A hung shell would make every later case, and the next run, wait out the timeout as well.
+direct_failed() {
+    local part=$1 out=$2 rc=$3
+    ((rc != DIRECT_HUNG)) || die "direct.sh $part hung in ${out##*/}, so G2 stops here: $(grep -m1 ': no report within' "$out/direct-$part.txt")"
+    echo "direct.sh $part: exit $rc"
+}
+
 one_run() {
     local out=$1 name rc
     name=g2-$stamp-${out##*/}
@@ -172,18 +180,18 @@ one_run() {
     log "${out##*/}: the direct cases"
     sudo podman run --rm --name "$name-direct" "$NO_SELINUX_LABELS" -v "$HERE:/w:ro,z" -v "$out:/out:z" \
         --entrypoint /bin/bash "$BUS_IMAGE" /w/direct.sh main 2>&1 | tee "$out/direct-main.txt" ||
-        echo "direct.sh main: exit $?"
+        direct_failed main "$out" $?
 
     log "${out##*/}: apex.safe=1 on the kernel command line (a fixture bound over /proc/cmdline)"
     sudo podman run --rm --name "$name-kernel" "$NO_SELINUX_LABELS" -v "$HERE:/w:ro,z" -v "$out:/out:z" \
         -v "$out/cmdline-safe:/proc/cmdline:ro,z" \
         --entrypoint /bin/bash "$BUS_IMAGE" /w/direct.sh kernel 2>&1 | tee "$out/direct-kernel.txt" ||
-        echo "direct.sh kernel: exit $?"
+        direct_failed kernel "$out" $?
 
     log "${out##*/}: Fedora's own gnome-shell build, the baseline of the captures"
     sudo podman run --rm --name "$name-fedora" "$NO_SELINUX_LABELS" -v "$HERE:/w:ro,z" -v "$out:/out:z" \
         --entrypoint /bin/bash "$FEDORA_BUS_IMAGE" /w/direct.sh fedora 2>&1 | tee "$out/direct-fedora.txt" ||
-        echo "direct.sh fedora: exit $?"
+        direct_failed fedora "$out" $?
 
     log "${out##*/}: the crash guard (the image's systemd and a user's systemd --user)"
     sudo podman rm -f "$name-guard" >/dev/null 2>&1 || true

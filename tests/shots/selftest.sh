@@ -347,7 +347,7 @@ EOF
     mkdir -p "$T/run-a" "$T/run-b"
     # shellcheck disable=SC2016 # expanded by the inner bash
     G2_GJS=false bash -c '. "$1/assert.sh"; compare_with_fedora "$2"' _ "$HERE" "$T/run-a" >"$T/fedora-compare.out" 2>&1 || true
-    if grep -q '^FAIL captures: compare.js compared none of 8 ' "$T/fedora-compare.out"; then
+    if grep -q '^FAIL captures: compare.js compared none of 6 ' "$T/fedora-compare.out"; then
         ok "captures: assert.sh fails the Fedora comparisons when compare.js cannot run"
     else
         not_ok "captures: assert.sh fails the Fedora comparisons when compare.js cannot run"
@@ -378,7 +378,7 @@ test_fixed_clock() {
     local clock passes failures
     # shellcheck disable=SC2016 # expanded by the inner bash
     clock=$(bash -c '. "$1/assert.sh"; echo "$FIXED_CLOCK"' _ "$HERE")
-    expect_eq "clock: assert.sh expects the time direct.sh gives libfaketime" "$clock" \
+    expect_eq "clock: assert.sh expects the time direct.sh gives clock.c" "$clock" \
         "$(sed -n "s/^readonly G2_CLOCK='\([0-9-]*\) \([0-9:]*\)'\$/\1T\2Z/p" "$HERE/direct.sh")"
     while IFS='|' read -r failures what clock; do
         printf 'APEXG2 %s\n' "$clock" >"$T/clock.log"
@@ -388,8 +388,8 @@ test_fixed_clock() {
 0|the fixed time, as G2's 24-hour clock shows it,|{"clock": {"now": "2026-09-28T09:41:00Z", "text": "Mon Sep 28\u200209:41"}}
 1|a plain space for the EN SPACE|{"clock": {"now": "2026-09-28T09:41:00Z", "text": "Mon Sep 28 09:41"}}
 1|a clock without the weekday|{"clock": {"now": "2026-09-28T09:41:00Z", "text": "Sep 28\u200209:41"}}
-1|a shell that missed libfaketime|{"clock": {"now": "2026-10-23T14:02:11Z", "text": "Mon Sep 28\u200209:41"}}
-2|a shell without FAKETIME|{"clock": null}
+1|a shell that missed clock.c|{"clock": {"now": "2026-10-23T14:02:11Z", "text": "Mon Sep 28\u200209:41"}}
+2|a shell without G2_CLOCK_EPOCH|{"clock": null}
 CLOCKS
 }
 
@@ -543,6 +543,92 @@ test_fixtures() {
     kill "${pids[@]}" 2>/dev/null || true
 }
 
+# clock.c must hold the wall clock and leave an absolute monotonic timer alone: libfaketime
+# moved mutter's frame timer, and no headless shell ever finished starting.
+test_clock_c() {
+    local epoch=1790588460 held timer
+    if ! command -v gcc >/dev/null 2>&1; then
+        skip_or_fail "clock.c: needs gcc"
+        return
+    fi
+    if ! gcc -O2 -Wall -Werror -shared -fPIC -o "$T/clock.so" "$HERE/clock.c" 2>"$T/clock.err"; then
+        not_ok "clock.c: builds with -Wall -Werror ($(head -n 3 "$T/clock.err" | paste -sd'|' -))"
+        return
+    fi
+    ok "clock.c: builds with -Wall -Werror"
+    held=$(LD_PRELOAD=$T/clock.so G2_CLOCK_EPOCH=$epoch date -u +%FT%T.%NZ)
+    expect_eq "clock.c: date reads the fixed time" 2026-09-28T09:41:00.000000000Z "$held"
+    held=$(LD_PRELOAD=$T/clock.so G2_CLOCK_EPOCH=$epoch gjs -c 'const GLib = imports.gi.GLib; print(GLib.DateTime.new_now_utc().format_iso8601())')
+    expect_eq "clock.c: GLib reads the fixed time" 2026-09-28T09:41:00Z "$held"
+    held=$(LD_PRELOAD=$T/clock.so date -u +%Y)
+    expect_eq "clock.c: without G2_CLOCK_EPOCH the clock is the real one" "$(date -u +%Y)" "$held"
+    # shellcheck disable=SC2016 # a gjs program
+    timer=$(LD_PRELOAD=$T/clock.so G2_CLOCK_EPOCH=$epoch timeout 10 gjs -c '
+        const GLib = imports.gi.GLib;
+        const loop = new GLib.MainLoop(null, false);
+        const start = GLib.get_monotonic_time();
+        GLib.timeout_add(GLib.PRIORITY_DEFAULT, 200, () => {
+            print(GLib.get_monotonic_time() - start >= 200000 ? "fired" : "early");
+            loop.quit();
+            return GLib.SOURCE_REMOVE;
+        });
+        loop.run();' 2>&1)
+    expect_eq "clock.c: a GLib timeout on the monotonic clock still fires after 200 ms" fired "$timer"
+    timer=$(LD_PRELOAD=$T/clock.so G2_CLOCK_EPOCH=$epoch timeout 10 python3 -c '
+import os, time
+fd = os.timerfd_create(time.CLOCK_MONOTONIC)
+os.timerfd_settime_ns(fd, flags=os.TFD_TIMER_ABSTIME, initial=time.clock_gettime_ns(time.CLOCK_MONOTONIC) + 200_000_000)
+os.read(fd, 8)
+print("fired")' 2>&1)
+    expect_eq "clock.c: an absolute timerfd on the monotonic clock, as mutter's frame clock sets, fires" fired "$timer"
+    timer=$(LD_PRELOAD=$T/clock.so G2_CLOCK_EPOCH=$epoch timeout 10 python3 -c '
+import os, time
+fd = os.timerfd_create(time.CLOCK_REALTIME)
+start = time.monotonic()
+os.timerfd_settime_ns(fd, flags=os.TFD_TIMER_ABSTIME, initial=time.time_ns() + 300_000_000)
+os.read(fd, 8)
+print("on time" if time.monotonic() - start >= 0.25 else "at once")' 2>&1)
+    expect_eq "clock.c: a wall-clock timerfd 300 ms after the fixed time, as GnomeWallClock sets, fires on time" "on time" "$timer"
+    cat >"$T/time-change.c" <<'EOF'
+#include <poll.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <sys/timerfd.h>
+
+int main(void)
+{
+    int fd = timerfd_create(CLOCK_REALTIME, TFD_NONBLOCK);
+    struct itimerspec its = {.it_value.tv_sec = (time_t)UINT64_MAX};
+    int refused = timerfd_settime(fd, TFD_TIMER_ABSTIME | TFD_TIMER_CANCEL_ON_SET, &its, NULL) < 0;
+    struct pollfd ready = {.fd = fd, .events = POLLIN};
+
+    its.it_value.tv_sec = UINT32_MAX;
+    timerfd_settime(fd, TFD_TIMER_ABSTIME | TFD_TIMER_CANCEL_ON_SET, &its, NULL);
+    printf("%s %s\n", refused ? "refused" : "accepted", poll(&ready, 1, 300) == 0 ? "quiet" : "fired");
+    return 0;
+}
+EOF
+    if gcc -O2 -Wall -Werror -o "$T/time-change" "$T/time-change.c" 2>"$T/time-change.err"; then
+        expect_eq "clock.c: gnome-shell's time-change timer is refused at -1 and stays quiet at 2106" "refused quiet" \
+            "$(LD_PRELOAD=$T/clock.so G2_CLOCK_EPOCH=$epoch timeout 10 "$T/time-change" 2>&1)"
+    else
+        not_ok "clock.c: the time-change test builds ($(head -n 3 "$T/time-change.err" | paste -sd'|' -))"
+    fi
+}
+
+test_overview_below_bar() {
+    local passes failures what report
+    while IFS='|' read -r failures what report; do
+        printf 'APEXG2-SCENES %s\n' "$report" >"$T/overview.log"
+        read -r passes _ <<<"$(assertion_counts overview_below_bar case "$T/overview.log")"
+        expect_eq "overview: $what fails $failures of 1" "$failures" $((1 - passes))
+    done <<'REPORTS'
+0|a work area that starts at the bar's height|{"topBar": {"panel": {"height": 32}}, "scenes": {"overview": {"workArea": {"y": 32, "height": 868}}}}
+1|a work area 2 px lower|{"topBar": {"panel": {"height": 32}}, "scenes": {"overview": {"workArea": {"y": 34, "height": 866}}}}
+1|a probe without the work area|{"topBar": {"panel": {"height": 32}}, "scenes": {"overview": {}}}
+REPORTS
+}
+
 test_spotlight_key() {
     local passes failures what report
     while IFS='|' read -r failures what report; do
@@ -575,6 +661,8 @@ test_top_bar
 test_today_pins
 test_known_gaps
 test_fixed_clock
+test_clock_c
+test_overview_below_bar
 test_layer_cycles
 test_spotlight_key
 test_fixtures

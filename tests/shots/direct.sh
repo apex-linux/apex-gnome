@@ -13,7 +13,7 @@ HOME and XDG_RUNTIME_DIR, a 2880x1800 virtual monitor at scale 2 (default-scale1
 1440x900 at scale 1, as the desktop VM runs) and probe.js as its automation script;
 /out/CASE.log gets its output, /out/results-PART.txt its exit status. Every shell sees
 fixtures.py's python-dbusmock services on the system bus (/out/fixtures-PART.txt) and a
-wall clock that libfaketime holds at G2_CLOCK.
+wall clock that clock.c holds at G2_CLOCK. A case that times out stops the part (exit 3).
 
   main     every case, with the VM's real /proc/cmdline
   kernel   the apex.safe=1 case (run.sh binds a fixture over /proc/cmdline)
@@ -26,12 +26,15 @@ case ${1:-} in
     -h | --help) usage; exit 0 ;;
     *) usage >&2; exit 2 ;;
 esac
-# It stops logind's seats and changes /run as root: never outside run.sh's container.
-[[ -e /run/.containerenv ]] || { echo "direct.sh: only inside run.sh's podman container" >&2; exit 2; }
+# It stops logind's seats and changes /run as root: never outside a throwaway container.
+[[ -e /run/.containerenv || -e /.dockerenv ]] || { echo "direct.sh: only inside run.sh's or smoke.sh's container" >&2; exit 2; }
 
 readonly SHELL_TIMEOUT=150
-readonly FAKETIME_LIB=/usr/lib64/libfaketime.so.1
+readonly EXIT_HUNG=3
+readonly CLOCK_LIB=/run/g2-clock.so
 readonly G2_CLOCK='2026-09-28 09:41:00'
+G2_CLOCK_EPOCH=$(date -u -d "$G2_CLOCK" +%s)
+readonly G2_CLOCK_EPOCH
 readonly FIXTURE_NAMES=(org.freedesktop.UPower org.freedesktop.NetworkManager org.bluez)
 # Two fixed workspaces: stock widens the active workspace dot by a factor that depends on
 # the count. A 24-hour clock: in 12 hours a one-digit hour adds a figure space.
@@ -55,9 +58,10 @@ dbus-daemon --system --fork || echo "no system bus"
 mkdir -p "/out/fixtures-$part"
 python3 /w/fixtures.py "/out/fixtures-$part" >"/out/fixtures-$part.txt" 2>&1 || echo "fixtures.py: exit $?"
 mkdir -p /tmp/.X11-unix && chmod 1777 /tmp/.X11-unix
+gcc -O2 -Wall -Werror -shared -fPIC -o "$CLOCK_LIB" /w/clock.c || { echo "direct.sh: cannot build clock.c" >&2; exit 1; }
 # ld.so only warns when a preload is missing, and the shells would keep the real clock.
-held=$(env LD_PRELOAD="$FAKETIME_LIB" FAKETIME="$G2_CLOCK" TZ=UTC date -u '+%F %T' 2>&1)
-[[ $held == "$G2_CLOCK" ]] || { echo "direct.sh: $FAKETIME_LIB does not hold the clock at $G2_CLOCK: $held" >&2; exit 1; }
+held=$(env LD_PRELOAD="$CLOCK_LIB" G2_CLOCK_EPOCH="$G2_CLOCK_EPOCH" date -u '+%F %T' 2>&1)
+[[ $held == "$G2_CLOCK" ]] || { echo "direct.sh: $CLOCK_LIB does not hold the clock at $G2_CLOCK: $held" >&2; exit 1; }
 
 run_case() {
     local name=$1 gsettings_triples=$2
@@ -70,7 +74,7 @@ run_case() {
     env -i HOME="$home" PATH=/usr/bin:/usr/sbin XDG_RUNTIME_DIR="$run" LANG=C.UTF-8 \
         DBUS_SYSTEM_BUS_ADDRESS=unix:path=/run/dbus/system_bus_socket \
         G2_CASE="$name" G2_CAPTURES=/out/captures G2_SETTINGS="$gsettings_triples" \
-        G2_SCALE=2 G2_MONITOR=2880x1800 TZ=UTC G2_FAKETIME_LIB="$FAKETIME_LIB" G2_CLOCK="$G2_CLOCK" "$@" \
+        G2_SCALE=2 G2_MONITOR=2880x1800 TZ=UTC G2_CLOCK_LIB="$CLOCK_LIB" G2_CLOCK_EPOCH="$G2_CLOCK_EPOCH" "$@" \
         timeout "$SHELL_TIMEOUT" dbus-run-session -- bash -c '
             set -u
             gsettings set org.gnome.desktop.interface scaling-factor "$G2_SCALE"
@@ -84,8 +88,8 @@ run_case() {
             echo "G2-SETTINGS scaling-factor=$(gsettings get org.gnome.desktop.interface scaling-factor)" \
                 "color-scheme=$(gsettings get org.gnome.desktop.interface color-scheme)" \
                 "layer-enabled=$(gsettings get io.github.apex_linux.Apex.Desktop layer-enabled)"
-            # Only the realtime clock stands still: timeouts run on the monotonic one.
-            exec env LD_PRELOAD="$G2_FAKETIME_LIB" FAKETIME="$G2_CLOCK" FAKETIME_DONT_FAKE_MONOTONIC=1 NO_FAKE_STAT=1 \
+            # Only reads of the wall clock stand still: timers and frames keep the real clocks.
+            exec env LD_PRELOAD="$G2_CLOCK_LIB" \
                 gnome-shell --headless --virtual-monitor "$G2_MONITOR" \
                 --wayland-display=apex-g2 --automation-script /w/probe.js
         ' >"/out/$name.log" 2>&1
@@ -105,6 +109,10 @@ run_and_record_case() {
         run_case "$@"
     fi
     printf '%s\n' "$RESULT" >>"/out/results-$part.txt"
+    if [[ $RESULT == "$name exit=124 "* ]]; then
+        echo "== $name: no report within $SHELL_TIMEOUT s; the shell hung, and the cases after it would wait as long"
+        exit "$EXIT_HUNG"
+    fi
 }
 
 : >"/out/results-$part.txt"
