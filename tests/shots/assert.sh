@@ -327,6 +327,8 @@ dock_metrics() {
         '{dash: .dock.overviewDashVisible, overview: .scenes.overview.dockVisible}' '.dash == false and .overview == true'
     "${metric[@]}" 'and lays its workspaces out above the dock' \
         '{dock: .dock, clearance: .scenes.overview.dockClearance}' '.dock != null and .clearance != null and .clearance >= 0'
+    "${metric[@]}" "its apps' menu offers Launch Using Discrete Graphics Card while switcheroo-control reports two GPUs" \
+        '.dock.appMenu' '.hasDualGpu == true and (.items | any(. == "Launch Using Discrete Graphics Card"))'
 }
 
 no_dock() {
@@ -728,6 +730,25 @@ overview_layer() {
 }
 
 # shellcheck disable=SC2016 # jq programs and token names, not shell expansions
+tile_preview() {
+    local label=$1 log=$2 variant=$3 scenes tokens
+    scenes=$(report_of "$log" APEXG2-SCENES)
+    tokens=$(tokens_for "$variant")
+    local -a metric=(top_bar_metric "$label tile preview" "$scenes" "$tokens")
+    local tp=.surfaces.tilePreview
+    local tinted='def tinted($a; $opacity): rgba as $c | ($a | rgba) as $w | ($c[0:3] == $w[0:3]) and ($c[3] - ($opacity | num) * 255 | fabs <= 1);'
+
+    "${metric[@]}" 'the preview over the left half fills the tile mutter gives it, behind a clear $apex_tile_preview_inset border, so it shows $apex_tile_preview_inset inside the tile' \
+        "$tp" '.tile as $tile | .preview | (.styleClass | split(" ") | index("tile-preview-left") != null)
+            and .x == $tile.x and .y == $tile.y and .width == $tile.width and .height == $tile.height
+            and (.border | [.top, .right, .bottom, .left] | all(px_is($t.apex_tile_preview_inset))) and (.borderColor | rgba | .[3] == 0)'
+    "${metric[@]}" 'it is rounded $apex_radius_tile_preview inside that border, filled with the accent at $apex_tile_preview_fill_opacity and ringed $apex_tile_preview_ring in the accent at $apex_tile_preview_ring_opacity' \
+        "{p: $tp.preview, accent: .topBar.accent}" "$tinted"' .accent as $a | .p | (.radius - .border.top | px_is($t.apex_radius_tile_preview))
+            and (.background | tinted($a; $t.apex_tile_preview_fill_opacity))
+            and (.boxShadow | .inset and (.spread | px_is($t.apex_tile_preview_ring)) and .blur == 0 and (.color | tinted($a; $t.apex_tile_preview_ring_opacity)))'
+}
+
+# shellcheck disable=SC2016 # jq programs and token names, not shell expansions
 derived_surfaces() {
     local label=$1 log=$2 variant=$3 scenes tokens
     scenes=$(report_of "$log" APEXG2-SCENES)
@@ -928,6 +949,8 @@ fixtures_on_the_bus() {
             "BlueZ: the keyboard \"Keychron K3\" is connected"
         expect "fixtures ($part)" "$fixtures" '.powerProfiles | .active == "balanced" and (.profiles | index("performance") != null)' \
             "power-profiles-daemon: Balanced, with Performance to switch to"
+        expect "fixtures ($part)" "$fixtures" '.gpus | .hasDualGpu and .names == ["Intel Graphics", "NVIDIA GeForce RTX 4060"]' \
+            "switcheroo-control: an integrated and a discrete GPU"
     done
 }
 
@@ -1037,6 +1060,7 @@ direct_cases() {
     app_grid default "$f" light
     overview_layer default "$f" light
     derived_surfaces default "$f" light
+    tile_preview default "$f" light
     spotlight_style default "$f" light
 
     f=$run/default-scale1.log
@@ -1059,6 +1083,7 @@ direct_cases() {
     app_grid default-scale1 "$f" light
     overview_layer default-scale1 "$f" light
     derived_surfaces default-scale1 "$f" light
+    tile_preview default-scale1 "$f" light
     spotlight_style default-scale1 "$f" light
 
     f=$run/dark-style.log
@@ -1084,6 +1109,7 @@ direct_cases() {
     app_grid dark-style "$f" dark
     overview_layer dark-style "$f" dark
     derived_surfaces dark-style "$f" dark
+    tile_preview dark-style "$f" dark
     spotlight_style dark-style "$f" dark
     dark_style_off dark-style "$f"
 
@@ -1173,6 +1199,8 @@ glass_frames() {
         "damage forwarded to the glass box re-blurs in the same frame, as a full redraw draws it" APEXG2-GLASS
     expect_report "$label" "$log" '.pixels.clippedRedraw | (.covered | not) and .differingFromLast == 0 and .nextCovered and .nextDifferingFromFull == 0' \
         "a redraw clip that misses the box draws the last result, pixel for pixel; the next frame is the full redraw's" APEXG2-GLASS
+    expect_report "$label" "$log" '.pixels.stock | (.covered | not) and .tries >= 1' \
+        "the stock control obtained a partial redraw, a frame whose redraw clip misses the box (it damages again up to 5 times; else: could not obtain a partial redraw)" APEXG2-GLASS
     expect_report "$label" "$log" ".pixels.stock | (.covered | not) and .differingFromFull > 0 and (($within) | not)" \
         "stock's blur in such a frame samples pixels the frame did not repaint and misses those tolerances, so the case can see it" APEXG2-GLASS
 }
@@ -1192,11 +1220,11 @@ glass_manager() {
     local -a expect_glass=(expect "$label" "$(report_of "$log" APEXG2-GLASS | jq -c --argjson t "$tokens" '. + {t: $t}' 2>/dev/null)")
     glass='def glass($blur; $saturation; $s): .radius == 2 * ($blur | px) * $s and ((.saturation - ($saturation | rtrimstr("%") | tonumber / 100)) | fabs < 0.001)
         and .enabled and .fine and .followOpacity and .background;
-        def none: [.panel, .quickSettings, .calendar, .banner] | all(. == null);'
+        def none: [.panel, .dock, .quickSettings, .calendar, .banner] | all(. == null);'
 
     "${expect_glass[@]}" "$glass"' .t as $t | .manager.monitorScale as $s | .manager.glass | (.panel | glass($t.apex_bar_blur; $t.apex_bar_saturation; $s))
-        and ([.quickSettings, .calendar, .banner] | all(glass($t.apex_panel_blur; $t.apex_panel_saturation; $s))) and (.solidClass | not)' \
-        'the bar blurs at $apex_bar_blur and $apex_bar_saturation; Quick Settings, the calendar and a banner at $apex_panel_blur and $apex_panel_saturation, each as radius 2 x sigma x the monitor scale, fine, following opacity'
+        and (.dock | glass($t.apex_dock_blur; $t.apex_dock_saturation; $s)) and ([.quickSettings, .calendar, .banner] | all(glass($t.apex_panel_blur; $t.apex_panel_saturation; $s))) and (.solidClass | not)' \
+        'the bar blurs at $apex_bar_blur and $apex_bar_saturation, the dock at $apex_dock_blur and $apex_dock_saturation; Quick Settings, the calendar and a banner at $apex_panel_blur and $apex_panel_saturation, each as radius 2 x sigma x the monitor scale, fine, following opacity'
     "${expect_glass[@]}" "$glass"' .manager.reduceTransparency | none and .blurEffects == [] and .solidClass' \
         'with Reduce Transparency no actor carries a blur effect, and the root carries apex-solid'
     "${expect_glass[@]}" "$glass"' .manager.highContrast | none and .blurEffects == [] and .solidClass' \

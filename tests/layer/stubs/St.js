@@ -124,6 +124,10 @@ class Widget {
         return {x, y};
     }
 
+    get_effect() {
+        return null;
+    }
+
     add_style_class_name(name) {
         this._styleClasses.add(name);
     }
