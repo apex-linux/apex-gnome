@@ -119,7 +119,7 @@ in_github_actions && common+=(--github)
 
 # reusable KEY: the cache's build of KEY, if its key and every file the manifest lists check out.
 reusable() {
-    local dir=$cache/builds/$1 kind sha file
+    local dir=$cache/builds/$PKG/$1 kind sha file
     [[ -f $dir/manifest.txt && $(cat -- "$dir/key.txt" 2>/dev/null) == "$1" ]] || return 1
     while read -r kind _ sha file; do
         [[ $kind == built || $kind == apex-srpm ]] || continue
@@ -134,7 +134,7 @@ if [[ -n $cache ]]; then
 fi
 rm -rf -- "$build/out"
 if [[ -n $key ]] && reusable "$key"; then
-    cp -a -- "$cache/builds/$key" "$build/out"
+    cp -a -- "$cache/builds/$PKG/$key" "$build/out"
     log "lane.sh: $PKG reused the build of $key: the key covers every input but the buildroot, as on the builder VM"
     [[ -z ${GITHUB_OUTPUT:-} ]] || echo "built=false" >>"$GITHUB_OUTPUT"
     exit 0
@@ -145,8 +145,8 @@ status=0
 
 cp -a -- "$work/out" "$build/out"
 if ((status == 0)) && [[ -n $cache ]]; then
-    rm -rf -- "$cache/builds" && mkdir -p -- "$cache/builds"
-    cp -a -- "$build/out" "$cache/builds/$(cat -- "$build/out/key.txt")"
+    rm -rf -- "${cache:?}/builds/$PKG" && mkdir -p -- "$cache/builds/$PKG"
+    cp -a -- "$build/out" "$cache/builds/$PKG/$(cat -- "$build/out/key.txt")"
     [[ -z ${GITHUB_OUTPUT:-} ]] || echo "built=true" >>"$GITHUB_OUTPUT"
 fi
 case $status in

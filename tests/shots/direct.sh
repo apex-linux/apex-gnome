@@ -92,7 +92,7 @@ run_case() {
         DBUS_SYSTEM_BUS_ADDRESS=unix:path=/run/dbus/system_bus_socket \
         G2_CASE="$name" G2_CAPTURES=/out/captures G2_SETTINGS="$gsettings_triples" \
         G2_SCALE=2 G2_MONITOR=2880x1800 TZ=UTC G2_CLOCK_LIB="$CLOCK_LIB" G2_CLOCK_EPOCH="$G2_CLOCK_EPOCH" \
-        G2_SURFACE_SCENES="${G2_SURFACE_SCENES:-0}" "$@" \
+        G2_SURFACE_SCENES="${G2_SURFACE_SCENES:-0}" G2_WAYLAND_DISPLAY=apex-g2 "$@" \
         timeout "$SHELL_TIMEOUT" dbus-run-session -- bash -c '
             set -u
             gsettings set org.gnome.desktop.interface scaling-factor "$G2_SCALE"
@@ -109,7 +109,7 @@ run_case() {
             # Only reads of the wall clock stand still: timers and frames keep the real clocks.
             exec env LD_PRELOAD="$G2_CLOCK_LIB" \
                 gnome-shell --headless --virtual-monitor "$G2_MONITOR" \
-                --wayland-display=apex-g2 --automation-script /w/probe.js
+                --wayland-display="$G2_WAYLAND_DISPLAY" --automation-script /w/probe.js
         ' >"/out/$name.log" 2>&1
     rc=$?
     [[ -e $run/apex-shell-starting ]] && left=yes
