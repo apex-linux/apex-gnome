@@ -354,6 +354,324 @@ top_bar_gaps() {
         '{dot: .topBar.withDot.dot.background, accent: .topBar.accent}' '. as $x | $x.dot | colour_is($x.accent)'
 }
 
+# shellcheck disable=SC2016 # jq programs and token names, not shell expansions
+shell_surfaces() {
+    local label=$1 log=$2 variant=$3 scenes tokens
+    scenes=$(report_of "$log" APEXG2-SCENES)
+    tokens=$(tokens_for "$variant")
+    local -a metric=(top_bar_metric "$label" "$scenes" "$tokens")
+    local m=.surfaces.popupMenu o=.surfaces.osd b=.surfaces.banner
+    local surface='(.border | [.top, .right, .bottom, .left] | all(px_is($t.apex_surface_border))) and (.borderColor | colour_is($t.apex_panel_border))
+        and (.boxShadow | .inset == false and .x == 0 and (.y | px_is($t.apex_shadow_y)) and (.blur | px_is($t.apex_shadow_blur)) and (.color | colour_is($t.apex_shadow)))'
+
+    "${metric[@]}" 'a popup menu is solid $apex_panel_solid with $apex_fg text at $apex_font_size, radius $apex_radius_menu' \
+        "$m.content" '(.background | colour_is($t.apex_panel_solid)) and (.foreground | colour_is($t.apex_fg)) and (.font.size | px_is($t.apex_font_size)) and (.radius | px_is($t.apex_radius_menu))'
+    "${metric[@]}" 'its ring is a $apex_surface_border border in $apex_panel_border, its shadow 0 $apex_shadow_y $apex_shadow_blur $apex_shadow' \
+        "$m.content" "$surface"
+    "${metric[@]}" 'it is inset $apex_menu_padding and at least $apex_menu_min_width wide' \
+        "$m.content" '(.padding | [.top, .right, .bottom, .left] | all(. + ($t.apex_surface_border | px) | px_is($t.apex_menu_padding))) and .width >= ($t.apex_menu_min_width | px)'
+    "${metric[@]}" 'its rows are $apex_menu_row_height high, radius $apex_radius_menu_row, padded $apex_menu_row_padding, $apex_menu_row_spacing between glyph and label' \
+        "$m.rows" 'length == 3 and all((.height | px_is($t.apex_menu_row_height)) and (.radius | px_is($t.apex_radius_menu_row))
+            and (.padding.left | px_is($t.apex_menu_row_padding)) and (.padding.right | px_is($t.apex_menu_row_padding)) and (.spacing | px_is($t.apex_menu_row_spacing)))'
+    "${metric[@]}" 'a row has no fill until hovered, then $apex_button_hover' \
+        "$m.rows" 'all((.background | rgba | .[3] == 0) and (.hover.background | colour_is($t.apex_button_hover)))'
+    "${metric[@]}" 'adjacent rows are $apex_menu_row_gap apart' \
+        "$m.rows" '.[1].y - .[0].y - .[0].height | px_is($t.apex_menu_row_gap)'
+    "${metric[@]}" 'a separator is a 1 px $apex_border line, inset $apex_menu_separator_inset, with $apex_menu_separator_margin + $apex_menu_row_gap above and below' \
+        "$m" '(.separator.height | px_is(1)) and (.separator.background | colour_is($t.apex_border))
+            and (.separator.x - .content.x - .content.padding.left - .content.border.left | px_is($t.apex_menu_separator_inset))
+            and ((.separator.y - .rows[1].y - .rows[1].height) | px_is(($t.apex_menu_separator_margin | px) + ($t.apex_menu_row_gap | px)))
+            and ((.rows[2].y - .separator.y - .separator.height) | px_is(($t.apex_menu_separator_margin | px) + ($t.apex_menu_row_gap | px)))'
+    "${metric[@]}" 'a row glyph is $apex_menu_icon_size' \
+        "$m.icon" 'px_is($t.apex_menu_icon_size)'
+
+    "${metric[@]}" 'the OSD is $apex_osd_height high, radius $apex_radius_osd, tinted $apex_panel' \
+        "$o.box" '(.height | px_is($t.apex_osd_height)) and (.radius | px_is($t.apex_radius_osd)) and (.background | colour_is($t.apex_panel)) and (.foreground | colour_is($t.apex_fg))'
+    "${metric[@]}" 'its ring is a $apex_surface_border border in $apex_panel_border, its shadow 0 $apex_shadow_y $apex_shadow_blur $apex_shadow' \
+        "$o.box" "$surface"
+    "${metric[@]}" 'it is inset $apex_osd_padding at the sides, $apex_osd_gap between its parts, its text $apex_font_size at $apex_font_label_weight' \
+        "$o.box" '(.padding.left + .border.left | px_is($t.apex_osd_padding)) and (.padding.right + .border.right | px_is($t.apex_osd_padding)) and (.spacing | px_is($t.apex_osd_gap))
+            and (.font.size | px_is($t.apex_font_size)) and .font.weight == ($t.apex_font_label_weight | tonumber)'
+    "${metric[@]}" 'its glyph is $apex_osd_icon_size; its level $apex_osd_level_width x $apex_osd_level_height in $apex_button_hover, filled with the accent' \
+        "{osd: $o, accent: .topBar.accent}" '.accent as $accent | (.osd.icon | px_is($t.apex_osd_icon_size)) and (.osd.level | (.width | px_is($t.apex_osd_level_width)) and (.barHeight | px_is($t.apex_osd_level_height))
+            and (.background | colour_is($t.apex_button_hover))) and (.osd.level.active | colour_is($accent))'
+    "${metric[@]}" 'it sits $apex_osd_bottom above the screen'"'"'s bottom edge' \
+        "$o.bottomGap" 'px_is($t.apex_osd_bottom)'
+
+    "${metric[@]}" 'a banner is $apex_banner_width wide, radius $apex_radius_banner, tinted $apex_panel, $apex_banner_top below the bar' \
+        "$b" '(.box.width | px_is($t.apex_banner_width)) and (.box.radius | px_is($t.apex_radius_banner)) and (.box.background | colour_is($t.apex_panel)) and (.topGap | px_is($t.apex_banner_top))'
+    "${metric[@]}" 'its ring is a $apex_surface_border border in $apex_panel_border, its shadow 0 $apex_shadow_y $apex_shadow_blur $apex_shadow' \
+        "$b.box" "$surface"
+    "${metric[@]}" 'it is inset $apex_banner_padding' \
+        "$b.box" '[.padding, .border] | [.[0].top + .[1].top, .[0].right + .[1].right, .[0].bottom + .[1].bottom, .[0].left + .[1].left] | all(px_is($t.apex_banner_padding))'
+    "${metric[@]}" 'its header is $apex_font_banner_header_size in $apex_fg_dim; its title $apex_font_size at $apex_font_heading_weight; its body $apex_font_banner_body_size in $apex_fg_dim' \
+        "$b" '(.header.font.size | px_is($t.apex_font_banner_header_size)) and (.header.foreground | colour_is($t.apex_fg_dim))
+            and (.title.font.size | px_is($t.apex_font_size)) and .title.font.weight == ($t.apex_font_heading_weight | tonumber)
+            and (.body.font.size | px_is($t.apex_font_banner_body_size)) and (.body.foreground | colour_is($t.apex_fg_dim))'
+    "${metric[@]}" 'its icon is $apex_banner_icon_size, $apex_banner_gap from the text' \
+        "$b" '(.icon | px_is($t.apex_banner_icon_size)) and (.title.x - .box.x - .box.padding.left - .box.border.left | px_is(($t.apex_banner_icon_size | px) + ($t.apex_banner_gap | px)))'
+    "${metric[@]}" 'its close button is a $apex_banner_close_size circle filled with $apex_button' \
+        "$b.close" '(.width | px_is($t.apex_banner_close_size)) and (.height | px_is($t.apex_banner_close_size)) and .radius >= (($t.apex_banner_close_size | px) / 2) and (.background | colour_is($t.apex_button))'
+    "${metric[@]}" 'its action buttons are $apex_banner_button_height high, radius $apex_radius_banner_button, $apex_button, $apex_font_banner_button_size at $apex_font_label_weight, $apex_banner_button_gap apart under the text' \
+        "$b" '(.button | (.minHeight | px_is($t.apex_banner_button_height)) and (.radius | px_is($t.apex_radius_banner_button)) and (.background | colour_is($t.apex_button))
+            and (.font.size | px_is($t.apex_font_banner_button_size)) and .font.weight == ($t.apex_font_label_weight | tonumber))
+            and (.actions | (.spacing | px_is($t.apex_banner_button_gap)) and (.padding.left | px_is(($t.apex_banner_icon_size | px) + ($t.apex_banner_gap | px))))'
+}
+
+# shellcheck disable=SC2016 # jq programs and token names, not shell expansions
+quick_settings() {
+    local label=$1 log=$2 variant=$3 scenes tokens
+    scenes=$(report_of "$log" APEXG2-SCENES)
+    tokens=$(tokens_for "$variant")
+    local -a metric=(top_bar_metric "$label Quick Settings" "$scenes" "$tokens")
+    local q=.surfaces.quickSettings
+    local toggle_width='((($t.apex_quick_settings_width | px) - 2 * ($t.apex_quick_settings_padding | px) - ($t.apex_quick_settings_grid_gap | px)) / 2)'
+    local shade='(1 - ($t.apex_quick_toggle_menu_button_shade | rtrimstr("%") | tonumber) / 100)'
+
+    "${metric[@]}" 'the panel is $apex_quick_settings_width wide, radius $apex_radius_quick_settings, tinted $apex_panel, inset $apex_quick_settings_padding' \
+        "$q.box" '(.width | px_is($t.apex_quick_settings_width)) and (.radius | px_is($t.apex_radius_quick_settings)) and (.background | colour_is($t.apex_panel))
+            and ([.padding, .border] | [.[0].top + .[1].top, .[0].right + .[1].right, .[0].bottom + .[1].bottom, .[0].left + .[1].left] | all(px_is($t.apex_quick_settings_padding)))'
+    "${metric[@]}" 'its ring is a $apex_surface_border border in $apex_panel_border, its shadow 0 $apex_shadow_y $apex_shadow_blur $apex_shadow' \
+        "$q.box" '(.border.top | px_is($t.apex_surface_border)) and (.borderColor | colour_is($t.apex_panel_border))
+            and (.boxShadow | .y == ($t.apex_shadow_y | px) and .blur == ($t.apex_shadow_blur | px) and (.color | colour_is($t.apex_shadow)))'
+    "${metric[@]}" 'the grid puts $apex_quick_settings_grid_gap between rows and columns, and $apex_quick_settings_section_gap under the top row' \
+        "$q" '(.grid.rows | px_is($t.apex_quick_settings_grid_gap)) and (.grid.columns | px_is($t.apex_quick_settings_grid_gap))
+            and (.wifi.y - .system.y - .system.height | px_is($t.apex_quick_settings_section_gap))'
+    "${metric[@]}" 'the top row'"'"'s round buttons are $apex_quick_settings_button_size circles in $apex_button, $apex_quick_settings_button_gap apart, glyphs $apex_quick_settings_icon_size' \
+        "$q.system" '(.spacing | px_is($t.apex_quick_settings_button_gap)) and (.screenshot | (.width | px_is($t.apex_quick_settings_button_size)) and (.height | px_is($t.apex_quick_settings_button_size))
+            and .radius >= ($t.apex_quick_settings_button_size | px) / 2 and (.background | colour_is($t.apex_button)) and (.icon | px_is($t.apex_quick_settings_icon_size)))'
+    "${metric[@]}" 'the battery pill is $apex_quick_settings_button_size high in $apex_button, padded $apex_quick_settings_battery_padding, $apex_quick_settings_battery_gap to its text at $apex_font_quick_settings_battery_size $apex_font_label_weight' \
+        "$q.system.battery" '(.height | px_is($t.apex_quick_settings_button_size)) and .radius >= ($t.apex_quick_settings_button_size | px) / 2 and (.background | colour_is($t.apex_button))
+            and (.box.padding.left | px_is($t.apex_quick_settings_battery_padding)) and (.box.padding.right | px_is($t.apex_quick_settings_battery_padding)) and (.box.spacing | px_is($t.apex_quick_settings_battery_gap))
+            and (.title.font.size | px_is($t.apex_font_quick_settings_battery_size)) and .title.font.weight == ($t.apex_font_label_weight | tonumber)'
+    "${metric[@]}" 'toggles fill half the grid and are $apex_quick_toggle_height high, fully round' \
+        "[$q.wifi, $q.unchecked]" "all((.width | px_is($toggle_width)) and (.height | px_is(\$t.apex_quick_toggle_height)))
+            and (.[1].radius >= (\$t.apex_quick_toggle_height | px) / 2)"
+    "${metric[@]}" 'an unchecked toggle is $apex_button with $apex_fg text, $apex_button_hover when hovered' \
+        "$q.unchecked" '(.background | colour_is($t.apex_button)) and (.foreground | colour_is($t.apex_fg)) and (.hover.background | colour_is($t.apex_button_hover))'
+    "${metric[@]}" 'a checked toggle is the accent, its text the accent'"'"'s foreground, its subtitle that at $apex_quick_toggle_subtitle_opacity' \
+        "{t: $q.wifi.toggle, accent: .topBar.accent}" '.accent as $a | (.t.background | colour_is($a)) and (.t.foreground | colour_is("#ffffff"))
+            and (.t.subtitle.foreground | colour_is("rgba(255, 255, 255, \($t.apex_quick_toggle_subtitle_opacity))"))'
+    "${metric[@]}" 'a toggle is padded $apex_quick_toggle_padding ($apex_quick_toggle_menu_padding before a menu arrow), $apex_quick_toggle_gap between glyph and text, its glyph $apex_quick_settings_icon_size' \
+        "[$q.wifi.toggle, $q.unchecked]" 'all((.box.padding.left | px_is($t.apex_quick_toggle_padding)) and (.box.spacing | px_is($t.apex_quick_toggle_gap)) and (.icon | px_is($t.apex_quick_settings_icon_size)))
+            and (.[0].box.padding.right | px_is($t.apex_quick_toggle_menu_padding)) and (.[1].box.padding.right | px_is($t.apex_quick_toggle_padding))'
+    "${metric[@]}" 'its title is $apex_font_quick_toggle_title_size at $apex_font_heading_weight, its subtitle $apex_font_quick_toggle_subtitle_size' \
+        "$q.wifi.toggle" '(.title.font.size | px_is($t.apex_font_quick_toggle_title_size)) and .title.font.weight == ($t.apex_font_heading_weight | tonumber)
+            and (.subtitle.font.size | px_is($t.apex_font_quick_toggle_subtitle_size))'
+    "${metric[@]}" 'the menu arrow is $apex_quick_toggle_menu_button_width wide, the checked fill shaded $apex_quick_toggle_menu_button_shade with black, with no separator' \
+        "{w: $q.wifi, accent: .topBar.accent}" "(.accent | rgba) as \$a | (.w.menuButton.background | rgba) as \$m
+            | (.w.menuButton.width | px_is(\$t.apex_quick_toggle_menu_button_width)) and (.w.separator.width == 0)
+            and ([range(3)] | all((\$m[.] - \$a[.] * $shade) | fabs <= 1))"
+    "${metric[@]}" 'a slider has $apex_quick_slider_gap beside its glyph, a $apex_quick_slider_track_height track in $apex_button_hover filled with the accent, a $apex_quick_slider_handle_size $apex_slider_handle handle' \
+        "{s: $q.slider, accent: .topBar.accent}" '.accent as $a | .s | (.spacing | px_is($t.apex_quick_slider_gap)) and (.trackHeight | px_is($t.apex_quick_slider_track_height))
+            and (.track | colour_is($t.apex_button_hover)) and (.fill | colour_is($a)) and (.handleRadius * 2 | px_is($t.apex_quick_slider_handle_size)) and (.handle | colour_is($t.apex_slider_handle))'
+    "${metric[@]}" 'the Wi-Fi menu is a $apex_card card ringed in $apex_card_border, radius $apex_radius_quick_menu, inset $apex_quick_menu_padding, $apex_quick_settings_grid_gap under its toggle, without a shadow' \
+        "$q" '(.wifiMenu.box | (.background | colour_is($t.apex_card)) and (.borderColor | colour_is($t.apex_card_border)) and (.border.top | px_is($t.apex_surface_border))
+            and (.radius | px_is($t.apex_radius_quick_menu)) and (.padding.left + .border.left | px_is($t.apex_quick_menu_padding)) and .boxShadow == null)
+            and (.wifiMenu.box.y - .wifi.y - .wifi.height | px_is($t.apex_quick_settings_grid_gap))'
+    "${metric[@]}" 'its header glyph sits in a $apex_quick_menu_header_icon_size accent circle; its title is $apex_font_quick_menu_title_size at $apex_font_heading_weight' \
+        "{m: $q.wifiMenu, accent: .topBar.accent}" '.accent as $a | .m | (.headerIcon | (.width | px_is($t.apex_quick_menu_header_icon_size)) and (.height | px_is($t.apex_quick_menu_header_icon_size))
+            and (.background | colour_is($a)) and (.iconSize | px_is($t.apex_quick_settings_icon_size)))
+            and (.title.font.size | px_is($t.apex_font_quick_menu_title_size)) and .title.font.weight == ($t.apex_font_heading_weight | tonumber)'
+    "${metric[@]}" 'its rows are $apex_quick_menu_row_height high, padded $apex_menu_row_padding, radius $apex_radius_menu_row' \
+        "$q.wifiMenu.rows" 'length > 0 and all((.height | px_is($t.apex_quick_menu_row_height)) and (.padding.left | px_is($t.apex_menu_row_padding)) and (.radius | px_is($t.apex_radius_menu_row)))'
+}
+
+# shellcheck disable=SC2016 # jq programs and token names, not shell expansions
+window_switcher() {
+    local label=$1 log=$2 variant=$3 scenes tokens
+    scenes=$(report_of "$log" APEXG2-SCENES)
+    tokens=$(tokens_for "$variant")
+    local -a metric=(top_bar_metric "$label window switcher" "$scenes" "$tokens")
+    local w=.surfaces.switcher
+
+    "${metric[@]}" 'the list is tinted $apex_panel, radius $apex_radius_switcher, inset $apex_switcher_padding' \
+        "$w.list" '(.background | colour_is($t.apex_panel)) and (.radius | px_is($t.apex_radius_switcher))
+            and ([.padding, .border] | [.[0].top + .[1].top, .[0].right + .[1].right, .[0].bottom + .[1].bottom, .[0].left + .[1].left] | all(px_is($t.apex_switcher_padding)))'
+    "${metric[@]}" 'its ring is a $apex_surface_border border in $apex_panel_border, its shadow 0 $apex_shadow_y $apex_shadow_blur $apex_shadow' \
+        "$w.list" '(.border.top | px_is($t.apex_surface_border)) and (.borderColor | colour_is($t.apex_panel_border))
+            and (.boxShadow | .y == ($t.apex_shadow_y | px) and .blur == ($t.apex_shadow_blur | px) and (.color | colour_is($t.apex_shadow)))'
+    "${metric[@]}" 'its tiles are $apex_switcher_gap apart, radius $apex_radius_switcher_item, padded $apex_switcher_item_vpadding $apex_switcher_item_hpadding, $apex_switcher_item_spacing above the name' \
+        "$w" '(.spacing | px_is($t.apex_switcher_gap)) and (.app.spacing | px_is($t.apex_switcher_item_spacing))
+            and (.items | length > 1 and all((.radius | px_is($t.apex_radius_switcher_item)) and (.padding.top | px_is($t.apex_switcher_item_vpadding)) and (.padding.left | px_is($t.apex_switcher_item_hpadding))))'
+    "${metric[@]}" 'the selected tile alone is filled with $apex_button_hover, its name in $apex_fg' \
+        "$w.items" 'map(select(.pseudoClass // "" | test("selected"))) as $sel | map(select(.pseudoClass // "" | test("selected") | not)) as $rest
+            | ($sel | length == 1) and ($sel[0] | (.background | colour_is($t.apex_button_hover)) and (.foreground | colour_is($t.apex_fg))) and ($rest | all(.background | rgba | .[3] == 0))'
+    "${metric[@]}" 'the names are $apex_font_size at $apex_font_label_weight' \
+        "$w.app.label" '(.size | px_is($t.apex_font_size)) and .weight == ($t.apex_font_label_weight | tonumber)'
+}
+
+# shellcheck disable=SC2016 # jq programs and token names, not shell expansions
+modal_dialog() {
+    local label=$1 log=$2 variant=$3 scenes tokens
+    scenes=$(report_of "$log" APEXG2-SCENES)
+    tokens=$(tokens_for "$variant")
+    local -a metric=(top_bar_metric "$label modal dialog" "$scenes" "$tokens")
+    local d=.surfaces.dialog
+
+    "${metric[@]}" 'a dialog is solid $apex_panel_solid, radius $apex_radius_dialog, $apex_dialog_width wide (polkit), $apex_end_session_dialog_width (end session)' \
+        "$d" '(.box | (.background | colour_is($t.apex_panel_solid)) and (.radius | px_is($t.apex_radius_dialog)) and (.width | px_is($t.apex_dialog_width)))
+            and (.endSessionWidth + 2 * ($t.apex_dialog_padding | px) | px_is($t.apex_end_session_dialog_width))'
+    "${metric[@]}" 'its ring is a $apex_surface_border border in $apex_panel_border, its shadow 0 $apex_shadow_y $apex_shadow_blur $apex_shadow' \
+        "$d.box" '(.border.top | px_is($t.apex_surface_border)) and (.borderColor | colour_is($t.apex_panel_border))
+            and (.boxShadow | .y == ($t.apex_shadow_y | px) and .blur == ($t.apex_shadow_blur | px) and (.color | colour_is($t.apex_shadow)))'
+    "${metric[@]}" 'it is inset $apex_dialog_padding, $apex_dialog_padding_bottom at the bottom, with $apex_dialog_gap between its parts and $apex_dialog_text_gap between title and text' \
+        "$d" '(.box | (.padding.top + .border.top | px_is($t.apex_dialog_padding)) and (.padding.left + .border.left | px_is($t.apex_dialog_padding))
+            and (.padding.right + .border.right | px_is($t.apex_dialog_padding)) and (.padding.bottom + .border.bottom | px_is($t.apex_dialog_padding_bottom)) and (.spacing | px_is($t.apex_dialog_gap)))
+            and (.contentSpacing | px_is($t.apex_dialog_gap)) and (.textSpacing | px_is($t.apex_dialog_text_gap))'
+    "${metric[@]}" 'its title is $apex_font_dialog_title_size at $apex_font_heading_weight, its text $apex_font_size in $apex_fg_dim' \
+        "$d" '(.title.font.size | px_is($t.apex_font_dialog_title_size)) and .title.font.weight == ($t.apex_font_heading_weight | tonumber)
+            and (.description.font.size | px_is($t.apex_font_size)) and (.description.foreground | colour_is($t.apex_fg_dim))'
+    "${metric[@]}" 'the password entry is $apex_entry_height high, fully round, $apex_button, padded $apex_entry_padding, $apex_font_entry_size at $apex_font_entry_weight' \
+        "$d.entry" '(.height | px_is($t.apex_entry_height)) and .radius >= ($t.apex_entry_height | px) / 2 and (.background | colour_is($t.apex_button)) and .boxShadow == null
+            and (.padding.left | px_is($t.apex_entry_padding)) and (.padding.right | px_is($t.apex_entry_padding))
+            and (.font.size | px_is($t.apex_font_entry_size)) and .font.weight == ($t.apex_font_entry_weight | tonumber)'
+    "${metric[@]}" 'focused, it draws a $apex_entry_focus_ring ring in the raw accent' \
+        "{e: $d.entry, accent: .topBar.accent}" '.accent as $a | .e.focus.boxShadow | .inset and (.spread | px_is($t.apex_entry_focus_ring)) and (.color | colour_is($a))'
+    "${metric[@]}" 'its buttons are $apex_dialog_button_height high, fully round, $apex_font_dialog_button_size at $apex_font_label_weight' \
+        "$d.buttons" 'length == 2 and all((.height | px_is($t.apex_dialog_button_height)) and .radius >= ($t.apex_dialog_button_height | px) / 2
+            and (.font.size | px_is($t.apex_font_dialog_button_size)) and .font.weight == ($t.apex_font_label_weight | tonumber))'
+    "${metric[@]}" 'a button is $apex_button ($apex_button_hover hovered); the default one the accent with its foreground' \
+        "{b: $d.buttons, accent: .topBar.accent}" '.accent as $a | (.b | map(select(.default | not)) | length == 1 and all((.background | colour_is($t.apex_button)) and (.foreground | colour_is($t.apex_fg)) and (.hover.background | colour_is($t.apex_button_hover))))
+            and (.b | map(select(.default)) | length == 1 and all((.background | colour_is($a)) and (.foreground | colour_is("#ffffff"))))'
+}
+
+# shellcheck disable=SC2016 # jq programs and token names, not shell expansions
+date_menu() {
+    local label=$1 log=$2 variant=$3 scenes tokens
+    scenes=$(report_of "$log" APEXG2-SCENES)
+    tokens=$(tokens_for "$variant")
+    local -a metric=(top_bar_metric "$label calendar" "$scenes" "$tokens")
+    local d=.surfaces.dateMenu
+    local inset='[.padding, .border] | [.[0].top + .[1].top, .[0].right + .[1].right, .[0].bottom + .[1].bottom, .[0].left + .[1].left]'
+
+    "${metric[@]}" 'the popover is $apex_date_menu_list_width + $apex_date_menu_gap + $apex_date_menu_column_width inside a $apex_quick_settings_padding glass inset, radius $apex_radius_quick_settings' \
+        "$d" "(.box | (.background | colour_is(\$t.apex_panel)) and (.radius | px_is(\$t.apex_radius_quick_settings)) and ($inset | all(px_is(\$t.apex_quick_settings_padding))))
+            and (.area.spacing | px_is(\$t.apex_date_menu_gap)) and (.list.width | px_is(\$t.apex_date_menu_list_width)) and (.column.width | px_is(\$t.apex_date_menu_column_width))
+            and (.list.border.right == 0) and (.column.spacing | px_is(\$t.apex_date_menu_column_gap))"
+    "${metric[@]}" 'a notification card is opaque $apex_message_card ringed in $apex_glass_card_border, radius $apex_radius_message, $apex_message_gap apart' \
+        "$d.message" '(.background | colour_is($t.apex_message_card)) and (.borderColor | colour_is($t.apex_glass_card_border)) and (.border.top | px_is($t.apex_surface_border))
+            and (.radius | px_is($t.apex_radius_message)) and (.marginBottom | px_is($t.apex_message_gap)) and .boxShadow == null'
+    "${metric[@]}" 'it is inset $apex_message_padding, $apex_message_padding_start at the start and $apex_message_padding_end at the end' \
+        "$d.message" "$inset"' | (.[0] | px_is($t.apex_message_padding)) and (.[2] | px_is($t.apex_message_padding)) and (.[3] | px_is($t.apex_message_padding_start)) and (.[1] | px_is($t.apex_message_padding_end))'
+    "${metric[@]}" 'its header is $apex_font_banner_header_size in $apex_fg_dim, its title $apex_font_size at $apex_font_heading_weight, its body $apex_font_message_body_size in $apex_fg_dim, its icon $apex_message_icon_size' \
+        "$d.message" '(.header.font.size | px_is($t.apex_font_banner_header_size)) and (.header.foreground | colour_is($t.apex_fg_dim))
+            and (.title.font.size | px_is($t.apex_font_size)) and .title.font.weight == ($t.apex_font_heading_weight | tonumber)
+            and (.body.font.size | px_is($t.apex_font_message_body_size)) and (.body.foreground | colour_is($t.apex_fg_dim)) and (.icon | px_is($t.apex_message_icon_size))'
+    "${metric[@]}" 'its close button is a $apex_banner_close_size circle in $apex_button' \
+        "$d.message.close" '(.width | px_is($t.apex_banner_close_size)) and (.height | px_is($t.apex_banner_close_size)) and (.background | colour_is($t.apex_button))'
+    "${metric[@]}" 'the footer is $apex_date_menu_footer_height high; Clear is a $apex_clear_button_height pill in $apex_button, padded $apex_clear_button_padding' \
+        "$d" '(.controls.height | px_is($t.apex_date_menu_footer_height)) and (.clear | (.height | px_is($t.apex_clear_button_height)) and .radius >= ($t.apex_clear_button_height | px) / 2
+            and (.background | colour_is($t.apex_button)) and (.padding.left | px_is($t.apex_clear_button_padding)))'
+    "${metric[@]}" 'the weekday is $apex_font_date_menu_weekday_size $apex_font_heading_weight in $apex_fg_dim over the date at $apex_font_date_menu_date_size $apex_font_date_menu_date_weight' \
+        "$d" '(.dayLabel | (.font.size | px_is($t.apex_font_date_menu_weekday_size)) and .font.weight == ($t.apex_font_heading_weight | tonumber) and (.foreground | colour_is($t.apex_fg_dim)))
+            and (.dateLabel.font | (.size | px_is($t.apex_font_date_menu_date_size)) and .weight == ($t.apex_font_date_menu_date_weight | tonumber))'
+    "${metric[@]}" 'the month is a $apex_glass_card card ringed in $apex_glass_card_border, radius $apex_radius_calendar, inset $apex_calendar_padding, its name $apex_font_calendar_month_size $apex_font_heading_weight' \
+        "$d" "(.calendar | (.background | colour_is(\$t.apex_glass_card)) and (.borderColor | colour_is(\$t.apex_glass_card_border)) and (.radius | px_is(\$t.apex_radius_calendar))
+            and ($inset | all(px_is(\$t.apex_calendar_padding)))) and (.monthLabel.font | (.size | px_is(\$t.apex_font_calendar_month_size)) and .weight == (\$t.apex_font_heading_weight | tonumber))
+            and (.monthLabel.background | rgba | .[3] == 0) and (.pager.width | px_is(\$t.apex_calendar_pager_size))"
+    "${metric[@]}" 'weekday headings are $apex_calendar_heading_height high, $apex_font_calendar_heading_size $apex_font_heading_weight in $apex_fg_dim, unfilled' \
+        "$d.heading" '(.height | px_is($t.apex_calendar_heading_height)) and (.font.size | px_is($t.apex_font_calendar_heading_size)) and .font.weight == ($t.apex_font_heading_weight | tonumber)
+            and (.foreground | colour_is($t.apex_fg_dim)) and (.background | rgba | .[3] == 0)'
+    "${metric[@]}" 'days fill the card'"'"'s seven columns $apex_calendar_day_gap apart, $apex_calendar_day_height high and fully round, $apex_font_calendar_day_size in $apex_fg, unfilled, weekends too' \
+        "$d" "((.day.width * 7 + 7 * (\$t.apex_calendar_day_gap | px) + 2 * (\$t.apex_calendar_padding | px)) - (\$t.apex_date_menu_column_width | px) | fabs < 7)
+            and (.day | (.height | px_is(\$t.apex_calendar_day_height)) and .radius >= (\$t.apex_calendar_day_height | px) / 2 and (.font.size | px_is(\$t.apex_font_calendar_day_size))
+            and (.foreground | colour_is(\$t.apex_fg)) and (.background | rgba | .[3] == 0)) and (.weekend.foreground | colour_is(\$t.apex_fg))"
+    "${metric[@]}" 'days of other months are $apex_fg_faint; today is the accent at $apex_font_heading_weight' \
+        "{d: $d, accent: .topBar.accent}" '.accent as $a | (.d.otherMonth.foreground | colour_is($t.apex_fg_faint))
+            and (.d.today | (.background | colour_is($a)) and (.foreground | colour_is("#ffffff")) and .font.weight == ($t.apex_font_heading_weight | tonumber))'
+    "${metric[@]}" 'the events card is inset $apex_events_padding_top $apex_events_padding $apex_events_padding_bottom, its title $apex_font_events_title_size $apex_font_heading_weight in $apex_fg_dim' \
+        "$d" "(.events | (.background | colour_is(\$t.apex_glass_card)) and (.radius | px_is(\$t.apex_radius_calendar))
+            and ($inset | (.[0] | px_is(\$t.apex_events_padding_top)) and (.[1] | px_is(\$t.apex_events_padding)) and (.[2] | px_is(\$t.apex_events_padding_bottom))))
+            and (.eventsTitle | (.font.size | px_is(\$t.apex_font_events_title_size)) and .font.weight == (\$t.apex_font_heading_weight | tonumber) and (.foreground | colour_is(\$t.apex_fg_dim)))"
+}
+
+# shellcheck disable=SC2016 # jq programs and token names, not shell expansions
+overview_style() {
+    local label=$1 log=$2 variant=$3 scenes tokens
+    scenes=$(report_of "$log" APEXG2-SCENES)
+    tokens=$(tokens_for "$variant")
+    local -a metric=(top_bar_metric "$label overview" "$scenes" "$tokens")
+    local o=.surfaces.overview
+
+    "${metric[@]}" 'the overview is tinted with the $apex_scrim scrim' \
+        "$o.group" '(.background | colour_is($t.apex_scrim)) and .boxShadow == null'
+    "${metric[@]}" 'the search field is a $apex_search_width x $apex_search_height $apex_pill pill ringed in $apex_pill_border, padded $apex_search_padding, $apex_search_top below the bar' \
+        "{o: $o, bar: .topBar.panel.height}" '.bar as $bar | .o.search | (.width | px_is($t.apex_search_width)) and (.height | px_is($t.apex_search_height)) and .radius >= ($t.apex_search_height | px) / 2
+            and (.background | colour_is($t.apex_pill)) and (.borderColor | colour_is($t.apex_pill_border)) and (.border.top | px_is($t.apex_surface_border))
+            and (.padding.left + .border.left | px_is($t.apex_search_padding)) and (.y - $bar | px_is($t.apex_search_top))'
+    "${metric[@]}" 'its text is $apex_font_search_size in $apex_fg, its glyph $apex_quick_settings_icon_size; focused, it draws a $apex_entry_focus_ring ring in the raw accent' \
+        "{s: $o.search, accent: .topBar.accent}" '.accent as $a | .s | (.font.size | px_is($t.apex_font_search_size)) and (.foreground | colour_is($t.apex_fg)) and (.icon | px_is($t.apex_quick_settings_icon_size))
+            and (.focus.boxShadow | .inset and (.spread | px_is($t.apex_entry_focus_ring)) and (.color | colour_is($a)))'
+    "${metric[@]}" 'workspace thumbnails are $apex_thumbnail_gap apart, radius $apex_radius_thumbnail, ringed in $apex_pill_border; the current one in a $apex_thumbnail_indicator accent ring' \
+        "{o: $o, accent: .topBar.accent}" '.accent as $a | .o | (.thumbnailsSpacing | px_is($t.apex_thumbnail_gap))
+            and (.thumbnail | (.radius | px_is($t.apex_radius_thumbnail)) and (.borderColor | colour_is($t.apex_pill_border)) and (.border.top | px_is($t.apex_surface_border)))
+            and (.indicator | (.radius | px_is($t.apex_radius_thumbnail)) and (.border.top | px_is($t.apex_thumbnail_indicator)) and (.borderColor | colour_is($a)))'
+    "${metric[@]}" 'a window title is a $apex_caption_height $apex_pill pill ringed in $apex_pill_border, padded $apex_caption_padding, $apex_font_caption_size $apex_font_heading_weight in $apex_fg' \
+        "$o.caption" '(.minHeight + 2 * .border.top | px_is($t.apex_caption_height)) and .radius >= ($t.apex_caption_height | px) / 2 and (.background | colour_is($t.apex_pill))
+            and (.borderColor | colour_is($t.apex_pill_border)) and (.padding.left + .border.left | px_is($t.apex_caption_padding))
+            and (.font.size | px_is($t.apex_font_caption_size)) and .font.weight == ($t.apex_font_heading_weight | tonumber) and (.foreground | colour_is($t.apex_fg))'
+    "${metric[@]}" 'a search section is a $apex_glass_card card ringed in $apex_glass_card_border, radius $apex_radius_message, its text $apex_fg' \
+        "$o.section" '(.background | colour_is($t.apex_glass_card)) and (.borderColor | colour_is($t.apex_glass_card_border)) and (.radius | px_is($t.apex_radius_message)) and (.foreground | colour_is($t.apex_fg))'
+}
+
+# shellcheck disable=SC2016 # jq programs and token names, not shell expansions
+app_grid() {
+    local label=$1 log=$2 variant=$3 scenes tokens
+    scenes=$(report_of "$log" APEXG2-SCENES)
+    tokens=$(tokens_for "$variant")
+    local -a metric=(top_bar_metric "$label launcher" "$scenes" "$tokens")
+    local g=.surfaces.appGrid
+
+    "${metric[@]}" 'an app tile is unfilled, radius $apex_radius_app_tile, padded $apex_app_tile_padding, $apex_app_tile_gap above its name at $apex_font_app_label_size $apex_font_label_weight in $apex_fg' \
+        "$g.app" '(.background | rgba | .[3] == 0) and (.radius | px_is($t.apex_radius_app_tile)) and (.padding.top | px_is($t.apex_app_tile_padding))
+            and (.spacing | px_is($t.apex_app_tile_gap)) and (.labelFont.size | px_is($t.apex_font_app_label_size)) and .labelFont.weight == ($t.apex_font_label_weight | tonumber)
+            and (.foreground | colour_is($t.apex_fg))'
+    "${metric[@]}" 'hovered it is $apex_button; focused, $apex_button in a $apex_entry_focus_ring raw-accent ring' \
+        "{a: $g.app, accent: .topBar.accent}" '.accent as $c | .a | (.hover.background | colour_is($t.apex_button)) and (.focus.background | colour_is($t.apex_button))
+            and (.focus.boxShadow | .inset and (.spread | px_is($t.apex_entry_focus_ring)) and (.color | colour_is($c)))'
+    "${metric[@]}" 'a folder tile is $apex_folder ringed in $apex_pill_border' \
+        "$g.folder" '(.background | colour_is($t.apex_folder)) and (.borderColor | colour_is($t.apex_pill_border)) and (.border.top | px_is($t.apex_surface_border))'
+    "${metric[@]}" 'the folder dialog is $apex_folder_dialog_width of $apex_folder_panel glass ringed in $apex_panel_border, radius $apex_radius_folder_dialog, inset $apex_folder_dialog_padding ($apex_folder_dialog_padding_bottom at the bottom)' \
+        "$g.dialog" '(.width | px_is($t.apex_folder_dialog_width)) and (.background | colour_is($t.apex_folder_panel)) and (.borderColor | colour_is($t.apex_panel_border))
+            and (.radius | px_is($t.apex_radius_folder_dialog)) and (.padding.left + .border.left | px_is($t.apex_folder_dialog_padding))
+            and (.padding.bottom + .border.bottom | px_is($t.apex_folder_dialog_padding_bottom))
+            and (.boxShadow | .y == ($t.apex_shadow_y | px) and .blur == ($t.apex_shadow_blur | px) and (.color | colour_is($t.apex_shadow)))'
+    "${metric[@]}" 'its title is $apex_font_folder_title_size $apex_font_heading_weight in $apex_fg; its button a $apex_folder_close_size circle in $apex_button' \
+        "$g.dialog" '(.title.font.size | px_is($t.apex_font_folder_title_size)) and .title.font.weight == ($t.apex_font_heading_weight | tonumber) and (.title.foreground | colour_is($t.apex_fg))
+            and (.button | (.width | px_is($t.apex_folder_close_size)) and (.height | px_is($t.apex_folder_close_size)) and (.background | colour_is($t.apex_button)))'
+    "${metric[@]}" 'running dots are $apex_running_dot_size round in $apex_fg at $apex_running_dot_opacity; page indicators $apex_fg; page hints flat, no gradient' \
+        "$g" '(.runningDot | (.width | px_is($t.apex_running_dot_size)) and (.height | px_is($t.apex_running_dot_size)) and (.radius * 2 | px_is($t.apex_running_dot_size))
+            and (.background | rgba | .[3] - (($t.apex_running_dot_opacity | num) * 255) | fabs <= 1))
+            and (.pageIndicator.background | colour_is($t.apex_fg)) and .pageHint.gradient == 0'
+}
+
+# shellcheck disable=SC2016 # jq programs and token names, not shell expansions
+derived_surfaces() {
+    local label=$1 log=$2 variant=$3 scenes tokens
+    scenes=$(report_of "$log" APEXG2-SCENES)
+    tokens=$(tokens_for "$variant")
+    local -a metric=(top_bar_metric "$label derived surfaces" "$scenes" "$tokens")
+    local d=.surfaces.derived
+    local ring='(.border.top | px_is($t.apex_surface_border)) and (.borderColor | colour_is($t.apex_panel_border))
+        and (.boxShadow | .y == ($t.apex_shadow_y | px) and .blur == ($t.apex_shadow_blur | px) and (.color | colour_is($t.apex_shadow)))'
+
+    "${metric[@]}" 'the workspace switcher and the resize popup take the OSD'"'"'s $apex_panel tint, ring and shadow, radius $apex_radius_osd' \
+        "[$d.workspaceSwitcher, $d.resizePopup]" "all((.background | colour_is(\$t.apex_panel)) and (.radius | px_is(\$t.apex_radius_osd)) and $ring)"
+    "${metric[@]}" 'the workspace dots are $apex_fg_faint, the current one $apex_fg' \
+        "$d.wsIndicator" '(.background | colour_is($t.apex_fg_faint)) and (.active.background | colour_is($t.apex_fg))'
+    "${metric[@]}" 'the input method'"'"'s candidates take the popup menu: $apex_panel_solid, ring and shadow, radius $apex_radius_menu; rows radius $apex_radius_menu_row, $apex_button_hover when hovered' \
+        "$d" "(.candidatePopup | (.background | colour_is(\$t.apex_panel_solid)) and (.radius | px_is(\$t.apex_radius_menu)) and $ring)
+            and (.candidateBox | (.radius | px_is(\$t.apex_radius_menu_row)) and (.hover.background | colour_is(\$t.apex_button_hover)))"
+    "${metric[@]}" 'the run dialog'"'"'s entry is the password entry: $apex_entry_height, $apex_button, a $apex_entry_focus_ring raw-accent ring when focused' \
+        "{e: $d.runEntry, accent: .topBar.accent}" '.accent as $a | .e | (.minHeight | px_is($t.apex_entry_height)) and (.background | colour_is($t.apex_button)) and .boxShadow == null
+            and (.focus.boxShadow | .inset and (.spread | px_is($t.apex_entry_focus_ring)) and (.color | colour_is($a)))'
+    "${metric[@]}" 'an audio device tile takes the switcher'"'"'s: radius $apex_radius_switcher_item, unfilled, $apex_button_hover when hovered, $apex_fg' \
+        "$d.audioDevice" '(.radius | px_is($t.apex_radius_switcher_item)) and (.background | rgba | .[3] == 0) and (.hover.background | colour_is($t.apex_button_hover)) and (.foreground | colour_is($t.apex_fg))'
+    "${metric[@]}" 'the monitor number takes the OSD'"'"'s radius $apex_radius_osd' \
+        "$d.monitorLabel.radius" 'px_is($t.apex_radius_osd)'
+}
+
 scenes_captured() {
     local run=$1 case_name=$2
     local log=$run/$case_name.log scene
@@ -456,6 +774,8 @@ fixtures_on_the_bus() {
             "UPower's display device: a battery at $BATTERY_PERCENT %, discharging"
         expect "fixtures ($part)" "$fixtures" '.wifi | .primary == "Apex-5G" and .ssid == "Apex-5G" and .strength >= 80 and .state == 70 and .connectivity == 4' \
             "NetworkManager: the primary connection is Wi-Fi \"Apex-5G\" at full signal, connected globally"
+        expect "fixtures ($part)" "$fixtures" '.wifi.inRange == ["Apex-5G", "Apex-2.4G", "Library Guest"]' \
+            "NetworkManager: \"Apex-2.4G\" and the open \"Library Guest\" are in range too"
         expect "fixtures ($part)" "$fixtures" '.keyboard | .alias == "Keychron K3" and .connected and .icon == "input-keyboard"' \
             "BlueZ: the keyboard \"Keychron K3\" is connected"
     done
@@ -529,6 +849,14 @@ direct_cases() {
     top_bar_today default "$f" light
     top_bar_gaps default "$f" light
     dock_metrics default "$f" light
+    shell_surfaces default "$f" light
+    quick_settings default "$f" light
+    window_switcher default "$f" light
+    modal_dialog default "$f" light
+    date_menu default "$f" light
+    overview_style default "$f" light
+    app_grid default "$f" light
+    derived_surfaces default "$f" light
 
     f=$run/default-scale1.log
     exits "$run" default-scale1 0
@@ -539,6 +867,14 @@ direct_cases() {
     top_bar default-scale1 "$f" light
     top_bar_today default-scale1 "$f" light
     dock_metrics default-scale1 "$f" light
+    shell_surfaces default-scale1 "$f" light
+    quick_settings default-scale1 "$f" light
+    window_switcher default-scale1 "$f" light
+    modal_dialog default-scale1 "$f" light
+    date_menu default-scale1 "$f" light
+    overview_style default-scale1 "$f" light
+    app_grid default-scale1 "$f" light
+    derived_surfaces default-scale1 "$f" light
 
     f=$run/dark-style.log
     exits "$run" dark-style 0
@@ -552,6 +888,14 @@ direct_cases() {
     top_bar_today dark-style "$f" dark
     top_bar_gaps dark-style "$f" dark
     dock_metrics dark-style "$f" dark
+    shell_surfaces dark-style "$f" dark
+    quick_settings dark-style "$f" dark
+    window_switcher dark-style "$f" dark
+    modal_dialog dark-style "$f" dark
+    date_menu dark-style "$f" dark
+    overview_style dark-style "$f" dark
+    app_grid dark-style "$f" dark
+    derived_surfaces dark-style "$f" dark
     dark_style_off dark-style "$f"
 
     for c in stock-light stock-dark; do

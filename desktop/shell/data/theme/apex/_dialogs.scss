@@ -1,0 +1,79 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+
+// Modal dialogs stay solid (DESIGN.md). dialog.js sets the 12 px gap between the buttons.
+.modal-dialog {
+  @include apex-surface($apex_panel_solid);
+  padding: ($apex_dialog_padding - $apex_surface_border) ($apex_dialog_padding - $apex_surface_border)
+    ($apex_dialog_padding_bottom - $apex_surface_border);
+  border-radius: $apex_radius_dialog;
+  spacing: $apex_dialog_gap;
+  font-size: apex-text-size($apex_font_size);
+
+  .modal-dialog-content-box {
+    padding-top: 0;
+    spacing: $apex_dialog_gap;
+  }
+
+  .modal-dialog-button-box {
+    padding-top: 0;
+
+    .modal-dialog-button {
+      min-height: $apex_dialog_button_height;
+      padding: 0;
+      border-radius: $apex_dialog_button_height / 2;
+      color: $apex_fg;
+      background-color: $apex_button;
+      font-size: apex-text-size($apex_font_dialog_button_size);
+      font-weight: $apex_font_label_weight;
+
+      &:hover, &:active, &:focus { color: $apex_fg; background-color: $apex_button_hover; }
+
+      &:default, &:default:hover, &:default:active, &:default:focus {
+        color: -st-accent-fg-color;
+        background-color: $apex_accent;
+      }
+    }
+  }
+}
+
+.message-dialog-content {
+  spacing: $apex_dialog_text_gap;
+
+  .message-dialog-title {
+    font-size: apex-text-size($apex_font_dialog_title_size);
+    font-weight: $apex_font_heading_weight;
+  }
+
+  .message-dialog-description { color: $apex_fg_dim; }
+}
+
+.prompt-dialog { width: $apex_dialog_width - 2 * $apex_dialog_padding; }
+.end-session-dialog { width: $apex_end_session_dialog_width - 2 * $apex_dialog_padding; }
+
+@mixin apex-entry {
+  min-height: $apex_entry_height;
+  padding: 0 $apex_entry_padding;
+  border: none;
+  border-radius: $apex_entry_height / 2;
+  color: $apex_fg;
+  background-color: $apex_button;
+  box-shadow: none;
+  font-size: apex-text-size($apex_font_entry_size);
+  font-weight: $apex_font_entry_weight;
+
+  &:hover { background-color: $apex_button; }
+  // Upstream's focus ring is !important, at 80 % of the accent.
+  &:focus {
+    background-color: $apex_button;
+    box-shadow: inset 0 0 0 $apex_entry_focus_ring $apex_accent !important;
+  }
+}
+
+.prompt-dialog .prompt-dialog-password-entry { @include apex-entry; }
+
+.polkit-dialog-user-layout {
+  .polkit-dialog-user-label {
+    font-size: apex-text-size($apex_font_size);
+    font-weight: $apex_font_label_weight;
+  }
+}

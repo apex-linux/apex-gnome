@@ -1,0 +1,44 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Thuong Vo <66083331+SekiroKenjii@users.noreply.github.com>
+Date: Sat, 24 Oct 2026 08:01:25 +0000
+Subject: [PATCH] window: the Apex disk footer and item-count bar
+
+The Apex Files window (src/apex/, Source1) adds two widgets, both from
+apex_window_attach() in nautilus_window_init(), once the template is
+built:
+
+- the disk footer under the places sidebar: the free space and size of
+  the filesystem holding the home folder, with a meter;
+- the item-count bar at the bottom of the content: the items of the
+  active view, or the results while searching, and the selection.
+
+With APEX_NAUTILUS_STOCK=1 it does nothing.
+---
+ src/nautilus-window.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/src/nautilus-window.c b/src/nautilus-window.c
+index 4ca67af..1b26507 100644
+--- a/src/nautilus-window.c
++++ b/src/nautilus-window.c
+@@ -69,6 +69,8 @@
+ #include "nautilus-ui-utilities.h"
+ #include "nautilus-window-slot.h"
+ 
++#include "apex/apex-window.h"
++
+ static void nautilus_window_initialize_actions (NautilusWindow *window);
+ static void nautilus_window_sync_location_widgets (NautilusWindow *window);
+ static void update_cursor (NautilusWindow *window);
+@@ -1571,6 +1573,8 @@ nautilus_window_init (NautilusWindow *window)
+     window->active_slot = NULL;
+ 
+     gtk_widget_add_css_class (GTK_WIDGET (window), "nautilus-window");
++    apex_window_attach (ADW_APPLICATION_WINDOW (window), GTK_WIDGET (window->places_sidebar),
++                        GTK_WIDGET (window->tab_view));
+ 
+     window_group = gtk_window_group_new ();
+     gtk_window_group_add_window (window_group, GTK_WINDOW (window));
+-- 
+2.43.0
+

@@ -6,9 +6,15 @@ import GLib from 'gi://GLib';
 import Shell from 'gi://Shell';
 import St from 'gi://St';
 
+import * as BoxPointer from 'resource:///org/gnome/shell/ui/boxpointer.js';
+import * as Dialog from 'resource:///org/gnome/shell/ui/dialog.js';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import * as MessageTray from 'resource:///org/gnome/shell/ui/messageTray.js';
+import * as ModalDialog from 'resource:///org/gnome/shell/ui/modalDialog.js';
+import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 import * as Scripting from 'resource:///org/gnome/shell/ui/scripting.js';
+import * as Slider from 'resource:///org/gnome/shell/ui/slider.js';
+import * as SwitcherPopup from 'resource:///org/gnome/shell/ui/switcherPopup.js';
 import * as WorkspaceThumbnail from 'resource:///org/gnome/shell/ui/workspaceThumbnail.js';
 
 import * as Png from './png.js';
@@ -33,6 +39,10 @@ const HIGH_CONTRAST_SHEET = 'resource:///org/gnome/shell/theme/gnome-shell-high-
 const STRUCTURE_MARKER = '/*! apex-shell-structure */';
 const LAYER_ENABLED_KEY = 'layer-enabled';
 const SEARCH_HINT_KEY = 'search-hint-shown';
+const OSD_LEVEL = 0.62;
+const OSD_GLYPH = 'audio-volume-medium-symbolic';
+const SWITCHER_APPS = ['Text Editor', 'Terminal', 'Web', 'Files', 'Settings'];
+const SWITCHER_ICON_SIZE = 96;
 
 Gio._promisify(Shell.Screenshot.prototype, 'screenshot');
 
@@ -251,6 +261,7 @@ function styleOf(actor, unit) {
         width: round(width / unit.length),
         height: round(height / unit.length),
         border: sides(side => node.get_border_width(side), unit),
+        borderColor: hex(node.get_border_color(St.Side.TOP)),
         padding: sides(side => node.get_padding(side), unit),
         hpadding: {
             natural: lengthOrNull(node, '-natural-hpadding', unit),
@@ -662,6 +673,484 @@ async function withOpaqueBar(unit) {
     return measured;
 }
 
+// A stock PopupMenu holding the board's rows: two adjacent rows, a separator, an icon row.
+function openPopupMenu() {
+    const anchor = new St.Widget({x: 400, y: 300, width: 1, height: 1});
+    Main.uiGroup.add_child(anchor);
+    const menu = new PopupMenu.PopupMenu(anchor, 0.5, St.Side.TOP);
+    Main.uiGroup.add_child(menu.actor);
+    const rows = [new PopupMenu.PopupMenuItem('Unpin'), new PopupMenu.PopupMenuItem('App Details')];
+    const separator = new PopupMenu.PopupSeparatorMenuItem();
+    const iconRow = new PopupMenu.PopupImageMenuItem('Home', 'user-home-symbolic');
+    [...rows, separator, iconRow].forEach(item => menu.addMenuItem(item));
+    menu.open(BoxPointer.PopupAnimation.NONE);
+    return {
+        measure: unit => {
+            const line = separator.get_children().find(c => c.has_style_class_name('popup-separator-menu-item-separator'));
+            return {
+                content: styleOf(menu.box, unit),
+                rows: [...rows, iconRow].map(row => ({
+                    ...styleOf(row, unit),
+                    hover: underPseudoClass(row, 'hover', () => paint(row.get_theme_node(), unit)),
+                })),
+                separator: {...boxOf(line, unit), background: hex(line.get_theme_node().get_background_color())},
+                icon: lengthOrNull(iconRow._icon.get_theme_node(), 'icon-size', unit),
+            };
+        },
+        close: () => {
+            menu.close(BoxPointer.PopupAnimation.NONE);
+            menu.destroy();
+            anchor.destroy();
+        },
+    };
+}
+
+function openOsd() {
+    const {primaryIndex, primaryMonitor} = Main.layoutManager;
+    Main.osdWindowManager.showOne(primaryIndex, Gio.ThemedIcon.new(OSD_GLYPH), null, OSD_LEVEL);
+    const window = Main.osdWindowManager._osdWindows[primaryIndex];
+    return {
+        measure: unit => {
+            const box = styleOf(window._hbox, unit);
+            const levelNode = window._level.get_theme_node();
+            return {
+                box,
+                bottomGap: round((primaryMonitor.y + primaryMonitor.height) / unit.length - box.y - box.height),
+                icon: lengthOrNull(window._icon.get_theme_node(), 'icon-size', unit),
+                level: {
+                    ...boxOf(window._level, unit),
+                    barHeight: lengthOrNull(levelNode, '-barlevel-height', unit),
+                    background: hex(levelNode.get_color('-barlevel-background-color')),
+                    active: hex(levelNode.get_color('-barlevel-active-background-color')),
+                },
+            };
+        },
+        close: () => window.cancel(),
+    };
+}
+
+// A normal-urgency notification with an action shows a banner under the bar.
+function openBanner() {
+    const source = new MessageTray.Source({title: 'G2 Updates', iconName: 'software-update-available-symbolic'});
+    Main.messageTray.add(source);
+    const notification = new MessageTray.Notification({
+        source, title: 'Updates Ready', body: 'They start at the next restart.',
+        gicon: Gio.ThemedIcon.new('system-software-install'), urgency: MessageTray.Urgency.NORMAL,
+    });
+    notification.addAction('Restart Now', () => {});
+    source.addNotification(notification);
+    return {
+        measure: unit => {
+            const message = Main.messageTray._banner;
+            if (!message)
+                return {error: 'no banner'};
+            const find = styleClass => findDescendant(message, a => a.has_style_class_name?.(styleClass));
+            const box = styleOf(message, unit);
+            return {
+                box,
+                topGap: round(box.y - (Main.layoutManager.primaryMonitor.y + Main.panel.height) / unit.length),
+                header: styleOf(find('message-header'), unit),
+                title: styleOf(find('message-title'), unit),
+                body: styleOf(find('message-body'), unit),
+                icon: lengthOrNull(find('message-icon').get_theme_node(), 'icon-size', unit),
+                close: styleOf(find('message-close-button'), unit),
+                actions: styleOf(find('message-action-bin'), unit),
+                button: {
+                    ...styleOf(find('notification-button'), unit),
+                    minHeight: lengthOrNull(find('notification-button').get_theme_node(), 'min-height', unit),
+                },
+            };
+        },
+        close: () => source.destroy(),
+    };
+}
+
+// Open together as on board 16; G2_SURFACE_SCENES=1 also captures them.
+async function shellSurfaces(unit) {
+    const opened = {popupMenu: openPopupMenu(), osd: openOsd(), banner: openBanner()};
+    try {
+        await settle();
+        const scene = GLib.getenv('G2_SURFACE_SCENES') === '1' ? await capture('surfaces') : null;
+        if (scene)
+            delete scene.bytes;
+        return {scene, ...Object.fromEntries(Object.entries(opened).map(([name, s]) => [name, s.measure(unit)]))};
+    } finally {
+        Object.values(opened).forEach(s => s.close());
+        await settle();
+    }
+}
+
+// A slider never shows in the container (no audio, no backlight): one in a stand-in row.
+function quickSlider(unit) {
+    const box = new St.BoxLayout({style_class: 'popup-menu-content quick-settings'});
+    const row = new St.BoxLayout();
+    const slider = new Slider.Slider(OSD_LEVEL);
+    row.add_child(slider);
+    box.add_child(new St.Bin({style_class: 'quick-slider', child: row}));
+    return withStyledActor(box, () => {
+        const node = slider.get_theme_node();
+        return {
+            spacing: lengthOrNull(row.get_theme_node(), 'spacing', unit),
+            trackHeight: lengthOrNull(node, '-barlevel-height', unit),
+            track: hex(node.get_color('-barlevel-background-color')),
+            fill: hex(node.get_color('-barlevel-active-background-color')),
+            handleRadius: lengthOrNull(node, '-slider-handle-radius', unit),
+            handle: hex(node.get_foreground_color()),
+        };
+    });
+}
+
+function quickToggle(toggle, unit) {
+    const box = toggle.get_first_child();
+    const [title, subtitle] = findDescendant(box, a => a.has_style_class_name?.('quick-toggle-title'))
+        ?.get_parent().get_children() ?? [];
+    return {
+        ...styleOf(toggle, unit),
+        box: styleOf(box, unit),
+        icon: lengthOrNull(findDescendant(box, a => a.has_style_class_name?.('quick-toggle-icon')).get_theme_node(), 'icon-size', unit),
+        title: styleOf(title, unit),
+        subtitle: subtitle?.visible ? styleOf(subtitle, unit) : null,
+        hover: underPseudoClass(toggle, 'hover', () => paint(toggle.get_theme_node(), unit)),
+    };
+}
+
+// The fixtures' Wi-Fi makes the network toggle checked, with a menu: board 17 opens it.
+async function quickSettings(unit) {
+    const {quickSettings: indicator} = Main.panel.statusArea;
+    const {menu} = indicator;
+    const grid = findDescendant(menu.box, a => a.has_style_class_name?.('quick-settings-grid'));
+    const byType = name => findDescendant(menu.box, a => a.constructor.name === name);
+    menu.open(BoxPointer.PopupAnimation.NONE);
+    const wifi = byType('NMWirelessToggle');
+    try {
+        await settle();
+        wifi?.menu.open(BoxPointer.PopupAnimation.NONE);
+        await settle();
+        const scene = GLib.getenv('G2_SURFACE_SCENES') === '1' ? await capture('quick-settings') : null;
+        if (scene)
+            delete scene.bytes;
+        const system = byType('SystemItem');
+        const wifiToggle = wifi && findDescendant(wifi, a => a.has_style_class_name?.('quick-toggle'));
+        const menuButton = wifi && findDescendant(wifi, a => a.has_style_class_name?.('quick-toggle-menu-button'));
+        const header = wifi && findDescendant(wifi.menu.box, a => a.has_style_class_name?.('header'));
+        const find = (root, styleClass) => findDescendant(root, a => a.has_style_class_name?.(styleClass));
+        return {
+            scene,
+            box: styleOf(menu.box, unit),
+            grid: {
+                rows: lengthOrNull(grid.get_theme_node(), 'spacing-rows', unit),
+                columns: lengthOrNull(grid.get_theme_node(), 'spacing-columns', unit),
+            },
+            system: {
+                ...boxOf(system, unit),
+                spacing: lengthOrNull(system.get_first_child().get_theme_node(), 'spacing', unit),
+                battery: quickToggle(byType('PowerToggle'), unit),
+                screenshot: {
+                    ...styleOf(byType('ScreenshotItem'), unit),
+                    icon: lengthOrNull(byType('ScreenshotItem').get_first_child().get_theme_node(), 'icon-size', unit),
+                },
+            },
+            wifi: wifi ? {
+                ...boxOf(wifi, unit),
+                toggle: quickToggle(wifiToggle, unit),
+                separator: boxOf(find(wifi, 'quick-toggle-separator'), unit),
+                menuButton: styleOf(menuButton, unit),
+            } : null,
+            unchecked: quickToggle(byType('DoNotDisturbToggle'), unit),
+            slider: quickSlider(unit),
+            wifiMenu: wifi ? {
+                box: styleOf(wifi.menu.box, unit),
+                header: styleOf(header, unit),
+                headerIcon: {
+                    ...styleOf(find(header, 'icon'), unit),
+                    iconSize: lengthOrNull(find(header, 'icon').get_theme_node(), 'icon-size', unit),
+                },
+                title: styleOf(find(header, 'title'), unit),
+                subtitle: styleOf(find(header, 'subtitle'), unit),
+                rows: wifi.menu._getMenuItems().filter(i => i.visible && i.label?.text).map(i => styleOf(i, unit)),
+                separator: styleOf(wifi.menu._getMenuItems().find(i => i instanceof PopupMenu.PopupSeparatorMenuItem), unit),
+            } : null,
+        };
+    } finally {
+        wifi?.menu.close(BoxPointer.PopupAnimation.NONE);
+        menu.close(BoxPointer.PopupAnimation.NONE);
+        await settle();
+    }
+}
+
+// G2 opens no windows, so the switcher is a stock SwitcherList of AppIcon-shaped items.
+async function windowSwitcher(unit) {
+    const list = new SwitcherPopup.SwitcherList(true);
+    const apps = SWITCHER_APPS.map(name => {
+        const app = new St.BoxLayout({style_class: 'alt-tab-app', orientation: Clutter.Orientation.VERTICAL});
+        app.add_child(new St.Icon({icon_name: 'application-x-executable', icon_size: SWITCHER_ICON_SIZE}));
+        app.add_child(new St.Label({text: name, x_align: Clutter.ActorAlign.CENTER}));
+        list.addItem(app, app.get_last_child());
+        return app;
+    });
+    Main.uiGroup.add_child(list);
+    try {
+        const [, width] = list.get_preferred_width(-1);
+        const [, height] = list.get_preferred_height(width);
+        const {primaryMonitor: monitor} = Main.layoutManager;
+        list.set_position(monitor.x + Math.floor((monitor.width - width) / 2), monitor.y + Math.floor((monitor.height - height) / 2));
+        list.highlight(1);
+        await settle();
+        const scene = GLib.getenv('G2_SURFACE_SCENES') === '1' ? await capture('switcher') : null;
+        if (scene)
+            delete scene.bytes;
+        const label = apps[0].get_last_child();
+        return {
+            scene,
+            list: styleOf(list, unit),
+            spacing: lengthOrNull(list._list.get_theme_node(), 'spacing', unit),
+            items: list._items.map(item => styleOf(item, unit)),
+            app: {spacing: lengthOrNull(apps[0].get_theme_node(), 'spacing', unit), label: font(label.get_theme_node(), unit)},
+        };
+    } finally {
+        list.destroy();
+        await settle();
+    }
+}
+
+// A stock ModalDialog shaped like polkit's: title, description, password entry, two buttons.
+async function modalDialog(unit) {
+    const dialog = new ModalDialog.ModalDialog({styleClass: 'prompt-dialog'});
+    const content = new Dialog.MessageDialogContent({
+        title: 'Authentication Required',
+        description: 'Booting the previous version needs an administrator password.',
+    });
+    const entry = new St.PasswordEntry({style_class: 'prompt-dialog-password-entry', hint_text: 'Password', can_focus: true});
+    content.add_child(entry);
+    dialog.contentLayout.add_child(content);
+    const buttons = [
+        dialog.addButton({label: 'Cancel', action: () => {}, key: Clutter.KEY_Escape}),
+        dialog.addButton({label: 'Authenticate', action: () => {}, default: true}),
+    ];
+    dialog.open();
+    try {
+        await settle();
+        global.stage.set_key_focus(null);
+        const scene = GLib.getenv('G2_SURFACE_SCENES') === '1' ? await capture('dialog') : null;
+        if (scene)
+            delete scene.bytes;
+        const find = styleClass => findDescendant(content, a => a.has_style_class_name?.(styleClass));
+        const endSession = withStyledActor(new St.BoxLayout({style_class: 'modal-dialog end-session-dialog'}),
+            node => lengthOrNull(node, 'width', unit));
+        return {
+            scene,
+            box: styleOf(dialog.dialogLayout._dialog, unit),
+            contentSpacing: lengthOrNull(dialog.contentLayout.get_theme_node(), 'spacing', unit),
+            textSpacing: lengthOrNull(content.get_theme_node(), 'spacing', unit),
+            title: styleOf(find('message-dialog-title'), unit),
+            description: styleOf(find('message-dialog-description'), unit),
+            entry: {
+                ...styleOf(entry, unit),
+                focus: underPseudoClass(entry, 'focus', () => paint(entry.get_theme_node(), unit)),
+            },
+            buttons: buttons.map(b => ({
+                ...styleOf(b, unit),
+                default: b.has_style_pseudo_class('default'),
+                hover: underPseudoClass(b, 'hover', () => paint(b.get_theme_node(), unit)),
+            })),
+            endSessionWidth: endSession,
+        };
+    } finally {
+        dialog.close();
+        dialog.destroy();
+        await settle();
+    }
+}
+
+// Two low-urgency notifications fill the list without banners; the menu shows the fixed date.
+async function calendarMenu(unit) {
+    const source = new MessageTray.Source({title: 'G2 Updates', iconName: 'software-update-available-symbolic'});
+    Main.messageTray.add(source);
+    for (const title of ['Update ready', 'Design review']) {
+        source.addNotification(new MessageTray.Notification({
+            source, title, body: 'Starts after the next restart.', urgency: MessageTray.Urgency.LOW,
+        }));
+    }
+    const {menu} = Main.panel.statusArea.dateMenu;
+    menu.open(BoxPointer.PopupAnimation.NONE);
+    try {
+        await settle();
+        const scene = GLib.getenv('G2_SURFACE_SCENES') === '1' ? await capture('datemenu') : null;
+        if (scene)
+            delete scene.bytes;
+        const find = (root, styleClass) => findDescendant(root, a => a.has_style_class_name?.(styleClass));
+        const box = menu.box;
+        const message = findDescendant(box, a => a.constructor.name === 'NotificationMessage');
+        const calendar = find(box, 'calendar');
+        const days = calendar.get_children().filter(a => a.has_style_class_name?.('calendar-day'));
+        const day = classes => days.find(d => classes.every(c => d.has_style_class_name(c)) &&
+            !d.has_style_class_name('calendar-today') && (classes.includes('calendar-other-month') || !d.has_style_class_name('calendar-other-month')));
+        const events = find(box, 'events-button');
+        return {
+            scene,
+            box: styleOf(box, unit),
+            area: {spacing: lengthOrNull(find(box, 'message-list').get_parent().get_theme_node(), 'spacing', unit)},
+            list: styleOf(find(box, 'message-list'), unit),
+            column: styleOf(find(box, 'datemenu-calendar-column'), unit),
+            message: {
+                ...styleOf(message, unit),
+                marginBottom: round(message.get_theme_node().get_margin(St.Side.BOTTOM) / unit.length),
+                header: styleOf(find(message, 'message-header'), unit),
+                title: styleOf(find(message, 'message-title'), unit),
+                body: styleOf(find(message, 'message-body'), unit),
+                close: styleOf(find(message, 'message-close-button'), unit),
+                icon: lengthOrNull(find(message, 'message-icon').get_theme_node(), 'icon-size', unit),
+            },
+            controls: styleOf(find(box, 'message-list-controls'), unit),
+            clear: styleOf(find(box, 'message-list-clear-button'), unit),
+            dayLabel: styleOf(find(box, 'day-label'), unit),
+            dateLabel: styleOf(find(box, 'date-label'), unit),
+            calendar: styleOf(calendar, unit),
+            monthLabel: styleOf(find(calendar, 'calendar-month-label'), unit),
+            pager: styleOf(find(calendar, 'pager-button'), unit),
+            heading: styleOf(find(calendar, 'calendar-day-heading'), unit),
+            day: styleOf(day(['calendar-weekday']), unit),
+            weekend: styleOf(day(['calendar-weekend']), unit),
+            otherMonth: styleOf(day(['calendar-other-month']), unit),
+            today: styleOf(days.find(d => d.has_style_class_name('calendar-today')), unit),
+            events: styleOf(events, unit),
+            eventsTitle: styleOf(find(events, 'events-title'), unit),
+        };
+    } finally {
+        menu.close(BoxPointer.PopupAnimation.NONE);
+        source.destroy();
+        await settle();
+    }
+}
+
+// What the overview draws without windows; a caption and a search section are stand-ins.
+function overviewStyle(unit) {
+    const {controls} = Main.overview._overview;
+    const thumbnailsBox = controls._thumbnailsBox;
+    const caption = new St.Label({style_class: 'window-caption', text: 'Home'});
+    const section = new St.BoxLayout({style_class: 'search-section-content'});
+    Main.layoutManager.overviewGroup.add_child(caption);
+    Main.layoutManager.overviewGroup.add_child(section);
+    try {
+        return {
+            group: paint(Main.layoutManager.overviewGroup.get_theme_node(), unit),
+            search: {
+                ...styleOf(controls._searchEntry, unit),
+                icon: lengthOrNull(controls._searchEntry.primary_icon?.get_theme_node() ?? controls._searchEntry.get_theme_node(), 'icon-size', unit),
+                focus: underPseudoClass(controls._searchEntry, 'focus', () => ({
+                    ...paint(controls._searchEntry.get_theme_node(), unit),
+                    borderColor: hex(controls._searchEntry.get_theme_node().get_border_color(St.Side.TOP)),
+                })),
+            },
+            thumbnailsSpacing: lengthOrNull(thumbnailsBox.get_theme_node(), 'spacing', unit),
+            thumbnail: thumbnailsBox._thumbnails?.[0] ? styleOf(thumbnailsBox._thumbnails[0], unit) : null,
+            indicator: thumbnailsBox._indicator ? styleOf(thumbnailsBox._indicator, unit) : null,
+            caption: {...styleOf(caption, unit), minHeight: lengthOrNull(caption.get_theme_node(), 'min-height', unit)},
+            section: styleOf(section, unit),
+        };
+    } finally {
+        caption.destroy();
+        section.destroy();
+    }
+}
+
+function standInStyle(styleClass, parentClass, unit) {
+    const parent = new St.BoxLayout({style_class: parentClass ?? ''});
+    const actor = new St.Widget({style_class: styleClass});
+    parent.add_child(actor);
+    return withStyledActor(parent, () => {
+        const node = actor.get_theme_node();
+        const [type] = node.get_background_gradient();
+        return {
+            width: lengthOrNull(node, 'width', unit), height: lengthOrNull(node, 'height', unit),
+            radius: round(node.get_border_radius(St.Corner.TOPLEFT) / unit.length),
+            background: hex(node.get_background_color()), gradient: type,
+        };
+    });
+}
+
+// The launcher of the fixture image: a few apps and the System folder, opened as board 36 does.
+async function appGrid(unit) {
+    const {showAppsButton} = Main.overview.dash;
+    const appDisplay = Main.overview._overview.controls._appDisplay;
+    showAppsButton.checked = true;
+    let folder = null;
+    try {
+        await settle();
+        const tiles = appDisplay._orderedItems ?? [];
+        const app = tiles.find(t => t.constructor.name === 'AppIcon');
+        folder = tiles.find(t => t.constructor.name === 'FolderIcon');
+        const label = app ? firstVisibleLabel(app) : null;
+        const measured = {
+            app: app ? {
+                ...styleOf(app, unit),
+                labelFont: label ? font(label.get_theme_node(), unit) : null,
+                spacing: lengthOrNull(findDescendant(app, a => a.has_style_class_name?.('overview-icon'))
+                    .get_first_child().get_theme_node(), 'spacing', unit),
+                hover: underPseudoClass(app, 'hover', () => paint(app.get_theme_node(), unit)),
+                focus: underPseudoClass(app, 'focus', () => paint(app.get_theme_node(), unit)),
+            } : null,
+            folder: folder ? styleOf(folder, unit) : null,
+            runningDot: standInStyle('app-grid-running-dot', null, unit),
+            pageIndicator: standInStyle('page-indicator-icon', 'page-indicator', unit),
+            pageHint: standInStyle('page-navigation-hint next', null, unit),
+        };
+        if (folder) {
+            folder.open();
+            await settle();
+            const dialog = findDescendant(Main.layoutManager.overviewGroup, a => a.has_style_class_name?.('app-folder-dialog'));
+            measured.scene = GLib.getenv('G2_SURFACE_SCENES') === '1' ? await capture('appgrid') : null;
+            if (measured.scene)
+                delete measured.scene.bytes;
+            measured.dialog = dialog ? {
+                ...styleOf(dialog, unit),
+                title: styleOf(findDescendant(dialog, a => a.has_style_class_name?.('folder-name-label')), unit),
+                button: styleOf(findDescendant(dialog, a => a.has_style_class_name?.('icon-button')), unit),
+            } : null;
+        }
+        return measured;
+    } finally {
+        folder?._dialog?.popdown();
+        showAppsButton.checked = false;
+        await settle();
+    }
+}
+
+// Surfaces G2 never opens, as nested stand-ins: each class is the parent of the next.
+function nestedStyle(classes, unit, Leaf = St.Widget) {
+    const actors = classes.map((styleClass, i) => i === classes.length - 1
+        ? new Leaf({style_class: styleClass}) : new St.BoxLayout({style_class: styleClass}));
+    actors.slice(1).forEach((actor, i) => actors[i].add_child(actor));
+    const leaf = actors[actors.length - 1];
+    return withStyledActor(actors[0], () => {
+        const node = leaf.get_theme_node();
+        return {
+            ...paint(node, unit),
+            foreground: hex(node.get_foreground_color()),
+            border: sides(side => node.get_border_width(side), unit),
+            borderColor: hex(node.get_border_color(St.Side.TOP)),
+            radius: round(node.get_border_radius(St.Corner.TOPLEFT) / unit.length),
+            minHeight: lengthOrNull(node, 'min-height', unit),
+            hover: underPseudoClass(leaf, 'hover', () => paint(leaf.get_theme_node(), unit)),
+            active: underPseudoClass(leaf, 'active', () => paint(leaf.get_theme_node(), unit)),
+            focus: underPseudoClass(leaf, 'focus', () => paint(leaf.get_theme_node(), unit)),
+        };
+    });
+}
+
+function derivedSurfaces(unit) {
+    return {
+        workspaceSwitcher: nestedStyle(['workspace-switcher'], unit),
+        wsIndicator: nestedStyle(['workspace-switcher', 'ws-switcher-indicator'], unit),
+        resizePopup: nestedStyle(['resize-popup'], unit),
+        candidatePopup: nestedStyle(['candidate-popup-content'], unit),
+        candidateBox: nestedStyle(['candidate-popup-content', 'candidate-box'], unit),
+        runEntry: nestedStyle(['modal-dialog run-dialog', 'run-dialog-entry'], unit, St.Entry),
+        audioDevice: nestedStyle(['modal-dialog audio-device-selection-dialog', 'audio-selection-box', 'audio-selection-device'], unit, St.Button),
+        monitorLabel: nestedStyle(['osd-monitor-label'], unit),
+    };
+}
+
 // Without GDM the shell posts "Screen Lock disabled" at startup; its banner would cover
 // the scenes for as long as it happens to stay.
 function dropStartupNotifications() {
@@ -687,6 +1176,12 @@ async function scenes() {
     bar.opaque = await withOpaqueBar(unit);
     bar.lockScreen = await withLockScreenPanel(unit);
     bar.largeText = await withLargeText();
+    const surfaces = await shellSurfaces(unit);
+    surfaces.quickSettings = await quickSettings(unit);
+    surfaces.switcher = await windowSwitcher(unit);
+    surfaces.dialog = await modalDialog(unit);
+    surfaces.dateMenu = await calendarMenu(unit);
+    surfaces.derived = derivedSurfaces(unit);
 
     Main.overview.show();
     await settle();
@@ -698,6 +1193,8 @@ async function scenes() {
         dockVisible: apexDock()?.visible ?? null,
         dockClearance: dockClearance(unit),
     };
+    surfaces.overview = overviewStyle(unit);
+    surfaces.appGrid = await appGrid(unit);
     delete overview.bytes;
     Main.overview.hide();
 
@@ -707,6 +1204,7 @@ async function scenes() {
         monitorScale: global.display.get_monitor_scale(primary.index),
         topBar: {...bar, diamond},
         dock,
+        surfaces,
         scenes: {desktop, overview},
     };
 }

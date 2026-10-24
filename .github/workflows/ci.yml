@@ -141,7 +141,7 @@ jobs:
   ptyxis-lane:
     # The ptyxis recipe through apex-lane's own container half, built from a pinned
     # apex-image; the builder VM adds only the signing and the store.
-    name: tests/ptyxis/lane.sh (Fedora 45, Ptyxis rebuilt)
+    name: tests/lib/lane.sh ptyxis (Fedora 45, Ptyxis rebuilt)
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     permissions:
@@ -161,8 +161,8 @@ jobs:
       - name: tests/ptyxis/selftest.sh
         run: tests/ptyxis/selftest.sh
 
-      - name: tests/ptyxis/lane.sh
-        run: tests/ptyxis/lane.sh
+      - name: tests/lib/lane.sh ptyxis
+        run: tests/lib/lane.sh ptyxis
 
       - name: tests/ptyxis/status-test.sh
         env:
@@ -187,10 +187,51 @@ jobs:
           path: _build/ptyxis/shots/
           if-no-files-found: ignore
 
+  libadwaita-lane:
+    # The libadwaita recipe through apex-lane's own container half, then its radius test
+    # on Fedora's libadwaita and on the built one.
+    name: tests/lib/lane.sh libadwaita (Fedora 45, libadwaita rebuilt)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    container:
+      image: registry.fedoraproject.org/fedora:45@sha256:1e13e11f63e147a40a935c9046c79d53a30b861a3cf05ebb023bb53c562382cb
+    steps:
+      - name: git for the checkout
+        run: >-
+          dnf5 -y --setopt=install_weak_deps=False --repo=fedora --repo=updates install
+          git-core bash coreutils findutils sed
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: tests/lib/lane.sh libadwaita
+        run: tests/lib/lane.sh libadwaita
+
+      - name: tests/libadwaita/radius-test.sh on Fedora's libadwaita
+        run: |
+          dnf5 -y -q --setopt=install_weak_deps=False --repo=fedora --repo=updates install \
+            ptyxis gnome-shell mesa-dri-drivers dbus-daemon python3-dbusmock gcc util-linux jq
+          tests/libadwaita/radius-test.sh --stock
+
+      - name: tests/libadwaita/radius-test.sh on the built RPM
+        run: tests/libadwaita/radius-test.sh _build/libadwaita/out
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: failure()
+        with:
+          name: libadwaita-lane
+          path: |
+            _build/libadwaita/out/
+            _build/libadwaita/radius/
+          if-no-files-found: ignore
+
   control-center-lane:
     # The gnome-control-center recipe through apex-lane's own container half, built from
     # a pinned apex-image; the builder VM adds only the signing and the store.
-    name: tests/control-center/lane.sh (Fedora 45, gnome-control-center rebuilt)
+    name: tests/lib/lane.sh gnome-control-center (Fedora 45, gnome-control-center rebuilt)
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     permissions:
@@ -210,22 +251,35 @@ jobs:
       - name: tests/control-center/selftest.sh
         run: tests/control-center/selftest.sh
 
-      - name: tests/control-center/lane.sh
-        run: tests/control-center/lane.sh
+      - name: tests/lib/lane.sh gnome-control-center
+        run: tests/lib/lane.sh gnome-control-center
+
+      - name: tests/control-center/run.sh on the built RPMs
+        run: |
+          dnf5 -y -q --setopt=install_weak_deps=False --repo=fedora --repo=updates install \
+            gnome-shell mesa-dri-drivers dbus-daemon python3-dbusmock python3-gobject at-spi2-core gcc util-linux adwaita-sans-fonts
+          tests/control-center/run.sh _build/gnome-control-center/out
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: control-center-shots
+          path: _build/control-center/shots/
+          if-no-files-found: ignore
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: failure()
         with:
           name: control-center-lane
-          path: _build/control-center/out/
+          path: _build/gnome-control-center/out/
           if-no-files-found: ignore
 
   nautilus-lane:
     # The nautilus recipe through apex-lane's own container half, built from a pinned
     # apex-image; the builder VM adds only the signing and the store.
-    name: tests/nautilus/lane.sh (Fedora 45, nautilus rebuilt)
+    name: tests/lib/lane.sh nautilus (Fedora 45, nautilus rebuilt)
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 60
     permissions:
       contents: read
     container:
@@ -243,8 +297,29 @@ jobs:
       - name: tests/nautilus/selftest.sh
         run: tests/nautilus/selftest.sh
 
-      - name: tests/nautilus/lane.sh
-        run: tests/nautilus/lane.sh
+      - name: tests/lib/lane.sh nautilus
+        run: tests/lib/lane.sh nautilus
+
+      - name: tests/nautilus/format-test.sh
+        env:
+          APEX_NAUTILUS_TESTS_NO_SKIP: "1"
+        run: |
+          dnf5 -y -q --setopt=install_weak_deps=False --repo=fedora --repo=updates install gcc glib2-devel pkgconf-pkg-config
+          tests/nautilus/format-test.sh
+
+      - name: tests/nautilus/shoot.sh on the built RPMs
+        run: |
+          dnf5 -y -q --setopt=install_weak_deps=False --repo=fedora --repo=updates install \
+            gnome-shell mesa-dri-drivers dbus-daemon python3-dbusmock gcc util-linux at-spi2-core python3-gobject \
+            inkscape glycin-thumbnailer adwaita-sans-fonts jetbrains-mono-fonts-all
+          tests/nautilus/shoot.sh _build/nautilus/out
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: nautilus-shots
+          path: _build/nautilus/shots/
+          if-no-files-found: ignore
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: failure()
