@@ -143,7 +143,9 @@ every expected value from `desktop/shell/data/theme/apex/_apex-tokens.scss`, for
 case's variant: the bar's height, fill and type; the boxes' insets and gaps; each
 button's height and colour; each pill's height, radius, padding, and fill while closed,
 hovered and open; the clock's weight; where the pills sit, and that the Activities and
-status buttons still reach the screen's left and right edges; the bar's transition; with `translucent-top-bar` off, the bar `$apex_bar_solid` over a
+status buttons still reach the screen's left and right edges; the bar's transition; the
+bar's glass, a `Shell.BlurEffect` of radius 2 × `$apex_bar_blur` × the monitor scale at
+`$apex_bar_saturation` (the glass manager); with `translucent-top-bar` off, the bar `$apex_bar_solid` over a
 `0 1px 0 $apex_border` line (the `panel` feature); the
 workspace dots' gap, height and radius, the active dot `$apex_bar_dot_active_width` wide and
 the others `$apex_bar_dot_size` square at .45; that the top-left pixel reaches the reactive
@@ -238,6 +240,24 @@ damages the tile alone:
 
 `blur-ref.js` is a clamp-to-edge Gaussian at full resolution, CSS `saturate()` and the
 rounded box's coverage, over the box alone; `blur-ref-test.js` tests it in `selftest.sh`.
+In the same case the glass manager (`js/ui/apex/glass/`) is read on the live shell, light:
+`glass_manager` asserts that the bar's blur is `$apex_bar_blur` at `$apex_bar_saturation`,
+and Quick Settings', the calendar's (each opened) and a banner's `$apex_panel_blur` at
+`$apex_panel_saturation`, each a `fine`, opacity-following background blur of radius
+2 × sigma × the monitor scale; that with `reduce-transparency`, and with high contrast, no
+actor on the stage carries a `Shell.BlurEffect` and the root carries `apex-solid`; that
+with `disabled-features=['glass']` no actor carries one and the tints stay; and that the
+glass comes back after each.
+
+`G2_GLASS=1 G2_GLASS_STRESS=SECONDS` runs a stress instead, by hand: for that long a
+stand-in window moves and tiles change under the box, every other change forwarded. Each
+frame must have no black pixel; a frame whose clip misses the box must equal the last one
+wherever the box covers fully (its corners show what lies beneath); every 20th covered frame
+must equal a full redraw. `G2_GLASS_STRESS_STOCK=1` runs stock's effect as the control, which
+draws stale frames. With `CLUTTER_PAINT=damage-region`, mutter 51 repaints the whole view
+each frame (`meta-stage-impl.c`) and draws the damage on top, so no clip ever misses the box
+there: that run shows the damage, not the redraw-clip rule.
+
 Both shells capture `unlockDialog.js`'s blur (actor mode, radius 90 × scale, brightness
 .65) over a grid, with a background-mode blur over it, every property of 0003 at its
 default: `glass-unlock.png` against `fedora-glass-unlock.png` differs by 0 pixels.
@@ -257,13 +277,12 @@ removes its pin.
 
 | Until | Assertion | S1a measures |
 |---|---|---|
-| S2b (patch 0003, the glass manager) | a 24 px blur at 160 % saturation behind the bar | no blur effect |
 | S1b (the Facets wallpaper and the light overview) | the unread-notification dot is the raw accent | `$apex_bar_fg`: over Fedora's wallpaper an accent dot is about 1.4:1 against the light bar |
 | no step yet (a clock hook, or the owner accepts it) | `$apex_bar_clock_gap` between the date and the time | about 7 px with G2's 24-hour clock: one label, an EN SPACE. An en-US 12-hour clock adds a FIGURE SPACE before a one-digit hour ("Tue Sep 29" EN SPACE FIGURE SPACE "5:23 AM"): about 14 px |
 | no step yet (a clock hook, or the owner accepts it) | with the dot, the clock pill is padding + text + gap + dot + padding wide | 13 px wider: upstream's invisible pad left of the text |
 
 Not asserted here: the maximised-window trigger of the solid bar (G2 opens no window
-yet; the layer tests cover it), the volume glyph (the container has no audio server), Reduce Transparency (S2b), the bar
+yet; the layer tests cover it), the volume glyph (the container has no audio server), the bar
 text's contrast over other wallpapers (S2b's solid fallback; over the fixture wallpaper
 it is at least 4.8:1), and what the goldens judge: the Apex Symbolic glyphs (S1b), `ss03`
 (S1b, fontconfig) and the light bar over the still-dark overview (S1b).

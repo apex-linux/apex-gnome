@@ -196,7 +196,7 @@ REPORT_OF_A_BAR_DRAWN_FROM_TOKENS='
             pill: {x: 1303, y: 4, width: ($t.apex_bar_search_width | px), height: 24, radius: 12}},
         {accessibleName: "System", label: null, pill: {x: 1337, y: 4, width: 95, height: 24, radius: 12}}],
     opaque: {background: ($t.apex_bar_solid | hex), boxShadow: {color: ($t.apex_border | hex), inset: false, x: 0, y: 1, blur: 0, spread: 0}},
-    glass: []}}'
+    glass: [{actor: "panel", radius: (2 * ($t.apex_bar_blur | px) * 2), saturation: 1.6}]}}'
 # shellcheck disable=SC2016 # a jq program
 REPORT_OF_SURFACES_DRAWN_FROM_TOKENS='
 ($t.apex_surface_border | px) as $b | {top: $b, right: $b, bottom: $b, left: $b} as $border | ($t.apex_panel_border | hex) as $ring
@@ -362,8 +362,7 @@ HEX_DEF='def hex: rgba | map([., 16] | "0123456789abcdef"[(.[0] / .[1] | floor):
                                     + "0123456789abcdef"[(.[0] % .[1]):(.[0] % .[1]) + 1]) | "#" + join("");'
 
 # shellcheck disable=SC2016 # jq programs
-GAP_CLOSERS='the glass|.topBar.glass = [{actor: "panel", radius: 96, saturation: 1.6}]
-the clock gap|.topBar.clockTextGap = 8
+GAP_CLOSERS='the clock gap|.topBar.clockTextGap = 8
 the clock pill without the pad|.topBar.withDot.pillWidth -= ($t.apex_bar_clock_gap | px) + ($t.apex_bar_clock_dot_size | px)
 the raw accent dot|.topBar.withDot.dot.background = .topBar.accent'
 
@@ -455,9 +454,9 @@ del(.topBar.statusGlyphs[1])|no Wi-Fi glyph
 .topBar.dnd.on = ["notifications-disabled-symbolic"] + .topBar.dnd.off|a Do Not Disturb glyph in the status pill
 .topBar.statusGlyphs += [{name: "bluetooth-active-symbolic", width: 16, height: 16, iconSize: 16}]|the connected keyboard's Bluetooth glyph
 CHANGES
-    assert_run top_bar light '.monitorScale = 1 | .topBar.diamond.inkPixels = 16' >/dev/null
+    assert_run top_bar light '.monitorScale = 1 | .topBar.glass[0].radius /= 2 | .topBar.diamond.inkPixels = 16' >/dev/null
     expect_eq "top bar: at scale 1 a quarter of the diamond's stroke is 16 capture pixels" 0 "$(grep -c '^FAIL' "$T/top-bar.out")"
-    assert_run top_bar light '.monitorScale = 1 | .topBar.diamond.inkPixels = 15' >/dev/null
+    assert_run top_bar light '.monitorScale = 1 | .topBar.glass[0].radius /= 2 | .topBar.diamond.inkPixels = 15' >/dev/null
     expect_eq "top bar: and fewer fail" 1 "$(grep -c '^FAIL' "$T/top-bar.out")"
     assert_run top_bar light 'del(.topBar)' >/dev/null
     expect_eq "top bar: a report without the top bar passes none" 0 "$(grep -c '^PASS' "$T/top-bar.out")"
@@ -1092,6 +1091,30 @@ test_glass() {
 1|a stock control within the tolerances|.pixels.stock += (.pixels.reference | {box, interior, edge})
 6|Fedora's effect|{patched: false, pixels: null}
 6|a probe that failed|{error: "no frame within 2000 ms"}
+CHANGES
+
+    local on='{"radius": 96, "saturation": 1.6, "enabled": true, "fine": true, "followOpacity": true, "background": true}'
+    local popover='{"radius": 120, "saturation": 1.8, "enabled": true, "fine": true, "followOpacity": true, "background": true}'
+    local manager
+    manager=$(jq -nc --argjson on "$on" --argjson p "$popover" '{panel: $on, quickSettings: $p, calendar: $p, banner: $p, blurEffects: ["panel"], solidClass: false} as $g
+        | {panel: null, quickSettings: null, calendar: null, banner: null, blurEffects: []} as $none
+        | {manager: {monitorScale: 2, glass: $g, reduceTransparency: ($none + {solidClass: true}), highContrast: ($none + {solidClass: true}),
+            disabled: ($none + {solidClass: false}), restored: $g}}')
+    while IFS='|' read -r failures what change; do
+        jq -c "$change" <<<"$manager" | sed 's/^/APEXG2-GLASS /' >"$T/glass.log"
+        read -r passes _ <<<"$(assertion_counts glass_manager glass "$T/glass.log" light)"
+        expect_eq "glass manager: $what fails $failures of 5" "$failures" $((5 - passes))
+    done <<'CHANGES'
+0|the bar and the popovers at their tokens, every switch honoured|.
+1|the bar at the popovers' sigma|.manager.glass.panel.radius = 120
+1|a banner at the bar's saturation|.manager.glass.banner.saturation = 1.6
+1|a popover without fine|.manager.glass.calendar.fine = false
+1|a blur left behind by Reduce Transparency|.manager.reduceTransparency.blurEffects = ["St_BoxLayout"]
+1|Reduce Transparency without apex-solid|.manager.reduceTransparency.solidClass = false
+1|high contrast that keeps the bar's glass|.manager.highContrast.panel = .manager.glass.panel
+1|the kill switch that turns the tints solid|.manager.disabled.solidClass = true
+1|glass that does not come back|.manager.restored.panel = null
+5|no manager|.manager = null
 CHANGES
 }
 

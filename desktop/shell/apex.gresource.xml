@@ -19,6 +19,9 @@
     <file alias="panel/focused-app.js">js/ui/apex/panel/focused-app.js</file>
     <file alias="panel/search-button.js">js/ui/apex/panel/search-button.js</file>
     <file alias="panel/search-hint.js">js/ui/apex/panel/search-hint.js</file>
+    <file alias="glass/feature.js">js/ui/apex/glass/feature.js</file>
+    <file alias="glass/registry.js">js/ui/apex/glass/registry.js</file>
+    <file alias="glass/surfaces.js">js/ui/apex/glass/surfaces.js</file>
   </gresource>
   <gresource prefix="/org/gnome/shell/theme/apex">
     <file alias="diamond-light.svg">data/theme/apex/diamond-light.svg</file>

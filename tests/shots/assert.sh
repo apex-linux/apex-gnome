@@ -249,6 +249,9 @@ top_bar() {
         '.topBar | .clock.pill.x + .clock.pill.width / 2 - .panel.width / 2' 'fabs <= 0.5'
     "${metric[@]}" 'the bar changes over $apex_bar_transition' \
         '.topBar.panel.transition' '. == ($t.apex_bar_transition | rtrimstr("ms") | tonumber)'
+    "${metric[@]}" 'the bar is glass: a Shell.BlurEffect of radius 2 x $apex_bar_blur x the monitor scale at $apex_bar_saturation' \
+        '{glass: .topBar.glass, scale: .monitorScale}' \
+        '.scale as $s | .glass | any((.radius - 2 * ($t.apex_bar_blur | px) * $s | fabs < 0.01) and .saturation != null and ((.saturation - ($t.apex_bar_saturation | rtrimstr("%") | tonumber / 100)) | fabs < 0.01))'
     "${metric[@]}" 'with translucent-top-bar off the bar is $apex_bar_solid over a 0 1px 0 $apex_border line' \
         '.topBar.opaque' \
         '(.background | colour_is($t.apex_bar_solid)) and (.boxShadow | .inset == false and .x == 0 and .y == 1 and .blur == 0 and .spread == 0 and (.color | colour_is($t.apex_border)))'
@@ -298,8 +301,6 @@ top_bar_today() {
     tokens=$(tokens_for "$variant")
     local -a metric=(top_bar_metric "$label top bar, until its known gap closes" "$scenes" "$tokens")
 
-    "${metric[@]}" 'the bar has no blur effect' \
-        '.topBar.glass' '. == []'
     "${metric[@]}" "the clock's date and time are $TODAY_CLOCK_TEXT_GAP px apart (one EN SPACE, 24-hour clock)" \
         '.topBar.clockTextGap' "(. - $TODAY_CLOCK_TEXT_GAP) | fabs <= 0.5"
     "${metric[@]}" "with the dot, the clock pill is $TODAY_CLOCK_PILL_EXTRA px wider than \$apex_bar_pill_padding + the text + \$apex_bar_clock_gap + \$apex_bar_clock_dot_size + \$apex_bar_pill_padding" \
@@ -318,9 +319,6 @@ top_bar_gaps() {
     local clock_hook='no step yet (a clock hook, or the owner accepts it)'
     local wallpaper='S1b (the Facets wallpaper and the light overview)'
 
-    known_gap 'S2b (patch 0003, the glass manager)' "${metric[@]}" 'the bar is glass: a Shell.BlurEffect of radius 2 x $apex_bar_blur x the monitor scale at $apex_bar_saturation' \
-        '{glass: .topBar.glass, scale: .monitorScale}' \
-        '.scale as $s | .glass | any((.radius - 2 * ($t.apex_bar_blur | px) * $s | fabs < 0.01) and .saturation != null and ((.saturation - ($t.apex_bar_saturation | rtrimstr("%") | tonumber / 100)) | fabs < 0.01))'
     known_gap "$clock_hook" "${metric[@]}" 'the clock'"'"'s date and time are $apex_bar_clock_gap apart (G2'"'"'s 24-hour clock puts an EN SPACE between them; en-US'"'"'s 12-hour clock adds a FIGURE SPACE before a one-digit hour, about 14 px in all)' \
         '.topBar.clockTextGap' '(. - ($t.apex_bar_clock_gap | px)) | fabs <= 0.5'
     known_gap "$clock_hook" "${metric[@]}" 'with the dot, the clock pill is $apex_bar_pill_padding + the text + $apex_bar_clock_gap + $apex_bar_clock_dot_size + $apex_bar_pill_padding wide' \
@@ -874,6 +872,7 @@ direct_cases() {
     done
     compare_with_fedora "$run"
     glass_frames glass "$run/glass.log"
+    glass_manager glass "$run/glass.log" light
     glass_unlock_vs_fedora "$run"
 }
 
@@ -900,6 +899,28 @@ fedora_glass() {
     expect_report fedora-glass "$run/fedora-glass.log" '.error == null and (.patched | not) and .unlock.file == "fedora-glass-unlock.png"' \
         "Fedora's ShellBlurEffect has none of 0003's properties; the unlock blur captured" APEXG2-GLASS
     check "fedora-glass: fedora-glass-unlock.png written" test -s "$run/captures/fedora-glass-unlock.png"
+}
+
+# shellcheck disable=SC2016 # jq programs and token names, not shell expansions
+glass_manager() {
+    local label=$1 log=$2 variant=$3 tokens glass
+    tokens=$(tokens_for "$variant")
+    local -a expect_glass=(expect "$label" "$(report_of "$log" APEXG2-GLASS | jq -c --argjson t "$tokens" '. + {t: $t}' 2>/dev/null)")
+    glass='def glass($blur; $saturation; $s): .radius == 2 * ($blur | px) * $s and ((.saturation - ($saturation | rtrimstr("%") | tonumber / 100)) | fabs < 0.001)
+        and .enabled and .fine and .followOpacity and .background;
+        def none: [.panel, .quickSettings, .calendar, .banner] | all(. == null);'
+
+    "${expect_glass[@]}" "$glass"' .t as $t | .manager.monitorScale as $s | .manager.glass | (.panel | glass($t.apex_bar_blur; $t.apex_bar_saturation; $s))
+        and ([.quickSettings, .calendar, .banner] | all(glass($t.apex_panel_blur; $t.apex_panel_saturation; $s))) and (.solidClass | not)' \
+        'the bar blurs at $apex_bar_blur and $apex_bar_saturation; Quick Settings, the calendar and a banner at $apex_panel_blur and $apex_panel_saturation, each as radius 2 x sigma x the monitor scale, fine, following opacity'
+    "${expect_glass[@]}" "$glass"' .manager.reduceTransparency | none and .blurEffects == [] and .solidClass' \
+        'with Reduce Transparency no actor carries a blur effect, and the root carries apex-solid'
+    "${expect_glass[@]}" "$glass"' .manager.highContrast | none and .blurEffects == [] and .solidClass' \
+        'nor with high contrast'
+    "${expect_glass[@]}" "$glass"' .manager.disabled | none and .blurEffects == [] and (.solidClass | not)' \
+        "with disabled-features=['glass'] no blur effect either, and the tints stay"
+    "${expect_glass[@]}" "$glass"' .t as $t | .manager.monitorScale as $s | .manager.restored | (.panel | glass($t.apex_bar_blur; $t.apex_bar_saturation; $s)) and (.solidClass | not)' \
+        'each switch turned back, the glass is back'
 }
 
 # The stock unlock blur, at default values of 0003's properties, is Fedora's to the pixel.
