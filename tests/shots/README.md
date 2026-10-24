@@ -201,6 +201,13 @@ captures it with `G2_SURFACE_SCENES=1`, and reads the box's fill, radius, width,
 shadow, inset and gaps, the title and text, the entry at rest and focused, and both buttons; the
 end-session width comes from a stand-in `.end-session-dialog` box.
 
+`date_menu` runs in the same cases. The probe posts two low-urgency notifications (no
+banner), opens the calendar menu at the fixed date, captures it with
+`G2_SURFACE_SCENES=1`, and reads the popover's tint, inset and column widths, the
+notification card's fill, ring, radius, inset, gap, type, icon and close button, the
+footer and Clear, the date labels, the month card and its name, headings and days
+(weekday, weekend, other month, today), and the events card.
+
 None of these surfaces is in a compared capture, so the comparison with Fedora's build
 is unchanged.
 
@@ -263,8 +270,8 @@ the captures against Fedora's and `rpm -V` stay with G2 in the builder VM. With
 `PATCHED_RPMS=DIR` it installs built RPMs instead; `PATCHED_OUT=DIR` keeps the RPMs and logs.
 It also asserts the shell surfaces of the same three cases (below). With
 `-e G2_SURFACE_SCENES=1`, `direct.sh` passes the variable to the shells, and the capture
-cases also save a scene per surface group (`surfaces`, `quick-settings`, `switcher`, `dialog`), for
-placing beside the boards.
+cases also save a scene per surface group (`surfaces`, `quick-settings`, `switcher`,
+`dialog`, `datemenu`), for placing beside the boards.
 
 ## Not yet
 

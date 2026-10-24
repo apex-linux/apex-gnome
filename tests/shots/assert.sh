@@ -507,6 +507,56 @@ modal_dialog() {
             and (.b | map(select(.default)) | length == 1 and all((.background | colour_is($a)) and (.foreground | colour_is("#ffffff"))))'
 }
 
+# shellcheck disable=SC2016 # jq programs and token names, not shell expansions
+date_menu() {
+    local label=$1 log=$2 variant=$3 scenes tokens
+    scenes=$(report_of "$log" APEXG2-SCENES)
+    tokens=$(tokens_for "$variant")
+    local -a metric=(top_bar_metric "$label calendar" "$scenes" "$tokens")
+    local d=.surfaces.dateMenu
+    local inset='[.padding, .border] | [.[0].top + .[1].top, .[0].right + .[1].right, .[0].bottom + .[1].bottom, .[0].left + .[1].left]'
+
+    "${metric[@]}" 'the popover is $apex_date_menu_list_width + $apex_date_menu_gap + $apex_date_menu_column_width inside a $apex_quick_settings_padding glass inset, radius $apex_radius_quick_settings' \
+        "$d" "(.box | (.background | colour_is(\$t.apex_panel)) and (.radius | px_is(\$t.apex_radius_quick_settings)) and ($inset | all(px_is(\$t.apex_quick_settings_padding))))
+            and (.area.spacing | px_is(\$t.apex_date_menu_gap)) and (.list.width | px_is(\$t.apex_date_menu_list_width)) and (.column.width | px_is(\$t.apex_date_menu_column_width))
+            and (.list.border.right == 0) and (.column.spacing | px_is(\$t.apex_date_menu_column_gap))"
+    "${metric[@]}" 'a notification card is opaque $apex_message_card ringed in $apex_glass_card_border, radius $apex_radius_message, $apex_message_gap apart' \
+        "$d.message" '(.background | colour_is($t.apex_message_card)) and (.borderColor | colour_is($t.apex_glass_card_border)) and (.border.top | px_is($t.apex_surface_border))
+            and (.radius | px_is($t.apex_radius_message)) and (.marginBottom | px_is($t.apex_message_gap)) and .boxShadow == null'
+    "${metric[@]}" 'it is inset $apex_message_padding, $apex_message_padding_start at the start and $apex_message_padding_end at the end' \
+        "$d.message" "$inset"' | (.[0] | px_is($t.apex_message_padding)) and (.[2] | px_is($t.apex_message_padding)) and (.[3] | px_is($t.apex_message_padding_start)) and (.[1] | px_is($t.apex_message_padding_end))'
+    "${metric[@]}" 'its header is $apex_font_banner_header_size in $apex_fg_dim, its title $apex_font_size at $apex_font_heading_weight, its body $apex_font_message_body_size in $apex_fg_dim, its icon $apex_message_icon_size' \
+        "$d.message" '(.header.font.size | px_is($t.apex_font_banner_header_size)) and (.header.foreground | colour_is($t.apex_fg_dim))
+            and (.title.font.size | px_is($t.apex_font_size)) and .title.font.weight == ($t.apex_font_heading_weight | tonumber)
+            and (.body.font.size | px_is($t.apex_font_message_body_size)) and (.body.foreground | colour_is($t.apex_fg_dim)) and (.icon | px_is($t.apex_message_icon_size))'
+    "${metric[@]}" 'its close button is a $apex_banner_close_size circle in $apex_button' \
+        "$d.message.close" '(.width | px_is($t.apex_banner_close_size)) and (.height | px_is($t.apex_banner_close_size)) and (.background | colour_is($t.apex_button))'
+    "${metric[@]}" 'the footer is $apex_date_menu_footer_height high; Clear is a $apex_clear_button_height pill in $apex_button, padded $apex_clear_button_padding' \
+        "$d" '(.controls.height | px_is($t.apex_date_menu_footer_height)) and (.clear | (.height | px_is($t.apex_clear_button_height)) and .radius >= ($t.apex_clear_button_height | px) / 2
+            and (.background | colour_is($t.apex_button)) and (.padding.left | px_is($t.apex_clear_button_padding)))'
+    "${metric[@]}" 'the weekday is $apex_font_date_menu_weekday_size $apex_font_heading_weight in $apex_fg_dim over the date at $apex_font_date_menu_date_size $apex_font_date_menu_date_weight' \
+        "$d" '(.dayLabel | (.font.size | px_is($t.apex_font_date_menu_weekday_size)) and .font.weight == ($t.apex_font_heading_weight | tonumber) and (.foreground | colour_is($t.apex_fg_dim)))
+            and (.dateLabel.font | (.size | px_is($t.apex_font_date_menu_date_size)) and .weight == ($t.apex_font_date_menu_date_weight | tonumber))'
+    "${metric[@]}" 'the month is a $apex_glass_card card ringed in $apex_glass_card_border, radius $apex_radius_calendar, inset $apex_calendar_padding, its name $apex_font_calendar_month_size $apex_font_heading_weight' \
+        "$d" "(.calendar | (.background | colour_is(\$t.apex_glass_card)) and (.borderColor | colour_is(\$t.apex_glass_card_border)) and (.radius | px_is(\$t.apex_radius_calendar))
+            and ($inset | all(px_is(\$t.apex_calendar_padding)))) and (.monthLabel.font | (.size | px_is(\$t.apex_font_calendar_month_size)) and .weight == (\$t.apex_font_heading_weight | tonumber))
+            and (.monthLabel.background | rgba | .[3] == 0) and (.pager.width | px_is(\$t.apex_calendar_pager_size))"
+    "${metric[@]}" 'weekday headings are $apex_calendar_heading_height high, $apex_font_calendar_heading_size $apex_font_heading_weight in $apex_fg_dim, unfilled' \
+        "$d.heading" '(.height | px_is($t.apex_calendar_heading_height)) and (.font.size | px_is($t.apex_font_calendar_heading_size)) and .font.weight == ($t.apex_font_heading_weight | tonumber)
+            and (.foreground | colour_is($t.apex_fg_dim)) and (.background | rgba | .[3] == 0)'
+    "${metric[@]}" 'days fill the card'"'"'s seven columns $apex_calendar_day_gap apart, $apex_calendar_day_height high and fully round, $apex_font_calendar_day_size in $apex_fg, unfilled, weekends too' \
+        "$d" "((.day.width * 7 + 7 * (\$t.apex_calendar_day_gap | px) + 2 * (\$t.apex_calendar_padding | px)) - (\$t.apex_date_menu_column_width | px) | fabs < 7)
+            and (.day | (.height | px_is(\$t.apex_calendar_day_height)) and .radius >= (\$t.apex_calendar_day_height | px) / 2 and (.font.size | px_is(\$t.apex_font_calendar_day_size))
+            and (.foreground | colour_is(\$t.apex_fg)) and (.background | rgba | .[3] == 0)) and (.weekend.foreground | colour_is(\$t.apex_fg))"
+    "${metric[@]}" 'days of other months are $apex_fg_faint; today is the accent at $apex_font_heading_weight' \
+        "{d: $d, accent: .topBar.accent}" '.accent as $a | (.d.otherMonth.foreground | colour_is($t.apex_fg_faint))
+            and (.d.today | (.background | colour_is($a)) and (.foreground | colour_is("#ffffff")) and .font.weight == ($t.apex_font_heading_weight | tonumber))'
+    "${metric[@]}" 'the events card is inset $apex_events_padding_top $apex_events_padding $apex_events_padding_bottom, its title $apex_font_events_title_size $apex_font_heading_weight in $apex_fg_dim' \
+        "$d" "(.events | (.background | colour_is(\$t.apex_glass_card)) and (.radius | px_is(\$t.apex_radius_calendar))
+            and ($inset | (.[0] | px_is(\$t.apex_events_padding_top)) and (.[1] | px_is(\$t.apex_events_padding)) and (.[2] | px_is(\$t.apex_events_padding_bottom))))
+            and (.eventsTitle | (.font.size | px_is(\$t.apex_font_events_title_size)) and .font.weight == (\$t.apex_font_heading_weight | tonumber) and (.foreground | colour_is(\$t.apex_fg_dim)))"
+}
+
 scenes_captured() {
     local run=$1 case_name=$2
     local log=$run/$case_name.log scene
@@ -685,6 +735,7 @@ direct_cases() {
     quick_settings default "$f" light
     window_switcher default "$f" light
     modal_dialog default "$f" light
+    date_menu default "$f" light
 
     f=$run/default-scale1.log
     exits "$run" default-scale1 0
@@ -698,6 +749,7 @@ direct_cases() {
     quick_settings default-scale1 "$f" light
     window_switcher default-scale1 "$f" light
     modal_dialog default-scale1 "$f" light
+    date_menu default-scale1 "$f" light
 
     f=$run/dark-style.log
     exits "$run" dark-style 0
@@ -714,6 +766,7 @@ direct_cases() {
     quick_settings dark-style "$f" dark
     window_switcher dark-style "$f" dark
     modal_dialog dark-style "$f" dark
+    date_menu dark-style "$f" dark
     dark_style_off dark-style "$f"
 
     for c in stock-light stock-dark; do

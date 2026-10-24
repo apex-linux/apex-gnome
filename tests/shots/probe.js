@@ -913,6 +913,67 @@ async function modalDialog(unit) {
     }
 }
 
+// Two low-urgency notifications fill the list without banners; the menu shows the fixed date.
+async function calendarMenu(unit) {
+    const source = new MessageTray.Source({title: 'G2 Updates', iconName: 'software-update-available-symbolic'});
+    Main.messageTray.add(source);
+    for (const title of ['Update ready', 'Design review']) {
+        source.addNotification(new MessageTray.Notification({
+            source, title, body: 'Starts after the next restart.', urgency: MessageTray.Urgency.LOW,
+        }));
+    }
+    const {menu} = Main.panel.statusArea.dateMenu;
+    menu.open(BoxPointer.PopupAnimation.NONE);
+    try {
+        await settle();
+        const scene = GLib.getenv('G2_SURFACE_SCENES') === '1' ? await capture('datemenu') : null;
+        if (scene)
+            delete scene.bytes;
+        const find = (root, styleClass) => findDescendant(root, a => a.has_style_class_name?.(styleClass));
+        const box = menu.box;
+        const message = findDescendant(box, a => a.constructor.name === 'NotificationMessage');
+        const calendar = find(box, 'calendar');
+        const days = calendar.get_children().filter(a => a.has_style_class_name?.('calendar-day'));
+        const day = classes => days.find(d => classes.every(c => d.has_style_class_name(c)) &&
+            !d.has_style_class_name('calendar-today') && (classes.includes('calendar-other-month') || !d.has_style_class_name('calendar-other-month')));
+        const events = find(box, 'events-button');
+        return {
+            scene,
+            box: styleOf(box, unit),
+            area: {spacing: lengthOrNull(find(box, 'message-list').get_parent().get_theme_node(), 'spacing', unit)},
+            list: styleOf(find(box, 'message-list'), unit),
+            column: styleOf(find(box, 'datemenu-calendar-column'), unit),
+            message: {
+                ...styleOf(message, unit),
+                marginBottom: round(message.get_theme_node().get_margin(St.Side.BOTTOM) / unit.length),
+                header: styleOf(find(message, 'message-header'), unit),
+                title: styleOf(find(message, 'message-title'), unit),
+                body: styleOf(find(message, 'message-body'), unit),
+                close: styleOf(find(message, 'message-close-button'), unit),
+                icon: lengthOrNull(find(message, 'message-icon').get_theme_node(), 'icon-size', unit),
+            },
+            controls: styleOf(find(box, 'message-list-controls'), unit),
+            clear: styleOf(find(box, 'message-list-clear-button'), unit),
+            dayLabel: styleOf(find(box, 'day-label'), unit),
+            dateLabel: styleOf(find(box, 'date-label'), unit),
+            calendar: styleOf(calendar, unit),
+            monthLabel: styleOf(find(calendar, 'calendar-month-label'), unit),
+            pager: styleOf(find(calendar, 'pager-button'), unit),
+            heading: styleOf(find(calendar, 'calendar-day-heading'), unit),
+            day: styleOf(day(['calendar-weekday']), unit),
+            weekend: styleOf(day(['calendar-weekend']), unit),
+            otherMonth: styleOf(day(['calendar-other-month']), unit),
+            today: styleOf(days.find(d => d.has_style_class_name('calendar-today')), unit),
+            events: styleOf(events, unit),
+            eventsTitle: styleOf(find(events, 'events-title'), unit),
+        };
+    } finally {
+        menu.close(BoxPointer.PopupAnimation.NONE);
+        source.destroy();
+        await settle();
+    }
+}
+
 // Without GDM the shell posts "Screen Lock disabled" at startup; its banner would cover
 // the scenes for as long as it happens to stay.
 function dropStartupNotifications() {
@@ -941,6 +1002,7 @@ async function scenes() {
     surfaces.quickSettings = await quickSettings(unit);
     surfaces.switcher = await windowSwitcher(unit);
     surfaces.dialog = await modalDialog(unit);
+    surfaces.dateMenu = await calendarMenu(unit);
 
     Main.overview.show();
     await settle();
