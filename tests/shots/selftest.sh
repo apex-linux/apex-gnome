@@ -280,7 +280,8 @@ REPORT_OF_QUICK_SETTINGS_DRAWN_FROM_TOKENS='
             border: {top: $b, left: $b}, radius: ($t.apex_radius_quick_menu | px), padding: {left: (($t.apex_quick_menu_padding | px) - $b)}, boxShadow: null},
         headerIcon: {width: ($t.apex_quick_menu_header_icon_size | px), height: ($t.apex_quick_menu_header_icon_size | px), background: "#3584e4ff", iconSize: $icon},
         title: {font: {size: ($t.apex_font_quick_menu_title_size | px), weight: ($t.apex_font_heading_weight | tonumber)}},
-        rows: [{height: ($t.apex_quick_menu_row_height | px), padding: {left: ($t.apex_menu_row_padding | px)}, radius: ($t.apex_radius_menu_row | px)}]}}}}'
+        rows: [{height: ($t.apex_quick_menu_row_height | px), padding: {left: ($t.apex_menu_row_padding | px)}, radius: ($t.apex_radius_menu_row | px)}],
+        rowHover: {background: ($t.apex_quick_menu_row_hover | hex)}}}}}'
 # shellcheck disable=SC2016 # a jq program
 REPORT_OF_A_SWITCHER_DRAWN_FROM_TOKENS='
 ($t.apex_surface_border | px) as $b | ($t.apex_switcher_padding | px) as $p
@@ -510,7 +511,8 @@ REPORT_OF_A_SPOTLIGHT_DRAWN_FROM_TOKENS='
         bottomGap: ($t.apex_toast_bottom | px),
         check: {width: ($t.apex_toast_check_size | px), height: ($t.apex_toast_check_size | px), radius: 11, background: "#3584e4ff",
             icon: ($t.apex_toast_check_icon_size | px)},
-        label: {text: "Copied 1920"}}}}}'
+        label: {text: "Copied 1920"}}},
+    overviewSearch: {opened: true, text: "disk", overviewText: ""}}}'
 # shellcheck disable=SC2016 # a jq program
 # shellcheck disable=SC2016 # a jq program
 REPORT_OF_SPOTLIGHT_GLASS_FROM_TOKENS='
@@ -748,6 +750,7 @@ test_quick_settings() {
 .surfaces.quickSettings.wifiMenu.box.boxShadow = {color: "#00000010", inset: false, x: 0, y: 1, blur: 2, spread: 0}|upstream's card shadow
 .surfaces.quickSettings.wifiMenu.headerIcon.width = 36|upstream's header glyph circle
 .surfaces.quickSettings.wifiMenu.rows[0].height = 37|upstream's menu row
+.surfaces.quickSettings.wifiMenu.rowHover.background = "#00000a1f"|board 16's stronger popup-menu hover
 CHANGES
     assert_run quick_settings light 'del(.surfaces)' >/dev/null
     expect_eq "Quick Settings: a report without it passes none" 0 "$(grep -c '^PASS' "$T/top-bar.out")"
@@ -1016,7 +1019,7 @@ test_spotlight_style() {
     local variant change what passes failures open_gaps
     for variant in light dark; do
         read -r passes failures open_gaps <<<"$(assert_run spotlight_style "$variant")"
-        if ((failures == 0 && open_gaps == 0 && passes == 15)); then
+        if ((failures == 0 && open_gaps == 0 && passes == 16)); then
             ok "Spotlight ($variant): drawn from the tokens it passes all $passes assertions"
         else
             not_ok "Spotlight ($variant): drawn from the tokens it passes (passed/failed/gaps $passes/$failures/$open_gaps): $(grep -m3 '^FAIL' "$T/top-bar.out" | paste -sd'|' -)"
@@ -1051,6 +1054,8 @@ test_spotlight_style() {
 .surfaces.spotlight.closedOnCopy = false|Spotlight left open after the copy
 .surfaces.spotlight.toast.box.borderColor = "#00000000"|a toast without its ring
 .surfaces.spotlight.toast.check.background = "#1d1d21ff"|a check circle without the accent
+.surfaces.overviewSearch.opened = false|the overview's stock search
+.surfaces.overviewSearch.overviewText = "disk"|the typed text left in the overview's field too
 CHANGES
 }
 

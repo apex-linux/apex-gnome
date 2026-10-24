@@ -169,6 +169,8 @@ $apex_quick_menu_header_gap: 10px;
 $apex_quick_menu_header_padding: 6px;
 $apex_quick_menu_header_bottom: 8px;
 $apex_font_quick_menu_title_size: 15px;
+// Board 17's rows hover lighter than popup menus elsewhere (board 16).
+$apex_quick_menu_row_hover: if($variant == 'light', rgba(0, 0, 10, .035), rgba(255, 255, 255, .035));
 
 $apex_radius_switcher: 26px;
 $apex_radius_switcher_item: 16px;
