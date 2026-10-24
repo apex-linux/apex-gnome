@@ -12,6 +12,8 @@ class Actor {}
 
 class BinLayout {}
 
+class Stage {}
+
 class ClickGesture {
     connect(signal, fn) {
         if (signal === 'recognize')
@@ -24,6 +26,7 @@ export default {
     AnimationMode,
     BUTTON_SECONDARY: 3,
     BinLayout,
+    Stage,
     ClickGesture,
     ActorAlign: {FILL: 0, START: 1, CENTER: 2, END: 3},
     TextDirection,

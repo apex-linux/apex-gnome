@@ -52,7 +52,23 @@ class Widget {
     }
 
     get_stage() {
-        return null;
+        return this._stage ?? this._parent?.get_stage() ?? null;
+    }
+
+    get_theme_node() {
+        return this._themeNode ?? {get_shadow: () => null, get_border_radius: () => 0};
+    }
+
+    set_size(width, height) {
+        Object.assign(this, {width, height});
+    }
+
+    // Translation only: the probe's actors are neither scaled nor rotated.
+    apply_relative_transform_to_point(ancestor, point) {
+        let {x, y} = point;
+        for (let a = this; a && a !== ancestor; a = a._parent)
+            [x, y] = [x + a.x, y + a.y];
+        return {x, y};
     }
 
     add_style_class_name(name) {
@@ -87,6 +103,7 @@ class Widget {
         if (this.destroyed)
             return;
         this.destroyed = true;
+        this._parent?._children.splice(this._parent._children.indexOf(this), 1);
         this._children.forEach(child => child.destroy?.());
         this.emit('destroy');
     }
@@ -101,6 +118,7 @@ export default {
     Bin,
     Button,
     ButtonMask: {ONE: 1, TWO: 2, THREE: 4},
+    Corner: {TOPLEFT: 0, TOPRIGHT: 1, BOTTOMRIGHT: 2, BOTTOMLEFT: 3},
     Icon,
     Label,
     Side: {TOP: 0, RIGHT: 1, BOTTOM: 2, LEFT: 3},

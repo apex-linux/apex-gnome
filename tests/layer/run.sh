@@ -342,6 +342,20 @@ fact "disabled-features=['quick-settings']: stock order" \
     'qs\.order=Wi-Fi,VPN,Bluetooth,Power Mode,Night Light,Dark Style,Do Not Disturb,Airplane Mode,Auto Rotate'
 fact "disabled-features=['quick-settings']: Power Mode unlit" 'qs\.power=checked=false classes=none'
 
+probe shadows "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_SHADOWS=1
+has "shadows: the feature enables" 'Apex: feature shadows enabled'
+fact "shadows: a registered surface gets one layer from -apex-shadow-layer, its box and radius, below its top ancestor" \
+    'shadows\.registered=box-shadow: 0px 2px 8px 0px rgba\(20, 30, 60, 0\.2\); border-radius: 14px; at 106,46 300x200 below=true'
+fact "shadows: registering again keeps one layer" 'shadows\.registered-twice=1'
+fact "shadows: layer off: no layer drawn" 'shadows\.off=none'
+fact "shadows: layer back on: the registration draws again" \
+    'shadows\.on=box-shadow: 0px 2px 8px 0px rgba\(20, 30, 60, 0\.2\); border-radius: 14px; at 106,46 300x200 below=true'
+fact "shadows: a destroyed surface takes its layer with it" 'shadows\.destroyed=0 layers, root=bin'
+
+probe shadows-disabled "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_SHADOWS=1 PROBE_DISABLED=shadows
+has "disabled-features=['shadows']: skips the feature" 'Apex: feature shadows is in disabled-features'
+fact "disabled-features=['shadows']: a registration draws nothing" 'shadows\.registered=none'
+
 probe spotlight-disabled "$CMDLINE_PLAIN" PROBE_DISABLED=spotlight PROBE_ENABLE=1 PROBE_PRESS=1
 has "disabled-features=['spotlight']: skips the feature" 'Apex: feature spotlight is in disabled-features'
 keybindings_are "disabled-features=['spotlight']: no Super+Space binding" ''

@@ -39,7 +39,6 @@ export const sessionMode = {
 
 export const actionMode = Shell.ActionMode.NORMAL;
 
-export const uiGroup = {add_child() {}};
 
 function box(children) {
     return {
@@ -205,7 +204,14 @@ export function notify(title) {
 // layout.js's chrome parameters: Params.parse throws on any other.
 const CHROME_PARAMS = ['trackFullscreen', 'affectsStruts'];
 
+// The containers the shadows feature scans: empty here, the probe registers its own actors.
+const emptyContainer = () => ({get_children: () => [], connect: () => 1, disconnect: () => {}});
+export const uiGroup = {...emptyContainer(), add_child() {}};
+export const messageTray = {_bannerBin: emptyContainer()};
+
 export const layoutManager = {
+    modalDialogGroup: emptyContainer(),
+    overviewGroup: emptyContainer(),
     ...emitter({}),
     primaryMonitor: {x: 0, y: 0, width: 1440, height: 900},
     chrome: [],

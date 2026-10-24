@@ -196,6 +196,7 @@ for c in default:light default-scale1:light dark-style:dark; do
     shell_surfaces "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
     quick_settings "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
     quick_settings_layer "${c%:*}" "$run/${c%:*}.log" apex
+    shadow_layers "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
     window_switcher "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
     modal_dialog "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
     date_menu "${c%:*}" "$run/${c%:*}.log" "${c#*:}"

@@ -1012,7 +1012,10 @@ readonly MOTION_REPORT='{enableAnimations: false,
   animated: {maximise: {maximised: true, transition: {mode: "CUBIC_BEZIER", duration: 300, curve: [0.2, 0.8, 0.2, 1]}},
              overview: {visible: true, transition: {mode: "CUBIC_BEZIER", duration: 200, curve: [0.2, 0.8, 0.2, 1]}}},
   still: {maximise: {maximised: true, transition: null}, overview: {visible: true, transition: null},
-         locatePointer: {mode: "CUBIC_BEZIER", duration: 830, curve: [0.2, 0.8, 0.2, 1]}}}'
+         locatePointer: {mode: "CUBIC_BEZIER", duration: 830, curve: [0.2, 0.8, 0.2, 1]}},
+  previews: [{styled: true, layers: [
+    {shown: true, radius: 14, boxShadow: {color: "#141e3c33", inset: false, x: 0, y: 12, blur: 32, spread: 0}},
+    {shown: true, radius: 14, boxShadow: {color: "#141e3c1a", inset: false, x: 0, y: 1, blur: 4, spread: 0}}]}]}'
 
 write_motion_run() {
     local change=$1 dir=$T/motion
@@ -1045,6 +1048,7 @@ test_motion() {
 .still.maximise.transition = {mode: "CUBIC_BEZIER", duration: 1}|a transition left with animations off
 .animated.maximise.maximised = false|a window that did not maximise
 .still.locatePointer = null|a Locate Pointer ripple that no longer animates with animations off
+.previews[0].layers = [.previews[0].layers[0]]|a window preview with one shadow layer
 CHANGES
 }
 

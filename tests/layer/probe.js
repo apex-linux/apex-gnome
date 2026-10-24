@@ -206,6 +206,42 @@ async function exerciseQuickSettings() {
     quickSettingsState('qs.on', quickSettings);
 }
 
+// A surface two actors below the stage's child, its sheet naming one further layer.
+async function exerciseShadows() {
+    if (GLib.getenv('PROBE_SHADOWS') !== '1')
+        return;
+    const St = (await import(`file://${shellDir}/../St.js`)).default;
+    const Registry = await import(`file://${shellDir}/js/ui/apex/shadows/registry.js`);
+    const root = new St.Widget({name: 'root'});
+    root._stage = {};
+    const bin = new St.Widget({name: 'bin', x: 100, y: 40});
+    const surface = new St.Widget({name: 'surface', x: 6, y: 6, width: 300, height: 200, mapped: true});
+    surface._themeNode = {
+        get_shadow: p => p === '-apex-shadow-layer'
+            ? {color: {red: 20, green: 30, blue: 60, alpha: 51}, xoffset: 0, yoffset: 2, blur: 8, spread: 0} : null,
+        get_border_radius: () => 14,
+    };
+    root.add_child(bin);
+    bin.add_child(surface);
+    const layers = label => {
+        const found = Registry.layersOf(surface);
+        fact(`shadows.${label}`, found.map(l => `${l.style} at ${l.x},${l.y} ${l.width}x${l.height} ` +
+            `below=${root.get_children().indexOf(l) < root.get_children().indexOf(bin)}`).join(' | ') || 'none');
+    };
+    Registry.register(surface, {name: 'probe', container: root});
+    layers('registered');
+    Registry.register(surface, {name: 'probe', container: root});
+    fact('shadows.registered-twice', Registry.layersOf(surface).length);
+    settings.set_boolean('layer-enabled', false);
+    await spin(200);
+    layers('off');
+    settings.set_boolean('layer-enabled', true);
+    await spin(200);
+    layers('on');
+    surface.destroy();
+    fact('shadows.destroyed', `${Registry.layersOf(surface).length} layers, root=${root.get_children().map(c => c.name).join(',')}`);
+}
+
 async function exerciseTopBar() {
     if (GLib.getenv('PROBE_TOP_BAR') !== '1')
         return;
@@ -556,6 +592,7 @@ if (layer && GLib.getenv('PROBE_ENABLE') === '1') {
     await pressToggleSpotlight();
     await exerciseMotion();
     await exerciseQuickSettings();
+    await exerciseShadows();
     await exerciseTopBar();
     await exerciseSolidBar();
     await exerciseFocusedApp();

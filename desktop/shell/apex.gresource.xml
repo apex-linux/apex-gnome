@@ -28,6 +28,8 @@
     <file alias="overview/thumbnails.js">js/ui/apex/overview/thumbnails.js</file>
     <file alias="overview/launcher.js">js/ui/apex/overview/launcher.js</file>
     <file alias="motion/feature.js">js/ui/apex/motion/feature.js</file>
+    <file alias="shadows/feature.js">js/ui/apex/shadows/feature.js</file>
+    <file alias="shadows/registry.js">js/ui/apex/shadows/registry.js</file>
     <file alias="quick-settings/feature.js">js/ui/apex/quick-settings/feature.js</file>
   </gresource>
   <gresource prefix="/org/gnome/shell/theme/apex">
