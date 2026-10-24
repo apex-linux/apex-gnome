@@ -396,6 +396,13 @@ REPORT_OF_AN_OVERVIEW_LAYER_FROM_TOKENS='
                 font: {size: ($t.apex_font_workspace_empty_size | px), weight: ($t.apex_font_heading_weight | tonumber)}}}},
     appGrid: {grid: {columns: 7, rows: 4, iconSize: 88}}}}'
 # shellcheck disable=SC2016 # a jq program
+REPORT_OF_SHADOW_LAYERS_FROM_TOKENS='
+{shown: true, sameBox: true, radius: 0, boxShadow: {color: ($t.apex_shadow_2 | hex), inset: false, x: 0,
+    y: ($t.apex_shadow_2_y | px), blur: ($t.apex_shadow_2_blur | px), spread: 0}} as $layer
+| {surfaces: {idleRepaints: {withShadows: 3, withoutShadows: 3}, shadowLayers: {
+    quickSettings: [$layer | .radius = ($t.apex_radius_quick_settings | px)], dateMenu: [$layer],
+    dialog: [$layer | .besideBox = true]}}}'
+# shellcheck disable=SC2016 # a jq program
 REPORT_OF_DERIVED_SURFACES_DRAWN_FROM_TOKENS='
 ($t.apex_surface_border | px) as $b
 | {border: {top: $b}, borderColor: ($t.apex_panel_border | hex),
@@ -482,6 +489,7 @@ assert_run() {
     [[ $assertions == derived_surfaces ]] && report=$REPORT_OF_DERIVED_SURFACES_DRAWN_FROM_TOKENS
     [[ $assertions == overview_layer ]] && report=$REPORT_OF_AN_OVERVIEW_LAYER_FROM_TOKENS
     [[ $assertions == spotlight_style ]] && report=$REPORT_OF_A_SPOTLIGHT_DRAWN_FROM_TOKENS
+    [[ $assertions == shadow_layers ]] && report=$REPORT_OF_SHADOW_LAYERS_FROM_TOKENS
     tokens=$(tokens_for "$variant")
     jq -nc --argjson t "$tokens" "$JQ_DEFS $HEX_DEF $report | $change" | sed 's/^/APEXG2-SCENES /' >"$T/top-bar.log"
     # shellcheck disable=SC2016 # expanded by the inner bash
@@ -806,6 +814,29 @@ test_overview_style() {
 .surfaces.overview.indicator.border.top = 3|upstream's 3 px indicator
 .surfaces.overview.caption.background = "#000000e6"|upstream's dark tooltip caption
 .surfaces.overview.section.background = "#2e2e33ff"|upstream's dark search section
+CHANGES
+}
+
+test_shadow_layers() {
+    local variant change what passes failures open_gaps
+    for variant in light dark; do
+        read -r passes failures open_gaps <<<"$(assert_run shadow_layers "$variant")"
+        if ((failures == 0 && passes == 4)); then
+            ok "shadows ($variant): layers drawn from the tokens pass all $passes assertions"
+        else
+            not_ok "shadows ($variant): layers drawn from the tokens pass (passed/failed $passes/$failures): $(grep -m3 '^FAIL' "$T/top-bar.out" | paste -sd'|' -)"
+        fi
+    done
+    while IFS='|' read -r change what; do
+        read -r passes failures open_gaps <<<"$(assert_run shadow_layers light "$change")"
+        expect_eq "shadows: $what fails one assertion" "3/1" "$passes/$failures"
+    done <<'CHANGES'
+.surfaces.shadowLayers.quickSettings[0].radius = 0|a Quick Settings layer with square corners
+.surfaces.shadowLayers.dateMenu = []|a calendar without its second layer
+.surfaces.shadowLayers.dialog[0].besideBox = false|a dialog layer under the lightbox
+.surfaces.shadowLayers.dateMenu[0].sameBox = false|a layer off its surface's box
+.surfaces.shadowLayers.dialog[0].boxShadow.blur = 50|the first layer's blur on the second
+.surfaces.idleRepaints.withShadows = 9|an idle desktop that repaints more with shadows
 CHANGES
 }
 
@@ -1423,6 +1454,7 @@ test_date_menu
 test_overview_style
 test_app_grid
 test_overview_layer
+test_shadow_layers
 test_derived_surfaces
 test_spotlight_style
 test_today_pins

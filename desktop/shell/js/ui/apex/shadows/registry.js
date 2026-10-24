@@ -45,7 +45,7 @@ function _sync(entry) {
     for (const layer of layers) {
         layer.set_position(Math.round(from.x), Math.round(from.y));
         layer.set_size(Math.round(to.x - from.x), Math.round(to.y - from.y));
-        layer.opacity = host.below === actor ? 255 : host.below.opacity;
+        layer.opacity = host.below.opacity;
         layer.show();
     }
 }
@@ -65,8 +65,13 @@ function _build(entry) {
         const shadow = node.get_shadow(property);
         if (!shadow)
             continue;
-        const layer = new St.Widget({style_class: LAYER_STYLE_CLASS, style: _css(shadow, radius, scale),
-            reactive: false, name: entry.opts.name ? `${entry.opts.name}${property}` : null});
+        const layer = new St.Widget({
+            style_class: LAYER_STYLE_CLASS,
+            style: _css(shadow, radius, scale),
+            name: entry.opts.name ? `${entry.opts.name}${property}` : null,
+            x_align: Clutter.ActorAlign.START,
+            y_align: Clutter.ActorAlign.START,
+        });
         entry.host.parent.insert_child_below(layer, entry.host.below);
         entry.layers.push(layer);
     }
@@ -121,7 +126,7 @@ export function unregister(actor) {
 }
 
 export function layersOf(actor) {
-    return [...(_entries.get(actor)?.layers ?? [])];
+    return Array.from(_entries.get(actor)?.layers ?? []);
 }
 
 export function start() {

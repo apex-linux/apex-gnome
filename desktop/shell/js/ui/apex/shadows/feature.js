@@ -20,9 +20,13 @@ function _surfaces(actor, depth = 0) {
     return actor.get_children().flatMap(child => _surfaces(child, depth + 1));
 }
 
+// A dialog's layer goes next to it, above the lightbox its ModalDialog keeps under it.
 function _registerIn(container, child) {
-    for (const surface of _surfaces(child))
-        Registry.register(surface, {name: 'apex-shadow', container});
+    const inDialog = container === Main.layoutManager.modalDialogGroup;
+    for (const surface of _surfaces(child)) {
+        const host = inDialog ? surface.get_parent() : container;
+        Registry.register(surface, {name: 'apex-shadow', container: host});
+    }
 }
 
 function _registerPreviews() {
@@ -38,11 +42,6 @@ function _registerPreviews() {
 
 function _containers() {
     return [Main.uiGroup, Main.layoutManager.modalDialogGroup, Main.messageTray._bannerBin].filter(Boolean);
-}
-
-export function configure() {
-    if (!Main.uiGroup || !Main.layoutManager?.overviewGroup)
-        throw new Error('no uiGroup or overviewGroup to put shadow layers in');
 }
 
 export function enable() {

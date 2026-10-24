@@ -952,6 +952,17 @@ async function shadowLayers(unit) {
         // eslint-disable-next-line no-await-in-loop
         await settle();
     }
+    // A ModalDialog keeps its lightbox right under its box's ancestor, so the layer must sit beside the box.
+    const dialog = new ModalDialog.ModalDialog();
+    dialog.contentLayout.add_child(new St.Label({text: 'Shadow'}));
+    dialog.open();
+    await settle();
+    const surface = dialog.dialogLayout._dialog;
+    result.dialog = layerReport(Registry, surface, unit)
+        .map((layer, i) => ({...layer, besideBox: Registry.layersOf(surface)[i].get_parent() === surface.get_parent()}));
+    dialog.close();
+    dialog.destroy();
+    await settle();
     return result;
 }
 
