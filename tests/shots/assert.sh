@@ -337,12 +337,12 @@ shell_surfaces() {
     tokens=$(tokens_for "$variant")
     local -a metric=(top_bar_metric "$label" "$scenes" "$tokens")
     local m=.surfaces.popupMenu o=.surfaces.osd b=.surfaces.banner
-    local surface='(.border | [.top, .right, .bottom, .left] | all(px_is($t.apex_surface_border)))
+    local surface='(.border | [.top, .right, .bottom, .left] | all(px_is($t.apex_surface_border))) and (.borderColor | colour_is($t.apex_panel_border))
         and (.boxShadow | .inset == false and .x == 0 and (.y | px_is($t.apex_shadow_y)) and (.blur | px_is($t.apex_shadow_blur)) and (.color | colour_is($t.apex_shadow)))'
 
     "${metric[@]}" 'a popup menu is solid $apex_panel_solid with $apex_fg text at $apex_font_size, radius $apex_radius_menu' \
         "$m.content" '(.background | colour_is($t.apex_panel_solid)) and (.foreground | colour_is($t.apex_fg)) and (.font.size | px_is($t.apex_font_size)) and (.radius | px_is($t.apex_radius_menu))'
-    "${metric[@]}" 'its ring is a $apex_surface_border border, its shadow 0 $apex_shadow_y $apex_shadow_blur $apex_shadow' \
+    "${metric[@]}" 'its ring is a $apex_surface_border border in $apex_panel_border, its shadow 0 $apex_shadow_y $apex_shadow_blur $apex_shadow' \
         "$m.content" "$surface"
     "${metric[@]}" 'it is inset $apex_menu_padding and at least $apex_menu_min_width wide' \
         "$m.content" '(.padding | [.top, .right, .bottom, .left] | all(. + ($t.apex_surface_border | px) | px_is($t.apex_menu_padding))) and .width >= ($t.apex_menu_min_width | px)'
@@ -363,7 +363,7 @@ shell_surfaces() {
 
     "${metric[@]}" 'the OSD is $apex_osd_height high, radius $apex_radius_osd, tinted $apex_panel' \
         "$o.box" '(.height | px_is($t.apex_osd_height)) and (.radius | px_is($t.apex_radius_osd)) and (.background | colour_is($t.apex_panel)) and (.foreground | colour_is($t.apex_fg))'
-    "${metric[@]}" 'its ring is a $apex_surface_border border, its shadow 0 $apex_shadow_y $apex_shadow_blur $apex_shadow' \
+    "${metric[@]}" 'its ring is a $apex_surface_border border in $apex_panel_border, its shadow 0 $apex_shadow_y $apex_shadow_blur $apex_shadow' \
         "$o.box" "$surface"
     "${metric[@]}" 'it is inset $apex_osd_padding at the sides, $apex_osd_gap between its parts, its text $apex_font_size at $apex_font_label_weight' \
         "$o.box" '(.padding.left + .border.left | px_is($t.apex_osd_padding)) and (.padding.right + .border.right | px_is($t.apex_osd_padding)) and (.spacing | px_is($t.apex_osd_gap))
@@ -376,7 +376,7 @@ shell_surfaces() {
 
     "${metric[@]}" 'a banner is $apex_banner_width wide, radius $apex_radius_banner, tinted $apex_panel, $apex_banner_top below the bar' \
         "$b" '(.box.width | px_is($t.apex_banner_width)) and (.box.radius | px_is($t.apex_radius_banner)) and (.box.background | colour_is($t.apex_panel)) and (.topGap | px_is($t.apex_banner_top))'
-    "${metric[@]}" 'its ring is a $apex_surface_border border, its shadow 0 $apex_shadow_y $apex_shadow_blur $apex_shadow' \
+    "${metric[@]}" 'its ring is a $apex_surface_border border in $apex_panel_border, its shadow 0 $apex_shadow_y $apex_shadow_blur $apex_shadow' \
         "$b.box" "$surface"
     "${metric[@]}" 'it is inset $apex_banner_padding' \
         "$b.box" '[.padding, .border] | [.[0].top + .[1].top, .[0].right + .[1].right, .[0].bottom + .[1].bottom, .[0].left + .[1].left] | all(px_is($t.apex_banner_padding))'

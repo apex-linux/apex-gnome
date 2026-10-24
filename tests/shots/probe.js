@@ -251,6 +251,7 @@ function styleOf(actor, unit) {
         width: round(width / unit.length),
         height: round(height / unit.length),
         border: sides(side => node.get_border_width(side), unit),
+        borderColor: hex(node.get_border_color(St.Side.TOP)),
         padding: sides(side => node.get_padding(side), unit),
         hpadding: {
             natural: lengthOrNull(node, '-natural-hpadding', unit),

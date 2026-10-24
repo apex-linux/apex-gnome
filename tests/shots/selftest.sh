@@ -196,7 +196,7 @@ REPORT_OF_A_BAR_DRAWN_FROM_TOKENS='
     glass: []}}'
 # shellcheck disable=SC2016 # a jq program
 REPORT_OF_SURFACES_DRAWN_FROM_TOKENS='
-($t.apex_surface_border | px) as $b | {top: $b, right: $b, bottom: $b, left: $b} as $border
+($t.apex_surface_border | px) as $b | {top: $b, right: $b, bottom: $b, left: $b} as $border | ($t.apex_panel_border | hex) as $ring
 | {color: ($t.apex_shadow | hex), inset: false, x: 0, y: ($t.apex_shadow_y | px), blur: ($t.apex_shadow_blur | px), spread: 0} as $shadow
 | ($t.apex_menu_padding | px) as $mp | ($t.apex_menu_row_height | px) as $row | ($t.apex_menu_row_gap | px) as $gap
 | ($t.apex_menu_row_padding | px) as $rp | ($t.apex_menu_separator_margin | px) as $sm
@@ -206,7 +206,7 @@ REPORT_OF_SURFACES_DRAWN_FROM_TOKENS='
 | ($t.apex_banner_close_size | px) as $close
 | {topBar: {accent: "#3584e4ff"}, surfaces: {
     popupMenu: {
-        content: {x: 290, y: 307, width: 220, border: $border, padding: {top: ($mp - $b), right: ($mp - $b), bottom: ($mp - $b), left: ($mp - $b)},
+        content: {x: 290, y: 307, width: 220, border: $border, borderColor: $ring, padding: {top: ($mp - $b), right: ($mp - $b), bottom: ($mp - $b), left: ($mp - $b)},
             radius: ($t.apex_radius_menu | px), background: ($t.apex_panel_solid | hex), foreground: ($t.apex_fg | hex),
             boxShadow: $shadow, font: {size: ($t.apex_font_size | px)}},
         rows: [$r + {y: 313}, $r + {y: (313 + $row + $gap)},
@@ -216,14 +216,14 @@ REPORT_OF_SURFACES_DRAWN_FROM_TOKENS='
         icon: ($t.apex_menu_icon_size | px)},
     osd: {
         box: {height: ($t.apex_osd_height | px), radius: ($t.apex_radius_osd | px), background: ($t.apex_panel | hex), foreground: ($t.apex_fg | hex),
-            border: $border, boxShadow: $shadow, padding: {left: ($op - $b), right: ($op - $b)}, spacing: ($t.apex_osd_gap | px),
+            border: $border, borderColor: $ring, boxShadow: $shadow, padding: {left: ($op - $b), right: ($op - $b)}, spacing: ($t.apex_osd_gap | px),
             font: {size: ($t.apex_font_size | px), weight: ($t.apex_font_label_weight | tonumber)}},
         bottomGap: ($t.apex_osd_bottom | px), icon: ($t.apex_osd_icon_size | px),
         level: {width: ($t.apex_osd_level_width | px), barHeight: ($t.apex_osd_level_height | px),
             background: ($t.apex_button_hover | hex), active: "#3584e4ff"}},
     banner: {
         box: {x: 490, width: ($t.apex_banner_width | px), radius: ($t.apex_radius_banner | px), background: ($t.apex_panel | hex),
-            border: $border, boxShadow: $shadow, padding: {top: ($bp - $b), right: ($bp - $b), bottom: ($bp - $b), left: ($bp - $b)}},
+            border: $border, borderColor: $ring, boxShadow: $shadow, padding: {top: ($bp - $b), right: ($bp - $b), bottom: ($bp - $b), left: ($bp - $b)}},
         topGap: ($t.apex_banner_top | px),
         header: {font: {size: ($t.apex_font_banner_header_size | px)}, foreground: ($t.apex_fg_dim | hex)},
         title: {x: (490 + $bp + $icon + ($t.apex_banner_gap | px)), font: {size: ($t.apex_font_size | px), weight: ($t.apex_font_heading_weight | tonumber)}},
@@ -355,6 +355,7 @@ test_shell_surfaces() {
 .surfaces.popupMenu.icon = 16.364|upstream's em-sized row glyph
 .surfaces.osd.box.radius = 999|upstream's round OSD
 .surfaces.osd.box.border.top = 0|an OSD without its ring
+.surfaces.banner.box.borderColor = "#e6e6ebff"|upstream's grey border on the banner
 .surfaces.osd.box.spacing = 8|parts too close in the OSD
 .surfaces.osd.level.active = "#ffffffff"|upstream's white level
 .surfaces.osd.bottomGap = 59|upstream's OSD position
