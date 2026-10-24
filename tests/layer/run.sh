@@ -358,25 +358,30 @@ fact "disabled-features=['quick-settings']: stock order" \
     'qs\.order=Wi-Fi,VPN,Bluetooth,Power Mode,Night Light,Dark Style,Do Not Disturb,Airplane Mode,Auto Rotate'
 fact "disabled-features=['quick-settings']: Power Mode unlit" 'qs\.power=checked=false classes=none'
 
-probe message-list "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_MESSAGE_LIST=1
-has "message-list: the feature enables" 'Apex: feature message-list enabled'
-readonly FLAT='expanded=true expansion=1 cover=false header=false/0 scaling=true flat=true'
-readonly STACKED='expanded=false expansion=0 cover=true header=false/-1 scaling=false flat=false'
-fact "message-list: a group already in the list lies flat, without its header" "ml\.groups=Mail:$FLAT"
-fact "message-list: Do Not Disturb, then Clear on the right" 'ml\.footer=apex-dnd-button,clear clear=align:3 expand:true visible:true'
-fact "message-list: a group added later lies flat too" "ml\.added\.groups=Mail:$FLAT \| Chat:$FLAT"
-fact "message-list: Clear stays shown with nothing to clear" 'ml\.added\.footer=apex-dnd-button,clear clear=align:3 expand:true visible:true'
-fact "message-list: the switch follows show-banners" 'ml\.dnd-from-settings=checked=true switch=true'
-fact "message-list: a click turns Do Not Disturb off" 'ml\.dnd-click=show-banners=true checked=false'
-fact "message-list: layer off: the groups stack again" "ml\.off\.groups=Mail:$STACKED \| Chat:$STACKED"
-fact "message-list: layer off: stock's footer, Clear hidden with the placeholder shown" 'ml\.off\.footer=clear clear=align:1 expand:true visible:false'
-fact "message-list: layer back on: flat again" "ml\.on\.groups=Mail:$FLAT \| Chat:$FLAT"
-fact "message-list: layer back on: the footer again" 'ml\.on\.footer=apex-dnd-button,clear clear=align:3 expand:true visible:true'
+probe notifications "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_NOTIFICATIONS=1
+has "notifications: the feature enables" 'Apex: feature notifications enabled'
+readonly FLAT='expanded=true layout=box cover=false header=false stacked=false'
+readonly STACKED='expanded=false layout=expander cover=true header=false'
+fact "notifications: a group lays its cards out flat, without its header or cover" "nf\.groups=Mail:$FLAT"
+fact "notifications: the header reads app · time, without the source glyph" 'nf\.header=icon=false line=Mail · now'
+fact "notifications: Do Not Disturb, then Clear on the right" 'nf\.footer=apex-dnd-button,clear clear=align:3 visible:true'
+fact "notifications: a card shows the source's icon without one of its own, else its own" 'nf\.icons=fallback=mail-icon own=photo-icon'
+fact "notifications: the switch follows show-banners; Clear stays shown with nothing to clear" \
+    'nf\.dnd-from-settings=checked=true switch=true clear=true'
+fact "notifications: a click turns Do Not Disturb off" 'nf\.dnd-click=show-banners=true checked=false'
+fact "notifications: layer off: stock's groups, a new one too" "nf\.off\.groups=Mail:$STACKED stacked=true \| Chat:$STACKED stacked=true"
+fact "notifications: layer off: stock's header" 'nf\.off\.header=icon=true line=Mail now'
+fact "notifications: layer off: stock's footer, Clear hidden with the placeholder shown" 'nf\.off\.footer=clear clear=align:1 visible:false'
+fact "notifications: layer off: no fallback icon" 'nf\.off\.icons=fallback=null own=photo-icon'
+fact "notifications: layer back on: flat again; a group built while every hook was stock stays stock" \
+    "nf\.on\.groups=Mail:$FLAT \| Chat:$STACKED stacked=true"
+fact "notifications: layer back on: the footer again" 'nf\.on\.footer=apex-dnd-button,clear clear=align:3 visible:true'
 
-probe message-list-disabled "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_MESSAGE_LIST=1 PROBE_DISABLED=message-list
-has "disabled-features=['message-list']: skips the feature" 'Apex: feature message-list is in disabled-features'
-fact "disabled-features=['message-list']: stacked groups" "ml\.groups=Mail:expanded=false expansion=0 cover=true header=false/0 scaling=false flat=false"
-fact "disabled-features=['message-list']: stock's footer" 'ml\.footer=clear clear=align:1 expand:true visible:true'
+probe notifications-disabled "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_NOTIFICATIONS=1 PROBE_DISABLED=notifications
+has "disabled-features=['notifications']: skips the feature" 'Apex: feature notifications is in disabled-features'
+fact "disabled-features=['notifications']: stock's group" "nf\.groups=Mail:$STACKED stacked=true"
+fact "disabled-features=['notifications']: stock's header" 'nf\.header=icon=true line=Mail now'
+fact "disabled-features=['notifications']: stock's footer" 'nf\.footer=clear clear=align:1 visible:true'
 
 probe shadows "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_SHADOWS=1
 has "shadows: the feature enables" 'Apex: feature shadows enabled'

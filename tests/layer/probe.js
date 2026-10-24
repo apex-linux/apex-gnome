@@ -372,42 +372,44 @@ async function exerciseQuickSettings() {
     quickSettingsState('qs.on', quickSettings);
 }
 
-function messageListState(label, list) {
-    const groups = list._messageView.get_children().map(item => item.child).map(g => `${g.name}:` +
-        `expanded=${g._expanded} expansion=${g.layout_manager.expansion} cover=${g._cover.visible} ` +
-        `header=${g._headerBox.visible}/${g._headerBox.height} scaling=${g.get_children()[0].layout_manager.scalingEnabled} ` +
-        `flat=${g.has_style_class_name('apex-flat')}`);
-    fact(`${label}.groups`, groups.join(' | '));
-    const clear = list._clearButton;
-    const footer = clear.get_parent().get_children().map(c => c.name ?? c.style_class).join(',');
-    fact(`${label}.footer`, `${footer} clear=align:${clear.x_align} expand:${clear.x_expand} visible:${clear.visible}`);
+function notificationsState(label, list, groups) {
+    fact(`${label}.groups`, groups.map(g => `${g.name}:expanded=${g.expanded} layout=${g.layout_manager.name ?? 'box'} ` +
+        `cover=${g.cover.visible} header=${g.header.visible} ` +
+        `stacked=${g.get_children().some(c => c.child?.has_style_pseudo_class('second-in-stack'))}`).join(' | '));
+    const header = groups[0].get_children()[0].child.header;
+    fact(`${label}.header`, `icon=${header.sourceIcon.visible} line=${header.content.get_children().map(c => c.text).join(' ')}`);
+    const {clear} = list;
+    fact(`${label}.footer`, `${list.footer.get_children().map(c => c.name ?? c.style_class).join(',')} ` +
+        `clear=align:${clear.x_align} visible:${clear.visible}`);
 }
 
-async function exerciseMessageList() {
-    if (GLib.getenv('PROBE_MESSAGE_LIST') !== '1')
+async function exerciseNotifications() {
+    if (GLib.getenv('PROBE_NOTIFICATIONS') !== '1')
         return;
-    const Main = await import(`file://${shellDir}/js/ui/main.js`);
     const MessageList = await import(`file://${shellDir}/js/ui/messageList.js`);
-    const St = (await import(`file://${shellDir}/../St.js`)).default;
-    const list = Main.panel.statusArea.dateMenu._messageList;
+    const mail = {title: 'Mail', icon: 'mail-icon'};
+    const list = MessageList.newCalendarMessageList();
+    const groups = [new MessageList.NotificationMessageGroup(mail, 3)];
+    notificationsState('nf', list, groups);
+    const own = new MessageList.Message(mail, 'photo-icon');
+    fact('nf.icons', `fallback=${groups[0].get_children()[0].child.icon} own=${own.icon}`);
+    list.placeholder.visible = true;
+    list.clear.visible = false;
+    list.clear.emit('notify::visible');
     const notifications = new Gio.Settings({schema_id: 'org.gnome.desktop.notifications'});
-    messageListState('ml', list);
-    list._messageView.add_child(new St.Bin({child: new MessageList.NotificationMessageGroup('Chat', 2)}));
-    list._placeholder.visible = true;
-    list._clearButton.visible = false;
-    list._clearButton.emit('notify::visible');
-    messageListState('ml.added', list);
-    const dnd = list._clearButton.get_parent().get_children()[0];
+    const dnd = list.footer.get_children()[0];
     notifications.set_boolean('show-banners', false);
-    fact('ml.dnd-from-settings', `checked=${dnd.checked} switch=${dnd.child.get_children()[1].state}`);
+    fact('nf.dnd-from-settings', `checked=${dnd.checked} switch=${dnd.child.get_children()[1].state} clear=${list.clear.visible}`);
     dnd.emit('clicked');
-    fact('ml.dnd-click', `show-banners=${notifications.get_boolean('show-banners')} checked=${dnd.checked}`);
+    fact('nf.dnd-click', `show-banners=${notifications.get_boolean('show-banners')} checked=${dnd.checked}`);
     settings.set_boolean('layer-enabled', false);
     await spin(200);
-    messageListState('ml.off', list);
+    groups.push(new MessageList.NotificationMessageGroup({title: 'Chat', icon: 'chat-icon'}, 2));
+    notificationsState('nf.off', list, groups);
+    fact('nf.off.icons', `fallback=${groups[0].get_children()[0].child.icon} own=${own.icon}`);
     settings.set_boolean('layer-enabled', true);
     await spin(200);
-    messageListState('ml.on', list);
+    notificationsState('nf.on', list, groups);
 }
 
 // A surface two actors below the stage's child, its sheet naming one further layer.
@@ -797,7 +799,7 @@ if (layer && GLib.getenv('PROBE_ENABLE') === '1') {
     await pressToggleSpotlight();
     await exerciseMotion();
     await exerciseQuickSettings();
-    await exerciseMessageList();
+    await exerciseNotifications();
     await exerciseShadows();
     await exerciseSpotlight();
     await exerciseTopBar();

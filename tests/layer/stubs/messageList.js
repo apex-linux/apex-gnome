@@ -1,26 +1,63 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
-// run.sh installs this as js/ui/messageList.js: a notification group and the calendar's list.
+// run.sh installs this as js/ui/messageList.js: messages, a group and the calendar's list, with patch 0012's hooks.
 
 import St from '../../../St.js';
+import * as Hooks from './apex/hooks.js';
 
-// A group of one or more notifications, collapsed as stock first shows it.
-export class NotificationMessageGroup extends St.Widget {
-    constructor(name, count) {
-        super({name, style_class: 'message-notification-group'});
-        this._expanded = false;
-        this._cover = new St.Widget({name: 'cover'});
-        this._headerBox = new St.BoxLayout({name: 'header', visible: false});
-        this.layout_manager = {expansion: 0};
-        this.fades = 0;
-        for (let i = 0; i < count; i++)
-            this.add_child(new St.Bin({layout_manager: {scalingEnabled: false}, child: new St.Widget()}));
-        this.add_child(this._cover);
-        this.add_child(this._headerBox);
+class MessageHeader extends St.BoxLayout {
+    constructor(source) {
+        super({style_class: 'message-header'});
+        this.sourceIcon = new St.Icon({name: 'source-icon'});
+        this.content = new St.BoxLayout({name: 'content'});
+        this.content.add_child(new St.Label({name: 'title', text: source.title}));
+        this.content.add_child(new St.Label({name: 'time', text: 'now'}));
+        this.add_child(this.sourceIcon);
+        this.add_child(this.content);
+        Hooks.run('message-header', this, this.sourceIcon, this.content);
+    }
+}
+
+export class Message extends St.Button {
+    constructor(source, gicon = null) {
+        super({style_class: 'message'});
+        this.header = new MessageHeader(source);
+        this.add_child(this.header);
+        Hooks.run('message', this, source);
+        this.icon = gicon;
     }
 
-    _updateStackedMessagesFade() {
-        this.fades++;
+    get icon() {
+        return this._gicon;
+    }
+
+    set icon(icon) {
+        this._gicon = Hooks.value('message-icon', icon, this);
+    }
+}
+
+// A group as stock first shows it: collapsed, its second card styled under the first.
+export class NotificationMessageGroup extends St.Widget {
+    constructor(source, count) {
+        super({name: source.title, style_class: 'message-notification-group'});
+        this._expanded = false;
+        this.count = count;
+        this.layout_manager = {name: 'expander'};
+        for (let i = 0; i < count; i++) {
+            const item = new St.Bin({child: new Message(source)});
+            if (i === 1)
+                item.child.add_style_pseudo_class('second-in-stack');
+            this.add_child(item);
+        }
+        this.cover = new St.Widget({name: 'cover'});
+        this.header = new St.BoxLayout({name: 'header', visible: false});
+        this.add_child(this.cover);
+        this.add_child(this.header);
+        Hooks.run('message-group', this, this.cover, this.header);
+    }
+
+    get expanded() {
+        return Hooks.value('message-group-expanded', this._expanded || this.count === 1, this);
     }
 
     notify(property) {
@@ -28,19 +65,12 @@ export class NotificationMessageGroup extends St.Widget {
     }
 }
 
-class MessageView extends St.Widget {
-    add_child(child) {
-        super.add_child(child);
-        this.emit('child-added', child);
-    }
-}
-
-// calendar.js's CalendarMessageList: the view, the placeholder, and Clear alone in the footer.
+// calendar.js's CalendarMessageList: Clear alone in the footer, hidden while the placeholder shows.
 export function newCalendarMessageList() {
-    const view = new MessageView({name: 'view'});
-    view.add_child(new St.Bin({child: new NotificationMessageGroup('Mail', 3)}));
     const footer = new St.BoxLayout({name: 'footer', style_class: 'message-list-controls'});
     const clear = new St.Button({name: 'clear', label: 'Clear', x_expand: true, x_align: 1});
+    const placeholder = new St.Widget({name: 'placeholder', visible: false});
     footer.add_child(clear);
-    return {_messageView: view, _placeholder: new St.Widget({name: 'placeholder', visible: false}), _clearButton: clear};
+    Hooks.run('message-list-controls', footer, clear, placeholder);
+    return {footer, clear, placeholder};
 }

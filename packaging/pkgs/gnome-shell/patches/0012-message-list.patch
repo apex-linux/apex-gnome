@@ -1,0 +1,92 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Thuong Vo <66083331+SekiroKenjii@users.noreply.github.com>
+Date: Sat, 24 Oct 2026 13:10:00 +0000
+Subject: [PATCH] messageList, calendar: hooks for the Apex message list
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Behaviour hooks once a message header, a message and a notification
+group are built, and once the calendar's message list has its footer,
+which the Apex layer's notifications feature provides (apex ROADMAP
+S3c): one flat card per notification, an "app · time" header without
+the source glyph, Do Not Disturb and Clear in the footer. Value hooks
+over a message's icon (the source's when the notification has none)
+and over whether a group counts as expanded, so a flat group never
+asks MessageView to expand it.
+---
+ js/ui/calendar.js    | 2 ++
+ js/ui/messageList.js | 8 +++++++-
+ 2 files changed, 9 insertions(+), 1 deletion(-)
+
+diff --git a/js/ui/calendar.js b/js/ui/calendar.js
+index 56e0f8e..1908a00 100644
+--- a/js/ui/calendar.js
++++ b/js/ui/calendar.js
+@@ -6,6 +6,7 @@ import GObject from 'gi://GObject';
+ import Shell from 'gi://Shell';
+ import St from 'gi://St';
+ 
++import * as ApexHooks from './apex/hooks.js';
+ import * as MessageList from './messageList.js';
+ import {ensureActorVisibleInScrollView} from '../misc/animationUtils.js';
+ 
+@@ -840,6 +841,7 @@ class CalendarMessageList extends St.Widget {
+         this._placeholder.bind_property('visible',
+             this._clearButton, 'visible',
+             GObject.BindingFlags.INVERT_BOOLEAN);
++        ApexHooks.run('message-list-controls', hbox, this._clearButton, this._placeholder);
+ 
+         this._messageView.connectObject(
+             'message-focused', (_s, messageActor) => {
+diff --git a/js/ui/messageList.js b/js/ui/messageList.js
+index fc5c236..2e9050e 100644
+--- a/js/ui/messageList.js
++++ b/js/ui/messageList.js
+@@ -8,6 +8,7 @@ import Graphene from 'gi://Graphene';
+ import Pango from 'gi://Pango';
+ import St from 'gi://St';
+ 
++import * as ApexHooks from './apex/hooks.js';
+ import * as Main from './main.js';
+ import * as MessageTray from './messageTray.js';
+ import * as Mpris from './mpris.js';
+@@ -413,6 +414,7 @@ class MessageHeader extends St.BoxLayout {
+ 
+         this.timeLabel = new TimeLabel();
+         headerContent.add_child(this.timeLabel);
++        ApexHooks.run('message-header', this, sourceIcon, headerContent);
+     }
+ });
+ 
+@@ -553,6 +555,7 @@ export class Message extends St.Button {
+         });
+         this._bodyLabel.connect('notify::allocation', this._updateExpandButton.bind(this));
+         this._updateExpandButton();
++        ApexHooks.run('message', this, source);
+     }
+ 
+     _updateExpandButton() {
+@@ -569,6 +572,7 @@ export class Message extends St.Button {
+     }
+ 
+     set icon(icon) {
++        icon = ApexHooks.value('message-icon', icon, this);
+         this._icon.gicon = icon;
+ 
+         this._icon.visible = !!icon;
+@@ -975,11 +979,13 @@ export const NotificationMessageGroup = GObject.registerClass({
+         source.notifications.forEach(notification => {
+             this._addNotification(notification);
+         });
++        ApexHooks.run('message-group', this, cover, header);
+     }
+ 
+     get expanded() {
+         // Consider this group to be expanded when it has only one message
+-        return this._expanded || this._notificationToMessage.size === 1;
++        return ApexHooks.value('message-group-expanded',
++            this._expanded || this._notificationToMessage.size === 1, this);
+     }
+ 
+     get hasUrgent() {

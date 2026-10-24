@@ -1132,8 +1132,8 @@ async function calendarMenu(unit) {
     }
 }
 
-// The message-list feature: three notifications from one app, the footer, then an empty list.
-async function messageListLayer(unit) {
+// The notifications feature: three notifications from one app, the footer, then an empty list.
+async function notificationsLayer(unit) {
     const source = new MessageTray.Source({title: 'G2 Chat', iconName: 'mail-unread-symbolic'});
     Main.messageTray.add(source);
     for (const title of ['Lunch?', 'Standup moved', 'Build passed'])
@@ -1147,8 +1147,15 @@ async function messageListLayer(unit) {
         const messages = group.get_children().map(c => c.child).filter(m => m?.constructor.name === 'NotificationMessage');
         const footer = list._clearButton.get_parent();
         const dnd = footer.get_children().find(c => c.has_style_class_name('apex-dnd-button')) ?? null;
+        const header = findDescendant(messages[0], a => a.has_style_class_name?.('message-header'));
+        const line = findDescendant(header, a => a.has_style_class_name?.('message-header-content'));
         const result = {
             header: group._headerBox.visible,
+            cardHeader: {
+                sourceIcon: findDescendant(header, a => a.has_style_class_name?.('message-source-icon')).visible,
+                line: line.get_children().filter(c => c.visible).map(c => c.text).join(' '),
+            },
+            icon: messages[0].icon?.to_string() ?? null,
             messages: messages.map(m => boxOf(m, unit)),
             footer: boxOf(footer, unit),
             clear: {...boxOf(list._clearButton, unit), visible: list._clearButton.visible},
@@ -1504,7 +1511,7 @@ async function scenes() {
     surfaces.switcher = await windowSwitcher(unit);
     surfaces.dialog = await modalDialog(unit);
     surfaces.dateMenu = await calendarMenu(unit);
-    surfaces.messageListLayer = await messageListLayer(unit);
+    surfaces.notificationsLayer = await notificationsLayer(unit);
     surfaces.derived = derivedSurfaces(unit);
     surfaces.spotlight = await spotlightStyle(unit);
 

@@ -818,33 +818,36 @@ CHANGES
 }
 
 # shellcheck disable=SC2016 # a jq program
-readonly MESSAGE_LIST_REPORT='{surfaces: {messageListLayer: {header: false,
+readonly NOTIFICATIONS_REPORT='{surfaces: {notificationsLayer: {header: false, cardHeader: {sourceIcon: false, line: "G2 Chat · now"}, icon: "mail-unread-symbolic",
   messages: [{x: 0, y: 0, width: 400, height: 80}, {x: 0, y: 88, width: 400, height: 80}, {x: 0, y: 176, width: 400, height: 80}],
   footer: {x: 0, y: 600, width: 400, height: 40}, clear: {x: 310, y: 604, width: 86, height: 32, visible: true},
   dnd: {x: 4, y: 604, width: 180, height: 32, label: "Do Not Disturb"}, dndClick: {showBanners: false, checked: true},
   empty: {placeholder: true, clearVisible: true, clearReactive: false}}}}'
 
-test_message_list_layer() {
+test_notifications_layer() {
     local change what passes failures
-    jq -nc "$MESSAGE_LIST_REPORT" | sed 's/^/APEXG2-SCENES /' >"$T/message-list.log"
-    read -r passes failures <<<"$(assertion_counts message_list_layer case "$T/message-list.log" apex)"
-    expect_eq "message list: the feature's list and footer pass all four assertions" "4/0" "$passes/$failures"
+    jq -nc "$NOTIFICATIONS_REPORT" | sed 's/^/APEXG2-SCENES /' >"$T/notifications.log"
+    read -r passes failures <<<"$(assertion_counts notifications_layer case "$T/notifications.log" apex)"
+    expect_eq "notifications: the feature's list, cards and footer pass all five assertions" "5/0" "$passes/$failures"
     while IFS='|' read -r change what; do
-        jq -nc "$MESSAGE_LIST_REPORT | .surfaces.messageListLayer |= ($change)" | sed 's/^/APEXG2-SCENES /' >"$T/message-list.log"
-        read -r passes failures <<<"$(assertion_counts message_list_layer case "$T/message-list.log" apex)"
-        expect_eq "message list: $what fails one assertion" "3/1" "$passes/$failures"
+        jq -nc "$NOTIFICATIONS_REPORT | .surfaces.notificationsLayer |= ($change)" | sed 's/^/APEXG2-SCENES /' >"$T/notifications.log"
+        read -r passes failures <<<"$(assertion_counts notifications_layer case "$T/notifications.log" apex)"
+        expect_eq "notifications: $what fails one assertion" "4/1" "$passes/$failures"
     done <<'CHANGES'
 .messages[1].y = 10|a stacked group
 .header = true|a group header
+.cardHeader.sourceIcon = true|a card header with the source glyph
+.icon = null|a card without the app's icon
 .dnd = null|a footer without Do Not Disturb
 .clear.x = 200|Clear off the right edge
 .dndClick.showBanners = true|a click that left banners on
 .empty.clearVisible = false|Clear hidden with nothing to clear
 CHANGES
-    jq -nc "$MESSAGE_LIST_REPORT | .surfaces.messageListLayer |= (.messages[1].y = 10 | .dnd = null | .empty.clearVisible = false)" |
-        sed 's/^/APEXG2-SCENES /' >"$T/message-list.log"
-    read -r passes failures <<<"$(assertion_counts message_list_layer case "$T/message-list.log" stock)"
-    expect_eq "message list: stock's stacked list and lone Clear pass both stock assertions" "2/0" "$passes/$failures"
+    jq -nc "$NOTIFICATIONS_REPORT | .surfaces.notificationsLayer |= (.messages[1].y = 10 | .dnd = null | .empty.clearVisible = false
+        | .cardHeader.sourceIcon = true | .icon = null)" |
+        sed 's/^/APEXG2-SCENES /' >"$T/notifications.log"
+    read -r passes failures <<<"$(assertion_counts notifications_layer case "$T/notifications.log" stock)"
+    expect_eq "notifications: stock's stacked list and lone Clear pass both stock assertions" "2/0" "$passes/$failures"
 }
 
 test_shadow_layers() {
@@ -1489,7 +1492,7 @@ test_overview_style
 test_app_grid
 test_overview_layer
 test_shadow_layers
-test_message_list_layer
+test_notifications_layer
 test_derived_surfaces
 test_spotlight_style
 test_today_pins

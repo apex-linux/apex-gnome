@@ -106,9 +106,15 @@ $_calendar_day_width: ($apex_date_menu_column_width - 2 * $apex_calendar_padding
     font-weight: $apex_font_label_weight;
 
     &:hover, &:focus { background-color: $apex_button_hover; }
+
+    // With nothing to clear, the notifications feature keeps Clear shown, faded.
+    &:insensitive {
+      color: rgba($apex_fg, $apex_clear_insensitive_opacity);
+      background-color: rgba($apex_button, alpha($apex_button) * $apex_clear_insensitive_opacity);
+    }
   }
 
-  // The message-list feature's Do Not Disturb row: its label, then a stock switch.
+  // The notifications feature's Do Not Disturb row: its label, then a stock switch.
   .apex-dnd-button {
     min-height: $apex_clear_button_height;
     padding: 0;
