@@ -1449,6 +1449,108 @@ async function spotlightStyle(unit) {
     }
 }
 
+// S3a's exit items in the real shell: a provider past the budget holds back no section, and
+// real key presses move one selection across the sections, open a row and close the popup.
+const SLOW_SETTINGS_MS = 1600;
+const SECTIONS_EARLY_MS = 300;
+const SECTIONS_LATE_MS = 1200;
+const NO_KEYBINDING_ACTION = -1;
+
+function slowSpotlightProviders(started, settings) {
+    const providers = spotlightProviders();
+    const fast = providers.get('org.gnome.Settings.desktop');
+    providers.set('org.gnome.Settings.desktop', {
+        ...fast,
+        getInitialResultSet: (terms, cancellable) => new Promise(resolve => {
+            settings.askedMs = msSince(started.at);
+            cancellable?.connect(() => {
+                settings.cancelledMs = msSince(started.at);
+            });
+            GLib.timeout_add(GLib.PRIORITY_DEFAULT, SLOW_SETTINGS_MS, () => {
+                resolve(fast.getInitialResultSet(terms));
+                return GLib.SOURCE_REMOVE;
+            });
+        }),
+    });
+    for (const [id, provider] of providers)
+        provider.activateResult = (resultId, terms) => settings.activated.push({provider: id, id: resultId, terms});
+    return providers;
+}
+
+function msSince(start) {
+    return Math.round((GLib.get_monotonic_time() - start) / 1000);
+}
+
+function spotlightSections(popup) {
+    if (!popup.isOpen)
+        return {open: false, sections: [], rows: 0, selected: null};
+    const results = popup.panel.get_children()[1];
+    const headers = results.get_children().filter(a => a.has_style_class_name('apex-spotlight-header'));
+    const selected = popup.rows.find(r => r.selected);
+    return {
+        sections: headers.map(h => h.get_child().get_text()),
+        rows: popup.rows.length,
+        selected: selected ? selected.key : null,
+    };
+}
+
+async function pressKeys(keyboard, keyval, times) {
+    for (let i = 0; i < times; i++) {
+        keyboard.notify_keyval(GLib.get_monotonic_time(), keyval, Clutter.KeyState.PRESSED);
+        keyboard.notify_keyval(GLib.get_monotonic_time(), keyval, Clutter.KeyState.RELEASED);
+        // eslint-disable-next-line no-await-in-loop
+        await Scripting.sleep(20);
+    }
+    await settle();
+}
+
+async function spotlightKeys() {
+    if ((await apexHooks())?.safe() !== false)
+        return null;
+    let Popup, BUDGET_MS;
+    try {
+        ({Popup} = await import('resource:///org/gnome/shell/ui/apex/spotlight/popup.js'));
+        ({BUDGET_MS} = await import('resource:///org/gnome/shell/ui/apex/spotlight/search.js'));
+    } catch {
+        return null;
+    }
+    const started = {at: 0};
+    const settings = {askedMs: null, cancelledMs: null, activated: []};
+    // Unbound keys map to keybinding action 0, so the toggle action here must match none.
+    const popup = new Popup(() => slowSpotlightProviders(started, settings), NO_KEYBINDING_ACTION);
+    const seat = global.stage.context.get_backend().get_default_seat();
+    const keyboard = seat.create_virtual_device(Clutter.InputDeviceType.KEYBOARD_DEVICE);
+    const keys = {budgetMs: BUDGET_MS, slowMs: SLOW_SETTINGS_MS, modalBefore: Main.modalCount};
+    try {
+        popup.open();
+        keys.modalOpen = Main.modalCount;
+        started.at = GLib.get_monotonic_time();
+        popup.panel.get_children()[0].get_children()[1].set_text('disk');
+        await Scripting.sleep(SECTIONS_EARLY_MS);
+        keys.early = {ms: msSince(started.at), ...spotlightSections(popup)};
+        await Scripting.sleep(Math.max(0, SECTIONS_LATE_MS - msSince(started.at)));
+        keys.late = {ms: msSince(started.at), ...spotlightSections(popup)};
+        keys.settings = {askedMs: settings.askedMs, cancelledMs: settings.cancelledMs};
+        await pressKeys(keyboard, Clutter.KEY_Down, 4);
+        keys.down4 = spotlightSections(popup).selected;
+        await pressKeys(keyboard, Clutter.KEY_Up, 1);
+        keys.up1 = spotlightSections(popup).selected;
+        await pressKeys(keyboard, Clutter.KEY_Down, 20);
+        keys.down20 = spotlightSections(popup).selected;
+        await pressKeys(keyboard, Clutter.KEY_Return, 1);
+        keys.enter = {open: popup.isOpen, modal: Main.modalCount, activated: settings.activated};
+        popup.open();
+        popup.panel.get_children()[0].get_children()[1].set_text('disk');
+        await settle();
+        await pressKeys(keyboard, Clutter.KEY_Escape, 1);
+        keys.escape = {open: popup.isOpen, modal: Main.modalCount};
+        return keys;
+    } finally {
+        popup.destroy();
+        await settle();
+    }
+}
+
 // Text typed in the overview reaches its search entry; patch 0013 hands it to Spotlight.
 async function overviewSearch() {
     const feature = await import(SPOTLIGHT_FEATURE).catch(() => null);
@@ -1820,6 +1922,7 @@ async function scenes() {
     surfaces.derived = derivedSurfaces(unit);
     surfaces.tilePreview = await tilePreview(unit);
     surfaces.spotlight = await spotlightStyle(unit);
+    surfaces.spotlightKeys = await spotlightKeys();
     surfaces.screenshot = await screenshotUI(unit);
 
     Main.overview.show();
