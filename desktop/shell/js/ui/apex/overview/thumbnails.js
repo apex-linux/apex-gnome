@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 //
-// DESIGN: workspace thumbnails 150 x 94 on a 1440 x 900 screen, shown once there are two
-// workspaces, which with dynamic workspaces is as soon as one has a window.
+// DESIGN: workspace thumbnails at .104 of the work area (150 x 90 on 1440 x 900), shown from
+// two workspaces, which with dynamic workspaces is as soon as one has a window.
 
 import * as Hooks from '../hooks.js';
 import * as Main from '../../main.js';
