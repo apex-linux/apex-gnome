@@ -1068,6 +1068,7 @@ async function openEndSessionDialog(unit) {
             rowSpacing: round(row.layout_manager.spacing / unit.length),
             buttons: row.get_children().filter(b => b.visible).map(b => ({
                 ...styleOf(b, unit),
+                text: b.label,
                 hover: underPseudoClass(b, 'hover', () => paint(b.get_theme_node(), unit)),
             })),
         };

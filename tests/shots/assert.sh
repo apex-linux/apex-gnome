@@ -609,7 +609,7 @@ modal_dialog() {
     "${metric[@]}" 'its row is Cancel, Restart, Power Off, $apex_end_session_button_gap apart, sharing it $apex_end_session_cancel_share : $apex_end_session_restart_share : $apex_end_session_confirm_share' \
         "$d.endSession" '((($t.apex_end_session_dialog_width | px) - 2 * ($t.apex_dialog_padding | px) - 2 * ($t.apex_end_session_button_gap | px))
             / (($t.apex_end_session_cancel_share | num) + ($t.apex_end_session_restart_share | num) + ($t.apex_end_session_confirm_share | num))) as $share
-            | (.buttons | map(.label.text)) == ["Cancel", "Restart", "Power Off"] and (.rowSpacing | px_is($t.apex_end_session_button_gap))
+            | (.buttons | map(.text)) == ["Cancel", "Restart", "Power Off"] and (.rowSpacing | px_is($t.apex_end_session_button_gap))
             and ([.buttons[].width] | [.[0] / ($t.apex_end_session_cancel_share | num), .[1] / ($t.apex_end_session_restart_share | num), .[2] / ($t.apex_end_session_confirm_share | num)]
                 | all(. - $share | fabs <= 1))'
     "${metric[@]}" 'Cancel and Restart are $apex_button ($apex_button_hover hovered); Power Off, which ends the session, $apex_destructive ($apex_destructive_hover hovered) with $apex_destructive_fg' \
