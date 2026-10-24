@@ -192,7 +192,9 @@ REPORT_OF_A_BAR_DRAWN_FROM_TOKENS='
     dnd: {off: $glyphs, on: $glyphs},
     leftItems: [{accessibleName: "Activities", label: null, pill: {x: $pad, y: 4, width: 76, height: 24, radius: 12}},
         {accessibleName: "Desktop", label: {text: "Desktop", weight: ($t.apex_font_bar_emphasis_weight | tonumber)}, pill: null}],
-    rightItems: [{accessibleName: "System", label: null, pill: {x: 1337, y: 4, width: 95, height: 24, radius: 12}}],
+    rightItems: [{accessibleName: "Search (Super+Space)", label: null,
+            pill: {x: 1303, y: 4, width: ($t.apex_bar_search_width | px), height: 24, radius: 12}},
+        {accessibleName: "System", label: null, pill: {x: 1337, y: 4, width: 95, height: 24, radius: 12}}],
     opaque: {background: ($t.apex_bar_solid | hex), boxShadow: {color: ($t.apex_border | hex), inset: false, x: 0, y: 1, blur: 0, spread: 0}},
     glass: []}}'
 # shellcheck disable=SC2016 # a jq program
@@ -200,8 +202,7 @@ HEX_DEF='def hex: rgba | map([., 16] | "0123456789abcdef"[(.[0] / .[1] | floor):
                                     + "0123456789abcdef"[(.[0] % .[1]):(.[0] % .[1]) + 1]) | "#" + join("");'
 
 # shellcheck disable=SC2016 # jq programs
-GAP_CLOSERS='the search button|.topBar.rightItems |= [{accessibleName: "Search (Super+Space)", pill: {width: 32, height: 24, radius: 12}}] + .
-the glass|.topBar.glass = [{actor: "panel", radius: 96, saturation: 1.6}]
+GAP_CLOSERS='the glass|.topBar.glass = [{actor: "panel", radius: 96, saturation: 1.6}]
 the clock gap|.topBar.clockTextGap = 8
 the clock pill without the pad|.topBar.withDot.pillWidth -= ($t.apex_bar_clock_gap | px) + ($t.apex_bar_clock_dot_size | px)
 the raw accent dot|.topBar.withDot.dot.background = .topBar.accent'
@@ -281,6 +282,10 @@ del(.topBar.statusGlyphs[1])|no Wi-Fi glyph
 .topBar.leftItems = .topBar.leftItems[:1]|no focused-app name
 .topBar.leftItems[1].label.weight = 600|a focused-app name at the bar's weight
 .topBar.leftItems[1].label.text = "Activities"|another name while nothing has focus
+.topBar.rightItems = .topBar.rightItems[1:]|no search button
+.topBar.rightItems = .topBar.rightItems[1:] + .topBar.rightItems[:1]|a search button after the status pill
+.topBar.rightItems[0].pill.width = 36|a search pill padded like the others
+.topBar.rightItems[0].accessibleName = "Search"|a search button that does not name its key
 .topBar.dnd.on = ["notifications-disabled-symbolic"] + .topBar.dnd.off|a Do Not Disturb glyph in the status pill
 .topBar.statusGlyphs += [{name: "bluetooth-active-symbolic", width: 16, height: 16, iconSize: 16}]|the connected keyboard's Bluetooth glyph
 CHANGES

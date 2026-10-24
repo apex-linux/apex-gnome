@@ -16,6 +16,7 @@
     <file alias="status-pill/feature.js">js/ui/apex/status-pill/feature.js</file>
     <file alias="solid-bar/feature.js">js/ui/apex/solid-bar/feature.js</file>
     <file alias="focused-app/feature.js">js/ui/apex/focused-app/feature.js</file>
+    <file alias="search-button/feature.js">js/ui/apex/search-button/feature.js</file>
   </gresource>
   <gresource prefix="/org/gnome/shell/theme/apex">
     <file alias="diamond-light.svg">data/theme/apex/diamond-light.svg</file>

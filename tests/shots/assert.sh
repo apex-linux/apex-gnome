@@ -30,6 +30,8 @@ readonly DIAMOND_STROKE_PX=2
 readonly DIAMOND_STROKE_AREA_PX=$((4 * DIAMOND_SQUARE_PX * DIAMOND_STROKE_PX))
 readonly LARGE_TEXT_SCALING_FACTOR=1.25
 readonly HOT_CORNER_SIZE=4px
+readonly SEARCH_BUTTON_NAME='Search (Super+Space)'
+readonly STATUS_BUTTON_NAME=System
 readonly INACTIVE_DOT_OPACITY=0.45
 readonly TODAY_CLOCK_TEXT_GAP=7.04
 readonly TODAY_CLOCK_PILL_EXTRA=13
@@ -223,6 +225,10 @@ top_bar() {
         '.topBar.leftItems' 'length == 2 and .[0].accessibleName == "Activities" and (.[1].label | .text == "Desktop" and .weight == ($t.apex_font_bar_emphasis_weight | tonumber))'
     "${metric[@]}" 'the status pill ends $apex_bar_padding from the right edge' \
         '.topBar | .panel.width - .status.pill.x - .status.pill.width' 'px_is($t.apex_bar_padding)'
+    "${metric[@]}" "the search button comes just before the status pill: a \$apex_bar_search_width x \$apex_bar_pill_height pill, radius \$apex_radius_bar_pill, named \"$SEARCH_BUTTON_NAME\"" \
+        '.topBar.rightItems | .[-2:]' \
+        "length == 2 and .[1].accessibleName == \"$STATUS_BUTTON_NAME\" and .[0].accessibleName == \"$SEARCH_BUTTON_NAME\"
+            and (.[0].pill | (.width | px_is(\$t.apex_bar_search_width)) and (.height | px_is(\$t.apex_bar_pill_height)) and (.radius | px_is(\$t.apex_radius_bar_pill)))"
     "${metric[@]}" 'the clock pill is centred on the bar' \
         '.topBar | .clock.pill.x + .clock.pill.width / 2 - .panel.width / 2' 'fabs <= 0.5'
     "${metric[@]}" 'the bar changes over $apex_bar_transition' \
@@ -276,8 +282,6 @@ top_bar_today() {
     tokens=$(tokens_for "$variant")
     local -a metric=(top_bar_metric "$label top bar, until its known gap closes" "$scenes" "$tokens")
 
-    "${metric[@]}" 'the right box has no search button' \
-        '.topBar.rightItems | map(select(.accessibleName // "" | startswith("Search")))' '. == []'
     "${metric[@]}" 'the bar has no blur effect' \
         '.topBar.glass' '. == []'
     "${metric[@]}" "the clock's date and time are $TODAY_CLOCK_TEXT_GAP px apart (one EN SPACE, 24-hour clock)" \
@@ -295,12 +299,9 @@ top_bar_gaps() {
     scenes=$(report_of "$log" APEXG2-SCENES)
     tokens=$(tokens_for "$variant")
     local -a metric=(top_bar_metric "$label top bar" "$scenes" "$tokens")
-    local layer='S2a (the layer)' clock_hook='no step yet (a clock hook, or the owner accepts it)'
+    local clock_hook='no step yet (a clock hook, or the owner accepts it)'
     local wallpaper='S1b (the Facets wallpaper and the light overview)'
 
-    known_gap "$layer" "${metric[@]}" 'the right box holds the search button: a 32 x $apex_bar_pill_height pill, radius $apex_radius_bar_pill, named "Search"' \
-        '.topBar.rightItems | map(select(.accessibleName // "" | startswith("Search")))' \
-        'length == 1 and (.[0].pill | (.width | px_is("32px")) and (.height | px_is($t.apex_bar_pill_height)) and (.radius | px_is($t.apex_radius_bar_pill)))'
     known_gap 'S2b (patch 0003, the glass manager)' "${metric[@]}" 'the bar is glass: a Shell.BlurEffect of radius 2 x $apex_bar_blur x the monitor scale at $apex_bar_saturation' \
         '{glass: .topBar.glass, scale: .monitorScale}' \
         '.scale as $s | .glass | any((.radius - 2 * ($t.apex_bar_blur | px) * $s | fabs < 0.01) and .saturation != null and ((.saturation - ($t.apex_bar_saturation | rtrimstr("%") | tonumber / 100)) | fabs < 0.01))'

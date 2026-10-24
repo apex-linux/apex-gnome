@@ -21,6 +21,7 @@ directory with `git archive` and unpacks it at the top of Fedora's gnome-shell t
 | `js/ui/apex/workspace-dots/feature.js`, `hot-corner/feature.js`, `status-pill/feature.js` | the top bar's hooks of patch 0010 (below) |
 | `js/ui/apex/solid-bar/feature.js` | the solid bar while `translucent-top-bar` is off (below) |
 | `js/ui/apex/focused-app/feature.js` | the focused app's name after the Activities pill (below) |
+| `js/ui/apex/search-button/feature.js` | the search button before the status pill (below) |
 | `js/ui/apex/fault/feature.js` | the fault-injection feature: loaded only when `APEX_SHELL_TEST_FAULT` names a phase, it fails in that phase (below) |
 | `data/theme/apex/_apex-tokens.scss` | the design tokens as SCSS variables, imported after upstream's `_colors` |
 | `data/theme/apex/_apex.scss` | the Apex sheet, imported last by the light and dark entry files |
@@ -84,6 +85,13 @@ the name of `Shell.WindowTracker`'s focus app, or "Desktop" while nothing has fo
 `$apex_font_bar_emphasis_weight` and padded `$apex_bar_app_name_padding`. It takes no
 clicks, and `show-focused-app-name` (live) and the lock screen hide it. A schema without
 the key turns off only this feature.
+
+`search-button` adds a pill just before the status pill (role `apex-search`), named
+"Search (Super+Space)", `$apex_bar_search_width` wide with the 16 px search glyph. A click
+does what Super+Space does (`toggleSpotlight()` of `spotlight`): the overview with its
+search entry focused, or, while the overview is up, hides it. It works with `spotlight`
+in `disabled-features` too. The lock screen hides it; keyboard focus reaches it, but
+Super+Space is its key.
 
 The layer also does what every feature relies on:
 

@@ -147,7 +147,9 @@ status buttons still reach the screen's left and right edges; the bar's transiti
 workspace dots' gap, height and radius, the active dot `$apex_bar_dot_active_width` wide and
 the others `$apex_bar_dot_size` square at .45; that the top-left pixel reaches the reactive
 4 × 4 hot-corner zone; "Desktop" at `$apex_font_bar_emphasis_weight` after the Activities pill,
-as nothing has focus (the `focused-app` feature); the clock's unread-notification dot (the probe
+as nothing has focus (the `focused-app` feature); the search button just before the status pill, a
+`$apex_bar_search_width` × `$apex_bar_pill_height` pill named "Search (Super+Space)" (the
+`search-button` feature); the clock's unread-notification dot (the probe
 posts one low-urgency notification); that the diamond is drawn (at least a quarter of
 its stroke's area in capture pixels of the bar's colour, left of the dots, at the
 capture's scale); the status pill's glyph gap and glyph size, the fixtures' Wi-Fi and
@@ -175,7 +177,6 @@ removes its pin.
 
 | Until | Assertion | S1a measures |
 |---|---|---|
-| S2a (the layer) | a 32 × 24 search button named "Search…" | none |
 | S2b (patch 0003, the glass manager) | a 24 px blur at 160 % saturation behind the bar | no blur effect |
 | S1b (the Facets wallpaper and the light overview) | the unread-notification dot is the raw accent | `$apex_bar_fg`: over Fedora's wallpaper an accent dot is about 1.4:1 against the light bar |
 | no step yet (a clock hook, or the owner accepts it) | `$apex_bar_clock_gap` between the date and the time | about 7 px with G2's 24-hour clock: one label, an EN SPACE. An en-US 12-hour clock adds a FIGURE SPACE before a one-digit hour ("Tue Sep 29" EN SPACE FIGURE SPACE "5:23 AM"): about 14 px |
