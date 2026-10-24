@@ -19,6 +19,7 @@ directory with `git archive` and unpacks it at the top of Fedora's gnome-shell t
 | `js/ui/apex/layer.js` | the layer: the configure and enable phases, one `try/catch` per feature, the session-mode colour hook, the crash guard's marker file |
 | `js/ui/apex/spotlight/feature.js` | Super+Space (below) |
 | `js/ui/apex/workspace-dots/feature.js`, `hot-corner/feature.js`, `status-pill/feature.js` | the top bar's hooks of patch 0010 (below) |
+| `js/ui/apex/solid-bar/feature.js` | the solid bar while `translucent-top-bar` is off (below) |
 | `js/ui/apex/fault/feature.js` | the fault-injection feature: loaded only when `APEX_SHELL_TEST_FAULT` names a phase, it fails in that phase (below) |
 | `data/theme/apex/_apex-tokens.scss` | the design tokens as SCSS variables, imported after upstream's `_colors` |
 | `data/theme/apex/_apex.scss` | the Apex sheet, imported last by the light and dark entry files |
@@ -70,6 +71,12 @@ switches and `disabled-features`, and restores the stock bar when it is disabled
   pill. Network, volume, battery, the camera, microphone, location and remote-access
   indicators, unsafe mode and other panel buttons (input source, accessibility,
   recording) stay. Their Quick Settings toggles stay too.
+
+`solid-bar` follows `translucent-top-bar` live: while it is off the panel carries the
+style class `apex-solid-bar`, which `_top-bar.scss` draws as `$apex_bar_solid` over a
+`0 1px 0 $apex_border` line, in the overview too; the lock screen and the greeter keep
+their transparent panel. A schema without the key turns off only this feature. The
+maximised-window trigger waits for S2a's window tracking.
 
 The layer also does what every feature relies on:
 

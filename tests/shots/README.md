@@ -142,7 +142,8 @@ every expected value from `desktop/shell/data/theme/apex/_apex-tokens.scss`, for
 case's variant: the bar's height, fill and type; the boxes' insets and gaps; each
 button's height and colour; each pill's height, radius, padding, and fill while closed,
 hovered and open; the clock's weight; where the pills sit, and that the Activities and
-status buttons still reach the screen's left and right edges; the bar's transition; the
+status buttons still reach the screen's left and right edges; the bar's transition; with `translucent-top-bar` off, the bar `$apex_bar_solid` over a
+`0 1px 0 $apex_border` line (the `solid-bar` feature); the
 workspace dots' gap, height and radius, the active dot `$apex_bar_dot_active_width` wide and
 the others `$apex_bar_dot_size` square at .45; that the top-left pixel reaches the reactive
 4 × 4 hot-corner zone; the clock's unread-notification dot (the probe
@@ -175,7 +176,6 @@ removes its pin.
 |---|---|---|
 | S2a (the layer) | "Desktop" at 700 follows the Activities pill while nothing has focus | no item |
 | S2a (the layer) | a 32 × 24 search button named "Search…" | none |
-| S2a (the layer) | with `translucent-top-bar` off the bar is `$apex_bar_solid` over a `0 1px 0 $apex_border` line | the bar keeps its translucent fill and draws no line |
 | S2b (patch 0003, the glass manager) | a 24 px blur at 160 % saturation behind the bar | no blur effect |
 | S1b (the Facets wallpaper and the light overview) | the unread-notification dot is the raw accent | `$apex_bar_fg`: over Fedora's wallpaper an accent dot is about 1.4:1 against the light bar |
 | no step yet (a clock hook, or the owner accepts it) | `$apex_bar_clock_gap` between the date and the time | about 7 px with G2's 24-hour clock: one label, an EN SPACE. An en-US 12-hour clock adds a FIGURE SPACE before a one-digit hour ("Tue Sep 29" EN SPACE FIGURE SPACE "5:23 AM"): about 14 px |

@@ -192,7 +192,7 @@ REPORT_OF_A_BAR_DRAWN_FROM_TOKENS='
     dnd: {off: $glyphs, on: $glyphs},
     leftItems: [{accessibleName: "Activities", label: null, pill: {x: $pad, y: 4, width: 76, height: 24, radius: 12}}],
     rightItems: [{accessibleName: "System", label: null, pill: {x: 1337, y: 4, width: 95, height: 24, radius: 12}}],
-    opaque: {background: ($t.apex_bar | hex), boxShadow: null},
+    opaque: {background: ($t.apex_bar_solid | hex), boxShadow: {color: ($t.apex_border | hex), inset: false, x: 0, y: 1, blur: 0, spread: 0}},
     glass: []}}'
 # shellcheck disable=SC2016 # a jq program
 HEX_DEF='def hex: rgba | map([., 16] | "0123456789abcdef"[(.[0] / .[1] | floor):(.[0] / .[1] | floor) + 1]
@@ -201,7 +201,6 @@ HEX_DEF='def hex: rgba | map([., 16] | "0123456789abcdef"[(.[0] / .[1] | floor):
 # shellcheck disable=SC2016 # jq programs
 GAP_CLOSERS='the focused-app name|.topBar.leftItems += [{accessibleName: "Desktop", label: {text: "Desktop", weight: 700}}]
 the search button|.topBar.rightItems |= [{accessibleName: "Search (Super+Space)", pill: {width: 32, height: 24, radius: 12}}] + .
-the solid bar|.topBar.opaque = {background: ($t.apex_bar_solid | hex), boxShadow: {color: ($t.apex_border | hex), inset: false, x: 0, y: 1, blur: 0, spread: 0}}
 the glass|.topBar.glass = [{actor: "panel", radius: 96, saturation: 1.6}]
 the clock gap|.topBar.clockTextGap = 8
 the clock pill without the pad|.topBar.withDot.pillWidth -= ($t.apex_bar_clock_gap | px) + ($t.apex_bar_clock_dot_size | px)
@@ -276,6 +275,9 @@ del(.topBar.statusGlyphs[1])|no Wi-Fi glyph
 .topBar.dots[1].opacity = 1|an inactive dot as strong as the active one
 .topBar.corner = {name: "panelActivities", type: "ActivitiesButton", x: 0, y: 0, width: 84, height: 32}|no hot-corner zone at the top-left pixel
 .topBar.corner.width = 1|a 1 px hot corner
+.topBar.opaque.background = .topBar.panel.background|translucent-top-bar off that keeps the translucent fill
+.topBar.opaque.boxShadow = null|a solid bar without its line
+.topBar.opaque.boxShadow.y = 2|a 2 px line under the solid bar
 .topBar.dnd.on = ["notifications-disabled-symbolic"] + .topBar.dnd.off|a Do Not Disturb glyph in the status pill
 .topBar.statusGlyphs += [{name: "bluetooth-active-symbolic", width: 16, height: 16, iconSize: 16}]|the connected keyboard's Bluetooth glyph
 CHANGES

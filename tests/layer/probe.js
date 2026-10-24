@@ -147,6 +147,18 @@ async function exerciseTopBar() {
     fact('pill.on', pillNames(quickSettings));
 }
 
+async function exerciseSolidBar() {
+    if (GLib.getenv('PROBE_SOLID_BAR') !== '1')
+        return;
+    for (const [key, value] of [['translucent-top-bar', false], ['translucent-top-bar', true],
+        ['translucent-top-bar', false], ['layer-enabled', false], ['layer-enabled', true]]) {
+        printerr(`probe: set ${key}=${value}`);
+        settings.set_boolean(key, value);
+        // eslint-disable-next-line no-await-in-loop
+        await spin(200);
+    }
+}
+
 async function switchLayer() {
     const cycles = Number(GLib.getenv('PROBE_SWITCH') ?? '0');
     for (let cycle = 1; cycle <= cycles; cycle++) {
@@ -192,6 +204,7 @@ if (layer && GLib.getenv('PROBE_ENABLE') === '1') {
     }
     await pressToggleSpotlight();
     await exerciseTopBar();
+    await exerciseSolidBar();
     await setDisabledLive();
     await switchLayer();
     for (const [signal, fn] of [...handlers.values()]) {

@@ -225,6 +225,9 @@ top_bar() {
         '.topBar | .clock.pill.x + .clock.pill.width / 2 - .panel.width / 2' 'fabs <= 0.5'
     "${metric[@]}" 'the bar changes over $apex_bar_transition' \
         '.topBar.panel.transition' '. == ($t.apex_bar_transition | rtrimstr("ms") | tonumber)'
+    "${metric[@]}" 'with translucent-top-bar off the bar is $apex_bar_solid over a 0 1px 0 $apex_border line' \
+        '.topBar.opaque' \
+        '(.background | colour_is($t.apex_bar_solid)) and (.boxShadow | .inset == false and .x == 0 and .y == 1 and .blur == 0 and .spread == 0 and (.color | colour_is($t.apex_border)))'
     "${metric[@]}" 'the workspace dots are $apex_bar_dots_gap apart, the active one $apex_bar_dot_size high, each with radius $apex_radius_workspace_dot' \
         '.topBar | {spacing: .activities.pill.spacing, active: (.dots | map(select(.active)) | map(.height)), radii: (.dots | map(.radius))}' \
         '(.spacing | px_is($t.apex_bar_dots_gap)) and .active != [] and (.active | all(px_is($t.apex_bar_dot_size))) and (.radii | all(px_is($t.apex_radius_workspace_dot)))'
@@ -275,8 +278,6 @@ top_bar_today() {
         '.topBar.leftItems | map(.accessibleName)' '. == ["Activities"]'
     "${metric[@]}" 'the right box has no search button' \
         '.topBar.rightItems | map(select(.accessibleName // "" | startswith("Search")))' '. == []'
-    "${metric[@]}" 'with translucent-top-bar off the bar keeps its fill and draws no line' \
-        '{opaque: .topBar.opaque, fill: .topBar.panel.background}' '.opaque.error == null and .opaque.background == .fill and .opaque.boxShadow == null'
     "${metric[@]}" 'the bar has no blur effect' \
         '.topBar.glass' '. == []'
     "${metric[@]}" "the clock's date and time are $TODAY_CLOCK_TEXT_GAP px apart (one EN SPACE, 24-hour clock)" \
@@ -302,9 +303,6 @@ top_bar_gaps() {
     known_gap "$layer" "${metric[@]}" 'the right box holds the search button: a 32 x $apex_bar_pill_height pill, radius $apex_radius_bar_pill, named "Search"' \
         '.topBar.rightItems | map(select(.accessibleName // "" | startswith("Search")))' \
         'length == 1 and (.[0].pill | (.width | px_is("32px")) and (.height | px_is($t.apex_bar_pill_height)) and (.radius | px_is($t.apex_radius_bar_pill)))'
-    known_gap "$layer" "${metric[@]}" 'with translucent-top-bar off the bar is $apex_bar_solid over a 0 1px 0 $apex_border line' \
-        '.topBar.opaque' \
-        '(.background | colour_is($t.apex_bar_solid)) and (.boxShadow | .x == 0 and .y == 1 and .blur == 0 and .spread == 0 and (.color | colour_is($t.apex_border)))'
     known_gap 'S2b (patch 0003, the glass manager)' "${metric[@]}" 'the bar is glass: a Shell.BlurEffect of radius 2 x $apex_bar_blur x the monitor scale at $apex_bar_saturation' \
         '{glass: .topBar.glass, scale: .monitorScale}' \
         '.scale as $s | .glass | any((.radius - 2 * ($t.apex_bar_blur | px) * $s | fabs < 0.01) and .saturation != null and ((.saturation - ($t.apex_bar_saturation | rtrimstr("%") | tonumber / 100)) | fabs < 0.01))'

@@ -7,7 +7,8 @@ import * as Hooks from './hooks.js';
 
 // Each <name>/feature.js exports configure(name), which may be async, and synchronous
 // enable() and disable().
-const FEATURES_IN_ENABLE_ORDER = ['spotlight', 'workspace-dots', 'hot-corner', 'status-pill'];
+const FEATURES_IN_ENABLE_ORDER = ['spotlight', 'workspace-dots', 'hot-corner', 'status-pill',
+    'solid-bar'];
 
 const TEST_FAULT_PHASES = ['configure', 'enable', 'abort-after-enable'];
 
