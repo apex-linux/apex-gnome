@@ -1,0 +1,17 @@
+# Anchored edits to Fedora's ptyxis.spec; format and placeholders:
+# packaging/README.md. apex-lane adds the PatchNNNN lines itself.
+
+# %{autorelease} with braces sorts the suffix above Fedora's build (see gnome-shell's).
+replace ^Release:[[:space:]]+%autorelease$
+	Release:	%{autorelease}@APEX_RELEASE@
+end
+
+# Fedora's Source1 is its gschema override, so the Apex archive is Source100.
+after ^Source1:[[:space:]]
+	Source100:	@SOURCE1@
+end
+
+after ^%autosetup[[:space:]]
+	# Apex: src/apex/ (Source100, desktop/ptyxis/ in apex-gnome); -k never clobbers upstream.
+	tar -xkf %{SOURCE100}
+end

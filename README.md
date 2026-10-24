@@ -10,6 +10,8 @@ the Apex layer; libadwaita, Settings and Files patch series join it in S2.
 | `packaging/pkgs/gnome-shell/` | The rebuild recipe apex-image's lane builds from Fedora's SRPM: the patch series, `spec-edit`, `pkg.env` and the post-build `check.sh` |
 | `tests/layer/` | The layer's safety net in gjs: kill switches, fault injection, the crash guard and live layer cycles |
 | `tests/shots/` | G2, the headless shell of a built image, and its self-test |
+| `desktop/ptyxis/`, `packaging/pkgs/ptyxis/` | Ptyxis rebuilt in the lane with the Apex terminal, the sessions sidebar and split panes of boards 32 and 33: its sources (`src/apex/`) and its recipe ([README](packaging/pkgs/ptyxis/README.md)) |
+| `tests/ptyxis/` | the ptyxis recipe through apex-lane's container half (`lane.sh`), and the checks of `desktop/ptyxis/` |
 
 [apex-image](https://github.com/apex-linux/apex-image) pins this repository by commit in
 `components.lock`, builds gnome-shell from the recipe in its builder VM, and runs G2 on the
@@ -35,6 +37,7 @@ just layer-test   # gjs, glib-compile-schemas and gi-compile-repository (or g-ir
 just shots-test   # gjs, GdkPixbuf and jq; dbus-daemon and python3-dbusmock for the fixtures
 just eslint       # node, npm and git: gnome-shell 51.0's eslint rules, pinned in lint/package-lock.json
 just theme        # sassc and git; dnf5, rpm2cpio, cpio and xz for Fedora's gnome-shell SRPM
+just ptyxis-lane  # podman or docker: Ptyxis rebuilt as the lane builds it, RPMs in _build/ptyxis/out
 ```
 
 `just eslint` lints `desktop/shell/js` and the gjs tests with gnome-shell's own
@@ -54,4 +57,5 @@ explains itself, and comments say only why
 
 `desktop/shell/` and the patches are GPL-2.0-or-later, as gnome-shell is
 (`LICENSE.GPL-2.0`). `lint/eslint.config.js` keeps gnome-shell's MIT OR
-LGPL-2.1-or-later. Everything else is GPL-3.0-or-later (`LICENSE`).
+LGPL-2.1-or-later. Everything else, `desktop/ptyxis/` and the Ptyxis patches included
+(Ptyxis is GPL-3.0-or-later), is GPL-3.0-or-later (`LICENSE`).
