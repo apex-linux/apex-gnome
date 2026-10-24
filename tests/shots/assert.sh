@@ -517,6 +517,8 @@ quick_settings() {
             and (.title.font.size | px_is($t.apex_font_quick_menu_title_size)) and .title.font.weight == ($t.apex_font_heading_weight | tonumber)'
     "${metric[@]}" 'its rows are $apex_quick_menu_row_height high, padded $apex_menu_row_padding, radius $apex_radius_menu_row' \
         "$q.wifiMenu.rows" 'length > 0 and all((.height | px_is($t.apex_quick_menu_row_height)) and (.padding.left | px_is($t.apex_menu_row_padding)) and (.radius | px_is($t.apex_radius_menu_row)))'
+    "${metric[@]}" 'its rows hover in $apex_quick_menu_row_hover, lighter than popup menus' \
+        "$q.wifiMenu" '.rowHover.background | colour_is($t.apex_quick_menu_row_hover)'
 }
 
 # shellcheck disable=SC2016 # jq programs and token names, not shell expansions
