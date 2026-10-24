@@ -174,6 +174,27 @@ async function exerciseSpotlight() {
         report('slow.at-1300ms');
         return;
     }
+    if (mode === 'late') {
+        open();
+        entry().set_text('disk');
+        await spin(300);
+        report('late.at-300ms');
+        for (let i = 0; i < 5; i++)
+            key(Clutter.KEY_Down);
+        report('late.down-5');
+        await spin(600);
+        report('late.at-900ms');
+        return;
+    }
+    if (mode === 'late-sum') {
+        open();
+        entry().set_text('2880 / 1.5');
+        await spin(300);
+        report('late-sum.at-300ms');
+        await spin(600);
+        report('late-sum.at-900ms');
+        return;
+    }
 
     open();
     report('opened');

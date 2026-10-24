@@ -77,6 +77,7 @@ export class Popup {
         this._actor = null;
         this._rows = [];
         this._selected = -1;
+        this._shownText = undefined;
     }
 
     destroy() {
@@ -161,6 +162,7 @@ export class Popup {
             this.close();
         } else if (symbol === Clutter.KEY_Down || symbol === Clutter.KEY_Up) {
             const step = symbol === Clutter.KEY_Down ? 1 : -1;
+            this._moved = true;
             this._select(Math.max(0, Math.min(this._rows.length - 1, this._selected + step)));
         } else if (ENTER_KEYS.includes(symbol)) {
             this._activate(this._selected);
@@ -182,14 +184,22 @@ export class Popup {
         });
     }
 
-    async _runSearch(text) {
+    _runSearch(text) {
         const serial = ++this._serial;
-        const sections = await this._search.run(termsOf(text));
-        if (serial === this._serial && this.isOpen)
-            this._show(sections, text.trim());
+        return this._search.run(termsOf(text), (sections, done) => {
+            const rows = sections.reduce((n, section) => n + section.rows.length, 0);
+            if (serial === this._serial && this.isOpen && (rows > 0 || done))
+                this._show(sections, text.trim());
+        });
     }
 
+    // Until the user moves it, the selection is the first row; then a section that arrives
+    // later never moves it. A new query starts at the top.
     _show(sections, text) {
+        if (text !== this._shownText)
+            this._moved = false;
+        const selectedKey = this._moved ? this._rows[this._selected]?.row.key : undefined;
+        this._shownText = text;
         this._results.destroy_all_children();
         this._rows = [];
         for (const section of sections) {
@@ -208,7 +218,11 @@ export class Popup {
         this._results.visible = this._rows.length > 0;
         this._empty.visible = text !== '' && this._rows.length === 0;
         this._emptyLabel.text = `No results for “${text}”`;
-        this._select(this._rows.length > 0 ? 0 : -1);
+        const kept = this._rows.findIndex(({row}) => row.key === selectedKey);
+        if (kept >= 0)
+            this._select(kept);
+        else
+            this._select(this._rows.length > 0 ? 0 : -1);
     }
 
     _buildRow(row, index) {
@@ -242,8 +256,10 @@ export class Popup {
         }));
         actor.add_child(action);
         actor.connect('notify::hover', () => {
-            if (actor.hover)
-                this._select(index);
+            if (!actor.hover)
+                return;
+            this._moved = true;
+            this._select(index);
         });
         const click = new Clutter.ClickGesture();
         click.connect('recognize', () => this._activate(index));

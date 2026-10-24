@@ -59,16 +59,20 @@ registers `toggle-spotlight` from `io.github.apex_linux.Apex.Desktop.Keybindings
 (`['<Super>space']`) with `Main.wm.addKeybinding` at enable, in the normal and overview
 action modes and without autorepeat, and removes it at disable. A press opens Spotlight
 (board 38, DESIGN's Spotlight rules), a modal popup in the popup action mode; Esc, a click
-outside, Super+Space again or the Super tap (which then opens the overview) close it.
+outside or Super+Space again close it. Upstream allows the Super tap only in the normal and
+overview modes, so it does nothing while Spotlight is open (no hook); with Spotlight closed
+it opens the overview as before.
 apex-desktop's override moves `switch-input-source` to Super+Alt+Space, so nothing else
 owns Super+Space; a Super tap (the overview) and Super+A (the launcher) are upstream's.
 
 Spotlight draws its own rows over the stock search providers: upstream's app search
 (`AppSearchProvider`), then the remote providers `remoteSearch.js` loads, of which it keeps
 gnome-calculator, gnome-control-center and nautilus. The sections and caps are Calculator 1,
-Applications 4, Settings 3 and Files 4, in that order; each provider has 1 s per query, and
-one past it is cancelled and left out of that query while the others show. A sum puts
-Calculator first among the applications. Up and Down move one selection across the
+Applications 4, Settings 3 and Files 4, in that order. Sections show as their providers
+answer, each in its place; each provider has 1 s per query, and one past it is cancelled and
+left out of that query. The selection is the first row until Up, Down or the pointer moves it;
+after that an arriving section never moves it. A sum puts Calculator first among the
+applications, whichever answers first. Up and Down move one selection across the
 sections, Enter activates it through its provider, and Enter on the calculator's result
 copies it, closes Spotlight and shows the "Copied" toast above the dock for 2 s. An empty
 query shows only the field; a query with no results says so. The feature follows the kill

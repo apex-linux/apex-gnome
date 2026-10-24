@@ -57,6 +57,7 @@ async function query(provider, terms, cap, cancellable) {
 function rowsOf(section, provider, metas, terms) {
     const calculator = section.name === 'Calculator';
     return metas.slice(0, section.cap).map(meta => ({
+        key: `${section.name}/${meta.id}`,
         title: calculator ? meta.clipboardText ?? meta.name : meta.name,
         subtitle: calculator ? meta.name : meta.description ?? '',
         createIcon: size => meta.createIcon?.(size) ?? null,
@@ -67,15 +68,22 @@ function rowsOf(section, provider, metas, terms) {
     }));
 }
 
-// A sum offers Calculator as the first application, when it is installed.
-async function withCalculatorFirst(apps, metas, cancellable) {
-    const others = metas.filter(meta => meta.id !== CALCULATOR_APP);
+// Fetched with the apps, so that a sum can offer Calculator first whichever answers last.
+async function calculatorApp(apps, cancellable) {
     try {
-        const [calculator] = await metasOf(apps, [CALCULATOR_APP], cancellable);
-        return calculator ? [calculator, ...others] : metas;
+        const [meta] = await metasOf(apps, [CALCULATOR_APP], cancellable);
+        return meta ?? null;
     } catch {
-        return metas;
+        return null;
     }
+}
+
+async function appsQuery(apps, terms, cap, cancellable) {
+    const [metas, calculator] = await Promise.all([
+        query(apps, terms, cap, cancellable),
+        calculatorApp(apps, cancellable),
+    ]);
+    return {metas, calculator};
 }
 
 export class Search {
@@ -83,36 +91,49 @@ export class Search {
         this._providers = providers;
         this._budgetMs = budgetMs;
         this._cancellables = [];
+        this._run = 0;
     }
 
     cancel() {
+        this._run++;
         this._cancellables.forEach(c => c.cancel());
         this._cancellables = [];
     }
 
-    async run(terms) {
+    // onUpdate(sections, done) runs as each provider answers or runs out of budget, the
+    // sections always in SECTIONS' order.
+    run(terms, onUpdate) {
         this.cancel();
-        if (terms.length === 0)
-            return [];
+        if (terms.length === 0) {
+            onUpdate([], true);
+            return Promise.resolve();
+        }
+        const run = this._run;
         const sections = SECTIONS.filter(s => this._providers.has(s.provider));
-        const found = await Promise.all(sections.map(section => {
+        const found = new Map();
+        return Promise.all(sections.map(async section => {
             const cancellable = new Gio.Cancellable();
             this._cancellables.push(cancellable);
             const provider = this._providers.get(section.provider);
-            return withinBudget(query(provider, terms, section.cap, cancellable), cancellable, this._budgetMs);
+            const work = section.name === 'Applications'
+                ? appsQuery(provider, terms, section.cap, cancellable)
+                : query(provider, terms, section.cap, cancellable).then(metas => ({metas}));
+            found.set(section.name, await withinBudget(work, cancellable, this._budgetMs));
+            if (run === this._run)
+                onUpdate(this._assemble(sections, found, terms), found.size === sections.length);
         }));
-        const metasByName = new Map(sections.map((s, i) => [s.name, found[i]]));
-        const apps = this._providers.get('applications');
-        if (metasByName.get('Calculator')?.length > 0 && apps) {
-            metasByName.set('Applications', await withCalculatorFirst(apps,
-                metasByName.get('Applications') ?? [], new Gio.Cancellable()));
-        }
+    }
+
+    _assemble(sections, found, terms) {
+        const sum = found.get('Calculator')?.metas.length > 0;
         return sections
-            .map(section => ({
-                name: section.name,
-                rows: rowsOf(section, this._providers.get(section.provider),
-                    metasByName.get(section.name) ?? [], terms),
-            }))
+            .map(section => {
+                const result = found.get(section.name);
+                let metas = result?.metas ?? [];
+                if (section.name === 'Applications' && sum && result?.calculator)
+                    metas = [result.calculator, ...metas.filter(m => m.id !== CALCULATOR_APP)];
+                return {name: section.name, rows: rowsOf(section, this._providers.get(section.provider), metas, terms)};
+            })
             .filter(section => section.rows.length > 0);
     }
 }
