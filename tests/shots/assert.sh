@@ -394,6 +394,65 @@ shell_surfaces() {
             and (.actions | (.spacing | px_is($t.apex_banner_button_gap)) and (.padding.left | px_is(($t.apex_banner_icon_size | px) + ($t.apex_banner_gap | px))))'
 }
 
+# shellcheck disable=SC2016 # jq programs and token names, not shell expansions
+quick_settings() {
+    local label=$1 log=$2 variant=$3 scenes tokens
+    scenes=$(report_of "$log" APEXG2-SCENES)
+    tokens=$(tokens_for "$variant")
+    local -a metric=(top_bar_metric "$label Quick Settings" "$scenes" "$tokens")
+    local q=.surfaces.quickSettings
+    local toggle_width='((($t.apex_quick_settings_width | px) - 2 * ($t.apex_quick_settings_padding | px) - ($t.apex_quick_settings_grid_gap | px)) / 2)'
+    local shade='(1 - ($t.apex_quick_toggle_menu_button_shade | rtrimstr("%") | tonumber) / 100)'
+
+    "${metric[@]}" 'the panel is $apex_quick_settings_width wide, radius $apex_radius_quick_settings, tinted $apex_panel, inset $apex_quick_settings_padding' \
+        "$q.box" '(.width | px_is($t.apex_quick_settings_width)) and (.radius | px_is($t.apex_radius_quick_settings)) and (.background | colour_is($t.apex_panel))
+            and ([.padding, .border] | [.[0].top + .[1].top, .[0].right + .[1].right, .[0].bottom + .[1].bottom, .[0].left + .[1].left] | all(px_is($t.apex_quick_settings_padding)))'
+    "${metric[@]}" 'its ring is a $apex_surface_border border in $apex_panel_border, its shadow 0 $apex_shadow_y $apex_shadow_blur $apex_shadow' \
+        "$q.box" '(.border.top | px_is($t.apex_surface_border)) and (.borderColor | colour_is($t.apex_panel_border))
+            and (.boxShadow | .y == ($t.apex_shadow_y | px) and .blur == ($t.apex_shadow_blur | px) and (.color | colour_is($t.apex_shadow)))'
+    "${metric[@]}" 'the grid puts $apex_quick_settings_grid_gap between rows and columns, and $apex_quick_settings_section_gap under the top row' \
+        "$q" '(.grid.rows | px_is($t.apex_quick_settings_grid_gap)) and (.grid.columns | px_is($t.apex_quick_settings_grid_gap))
+            and (.wifi.y - .system.y - .system.height | px_is($t.apex_quick_settings_section_gap))'
+    "${metric[@]}" 'the top row'"'"'s round buttons are $apex_quick_settings_button_size circles in $apex_button, $apex_quick_settings_button_gap apart, glyphs $apex_quick_settings_icon_size' \
+        "$q.system" '(.spacing | px_is($t.apex_quick_settings_button_gap)) and (.screenshot | (.width | px_is($t.apex_quick_settings_button_size)) and (.height | px_is($t.apex_quick_settings_button_size))
+            and .radius >= ($t.apex_quick_settings_button_size | px) / 2 and (.background | colour_is($t.apex_button)) and (.icon | px_is($t.apex_quick_settings_icon_size)))'
+    "${metric[@]}" 'the battery pill is $apex_quick_settings_button_size high in $apex_button, padded $apex_quick_settings_battery_padding, $apex_quick_settings_battery_gap to its text at $apex_font_quick_settings_battery_size $apex_font_label_weight' \
+        "$q.system.battery" '(.height | px_is($t.apex_quick_settings_button_size)) and .radius >= ($t.apex_quick_settings_button_size | px) / 2 and (.background | colour_is($t.apex_button))
+            and (.box.padding.left | px_is($t.apex_quick_settings_battery_padding)) and (.box.padding.right | px_is($t.apex_quick_settings_battery_padding)) and (.box.spacing | px_is($t.apex_quick_settings_battery_gap))
+            and (.title.font.size | px_is($t.apex_font_quick_settings_battery_size)) and .title.font.weight == ($t.apex_font_label_weight | tonumber)'
+    "${metric[@]}" 'toggles fill half the grid and are $apex_quick_toggle_height high, fully round' \
+        "[$q.wifi, $q.unchecked]" "all((.width | px_is($toggle_width)) and (.height | px_is(\$t.apex_quick_toggle_height)))
+            and (.[1].radius >= (\$t.apex_quick_toggle_height | px) / 2)"
+    "${metric[@]}" 'an unchecked toggle is $apex_button with $apex_fg text, $apex_button_hover when hovered' \
+        "$q.unchecked" '(.background | colour_is($t.apex_button)) and (.foreground | colour_is($t.apex_fg)) and (.hover.background | colour_is($t.apex_button_hover))'
+    "${metric[@]}" 'a checked toggle is the accent, its text the accent'"'"'s foreground, its subtitle that at $apex_quick_toggle_subtitle_opacity' \
+        "{t: $q.wifi.toggle, accent: .topBar.accent}" '.accent as $a | (.t.background | colour_is($a)) and (.t.foreground | colour_is("#ffffff"))
+            and (.t.subtitle.foreground | colour_is("rgba(255, 255, 255, \($t.apex_quick_toggle_subtitle_opacity))"))'
+    "${metric[@]}" 'a toggle is padded $apex_quick_toggle_padding ($apex_quick_toggle_menu_padding before a menu arrow), $apex_quick_toggle_gap between glyph and text, its glyph $apex_quick_settings_icon_size' \
+        "[$q.wifi.toggle, $q.unchecked]" 'all((.box.padding.left | px_is($t.apex_quick_toggle_padding)) and (.box.spacing | px_is($t.apex_quick_toggle_gap)) and (.icon | px_is($t.apex_quick_settings_icon_size)))
+            and (.[0].box.padding.right | px_is($t.apex_quick_toggle_menu_padding)) and (.[1].box.padding.right | px_is($t.apex_quick_toggle_padding))'
+    "${metric[@]}" 'its title is $apex_font_quick_toggle_title_size at $apex_font_heading_weight, its subtitle $apex_font_quick_toggle_subtitle_size' \
+        "$q.wifi.toggle" '(.title.font.size | px_is($t.apex_font_quick_toggle_title_size)) and .title.font.weight == ($t.apex_font_heading_weight | tonumber)
+            and (.subtitle.font.size | px_is($t.apex_font_quick_toggle_subtitle_size))'
+    "${metric[@]}" 'the menu arrow is $apex_quick_toggle_menu_button_width wide, the checked fill shaded $apex_quick_toggle_menu_button_shade with black, with no separator' \
+        "{w: $q.wifi, accent: .topBar.accent}" "(.accent | rgba) as \$a | (.w.menuButton.background | rgba) as \$m
+            | (.w.menuButton.width | px_is(\$t.apex_quick_toggle_menu_button_width)) and (.w.separator.width == 0)
+            and ([range(3)] | all((\$m[.] - \$a[.] * $shade) | fabs <= 1))"
+    "${metric[@]}" 'a slider has $apex_quick_slider_gap beside its glyph, a $apex_quick_slider_track_height track in $apex_button_hover filled with the accent, a $apex_quick_slider_handle_size $apex_slider_handle handle' \
+        "{s: $q.slider, accent: .topBar.accent}" '.accent as $a | .s | (.spacing | px_is($t.apex_quick_slider_gap)) and (.trackHeight | px_is($t.apex_quick_slider_track_height))
+            and (.track | colour_is($t.apex_button_hover)) and (.fill | colour_is($a)) and (.handleRadius * 2 | px_is($t.apex_quick_slider_handle_size)) and (.handle | colour_is($t.apex_slider_handle))'
+    "${metric[@]}" 'the Wi-Fi menu is a $apex_card card ringed in $apex_card_border, radius $apex_radius_quick_menu, inset $apex_quick_menu_padding, $apex_quick_settings_grid_gap under its toggle, without a shadow' \
+        "$q" '(.wifiMenu.box | (.background | colour_is($t.apex_card)) and (.borderColor | colour_is($t.apex_card_border)) and (.border.top | px_is($t.apex_surface_border))
+            and (.radius | px_is($t.apex_radius_quick_menu)) and (.padding.left + .border.left | px_is($t.apex_quick_menu_padding)) and .boxShadow == null)
+            and (.wifiMenu.box.y - .wifi.y - .wifi.height | px_is($t.apex_quick_settings_grid_gap))'
+    "${metric[@]}" 'its header glyph sits in a $apex_quick_menu_header_icon_size accent circle; its title is $apex_font_quick_menu_title_size at $apex_font_heading_weight' \
+        "{m: $q.wifiMenu, accent: .topBar.accent}" '.accent as $a | .m | (.headerIcon | (.width | px_is($t.apex_quick_menu_header_icon_size)) and (.height | px_is($t.apex_quick_menu_header_icon_size))
+            and (.background | colour_is($a)) and (.iconSize | px_is($t.apex_quick_settings_icon_size)))
+            and (.title.font.size | px_is($t.apex_font_quick_menu_title_size)) and .title.font.weight == ($t.apex_font_heading_weight | tonumber)'
+    "${metric[@]}" 'its rows are $apex_quick_menu_row_height high, padded $apex_menu_row_padding, radius $apex_radius_menu_row' \
+        "$q.wifiMenu.rows" 'length > 0 and all((.height | px_is($t.apex_quick_menu_row_height)) and (.padding.left | px_is($t.apex_menu_row_padding)) and (.radius | px_is($t.apex_radius_menu_row)))'
+}
+
 scenes_captured() {
     local run=$1 case_name=$2
     local log=$run/$case_name.log scene
@@ -568,6 +627,7 @@ direct_cases() {
     top_bar_today default "$f" light
     top_bar_gaps default "$f" light
     shell_surfaces default "$f" light
+    quick_settings default "$f" light
 
     f=$run/default-scale1.log
     exits "$run" default-scale1 0
@@ -578,6 +638,7 @@ direct_cases() {
     top_bar default-scale1 "$f" light
     top_bar_today default-scale1 "$f" light
     shell_surfaces default-scale1 "$f" light
+    quick_settings default-scale1 "$f" light
 
     f=$run/dark-style.log
     exits "$run" dark-style 0
@@ -591,6 +652,7 @@ direct_cases() {
     top_bar_today dark-style "$f" dark
     top_bar_gaps dark-style "$f" dark
     shell_surfaces dark-style "$f" dark
+    quick_settings dark-style "$f" dark
     dark_style_off dark-style "$f"
 
     for c in stock-light stock-dark; do

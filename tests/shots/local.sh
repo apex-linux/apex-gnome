@@ -106,9 +106,11 @@ inside_run() {
         no_js_error default /out/default.log
         top_bar default /out/default.log light
         shell_surfaces default /out/default.log light
+        quick_settings default /out/default.log light
         no_js_error dark-style /out/dark-style.log
         top_bar dark-style /out/dark-style.log dark
         shell_surfaces dark-style /out/dark-style.log dark
+        quick_settings dark-style /out/dark-style.log dark
         summary
     } >/out/assert.txt
     local status=$?
