@@ -96,7 +96,8 @@ and polkit asks in the daemon, never in Settings.
   digest, listed in a second dialog) and OK (`AcknowledgeHealthFailure`, which clears
   `LastFallback`) after a fallback, whose hero says so too. These three members, and
   `Kept`, come from apex-system K4; the page reads them through a proxy without the
-  compiled interface and offers each only when the daemon has it. apex-session-agent's notification opens this page.
+  compiled interface and offers each only when the daemon has it, so the page also runs
+  against a daemon from before K4. apex-session-agent's notification opens this page.
 - **Notes** for every family in the newest deployment's `held` list, with each of its
   `holds` records when there are some ("Settings 51.1 is held back … Not a security
   update. Held for up to 14 days, then Apex ships the stock 51.1."; the kernel pair's
@@ -119,7 +120,7 @@ and polkit asks in the daemon, never in Settings.
 dates, digests and the changes' summary. `tests/control-center/state-test.sh` tests it.
 
 `panels/apex/io.github.apex_linux.Apex.Update1.xml` is apex-system's
-`crates/apex-dbus/data/io.github.apex_linux.Apex.Update1.xml` at 05ce79b, copied byte for
+`crates/apex-dbus/data/io.github.apex_linux.Apex.Update1.xml` at 4082998, copied byte for
 byte;
 gdbus-codegen makes the page's proxy from it, and apex-image's contracts job compares the
 two. Change it there first, then copy it here.

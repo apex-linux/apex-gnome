@@ -525,7 +525,7 @@ refresh_notes (CcApexUpdatesPage *self, GVariant *newest)
 
         g_variant_get_child (stock, r, "(&s&s)", &family, &reason);
         title = g_strdup_printf (_("%s runs Fedora’s own build"), family);
-        add_note (self, title, reason);
+        add_note (self, title, *reason ? reason : _("This version ships it without Apex’s changes."));
     }
     for (guint i = 0; degraded && degraded[i]; i++) {
         g_autofree char *title = g_strdup_printf (_("%s runs without Apex’s changes"), degraded[i]);
