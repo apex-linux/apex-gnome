@@ -162,7 +162,7 @@ char *
 apex_command_display (const char *cmdline)
 {
   g_auto(GStrv) words = NULL;
-  g_autofree char *program = NULL;
+  GString *display = NULL;
 
   if (cmdline == NULL)
     return NULL;
@@ -173,18 +173,16 @@ apex_command_display (const char *cmdline)
       if (words[i][0] == '\0')
         continue;
 
-      if (program == NULL)
+      if (display == NULL)
         {
-          program = g_path_get_basename (words[i]);
-          continue;
+          g_autofree char *program = g_path_get_basename (words[i]);
+          display = g_string_new (program);
         }
-
-      g_autofree char *joined = g_strconcat (program, " ", words[i], NULL);
-      g_free (program);
-      program = g_steal_pointer (&joined);
+      else
+        g_string_append_printf (display, " %s", words[i]);
     }
 
-  return g_steal_pointer (&program);
+  return display != NULL ? g_string_free (display, FALSE) : NULL;
 }
 
 char *

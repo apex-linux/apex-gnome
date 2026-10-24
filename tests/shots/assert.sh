@@ -150,6 +150,17 @@ no_spotlight_key() {
     expect_report "$label" "$log" '.spotlightKey.modes == []' "no Super+Space: toggle-spotlight is not registered"
 }
 
+# Until apex-desktop's schema has the key, the panel shows no hint and says so.
+search_hint() {
+    local label=$1 log=$2 shown=$3
+    if [[ $shown == true ]]; then
+        expect_report "$label" "$log" '.searchHintShown == true or .searchHintShown == "no-key"' \
+            "the panel showed the one-time search hint and set search-hint-shown"
+    else
+        expect_report "$label" "$log" '.searchHintShown != true' "the stock shell shows no search hint"
+    fi
+}
+
 stock_scheme() {
     local label=$1 log=$2
     expect_report "$label" "$log" '.sessionColorScheme == "prefer-dark" and .variant == "dark"' \
@@ -711,6 +722,7 @@ direct_cases() {
     apex_light default "$f"
     no_apex_failure default "$f"
     spotlight_key default "$f"
+    search_hint default "$f" true
     virtual_monitor default "$f"
     expect_report default "$f" '.testFault == "stock" and .env.APEX_SHELL_TEST_FAULT == null' \
         "no fault feature without APEX_SHELL_TEST_FAULT"
@@ -769,6 +781,7 @@ direct_cases() {
     logs safe-env "$f" 'Apex: safe mode \(APEX_SHELL_SAFE=1\)' "logs 'Apex: safe mode (APEX_SHELL_SAFE=1)'"
     stock_view safe-env "$f" dark
     stock_scheme safe-env "$f"
+    search_hint safe-env "$f" false
     virtual_monitor safe-env "$f"
 
     f=$run/layer-disabled.log

@@ -10,7 +10,33 @@ const fact = (key, value) => printerr(`probe: ${key}=${value}`);
 
 const handlers = new Map();
 let nextId = 1;
+function newEmitter(props = {}) {
+    const signalHandlers = new Map();
+    let nextSignalId = 1;
+    return {
+        ...props,
+        connect(signal, fn) {
+            signalHandlers.set(nextSignalId, [signal, fn]);
+            return nextSignalId++;
+        },
+        disconnect(id) {
+            signalHandlers.delete(id);
+        },
+        emit(signal) {
+            for (const [s, fn] of [...signalHandlers.values()]) {
+                if (s === signal)
+                    fn();
+            }
+        },
+    };
+}
+
+const windows = [];
 globalThis.global = {
+    display: newEmitter(),
+    stage: {width: 1440},
+    window_manager: newEmitter(),
+    workspace_manager: newEmitter({get_active_workspace: () => ({list_windows: () => windows})}),
     session_mode: GLib.getenv('PROBE_MODE') ?? 'user',
     connect(signal, fn) {
         handlers.set(nextId, [signal, fn]);
@@ -27,6 +53,8 @@ const settings = schema ? new Gio.Settings({settings_schema: schema}) : null;
 if (settings) {
     if (GLib.getenv('PROBE_LAYER_OFF') === '1')
         settings.set_boolean('layer-enabled', false);
+    if (GLib.getenv('PROBE_HINT_SHOWN') === '1')
+        settings.set_boolean('search-hint-shown', true);
     const disabled = GLib.getenv('PROBE_DISABLED');
     if (disabled)
         settings.set_strv('disabled-features', disabled.split(','));
@@ -206,6 +234,19 @@ async function exerciseSearchButton() {
             `visible=${item.container.visible}`);
     };
     report('enabled');
+    const button = Main.panel.statusArea['apex-search'];
+    if (button) {
+        const tooltip = () => {
+            const label = Main.layoutManager.lastChrome;
+            return label ? `${label.visible} at ${label.x},${label.y}` : 'none';
+        };
+        button.hover = true;
+        button.emit('notify::hover');
+        fact('search.tooltip.hover', tooltip());
+        button.hover = false;
+        button.emit('notify::hover');
+        fact('search.tooltip.unhover', tooltip());
+    }
     Main.panel.statusArea['apex-search']?.actions[0].recognize();
     fact('search.click.1', `overview=${Main.overview.visible}`);
     Main.panel.statusArea['apex-search']?.actions[0].recognize();
@@ -219,6 +260,57 @@ async function exerciseSearchButton() {
     settings.set_boolean('layer-enabled', true);
     await spin(200);
     report('on');
+}
+
+function newWindow() {
+    return {
+        primary: true, showing: true, maximized: true, type: 0,
+        is_on_primary_monitor() {
+            return this.primary;
+        },
+        showing_on_its_workspace() {
+            return this.showing;
+        },
+        is_maximized() {
+            return this.maximized;
+        },
+        get_window_type() {
+            return this.type;
+        },
+    };
+}
+
+async function exerciseMaximisedWindow() {
+    if (GLib.getenv('PROBE_MAXIMISED') !== '1')
+        return;
+    const Main = await import(`file://${shellDir}/js/ui/main.js`);
+    const win = newWindow();
+    const steps = [
+        ['maximised', () => windows.push(win), global.window_manager, 'size-changed'],
+        ['overview', () => (Main.overview.visible = true), Main.overview, 'showing'],
+        ['no-overview', () => (Main.overview.visible = false), Main.overview, 'hidden'],
+        ['minimised', () => (win.showing = false), global.window_manager, 'minimize'],
+        ['unminimised', () => (win.showing = true), global.window_manager, 'unminimize'],
+        ['unmaximised', () => (win.maximized = false), global.window_manager, 'size-changed'],
+        ['other-monitor', () => Object.assign(win, {maximized: true, primary: false}), global.display, 'restacked'],
+        ['desktop-window', () => Object.assign(win, {primary: true, type: 1}), global.display, 'restacked'],
+        ['workspace', () => Object.assign(win, {type: 0}), global.workspace_manager, 'active-workspace-changed'],
+        ['closed', () => windows.pop(), global.display, 'restacked'],
+    ];
+    for (const [label, change, emitter, signal] of steps) {
+        printerr(`probe: set ${label}`);
+        change();
+        emitter.emit(signal);
+    }
+    windows.push(win);
+    printerr('probe: set translucent-top-bar=false');
+    settings.set_boolean('translucent-top-bar', false);
+    await spin(100);
+    printerr('probe: set layer-enabled=false');
+    settings.set_boolean('layer-enabled', false);
+    await spin(200);
+    printerr('probe: set restacked');
+    global.display.emit('restacked');
 }
 
 async function switchLayer() {
@@ -248,6 +340,8 @@ fact('boom', `${Hooks.value('boom', 'stock')},${Hooks.value('boom', 'stock')}`);
 fact('run-without-provider', Hooks.run('nothing'));
 
 if (layer && GLib.getenv('PROBE_ENABLE') === '1') {
+    if (GLib.getenv('PROBE_LOCKED') === '1')
+        (await import(`file://${shellDir}/js/ui/main.js`)).sessionMode.isLocked = true;
     layer.enable();
     const marker = GLib.build_filenamev([GLib.get_user_runtime_dir(), 'apex-shell-starting']);
     fact('starting-file', GLib.file_test(marker, GLib.FileTest.EXISTS));
@@ -269,6 +363,7 @@ if (layer && GLib.getenv('PROBE_ENABLE') === '1') {
     await exerciseSolidBar();
     await exerciseFocusedApp();
     await exerciseSearchButton();
+    await exerciseMaximisedWindow();
     await setDisabledLive();
     await switchLayer();
     for (const [signal, fn] of [...handlers.values()]) {
@@ -276,6 +371,8 @@ if (layer && GLib.getenv('PROBE_ENABLE') === '1') {
             fn();
     }
     fact('starting-file.after-shutdown', GLib.file_test(marker, GLib.FileTest.EXISTS));
+    if (settings.settings_schema.has_key('search-hint-shown'))
+        fact('search-hint-shown', settings.get_boolean('search-hint-shown'));
 }
 if (!layer && settings)
     await switchLayer();
