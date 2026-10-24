@@ -478,6 +478,29 @@ quick_settings_layer() {
     fi
 }
 
+# shellcheck disable=SC2016 # jq programs
+message_list_layer() {
+    local label=$1 log=$2 mode=$3 scenes q=.surfaces.messageListLayer
+    scenes=$(report_of "$log" APEXG2-SCENES)
+    local flat='[.messages as $m | range(1; $m | length) | $m[.].y >= $m[. - 1].y + $m[. - 1].height] | all'
+    if [[ $mode == apex ]]; then
+        expect "$label message list" "$scenes" "$q | (.messages | length == 3) and (.header | not) and ($flat)" \
+            "the message-list feature lays an app's three notifications out flat, one under another, without a group header"
+        expect "$label message list" "$scenes" "$q | .dnd.label == \"Do Not Disturb\" and .dnd.x < .clear.x
+            and (.clear.x + .clear.width) >= (.footer.x + .footer.width - 6)" \
+            "the footer: Do Not Disturb on the left, Clear on the right"
+        expect "$label message list" "$scenes" "$q.dndClick | .showBanners == false and .checked" \
+            "a click on Do Not Disturb turns banners off and checks it"
+        expect "$label message list" "$scenes" "$q.empty | .placeholder and .clearVisible and (.clearReactive | not)" \
+            "with nothing to clear, Clear stays shown, insensitive"
+    else
+        expect "$label message list" "$scenes" "$q | (.messages | length == 3) and ($flat | not) and .dnd == null" \
+            "stock: an app's notifications stack, and the footer has Clear alone"
+        expect "$label message list" "$scenes" "$q.empty | .placeholder and (.clearVisible | not)" \
+            "stock: with nothing to clear, Clear hides"
+    fi
+}
+
 # shellcheck disable=SC2016 # jq programs and token names, not shell expansions
 quick_settings() {
     local label=$1 log=$2 variant=$3 scenes tokens
@@ -1031,6 +1054,7 @@ direct_cases() {
     shell_surfaces default "$f" light
     quick_settings default "$f" light
     quick_settings_layer default "$f" apex
+    message_list_layer default "$f" apex
     shadow_layers default "$f" light
     window_switcher default "$f" light
     modal_dialog default "$f" light
@@ -1053,6 +1077,7 @@ direct_cases() {
     shell_surfaces default-scale1 "$f" light
     quick_settings default-scale1 "$f" light
     quick_settings_layer default-scale1 "$f" apex
+    message_list_layer default-scale1 "$f" apex
     shadow_layers default-scale1 "$f" light
     window_switcher default-scale1 "$f" light
     modal_dialog default-scale1 "$f" light
@@ -1078,6 +1103,7 @@ direct_cases() {
     shell_surfaces dark-style "$f" dark
     quick_settings dark-style "$f" dark
     quick_settings_layer dark-style "$f" apex
+    message_list_layer dark-style "$f" apex
     shadow_layers dark-style "$f" dark
     window_switcher dark-style "$f" dark
     modal_dialog dark-style "$f" dark
@@ -1094,6 +1120,7 @@ direct_cases() {
         stock_view "$c" "$run/$c.log" "${c#stock-}"
         no_dock "$c" "$run/$c.log"
         quick_settings_layer "$c" "$run/$c.log" stock
+        message_list_layer "$c" "$run/$c.log" stock
         no_apex_failure "$c" "$run/$c.log"
     done
     stock_thumbnails "$run"

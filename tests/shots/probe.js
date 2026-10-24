@@ -1132,6 +1132,49 @@ async function calendarMenu(unit) {
     }
 }
 
+// The message-list feature: three notifications from one app, the footer, then an empty list.
+async function messageListLayer(unit) {
+    const source = new MessageTray.Source({title: 'G2 Chat', iconName: 'mail-unread-symbolic'});
+    Main.messageTray.add(source);
+    for (const title of ['Lunch?', 'Standup moved', 'Build passed'])
+        source.addNotification(new MessageTray.Notification({source, title, body: 'Just now.', urgency: MessageTray.Urgency.LOW}));
+    const {menu, _messageList: list} = Main.panel.statusArea.dateMenu;
+    const notifications = new Gio.Settings({schema_id: 'org.gnome.desktop.notifications'});
+    menu.open(BoxPointer.PopupAnimation.NONE);
+    try {
+        await settle();
+        const group = findDescendant(menu.box, a => a.constructor.name === 'NotificationMessageGroup');
+        const messages = group.get_children().map(c => c.child).filter(m => m?.constructor.name === 'NotificationMessage');
+        const footer = list._clearButton.get_parent();
+        const dnd = footer.get_children().find(c => c.has_style_class_name('apex-dnd-button')) ?? null;
+        const result = {
+            header: group._headerBox.visible,
+            messages: messages.map(m => boxOf(m, unit)),
+            footer: boxOf(footer, unit),
+            clear: {...boxOf(list._clearButton, unit), visible: list._clearButton.visible},
+            dnd: dnd && {...boxOf(dnd, unit), label: findDescendant(dnd, a => a instanceof St.Label)?.text ?? null},
+        };
+        if (dnd) {
+            dnd.emit('clicked');
+            result.dndClick = {showBanners: notifications.get_boolean('show-banners'), checked: dnd.checked};
+            dnd.emit('clicked');
+        }
+        Main.messageTray.getSources().filter(s => s === source).forEach(s => s.destroy());
+        await settle();
+        result.empty = {
+            placeholder: list._placeholder.visible,
+            clearVisible: list._clearButton.visible,
+            clearReactive: list._clearButton.reactive,
+        };
+        return result;
+    } finally {
+        menu.close(BoxPointer.PopupAnimation.NONE);
+        notifications.reset('show-banners');
+        Main.messageTray.getSources().filter(s => s === source).forEach(s => s.destroy());
+        await settle();
+    }
+}
+
 // Board 38's rows, from providers of the probe's own: G2's image has no files or settings
 // to find, so a real query would draw nothing to measure.
 const CALCULATOR = 'org.gnome.Calculator.desktop';
@@ -1461,6 +1504,7 @@ async function scenes() {
     surfaces.switcher = await windowSwitcher(unit);
     surfaces.dialog = await modalDialog(unit);
     surfaces.dateMenu = await calendarMenu(unit);
+    surfaces.messageListLayer = await messageListLayer(unit);
     surfaces.derived = derivedSurfaces(unit);
     surfaces.spotlight = await spotlightStyle(unit);
 
