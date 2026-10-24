@@ -1005,6 +1005,103 @@ function overviewStyle(unit) {
     }
 }
 
+function standInStyle(styleClass, parentClass, unit) {
+    const parent = new St.BoxLayout({style_class: parentClass ?? ''});
+    const actor = new St.Widget({style_class: styleClass});
+    parent.add_child(actor);
+    return withStyledActor(parent, () => {
+        const node = actor.get_theme_node();
+        const [type] = node.get_background_gradient();
+        return {
+            width: lengthOrNull(node, 'width', unit), height: lengthOrNull(node, 'height', unit),
+            radius: round(node.get_border_radius(St.Corner.TOPLEFT) / unit.length),
+            background: hex(node.get_background_color()), gradient: type,
+        };
+    });
+}
+
+// The launcher of the fixture image: a few apps and the System folder, opened as board 36 does.
+async function appGrid(unit) {
+    const {showAppsButton} = Main.overview.dash;
+    const appDisplay = Main.overview._overview.controls._appDisplay;
+    showAppsButton.checked = true;
+    let folder = null;
+    try {
+        await settle();
+        const tiles = appDisplay._orderedItems ?? [];
+        const app = tiles.find(t => t.constructor.name === 'AppIcon');
+        folder = tiles.find(t => t.constructor.name === 'FolderIcon');
+        const label = app ? firstVisibleLabel(app) : null;
+        const measured = {
+            app: app ? {
+                ...styleOf(app, unit),
+                labelFont: label ? font(label.get_theme_node(), unit) : null,
+                spacing: lengthOrNull(findDescendant(app, a => a.has_style_class_name?.('overview-icon'))
+                    .get_first_child().get_theme_node(), 'spacing', unit),
+                hover: underPseudoClass(app, 'hover', () => paint(app.get_theme_node(), unit)),
+                focus: underPseudoClass(app, 'focus', () => paint(app.get_theme_node(), unit)),
+            } : null,
+            folder: folder ? styleOf(folder, unit) : null,
+            runningDot: standInStyle('app-grid-running-dot', null, unit),
+            pageIndicator: standInStyle('page-indicator-icon', 'page-indicator', unit),
+            pageHint: standInStyle('page-navigation-hint next', null, unit),
+        };
+        if (folder) {
+            folder.open();
+            await settle();
+            const dialog = findDescendant(Main.layoutManager.overviewGroup, a => a.has_style_class_name?.('app-folder-dialog'));
+            measured.scene = GLib.getenv('G2_SURFACE_SCENES') === '1' ? await capture('appgrid') : null;
+            if (measured.scene)
+                delete measured.scene.bytes;
+            measured.dialog = dialog ? {
+                ...styleOf(dialog, unit),
+                title: styleOf(findDescendant(dialog, a => a.has_style_class_name?.('folder-name-label')), unit),
+                button: styleOf(findDescendant(dialog, a => a.has_style_class_name?.('icon-button')), unit),
+            } : null;
+        }
+        return measured;
+    } finally {
+        folder?._dialog?.popdown();
+        showAppsButton.checked = false;
+        await settle();
+    }
+}
+
+// Surfaces G2 never opens, as nested stand-ins: each class is the parent of the next.
+function nestedStyle(classes, unit, Leaf = St.Widget) {
+    const actors = classes.map((styleClass, i) => i === classes.length - 1
+        ? new Leaf({style_class: styleClass}) : new St.BoxLayout({style_class: styleClass}));
+    actors.slice(1).forEach((actor, i) => actors[i].add_child(actor));
+    const leaf = actors[actors.length - 1];
+    return withStyledActor(actors[0], () => {
+        const node = leaf.get_theme_node();
+        return {
+            ...paint(node, unit),
+            foreground: hex(node.get_foreground_color()),
+            border: sides(side => node.get_border_width(side), unit),
+            borderColor: hex(node.get_border_color(St.Side.TOP)),
+            radius: round(node.get_border_radius(St.Corner.TOPLEFT) / unit.length),
+            minHeight: lengthOrNull(node, 'min-height', unit),
+            hover: underPseudoClass(leaf, 'hover', () => paint(leaf.get_theme_node(), unit)),
+            active: underPseudoClass(leaf, 'active', () => paint(leaf.get_theme_node(), unit)),
+            focus: underPseudoClass(leaf, 'focus', () => paint(leaf.get_theme_node(), unit)),
+        };
+    });
+}
+
+function derivedSurfaces(unit) {
+    return {
+        workspaceSwitcher: nestedStyle(['workspace-switcher'], unit),
+        wsIndicator: nestedStyle(['workspace-switcher', 'ws-switcher-indicator'], unit),
+        resizePopup: nestedStyle(['resize-popup'], unit),
+        candidatePopup: nestedStyle(['candidate-popup-content'], unit),
+        candidateBox: nestedStyle(['candidate-popup-content', 'candidate-box'], unit),
+        runEntry: nestedStyle(['modal-dialog run-dialog', 'run-dialog-entry'], unit, St.Entry),
+        audioDevice: nestedStyle(['modal-dialog audio-device-selection-dialog', 'audio-selection-box', 'audio-selection-device'], unit, St.Button),
+        monitorLabel: nestedStyle(['osd-monitor-label'], unit),
+    };
+}
+
 // Without GDM the shell posts "Screen Lock disabled" at startup; its banner would cover
 // the scenes for as long as it happens to stay.
 function dropStartupNotifications() {
@@ -1034,6 +1131,7 @@ async function scenes() {
     surfaces.switcher = await windowSwitcher(unit);
     surfaces.dialog = await modalDialog(unit);
     surfaces.dateMenu = await calendarMenu(unit);
+    surfaces.derived = derivedSurfaces(unit);
 
     Main.overview.show();
     await settle();
@@ -1042,6 +1140,7 @@ async function scenes() {
     const overviewIdle = await settle();
     const overview = {idle: overviewIdle, ...await capture('overview'), thumbnails: thumbnails(), workArea: workArea(unit)};
     surfaces.overview = overviewStyle(unit);
+    surfaces.appGrid = await appGrid(unit);
     delete overview.bytes;
     Main.overview.hide();
 

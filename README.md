@@ -16,6 +16,7 @@ the Apex layer; libadwaita, Settings and Files patch series join it in S2.
 | `packaging/pkgs/libadwaita/`, `tests/libadwaita/` | libadwaita rebuilt in the lane to load and follow Settings' `apex.css`, the live window radius ([README](packaging/pkgs/libadwaita/README.md)), and its radius test |
 | `desktop/control-center/`, `packaging/pkgs/gnome-control-center/` | gnome-control-center rebuilt in the lane for the Apex Settings, boards 11, 18, 23, 24 and 26: its sources (`panels/apex/`) and its recipe ([README](packaging/pkgs/gnome-control-center/README.md)) |
 | `tests/control-center/` | the checks of `desktop/control-center/`, and the Apex Desktop panel in a headless shell: board 11's captures and every row's binding (`run.sh`) |
+| `tests/s2c/` | S2c's live window radius end to end: apex-session-agent from the pinned apex-system (`agent.sh`), and Settings' Corner Radius pressed through AT-SPI under open Ptyxis, Files and Settings windows beside a maximised one (`radius-test.sh`) |
 | `desktop/nautilus/`, `packaging/pkgs/nautilus/` | nautilus rebuilt in the lane for Files, boards 27 to 29: its sources (`src/apex/`) and its recipe ([README](packaging/pkgs/nautilus/README.md)) |
 | `tests/nautilus/` | the checks of `desktop/nautilus/`, the texts' unit test, and the captures with board 27's home (`shoot.sh`) |
 
@@ -49,6 +50,7 @@ just libadwaita-lane     # podman or docker: libadwaita rebuilt as the lane buil
 just libadwaita-radius   # podman or docker: that libadwaita under an open Ptyxis, apex.css rewritten from 14 px to 0 px
 just control-center-lane # podman or docker: gnome-control-center rebuilt as the lane builds it, RPMs in _build/gnome-control-center/out
 just control-center-run  # podman or docker: that Settings in a headless gnome-shell: board 11 captured, every row checked
+just s2c-radius     # podman or docker, after the three lanes: Settings' Corner Radius from 14 to 0 under open windows
 just nautilus-lane # podman or docker: nautilus rebuilt as the lane builds it, RPMs in _build/nautilus/out
 just nautilus-shots # podman or docker: that nautilus captured in a headless gnome-shell, light and dark
 ```

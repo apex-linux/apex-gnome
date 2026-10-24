@@ -4,9 +4,9 @@
 
 set -euo pipefail
 . "$(dirname "${BASH_SOURCE[0]}")/../../.github/scripts/lib.sh"
+# shellcheck source=SCRIPTDIR/pins.sh
+. "$(dirname "${BASH_SOURCE[0]}")/pins.sh"
 
-readonly APEX_IMAGE_URL=https://github.com/apex-linux/apex-image
-readonly APEX_IMAGE_REV=3b1ba1ec31d424d9cc6d63918d60e0abf8ceebbc
 readonly SOURCE1_MTIME=@946684800
 readonly LANE_PATHS=(/src /recipes /work /store)
 
