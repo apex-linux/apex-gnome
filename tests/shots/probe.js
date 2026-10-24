@@ -958,9 +958,50 @@ async function quickSettings(unit) {
     }
 }
 
+function findAll(actor, matches) {
+    return actor.get_children().flatMap(child => [...matches(child) ? [child] : [], ...findAll(child, matches)]);
+}
+
+// Board 17's Wi-Fi menu: the header subtitle's grid cell and each network row, the lock read
+// where it is, after the name or in the signal icon's box.
+async function wifiMenuRows(unit) {
+    const {menu} = Main.panel.statusArea.quickSettings;
+    const wifi = findDescendant(menu.box, a => a.constructor.name === 'NMWirelessToggle');
+    if (!wifi)
+        return null;
+    menu.open(BoxPointer.PopupAnimation.NONE);
+    wifi.menu.open(BoxPointer.PopupAnimation.NONE);
+    try {
+        await settle();
+        const {_header: header, _headerSubtitle: subtitle} = wifi.menu;
+        const meta = header.layout_manager.get_child_meta(header, subtitle);
+        const rows = findAll(wifi.menu.box, a => a.constructor.name === 'NMWirelessNetworkItem');
+        return {
+            subtitle: {column: meta.left_attach, row: meta.top_attach, xAlign: subtitle.x_align, end: Clutter.ActorAlign.END},
+            rows: rows.map(row => {
+                const lock = row._secureIcon;
+                const children = row.get_children();
+                return {
+                    ssid: row._label.text,
+                    active: row.network.is_active,
+                    checked: row.has_style_pseudo_class('checked'),
+                    secure: !!lock.icon_name,
+                    lockAfterName: children.indexOf(lock) === children.indexOf(row._label) + 1,
+                    lockSize: lengthOrNull(lock.get_theme_node(), 'icon-size', unit),
+                    lockColor: hex(lock.get_theme_node().get_foreground_color()),
+                };
+            }),
+        };
+    } finally {
+        wifi.menu.close(BoxPointer.PopupAnimation.NONE);
+        menu.close(BoxPointer.PopupAnimation.NONE);
+        await settle();
+    }
+}
+
 // The quick-settings feature: the toggles' order, Power Mode lit, On/Off subtitles; then two
 // clicks on Power Mode, which stock answers by switching to the last profile and back.
-async function quickSettingsLayer() {
+async function quickSettingsLayer(unit) {
     const indicator = Main.panel.statusArea.quickSettings;
     // Without a VPN connection the VPN toggle is hidden and has no title.
     const name = t => t.constructor.name === 'NMVpnToggle' ? 'VPN' : t.title;
@@ -988,6 +1029,7 @@ async function quickSettingsLayer() {
         pillShowsPower: indicator._powerProfiles?.get_parent() === indicator._indicators &&
             indicator._powerProfiles.visible,
         dndSubtitle: dnd?.subtitle ?? null,
+        wifiMenu: await wifiMenuRows(unit),
     };
     if (power?.visible) {
         state.switched = await clickPower();
@@ -1589,7 +1631,7 @@ async function scenes() {
     bar.largeText = await withLargeText();
     const surfaces = await shellSurfaces(unit);
     surfaces.quickSettings = await quickSettings(unit);
-    surfaces.quickSettingsLayer = await quickSettingsLayer();
+    surfaces.quickSettingsLayer = await quickSettingsLayer(unit);
     surfaces.switcher = await windowSwitcher(unit);
     surfaces.dialog = await modalDialog(unit);
     surfaces.dateMenu = await calendarMenu(unit);

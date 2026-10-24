@@ -43,6 +43,7 @@
     <file alias="lock/question.js">js/ui/apex/lock/question.js</file>
     <file alias="lock/avatar.js">js/ui/apex/lock/avatar.js</file>
     <file alias="quick-settings/feature.js">js/ui/apex/quick-settings/feature.js</file>
+    <file alias="quick-settings/submenu.js">js/ui/apex/quick-settings/submenu.js</file>
   </gresource>
   <gresource prefix="/org/gnome/shell/theme/apex">
     <file alias="diamond-light.svg">data/theme/apex/diamond-light.svg</file>

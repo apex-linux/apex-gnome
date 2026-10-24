@@ -204,6 +204,11 @@ $_toggle_states: hover, focus, active;
 
     &:hover, &:focus, &:selected, &:active { background-color: $apex_quick_menu_row_hover; }
     & > StIcon { icon-size: $apex_quick_settings_icon_size; }
+
+    .apex-network-lock {
+      icon-size: $apex_quick_menu_lock_size;
+      color: transparentize($apex_fg, 1 - $apex_quick_menu_lock_opacity);
+    }
   }
 
   .popup-separator-menu-item { min-height: 0; }
