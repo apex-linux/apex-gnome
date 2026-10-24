@@ -1,0 +1,40 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Thuong Vo <66083331+SekiroKenjii@users.noreply.github.com>
+Date: Sat, 24 Oct 2026 07:15:47 +0000
+Subject: [PATCH] profile: follow a rewritten user palette
+
+A rewritten palette file replaces its PtyxisPalette in the palette list,
+but a profile notifies "palette" only when its GSettings key changes, so
+open terminals and the window dressing keep the old palette until
+restart. Apex rewrites the user palette when the accent changes
+(apex-session-agent), and the caret must follow within a second.
+
+ptyxis_profile_constructed() calls apex_profile_follow_palette_files()
+(src/apex/, Source100), which notifies "palette" when the list reloads a
+palette with the profile's palette id.
+---
+ src/ptyxis-profile.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/src/ptyxis-profile.c b/src/ptyxis-profile.c
+index b803e8c..6d2a646 100644
+--- a/src/ptyxis-profile.c
++++ b/src/ptyxis-profile.c
+@@ -30,6 +30,8 @@
+ #include "ptyxis-profile.h"
+ #include "ptyxis-util.h"
+ 
++#include "apex/apex-palette.h"
++
+ struct _PtyxisProfile
+ {
+   GObject parent_instance;
+@@ -252,6 +254,8 @@ ptyxis_profile_constructed (GObject *object)
+                            G_CONNECT_SWAPPED);
+ 
+   read_custom_links_from_settings (self);
++
++  apex_profile_follow_palette_files (self);
+ }
+ 
+ static void
