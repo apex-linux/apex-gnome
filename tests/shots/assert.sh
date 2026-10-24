@@ -19,7 +19,7 @@ readonly APEX_LIGHT_SHEET=resource:///org/gnome/shell/theme/gnome-shell-light.cs
 readonly APEX_DARK_SHEET=resource:///org/gnome/shell/theme/gnome-shell-dark.css
 readonly STOCK_SHEETS=resource:///org/gnome/shell/theme/stock
 readonly FEDORA_SHEETS=resource:///org/gnome/shell/theme
-readonly DIRECT_CASES=(default default-scale1 dark-style stock-light stock-dark safe-env layer-disabled
+readonly DIRECT_CASES=(default default-scale1 dark-style dock-intellihide dock-intellihide-dark stock-light stock-dark safe-env layer-disabled
     layer-cycles fault-configure fault-enable fault-abort kernel-safe fedora-light fedora-dark)
 readonly DIRECT_PARTS=(main kernel fedora)
 readonly CAPTURE_CASES=(default default-scale1 dark-style stock-light stock-dark fedora-light fedora-dark)
@@ -308,6 +308,25 @@ dock_metrics() {
         '{dash: .dock.overviewDashVisible, overview: .scenes.overview.dockVisible}' '.dash == false and .overview == true'
     "${metric[@]}" 'and lays its workspaces out above the dock' \
         '{dock: .dock, clearance: .scenes.overview.dockClearance}' '.dock != null and .clearance != null and .clearance >= 0'
+}
+
+dock_intellihide() {
+    local label=$1 log=$2
+    expect_report "$label" "$log" '.error == null and .steps.initial.hidden == false' \
+        "the dock shows while no window is maximised" APEXG2-DOCK
+    expect_report "$label" "$log" '.steps.maximised | .window == true and .hidden == true and .barSolid == true' \
+        "a maximised window hides it (dock-intellihide) and makes the bar solid" APEXG2-DOCK
+    expect_report "$label" "$log" '.steps.revealed | .hidden == false and .underPointer == true' \
+        "pushing against the bottom edge under it reveals it, under the pointer" APEXG2-DOCK
+    expect_report "$label" "$log" '.steps.left.hidden == true' "leaving it hides it again" APEXG2-DOCK
+    expect_report "$label" "$log" '.steps.overview.hidden == false' "the overview shows it over the maximised window" APEXG2-DOCK
+    expect_report "$label" "$log" '.steps.intellihideOff | .hidden == false and .window == true' \
+        "with dock-intellihide off it stays over the maximised window" APEXG2-DOCK
+    expect_report "$label" "$log" '.steps.intellihideOn.hidden == true' "turned back on, it hides again" APEXG2-DOCK
+    expect_report "$label" "$log" '.steps.closed | .hidden == false and .window == false' \
+        "the window gone, it shows" APEXG2-DOCK
+    check "$label: the maximised and revealed scenes are captured" \
+        test -s "$3/captures/$label-maximised.png" -a -s "$3/captures/$label-revealed.png"
 }
 
 no_dock() {
@@ -897,6 +916,12 @@ direct_cases() {
     app_grid dark-style "$f" dark
     derived_surfaces dark-style "$f" dark
     dark_style_off dark-style "$f"
+
+    for c in dock-intellihide dock-intellihide-dark; do
+        exits "$run" "$c" 0
+        no_apex_failure "$c" "$run/$c.log"
+        dock_intellihide "$c" "$run/$c.log" "$run"
+    done
 
     for c in stock-light stock-dark; do
         exits "$run" "$c" 0

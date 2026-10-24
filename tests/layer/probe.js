@@ -35,6 +35,10 @@ const windows = [];
 globalThis.global = {
     display: newEmitter(),
     stage: {width: 1440},
+    pointer: [0, 0],
+    get_pointer() {
+        return [...this.pointer, 0];
+    },
     window_manager: newEmitter(),
     workspace_manager: newEmitter({get_active_workspace: () => ({list_windows: () => windows})}),
     session_mode: GLib.getenv('PROBE_MODE') ?? 'user',
@@ -371,6 +375,71 @@ async function exerciseDock() {
     report('on');
 }
 
+async function exerciseIntellihide() {
+    if (GLib.getenv('PROBE_INTELLIHIDE') !== '1')
+        return;
+    const Main = await import(`file://${shellDir}/js/ui/main.js`);
+    const box = Main.layoutManager.chrome.find(actor => actor.name === 'apexDockBox' && !actor.destroyed);
+    const pressure = globalThis.PROBE_PRESSURE;
+    if (!box || !pressure)
+        return;
+    const [barrier] = pressure.barriers;
+    fact('intellihide.barrier', `x=${barrier.x1}..${barrier.x2} y=${barrier.y1}..${barrier.y2} directions=${barrier.directions}`);
+    box.height = 80;
+    const win = newWindow();
+    const step = async (label, change) => {
+        printerr(`probe: set ${label}`);
+        await change();
+        fact('intellihide.hidden', box.translation_y > 0);
+    };
+    await step('initial', () => {});
+    await step('maximised', () => {
+        windows.push(win);
+        global.window_manager.emit('size-changed');
+    });
+    await step('edge', () => pressure.trigger());
+    await step('pointer-elsewhere', () => spin(450));
+    await step('edge-again', () => pressure.trigger());
+    await step('pointer-on-dock', async () => {
+        global.pointer = [box.x + 10, box.y + 10];
+        await spin(450);
+    });
+    await step('left', async () => {
+        global.pointer = [0, 0];
+        box.hover = false;
+        box.emit('notify::hover');
+        await spin(450);
+    });
+    await step('overview', () => {
+        Main.overview.visible = true;
+        Main.overview.emit('showing');
+    });
+    await step('no-overview', () => {
+        Main.overview.visible = false;
+        Main.overview.emit('hidden');
+    });
+    await step('intellihide=false', async () => {
+        settings.set_boolean('dock-intellihide', false);
+        await spin(50);
+    });
+    await step('intellihide=true', async () => {
+        settings.reset('dock-intellihide');
+        await spin(50);
+    });
+    await step('closed', () => {
+        windows.pop();
+        global.display.emit('restacked');
+    });
+    windows.push(win);
+    global.display.emit('restacked');
+    await step('layer-enabled=false', async () => {
+        settings.set_boolean('layer-enabled', false);
+        await spin(200);
+    });
+    fact('intellihide.after-off', `pressure-destroyed=${pressure.destroyed} barrier-destroyed=${barrier.destroyed ?? false}`);
+    windows.pop();
+}
+
 async function switchLayer() {
     const cycles = Number(GLib.getenv('PROBE_SWITCH') ?? '0');
     for (let cycle = 1; cycle <= cycles; cycle++) {
@@ -424,6 +493,7 @@ if (layer && GLib.getenv('PROBE_ENABLE') === '1') {
     await exerciseSearchButton();
     await exerciseMaximisedWindow();
     await exerciseDock();
+    await exerciseIntellihide();
     await setDisabledLive();
     await switchLayer();
     for (const [signal, fn] of [...handlers.values()]) {

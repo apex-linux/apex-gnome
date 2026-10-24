@@ -19,7 +19,8 @@ directory with `git archive` and unpacks it at the top of Fedora's gnome-shell t
 | `js/ui/apex/layer.js` | the layer: the configure and enable phases, one `try/catch` per feature, the session-mode colour hook, the crash guard's marker file |
 | `js/ui/apex/spotlight/feature.js` | Super+Space (below) |
 | `js/ui/apex/panel/feature.js` | the top bar of S2a (below): its parts in `panel/`, one module each |
-| `js/ui/apex/dock/feature.js`, `dock.js`, `trash.js` | the dock of S2a (below): ApexDock, a subclass of upstream's `Dash`, and its Trash |
+| `js/ui/apex/dock/feature.js`, `dock.js`, `trash.js`, `intellihide.js` | the dock of S2a (below): ApexDock, a subclass of upstream's `Dash`, its Trash and its intellihide |
+| `js/ui/apex/windows.js` | whether a window on the primary monitor is maximised, and the signals that change it: the solid bar and the dock's intellihide |
 | `js/ui/apex/fault/feature.js` | the fault-injection feature: loaded only when `APEX_SHELL_TEST_FAULT` names a phase, it fails in that phase (below) |
 | `data/theme/apex/_apex-tokens.scss` | the design tokens as SCSS variables, imported after upstream's `_colors` |
 | `data/theme/apex/_apex.scss` | the Apex sheet, imported last by the light and dark entry files: `apex-text-size()`, the `apex-surface()` mixin of the shell's own surfaces, and the partials |
@@ -122,7 +123,13 @@ rest of the panel runs.
   `dock-running-indicators`; every key live;
 - each icon lifted 6 px over 180 ms while hovered, its label above it;
 - in the chrome, centred `$apex_dock_bottom_gap` above the primary monitor's bottom edge,
-  with no strut, hidden under fullscreen windows and on the lock screen;
+  with no strut, hidden under fullscreen windows and on the lock screen; its box reaches
+  the edge, so the gap below the dock is its own;
+- `dock/intellihide.js`, Hide Behind Maximized Windows (`dock-intellihide`, live): while a
+  window on the primary monitor is maximised and the overview is closed, the box slides
+  below the screen over 380 ms; a threshold-0 pressure barrier on the bottom edge under
+  it reveals it, and it hides again 300 ms after the pointer leaves it, waiting while a
+  menu of its own is open;
 - in the overview too, whose own dash is hidden at the dock's height plus its gap, so the
   overview lays its views out above the dock; the dock's Show Apps opens the app grid,
   and the overview's Show Apps button and the dock's follow each other;

@@ -83,6 +83,20 @@ class Widget {
         Object.assign(this, props);
     }
 
+    get_transformed_position() {
+        return [this.x, this.y + (this.translation_y ?? 0)];
+    }
+
+    get_transformed_size() {
+        return [this.width, this.height];
+    }
+
+    set(props) {
+        Object.assign(this, props);
+    }
+
+    remove_all_transitions() {}
+
     destroy() {
         if (this.destroyed)
             return;

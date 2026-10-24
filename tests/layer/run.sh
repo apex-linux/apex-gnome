@@ -48,14 +48,15 @@ mkdir -p "$T/schemas" "$T/noschema" "$T/nochild" "$T/data" "$T/home" "$T/shell" 
 # main.js and the Meta and Shell typelibs come only with gnome-shell and mutter.
 cp -R "$REPO/desktop/shell/js" "$T/shell/"
 cp "$HERE/main-stub.js" "$T/shell/js/ui/main.js"
-for upstream in panelMenu dash iconGrid popupMenu; do
+for upstream in panelMenu dash iconGrid popupMenu layout; do
     cp "$HERE/stubs/$upstream.js" "$T/shell/js/ui/$upstream.js"
 done
-cp "$HERE"/stubs/St.js "$HERE"/stubs/Clutter.js "$HERE"/stubs/Shell.js "$T/"
-# gjs outside the shell has no St or Clutter typelib, and the fixture's Shell no
-# WindowTracker: the features get stubs instead.
+cp "$HERE"/stubs/St.js "$HERE"/stubs/Clutter.js "$HERE"/stubs/Shell.js "$HERE"/stubs/Meta.js "$T/"
+# gjs outside the shell has no St or Clutter typelib, and the fixtures' Shell and Meta no
+# WindowTracker or Barrier: the features get stubs instead.
 find "$T/shell/js/ui/apex" -name '*.js' -exec sed -i -e "s|'gi://St'|'file://$T/St.js'|" \
-    -e "s|'gi://Clutter'|'file://$T/Clutter.js'|" -e "s|'gi://Shell'|'file://$T/Shell.js'|" {} +
+    -e "s|'gi://Clutter'|'file://$T/Clutter.js'|" -e "s|'gi://Shell'|'file://$T/Shell.js'|" \
+    -e "s|'gi://Meta'|'file://$T/Meta.js'|" {} +
 for gir in "$HERE"/fixtures/*.gir; do
     gir_name=${gir##*/}
     "$GI_COMPILER" "$gir" -o "$T/typelib/${gir_name%.gir}.typelib"
@@ -449,6 +450,20 @@ fact "dock: layer-enabled=false takes it away and gives the overview its dash ba
 fact "dock: layer-enabled=true brings it back" "dock\.on=Files:54 Web:54 $DOCK_TAIL indicators=true visible=true dash=false dash-height=0"
 count_is "dock: the old dock is destroyed" '^probe: dock\.destroyed=apexDock$' 1
 lacks "dock: no feature fails or disables uncleanly" 'off for this session|did not disable cleanly|cannot restyle'
+
+probe intellihide "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_INTELLIHIDE=1
+fact "intellihide: a threshold-0 barrier on the bottom edge, under the dock, blocking downward motion" \
+    'intellihide\.barrier=x=660\.\.780 y=900\.\.900 directions=8'
+fact "intellihide: the pressure barrier triggers on the first hit" 'pressure-barrier=threshold=0 timeout=1000'
+intellihide_steps_are() {
+    local got
+    got=$(sed -n 's/^probe: set \(.*\)$/[\1]/p; s/^probe: intellihide\.hidden=\(.*\)$/\1/p' "$OUT" | paste -sd' ' -)
+    if [[ $got == "$2" ]]; then ok "$1"; else not_ok "$1 (got '$got', expected '$2')"; _show; fi
+}
+intellihide_steps_are "intellihide: hidden behind a maximised window, revealed by the edge while the pointer is on it, shown in the overview and with the key off" \
+    '[initial] false [maximised] true [edge] false [pointer-elsewhere] true [edge-again] false [pointer-on-dock] false [left] true [overview] false [no-overview] true [intellihide=false] false [intellihide=true] true [closed] false [layer-enabled=false] false'
+fact "intellihide: layer-enabled=false takes its barrier away" 'intellihide\.after-off=pressure-destroyed=true barrier-destroyed=true'
+lacks "intellihide: no feature fails or disables uncleanly" 'off for this session|did not disable cleanly|cannot restyle'
 
 probe dock-disabled "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_DOCK=1 PROBE_DISABLED=dock
 has "disabled-features=['dock']: skips the feature" 'Apex: feature dock is in disabled-features'
