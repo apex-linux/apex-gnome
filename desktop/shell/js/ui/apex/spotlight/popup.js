@@ -15,6 +15,7 @@ const HINT = 'Search apps, settings and files, or type a sum';
 const SEARCH_GLYPH = 'system-search-symbolic';
 const CLEAR_GLYPH = 'edit-clear-symbolic';
 const ICON_SIZE = 32;
+const TILE_GLYPH_SIZE = 16;
 const TYPING_PAUSE_MS = 50;
 const ENTER_KEYS = [Clutter.KEY_Return, Clutter.KEY_KP_Enter, Clutter.KEY_ISO_Enter];
 
@@ -231,6 +232,25 @@ export class Popup {
             this._select(this._rows.length > 0 ? 0 : -1);
     }
 
+    // Settings rows draw the provider's symbolic icon on a tile of the panel's colour.
+    _buildIcon(row) {
+        const tiled = row.tile !== undefined;
+        const icon = new St.Bin({
+            style_class: tiled ? 'apex-spotlight-icon apex-spotlight-tile' : 'apex-spotlight-icon',
+            y_align: Clutter.ActorAlign.CENTER,
+            child: row.gicon
+                ? new St.Icon({gicon: row.gicon, icon_size: ICON_SIZE})
+                : row.createIcon(tiled ? TILE_GLYPH_SIZE : ICON_SIZE),
+        });
+        if (row.tile === 'accent') {
+            icon.add_style_class_name('apex-spotlight-tile-accent');
+        } else if (row.tile) {
+            icon.add_style_class_name('apex-spotlight-tile-coloured');
+            icon.set_style(`background-color: ${row.tile};`);
+        }
+        return icon;
+    }
+
     _buildRow(row, index) {
         const actor = new St.BoxLayout({
             style_class: 'apex-spotlight-row',
@@ -238,11 +258,7 @@ export class Popup {
             track_hover: true,
             accessible_name: row.title,
         });
-        actor.add_child(new St.Bin({
-            style_class: 'apex-spotlight-icon',
-            y_align: Clutter.ActorAlign.CENTER,
-            child: row.gicon ? new St.Icon({gicon: row.gicon, icon_size: ICON_SIZE}) : row.createIcon(ICON_SIZE),
-        }));
+        actor.add_child(this._buildIcon(row));
         const text = new St.BoxLayout({
             style_class: 'apex-spotlight-text',
             orientation: Clutter.Orientation.VERTICAL,

@@ -19,7 +19,7 @@ directory with `git archive` and unpacks it at the top of Fedora's gnome-shell t
 | `js/ui/apex/layer.js` | the layer: the configure and enable phases, one `try/catch` per feature, the session-mode colour hook, the crash guard's marker file |
 | `js/ui/apex/lock/` | the lock screen of S3b (board 20), the `lock` feature: `stage.js` (the single stage: date over time over the prompt and its hint, the overlay, the prompt torn down while `org.gnome.Mutter.DisplayConfig`'s `PowerSaveMode` blanks the screen and rebuilt on wake), `background.js` (the blur, σ 30 and saturation 1.3, without upstream's darkening), `question.js` ("Enter Password" for PAM's exact `Password:` only) and `avatar.js` (the name's initial in place of the generic icon), through patch 0015's hooks. Unlocking stays upstream's: no Apex code is on its path, which `tests/layer/run.sh`'s unlock guard checks. Stock keeps, until S4: the show-password eye and the chevron button; the failure text on a message line above the hint, where the board puts it in the hint's place with a red ring; and pam_fprintd's "(or place finger on reader)", "Failed to match fingerprint" and the "Unlock with fingerprint" indicator, where the board has one hint line, "Or touch the fingerprint reader" with the print glyph, and "Fingerprint not recognized. Try again." |
 | `js/ui/apex/motion/feature.js` | DESIGN's motion (below): one curve and fixed durations through patch 0016's hooks |
-| `js/ui/apex/spotlight/` | Spotlight (below): `feature.js` (Super+Space), `search.js` (the sections, caps and budget), `providers.js` (the stock providers), `popup.js` and `toast.js` |
+| `js/ui/apex/spotlight/` | Spotlight (below): `feature.js` (Super+Space), `search.js` (the sections, caps and budget), `providers.js` (the stock providers), `popup.js`, `toast.js`, and `tiles.js` with `settings-tiles.json`, the Settings tile colours by panel id. That JSON mirrors gnome-control-center's `panels/apex/settings-tiles.json` byte for byte and is the one file here without an SPDX line, since JSON has no comments |
 | `js/ui/apex/quick-settings/feature.js` | DESIGN's Quick Settings (below): VPN after Airplane Mode, Power Mode lit, On/Off subtitles, through patch 0011's hook |
 | `js/ui/apex/panel/feature.js` | the top bar of S2a (below): its parts in `panel/`, one module each |
 | `js/ui/apex/glass/feature.js` | the glass manager of S2b (below), with `glass/surfaces.js`, the layer's own glass, and `glass/registry.js`, where any feature registers an actor |
@@ -90,7 +90,10 @@ Applications 4, Settings 3 and Files 4, in that order. Sections show as their pr
 answer, each in its place; each provider has 1 s per query, and one past it is cancelled and
 left out of that query. The selection is the first row until Up, Down or the pointer moves it;
 after that an arriving section never moves it. A sum puts Calculator first among the
-applications, whichever answers first. Up and Down move one selection across the
+applications, whichever answers first. Settings rows draw the provider's symbolic icon on a 32 px tile
+in the panel's colour from `settings-tiles.json`, the same table as the Settings sidebar's
+tiles: System's search-only pages take System's, Apex Desktop the accent, and a panel
+without a colour a neutral tile. Up and Down move one selection across the
 sections, Enter activates it through its provider, and Enter on the calculator's result
 copies it, closes Spotlight and shows the "Copied" toast above the dock for 2 s. An empty
 query shows only the field; a query with no results says so. The feature follows the kill
