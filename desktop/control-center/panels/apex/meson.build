@@ -39,6 +39,7 @@ panels_libs += static_library(
   sources: files(
     'cc-apex-header.c',
     'cc-apex-panel.c',
+    'cc-apex-sidebar.c',
     'cc-apex-tile.c',
     'cc-apex-updates-page.c',
     'cc-apex-updates-state.c',

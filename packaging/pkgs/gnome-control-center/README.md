@@ -71,6 +71,22 @@ the launcher's "Apex Tweaks" (`io.github.apex_linux.Apex.Tweaks.desktop`) opens 
 - **Without apex-desktop's schema** the panel shows an explanation instead of the rows.
   A schema without one of the Apex keys hides that row and logs it.
 
+## The sidebar
+
+0002 puts each panel's icon on a 24 px tile, radius 7, white on its colour, and orders the
+panels as boards 11, 18, 23 and 24 do: Apex Desktop; Wi-Fi, Network, Bluetooth; Displays,
+Sound, Power; Appearance (`background`), Multitasking, Notifications, Search, Apps, then
+Online Accounts, Sharing, Wellbeing; Privacy & Security, Keyboard, Mouse & Touchpad, then
+Color, Printers, Wacom, Accessibility and System. The panels the boards leave out keep
+their place next to their group.
+
+The colours are `panels/apex/settings-tiles.json`, `{"<panel id>": "#rrggbb" | "accent"}`,
+compiled into the resource and turned into one CSS rule per panel when Settings starts;
+`accent` is the user's accent colour, and a panel the table lacks gets a slate tile. It is
+the one table of Settings tile colours: the shell's Spotlight keeps a byte-identical copy,
+`desktop/shell/data/apex/settings-tiles.json`, and compares the two. The selftest checks
+its format (sorted keys, two-space indent, a final newline, `#rrggbb` or `accent`).
+
 ## The Software Updates page
 
 System's Software Updates row opens it (0003), and so does
@@ -127,7 +143,8 @@ two. Change it there first, then copy it here.
 
 ## `desktop/control-center/`
 
-Every file but the `Update1` copy is GPL-2.0-or-later, gnome-control-center's licence,
+Every file but the `Update1` copy and the JSON tile table, which cannot carry a comment, is
+GPL-2.0-or-later, gnome-control-center's licence,
 and sits under `panels/apex/`, the one path `source1_paths` allows;
 `tests/control-center/selftest.sh` checks both, and that every patch is the owner's. The
 copy keeps apex-system's bytes and licence, GPL-3.0-or-later, so the built package is
@@ -143,6 +160,8 @@ copy keeps apex-system's bytes and licence, GPL-3.0-or-later, so the built packa
 | `panels/apex/gnome-apex-panel.desktop.in` | the panel's name, icon, keywords and section for the sidebar and search |
 | `panels/apex/io.github.apex_linux.Apex.Tweaks.desktop.in` | "Apex Tweaks" in the launcher |
 | `panels/apex/icons/org.gnome.Settings-apex-symbolic.svg` | the Apex diamond, the panel's sidebar icon |
+| `panels/apex/cc-apex-sidebar.{c,h}` | the sidebar's tiles from `settings-tiles.json`, and the one loader of the Apex sheets |
+| `panels/apex/settings-tiles.json` | the tile colours by panel id, shared with the shell's Spotlight |
 | `panels/apex/cc-apex-tile.{c,h}` | the wallpaper tile with the Apex diamond, and a badge, shared by the panel's header and the updates page |
 | `panels/apex/cc-apex-updates-page.{c,h,blp}` | the Software Updates page |
 | `panels/apex/cc-apex-updates-state.{c,h}` | its logic, without GTK |
@@ -153,6 +172,7 @@ copy keeps apex-system's bytes and licence, GPL-3.0-or-later, so the built packa
 | Patch | Upstream files | Changed lines | Hunks |
 |---|---|---|---|
 | `0001-apex-desktop` | `panels/meson.build`, `shell/meson.build`, `shell/cc-panel-loader.c`, `shell/cc-panel-list.c` | +7 | `subdir('apex')` after upstream's panels; `apex_shell_sources` added to `shell_sources`; the panel registered as `apex`; `"apex"` and a separator at the head of `panel_order[]` |
+| `0002-sidebar-tiles` | `shell/cc-panel-list.c` | +8 −7 | the include; each row's icon handed to `cc_apex_sidebar_tile()`; `panel_order[]` in the design's order |
 | `0003-software-updates` | `panels/system/cc-system-panel.c`, `panels/system/cc-system-panel.blp` | +6 −3 | the include; the `software-updates` subpage; the Software Updates group always shown; its row pushes the page (`navigation.push`) instead of spawning gnome-software, with a forward arrow for the external-link one |
 
 The resource goes into the executable as sources, not as a static library in
@@ -160,8 +180,7 @@ The resource goes into the executable as sources, not as a static library in
 and nothing upstream does.
 
 Budget (ADR 0014): at most 150 changed lines in upstream files, in hook hunks only; the
-added files under `panels/apex/` do not count. In use: 16 lines in 6 files. 0002, the
-coloured sidebar tiles, comes next.
+added files under `panels/apex/` do not count. In use: 31 lines in 6 files.
 
 The patches are `git format-patch` output against Fedora's `%prep` tree, with `a/` and
 `b/` prefixes, applied with `-p1`. Write them with apex-image's

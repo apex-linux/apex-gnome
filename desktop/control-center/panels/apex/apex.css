@@ -48,6 +48,15 @@ apex-tile .badge.error {
   background-color: var(--error-bg-color);
 }
 
+image.apex-tile {
+  min-width: 24px;
+  min-height: 24px;
+  border-radius: 7px;
+  color: white;
+  background-color: #6f8396;
+  -gtk-icon-size: 16px;
+}
+
 .apex-title {
   font-size: 20px;
   font-weight: 800;
