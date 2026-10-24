@@ -894,6 +894,8 @@ async function quickSettings(unit) {
                 title: styleOf(find(header, 'title'), unit),
                 subtitle: styleOf(find(header, 'subtitle'), unit),
                 rows: wifi.menu._getMenuItems().filter(i => i.visible && i.label?.text).map(i => styleOf(i, unit)),
+                rowHover: (row => row && underPseudoClass(row, 'hover', () => paint(row.get_theme_node(), unit)))(
+                    wifi.menu._getMenuItems().find(i => i.visible && i.label?.text)),
                 separator: styleOf(wifi.menu._getMenuItems().find(i => i instanceof PopupMenu.PopupSeparatorMenuItem), unit),
             } : null,
         };
