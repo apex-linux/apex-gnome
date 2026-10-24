@@ -51,6 +51,10 @@ cp "$HERE/main-stub.js" "$T/shell/js/ui/main.js"
 for upstream in panelMenu dash iconGrid popupMenu; do
     cp "$HERE/stubs/$upstream.js" "$T/shell/js/ui/$upstream.js"
 done
+# Spotlight's providers: upstream's app search and remote providers, faked.
+cp "$HERE"/stubs/appDisplay.js "$HERE"/stubs/remoteSearch.js "$HERE"/stubs/searchProviders.js "$T/shell/js/ui/"
+mkdir -p "$T/shell/js/misc"
+cp "$HERE/stubs/systemActions.js" "$T/shell/js/misc/"
 cp "$HERE"/stubs/St.js "$HERE"/stubs/Clutter.js "$HERE"/stubs/Shell.js "$T/"
 # gjs outside the shell has no St or Clutter typelib, and the fixture's Shell no
 # WindowTracker: the features get stubs instead.
@@ -61,21 +65,35 @@ for gir in "$HERE"/fixtures/*.gir; do
     "$GI_COMPILER" "$gir" -o "$T/typelib/${gir_name%.gir}.typelib"
 done
 cp "$SCHEMA_DIR"/*.gschema.xml "$T/schemas/"
+readonly SEARCH_PROVIDERS_SCHEMA=$HERE/fixtures/org.gnome.desktop.search-providers.gschema.xml
+cp "$SEARCH_PROVIDERS_SCHEMA" "$T/schemas/"
 glib-compile-schemas --strict "$T/schemas"
 awk '/<child name="keybindings"/ { next }
     /<schema id="io\.github\.apex_linux\.Apex\.Desktop\.Keybindings"/ { skip = 1 }
     !skip { print }
     skip && /<\/schema>/ { skip = 0 }' "$SCHEMA_DIR/io.github.apex_linux.Apex.Desktop.gschema.xml" \
     >"$T/nochild/io.github.apex_linux.Apex.Desktop.gschema.xml"
+cp "$SEARCH_PROVIDERS_SCHEMA" "$T/nochild/"
 glib-compile-schemas --strict "$T/nochild"
+mkdir -p "$T/nokey"
+awk '/<key name="toggle-spotlight"/ { skip = 1 } !skip { print } skip && /<\/key>/ { skip = 0 }' \
+    "$SCHEMA_DIR/io.github.apex_linux.Apex.Desktop.gschema.xml" >"$T/nokey/io.github.apex_linux.Apex.Desktop.gschema.xml"
+cp "$SEARCH_PROVIDERS_SCHEMA" "$T/nokey/"
+glib-compile-schemas --strict "$T/nokey"
 mkdir -p "$T/nodock"
 awk '/<key name="dock-show-trash"/ { skip = 1 } !skip { print } skip && /<\/key>/ { skip = 0 }' \
     "$SCHEMA_DIR/io.github.apex_linux.Apex.Desktop.gschema.xml" >"$T/nodock/io.github.apex_linux.Apex.Desktop.gschema.xml"
+cp "$SEARCH_PROVIDERS_SCHEMA" "$T/nodock/"
 glib-compile-schemas --strict "$T/nodock"
 mkdir -p "$T/nohint"
 awk '/<key name="search-hint-shown"/ { skip = 1 } !skip { print } skip && /<\/key>/ { skip = 0 }' \
     "$SCHEMA_DIR/io.github.apex_linux.Apex.Desktop.gschema.xml" >"$T/nohint/io.github.apex_linux.Apex.Desktop.gschema.xml"
+cp "$SEARCH_PROVIDERS_SCHEMA" "$T/nohint/"
 glib-compile-schemas --strict "$T/nohint"
+mkdir -p "$T/noreduce"
+awk '/<key name="reduce-transparency"/ { skip = 1 } !skip { print } skip && /<\/key>/ { skip = 0 }' \
+    "$SCHEMA_DIR/io.github.apex_linux.Apex.Desktop.gschema.xml" >"$T/noreduce/io.github.apex_linux.Apex.Desktop.gschema.xml"
+glib-compile-schemas --strict "$T/noreduce"
 
 readonly CMDLINE_PLAIN='BOOT_IMAGE=(hd0,gpt2)/boot/ostree/apex/vmlinuz root=UUID=0 rw rhgb quiet'
 sandbox=0
@@ -162,9 +180,10 @@ fact "spotlight: enable registers Super+Space, without autorepeat, in the normal
     'keybinding\.add=toggle-spotlight accelerators=<Super>space flags=IGNORE_AUTOREPEAT modes=NORMAL\|OVERVIEW'
 has "spotlight: the feature enables" 'Apex: feature spotlight enabled'
 keybindings_are "spotlight: registered once" add
-has "spotlight: a press opens the overview with its search entry focused" '^probe: overview=shown, search focused$'
-fact "spotlight: so the overview is up" 'press\.1=overview=true'
-fact "spotlight: pressed again while it is up, it hides the overview" 'press\.2=overview=false'
+fact "spotlight: a press opens Spotlight, a modal in the popup action mode" 'modal\.push=apexSpotlight actionMode=128 count=1'
+fact "spotlight: over the desktop, not the overview" 'press\.1=overview=false spotlight=true'
+fact "spotlight: pressed again, it closes and gives the grab back" 'press\.2=overview=false spotlight=false'
+count_is "spotlight: one grab taken, one given back" '^probe: modal\.pop=count=0$' 1
 if [[ $(run_guard_unit_like_systemd default) == skipped ]]; then
     ok "default: a later shell failure does not trip the guard (no marker)"
 else
@@ -301,7 +320,7 @@ fact "and its hook gives stock" 'test-fault=stock'
 probe spotlight-disabled "$CMDLINE_PLAIN" PROBE_DISABLED=spotlight PROBE_ENABLE=1 PROBE_PRESS=1
 has "disabled-features=['spotlight']: skips the feature" 'Apex: feature spotlight is in disabled-features'
 keybindings_are "disabled-features=['spotlight']: no Super+Space binding" ''
-fact "disabled-features=['spotlight']: Super+Space opens nothing" 'press\.1=overview=false'
+fact "disabled-features=['spotlight']: Super+Space opens nothing" 'press\.1=overview=false spotlight=false'
 fact "disabled-features=['spotlight']: no handler gets the press" 'unbound-press=toggle-spotlight'
 fact "disabled-features=['spotlight']: the rest of the layer runs" 'scheme\.user\.after-enable=prefer-light'
 
@@ -319,6 +338,76 @@ count_is "no Keybindings child schema: in one log line" 'Apex: .*spotlight' 1
 keybindings_are "no Keybindings child schema: no Super+Space binding" ''
 fact "no Keybindings child schema: the rest of the layer runs" 'scheme\.user\.after-enable=prefer-light'
 fact "no Keybindings child schema: enable still runs" 'starting-file=true'
+
+probe spotlight-nokey "$CMDLINE_PLAIN" GSETTINGS_SCHEMA_DIR="$T/nokey" PROBE_ENABLE=1
+has "a Keybindings schema without toggle-spotlight: only spotlight is off, and says why" \
+    'Apex: feature spotlight off for this session \(configure: Error: schema io\.github\.apex_linux\.Apex\.Desktop\.Keybindings has no key toggle-spotlight\)'
+keybindings_are "a Keybindings schema without toggle-spotlight: no Super+Space binding" ''
+fact "a Keybindings schema without toggle-spotlight: the rest of the layer runs" 'scheme\.user\.after-enable=prefer-light'
+
+readonly APPS='APPLICATIONS: Disks Disk Usage Analyzer Disk Benchmark Disk Images'
+readonly SETTINGS='SETTINGS: Disk Encryption Disk Storage Removable Disks'
+readonly FILES='FILES: disk-usage-2026-10.csv disk-unlock-board.png Disk Images diskspace-notes.md'
+probe spotlight "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_SPOTLIGHT=1
+rc_is "spotlight: the probe runs" 0
+fact "spotlight: an empty query shows only the field" 'spotlight\.opened=field only'
+fact "spotlight: the field has the keyboard focus" 'spotlight\.focus=true'
+fact "spotlight: sections in order, capped at 4 apps, 3 settings, 4 files; the first row selected, Enter to open" \
+    "spotlight\.disk=APPLICATIONS: Disks\*Open Disk Usage Analyzer Disk Benchmark Disk Images \| $SETTINGS \| $FILES"
+lacks "spotlight: a provider without a section shows nothing" 'Characters'
+fact "spotlight: Down moves across sections" \
+    "spotlight\.down-4=$APPS \| SETTINGS: Disk Encryption\*Open Disk Storage Removable Disks \| $FILES"
+fact "spotlight: Up moves back" \
+    "spotlight\.up-1=APPLICATIONS: Disks Disk Usage Analyzer Disk Benchmark Disk Images\*Open \| $SETTINGS \| $FILES"
+fact "spotlight: Down stops at the last row" \
+    "spotlight\.down-20=$APPS \| $SETTINGS \| FILES: disk-usage-2026-10.csv disk-unlock-board.png Disk Images diskspace-notes.md\*Open"
+fact "spotlight: Up stops at the first" "spotlight\.up-20=APPLICATIONS: Disks\*Open .*"
+fact "spotlight: Enter activates the selected result through its provider, with the terms" \
+    'spotlight\.activated=org\.gnome\.Settings\.desktop:disk-encryption terms=disk'
+fact "spotlight: and closes Spotlight" 'spotlight\.enter-on-a-setting=closed'
+fact "spotlight: Enter on an app launches it" 'spotlight\.launched=org\.gnome\.DiskUtility\.desktop'
+fact "spotlight: a sum: its result first, then Calculator as the first application" \
+    'spotlight\.sum=CALCULATOR: 1920\(2880 / 1\.5\)\*Copy \| APPLICATIONS: Calculator'
+fact "spotlight: Enter on the result copies it to the clipboard" 'clipboard=1:1920'
+fact "spotlight: closes Spotlight" 'spotlight\.enter-on-the-sum=closed'
+fact "spotlight: and shows the Copied toast" 'spotlight\.toast=Copied 1920 in-ui-group=true'
+fact "spotlight: the toast goes after a moment" 'spotlight\.toast-later=gone'
+lacks "spotlight: copying launches nothing" 'spotlight\.activated=org\.gnome\.Calculator'
+fact "spotlight: a query with no results says so" 'spotlight\.none=empty "No results for “zzz”"'
+fact "spotlight: Esc closes" 'spotlight\.escape=closed'
+fact "spotlight: clearing the query shows only the field again" 'spotlight\.cleared=field only'
+fact "spotlight: a query typed over a running one shows only the later's results" 'spotlight\.superseded=empty "No results for “zzz”"'
+fact "spotlight: Super+Space inside Spotlight closes it" 'spotlight\.toggle-key=closed'
+fact "spotlight: the Super tap closes it and opens the overview" 'spotlight\.overlay-key=closed overview=true'
+fact "spotlight: a click outside closes it" 'spotlight\.click-outside=closed'
+fact "spotlight: hovering a row selects it" "spotlight\.hover=APPLICATIONS: Disks Disk Usage Analyzer\*Open .*"
+fact "spotlight: clicking a row activates it" 'spotlight\.launched=org\.gnome\.baobab\.desktop'
+fact "spotlight: closing leaves no popup on the stage" 'spotlight\.stage=0'
+fact "spotlight: put in disabled-features while open, it closes and goes" 'spotlight\.live-disabled=0 popup=true'
+fact "spotlight: taken out again, Super+Space opens it afresh" 'spotlight\.live-enabled=field only'
+count_is "spotlight: every grab is given back" '^probe: modal\.push=' "$(grep -c '^probe: modal\.pop=' "$OUT")"
+lacks "spotlight: nothing fails" 'off for this session|did not disable cleanly|Spotlight search failed|JS ERROR|Gjs-WARNING'
+
+probe spotlight-slow "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_SPOTLIGHT=slow PROBE_SPOTLIGHT_SLOW=org.gnome.Settings.desktop
+fact "spotlight: a slow provider does not hold back the sections that answered" \
+    "spotlight\.slow\.at-700ms=APPLICATIONS: Disks\*Open Disk Usage Analyzer Disk Benchmark Disk Images \| $FILES"
+fact "spotlight: past its 1 s budget, its section is left out" \
+    "spotlight\.slow\.at-1300ms=APPLICATIONS: Disks\*Open Disk Usage Analyzer Disk Benchmark Disk Images \| $FILES"
+fact "spotlight: and its call is cancelled" 'spotlight\.cancelled=org\.gnome\.Settings\.desktop'
+
+probe spotlight-late "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_SPOTLIGHT=late PROBE_SPOTLIGHT_SLOW=org.gnome.Settings.desktop PROBE_SPOTLIGHT_SLOW_MS=600
+fact "spotlight: within its budget, a slower section is not there yet" \
+    "spotlight\.late\.at-300ms=APPLICATIONS: Disks\*Open Disk Usage Analyzer Disk Benchmark Disk Images \| $FILES"
+fact "spotlight: the selection moves among the sections shown" \
+    "spotlight\.late\.down-5=$APPS \| FILES: disk-usage-2026-10.csv disk-unlock-board.png\*Open Disk Images diskspace-notes.md"
+fact "spotlight: the section arrives in its place, and the selection stays on its row" \
+    "spotlight\.late\.at-900ms=$APPS \| $SETTINGS \| FILES: disk-usage-2026-10.csv disk-unlock-board.png\*Open Disk Images diskspace-notes.md"
+lacks "spotlight: an answer within budget cancels nothing" 'spotlight\.cancelled='
+
+probe spotlight-late-sum "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_SPOTLIGHT=late-sum PROBE_SPOTLIGHT_SLOW=org.gnome.Calculator.desktop PROBE_SPOTLIGHT_SLOW_MS=600
+fact "spotlight: no rows yet and the query not done: only the field, no 'No results'" 'spotlight\.late-sum\.at-300ms=field only'
+fact "spotlight: a late sum still puts Calculator first among the applications" \
+    'spotlight\.late-sum\.at-900ms=CALCULATOR: 1920\(2880 / 1\.5\)\*Copy \| APPLICATIONS: Calculator'
 
 readonly KEPT_PILL='remoteAccess,camera,volumeInput,location,network,volumeOutput,unsafeMode,system'
 readonly STOCK_PILL='remoteAccess,camera,volumeInput,location,brightness,thunderbolt,nightLight,network,darkMode,doNotDisturb,backlight,bluetooth,rfkill,autoRotate,volumeOutput,unsafeMode,powerProfiles,system'
@@ -397,12 +486,16 @@ fact "search-button: a pill with the search glyph, named for its key" "search\.e
 fact "search-button: hovered, its tooltip shows centred below it" 'search\.tooltip\.hover=true at 1256,32'
 fact "search-button: and hides when the pointer leaves" 'search\.tooltip\.unhover=false at 1256,32'
 fact "search-button: the tooltip names the key, in the chrome as dash.js's labels are" 'chrome\.add=Search \(Super\+Space\) trackFullscreen=false'
-fact "search-button: a click opens the overview with its search entry focused" 'search\.click\.1=overview=true'
-fact "search-button: a second click hides it, as Super+Space does" 'search\.click\.2=overview=false'
+fact "search-button: a click opens Spotlight, as Super+Space does" 'search\.click\.1=overview=false spotlight=true'
+fact "search-button: a second click closes it" 'search\.click\.2=overview=false spotlight=false'
 fact "search-button: the lock screen hides it" "search\.locked=$SEARCH_ITEM visible=false"
 fact "search-button: layer-enabled=false takes it out of the bar" 'search\.off=none'
 fact "search-button: layer-enabled=true brings it back" "search\.on=$SEARCH_ITEM visible=true"
 lacks "search-button: no feature fails or disables uncleanly" 'off for this session|did not disable cleanly|cannot restyle'
+
+probe search-no-spotlight "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_SEARCH_BUTTON=1 PROBE_DISABLED=spotlight
+fact "disabled-features=['spotlight']: the search button opens the overview with its search entry focused" 'search\.click\.1=overview=true spotlight=false'
+fact "disabled-features=['spotlight']: and a second click hides it" 'search\.click\.2=overview=false spotlight=false'
 
 probe search-disabled "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_SEARCH_BUTTON=1 PROBE_DISABLED=panel
 fact "disabled-features=['panel']: no search button" 'search\.enabled=none'
@@ -412,6 +505,46 @@ probe maximised "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_MAXIMISED=1
 panel_classes_are "solid-bar: solid while a window on the primary monitor is maximised and the overview is closed" \
     'none [maximised] apex-solid-bar [overview] none [no-overview] apex-solid-bar [minimised] none [unminimised] apex-solid-bar [unmaximised] none [other-monitor] none [desktop-window] none [workspace] apex-solid-bar [closed] none [translucent-top-bar=false] apex-solid-bar [layer-enabled=false] none [restacked]'
 lacks "solid-bar: the maximised-window trigger disables cleanly" 'off for this session|did not disable cleanly|cannot restyle'
+
+readonly GLASS_ON='panel:r96/s1.6/c0/on/background quick-settings:r120/s1.8/c52/on/background calendar:r120/s1.8/c52/on/background'
+readonly GLASS_OFF='panel:none quick-settings:none calendar:none'
+readonly BANNER_ON='banner:r120/s1.8/c32/on/background'
+probe glass "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_GLASS=1
+has "glass: the feature enables" 'Apex: feature glass enabled'
+fact "glass: the bar, Quick Settings and the calendar blur behind them: radius 2 x their sheet's sigma x the scale, its saturation and corners, fine, following opacity; the offscreen redirects they sit in are held off" \
+    "glass\.enabled=$GLASS_ON solid=false redirects=0,0"
+fact "glass: a banner blurs from the moment it is shown" "glass\.banner=$GLASS_ON $BANNER_ON solid=false redirects=0,0"
+fact "glass: the bar's glass pauses while the bar is solid" \
+    "glass\.solid-bar=panel:r96/s1\.6/c0/paused/background quick-settings:r120/s1\.8/c52/on/background calendar:r120/s1\.8/c52/on/background $BANNER_ON solid=false redirects=0,0"
+fact "glass: a closed popover's glass pauses" \
+    "glass\.menu-closed=panel:r96/s1\.6/c0/on/background quick-settings:r120/s1\.8/c52/paused/background calendar:r120/s1\.8/c52/on/background $BANNER_ON solid=false redirects=0,0"
+fact "glass: a second register() replaces the first's opts, one surface per actor" 'glass\.registered-twice=dock:r112/s1\.8/c44/paused/background 1'
+fact "glass: another feature registers its actor, the dock's sigma 28 at 1.8, without the manager" 'glass\.registered=dock:r112/s1\.8/c44/on/background'
+fact "glass: a damaged window that touches no glass box redraws none" 'glass\.damage-elsewhere=panel=0 quick-settings=0 dock=0 -> panel=0 quick-settings=0 dock=0'
+fact "glass: a window moved under the bar redraws the bar's box" 'glass\.moved-under-the-bar=panel=1 quick-settings=0 dock=0'
+fact "glass: moved out from under the bar and damaged under the dock, it redraws the bar once more and the dock" 'glass\.damage-under-the-dock=panel=2 quick-settings=0 dock=2'
+fact "glass: a restack redraws every glass box" 'glass\.restacked=panel=3 quick-settings=1 dock=3'
+fact "glass: Reduce Transparency removes every blur and roots apex-solid; the redirects come back" \
+    "glass\.reduce-transparency=$GLASS_OFF banner:none solid=true redirects=2,2"
+fact "glass: and the registered dock's" 'glass\.reduce-transparency\.dock=dock:none'
+fact "glass: high contrast does the same" "glass\.high-contrast=$GLASS_OFF banner:none solid=true redirects=2,2"
+fact "glass: disabled-features=['glass'] removes every blur and keeps the tints" "glass\.disabled=$GLASS_OFF banner:none solid=false redirects=2,2"
+fact "glass: and the registered dock's" 'glass\.disabled\.dock=dock:none'
+fact "glass: an actor registered while glass is off waits" 'glass\.registered-while-disabled=later:none'
+fact "glass: and blurs once glass is back" 'glass\.registered-while-disabled\.enabled=later:r136/s1\.8/c52/on/background'
+fact "glass: unregistered, twice, the dock loses its blur" 'glass\.unregistered=dock:none'
+fact "glass: layer-enabled=false removes every blur and gives the redirects back" "glass\.off=$GLASS_OFF banner:none solid=false redirects=2,2"
+fact "glass: layer-enabled=true brings the glass back" "glass\.on=$GLASS_ON $BANNER_ON solid=false redirects=0,0"
+lacks "glass: no feature fails or disables uncleanly" 'off for this session|did not disable cleanly|cannot restyle'
+
+probe glass-disabled "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_DISABLED=glass PROBE_GLASS=1
+has "disabled-features=['glass']: skips the feature" 'Apex: feature glass is in disabled-features'
+fact "disabled-features=['glass']: no blur, the panel's own redirect" "glass\.enabled=$GLASS_OFF solid=false redirects=2,2"
+
+probe glass-noreduce "$CMDLINE_PLAIN" GSETTINGS_SCHEMA_DIR="$T/noreduce" PROBE_ENABLE=1
+has "a schema without reduce-transparency: only glass is off, and says why" \
+    'Apex: feature glass off for this session \(configure: Error: io\.github\.apex_linux\.Apex\.Desktop has no key reduce-transparency\)'
+has "and the rest of the layer runs" 'Apex: feature panel enabled'
 
 readonly SEARCH_HINT='^probe: notify=Press Super+Space to search$'
 probe search-hint "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_SWITCH=2
