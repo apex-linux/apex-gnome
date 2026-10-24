@@ -348,8 +348,9 @@ function clockTextGap(label, unit) {
     return round((timeStart - dateEnd) / logical.width * boxOf(label, unit).width);
 }
 
+// panel.js hides a button it has nothing to show for, not its container.
 function panelItems(boxActor, unit) {
-    return boxActor.get_children().filter(c => c.visible).map(container => {
+    return boxActor.get_children().filter(c => c.visible && c.get_first_child()?.visible !== false).map(container => {
         const item = container.get_first_child();
         const pill = item?.get_first_child();
         const label = item ? firstVisibleLabel(item) : null;

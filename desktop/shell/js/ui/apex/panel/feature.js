@@ -5,6 +5,8 @@
 
 import * as FocusedApp from './focused-app.js';
 import * as HotCorner from './hot-corner.js';
+import * as InputChip from './input-chip.js';
+import * as ScreenPills from './screen-pills.js';
 import * as SearchButton from './search-button.js';
 import * as SearchHint from './search-hint.js';
 import * as SolidBar from './solid-bar.js';
@@ -12,7 +14,7 @@ import * as StatusPill from './status-pill.js';
 import * as WorkspaceDots from './workspace-dots.js';
 
 const PARTS = [WorkspaceDots, HotCorner, StatusPill, SolidBar, FocusedApp,
-    SearchButton, SearchHint];
+    SearchButton, SearchHint, ScreenPills, InputChip];
 
 export function configure(featureName) {
     for (const part of PARTS)

@@ -135,6 +135,26 @@ stock bar when it is disabled:
   pill. Network, volume, battery, the camera, microphone, location and remote-access
   indicators, unsafe mode and other panel buttons (input source, accessibility,
   recording) stay. Their Quick Settings toggles stay too.
+- `panel/privacy-group.js`, from `status-pill.js`'s hook: board 39's privacy group. The
+  remote-access, camera, microphone and location indicators move into one
+  `apex-privacy-group` box at the start of the status pill, a `$apex_privacy_height`
+  `$apex_privacy` pill (radius `$apex_radius_privacy`, padded `$apex_privacy_padding`) with
+  `$apex_privacy_icon_size` glyphs in `$apex_privacy_fg`, `$apex_privacy_gap` apart. It shows
+  only while one of them does, and then the status pill starts `$apex_bar_pill_padding_privacy`
+  in instead of `$apex_bar_pill_padding` (`apex-privacy-in-use`).
+- `panel/screen-pills.js`: stock's screen-recording and screen-sharing buttons become board 39's
+  pills, each with a `$apex_screen_stop_size` white square (radius `$apex_radius_screen_stop`) in
+  place of its stop glyph. The recording's square leads its timer, set at
+  `$apex_font_recording_size`/`$apex_font_recording_weight` in tabular figures on
+  `$apex_recording`. Sharing's follows its `$apex_sharing_icon_size` glyph on `$apex_privacy`, and
+  its button, named "Stop screen sharing", moves right before the status pill, again after each
+  session-mode change, since panel.js then re-adds its items in stock order. Both keep their
+  clicks, so the shell keeps a control that stops a share.
+- `panel/input-chip.js`: the input source's short names in capitals ("EN", "VI"), however
+  keyboard.js sets them. `_top-bar.scss` draws the chip at
+  `$apex_font_input_chip_size`/`$apex_font_input_chip_weight`, tracked
+  `$apex_font_input_chip_tracking`, at least `$apex_input_chip_min_width` wide; stock shows it
+  only with two or more sources.
 
 `panel/solid-bar.js` makes the bar solid while `translucent-top-bar` is off (live), or while
 a window on the primary monitor's active workspace is maximised, showing and not the
@@ -150,7 +170,8 @@ the name of `Shell.WindowTracker`'s focus app, or "Desktop" while nothing has fo
 clicks, and `show-focused-app-name` (live) and the lock screen hide it. A schema without
 the key turns off the `panel` feature, logged.
 
-`panel/search-button.js` adds a pill just before the status pill (role `apex-search`), named
+`panel/search-button.js` adds a pill at the start of the right box (role `apex-search`), after
+the app indicators and before the recording, accessibility and input-source buttons (board 39), named
 "Search (Super+Space)", `$apex_bar_search_width` wide with the 16 px search glyph. A click
 does what Super+Space does (`toggleSpotlight()` of `spotlight`): it opens or closes
 Spotlight. With `spotlight` in `disabled-features` it opens the overview with its search

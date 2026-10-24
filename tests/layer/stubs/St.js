@@ -109,6 +109,10 @@ class Widget {
         child._parent = this;
     }
 
+    get_first_child() {
+        return this._children[0] ?? null;
+    }
+
     get_children() {
         return [...this._children];
     }

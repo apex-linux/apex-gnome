@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 //
-// DESIGN: the search button before the status pill. It does what Super+Space does, and
-// opens the stock overview search while Spotlight is in disabled-features.
+// DESIGN: the search button starts the right box (board 39). It does what Super+Space does,
+// and opens the stock overview search while Spotlight is in disabled-features.
 
 import Clutter from 'gi://Clutter';
 import St from 'gi://St';
@@ -34,11 +34,6 @@ function _syncTooltip() {
     _tooltip.set_position(Math.round(left), Math.round(y + height));
 }
 
-function _beforeTheStatusPill() {
-    const {container} = Main.panel.statusArea.quickSettings;
-    return container.get_parent().get_children().indexOf(container);
-}
-
 export function enable() {
     _button = new PanelMenu.Button(0.0, NAME, true);
     _button.add_style_class_name('apex-search');
@@ -55,7 +50,7 @@ export function enable() {
     const click = new Clutter.ClickGesture();
     click.connect('recognize', () => toggleSpotlight());
     _button.add_action(click);
-    Main.panel.addToStatusArea(ROLE, _button, _beforeTheStatusPill(), 'right');
+    Main.panel.addToStatusArea(ROLE, _button, 0, 'right');
     _tooltip = new St.Label({style_class: 'dash-label', text: NAME, visible: false});
     Main.layoutManager.addChrome(_tooltip);
     _button.connect('notify::hover', _syncTooltip);
