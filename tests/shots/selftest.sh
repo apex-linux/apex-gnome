@@ -340,6 +340,24 @@ REPORT_OF_A_DATE_MENU_DRAWN_FROM_TOKENS='
         padding: inset(($t.apex_events_padding_top | px); $ep; ($t.apex_events_padding_bottom | px); $ep)},
     eventsTitle: {font: {size: ($t.apex_font_events_title_size | px), weight: ($t.apex_font_heading_weight | tonumber)}, foreground: ($t.apex_fg_dim | hex)}}}}'
 # shellcheck disable=SC2016 # a jq program
+REPORT_OF_AN_OVERVIEW_DRAWN_FROM_TOKENS='
+($t.apex_surface_border | px) as $b | {top: $b, right: $b, bottom: $b, left: $b} as $border
+| {topBar: {accent: "#3584e4ff", panel: {height: 32}}, surfaces: {overview: {
+    group: {background: ($t.apex_scrim | hex), boxShadow: null},
+    search: {y: (32 + ($t.apex_search_top | px)), width: ($t.apex_search_width | px), height: ($t.apex_search_height | px), radius: 20,
+        background: ($t.apex_pill | hex), borderColor: ($t.apex_pill_border | hex), border: $border,
+        padding: {left: (($t.apex_search_padding | px) - $b)}, font: {size: ($t.apex_font_search_size | px)}, foreground: ($t.apex_fg | hex),
+        icon: ($t.apex_quick_settings_icon_size | px),
+        focus: {boxShadow: {inset: true, spread: ($t.apex_entry_focus_ring | px), color: "#3584e4ff"}}},
+    thumbnailsSpacing: ($t.apex_thumbnail_gap | px),
+    thumbnail: {radius: ($t.apex_radius_thumbnail | px), borderColor: ($t.apex_pill_border | hex), border: $border},
+    indicator: {radius: ($t.apex_radius_thumbnail | px), border: {top: ($t.apex_thumbnail_indicator | px)}, borderColor: "#3584e4ff"},
+    caption: {minHeight: (($t.apex_caption_height | px) - 2 * $b), border: $border, radius: 14, background: ($t.apex_pill | hex),
+        borderColor: ($t.apex_pill_border | hex), padding: {left: (($t.apex_caption_padding | px) - $b)}, foreground: ($t.apex_fg | hex),
+        font: {size: ($t.apex_font_caption_size | px), weight: ($t.apex_font_heading_weight | tonumber)}},
+    section: {background: ($t.apex_glass_card | hex), borderColor: ($t.apex_glass_card_border | hex),
+        radius: ($t.apex_radius_message | px), foreground: ($t.apex_fg | hex)}}}}'
+# shellcheck disable=SC2016 # a jq program
 HEX_DEF='def hex: rgba | map([., 16] | "0123456789abcdef"[(.[0] / .[1] | floor):(.[0] / .[1] | floor) + 1]
                                     + "0123456789abcdef"[(.[0] % .[1]):(.[0] % .[1]) + 1]) | "#" + join("");'
 
@@ -356,6 +374,7 @@ assert_run() {
     [[ $assertions == window_switcher ]] && report=$REPORT_OF_A_SWITCHER_DRAWN_FROM_TOKENS
     [[ $assertions == modal_dialog ]] && report=$REPORT_OF_A_DIALOG_DRAWN_FROM_TOKENS
     [[ $assertions == date_menu ]] && report=$REPORT_OF_A_DATE_MENU_DRAWN_FROM_TOKENS
+    [[ $assertions == overview_style ]] && report=$REPORT_OF_AN_OVERVIEW_DRAWN_FROM_TOKENS
     tokens=$(tokens_for "$variant")
     jq -nc --argjson t "$tokens" "$JQ_DEFS $HEX_DEF $report | $change" | sed 's/^/APEXG2-SCENES /' >"$T/top-bar.log"
     # shellcheck disable=SC2016 # expanded by the inner bash
@@ -616,6 +635,34 @@ test_date_menu() {
 .surfaces.dateMenu.day.height = 33|upstream's 3 em days
 .surfaces.dateMenu.otherMonth.foreground = "#1d1d2180"|upstream's half-opacity other months
 .surfaces.dateMenu.eventsTitle.foreground = "#1d1d21ff"|an events title at full strength
+CHANGES
+}
+
+test_overview_style() {
+    local variant change what passes failures open_gaps
+    for variant in light dark; do
+        read -r passes failures open_gaps <<<"$(assert_run overview_style "$variant")"
+        if ((failures == 0 && open_gaps == 0 && passes == 6)); then
+            ok "overview ($variant): drawn from the tokens it passes all $passes assertions"
+        else
+            not_ok "overview ($variant): drawn from the tokens it passes (passed/failed/gaps $passes/$failures/$open_gaps): $(grep -m3 '^FAIL' "$T/top-bar.out" | paste -sd'|' -)"
+        fi
+    done
+    while IFS='|' read -r change what; do
+        read -r passes failures open_gaps <<<"$(assert_run overview_style light "$change")"
+        if ((failures == 1)); then
+            ok "overview: $what fails one assertion"
+        else
+            not_ok "overview: $what fails one assertion (passed/failed/gaps $passes/$failures/$open_gaps)"
+        fi
+    done <<'CHANGES'
+.surfaces.overview.group.background = "#222226ff"|upstream's dark overview
+.surfaces.overview.search.width = 320|upstream's 24 em search field
+.surfaces.overview.search.y = 44|upstream's 12 px gap under the bar
+.surfaces.overview.search.focus.boxShadow.color = "#3584e4cc"|upstream's 80 % focus ring
+.surfaces.overview.indicator.border.top = 3|upstream's 3 px indicator
+.surfaces.overview.caption.background = "#000000e6"|upstream's dark tooltip caption
+.surfaces.overview.section.background = "#2e2e33ff"|upstream's dark search section
 CHANGES
 }
 
@@ -997,6 +1044,7 @@ test_quick_settings
 test_window_switcher
 test_modal_dialog
 test_date_menu
+test_overview_style
 test_today_pins
 test_known_gaps
 test_fixed_clock

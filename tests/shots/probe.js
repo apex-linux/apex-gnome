@@ -974,6 +974,37 @@ async function calendarMenu(unit) {
     }
 }
 
+// What the overview draws without windows; a caption and a search section are stand-ins.
+function overviewStyle(unit) {
+    const {controls} = Main.overview._overview;
+    const thumbnailsBox = controls._thumbnailsBox;
+    const caption = new St.Label({style_class: 'window-caption', text: 'Home'});
+    const section = new St.BoxLayout({style_class: 'search-section-content'});
+    Main.layoutManager.overviewGroup.add_child(caption);
+    Main.layoutManager.overviewGroup.add_child(section);
+    try {
+        return {
+            group: paint(Main.layoutManager.overviewGroup.get_theme_node(), unit),
+            search: {
+                ...styleOf(controls._searchEntry, unit),
+                icon: lengthOrNull(controls._searchEntry.primary_icon?.get_theme_node() ?? controls._searchEntry.get_theme_node(), 'icon-size', unit),
+                focus: underPseudoClass(controls._searchEntry, 'focus', () => ({
+                    ...paint(controls._searchEntry.get_theme_node(), unit),
+                    borderColor: hex(controls._searchEntry.get_theme_node().get_border_color(St.Side.TOP)),
+                })),
+            },
+            thumbnailsSpacing: lengthOrNull(thumbnailsBox.get_theme_node(), 'spacing', unit),
+            thumbnail: thumbnailsBox._thumbnails?.[0] ? styleOf(thumbnailsBox._thumbnails[0], unit) : null,
+            indicator: thumbnailsBox._indicator ? styleOf(thumbnailsBox._indicator, unit) : null,
+            caption: {...styleOf(caption, unit), minHeight: lengthOrNull(caption.get_theme_node(), 'min-height', unit)},
+            section: styleOf(section, unit),
+        };
+    } finally {
+        caption.destroy();
+        section.destroy();
+    }
+}
+
 // Without GDM the shell posts "Screen Lock disabled" at startup; its banner would cover
 // the scenes for as long as it happens to stay.
 function dropStartupNotifications() {
@@ -1010,6 +1041,7 @@ async function scenes() {
     global.stage.set_key_focus(null);
     const overviewIdle = await settle();
     const overview = {idle: overviewIdle, ...await capture('overview'), thumbnails: thumbnails(), workArea: workArea(unit)};
+    surfaces.overview = overviewStyle(unit);
     delete overview.bytes;
     Main.overview.hide();
 
