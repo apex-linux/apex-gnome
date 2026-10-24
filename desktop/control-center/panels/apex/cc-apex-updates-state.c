@@ -40,7 +40,14 @@ cc_apex_updates_hero_init (CcApexUpdatesHero *hero, const CcApexUpdatesFacts *f)
     memset (hero, 0, sizeof (*hero));
     hero->tone = CC_APEX_UPDATES_TONE_ACCENT;
 
-    if (g_str_equal (state, "up-to-date")) {
+    if (is_set (f->last_fallback) && !g_str_equal (state, "health-failure")) {
+        hero->title = g_strdup (_("Apex Went Back to the Previous Version"));
+        hero->subtitle = g_strdup (_("The update did not start properly three times in a row, so Apex started the "
+                                     "version you had before. That build will not be offered again; a newer one "
+                                     "will be."));
+        hero->tone = CC_APEX_UPDATES_TONE_WARNING;
+        hero->primary = CC_APEX_UPDATES_ACTION_ACKNOWLEDGE_FALLBACK;
+    } else if (g_str_equal (state, "up-to-date")) {
         checked = f->last_check > 0 ? cc_apex_updates_when (f->last_check, f->now) : NULL;
         hero->title = g_strdup (_("Apex Is Up to Date"));
         if (checked)
@@ -58,9 +65,14 @@ cc_apex_updates_hero_init (CcApexUpdatesHero *hero, const CcApexUpdatesFacts *f)
         hero->tone = CC_APEX_UPDATES_TONE_WARNING;
         hero->secondary = CC_APEX_UPDATES_ACTION_DOWNLOAD_ANYWAY;
     } else if (g_str_equal (state, "available")) {
+        g_autofree char *size = f->download_size > 0 ? cc_apex_updates_size (f->download_size) : NULL;
+        g_autofree char *what = size ? g_strdup_printf ("%s · %s", or_unknown (f->target_version), size)
+                                     : g_strdup (or_unknown (f->target_version));
+
         hero->title = g_strdup (_("Update Available"));
-        hero->subtitle = g_strdup_printf (_("%s downloads in the background, and nothing changes until you restart."),
-                                          or_unknown (f->target_version));
+        hero->subtitle = g_strdup_printf (_("%s. It downloads in the background and nothing changes until you "
+                                            "restart."),
+                                          what);
         hero->primary = CC_APEX_UPDATES_ACTION_DOWNLOAD;
     } else if (g_str_equal (state, "downloading")) {
         hero->title = g_strdup (_("Downloading Update"));
@@ -157,6 +169,8 @@ cc_apex_updates_action_label (CcApexUpdatesAction action)
         return _("Keep This Version");
     case CC_APEX_UPDATES_ACTION_KEEP_CURRENT:
         return _("Keep Current Version");
+    case CC_APEX_UPDATES_ACTION_ACKNOWLEDGE_FALLBACK:
+        return _("OK");
     case CC_APEX_UPDATES_ACTION_NONE:
     default:
         return NULL;
@@ -181,6 +195,145 @@ cc_apex_updates_when (gint64 unix_seconds, gint64 now)
     if (g_date_time_get_year (today) == g_date_time_get_year (when) && days == 1)
         return g_strdup_printf (_("yesterday at %s"), time);
     return g_date_time_format (when, _("%b %-d at %H:%M"));
+}
+
+static int
+size_unit (guint64 bytes, double *scale)
+{
+    int unit = 0;
+
+    *scale = 1;
+    while (unit < 3 && bytes >= 1000 * *scale) {
+        *scale *= 1000;
+        unit++;
+    }
+    return unit;
+}
+
+static char *
+format_in_unit (double bytes, double scale, gboolean whole)
+{
+    return g_strdup_printf (whole ? "%.0f" : "%.1f", bytes / scale);
+}
+
+char *
+cc_apex_updates_size (guint64 bytes)
+{
+    static const char *const units[] = { N_("%s B"), N_("%s kB"), N_("%s MB"), N_("%s GB") };
+    double scale;
+    int unit = size_unit (bytes, &scale);
+    g_autofree char *number = format_in_unit (bytes, scale, unit == 0 || bytes / scale >= 100);
+
+    return g_strdup_printf (_(units[unit]), number);
+}
+
+char *
+cc_apex_updates_progress_line (double progress, guint64 total, gint64 seconds_left)
+{
+    g_autofree char *done = NULL;
+    g_autofree char *size = NULL;
+    g_autofree char *amount = NULL;
+    double scale;
+    int minutes;
+
+    if (progress < 0)
+        return g_strdup ("");
+    if (total == 0)
+        return g_strdup_printf (_("%.0f %% downloaded"), progress * 100);
+
+    size_unit (total, &scale);
+    done = format_in_unit (progress * total, scale, total / scale >= 100);
+    size = cc_apex_updates_size (total);
+    amount = g_strdup_printf (_("%s of %s"), done, size);
+    if (seconds_left < 0)
+        return g_steal_pointer (&amount);
+    if (seconds_left < 60)
+        return g_strdup_printf ("%s · %s", amount, _("less than a minute left"));
+
+    minutes = (int) ((seconds_left + 59) / 60);
+    return g_strdup_printf (g_dngettext (GETTEXT_PACKAGE, "%s · about %d minute left", "%s · about %d minutes left",
+                                         minutes),
+                            amount, minutes);
+}
+
+static const struct {
+    const char *family;
+    const char *name;
+} family_names[] = {
+    { "gnome-control-center", N_("Settings") },
+    { "gnome-shell", N_("GNOME Shell") },
+    { "nautilus", N_("Files") },
+    { "ptyxis", N_("Terminal") },
+    { "kernel", N_("Linux") },
+    { "kernel-cachyos", N_("Linux") },
+};
+
+/* "gnome-control-center-51.1-1.fc45,…" gives "51.1": the first NVR's version. */
+static char *
+newer_version (const char *newer)
+{
+    g_auto(GStrv) builds = is_set (newer) ? g_strsplit (newer, ",", 2) : NULL;
+    g_auto(GStrv) parts = NULL;
+    guint n;
+
+    if (builds == NULL || !is_set (builds[0]))
+        return NULL;
+    parts = g_strsplit (g_strstrip (builds[0]), "-", -1);
+    n = g_strv_length (parts);
+    return n >= 3 ? g_strdup (parts[n - 2]) : NULL;
+}
+
+/* side is the kernel pair's half, "kernel" or "kmod", and "" or NULL for any other family. */
+void
+cc_apex_updates_hold_note (const char *family, const char *side, const char *newer, gint64 since,
+                           gboolean security, gint64 limit, char **title, char **body)
+{
+    g_autofree char *version = newer_version (newer);
+    g_autoptr(GString) text = g_string_new (NULL);
+    const char *name = family;
+
+    for (guint i = 0; i < G_N_ELEMENTS (family_names); i++)
+        if (g_str_equal (family, family_names[i].family))
+            name = _(family_names[i].name);
+    if (g_strcmp0 (side, "kernel") == 0)
+        name = _("Linux");
+    else if (g_strcmp0 (side, "kmod") == 0)
+        name = _("The NVIDIA driver");
+
+    if (version) {
+        *title = g_strdup_printf (_("%s %s is held back"), name, version);
+        g_string_append_printf (text, _("Apex’s %s changes do not apply to %s yet, so this update keeps the last "
+                                        "good build."),
+                                name, version);
+        g_string_append_c (text, ' ');
+        g_string_append (text, security ? _("It holds back a security update.") : _("Not a security update."));
+    } else {
+        *title = g_strdup_printf (_("%s is held back"), name);
+        g_string_append_printf (text, _("Apex’s %s changes do not apply to Fedora’s newest build yet, so this update "
+                                        "keeps the last good build."),
+                                name);
+    }
+
+    if (since > 0 && limit > since) {
+        int days = (int) ((limit - since + 43200) / 86400);
+
+        g_string_append_c (text, ' ');
+        if (version)
+            g_string_append_printf (text,
+                                    g_dngettext (GETTEXT_PACKAGE,
+                                                 "Held for up to %d day, then Apex ships the stock %s.",
+                                                 "Held for up to %d days, then Apex ships the stock %s.",
+                                                 days),
+                                    days, version);
+        else
+            g_string_append_printf (text,
+                                    g_dngettext (GETTEXT_PACKAGE,
+                                                 "Held for up to %d day, then Apex ships Fedora’s build.",
+                                                 "Held for up to %d days, then Apex ships Fedora’s build.",
+                                                 days),
+                                    days);
+    }
+    *body = g_string_free (g_steal_pointer (&text), FALSE);
 }
 
 char *
