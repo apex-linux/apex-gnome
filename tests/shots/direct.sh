@@ -30,7 +30,7 @@ esac
 [[ -e /run/.containerenv ]] || { echo "direct.sh: only inside run.sh's podman container" >&2; exit 2; }
 
 readonly SHELL_TIMEOUT=150
-readonly FAKETIME_LIB=/usr/lib64/faketime/libfaketime.so.1
+readonly FAKETIME_LIB=/usr/lib64/libfaketime.so.1
 readonly G2_CLOCK='2026-09-28 09:41:00'
 readonly FIXTURE_NAMES=(org.freedesktop.UPower org.freedesktop.NetworkManager org.bluez)
 # Two fixed workspaces: stock widens the active workspace dot by a factor that depends on
@@ -55,6 +55,9 @@ dbus-daemon --system --fork || echo "no system bus"
 mkdir -p "/out/fixtures-$part"
 python3 /w/fixtures.py "/out/fixtures-$part" >"/out/fixtures-$part.txt" 2>&1 || echo "fixtures.py: exit $?"
 mkdir -p /tmp/.X11-unix && chmod 1777 /tmp/.X11-unix
+# ld.so only warns when a preload is missing, and the shells would keep the real clock.
+held=$(env LD_PRELOAD="$FAKETIME_LIB" FAKETIME="$G2_CLOCK" TZ=UTC date -u '+%F %T' 2>&1)
+[[ $held == "$G2_CLOCK" ]] || { echo "direct.sh: $FAKETIME_LIB does not hold the clock at $G2_CLOCK: $held" >&2; exit 1; }
 
 run_case() {
     local name=$1 gsettings_triples=$2

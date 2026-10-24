@@ -52,7 +52,7 @@ The direct cases:
 | `fedora-light`, `fedora-dark` | Fedora's build, `prefer-light` or `prefer-dark` | no Apex module; upstream's sheet at its own path, byte for byte the one safe mode loads from `theme/stock/` |
 
 Every case: the probe ran (so the static import graph loaded), from `startup-complete`, and no `JS ERROR`;
-the wall clock stands at the fixed time and the top bar's clock shows it (`Sep 28`, EN SPACE, `09:41`).
+the wall clock stands at the fixed time and the top bar's clock shows it (`Mon Sep 28`, EN SPACE, `09:41`).
 
 ## Fixtures and the clock
 
@@ -67,7 +67,8 @@ starts python-dbusmock's `upower`, `networkmanager` and `bluez5` templates there
 | BlueZ | the Bluetooth keyboard "Keychron K3", paired and connected | `bluetooth-active-symbolic`, until S2a's status-pill filter (a known gap) |
 
 `fixtures-PART.txt` holds what the bus reports afterwards, and `assert.sh` checks it for
-each container. Each shell runs with `LD_PRELOAD` of libfaketime and
+each container. Each shell runs with `LD_PRELOAD` of libfaketime (`/usr/lib64/libfaketime.so.1`;
+`direct.sh` stops before the first case when it does not hold the clock) and
 `FAKETIME='2026-09-28 09:41:00'` in UTC, with `FAKETIME_DONT_FAKE_MONOTONIC=1`: the wall
 clock stands still, while timeouts and frames, which run on the monotonic clock, go on.
 The guard's shells, started by systemd, keep the real clock and have no fixtures.
@@ -165,9 +166,8 @@ removes its pin.
 | S2a (patch 0010) | the status pill shows network, volume and battery only: the connected Keychron K3 adds no glyph | it adds `bluetooth-active-symbolic` |
 | S2a (the layer) | "Desktop" at 700 follows the Activities pill while nothing has focus | no item |
 | S2a (the layer) | a 32 × 24 search button named "Search…" | none |
-| S2a (the layer) | with `translucent-top-bar` off the bar is `$apex_bar_solid` over a `0 1px 0 $apex_border` line | the key does not exist yet |
+| S2a (the layer) | with `translucent-top-bar` off the bar is `$apex_bar_solid` over a `0 1px 0 $apex_border` line | the bar keeps its translucent fill and draws no line |
 | S2b (patch 0003, the glass manager) | a 24 px blur at 160 % saturation behind the bar | no blur effect |
-| S1b (the override's `clock-show-weekday`) | the clock starts with the weekday | it does not |
 | S1b (the Facets wallpaper and the light overview) | the unread-notification dot is the raw accent | `$apex_bar_fg`: over Fedora's wallpaper an accent dot is about 1.4:1 against the light bar |
 | no step yet (a clock hook, or the owner accepts it) | `$apex_bar_clock_gap` between the date and the time | about 7 px with G2's 24-hour clock: one label, an EN SPACE. An en-US 12-hour clock adds a FIGURE SPACE before a one-digit hour ("Tue Sep 29" EN SPACE FIGURE SPACE "5:23 AM"): about 14 px |
 | no step yet (a clock hook, or the owner accepts it) | with the dot, the clock pill is padding + text + gap + dot + padding wide | 13 px wider: upstream's invisible pad left of the text |

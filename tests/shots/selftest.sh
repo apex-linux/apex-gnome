@@ -47,7 +47,7 @@ for tool in gjs jq; do
 done
 
 T=$(mktemp -d "${TMPDIR:-/tmp}/apex-shots-test.XXXXXX")
-trap 'kill "$(head -n 1 "$T/bus.pid" 2>/dev/null)" 2>/dev/null; rm -rf "$T"' EXIT
+trap 'kill "$(head -n 1 "$T/bus.pid" 2>/dev/null)" 2>/dev/null || true; rm -rf "$T"' EXIT
 # shellcheck source=tests/shots/lib.sh
 . "$HERE/lib.sh"
 
@@ -187,12 +187,12 @@ REPORT_OF_A_BAR_DRAWN_FROM_TOKENS='
             background: $fg},
         labelWidth: 120, pillWidth: (120 + 2 * $pp + 2 * ($clock_gap + $clock_dot))},
     clockTextGap: 7.041,
-    clockShowsWeekday: false,
+    clockShowsWeekday: true,
     corner: {name: "panelActivities", type: "ActivitiesButton", x: 0, y: 0, width: 84, height: $h},
     dnd: {off: $glyphs, on: (["notifications-disabled-symbolic"] + $glyphs)},
     leftItems: [{accessibleName: "Activities", label: null, pill: {x: $pad, y: 4, width: 76, height: 24, radius: 12}}],
     rightItems: [{accessibleName: "System", label: null, pill: {x: 1337, y: 4, width: 95, height: 24, radius: 12}}],
-    opaque: {error: "io.github.apex_linux.Apex.Desktop has no translucent-top-bar key"},
+    opaque: {background: ($t.apex_bar | hex), boxShadow: null},
     glass: []}}'
 # shellcheck disable=SC2016 # a jq program
 HEX_DEF='def hex: rgba | map([., 16] | "0123456789abcdef"[(.[0] / .[1] | floor):(.[0] / .[1] | floor) + 1]
@@ -208,7 +208,6 @@ the focused-app name|.topBar.leftItems += [{accessibleName: "Desktop", label: {t
 the search button|.topBar.rightItems |= [{accessibleName: "Search (Super+Space)", pill: {width: 32, height: 24, radius: 12}}] + .
 the solid bar|.topBar.opaque = {background: ($t.apex_bar_solid | hex), boxShadow: {color: ($t.apex_border | hex), inset: false, x: 0, y: 1, blur: 0, spread: 0}}
 the glass|.topBar.glass = [{actor: "panel", radius: 96, saturation: 1.6}]
-the weekday|.topBar.clockShowsWeekday = true
 the clock gap|.topBar.clockTextGap = 8
 the clock pill without the pad|.topBar.withDot.pillWidth -= ($t.apex_bar_clock_gap | px) + ($t.apex_bar_clock_dot_size | px)
 the raw accent dot|.topBar.withDot.dot.background = .topBar.accent'
@@ -276,6 +275,7 @@ del(.topBar.statusGlyphs[1])|no Wi-Fi glyph
 .topBar.statusLabels[0].text = "88%"|another battery percentage
 .topBar.statusLabels[0].font.size = 13.5|the percentage at the bar's text size
 .topBar.statusLabels = []|no percentage label
+.topBar.clockShowsWeekday = false|a clock without the weekday
 CHANGES
     assert_run top_bar light '.monitorScale = 1 | .topBar.diamond.inkPixels = 16' >/dev/null
     expect_eq "top bar: at scale 1 a quarter of the diamond's stroke is 16 capture pixels" 0 "$(grep -c '^FAIL' "$T/top-bar.out")"
@@ -385,9 +385,10 @@ test_fixed_clock() {
         read -r passes _ <<<"$(assertion_counts fixed_clock case "$T/clock.log")"
         expect_eq "clock: $what fails $failures of 2" "$failures" $((2 - passes))
     done <<'CLOCKS'
-0|the fixed time, as G2's 24-hour clock shows it,|{"clock": {"now": "2026-09-28T09:41:00Z", "text": "Sep 28\u200209:41"}}
-1|a plain space for the EN SPACE|{"clock": {"now": "2026-09-28T09:41:00Z", "text": "Sep 28 09:41"}}
-1|a shell that missed libfaketime|{"clock": {"now": "2026-10-23T14:02:11Z", "text": "Sep 28\u200209:41"}}
+0|the fixed time, as G2's 24-hour clock shows it,|{"clock": {"now": "2026-09-28T09:41:00Z", "text": "Mon Sep 28\u200209:41"}}
+1|a plain space for the EN SPACE|{"clock": {"now": "2026-09-28T09:41:00Z", "text": "Mon Sep 28 09:41"}}
+1|a clock without the weekday|{"clock": {"now": "2026-09-28T09:41:00Z", "text": "Sep 28\u200209:41"}}
+1|a shell that missed libfaketime|{"clock": {"now": "2026-10-23T14:02:11Z", "text": "Mon Sep 28\u200209:41"}}
 2|a shell without FAKETIME|{"clock": null}
 CLOCKS
 }
