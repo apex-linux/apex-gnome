@@ -68,7 +68,7 @@ starts python-dbusmock's `upower`, `networkmanager` and `bluez5` templates there
 |---|---|---|
 | UPower | a battery at 87 %, discharging (the display device) | `battery-level-80-symbolic` and, with `show-battery-percentage`, "87%" |
 | NetworkManager | the primary connection: Wi-Fi "Apex-5G" at signal 90, connected globally | `network-wireless-signal-excellent-symbolic` |
-| BlueZ | the Bluetooth keyboard "Keychron K3", paired and connected | no glyph: the status pill shows network, volume and battery only (the `status-pill` feature) |
+| BlueZ | the Bluetooth keyboard "Keychron K3", paired and connected | no glyph: the status pill shows network, volume and battery only (the `panel` feature) |
 
 `fixtures-PART.txt` holds what the bus reports afterwards, and `assert.sh` checks it for
 each container. `direct.sh` builds `clock.c` and preloads it into each shell with
