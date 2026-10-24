@@ -98,7 +98,8 @@ and polkit asks in the daemon, never in Settings.
 dates, digests and the changes' summary. `tests/control-center/state-test.sh` tests it.
 
 `panels/apex/io.github.apex_linux.Apex.Update1.xml` is apex-system's
-`crates/apex-dbus/data/io.github.apex_linux.Apex.Update1.xml`, copied byte for byte;
+`crates/apex-dbus/data/io.github.apex_linux.Apex.Update1.xml` at 05ce79b, copied byte for
+byte;
 gdbus-codegen makes the page's proxy from it, and apex-image's contracts job compares the
 two. Change it there first, then copy it here.
 
