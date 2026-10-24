@@ -20,6 +20,7 @@ directory with `git archive` and unpacks it at the top of Fedora's gnome-shell t
 | `js/ui/apex/spotlight/feature.js` | Super+Space (below) |
 | `js/ui/apex/workspace-dots/feature.js`, `hot-corner/feature.js`, `status-pill/feature.js` | the top bar's hooks of patch 0010 (below) |
 | `js/ui/apex/solid-bar/feature.js` | the solid bar while `translucent-top-bar` is off (below) |
+| `js/ui/apex/focused-app/feature.js` | the focused app's name after the Activities pill (below) |
 | `js/ui/apex/fault/feature.js` | the fault-injection feature: loaded only when `APEX_SHELL_TEST_FAULT` names a phase, it fails in that phase (below) |
 | `data/theme/apex/_apex-tokens.scss` | the design tokens as SCSS variables, imported after upstream's `_colors` |
 | `data/theme/apex/_apex.scss` | the Apex sheet, imported last by the light and dark entry files |
@@ -78,6 +79,12 @@ style class `apex-solid-bar`, which `_top-bar.scss` draws as `$apex_bar_solid` o
 their transparent panel. A schema without the key turns off only this feature. The
 maximised-window trigger waits for S2a's window tracking.
 
+`focused-app` adds an item after the Activities pill (status-area role `apex-focused-app`):
+the name of `Shell.WindowTracker`'s focus app, or "Desktop" while nothing has focus, at
+`$apex_font_bar_emphasis_weight` and padded `$apex_bar_app_name_padding`. It takes no
+clicks, and `show-focused-app-name` (live) and the lock screen hide it. A schema without
+the key turns off only this feature.
+
 The layer also does what every feature relies on:
 
 - In the user and unlock-dialog modes it gives the session mode the colour scheme
@@ -109,8 +116,8 @@ aborted shell, and Super+Space: its registration and removal through enable, the
 switches, `layer-enabled` and `disabled-features` cycles and a missing Keybindings schema,
 and the top bar's hooks with stub dots, indicators and hot corners, against
 `tests/layer/main-stub.js` for `main.js`, fixture typelibs for Meta and Shell, and
-`tests/layer/stubs/` for the features' St and Clutter imports, which gjs outside the shell
-cannot load.
+`tests/layer/stubs/` for `panelMenu.js` and the features' St, Clutter and Shell imports
+(gjs outside the shell has no St or Clutter, and the fixture's Shell no WindowTracker).
 
 For the fault injection in the VM, the variable goes into the shell's environment with
 a user drop-in on its unit, which the image never ships:

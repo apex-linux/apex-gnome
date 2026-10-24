@@ -7,6 +7,7 @@ import GLib from 'gi://GLib';
 const TextDirection = {DEFAULT: 0, LTR: 1, RTL: 2};
 
 export default {
+    ActorAlign: {FILL: 0, START: 1, CENTER: 2, END: 3},
     TextDirection,
     EVENT_PROPAGATE: false,
     EVENT_STOP: true,

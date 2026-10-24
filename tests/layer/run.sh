@@ -48,10 +48,12 @@ mkdir -p "$T/schemas" "$T/noschema" "$T/nochild" "$T/data" "$T/home" "$T/shell" 
 # main.js and the Meta and Shell typelibs come only with gnome-shell and mutter.
 cp -R "$REPO/desktop/shell/js" "$T/shell/"
 cp "$HERE/main-stub.js" "$T/shell/js/ui/main.js"
-cp "$HERE"/stubs/*.js "$T/"
-# gjs outside the shell has no St or Clutter typelib: the features get stubs instead.
-find "$T/shell/js/ui/apex" -name '*.js' -exec sed -i \
-    -e "s|'gi://St'|'file://$T/St.js'|" -e "s|'gi://Clutter'|'file://$T/Clutter.js'|" {} +
+cp "$HERE/stubs/panelMenu.js" "$T/shell/js/ui/panelMenu.js"
+cp "$HERE"/stubs/St.js "$HERE"/stubs/Clutter.js "$HERE"/stubs/Shell.js "$T/"
+# gjs outside the shell has no St or Clutter typelib, and the fixture's Shell no
+# WindowTracker: the features get stubs instead.
+find "$T/shell/js/ui/apex" -name '*.js' -exec sed -i -e "s|'gi://St'|'file://$T/St.js'|" \
+    -e "s|'gi://Clutter'|'file://$T/Clutter.js'|" -e "s|'gi://Shell'|'file://$T/Shell.js'|" {} +
 for gir in "$HERE"/fixtures/*.gir; do
     gir_name=${gir##*/}
     "$GI_COMPILER" "$gir" -o "$T/typelib/${gir_name%.gir}.typelib"
@@ -355,6 +357,23 @@ lacks "solid-bar: no feature fails or disables uncleanly" 'off for this session|
 probe solid-bar-disabled "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_SOLID_BAR=1 PROBE_DISABLED=solid-bar
 panel_classes_are "disabled-features=['solid-bar']: the bar stays translucent" \
     '[translucent-top-bar=false] [translucent-top-bar=true] [translucent-top-bar=false] [layer-enabled=false] [layer-enabled=true]'
+
+probe focused-app "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_FOCUSED_APP=1
+has "focused-app: the feature enables" 'Apex: feature focused-app enabled'
+fact "focused-app: its item follows the Activities pill in the left box" 'panel\.add=apex-focused-app at 1 in left'
+fact "focused-app: \"Desktop\" while nothing has focus, a label that takes no clicks" \
+    'focused-app\.none=Desktop name=Desktop visible=true reactive=false'
+fact "focused-app: the focused app's name" 'focused-app\.files=Files name=Files visible=true reactive=false'
+fact "focused-app: \"Desktop\" again when focus goes" 'focused-app\.unfocused=Desktop name=Desktop visible=true reactive=false'
+fact "focused-app: show-focused-app-name=false hides it" 'focused-app\.hidden=Desktop name=Desktop visible=false reactive=false'
+fact "focused-app: and the lock screen" 'focused-app\.locked=Desktop name=Desktop visible=false reactive=false'
+fact "focused-app: layer-enabled=false takes it out of the bar" 'focused-app\.off=none'
+fact "focused-app: layer-enabled=true brings it back" 'focused-app\.on=Desktop name=Desktop visible=true reactive=false'
+lacks "focused-app: no feature fails or disables uncleanly" 'off for this session|did not disable cleanly|cannot restyle'
+
+probe focused-app-disabled "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_FOCUSED_APP=1 PROBE_DISABLED=focused-app
+lacks "disabled-features=['focused-app']: no item in the bar" 'panel\.add=apex-focused-app'
+fact "disabled-features=['focused-app']: nothing follows the focus" 'focused-app\.files=none'
 
 printf '1..%d\n' "$tests"
 ((failed == 0))

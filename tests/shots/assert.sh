@@ -219,6 +219,8 @@ top_bar() {
         '.topBar.clock.label' '(.font.size | px_is($t.apex_font_bar_size)) and .font.weight == ($t.apex_font_bar_emphasis_weight | tonumber) and (.foreground | colour_is($t.apex_bar_fg))'
     "${metric[@]}" 'the activities pill starts $apex_bar_padding from the left edge' \
         '.topBar.activities.pill.x' 'px_is($t.apex_bar_padding)'
+    "${metric[@]}" 'the focused-app name follows the Activities pill: "Desktop" at $apex_font_bar_emphasis_weight while nothing has focus' \
+        '.topBar.leftItems' 'length == 2 and .[0].accessibleName == "Activities" and (.[1].label | .text == "Desktop" and .weight == ($t.apex_font_bar_emphasis_weight | tonumber))'
     "${metric[@]}" 'the status pill ends $apex_bar_padding from the right edge' \
         '.topBar | .panel.width - .status.pill.x - .status.pill.width' 'px_is($t.apex_bar_padding)'
     "${metric[@]}" 'the clock pill is centred on the bar' \
@@ -274,8 +276,6 @@ top_bar_today() {
     tokens=$(tokens_for "$variant")
     local -a metric=(top_bar_metric "$label top bar, until its known gap closes" "$scenes" "$tokens")
 
-    "${metric[@]}" 'the left box holds the Activities pill alone' \
-        '.topBar.leftItems | map(.accessibleName)' '. == ["Activities"]'
     "${metric[@]}" 'the right box has no search button' \
         '.topBar.rightItems | map(select(.accessibleName // "" | startswith("Search")))' '. == []'
     "${metric[@]}" 'the bar has no blur effect' \
@@ -298,8 +298,6 @@ top_bar_gaps() {
     local layer='S2a (the layer)' clock_hook='no step yet (a clock hook, or the owner accepts it)'
     local wallpaper='S1b (the Facets wallpaper and the light overview)'
 
-    known_gap "$layer" "${metric[@]}" 'the focused-app name follows the Activities pill: "Desktop" at $apex_font_bar_emphasis_weight while nothing has focus' \
-        '.topBar.leftItems | .[1].label' '.text == "Desktop" and .weight == ($t.apex_font_bar_emphasis_weight | tonumber)'
     known_gap "$layer" "${metric[@]}" 'the right box holds the search button: a 32 x $apex_bar_pill_height pill, radius $apex_radius_bar_pill, named "Search"' \
         '.topBar.rightItems | map(select(.accessibleName // "" | startswith("Search")))' \
         'length == 1 and (.[0].pill | (.width | px_is("32px")) and (.height | px_is($t.apex_bar_pill_height)) and (.radius | px_is($t.apex_radius_bar_pill)))'

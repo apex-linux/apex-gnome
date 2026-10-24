@@ -159,6 +159,38 @@ async function exerciseSolidBar() {
     }
 }
 
+async function exerciseFocusedApp() {
+    if (GLib.getenv('PROBE_FOCUSED_APP') !== '1')
+        return;
+    const Main = await import(`file://${shellDir}/js/ui/main.js`);
+    const {default: Shell} = await import(`file://${GLib.path_get_dirname(shellDir)}/Shell.js`);
+    const tracker = Shell.WindowTracker.get_default();
+    const report = label => {
+        const item = Main.panel.statusArea['apex-focused-app'];
+        fact(`focused-app.${label}`, item
+            ? `${item.children[0].text} name=${item.accessible_name} visible=${item.container.visible} reactive=${item.reactive}`
+            : 'none');
+    };
+    report('none');
+    tracker.focus({get_name: () => 'Files'});
+    report('files');
+    tracker.focus(null);
+    report('unfocused');
+    settings.set_boolean('show-focused-app-name', false);
+    await spin(100);
+    report('hidden');
+    settings.reset('show-focused-app-name');
+    Main.sessionMode.lock(true);
+    report('locked');
+    Main.sessionMode.lock(false);
+    settings.set_boolean('layer-enabled', false);
+    await spin(200);
+    report('off');
+    settings.set_boolean('layer-enabled', true);
+    await spin(200);
+    report('on');
+}
+
 async function switchLayer() {
     const cycles = Number(GLib.getenv('PROBE_SWITCH') ?? '0');
     for (let cycle = 1; cycle <= cycles; cycle++) {
@@ -205,6 +237,7 @@ if (layer && GLib.getenv('PROBE_ENABLE') === '1') {
     await pressToggleSpotlight();
     await exerciseTopBar();
     await exerciseSolidBar();
+    await exerciseFocusedApp();
     await setDisabledLive();
     await switchLayer();
     for (const [signal, fn] of [...handlers.values()]) {

@@ -190,7 +190,8 @@ REPORT_OF_A_BAR_DRAWN_FROM_TOKENS='
     clockShowsWeekday: true,
     corner: {name: "hot-corner", type: "HotCorner", x: 0, y: 0, width: 4, height: 4},
     dnd: {off: $glyphs, on: $glyphs},
-    leftItems: [{accessibleName: "Activities", label: null, pill: {x: $pad, y: 4, width: 76, height: 24, radius: 12}}],
+    leftItems: [{accessibleName: "Activities", label: null, pill: {x: $pad, y: 4, width: 76, height: 24, radius: 12}},
+        {accessibleName: "Desktop", label: {text: "Desktop", weight: ($t.apex_font_bar_emphasis_weight | tonumber)}, pill: null}],
     rightItems: [{accessibleName: "System", label: null, pill: {x: 1337, y: 4, width: 95, height: 24, radius: 12}}],
     opaque: {background: ($t.apex_bar_solid | hex), boxShadow: {color: ($t.apex_border | hex), inset: false, x: 0, y: 1, blur: 0, spread: 0}},
     glass: []}}'
@@ -199,8 +200,7 @@ HEX_DEF='def hex: rgba | map([., 16] | "0123456789abcdef"[(.[0] / .[1] | floor):
                                     + "0123456789abcdef"[(.[0] % .[1]):(.[0] % .[1]) + 1]) | "#" + join("");'
 
 # shellcheck disable=SC2016 # jq programs
-GAP_CLOSERS='the focused-app name|.topBar.leftItems += [{accessibleName: "Desktop", label: {text: "Desktop", weight: 700}}]
-the search button|.topBar.rightItems |= [{accessibleName: "Search (Super+Space)", pill: {width: 32, height: 24, radius: 12}}] + .
+GAP_CLOSERS='the search button|.topBar.rightItems |= [{accessibleName: "Search (Super+Space)", pill: {width: 32, height: 24, radius: 12}}] + .
 the glass|.topBar.glass = [{actor: "panel", radius: 96, saturation: 1.6}]
 the clock gap|.topBar.clockTextGap = 8
 the clock pill without the pad|.topBar.withDot.pillWidth -= ($t.apex_bar_clock_gap | px) + ($t.apex_bar_clock_dot_size | px)
@@ -278,6 +278,9 @@ del(.topBar.statusGlyphs[1])|no Wi-Fi glyph
 .topBar.opaque.background = .topBar.panel.background|translucent-top-bar off that keeps the translucent fill
 .topBar.opaque.boxShadow = null|a solid bar without its line
 .topBar.opaque.boxShadow.y = 2|a 2 px line under the solid bar
+.topBar.leftItems = .topBar.leftItems[:1]|no focused-app name
+.topBar.leftItems[1].label.weight = 600|a focused-app name at the bar's weight
+.topBar.leftItems[1].label.text = "Activities"|another name while nothing has focus
 .topBar.dnd.on = ["notifications-disabled-symbolic"] + .topBar.dnd.off|a Do Not Disturb glyph in the status pill
 .topBar.statusGlyphs += [{name: "bluetooth-active-symbolic", width: 16, height: 16, iconSize: 16}]|the connected keyboard's Bluetooth glyph
 CHANGES
