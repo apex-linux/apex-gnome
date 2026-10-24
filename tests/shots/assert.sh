@@ -602,9 +602,19 @@ modal_dialog() {
     "${metric[@]}" 'the end-session dialog has $apex_end_session_gap between its parts, its title tracked $apex_dialog_title_tracking, its countdown in tabular figures' \
         "$d.endSession" '(.box.spacing | px_is($t.apex_end_session_gap)) and (.contentSpacing | px_is($t.apex_end_session_gap))
             and (.title.tracking - ($t.apex_dialog_title_tracking | px) | fabs < 0.05) and (.description.font.features | test("tnum"))'
-    "${metric[@]}" 'its Cancel is $apex_button; the button that ends the session is $apex_destructive ($apex_destructive_hover hovered) with $apex_destructive_fg' \
-        "$d.endSession.buttons" 'length == 2 and (.[0] | (.background | colour_is($t.apex_button)) and (.hover.background | colour_is($t.apex_button_hover)))
-            and (.[1] | (.background | colour_is($t.apex_destructive)) and (.foreground | colour_is($t.apex_destructive_fg)) and (.hover.background | colour_is($t.apex_destructive_hover)))'
+    "${metric[@]}" 'above its title, stock'"'"'s system-shutdown-symbolic at $apex_end_session_icon_glyph_size in a $apex_end_session_icon_size circle of $apex_button' \
+        "$d.endSession.icon" '.iconName == "system-shutdown-symbolic" and .above and (.glyph | px_is($t.apex_end_session_icon_glyph_size))
+            and (.width | px_is($t.apex_end_session_icon_size)) and (.height | px_is($t.apex_end_session_icon_size))
+            and (.radius * 2 | px_is($t.apex_end_session_icon_size)) and (.background | colour_is($t.apex_button))'
+    "${metric[@]}" 'its row is Cancel, Restart, Power Off, $apex_end_session_button_gap apart, sharing it $apex_end_session_cancel_share : $apex_end_session_restart_share : $apex_end_session_confirm_share' \
+        "$d.endSession" '((($t.apex_end_session_dialog_width | px) - 2 * ($t.apex_dialog_padding | px) - 2 * ($t.apex_end_session_button_gap | px))
+            / (($t.apex_end_session_cancel_share | num) + ($t.apex_end_session_restart_share | num) + ($t.apex_end_session_confirm_share | num))) as $share
+            | (.buttons | map(.label.text)) == ["Cancel", "Restart", "Power Off"] and (.rowSpacing | px_is($t.apex_end_session_button_gap))
+            and ([.buttons[].width] | [.[0] / ($t.apex_end_session_cancel_share | num), .[1] / ($t.apex_end_session_restart_share | num), .[2] / ($t.apex_end_session_confirm_share | num)]
+                | all(. - $share | fabs <= 1))'
+    "${metric[@]}" 'Cancel and Restart are $apex_button ($apex_button_hover hovered); Power Off, which ends the session, $apex_destructive ($apex_destructive_hover hovered) with $apex_destructive_fg' \
+        "$d.endSession.buttons" '(.[:-1] | all((.background | colour_is($t.apex_button)) and (.hover.background | colour_is($t.apex_button_hover))))
+            and (.[-1] | (.background | colour_is($t.apex_destructive)) and (.foreground | colour_is($t.apex_destructive_fg)) and (.hover.background | colour_is($t.apex_destructive_hover)))'
 }
 
 # shellcheck disable=SC2016 # jq programs and token names, not shell expansions

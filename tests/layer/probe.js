@@ -36,6 +36,7 @@ function newEmitter(props = {}) {
 }
 
 globalThis._ = text => text;
+globalThis.C_ = (_context, text) => text;
 
 // mutter's DisplayConfig as the lock reads it, one cached PowerSaveMode; it answers, never
 // answers ('silent') or fails ('error'), as displayConfig.reply says.
@@ -414,6 +415,75 @@ async function exerciseQuickSettings() {
     settings.set_boolean('layer-enabled', true);
     await spin(200);
     quickSettingsState('qs.on', quickSettings);
+}
+
+// endSessionDialog.js as patch 0017's hook sees it: a stock row of Cancel and the confirm
+// button, a theme spacing of 10 once the row is styled.
+function endSessionDialog(St) {
+    const buttonLayout = new St.BoxLayout({style_class: 'modal-dialog-button-box'});
+    buttonLayout.layout_manager = {spacing: 12, homogeneous: true};
+    buttonLayout.peek_theme_node = () => ({lookup_length: p => p === 'spacing' ? [true, 10] : [false, 0]});
+    const dialog = newEmitter({
+        contentLayout: new St.BoxLayout({child: new St.BoxLayout({style_class: 'message-dialog-content'})}),
+        buttonLayout,
+        addButton({label, action}) {
+            const button = new St.Button({style_class: 'modal-dialog-button', label});
+            button.action = action;
+            buttonLayout.add_child(button);
+            return button;
+        },
+        close() {
+            this.emit('closed');
+        },
+        _confirm(signal) {
+            fact('end-session.confirmed', signal);
+            return Promise.resolve();
+        },
+    });
+    dialog.open = content => {
+        buttonLayout.destroy_all_children();
+        dialog.addButton({label: 'Cancel', action: () => {}});
+        for (const {label} of content.confirmButtons)
+            dialog.addButton({label, action: () => {}});
+        Hooks.run('end-session-buttons', dialog, content);
+    };
+    return dialog;
+}
+
+function endSessionState(label, dialog) {
+    const row = dialog.buttonLayout;
+    const [first] = dialog.contentLayout.get_children();
+    const icon = first.has_style_class_name('apex-end-session-icon') ? first.child.icon_name : 'none';
+    fact(label, `buttons=${row.get_children().map(b => b.label).join(',')} icon=${icon} ` +
+        `spacing=${row.layout_manager.spacing} homogeneous=${row.layout_manager.homogeneous} ` +
+        `row=${row.has_style_class_name('apex-end-session-row')}`);
+}
+
+async function exerciseEndSession() {
+    if (GLib.getenv('PROBE_END_SESSION') !== '1')
+        return;
+    const {default: St} = await import(`file://${GLib.path_get_dirname(shellDir)}/St.js`);
+    const dialog = endSessionDialog(St);
+    const powerOff = {confirmButtons: [{signal: 'ConfirmedShutdown', label: 'Power Off'}], iconName: 'system-shutdown-symbolic'};
+    const restart = {confirmButtons: [{signal: 'ConfirmedReboot', label: 'Restart'}], iconName: 'view-refresh-symbolic'};
+    const logout = {confirmButtons: [{signal: 'ConfirmedLogout', label: 'Log Out'}]};
+    dialog.open(powerOff);
+    endSessionState('end-session.power-off', dialog);
+    dialog.buttonLayout.get_children()[1].action();
+    dialog.open(restart);
+    endSessionState('end-session.restart', dialog);
+    dialog.open(logout);
+    endSessionState('end-session.logout', dialog);
+    dialog.open(powerOff);
+    settings.set_boolean('layer-enabled', false);
+    await spin(200);
+    endSessionState('end-session.off', dialog);
+    dialog.open(powerOff);
+    endSessionState('end-session.off.reopened', dialog);
+    settings.set_boolean('layer-enabled', true);
+    await spin(200);
+    dialog.open(powerOff);
+    endSessionState('end-session.on', dialog);
 }
 
 async function exerciseTopBar() {
@@ -1059,6 +1129,7 @@ if (layer && GLib.getenv('PROBE_ENABLE') === '1') {
     await exerciseLock();
     await exerciseMotion();
     await exerciseQuickSettings();
+    await exerciseEndSession();
     await exerciseSpotlight();
     await exerciseTopBar();
     await exerciseSolidBar();

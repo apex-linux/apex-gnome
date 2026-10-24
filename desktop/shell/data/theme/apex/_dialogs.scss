@@ -53,6 +53,7 @@
   spacing: $apex_end_session_gap;
 
   .modal-dialog-content-box { spacing: $apex_end_session_gap; }
+  .modal-dialog-button-box { spacing: $apex_end_session_button_gap; }
   .message-dialog-title { letter-spacing: $apex_dialog_title_tracking; }
   .message-dialog-description { font-feature-settings: "tnum"; }
 
@@ -65,6 +66,26 @@
       background-color: $apex_destructive_hover;
     }
   }
+}
+
+$_end_session_row: $apex_end_session_dialog_width - 2 * $apex_dialog_padding - 2 * $apex_end_session_button_gap;
+$_end_session_share: $_end_session_row /
+  ($apex_end_session_cancel_share + $apex_end_session_restart_share + $apex_end_session_confirm_share);
+
+.apex-end-session-row .modal-dialog-button {
+  &:first-child { width: $_end_session_share * $apex_end_session_cancel_share; }
+  &.apex-end-session-restart { width: $_end_session_share * $apex_end_session_restart_share; }
+  &:last-child { width: $_end_session_share * $apex_end_session_confirm_share; }
+}
+
+.apex-end-session-icon {
+  width: $apex_end_session_icon_size;
+  height: $apex_end_session_icon_size;
+  border-radius: $apex_end_session_icon_size / 2;
+  color: $apex_fg;
+  background-color: $apex_button;
+
+  StIcon { icon-size: $apex_end_session_icon_glyph_size; }
 }
 
 @mixin apex-entry {

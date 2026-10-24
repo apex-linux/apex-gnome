@@ -78,8 +78,8 @@
       <summary>Apex features to turn off</summary>
       <description>
         Features of the Apex layer to leave off without a rebuild, by name: glass,
-        dock, spotlight, lock, motion, notifications, overview, panel, quick-settings,
-        shadows. A disabled feature's hooks give their stock values. It takes effect
+        dock, end-session, spotlight, lock, motion, notifications, overview, panel,
+        quick-settings, shadows. A disabled feature's hooks give their stock values. It takes effect
         at the next login.
       </description>
     </key>

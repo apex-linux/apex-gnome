@@ -1031,37 +1031,48 @@ async function windowSwitcher(unit) {
     }
 }
 
-// Shaped like endSessionDialog.js's power-off dialog: Cancel, then the confirm button.
+// The shell's own power-off dialog, opened as gnome-session opens it, so that patch 0017's
+// hook runs: Cancel, the end-session feature's Restart, then Power Off.
 async function endSessionDialog(unit) {
-    const dialog = new ModalDialog.ModalDialog({styleClass: 'end-session-dialog'});
-    const content = new Dialog.MessageDialogContent({
-        title: 'Power Off',
-        description: 'The system will power off automatically in 54 seconds',
-    });
-    dialog.contentLayout.add_child(content);
-    const buttons = [
-        dialog.addButton({label: 'Cancel', action: () => {}, key: Clutter.KEY_Escape}),
-        dialog.addButton({label: 'Power Off', action: () => {}}),
-    ];
-    dialog.open();
+    try {
+        return await openEndSessionDialog(unit);
+    } catch (e) {
+        return {error: e.message};
+    }
+}
+
+async function openEndSessionDialog(unit) {
+    await Gio.DBus.session.call('org.gnome.Shell', '/org/gnome/SessionManager/EndSessionDialog',
+        'org.gnome.SessionManager.EndSessionDialog', 'Open', new GLib.Variant('(uuuao)', [1, 0, 60, []]),
+        null, Gio.DBusCallFlags.NONE, -1, null);
+    const dialog = Main.layoutManager.modalDialogGroup.get_children()
+        .find(c => c.dialogLayout?._dialog?.has_style_class_name('end-session-dialog'));
     try {
         await settle();
         global.stage.set_key_focus(null);
-        const find = styleClass => findDescendant(content, a => a.has_style_class_name?.(styleClass));
+        const find = styleClass => findDescendant(dialog.contentLayout, a => a.has_style_class_name?.(styleClass));
         const title = find('message-dialog-title');
+        const icon = find('apex-end-session-icon');
+        const row = dialog.buttonLayout;
         return {
             box: styleOf(dialog.dialogLayout._dialog, unit),
             contentSpacing: lengthOrNull(dialog.contentLayout.get_theme_node(), 'spacing', unit),
+            icon: icon ? {
+                ...styleOf(icon, unit),
+                glyph: lengthOrNull(icon.child.get_theme_node(), 'icon-size', unit),
+                iconName: icon.child.icon_name,
+                above: icon.get_next_sibling() === find('message-dialog-content'),
+            } : null,
             title: {...styleOf(title, unit), tracking: round(title.get_theme_node().get_letter_spacing() / unit.length)},
             description: styleOf(find('message-dialog-description'), unit),
-            buttons: buttons.map(b => ({
+            rowSpacing: round(row.layout_manager.spacing / unit.length),
+            buttons: row.get_children().filter(b => b.visible).map(b => ({
                 ...styleOf(b, unit),
                 hover: underPseudoClass(b, 'hover', () => paint(b.get_theme_node(), unit)),
             })),
         };
     } finally {
-        dialog.close();
-        dialog.destroy();
+        dialog?.cancel();
         await settle();
     }
 }
