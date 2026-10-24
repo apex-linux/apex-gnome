@@ -28,8 +28,24 @@
     font-weight: $apex_font_lock_name_weight;
   }
 
-  .login-dialog-prompt-layout { margin-top: 0; }
-  .login-dialog-input-well { spacing: $apex_lock_prompt_gap; }
+  // Upstream's cancel button, the field with its button, and a spacer as wide as cancel.
+  .login-dialog-prompt-layout {
+    width: 2 * $apex_lock_field_height + $apex_lock_field_gap + $apex_lock_field_width +
+      $apex_lock_field_gap + $apex_lock_field_height;
+    margin-top: 0;
+    spacing: $apex_lock_prompt_gap;
+  }
+
+  .login-dialog-input-well { spacing: 0; }
+  .login-dialog-button-box { height: $apex_lock_field_height; }
+
+  .login-dialog-button.cancel-button {
+    &:ltr { margin-right: $apex_lock_field_gap; }
+    &:rtl { margin-left: $apex_lock_field_gap; }
+  }
+
+  // Board 20's message shares the hint's line; S4 merges the two, until then it takes no room empty.
+  .login-dialog-message { min-height: 0; }
 
   // The submit button sits beside the field, not in it: the field leaves it its width.
   .login-dialog-prompt-entry-area {

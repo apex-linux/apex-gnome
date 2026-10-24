@@ -12,6 +12,9 @@ import * as Hooks from '../hooks.js';
 Gio._promisify(Gio.DBusProxy, 'new_for_bus');
 
 const CLOCK_ALWAYS_SHOWN = 0;
+// unlockDialog.js's layout starts the stack a tenth of the way down and ends it at the bottom
+// when it asks for the rest, so the stage's own layout alone places the clock.
+const STAGE_HEIGHT_FRACTION = 0.9;
 
 // mutter's own D-Bus API, which gsd-power sets to blank: MetaPowerSave is not introspected.
 const DISPLAY_CONFIG = 'org.gnome.Mutter.DisplayConfig';
@@ -52,7 +55,14 @@ function _restack(dialog) {
     dialog._stack.remove_child(dialog._promptBox);
     stage.add_child(dialog._clock);
     stage.add_child(dialog._promptBox);
+    dialog._promptBox.y_align = Clutter.ActorAlign.START;
     dialog._stack.add_child(stage);
+    const fill = () => {
+        if (dialog.height > 0)
+            stage.natural_height = Math.floor(dialog.height * STAGE_HEIGHT_FRACTION);
+    };
+    dialog.connect('notify::height', fill);
+    fill();
 
     const clock = dialog._clock;
     clock.add_style_class_name('apex-lock-clock');

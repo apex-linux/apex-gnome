@@ -262,7 +262,7 @@ $apex_lock_greeter_base: #0c1122;
 $apex_lock_blur: 30px;
 $apex_lock_saturation: 130%;
 
-// Board 20 puts the date 128px down; upstream's stack starts 90px down.
+// Board 20 puts the date 128px down; the stage starts a tenth of 900px down (stage.js).
 $apex_lock_clock_top: 128px - 90px;
 $apex_lock_clock_gap: 2px;
 $apex_lock_stage_gap: 240px;
