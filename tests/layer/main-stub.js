@@ -7,6 +7,8 @@ import Shell from 'gi://Shell';
 
 const fact = (key, value) => printerr(`probe: ${key}=${value}`);
 const handlers = new Map();
+const actions = new Map();
+let lastAction = 0;
 
 function flagNames(value, flags) {
     const names = Object.entries(flags)
@@ -110,7 +112,32 @@ export function notify(title) {
 // layout.js's chrome parameters: Params.parse throws on any other.
 const CHROME_PARAMS = ['trackFullscreen', 'affectsStruts'];
 
+export const uiGroup = {
+    children: [],
+    add_child(actor) {
+        this.children.push(actor);
+        actor._parent = this;
+    },
+    remove_child(actor) {
+        this.children = this.children.filter(a => a !== actor);
+    },
+};
+
+let modals = 0;
+
+export function pushModal(actor, params) {
+    modals++;
+    fact('modal.push', `${actor.name} actionMode=${params.actionMode} count=${modals}`);
+    return {};
+}
+
+export function popModal() {
+    modals--;
+    fact('modal.pop', `count=${modals}`);
+}
+
 export const layoutManager = {
+    primaryMonitor: {x: 0, y: 0, width: 1440, height: 900},
     _updateHotCorners: () => fact('hot-corners', 'rebuilt'),
     addChrome(actor, params = {}) {
         const unknown = Object.keys(params).filter(key => !CHROME_PARAMS.includes(key));
@@ -139,6 +166,10 @@ export const overview = {
                 fn();
         }
     },
+    show() {
+        this.visible = true;
+        fact('overview', 'shown');
+    },
     focusSearch() {
         this.visible = true;
         fact('overview', 'shown, search focused');
@@ -156,11 +187,16 @@ export const wm = {
             return Meta.KeyBindingAction.NONE;
         }
         handlers.set(name, handler);
+        actions.set(name, ++lastAction);
         fact('keybinding.add', `${name} accelerators=${settings.get_strv(name).join(',')} ` +
             `flags=${flagNames(flags, Meta.KeyBindingFlags)} modes=${flagNames(modes, Shell.ActionMode)}`);
-        return handlers.size;
+        return actions.get(name);
+    },
+    actionOf(name) {
+        return actions.get(name) ?? 0;
     },
     removeKeybinding(name) {
+        actions.delete(name);
         if (handlers.delete(name))
             fact('keybinding.remove', name);
     },
