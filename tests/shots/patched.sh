@@ -18,6 +18,7 @@ blur. The lane's own checks, signing and the mutter pin's mirror are apex-image'
 
   PATCHED_RPMS=DIR   install the gnome-shell RPMs in DIR instead of building them
   PATCHED_OUT=DIR    keep the RPMs and the run's logs in DIR (default: a temporary one)
+  PATCHED_PART=signoff  only direct.sh's signoff part, for signoff.sh: no Fedora baseline, no assertions
 
   docker run --rm --network=host -v "$PWD:/src:ro" registry.fedoraproject.org/fedora:45 \
       /src/tests/shots/patched.sh
@@ -158,6 +159,12 @@ rm -rf "$run"
 mkdir -p "$run/captures"
 ln -sfn "$HERE" /w
 ln -sfn "$run" /out
+if [[ ${PATCHED_PART:-} == signoff ]]; then
+    install_shell
+    step "direct.sh signoff"
+    bash /w/direct.sh signoff
+    exit
+fi
 fedora_part
 install_shell
 

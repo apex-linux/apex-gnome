@@ -480,6 +480,19 @@ counted on every actor, so the innermost entry is the one that asked. `assert.sh
 `ui/apex/` file of each JS class and `apex-` style class among them. The control opens Quick
 Settings inside a window of the same counter: it must count frames and name their damage.
 
+## Sign-off captures
+
+Every slice ends with the owner signing off its boards, light and dark, which then become
+approved goldens. `signoff.sh RPM_DIR` shoots them in one place: `patched.sh` with
+`PATCHED_PART=signoff` runs `direct.sh signoff`, the `default`, `dark-style`, `indicators`
+and `indicators-dark` cases with `G2_SURFACE_SCENES=1`, and `tests/shell/shoot.sh` shoots
+the greeter, the lock screen, polkit's dialog and the power-off dialog with an update
+staged. Each board's scene is copied to `board-NN-SLUG-light.png` and `-dark.png`, and
+`signoff.json` records its title, its scene and fixture state, the commit, the layer's
+features enabled, the scale and the monitor. These are review captures: nothing is
+compared, and only a scene without a capture fails the run, named. The `signoff` workflow
+(`workflow_dispatch` only) uploads the set as `signoff-SHA`.
+
 ## Known gaps
 
 `top_bar_gaps` asserts the rest of the designed top bar ([docs/DESIGN.md](https://github.com/apex-linux/apex/blob/main/docs/DESIGN.md)),
@@ -520,6 +533,7 @@ it is at least 4.8:1), and what the goldens judge: the Apex Symbolic glyphs (S1b
 | `assert.sh`, `stable.sh`, `lib.sh` | the builder VM | the assertions |
 | `png.js`, `compare.js` | gjs | PNG with GLib's zlib only, and the masked comparison |
 | `glass.js`, `blur-ref.js` | the shell; gjs | the glass cases, and their CPU reference |
+| `signoff.sh` | a throwaway Fedora 45 container; `.github/workflows/signoff.yml` on demand | the owner's sign-off captures (below) |
 | `a11y.js` | the shell | the accessibility cases: contrast against what is drawn, and the Large Text layout |
 | `indicators.js`, `sni-items.js` | the shell; gjs | the app-indicator part of `default`, `default-scale1` and `dark-style`, and the StatusNotifierItems it starts |
 | `idle.js` | the `idle` case's shell | the settled desktop, its paints and relayouts over 10 s, and the counter's control |

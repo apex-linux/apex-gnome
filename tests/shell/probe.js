@@ -457,6 +457,8 @@ async function shootEndSessionCases() {
     await endSessionStep('staged-pressed', dialog);
 
     dialog = await openEndSession(DIALOG_TYPE.powerOff);
+    // Board 14 for the owner's sign-off (tests/shots/signoff.sh): power off, an update staged.
+    await capture('power-off');
     dialog.contentLayout.get_children().find(c => c.has_style_class_name?.('apex-update-card'))
         .get_children()[2].emit('clicked', Clutter.BUTTON_PRIMARY);
     await Scripting.sleep(STEP_MS);

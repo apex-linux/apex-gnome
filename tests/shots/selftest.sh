@@ -746,6 +746,40 @@ a11y_layout|0|.banner.targets[0] += {ellipsized: true, expandable: true}|a colla
 CHANGES
 }
 
+# signoff.sh's last step on stand-in captures: each board's two scenes, then one gone.
+test_signoff() {
+    local dir=$T/signoff scene
+    rm -rf "$dir"
+    mkdir -p "$dir/g2/captures" "$dir/shots"
+    for scene in switcher surfaces quick-settings screenshot tile-preview datemenu overview appgrid desktop spotlight-search; do
+        printf '\x89PNG\r\n\x1a\n' >"$dir/g2/captures/default-$scene.png"
+        printf '\x89PNG\r\n\x1a\n' >"$dir/g2/captures/dark-style-$scene.png"
+    done
+    for scene in indicators-indicators-everything indicators-dark-indicators-everything; do
+        printf '\x89PNG\r\n\x1a\n' >"$dir/g2/captures/$scene.png"
+    done
+    for scene in greeter-%s-list polkit-%s-open end-session-%s-power-off lock-%s-open; do
+        # shellcheck disable=SC2059 # the scene names carry the variant's %s
+        printf '\x89PNG\r\n\x1a\n' | tee "$dir/shots/$(printf "$scene" light).png" >"$dir/shots/$(printf "$scene" dark).png"
+    done
+    printf 'Apex: feature panel enabled\nApex: feature dock enabled\n' >"$dir/g2/default.log"
+    if "$HERE/signoff.sh" --collect "$dir/g2" "$dir/shots" "$dir/out" >"$T/signoff.out" 2>&1 &&
+        [[ $(find "$dir/out" -name 'board-*.png' | wc -l) == 30 ]] &&
+        jq -e '(.boards | length) == 15 and .scale == 2 and .features == ["dock", "panel"]
+            and .boards[0].files.dark == "board-12-greeter-dark.png"' "$dir/out/signoff.json" >/dev/null; then
+        ok "signoff: fifteen boards, light and dark, and signoff.json from their captures"
+    else
+        not_ok "signoff: fifteen boards, light and dark, and signoff.json from their captures: $(tail -n 3 "$T/signoff.out")"
+    fi
+    rm "$dir/g2/captures/dark-style-tile-preview.png"
+    if ! "$HERE/signoff.sh" --collect "$dir/g2" "$dir/shots" "$dir/out2" >"$T/signoff.out" 2>&1 &&
+        grep -q 'board 22 (Edge tiling), dark: no capture of dark-style-tile-preview' "$T/signoff.out"; then
+        ok "signoff: a scene that did not open fails the run with its board's name"
+    else
+        not_ok "signoff: a scene that did not open fails the run with its board's name: $(tail -n 3 "$T/signoff.out")"
+    fi
+}
+
 test_top_bar() {
     local variant change what passes failures open_gaps
     for variant in light dark; do
@@ -2181,6 +2215,7 @@ test_quick_settings
 test_window_switcher
 test_modal_dialog
 test_a11y
+test_signoff
 test_date_menu
 test_overview_style
 test_app_grid
