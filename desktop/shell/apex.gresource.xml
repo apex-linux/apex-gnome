@@ -60,6 +60,7 @@
     <file alias="indicators/dbusmenu.js">js/ui/apex/indicators/dbusmenu.js</file>
     <file alias="indicators/indicator.js">js/ui/apex/indicators/indicator.js</file>
     <file alias="indicators/bar.js">js/ui/apex/indicators/bar.js</file>
+    <file alias="notifications/feature.js">js/ui/apex/notifications/feature.js</file>
   </gresource>
   <gresource prefix="/org/gnome/shell/theme/apex">
     <file alias="diamond-light.svg">data/theme/apex/diamond-light.svg</file>

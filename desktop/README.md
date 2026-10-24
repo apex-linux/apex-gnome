@@ -22,6 +22,7 @@ directory with `git archive` and unpacks it at the top of Fedora's gnome-shell t
 | `js/ui/apex/spotlight/` | Spotlight (below): `feature.js` (Super+Space), `search.js` (the sections, caps and budget), `providers.js` (the stock providers), `popup.js`, `toast.js`, and `tiles.js` with `settings-tiles.json`, the Settings tile colours by panel id. That JSON mirrors gnome-control-center's `panels/apex/settings-tiles.json` byte for byte and is the one file here without an SPDX line, since JSON has no comments |
 | `js/ui/apex/quick-settings/feature.js`, `submenu.js` | DESIGN's Quick Settings (below): VPN after Airplane Mode, Power Mode lit, On/Off subtitles, and board 17's submenus, through patch 0011's hooks |
 | `js/ui/apex/shadows/feature.js`, `registry.js`, `cutout.js` | DESIGN's second shadow layer (below): a shadow-layer actor under each surface whose sheet names `-apex-shadow-layer`, cut out under the surface, and the window previews' two layers |
+| `js/ui/apex/notifications/feature.js` | DESIGN's notifications in the calendar (below): one flat card per notification, "app · time" headers, the app's icon as a fallback, Do Not Disturb and Clear in the footer, through patch 0012's hooks |
 | `js/ui/apex/end-session/feature.js` | DESIGN's end-session dialog (board 14, below): stock's icon in a circle, Restart in the power-off dialog, the theme's gap and widths for the buttons, through patch 0018's hook |
 | `js/ui/apex/panel/feature.js` | the top bar of S2a (below): its parts in `panel/`, one module each |
 | `js/ui/apex/glass/feature.js` | the glass manager of S2b (below), with `glass/surfaces.js`, the layer's own glass, and `glass/registry.js`, where any feature registers an actor |
@@ -258,6 +259,17 @@ An actor without `-apex-glass-blur` gets no blur. The manager then:
   `disabled-features=['glass']` the effects go and the tints stay.
 
 A schema without `reduce-transparency` turns off the `glass` feature, logged.
+
+`notifications/feature.js` follows DESIGN's notification list (ROADMAP S3c; board 34)
+through patch 0012's hooks. A notification group lays its cards out one under another (a
+vertical `Clutter.BoxLayout` in place of the stacking layout, the cover and header hidden) and
+counts as expanded, so a click never asks `MessageView` to expand it. A card's header reads
+"app · time" without the 16 px source glyph, and a card without an icon of its own shows the
+app's (the source's) in its 32 px column. The footer gets Do Not Disturb on the left, a label
+and a switch on `org.gnome.desktop.notifications` `show-banners` (inverted, the setting the
+Quick Settings toggle uses), and Clear on the right, shown even with nothing to clear, then
+insensitive. Disabled, the feature restores the groups' layout and stack, the headers, the
+icons and the footer; a group built while every hook was stock (the layer off) stays stock.
 
 `dock` is the dock (DESIGN.md, "Dock"; board 37). `dock/dock.js`'s ApexDock is upstream's
 `Dash` (`js/ui/dash.js`) with the hooks of patch 0014-dash, which the feature provides:
