@@ -134,11 +134,23 @@ export function fineDownscale(width, height, sigma) {
     return ds;
 }
 
-export function differing(a, b) {
+// With a mask, only the pixels it marks count.
+export function differing(a, b, mask = null) {
     let count = 0;
     for (let i = 0; i < a.length; i += 4) {
-        if (a[i] !== b[i] || a[i + 1] !== b[i + 1] || a[i + 2] !== b[i + 2] || a[i + 3] !== b[i + 3])
+        if ((!mask || mask[i / 4]) &&
+            (a[i] !== b[i] || a[i + 1] !== b[i + 1] || a[i + 2] !== b[i + 2] || a[i + 3] !== b[i + 3]))
             count++;
     }
     return count;
+}
+
+// The pixels the rounded box covers fully: glass alone draws them.
+export function fullyCovered(width, height, radius) {
+    const mask = new Uint8Array(width * height);
+    for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++)
+            mask[y * width + x] = coverage(x, y, width, height, radius) === 1 ? 1 : 0;
+    }
+    return mask;
 }

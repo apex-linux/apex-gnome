@@ -22,10 +22,10 @@ function newEmitter(props = {}) {
         disconnect(id) {
             signalHandlers.delete(id);
         },
-        emit(signal) {
+        emit(signal, ...args) {
             for (const [s, fn] of [...signalHandlers.values()]) {
                 if (s === signal)
-                    fn();
+                    fn(this, ...args);
             }
         },
         connectObject(...args) {
@@ -36,8 +36,16 @@ function newEmitter(props = {}) {
 }
 
 const windows = [];
+const windowActors = [];
+const TOGGLE_KEYCODE = 65;
+let mainModule = null;
 globalThis.global = {
-    display: newEmitter(),
+    display: newEmitter({
+        get_keybinding_action: keycode =>
+            keycode === TOGGLE_KEYCODE ? mainModule?.wm.actionOf('toggle-spotlight') ?? 0 : 0,
+    }),
+    window_group: newEmitter(),
+    get_window_actors: () => [...windowActors],
     stage: {width: 1440},
     window_manager: newEmitter(),
     workspace_manager: newEmitter({get_active_workspace: () => ({list_windows: () => windows})}),
@@ -103,13 +111,174 @@ async function setDisabledLive() {
     await spin(200);
 }
 
+async function spotlightPopup() {
+    return (await import(`file://${shellDir}/js/ui/apex/spotlight/feature.js`)).popup();
+}
+
 async function pressToggleSpotlight() {
     const presses = Number(GLib.getenv('PROBE_PRESS') ?? '0');
     const Main = await import(`file://${shellDir}/js/ui/main.js`);
     for (let press = 1; press <= presses; press++) {
         Main.wm.press('toggle-spotlight');
-        fact(`press.${press}`, `overview=${Main.overview.visible}`);
+        // eslint-disable-next-line no-await-in-loop
+        fact(`press.${press}`, `overview=${Main.overview.visible} spotlight=${(await spotlightPopup())?.isOpen ?? false}`);
     }
+}
+
+// What the popup shows: each section's rows, the selected one starred with its verb.
+function shown(popup) {
+    if (!popup?.isOpen)
+        return 'closed';
+    const [, results, empty] = popup.panel.get_children();
+    if (empty.visible)
+        return `empty "${empty.get_children()[0].text}"`;
+    if (!results.visible)
+        return 'field only';
+    const parts = [];
+    for (const child of results.get_children()) {
+        if (child.has_style_class_name('apex-spotlight-header')) {
+            parts.push(`${child.get_children()[0].text}:`);
+            continue;
+        }
+        const [, text, action] = child.get_children();
+        const [title, subtitle] = text.get_children();
+        const result = title.has_style_class_name('apex-spotlight-result') ? `(${subtitle.text})` : '';
+        const selected = child.has_style_pseudo_class('selected') ? `*${action.get_children()[0].text}` : '';
+        parts[parts.length - 1] += ` ${title.text}${result}${selected}`;
+    }
+    return parts.join(' | ');
+}
+
+const SEARCH_SETTLE_MS = 300;
+
+async function exerciseSpotlight() {
+    const mode = GLib.getenv('PROBE_SPOTLIGHT');
+    if (mode === null)
+        return;
+    const Main = await import(`file://${shellDir}/js/ui/main.js`);
+    const Toast = await import(`file://${shellDir}/js/ui/apex/spotlight/toast.js`);
+    const popup = await spotlightPopup();
+    const entry = () => popup.panel.get_children()[0].get_children()[1];
+    const key = (symbol, keycode) => entry().actions[0].press(symbol, keycode);
+    const report = label => fact(`spotlight.${label}`, shown(popup));
+    const type = async (label, text) => {
+        entry().set_text(text);
+        await spin(SEARCH_SETTLE_MS);
+        report(label);
+    };
+    const open = () => {
+        Main.overview.visible = false;
+        Main.wm.press('toggle-spotlight');
+    };
+    const {default: Clutter} = await import(`file://${GLib.path_get_dirname(shellDir)}/Clutter.js`);
+
+    if (mode === 'slow') {
+        open();
+        entry().set_text('disk');
+        await spin(700);
+        report('slow.at-700ms');
+        await spin(600);
+        report('slow.at-1300ms');
+        return;
+    }
+    if (mode === 'late') {
+        open();
+        entry().set_text('disk');
+        await spin(300);
+        report('late.at-300ms');
+        for (let i = 0; i < 5; i++)
+            key(Clutter.KEY_Down);
+        report('late.down-5');
+        await spin(600);
+        report('late.at-900ms');
+        return;
+    }
+    if (mode === 'late-sum') {
+        open();
+        entry().set_text('2880 / 1.5');
+        await spin(300);
+        report('late-sum.at-300ms');
+        await spin(600);
+        report('late-sum.at-900ms');
+        return;
+    }
+
+    open();
+    report('opened');
+    fact('spotlight.focus', entry().focused === true);
+    await type('disk', 'disk');
+    for (let i = 0; i < 4; i++)
+        key(Clutter.KEY_Down);
+    report('down-4');
+    key(Clutter.KEY_Up);
+    report('up-1');
+    for (let i = 0; i < 20; i++)
+        key(Clutter.KEY_Down);
+    report('down-20');
+    for (let i = 0; i < 20; i++)
+        key(Clutter.KEY_Up);
+    report('up-20');
+    for (let i = 0; i < 4; i++)
+        key(Clutter.KEY_Down);
+    key(Clutter.KEY_Return);
+    report('enter-on-a-setting');
+
+    open();
+    await type('app', 'disk');
+    key(Clutter.KEY_KP_Enter);
+    report('enter-on-an-app');
+
+    open();
+    await type('sum', '2880 / 1.5');
+    key(Clutter.KEY_Return);
+    report('enter-on-the-sum');
+    const toast = Toast.current();
+    fact('spotlight.toast', toast ? `${toast.get_children()[0].accessible_name} in-ui-group=${Main.uiGroup.children.includes(toast)}` : 'none');
+    await spin(2300);
+    fact('spotlight.toast-later', Toast.current() ? 'shown' : 'gone');
+
+    open();
+    await type('none', 'zzz');
+    key(Clutter.KEY_Escape);
+    report('escape');
+
+    open();
+    await type('cleared-before', 'disk');
+    await type('cleared', '');
+    entry().set_text('disk');
+    await type('superseded', 'zzz');
+    key(0, TOGGLE_KEYCODE);
+    report('toggle-key');
+
+    open();
+    global.display.emit('overlay-key');
+    fact('spotlight.overlay-key', `${shown(popup)} overview=${Main.overview.visible}`);
+
+    open();
+    Main.uiGroup.children.find(a => a.name === 'apexSpotlight').get_children()[0].actions[0].recognize();
+    report('click-outside');
+
+    open();
+    await type('hover-before', 'disk');
+    const row = popup.panel.get_children()[1].get_children()[2];
+    row.hover = true;
+    row.emit('notify::hover');
+    report('hover');
+    row.actions[0].recognize();
+    report('click-row');
+    fact('spotlight.stage', Main.uiGroup.children.filter(a => a.name === 'apexSpotlight').length);
+
+    open();
+    await type('live-before', 'disk');
+    settings.set_strv('disabled-features', ['spotlight']);
+    await spin(200);
+    const gone = await spotlightPopup() === null;
+    fact('spotlight.live-disabled', `${Main.uiGroup.children.filter(a => a.name === 'apexSpotlight').length} popup=${gone}`);
+    settings.set_strv('disabled-features', []);
+    await spin(200);
+    Main.wm.press('toggle-spotlight');
+    fact('spotlight.live-enabled', shown(await spotlightPopup()));
+    Main.wm.press('toggle-spotlight');
 }
 
 function pillNames(quickSettings) {
@@ -252,9 +421,9 @@ async function exerciseSearchButton() {
         fact('search.tooltip.unhover', tooltip());
     }
     Main.panel.statusArea['apex-search']?.actions[0].recognize();
-    fact('search.click.1', `overview=${Main.overview.visible}`);
+    fact('search.click.1', `overview=${Main.overview.visible} spotlight=${(await spotlightPopup())?.isOpen ?? false}`);
     Main.panel.statusArea['apex-search']?.actions[0].recognize();
-    fact('search.click.2', `overview=${Main.overview.visible}`);
+    fact('search.click.2', `overview=${Main.overview.visible} spotlight=${(await spotlightPopup())?.isOpen ?? false}`);
     Main.sessionMode.lock(true);
     report('locked');
     Main.sessionMode.lock(false);
@@ -315,6 +484,100 @@ async function exerciseMaximisedWindow() {
     await spin(200);
     printerr('probe: set restacked');
     global.display.emit('restacked');
+}
+
+function glassOf(actor) {
+    const effect = actor.get_effect('apex-glass');
+    if (!effect)
+        return `${actor.name}:none`;
+    const mode = effect.mode === 1 ? 'background' : 'actor';
+    return `${actor.name}:r${effect.radius}/s${effect.saturation}/c${effect.corner_radius}/${effect.enabled ? 'on' : 'paused'}` +
+        `${effect.fine && effect.follow_opacity ? '' : '/stock'}/${mode}`;
+}
+
+async function exerciseGlass() {
+    if (GLib.getenv('PROBE_GLASS') !== '1')
+        return;
+    const Main = await import(`file://${shellDir}/js/ui/main.js`);
+    const Registry = await import(`file://${shellDir}/js/ui/apex/glass/registry.js`);
+    const {default: St} = await import(`file://${GLib.path_get_dirname(shellDir)}/St.js`);
+    const {panel} = Main;
+    const {quickSettings, dateMenu} = panel.statusArea;
+    const surfaces = () => [panel, quickSettings.menu.box, dateMenu.menu.box, ...Main.messageTray._bannerBin.children];
+    const report = label => fact(`glass.${label}`, `${surfaces().map(glassOf).join(' ')} ` +
+        `solid=${Main.uiGroup.has_style_class_name('apex-solid')} redirects=${panel.redirect},${quickSettings.menu.box.parent.redirect}`);
+    report('enabled');
+    Main.messageTray.showBanner();
+    report('banner');
+
+    panel.add_style_class_name('apex-solid-bar');
+    report('solid-bar');
+    panel.remove_style_class_name('apex-solid-bar');
+    quickSettings.menu.box.mapped = false;
+    quickSettings.menu.box.emit('notify::mapped');
+    report('menu-closed');
+    quickSettings.menu.box.mapped = true;
+    quickSettings.menu.box.emit('notify::mapped');
+
+    const dock = new Main.StubActor('dock', {glass: {blur: 28, saturation: 1.8, radius: 22}, extents: [420, 820, 600, 62]});
+    Registry.register(dock, {name: 'dock'});
+    Registry.register(dock, {name: 'dock', paused: () => true});
+    fact('glass.registered-twice', `${glassOf(dock)} ${Registry.surfaces().filter(r => r.actor === dock).length}`);
+    Registry.register(dock, {name: 'dock'});
+    fact('glass.registered', glassOf(dock));
+    const window = Object.assign(new Main.StubActor('window', {extents: [100, 100, 400, 300]}), {get_meta_window: () => ({})});
+    windowActors.push(window);
+    global.window_group.emit('child-added', window);
+    const redraws = () => [panel, quickSettings.menu.box, dock].map(a => `${a.name}=${a.redraws}`).join(' ');
+    const before = redraws();
+    window.emit('damaged');
+    fact('glass.damage-elsewhere', `${before} -> ${redraws()}`);
+    window.box = [400, 0, 400, 300];
+    window.emit('notify::allocation');
+    fact('glass.moved-under-the-bar', redraws());
+    window.box = [400, 600, 400, 300];
+    window.emit('notify::allocation');
+    window.emit('damaged');
+    fact('glass.damage-under-the-dock', redraws());
+    global.display.emit('restacked');
+    fact('glass.restacked', redraws());
+
+    for (const [label, key, on, off] of [
+        ['reduce-transparency', 'reduce-transparency', true, false],
+        ['disabled', 'disabled-features', ['glass'], []],
+    ]) {
+        const set = value => Array.isArray(value) ? settings.set_strv(key, value) : settings.set_boolean(key, value);
+        set(on);
+        // eslint-disable-next-line no-await-in-loop
+        await spin(200);
+        report(label);
+        fact(`glass.${label}.dock`, glassOf(dock));
+        set(off);
+        // eslint-disable-next-line no-await-in-loop
+        await spin(200);
+    }
+    St.Settings.get().setHighContrast(true);
+    report('high-contrast');
+    St.Settings.get().setHighContrast(false);
+
+    settings.set_strv('disabled-features', ['glass']);
+    await spin(200);
+    const later = new Main.StubActor('later', {glass: {blur: 34, saturation: 1.8, radius: 26}});
+    Registry.register(later, {name: 'later'});
+    fact('glass.registered-while-disabled', glassOf(later));
+    settings.set_strv('disabled-features', []);
+    await spin(200);
+    fact('glass.registered-while-disabled.enabled', glassOf(later));
+
+    Registry.unregister(dock);
+    Registry.unregister(dock);
+    fact('glass.unregistered', glassOf(dock));
+    settings.set_boolean('layer-enabled', false);
+    await spin(200);
+    report('off');
+    settings.set_boolean('layer-enabled', true);
+    await spin(200);
+    report('on');
 }
 
 function newWorkspace(nWindows) {
@@ -491,7 +754,9 @@ if (layer && GLib.getenv('PROBE_ENABLE') === '1') {
         loop.run();
         fact('survived', `${waitSeconds}s`);
     }
+    mainModule = await import(`file://${shellDir}/js/ui/main.js`);
     await pressToggleSpotlight();
+    await exerciseSpotlight();
     await exerciseTopBar();
     await exerciseSolidBar();
     await exerciseFocusedApp();
@@ -499,6 +764,7 @@ if (layer && GLib.getenv('PROBE_ENABLE') === '1') {
     await exerciseMaximisedWindow();
     await exerciseOverview();
     await exerciseDock();
+    await exerciseGlass();
     await setDisabledLive();
     await switchLayer();
     for (const [signal, fn] of [...handlers.values()]) {
