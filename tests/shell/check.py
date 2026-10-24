@@ -207,9 +207,14 @@ def between(gdm_log, start, end):
     return lines[first:last]
 
 
-# pam_fprintd's texts reach the prompt through upstream's own; S4 owns the wording.
-FINGERPRINT_HINT = "(or place finger on reader)"
-FINGERPRINT_PROBLEM = "Failed to match fingerprint"
+FINGERPRINT_HINT = "Or touch the fingerprint reader"
+FINGERPRINT_FAILED = "Fingerprint not recognized. Try again."
+FINGERPRINT_GLYPH = "auth-fingerprint-symbolic"
+
+
+def fingerprint_line(step, text, failed):
+    return (step.get("hint") == text and step.get("hintGlyph") == FINGERPRINT_GLYPH and step.get("hintFailed") is failed
+            and not (step.get("prompt") or {}).get("messageShown"))
 
 
 def check_fingerprint(shots, case):
@@ -227,10 +232,11 @@ def check_fingerprint(shots, case):
     begun = "BeginVerificationForUser gdm-fingerprint apex"
     check(f"{case}: a fingerprint conversation runs beside the password one",
           any(line.endswith(begun) for line in between(gdm, "", "opened")))
-    check(f"{case}: the prompt says so, in upstream's words", (f["opened"]["prompt"] or {}).get("message") == FINGERPRINT_HINT,
-          json.dumps(f["opened"]["prompt"]))
-    check(f"{case}: a failed scan is shown, and the screen stays locked",
-          (f["scan-failed"]["prompt"] or {}).get("message") == FINGERPRINT_PROBLEM, json.dumps(f["scan-failed"]["prompt"]))
+    check(f"{case}: board 20's line says so with the print, in place of upstream's message line",
+          fingerprint_line(f["opened"], FINGERPRINT_HINT, False), json.dumps(f["opened"]))
+    check(f"{case}: upstream's fingerprint indicator stands aside", f["opened"].get("indicator") in (None, 0), json.dumps(f["opened"]))
+    check(f"{case}: a failed scan swaps the line's text, and the screen stays locked",
+          fingerprint_line(f["scan-failed"], FINGERPRINT_FAILED, True), json.dumps(f["scan-failed"]))
     before_blank = between(gdm, "capture.scan-failed", "blank")
     check(f"{case}: blanking cancels the conversation the reader was in", any(line.endswith(": Cancel") for line in before_blank),
           json.dumps(before_blank))
@@ -239,6 +245,8 @@ def check_fingerprint(shots, case):
     check(f"{case}: blank: no prompt", f["blank"]["prompt"] is None and f["still-blank"]["prompt"] is None)
     check(f"{case}: waking starts the reader's conversation again",
           any(line.endswith(begun) for line in between(gdm, "still-blank", "wake")) and f["wake"]["prompt"] is not None)
+    check(f"{case}: and the new prompt's line is the reader's again, not the failure",
+          fingerprint_line(f["wake"], FINGERPRINT_HINT, False), json.dumps(f["wake"]))
 
 
 def check_refused(shots, case):

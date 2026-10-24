@@ -602,6 +602,7 @@ function newUnlockDialog(St) {
     stack.add_child(promptBox);
     stack.add_child(clock);
     const dialog = new St.Widget({style_class: 'unlock-dialog'});
+    dialog._authIndicatorButton = new St.Widget({name: 'auth-indicator', opacity: 255});
     Object.assign(dialog, {
         _clock: clock, _promptBox: promptBox, _stack: stack, _authPrompt: null,
         _backgroundGroup: new St.Widget({name: 'backgrounds'}), conversations: 0, cancelled: [],
@@ -609,12 +610,14 @@ function newUnlockDialog(St) {
             if (this._authPrompt)
                 return;
             const prompt = new St.Widget({name: `conversation-${++this.conversations}`});
-            prompt._userVerifier = {
+            prompt._message = new St.Label({name: 'message', text: ''});
+            prompt._userVerifier = Object.assign(new St.Widget({name: 'verifier'}), {
+                currentMessage: null,
                 destroy() {
                     this.cancel();
                 },
                 cancel: () => this.cancelled.push(prompt.name),
-            };
+            });
             prompt.connect('destroy', () => prompt._userVerifier.destroy());
             this._authPrompt = prompt;
             promptBox.add_child(prompt);
@@ -642,6 +645,29 @@ function newUnlockDialog(St) {
 
 const names = actors => actors.map(a => a.name ?? a.styleClasses?.[0] ?? '?').join(',');
 
+// What upstream's AuthPrompt does with a queued message, before the lock hears it.
+function say(dialog, serviceName, text, error = false) {
+    const prompt = dialog._authPrompt;
+    if (!prompt)
+        return;
+    if (error)
+        prompt._message.add_style_class_name('login-dialog-message-warning');
+    else
+        prompt._message.remove_style_class_name('login-dialog-message-warning');
+    prompt._message.text = text ?? '';
+    prompt._userVerifier.currentMessage = text ? {serviceName, text} : null;
+    prompt._userVerifier.emit('show-message');
+}
+
+function hintState(dialog) {
+    const line = dialog._promptBox.children.find(c => c.has_style_class_name('apex-lock-hint-line'));
+    if (!line)
+        return 'none';
+    const [glyph, label] = line.children;
+    return `"${label.text}" glyph=${glyph.visible ? glyph.icon_name : 'none'} failed=${line.has_style_class_name('apex-lock-hint-failed')} ` +
+        `message=${dialog._authPrompt?._message.visible ?? 'none'} indicator=${dialog._authIndicatorButton.opacity}`;
+}
+
 function lockState(dialog) {
     return `page=${dialog.page ?? 'none'} prompt=${dialog._authPrompt?.name ?? 'none'} cancelled=${dialog.cancelled.join(',') || 'none'}`;
 }
@@ -666,8 +692,20 @@ async function exerciseLock() {
         `stage=${names(stage.children ?? [])} clock=${names(dialog._clock.children)} ` +
         `hint=${dialog._clock._hint.visible} children=${names(dialog.children)}`);
     fact('lock.open', lockState(dialog));
-    const promptBoxChildren = () => dialog._promptBox.children.map(c => c.text ?? c.name).join(',');
+    const promptBoxChildren = () => dialog._promptBox.children
+        .map(c => c.text ?? c.name ?? c.children.map(part => part.text ?? '').join('')).join(',');
     fact('lock.prompt-box', promptBoxChildren());
+    fact('lock.hint.password', hintState(dialog));
+    for (const [label, service, text, error] of [
+        ['fingerprint-scan', 'gdm-fingerprint', '(or place finger on reader)', false],
+        ['fingerprint-failed', 'gdm-fingerprint', 'Failed to match fingerprint', true],
+        ['queue-done', null, null, false],
+        ['password-problem', 'gdm-password', "Sorry, that didn't work. Please try again.", true],
+        ['fingerprint-again', 'gdm-fingerprint', '(or place finger on reader)', false],
+    ]) {
+        say(dialog, service, text, error);
+        fact(`lock.hint.${label}`, hintState(dialog));
+    }
     for (const [label, mode] of [['blank', PowerSave.OFF], ['wake', PowerSave.ON],
         ['standby', PowerSave.STANDBY], ['wake-again', PowerSave.ON],
         ['suspend', PowerSave.SUSPEND], ['unsupported', PowerSave.UNSUPPORTED]]) {
@@ -675,6 +713,7 @@ async function exerciseLock() {
         fact(`lock.${label}`, lockState(dialog));
     }
     fact('lock.prompt-box.after-wake', promptBoxChildren());
+    fact('lock.hint.after-wake', hintState(dialog));
     dialog.emit('destroy');
 
     setScreen(PowerSave.OFF);
