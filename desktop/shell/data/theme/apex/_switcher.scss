@@ -1,0 +1,36 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+
+// Glass, like the OSD. altTab.js sizes the icons (96 px at most), so the tiles pad them.
+.switcher-list {
+  @include apex-surface($apex_panel);
+  padding: $apex_switcher_padding - $apex_surface_border;
+  border-radius: $apex_radius_switcher;
+  font-size: apex-text-size($apex_font_size);
+  font-weight: $apex_font_label_weight;
+
+  .switcher-list-item-container { spacing: $apex_switcher_gap; }
+
+  .item-box {
+    padding: $apex_switcher_item_vpadding $apex_switcher_item_hpadding;
+    border-radius: $apex_radius_switcher_item;
+    color: $apex_fg;
+    background-color: transparent;
+
+    &:hover, &:focus, &:active { background-color: transparent; box-shadow: none; }
+    &:selected, &:selected:hover { color: $apex_fg; background-color: $apex_button_hover; }
+  }
+
+  .alt-tab-app { spacing: $apex_switcher_item_spacing; }
+
+  .separator { background: $apex_border; }
+}
+
+.switcher-arrow {
+  border-color: $apex_fg_dim;
+  color: $apex_fg_dim;
+
+  &:highlighted {
+    border-color: $apex_fg;
+    color: $apex_fg;
+  }
+}

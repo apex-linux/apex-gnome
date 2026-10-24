@@ -271,6 +271,18 @@ REPORT_OF_QUICK_SETTINGS_DRAWN_FROM_TOKENS='
         title: {font: {size: ($t.apex_font_quick_menu_title_size | px), weight: ($t.apex_font_heading_weight | tonumber)}},
         rows: [{height: ($t.apex_quick_menu_row_height | px), padding: {left: ($t.apex_menu_row_padding | px)}, radius: ($t.apex_radius_menu_row | px)}]}}}}'
 # shellcheck disable=SC2016 # a jq program
+REPORT_OF_A_SWITCHER_DRAWN_FROM_TOKENS='
+($t.apex_surface_border | px) as $b | ($t.apex_switcher_padding | px) as $p
+| {radius: ($t.apex_radius_switcher_item | px), padding: {top: ($t.apex_switcher_item_vpadding | px), left: ($t.apex_switcher_item_hpadding | px)},
+   background: "#00000000", foreground: ($t.apex_fg | hex), pseudoClass: null} as $item
+| {surfaces: {switcher: {
+    list: {background: ($t.apex_panel | hex), radius: ($t.apex_radius_switcher | px), border: {top: $b, right: $b, bottom: $b, left: $b},
+        padding: {top: ($p - $b), right: ($p - $b), bottom: ($p - $b), left: ($p - $b)}, borderColor: ($t.apex_panel_border | hex),
+        boxShadow: {color: ($t.apex_shadow | hex), y: ($t.apex_shadow_y | px), blur: ($t.apex_shadow_blur | px)}},
+    spacing: ($t.apex_switcher_gap | px),
+    items: [$item + {pseudoClass: "first-child"}, $item + {pseudoClass: "selected", background: ($t.apex_button_hover | hex)}, $item],
+    app: {spacing: ($t.apex_switcher_item_spacing | px), label: {size: ($t.apex_font_size | px), weight: ($t.apex_font_label_weight | tonumber)}}}}}'
+# shellcheck disable=SC2016 # a jq program
 HEX_DEF='def hex: rgba | map([., 16] | "0123456789abcdef"[(.[0] / .[1] | floor):(.[0] / .[1] | floor) + 1]
                                     + "0123456789abcdef"[(.[0] % .[1]):(.[0] % .[1]) + 1]) | "#" + join("");'
 
@@ -284,6 +296,7 @@ assert_run() {
     local assertions=$1 variant=$2 change=${3:-.} tokens report=$REPORT_OF_A_BAR_DRAWN_FROM_TOKENS
     [[ $assertions == shell_surfaces ]] && report=$REPORT_OF_SURFACES_DRAWN_FROM_TOKENS
     [[ $assertions == quick_settings ]] && report=$REPORT_OF_QUICK_SETTINGS_DRAWN_FROM_TOKENS
+    [[ $assertions == window_switcher ]] && report=$REPORT_OF_A_SWITCHER_DRAWN_FROM_TOKENS
     tokens=$(tokens_for "$variant")
     jq -nc --argjson t "$tokens" "$JQ_DEFS $HEX_DEF $report | $change" | sed 's/^/APEXG2-SCENES /' >"$T/top-bar.log"
     # shellcheck disable=SC2016 # expanded by the inner bash
@@ -455,6 +468,33 @@ test_quick_settings() {
 CHANGES
     assert_run quick_settings light 'del(.surfaces)' >/dev/null
     expect_eq "Quick Settings: a report without it passes none" 0 "$(grep -c '^PASS' "$T/top-bar.out")"
+}
+
+test_window_switcher() {
+    local variant change what passes failures open_gaps
+    for variant in light dark; do
+        read -r passes failures open_gaps <<<"$(assert_run window_switcher "$variant")"
+        if ((failures == 0 && open_gaps == 0 && passes == 5)); then
+            ok "window switcher ($variant): drawn from the tokens it passes all $passes assertions"
+        else
+            not_ok "window switcher ($variant): drawn from the tokens it passes (passed/failed/gaps $passes/$failures/$open_gaps): $(grep -m3 '^FAIL' "$T/top-bar.out" | paste -sd'|' -)"
+        fi
+    done
+    while IFS='|' read -r change what; do
+        read -r passes failures open_gaps <<<"$(assert_run window_switcher light "$change")"
+        if ((failures == 1)); then
+            ok "window switcher: $what fails one assertion"
+        else
+            not_ok "window switcher: $what fails one assertion (passed/failed/gaps $passes/$failures/$open_gaps)"
+        fi
+    done <<'CHANGES'
+.surfaces.switcher.list.background = "#2e2e33ff"|upstream's dark OSD fill
+.surfaces.switcher.list.boxShadow.blur = 8|upstream's switcher shadow
+.surfaces.switcher.spacing = 12|upstream's gap between tiles
+.surfaces.switcher.items[1].foreground = "#ffffffff"|upstream's white selected name
+.surfaces.switcher.items[0].background = "#00000a1e"|a second tile filled as selected
+.surfaces.switcher.app.label.weight = 400|names at body weight
+CHANGES
 }
 
 test_today_pins() {
@@ -832,6 +872,7 @@ test_token_file
 test_top_bar
 test_shell_surfaces
 test_quick_settings
+test_window_switcher
 test_today_pins
 test_known_gaps
 test_fixed_clock

@@ -448,6 +448,30 @@ quick_settings() {
         "$q.wifiMenu.rows" 'length > 0 and all((.height | px_is($t.apex_quick_menu_row_height)) and (.padding.left | px_is($t.apex_menu_row_padding)) and (.radius | px_is($t.apex_radius_menu_row)))'
 }
 
+# shellcheck disable=SC2016 # jq programs and token names, not shell expansions
+window_switcher() {
+    local label=$1 log=$2 variant=$3 scenes tokens
+    scenes=$(report_of "$log" APEXG2-SCENES)
+    tokens=$(tokens_for "$variant")
+    local -a metric=(top_bar_metric "$label window switcher" "$scenes" "$tokens")
+    local w=.surfaces.switcher
+
+    "${metric[@]}" 'the list is tinted $apex_panel, radius $apex_radius_switcher, inset $apex_switcher_padding' \
+        "$w.list" '(.background | colour_is($t.apex_panel)) and (.radius | px_is($t.apex_radius_switcher))
+            and ([.padding, .border] | [.[0].top + .[1].top, .[0].right + .[1].right, .[0].bottom + .[1].bottom, .[0].left + .[1].left] | all(px_is($t.apex_switcher_padding)))'
+    "${metric[@]}" 'its ring is a $apex_surface_border border in $apex_panel_border, its shadow 0 $apex_shadow_y $apex_shadow_blur $apex_shadow' \
+        "$w.list" '(.border.top | px_is($t.apex_surface_border)) and (.borderColor | colour_is($t.apex_panel_border))
+            and (.boxShadow | .y == ($t.apex_shadow_y | px) and .blur == ($t.apex_shadow_blur | px) and (.color | colour_is($t.apex_shadow)))'
+    "${metric[@]}" 'its tiles are $apex_switcher_gap apart, radius $apex_radius_switcher_item, padded $apex_switcher_item_vpadding $apex_switcher_item_hpadding, $apex_switcher_item_spacing above the name' \
+        "$w" '(.spacing | px_is($t.apex_switcher_gap)) and (.app.spacing | px_is($t.apex_switcher_item_spacing))
+            and (.items | length > 1 and all((.radius | px_is($t.apex_radius_switcher_item)) and (.padding.top | px_is($t.apex_switcher_item_vpadding)) and (.padding.left | px_is($t.apex_switcher_item_hpadding))))'
+    "${metric[@]}" 'the selected tile alone is filled with $apex_button_hover, its name in $apex_fg' \
+        "$w.items" 'map(select(.pseudoClass // "" | test("selected"))) as $sel | map(select(.pseudoClass // "" | test("selected") | not)) as $rest
+            | ($sel | length == 1) and ($sel[0] | (.background | colour_is($t.apex_button_hover)) and (.foreground | colour_is($t.apex_fg))) and ($rest | all(.background | rgba | .[3] == 0))'
+    "${metric[@]}" 'the names are $apex_font_size at $apex_font_label_weight' \
+        "$w.app.label" '(.size | px_is($t.apex_font_size)) and .weight == ($t.apex_font_label_weight | tonumber)'
+}
+
 scenes_captured() {
     local run=$1 case_name=$2
     local log=$run/$case_name.log scene
@@ -624,6 +648,7 @@ direct_cases() {
     top_bar_gaps default "$f" light
     shell_surfaces default "$f" light
     quick_settings default "$f" light
+    window_switcher default "$f" light
 
     f=$run/default-scale1.log
     exits "$run" default-scale1 0
@@ -635,6 +660,7 @@ direct_cases() {
     top_bar_today default-scale1 "$f" light
     shell_surfaces default-scale1 "$f" light
     quick_settings default-scale1 "$f" light
+    window_switcher default-scale1 "$f" light
 
     f=$run/dark-style.log
     exits "$run" dark-style 0
@@ -649,6 +675,7 @@ direct_cases() {
     top_bar_gaps dark-style "$f" dark
     shell_surfaces dark-style "$f" dark
     quick_settings dark-style "$f" dark
+    window_switcher dark-style "$f" dark
     dark_style_off dark-style "$f"
 
     for c in stock-light stock-dark; do
