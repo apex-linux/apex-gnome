@@ -20,7 +20,7 @@ directory with `git archive` and unpacks it at the top of Fedora's gnome-shell t
 | `js/ui/apex/lock/` | the lock screen of S3b (board 20), the `lock` feature: `stage.js` (the single stage: date over time over the prompt and its hint, the overlay, the prompt torn down while `org.gnome.Mutter.DisplayConfig`'s `PowerSaveMode` blanks the screen and rebuilt on wake), `background.js` (the blur, σ 30 and saturation 1.3, without upstream's darkening), `question.js` ("Enter Password" for PAM's exact `Password:` only) and `avatar.js` (the name's initial in place of the generic icon), through patch 0015's hooks. Unlocking stays upstream's: no Apex code is on its path, which `tests/layer/run.sh`'s unlock guard checks. Stock keeps, until S4: the show-password eye and the chevron button; the failure text on a message line above the hint, where the board puts it in the hint's place with a red ring; and pam_fprintd's "(or place finger on reader)", "Failed to match fingerprint" and the "Unlock with fingerprint" indicator, where the board has one hint line, "Or touch the fingerprint reader" with the print glyph, and "Fingerprint not recognized. Try again." |
 | `js/ui/apex/motion/feature.js` | DESIGN's motion (below): one curve and fixed durations through patch 0016's hooks |
 | `js/ui/apex/spotlight/` | Spotlight (below): `feature.js` (Super+Space), `search.js` (the sections, caps and budget), `providers.js` (the stock providers), `popup.js` and `toast.js` |
-| `js/ui/apex/quick-settings/feature.js` | DESIGN's Quick Settings (below): VPN after Airplane Mode, Power Mode lit, On/Off subtitles, through patch 0011's hook |
+| `js/ui/apex/quick-settings/feature.js`, `submenu.js` | DESIGN's Quick Settings (below): VPN after Airplane Mode, Power Mode lit, On/Off subtitles, and board 17's submenus, through patch 0011's hooks |
 | `js/ui/apex/panel/feature.js` | the top bar of S2a (below): its parts in `panel/`, one module each |
 | `js/ui/apex/glass/feature.js` | the glass manager of S2b (below), with `glass/surfaces.js`, the layer's own glass, and `glass/registry.js`, where any feature registers an actor |
 | `js/ui/apex/dock/feature.js`, `dock.js`, `trash.js`, `intellihide.js` | the dock of S2a (below): ApexDock, a subclass of upstream's `Dash`, its Trash and its intellihide |
@@ -163,6 +163,15 @@ subtitle of its own reads "On" or "Off" from `checked`; one that sets its own (W
 network, Bluetooth's device, Power Mode's profile) keeps it, and gets ours back once it
 drops it. Disabled, the feature puts VPN back, unlights Power Mode and clears only the
 subtitles it wrote.
+
+`quick-settings/submenu.js` follows board 17 in the submenus, through 0011's
+`quick-settings-toggle-menu` and `quick-settings-network-item` hooks, at the end of each
+constructor. A submenu header's subtitle moves to the end of the title's row. A Wi-Fi
+network's row is `:checked` while its network is active, from the start (stock's
+`_isActiveChanged` runs only on a change), and its lock moves from the signal icon's box to
+after the name, styled `apex-network-lock` (`$apex_quick_menu_lock_size` in `$apex_fg` at
+`$apex_quick_menu_lock_opacity`). Menus and rows built before the feature enabled are found
+in Quick Settings' tree. Disabled, every row and header goes back as stock built it.
 
 `glass` is ADR 0014's glass manager, on patch 0003's `ShellBlurEffect`. A surface is any
 actor in `glass/registry.js`: the top bar, Quick Settings, the calendar and each banner

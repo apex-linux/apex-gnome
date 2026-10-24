@@ -267,6 +267,11 @@ Not Disturb's subtitle, then clicks Power Mode twice: VPN right after Airplane M
 Mode lit through `apex-lit` with `checked` stock, the power-profile indicator out of the
 pill, "Off" under a toggle without a subtitle of its own, and the clicks switching to the
 last profile and back, still lit. Stock keeps VPN before Airplane Mode and nothing lit.
+It also opens the Wi-Fi menu (board 17): the header's subtitle in the grid's column 3, row 0,
+at its end; the fixtures' active network the only `:checked` row; each secure network's lock
+right after its name, `$apex_quick_menu_lock_size` in `$apex_fg` at
+`$apex_quick_menu_lock_opacity`. Stock keeps the subtitle under the title, no row checked
+and each lock by its signal icon.
 
 `derived_surfaces` reads surfaces with no board, which G2 never opens, from nested
 stand-ins in the same cases: the workspace switcher and its dots, the resize popup, the
