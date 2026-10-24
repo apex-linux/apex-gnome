@@ -1,0 +1,34 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Sat, 24 Oct 2026 16:00:13 +0000
+Subject: [PATCH] endSessionDialog: a hook for the Apex end-session dialog
+
+A behaviour hook once the dialog has added its buttons, given the
+dialog and its content, which the Apex layer's end-session feature
+provides (apex ROADMAP S3c): stock's icon above the title, Restart
+between Cancel and Power Off through stock's ConfirmedReboot, and the
+theme's gap and widths for the button row.
+---
+ js/ui/endSessionDialog.js | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/js/ui/endSessionDialog.js b/js/ui/endSessionDialog.js
+index fa207b1..0af19e8 100644
+--- a/js/ui/endSessionDialog.js
++++ b/js/ui/endSessionDialog.js
+@@ -25,6 +25,7 @@ import Shell from 'gi://Shell';
+ import St from 'gi://St';
+ import UPower from 'gi://UPowerGlib';
+ 
++import * as ApexHooks from './apex/hooks.js';
+ import * as CheckBox from './checkBox.js';
+ import * as Dialog from './dialog.js';
+ import * as GnomeSession from '../misc/gnomeSession.js';
+@@ -439,6 +440,7 @@ class EndSessionDialog extends ModalDialog.ModalDialog {
+                 this._altCapture.enabled = true;
+             }
+         }
++        ApexHooks.run('end-session-buttons', this, dialogContent);
+     }
+ 
+     _stopAltCapture() {

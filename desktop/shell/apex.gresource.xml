@@ -41,6 +41,7 @@
     <file alias="glass/surfaces.js">js/ui/apex/glass/surfaces.js</file>
     <file alias="lock/feature.js">js/ui/apex/lock/feature.js</file>
     <file alias="lock/stage.js">js/ui/apex/lock/stage.js</file>
+    <file alias="lock/fingerprint.js">js/ui/apex/lock/fingerprint.js</file>
     <file alias="lock/background.js">js/ui/apex/lock/background.js</file>
     <file alias="lock/question.js">js/ui/apex/lock/question.js</file>
     <file alias="lock/avatar.js">js/ui/apex/lock/avatar.js</file>
@@ -48,6 +49,8 @@
     <file alias="shadows/registry.js">js/ui/apex/shadows/registry.js</file>
     <file alias="shadows/cutout.js">js/ui/apex/shadows/cutout.js</file>
     <file alias="quick-settings/feature.js">js/ui/apex/quick-settings/feature.js</file>
+    <file alias="quick-settings/submenu.js">js/ui/apex/quick-settings/submenu.js</file>
+    <file alias="end-session/feature.js">js/ui/apex/end-session/feature.js</file>
   </gresource>
   <gresource prefix="/org/gnome/shell/theme/apex">
     <file alias="diamond-light.svg">data/theme/apex/diamond-light.svg</file>

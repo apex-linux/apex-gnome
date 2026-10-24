@@ -6,6 +6,7 @@ import Clutter from 'gi://Clutter';
 import GLib from 'gi://GLib';
 import St from 'gi://St';
 
+import * as Glass from '../glass/registry.js';
 import * as Main from '../../main.js';
 
 const SHOWN_MS = 2000;
@@ -51,6 +52,7 @@ export function show(text) {
     });
     _toast.add_child(pill);
     Main.uiGroup.add_child(_toast);
+    Glass.register(pill, {name: 'toast'});
     _timeoutId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, SHOWN_MS, () => {
         _timeoutId = 0;
         hide();
