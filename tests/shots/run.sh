@@ -37,7 +37,7 @@ readonly RUNS=${G2_RUNS:-2}
 # The image has no dbus-daemon, which dbus-run-session and the direct cases' system bus
 # need, nor the fixtures' python3-dbusmock and the gcc that builds clock.c.
 readonly BUS_IMAGE=localhost/apex-g2-bus
-readonly FIXTURE_PACKAGES=(python3-dbusmock gcc)
+readonly FIXTURE_PACKAGES=(python3-dbusmock gcc glib2-devel)
 readonly FEDORA_BUS_IMAGE=localhost/apex-g2-fedora
 readonly SHELL_PACKAGES=(gnome-shell gnome-shell-common mutter mutter-common apex-desktop)
 readonly FEDORA_KEY=/usr/share/pki/rpm-gpg/RPM-GPG-KEY-fedora-45-primary

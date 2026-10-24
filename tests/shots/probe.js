@@ -1438,6 +1438,17 @@ export async function run() {
         console.log(`APEXG2-TOGGLED ${JSON.stringify(toggled)}`);
     }
 
+    if (GLib.getenv('G2_GLASS') === '1') {
+        let result;
+        try {
+            const Glass = await import('./glass.js');
+            result = await Glass.glassReport();
+        } catch (e) {
+            result = {error: `${e.message}\n${e.stack}`};
+        }
+        console.log(`APEXG2-GLASS ${JSON.stringify(result)}`);
+    }
+
     const cycles = Number(GLib.getenv('G2_CYCLES') ?? '0');
     if (cycles > 0) {
         let result;
