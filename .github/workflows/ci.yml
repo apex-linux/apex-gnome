@@ -6,6 +6,9 @@ on:
   pull_request: {}
   push:
     branches: [main]
+  # Weekly, every lane rebuilt without the lane cache: reuse skips buildroot drift, this catches it.
+  schedule:
+    - cron: '17 4 * * 1'
 
 permissions: {}
 
@@ -162,6 +165,7 @@ jobs:
         run: tests/ptyxis/selftest.sh
 
       - uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+        if: github.event_name != 'schedule'
         with:
           path: _build/lane-cache
           key: lane-ptyxis-${{ github.run_id }}-${{ github.run_attempt }}
@@ -170,7 +174,7 @@ jobs:
       - name: tests/lib/lane.sh ptyxis
         id: lane
         env:
-          APEX_LANE_CACHE: _build/lane-cache
+          APEX_LANE_CACHE: ${{ github.event_name != 'schedule' && '_build/lane-cache' || '' }}
         run: tests/lib/lane.sh ptyxis
 
       # Only a build changes the cache; a reused key leaves it as it was.
@@ -224,6 +228,7 @@ jobs:
           persist-credentials: false
 
       - uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+        if: github.event_name != 'schedule'
         with:
           path: _build/lane-cache
           key: lane-libadwaita-${{ github.run_id }}-${{ github.run_attempt }}
@@ -232,7 +237,7 @@ jobs:
       - name: tests/lib/lane.sh libadwaita
         id: lane
         env:
-          APEX_LANE_CACHE: _build/lane-cache
+          APEX_LANE_CACHE: ${{ github.event_name != 'schedule' && '_build/lane-cache' || '' }}
         run: tests/lib/lane.sh libadwaita
 
       # Only a build changes the cache; a reused key leaves it as it was.
@@ -301,6 +306,7 @@ jobs:
           tests/control-center/state-test.sh
 
       - uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+        if: github.event_name != 'schedule'
         with:
           path: _build/lane-cache
           key: lane-gnome-control-center-${{ github.run_id }}-${{ github.run_attempt }}
@@ -309,7 +315,7 @@ jobs:
       - name: tests/lib/lane.sh gnome-control-center
         id: lane
         env:
-          APEX_LANE_CACHE: _build/lane-cache
+          APEX_LANE_CACHE: ${{ github.event_name != 'schedule' && '_build/lane-cache' || '' }}
         run: tests/lib/lane.sh gnome-control-center
 
       # Only a build changes the cache; a reused key leaves it as it was.
@@ -372,6 +378,7 @@ jobs:
         run: tests/nautilus/selftest.sh
 
       - uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+        if: github.event_name != 'schedule'
         with:
           path: _build/lane-cache
           key: lane-nautilus-${{ github.run_id }}-${{ github.run_attempt }}
@@ -380,7 +387,7 @@ jobs:
       - name: tests/lib/lane.sh nautilus
         id: lane
         env:
-          APEX_LANE_CACHE: _build/lane-cache
+          APEX_LANE_CACHE: ${{ github.event_name != 'schedule' && '_build/lane-cache' || '' }}
         run: tests/lib/lane.sh nautilus
 
       # Only a build changes the cache; a reused key leaves it as it was.
@@ -448,6 +455,7 @@ jobs:
           persist-credentials: false
 
       - uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+        if: github.event_name != 'schedule'
         with:
           path: _build/lane-cache
           key: lane-gnome-shell-${{ github.run_id }}-${{ github.run_attempt }}
@@ -456,7 +464,7 @@ jobs:
       - name: tests/lib/lane.sh gnome-shell
         id: lane
         env:
-          APEX_LANE_CACHE: _build/lane-cache
+          APEX_LANE_CACHE: ${{ github.event_name != 'schedule' && '_build/lane-cache' || '' }}
         run: tests/lib/lane.sh gnome-shell
 
       # Only a build changes the cache; a reused key leaves it as it was.
