@@ -4,7 +4,8 @@
 
 Asserts each shoot.sh case from its log's APEXLOCK lines and gdm-mock.py's log: what
 boards 20 and 12 show, that no case unlocks, that a wrong answer leaves the screen
-locked, that a GDM refusing to reauthenticate leaves it locked, that blanking cancels the conversation and waking starts a new one, that
+locked, that a GDM refusing to reauthenticate leaves it locked, that the fingerprint
+conversation stops while the screen is blank, that blanking cancels the conversation and waking starts a new one, that
 stock and safe mode keep upstream's lock, and that the greeter runs no Apex JS.
 Prints one line per assertion and exits 1 when one fails.
 """
@@ -198,6 +199,48 @@ def check_lock(shots, case, want):
               (LOAD_WITNESS in log) == want["layer"])
 
 
+def between(gdm_log, start, end):
+    """The mock's lines after the probe's step START and before END ("" for the log's start)."""
+    lines = gdm_log.splitlines()
+    first = lines.index(f"-- {start}") + 1 if start else 0
+    last = lines.index(f"-- {end}", first)
+    return lines[first:last]
+
+
+# pam_fprintd's texts reach the prompt through upstream's own; S4 owns the wording.
+FINGERPRINT_HINT = "(or place finger on reader)"
+FINGERPRINT_PROBLEM = "Failed to match fingerprint"
+
+
+def check_fingerprint(shots, case):
+    log, gdm = read(shots, f"{case}.log"), read(shots, f"{case}.gdm.log")
+    f = facts(log)
+    steps = ("opened", "scan-failed", "blank", "still-blank", "wake", "end")
+    check(f"{case}: every step is reported", all(step in f for step in steps))
+    if not all(step in f for step in steps):
+        return
+    for step in steps:
+        check(f"{case}: {step}: locked", f[step]["locked"] is True)
+    check(f"{case}: GDM never completes a verification", "VerificationComplete" not in gdm)
+    check(f"{case}: no JS error", "JS ERROR" not in until(log, "end") and "APEXLOCK-ERROR" not in log)
+    check(f"{case}: the shell found fprintd's reader", "GetDefaultDevice" in read(shots, f"{case}.fprintd.log"))
+    begun = "BeginVerificationForUser gdm-fingerprint apex"
+    check(f"{case}: a fingerprint conversation runs beside the password one",
+          any(line.endswith(begun) for line in between(gdm, "", "opened")))
+    check(f"{case}: the prompt says so, in upstream's words", (f["opened"]["prompt"] or {}).get("message") == FINGERPRINT_HINT,
+          json.dumps(f["opened"]["prompt"]))
+    check(f"{case}: a failed scan is shown, and the screen stays locked",
+          (f["scan-failed"]["prompt"] or {}).get("message") == FINGERPRINT_PROBLEM, json.dumps(f["scan-failed"]["prompt"]))
+    before_blank = between(gdm, "capture.scan-failed", "blank")
+    check(f"{case}: blanking cancels the conversation the reader was in", any(line.endswith(": Cancel") for line in before_blank),
+          json.dumps(before_blank))
+    blank = between(gdm, "blank", "still-blank")
+    check(f"{case}: while blank, no conversation starts and the reader is left alone", blank == [], json.dumps(blank))
+    check(f"{case}: blank: no prompt", f["blank"]["prompt"] is None and f["still-blank"]["prompt"] is None)
+    check(f"{case}: waking starts the reader's conversation again",
+          any(line.endswith(begun) for line in between(gdm, "still-blank", "wake")) and f["wake"]["prompt"] is not None)
+
+
 def check_refused(shots, case):
     log = read(shots, f"{case}.log")
     f = facts(log)
@@ -269,6 +312,7 @@ def main():
     for case, want in LOCK_CASES.items():
         check_lock(shots, case, want)
     check_refused(shots, "lock-refused")
+    check_fingerprint(shots, "lock-fingerprint")
     for case in GREETER_CASES:
         check_greeter(shots, case)
     return 1 if failed else 0

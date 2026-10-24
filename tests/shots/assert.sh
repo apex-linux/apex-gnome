@@ -434,6 +434,32 @@ shell_surfaces() {
             and (.actions | (.spacing | px_is($t.apex_banner_button_gap)) and (.padding.left | px_is(($t.apex_banner_icon_size | px) + ($t.apex_banner_gap | px))))'
 }
 
+# shellcheck disable=SC2016 # jq programs
+quick_settings_layer() {
+    local label=$1 log=$2 mode=$3 scenes q=.surfaces.quickSettingsLayer
+    scenes=$(report_of "$log" APEXG2-SCENES)
+    local order='([.order[].title]) as $t | ($t | index("VPN")) as $vpn | ($t | index("Airplane Mode")) as $airplane'
+    if [[ $mode == apex ]]; then
+        expect "$label Quick Settings" "$scenes" "$q | $order | \$vpn != null and \$airplane != null and \$vpn == \$airplane + 1" \
+            "the quick-settings feature puts VPN right after Airplane Mode (DESIGN's order)"
+        expect "$label Quick Settings" "$scenes" "$q.power | .visible and .lit and (.checked | not) and .subtitle == \"Balanced\"" \
+            "Power Mode at Balanced is lit through apex-lit, its checked state stock (unchecked)"
+        expect "$label Quick Settings" "$scenes" "$q.pillShowsPower == false" "the power-profile indicator stays out of the status pill"
+        expect "$label Quick Settings" "$scenes" "$q.dndSubtitle == \"Off\"" "a toggle without a subtitle of its own says Off"
+        expect "$label Quick Settings" "$scenes" "$q.switched | .checked and .lit and .subtitle != \"Balanced\"" \
+            "a click switches Power Mode from Balanced to the last profile, still lit"
+        expect "$label Quick Settings" "$scenes" "$q.back | (.checked | not) and .lit and .subtitle == \"Balanced\"" \
+            "and a second click back to Balanced"
+    else
+        expect "$label Quick Settings" "$scenes" "$q | $order | \$vpn != null and \$airplane != null and \$vpn < \$airplane" \
+            "stock's order: VPN with the network toggles, before Airplane Mode"
+        expect "$label Quick Settings" "$scenes" "($q.power | .visible and (.lit | not) and (.checked | not)) and $q.dndSubtitle == null" \
+            "stock: Power Mode unlit at Balanced, no On/Off subtitles"
+        expect "$label Quick Settings" "$scenes" "$q.switched.checked and ($q.back.checked | not)" \
+            "stock: a click switches Power Mode to the last profile and back"
+    fi
+}
+
 # shellcheck disable=SC2016 # jq programs and token names, not shell expansions
 quick_settings() {
     local label=$1 log=$2 variant=$3 scenes tokens
@@ -491,6 +517,8 @@ quick_settings() {
             and (.title.font.size | px_is($t.apex_font_quick_menu_title_size)) and .title.font.weight == ($t.apex_font_heading_weight | tonumber)'
     "${metric[@]}" 'its rows are $apex_quick_menu_row_height high, padded $apex_menu_row_padding, radius $apex_radius_menu_row' \
         "$q.wifiMenu.rows" 'length > 0 and all((.height | px_is($t.apex_quick_menu_row_height)) and (.padding.left | px_is($t.apex_menu_row_padding)) and (.radius | px_is($t.apex_radius_menu_row)))'
+    "${metric[@]}" 'its rows hover in $apex_quick_menu_row_hover, lighter than popup menus' \
+        "$q.wifiMenu" '.rowHover.background | colour_is($t.apex_quick_menu_row_hover)'
 }
 
 # shellcheck disable=SC2016 # jq programs and token names, not shell expansions
@@ -851,6 +879,8 @@ spotlight_style() {
             and (.check | (.width | px_is($t.apex_toast_check_size)) and (.height | px_is($t.apex_toast_check_size)) and .radius >= ($t.apex_toast_check_size | px) / 2
                 and (.background | colour_is($a)) and (.icon | px_is($t.apex_toast_check_icon_size)))
             and .label.text == "Copied 1920"'
+    "${metric[@]}" 'typing in the overview opens Spotlight with the typed text and clears the overview'"'"'s own search (patch 0013)' \
+        '.surfaces.overviewSearch' '.opened and .text == "disk" and .overviewText == ""'
 }
 
 scenes_captured() {
@@ -959,6 +989,8 @@ fixtures_on_the_bus() {
             "NetworkManager: \"Apex-2.4G\" and the open \"Library Guest\" are in range too"
         expect "fixtures ($part)" "$fixtures" '.keyboard | .alias == "Keychron K3" and .connected and .icon == "input-keyboard"' \
             "BlueZ: the keyboard \"Keychron K3\" is connected"
+        expect "fixtures ($part)" "$fixtures" '.powerProfiles | .active == "balanced" and (.profiles | index("performance") != null)' \
+            "power-profiles-daemon: Balanced, with Performance to switch to"
         expect "fixtures ($part)" "$fixtures" '.gpus | .hasDualGpu and .names == ["Intel Graphics", "NVIDIA GeForce RTX 4060"]' \
             "switcheroo-control: an integrated and a discrete GPU"
     done
@@ -1055,6 +1087,7 @@ direct_cases() {
     dock_metrics default "$f" light
     shell_surfaces default "$f" light
     quick_settings default "$f" light
+    quick_settings_layer default "$f" apex
     window_switcher default "$f" light
     modal_dialog default "$f" light
     date_menu default "$f" light
@@ -1077,6 +1110,7 @@ direct_cases() {
     dock_metrics default-scale1 "$f" light
     shell_surfaces default-scale1 "$f" light
     quick_settings default-scale1 "$f" light
+    quick_settings_layer default-scale1 "$f" apex
     window_switcher default-scale1 "$f" light
     modal_dialog default-scale1 "$f" light
     date_menu default-scale1 "$f" light
@@ -1102,6 +1136,7 @@ direct_cases() {
     dock_metrics dark-style "$f" dark
     shell_surfaces dark-style "$f" dark
     quick_settings dark-style "$f" dark
+    quick_settings_layer dark-style "$f" apex
     window_switcher dark-style "$f" dark
     modal_dialog dark-style "$f" dark
     date_menu dark-style "$f" dark
@@ -1118,6 +1153,7 @@ direct_cases() {
         exits "$run" "$c" 0
         stock_view "$c" "$run/$c.log" "${c#stock-}"
         no_dock "$c" "$run/$c.log"
+        quick_settings_layer "$c" "$run/$c.log" stock
         no_apex_failure "$c" "$run/$c.log"
     done
     stock_thumbnails "$run"

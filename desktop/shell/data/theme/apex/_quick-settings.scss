@@ -70,7 +70,9 @@ $_toggle_states: hover, focus, active;
     &:#{$state} { color: $apex_fg; background-color: $apex_button_hover; }
   }
 
-  &:checked, &:checked:hover, &:checked:focus, &:checked:active {
+  // apex-lit: the quick-settings feature lights Power Mode at every profile (DESIGN).
+  &:checked, &:checked:hover, &:checked:focus, &:checked:active,
+  .apex-lit &, .apex-lit &:hover, .apex-lit &:focus, .apex-lit &:active {
     color: -st-accent-fg-color;
     background-color: $apex_accent;
   }
@@ -92,7 +94,7 @@ $_toggle_states: hover, focus, active;
     color: transparentize($apex_fg, 1 - $apex_quick_toggle_subtitle_opacity);
   }
 
-  &:checked .quick-toggle-subtitle {
+  &:checked .quick-toggle-subtitle, .apex-lit & .quick-toggle-subtitle {
     color: st-transparentize(-st-accent-fg-color, 1 - $apex_quick_toggle_subtitle_opacity);
   }
 }
@@ -125,6 +127,13 @@ $_toggle_states: hover, focus, active;
     }
 
     StIcon { icon-size: $apex_quick_settings_icon_size; }
+  }
+
+  &.apex-lit .quick-toggle-menu-button {
+    &, &:hover, &:focus, &:active {
+      color: -st-accent-fg-color;
+      background-color: st-mix(black, $apex_accent, $apex_quick_toggle_menu_button_shade);
+    }
   }
 }
 
@@ -193,6 +202,7 @@ $_toggle_states: hover, focus, active;
     min-height: $apex_quick_menu_row_height;
     spacing: $apex_quick_menu_row_spacing;
 
+    &:hover, &:focus, &:selected, &:active { background-color: $apex_quick_menu_row_hover; }
     & > StIcon { icon-size: $apex_quick_settings_icon_size; }
   }
 

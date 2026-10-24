@@ -19,6 +19,7 @@ directory with `git archive` and unpacks it at the top of Fedora's gnome-shell t
 | `js/ui/apex/layer.js` | the layer: the configure and enable phases, one `try/catch` per feature, the session-mode colour hook, the crash guard's marker file |
 | `js/ui/apex/motion/feature.js` | DESIGN's motion (below): one curve and fixed durations through patch 0016's hooks |
 | `js/ui/apex/spotlight/` | Spotlight (below): `feature.js` (Super+Space), `search.js` (the sections, caps and budget), `providers.js` (the stock providers), `popup.js` and `toast.js` |
+| `js/ui/apex/quick-settings/feature.js` | DESIGN's Quick Settings (below): VPN after Airplane Mode, Power Mode lit, On/Off subtitles, through patch 0011's hook |
 | `js/ui/apex/panel/feature.js` | the top bar of S2a (below): its parts in `panel/`, one module each |
 | `js/ui/apex/glass/feature.js` | the glass manager of S2b (below), with `glass/surfaces.js`, the layer's own glass, and `glass/registry.js`, where any feature registers an actor |
 | `js/ui/apex/dock/feature.js`, `dock.js`, `trash.js` | the dock of S2a (below): ApexDock, a subclass of upstream's `Dash`, and its Trash |
@@ -31,7 +32,7 @@ directory with `git archive` and unpacks it at the top of Fedora's gnome-shell t
 | `data/theme/apex/_popup-menus.scss` | stock popup menus (board 16): solid `$apex_panel_solid`, radius 14, 34 px rows, the board's inset ring as a 1 px border and its first shadow (St draws one). The calendar and Quick Settings popovers take it too until their own partials |
 | `data/theme/apex/_osd.scss` | the OSD (board 16): a 40 px pill tinted `$apex_panel`, its level 180 × 6 in the accent, 104 px above the screen's bottom edge |
 | `data/theme/apex/_notification-banner.scss` | the notification banner (board 16) on stock structure: 460 px, tinted `$apex_panel`, 12 px below the bar. Stock shows the action buttons only once a banner expands; they are the board's 32 px pills. The OSD and the banner are glass: the tint now, S2b's glass manager blurs behind it |
-| `data/theme/apex/_quick-settings.scss` | Quick Settings and its stock submenus (board 17): a 376 px glass panel, radius 26, 14 px inset; 36 px round buttons and battery pill; 54 px toggles, the accent when checked, the menu arrow shaded 12 % with black; accent sliders with a white 20 px handle; submenus as `$apex_card` cards with 38 px rows. BoxPointer's one `-arrow-rise` sets both the 6 px gap under the bar and the side clamp, so the panel sits 6 px from the right edge, not the board's 8 |
+| `data/theme/apex/_quick-settings.scss` | Quick Settings and its stock submenus (board 17): a 376 px glass panel, radius 26, 14 px inset; 36 px round buttons and battery pill; 54 px toggles, the accent when checked, the menu arrow shaded 12 % with black; accent sliders with a white 20 px handle; submenus as `$apex_card` cards with 38 px rows. BoxPointer's one `-arrow-rise` sets both the 6 px gap under the bar and the side clamp, so the panel sits 6 px from the right edge, not the board's 8 Submenu rows hover in board 17's lighter `$apex_quick_menu_row_hover` (popup menus elsewhere keep `$apex_button_hover`),. |
 | `data/theme/apex/_switcher.scss` | the window and app switcher (board 15): a glass list, radius 26, 14 px inset, tiles 6 px apart with radius 16, the selected tile in `$apex_button_hover`, names at 13.5/600. `altTab.js` sizes the icons (96 px at most) and labels every tile, so the tiles are larger than the board's 120 × 116 with 84 px icons, the window dots and the one name under the list; those need a hook |
 | `data/theme/apex/_dialogs.scss` | modal dialogs (boards 13 and 14): solid `$apex_panel_solid`, radius 26, inset 28 (22 at the bottom), 18 px between parts; a 20/700 title over `$apex_fg_dim` text; 36 px round buttons, the default one in the accent; polkit's password entry a 38 px round field with a 2 px accent ring when focused; 440 px polkit and 460 px end-session widths. `dialog.js` keeps its 12 px gap between buttons, and the lightbox its 0.4 dim |
 | `data/theme/apex/_date-menu.scss` | the calendar and notifications popover (board 34) on stock structure: glass like Quick Settings, a 400 px list beside a 318 px column 14 px apart; notification cards radius 18 (opaque `$apex_message_card`, since a group stacks its cards), a 40 px footer with a 32 px Clear pill; the weekday over a 20/800 date; the month, events, World Clocks and Weather as `$apex_glass_card` cards; 36 px round days filling seven columns, the accent today, `$apex_fg_faint` other months. Stock keeps the Do Not Disturb switch in Quick Settings, Clear on the left, grouped notifications, the month name between the pagers and its event-dot asset |
@@ -73,6 +74,11 @@ overview modes, so it does nothing while Spotlight is open (no hook); with Spotl
 it opens the overview as before.
 apex-desktop's override moves `switch-input-source` to Super+Alt+Space, so nothing else
 owns Super+Space; a Super tap (the overview) and Super+A (the launcher) are upstream's.
+
+DESIGN's one engine: text typed in the overview, or its search pill taking the key focus,
+opens Spotlight with that text through patch 0013's `overview-search` hook, and the overview's
+own search resets; activating a result hides the overview. With `spotlight` off the hook gives
+stock, and the overview searches as upstream does.
 
 Spotlight draws its own rows over the stock search providers: upstream's app search
 (`AppSearchProvider`), then the remote providers `remoteSearch.js` loads, of which it keeps
@@ -142,6 +148,18 @@ DESIGN's duration: `window` (the size change's two eases) .3 s, `overview` (the 
 state transitions in and out and to and from the app grid) .2 s, `popover` (a BoxPointer
 opening and closing) .18 s. The dock's .38 s is the dock's. `adjustAnimationTime` runs
 after the hooks, so `enable-animations=false` keeps stock's 0 ms.
+
+`quick-settings/feature.js` follows DESIGN's Quick Settings (ROADMAP S3c) once patch 0011's
+`quick-settings` hook says the items are in the grid. It moves the VPN toggle right after
+Airplane Mode, the end of DESIGN's order (Wi-Fi, Bluetooth, Power Mode, Night Light, Dark
+Style, Do Not Disturb, Airplane Mode, VPN). It lights Power Mode at every profile with the
+`apex-lit` class, which `_quick-settings.scss` styles as `:checked`; the toggle's `checked`
+stays stock, so a click still switches between Balanced and the last profile, and the
+status pill keeps the power-profile indicator out (`panel/status-pill.js`). A toggle with no
+subtitle of its own reads "On" or "Off" from `checked`; one that sets its own (Wi-Fi's
+network, Bluetooth's device, Power Mode's profile) keeps it, and gets ours back once it
+drops it. Disabled, the feature puts VPN back, unlights Power Mode and clears only the
+subtitles it wrote.
 
 `glass` is ADR 0014's glass manager, on patch 0003's `ShellBlurEffect`. A surface is any
 actor in `glass/registry.js`: the top bar, Quick Settings, the calendar and each banner

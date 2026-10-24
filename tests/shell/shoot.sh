@@ -16,8 +16,9 @@ usage: tests/shell/shoot.sh RPM_DIR
 The lock screen and the greeter of the gnome-shell RPMs in RPM_DIR (the lane's
 _build/gnome-shell/out), headless at scale 2, as root in a throwaway fedora:$APEX_FEDORA
 container (just lock-shots). gdm-mock.py stands in for GDM: it asks one question and
-fails every answer, so no case can unlock; lock-refused's GDM refuses even to ask. Each lock case locks, answers wrongly, blanks
-and wakes the screen; each greeter case (--mode=gdm) shows the user list, then the
+fails every answer, so no case can unlock; lock-refused's GDM refuses even to ask, and
+lock-fingerprint's also runs gdm-fingerprint against fprintd-mock.py's reader. Each lock
+case locks, answers wrongly (lock-fingerprint fails a scan), blanks and wakes the screen; each greeter case (--mode=gdm) shows the user list, then the
 prompt. check.py asserts the cases' logs and the mock's. The users apex and guest come
 from accounts-daemon; the wallpapers, the greeter's background and its logo are apex-desktop's ($APEX_DESKTOP_REV, or
 APEX_DESKTOP_SRC, a checkout). Captures and logs land in _build/gnome-shell/shots/.
@@ -42,6 +43,7 @@ readonly CLOCK_LIB=/run/apex-lock-clock.so
 readonly FIXTURE_NAMES=(org.freedesktop.UPower org.freedesktop.NetworkManager org.bluez)
 readonly GDM_NAME=org.gnome.DisplayManager
 readonly LOGIND_NAME=org.freedesktop.login1
+readonly FPRINT_NAME=net.reactivated.Fprint
 # layer.js warns that this names no fault phase as it loads: the witness that it loaded.
 readonly LOAD_WITNESS=APEX_SHELL_TEST_FAULT=load-witness
 readonly CLOCK='2026-10-21 10:24:00'
@@ -122,11 +124,11 @@ mkdir -p /run/systemd/seats
 mkdir -p /run/dbus /etc/dbus-1 /tmp/.X11-unix && chmod 1777 /tmp/.X11-unix
 {
     echo '<busconfig><policy user="root">'
-    for name in "${FIXTURE_NAMES[@]}" "$GDM_NAME" "$LOGIND_NAME"; do
+    for name in "${FIXTURE_NAMES[@]}" "$GDM_NAME" "$LOGIND_NAME" "$FPRINT_NAME"; do
         printf '<allow own="%s"/><allow send_destination="%s"/>\n' "$name" "$name"
     done
     printf '</policy><policy context="default">'
-    printf '<allow send_destination="%s"/>' "$GDM_NAME" "$LOGIND_NAME"
+    printf '<allow send_destination="%s"/>' "$GDM_NAME" "$LOGIND_NAME" "$FPRINT_NAME"
     printf '</policy></busconfig>\n'
 } >/etc/dbus-1/system-local.conf
 [[ -S /run/dbus/system_bus_socket ]] || dbus-daemon --system --fork || die "no system bus"
@@ -151,7 +153,8 @@ held=$(env LD_PRELOAD="$CLOCK_LIB" G2_CLOCK_EPOCH="$clock_epoch" date -u '+%F %T
 
 # shoot NAME USER MODE SCHEME QUESTION [SETTING...] [-- ENV...]
 shoot() {
-    local name=$1 user=$2 mode=$3 scheme=$4 question=$5 run rc settings home mock
+    local name=$1 user=$2 mode=$3 scheme=$4 question=$5 run rc settings home mock fprintd=''
+    local -a fingerprint=()
     shift 5
     settings="$APEX_SETTINGS"$'\n'"$CAPTURE_SETTINGS"$'\n'"org.gnome.desktop.interface color-scheme '$scheme'"
     while (($#)) && [[ $1 != -- ]]; do settings+=$'\n'"$1"; shift; done
@@ -160,10 +163,16 @@ shoot() {
     rm -rf "$home/.config/dconf"
     run=$(mktemp -d)
     chown "$user:" "$run" && chmod 700 "$run"
-    python3 "$HERE/gdm-mock.py" "$out/$name.gdm.log" "$question" 2>"$out/$name.gdm.err" &
+    if [[ " $* " == *" APEX_FINGERPRINT=1 "* ]]; then
+        fingerprint=(--fingerprint)
+        python3 "$HERE/fprintd-mock.py" "$out/$name.fprintd.log" 2>"$out/$name.fprintd.err" &
+        fprintd=$!
+    fi
+    python3 "$HERE/gdm-mock.py" "$out/$name.gdm.log" "$question" "${fingerprint[@]}" 2>"$out/$name.gdm.err" &
     mock=$!
     for _ in $(seq 100); do
-        grep -qx "owns $GDM_NAME" "$out/$name.gdm.log" 2>/dev/null && break
+        grep -qx "owns $GDM_NAME" "$out/$name.gdm.log" 2>/dev/null &&
+            { [[ -z $fprintd ]] || grep -qx "owns $FPRINT_NAME" "$out/$name.fprintd.log" 2>/dev/null; } && break
         sleep 0.1
     done
     # shellcheck disable=SC2016 # expanded by the user's bash
@@ -179,7 +188,7 @@ shoot() {
                 --wayland-display=apex-lock --mode='"$mode"' --automation-script '"$HERE"'/probe.js
         ' >"$out/$name.log" 2>&1
     rc=$?
-    kill "$mock" 2>/dev/null
+    kill "$mock" ${fprintd:+"$fprintd"} 2>/dev/null
     wait "$mock" 2>/dev/null
     log "shoot.sh: $name: exit $rc"
     grep -q '^.*APEXLOCK ' "$out/$name.log"
@@ -200,6 +209,14 @@ shoot lock-safe "$USER_NAME" user default 'Password:' -- APEX_SHELL_SAFE=1 || st
 shoot lock-refused "$USER_NAME" user default '' || status=1
 shoot lock-high-contrast "$USER_NAME" user default 'Password:' "org.gnome.desktop.a11y.interface high-contrast true" || status=1
 shoot lock-large-text "$USER_NAME" user default 'Password:' "org.gnome.desktop.interface text-scaling-factor 1.25" || status=1
+# authselect locks GDM's fingerprint key off; an image with a reader enables the feature.
+if ! authselect enable-feature with-fingerprint >"$out/authselect.log" 2>&1 || ! dconf update; then
+    die "authselect cannot enable with-fingerprint; see ${out#"$APEX_ROOT/"}/authselect.log"
+fi
+shoot lock-fingerprint "$USER_NAME" user default 'Password:' -- APEX_FINGERPRINT=1 || status=1
+if ! authselect disable-feature with-fingerprint >>"$out/authselect.log" 2>&1 || ! dconf update; then
+    log "authselect: cannot disable with-fingerprint"
+fi
 ((status == 0)) || die "shoot.sh: a case failed; see ${out#"$APEX_ROOT/"}/*.log"
 python3 "$HERE/check.py" "$out" || die "shoot.sh: the cases' assertions failed"
 log "shoot.sh: captures in ${out#"$APEX_ROOT/"}"

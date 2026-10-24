@@ -43,6 +43,7 @@ const STRUCTURE_MARKER = '/*! apex-shell-structure */';
 const LAYER_ENABLED_KEY = 'layer-enabled';
 const SEARCH_HINT_KEY = 'search-hint-shown';
 const OSD_LEVEL = 0.62;
+const POWER_PROFILE_WAIT_MS = 3000;
 const MOTION_WINDOW_ID = 'io.github.apex_linux.G2Window';
 const MOTION_WAIT_MS = 10000;
 const MOTION_SETTLE_MS = 1000;
@@ -893,6 +894,8 @@ async function quickSettings(unit) {
                 title: styleOf(find(header, 'title'), unit),
                 subtitle: styleOf(find(header, 'subtitle'), unit),
                 rows: wifi.menu._getMenuItems().filter(i => i.visible && i.label?.text).map(i => styleOf(i, unit)),
+                rowHover: (row => row && underPseudoClass(row, 'hover', () => paint(row.get_theme_node(), unit)))(
+                    wifi.menu._getMenuItems().find(i => i.visible && i.label?.text)),
                 separator: styleOf(wifi.menu._getMenuItems().find(i => i instanceof PopupMenu.PopupSeparatorMenuItem), unit),
             } : null,
         };
@@ -901,6 +904,44 @@ async function quickSettings(unit) {
         menu.close(BoxPointer.PopupAnimation.NONE);
         await settle();
     }
+}
+
+// The quick-settings feature: the toggles' order, Power Mode lit, On/Off subtitles; then two
+// clicks on Power Mode, which stock answers by switching to the last profile and back.
+async function quickSettingsLayer() {
+    const indicator = Main.panel.statusArea.quickSettings;
+    // Without a VPN connection the VPN toggle is hidden and has no title.
+    const name = t => t.constructor.name === 'NMVpnToggle' ? 'VPN' : t.title;
+    const toggles = indicator.menu._grid.get_children().filter(t => 'checked' in t && name(t));
+    const power = indicator._powerProfiles?.quickSettingsItems[0] ?? null;
+    const dnd = toggles.find(t => t.constructor.name === 'DoNotDisturbToggle');
+    const powerState = () => power && {
+        lit: power.has_style_class_name('apex-lit'),
+        checked: power.checked,
+        subtitle: power.subtitle,
+        visible: power.visible,
+    };
+    const clickPower = async () => {
+        const before = power.checked;
+        power.emit('clicked', Clutter.BUTTON_PRIMARY);
+        for (let waited = 0; power.checked === before && waited < POWER_PROFILE_WAIT_MS; waited += 50)
+            // eslint-disable-next-line no-await-in-loop
+            await Scripting.sleep(50);
+        await settle();
+        return powerState();
+    };
+    const state = {
+        order: toggles.map(t => ({title: name(t), visible: t.visible})),
+        power: powerState(),
+        pillShowsPower: indicator._powerProfiles?.get_parent() === indicator._indicators &&
+            indicator._powerProfiles.visible,
+        dndSubtitle: dnd?.subtitle ?? null,
+    };
+    if (power?.visible) {
+        state.switched = await clickPower();
+        state.back = await clickPower();
+    }
+    return state;
 }
 
 // G2 opens no windows, so the switcher is a stock SwitcherList of AppIcon-shaped items.
@@ -1185,6 +1226,25 @@ async function spotlightStyle(unit) {
         popup.destroy();
         await settle();
     }
+}
+
+// Text typed in the overview reaches its search entry; patch 0013 hands it to Spotlight.
+async function overviewSearch() {
+    const feature = await import('resource:///org/gnome/shell/ui/apex/spotlight/feature.js').catch(() => null);
+    const popup = feature?.popup();
+    if (!popup)
+        return null;
+    const entry = Main.overview._overview.controls._searchEntry;
+    entry.set_text('disk');
+    await settle();
+    const result = {
+        opened: popup.isOpen,
+        text: popup.isOpen ? popup.panel.get_children()[0].get_children()[1].get_text() : null,
+        overviewText: entry.get_text(),
+    };
+    popup.close();
+    await settle();
+    return result;
 }
 
 // What the overview draws without windows; a caption and a search section are stand-ins.
@@ -1473,6 +1533,7 @@ async function scenes() {
     bar.largeText = await withLargeText();
     const surfaces = await shellSurfaces(unit);
     surfaces.quickSettings = await quickSettings(unit);
+    surfaces.quickSettingsLayer = await quickSettingsLayer();
     surfaces.switcher = await windowSwitcher(unit);
     surfaces.dialog = await modalDialog(unit);
     surfaces.dateMenu = await calendarMenu(unit);
@@ -1492,6 +1553,7 @@ async function scenes() {
         dockClearance: dockClearance(unit),
     };
     surfaces.overview = overviewStyle(unit);
+    surfaces.overviewSearch = await overviewSearch();
     surfaces.overviewLayer = await overviewLayer(unit);
     surfaces.appGrid = await appGrid(unit);
     delete overview.bytes;

@@ -68,8 +68,9 @@ shell with exit 1.
 
 Before the first case, `direct.sh` lets root own and call the fixtures' names on the
 container's system bus (`/etc/dbus-1/system-local.conf`) and runs `fixtures.py`, which
-starts python-dbusmock's `upower`, `networkmanager` and `bluez5` templates there, and a bare
-mock of switcheroo-control, which has no template:
+starts python-dbusmock's `upower`, `networkmanager` and `bluez5` templates there, a bare
+mock of switcheroo-control, which has no template, and (`G2_POWER_PROFILES=1`)
+`upower_power_profiles_daemon`:
 
 | Service | Fixture | The shell shows |
 |---|---|---|
@@ -77,6 +78,7 @@ mock of switcheroo-control, which has no template:
 | NetworkManager | the primary connection: Wi-Fi "Apex-5G" at signal 90, connected globally, with "Apex-2.4G" (72) and the open "Library Guest" (48) in range, each with WPA2's ciphers or none, as libnm needs to list a network | `network-wireless-signal-excellent-symbolic`, and three networks in the Wi-Fi menu |
 | BlueZ | the Bluetooth keyboard "Keychron K3", paired and connected | no glyph: the status pill shows network, volume and battery only (the `panel` feature) |
 | switcheroo-control | two GPUs, "Intel Graphics" the default and "NVIDIA GeForce RTX 4060" (`HasDualGpu`) | "Launch Using Discrete Graphics Card" in an app's menu, the dock's included |
+| power-profiles-daemon | the Balanced profile, with Power Saver and Performance | the Power Mode toggle, lit at Balanced (the `quick-settings` feature); no glyph in the status pill |
 
 `fixtures-PART.txt` holds what the bus reports afterwards, and `assert.sh` checks it for
 each container. `direct.sh` builds `clock.c` and preloads it into each shell with
@@ -257,6 +259,14 @@ in the heading row, the area buttons (Window insensitive with no window), the po
 the capture button and its recording state, the screenshot/screencast switch, the selection's
 shade, outline and handles, then the screen mode's frame; a checked window frame is a stand-in.
 
+`quick_settings_layer` checks the `quick-settings` layer feature in the same cases, and
+stock in the stock cases. The probe reads the grid's toggles in order (the VPN toggle by
+its class: it has no title without a VPN connection), Power Mode, the status pill and Do
+Not Disturb's subtitle, then clicks Power Mode twice: VPN right after Airplane Mode, Power
+Mode lit through `apex-lit` with `checked` stock, the power-profile indicator out of the
+pill, "Off" under a toggle without a subtitle of its own, and the clicks switching to the
+last profile and back, still lit. Stock keeps VPN before Airplane Mode and nothing lit.
+
 `derived_surfaces` reads surfaces with no board, which G2 never opens, from nested
 stand-ins in the same cases: the workspace switcher and its dots, the resize popup, the
 input method's candidates and a candidate, the run dialog's entry, an audio device tile
@@ -271,7 +281,9 @@ shadow; the field, its glyph, text and hint; the results' line and inset; the se
 headers in board order; the rows, the selected row's accent tint, verb and Enter chip; the
 calculator's result in tabular figures with Calculator as the first application; that an
 empty query shows only the field, and the row of a query with no results; and, after Enter on the result, that Spotlight closed and the toast's size, tint,
-inset, check circle, text and distance from the bottom edge.
+inset, check circle, text and distance from the bottom edge. In the overview scene, after its capture, the probe
+types into the overview's search entry and checks that Spotlight opened with the text and
+the overview's own field emptied (patch 0013's hook).
 
 None of these surfaces is in a capture compared with Fedora, so the comparison with Fedora's build
 is unchanged: the Apex overview is compared only run to run, and safe mode's with Fedora's.

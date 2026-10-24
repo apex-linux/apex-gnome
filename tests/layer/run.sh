@@ -337,12 +337,39 @@ fact "disabled-features=['motion']: an actor's default stays Clutter's" 'motion\
 fact "disabled-features=['motion']: no curve is set" 'motion\.curve=stock'
 fact "disabled-features=['motion']: stock durations" 'motion\.durations=window=250 overview=250 popover=250 unknown=250'
 
-probe spotlight-disabled "$CMDLINE_PLAIN" PROBE_DISABLED=spotlight PROBE_ENABLE=1 PROBE_PRESS=1
+probe quick-settings "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_QUICK_SETTINGS=1
+has "quick-settings: the feature enables" 'Apex: feature quick-settings enabled'
+fact "quick-settings: VPN after Airplane Mode (DESIGN's order)" \
+    'qs\.order=Wi-Fi,Bluetooth,Power Mode,Night Light,Dark Style,Do Not Disturb,Airplane Mode,VPN,Auto Rotate'
+fact "quick-settings: On or Off under a toggle without a subtitle; a toggle's own subtitle stays" \
+    'qs\.subtitles=Wi-Fi=Home,Bluetooth=Off,Power Mode=Balanced,Night Light=Off,Dark Style=Off,Do Not Disturb=Off,Airplane Mode=Off,VPN=Off,Auto Rotate=Off'
+fact "quick-settings: Power Mode lit at Balanced, its checked state stock" 'qs\.power=checked=false classes=apex-lit'
+fact "quick-settings: the state follows checked; a subtitle the toggle sets wins" 'qs\.live=dnd=On bluetooth=Headphones'
+fact "quick-settings: once the toggle drops its own, ours follows again" 'qs\.own-subtitle-gone=bluetooth=On'
+fact "quick-settings: layer off: stock order" \
+    'qs\.off\.order=Wi-Fi,VPN,Bluetooth,Power Mode,Night Light,Dark Style,Do Not Disturb,Airplane Mode,Auto Rotate'
+fact "quick-settings: layer off: only the toggles' own subtitles" \
+    'qs\.off\.subtitles=Wi-Fi=Home,VPN=-,Bluetooth=-,Power Mode=Balanced,Night Light=-,Dark Style=-,Do Not Disturb=-,Airplane Mode=-,Auto Rotate=-'
+fact "quick-settings: layer off: Power Mode unlit" 'qs\.off\.power=checked=false classes=none'
+fact "quick-settings: layer back on: DESIGN's order again" \
+    'qs\.on\.order=Wi-Fi,Bluetooth,Power Mode,Night Light,Dark Style,Do Not Disturb,Airplane Mode,VPN,Auto Rotate'
+fact "quick-settings: layer back on: lit again" 'qs\.on\.power=checked=false classes=apex-lit'
+
+probe quick-settings-disabled "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_QUICK_SETTINGS=1 PROBE_DISABLED=quick-settings
+has "disabled-features=['quick-settings']: skips the feature" 'Apex: feature quick-settings is in disabled-features'
+fact "disabled-features=['quick-settings']: stock order" \
+    'qs\.order=Wi-Fi,VPN,Bluetooth,Power Mode,Night Light,Dark Style,Do Not Disturb,Airplane Mode,Auto Rotate'
+fact "disabled-features=['quick-settings']: Power Mode unlit" 'qs\.power=checked=false classes=none'
+
+probe spotlight-disabled "$CMDLINE_PLAIN" PROBE_DISABLED=spotlight PROBE_ENABLE=1 PROBE_PRESS=1 PROBE_OVERVIEW_SEARCH=1
 has "disabled-features=['spotlight']: skips the feature" 'Apex: feature spotlight is in disabled-features'
 keybindings_are "disabled-features=['spotlight']: no Super+Space binding" ''
 fact "disabled-features=['spotlight']: Super+Space opens nothing" 'press\.1=overview=false spotlight=false'
 fact "disabled-features=['spotlight']: no handler gets the press" 'unbound-press=toggle-spotlight'
 fact "disabled-features=['spotlight']: the rest of the layer runs" 'scheme\.user\.after-enable=prefer-light'
+fact "disabled-features=['spotlight']: the overview's search stays stock" 'overview-search=stock'
+lacks "disabled-features=['spotlight']: and is not reset" 'overview-search\.reset'
+
 
 probe spotlight-live "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_DISABLE_LIVE=spotlight
 keybindings_are "spotlight in and out of disabled-features, and the layer off and on: the binding follows each change" \
@@ -403,6 +430,12 @@ fact "spotlight: a click outside closes it" 'spotlight\.click-outside=closed'
 fact "spotlight: hovering a row selects it" "spotlight\.hover=APPLICATIONS: Disks Disk Usage Analyzer\*Open .*"
 fact "spotlight: clicking a row activates it" 'spotlight\.launched=org\.gnome\.baobab\.desktop'
 fact "spotlight: closing leaves no popup on the stage" 'spotlight\.stage=0'
+fact "spotlight: text typed in the overview opens Spotlight with it, through 0013's hook" \
+    "spotlight\.from-overview=true APPLICATIONS: Disks\*Open Disk Usage Analyzer Disk Benchmark Disk Images \| $SETTINGS \| $FILES"
+fact "spotlight: and resets the overview's own search" 'spotlight\.overview-reset=yes'
+fact "spotlight: while Spotlight is open the overview's search keeps its stock path" 'spotlight\.from-overview-again=false'
+fact "spotlight: activating a result from the overview closes Spotlight and hides the overview" 'spotlight\.from-overview-enter=closed overview=false'
+fact "spotlight: the overview's search pill taking the focus opens Spotlight with an empty field" 'spotlight\.from-overview-focus=true field only'
 fact "spotlight: put in disabled-features while open, it closes and goes" 'spotlight\.live-disabled=0 popup=true'
 fact "spotlight: taken out again, Super+Space opens it afresh" 'spotlight\.live-enabled=field only'
 count_is "spotlight: every grab is given back" '^probe: modal\.push=' "$(grep -c '^probe: modal\.pop=' "$OUT")"
