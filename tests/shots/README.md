@@ -278,7 +278,9 @@ mode at `$apex_overview_scrim_blur` and `$apex_overview_scrim_saturation`, and a
 `$apex_launcher_scrim_*` tokens while the app grid shows, with the bar's glass on over it.
 A stand-in window in `window_group` (a `Clutter.Actor`: St restyles no unmapped actor)
 changes colour under the scrim: with the damage forwarded as the manager forwards a
-window's, the frame equals a full redraw; without, the blur's halo stays stale (the control).
+window's, the frame equals a full redraw; without, the blur's halo stays stale (the control). The derived glass: an
+OSD shown, an Alt+Tab list in a stand-in popup and the screenshot panel (styled while closed)
+each carry the popovers' `$apex_panel_blur` and `$apex_panel_saturation`.
 
 `G2_GLASS=1 G2_GLASS_STRESS=SECONDS` runs a stress instead, by hand: for that long a
 stand-in window moves and tiles change under the box, every other change forwarded. Each

@@ -4,6 +4,7 @@
 // overview's and the launcher's scrims.
 
 import * as Main from '../../main.js';
+import * as Derived from './derived.js';
 import * as Registry from './registry.js';
 import * as Scrims from './scrims.js';
 
@@ -34,7 +35,9 @@ export function register() {
     Registry.register(dateMenu.menu.box, {name: 'calendar'});
     const unregisterBanners = _banners();
     const removeScrim = Scrims.register();
+    const removeDerived = Derived.register();
     return () => {
+        removeDerived();
         removeScrim();
         unregisterBanners();
         [Main.panel, quickSettings.menu.box, dateMenu.menu.box].forEach(actor => Registry.unregister(actor));

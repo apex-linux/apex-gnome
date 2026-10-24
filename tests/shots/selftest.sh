@@ -1279,11 +1279,12 @@ CHANGES
         | {manager: {monitorScale: 2, glass: $g, reduceTransparency: ($none + {solidClass: true}), highContrast: ($none + {solidClass: true}),
             disabled: ($none + {solidClass: false}), restored: $g,
             scrims: {overview: $scrim, launcher: ($scrim + {radius: 160, saturation: 1.6}), hidden: ($scrim + {enabled: false}), barOverScrim: $on,
-                unforwarded: {changed: 59520, differingFromFull: 42880}, forwarded: {changed: 102400, differingFromFull: 0}}}}')
+                unforwarded: {changed: 59520, differingFromFull: 42880}, forwarded: {changed: 102400, differingFromFull: 0}},
+            derived: {osd: $p, switcher: $p, screenshot: ($p + {enabled: false})}}}')
     while IFS='|' read -r failures what change; do
         jq -c "$change" <<<"$manager" | sed 's/^/APEXG2-GLASS /' >"$T/glass.log"
         read -r passes _ <<<"$(assertion_counts glass_manager glass "$T/glass.log" light)"
-        expect_eq "glass manager: $what fails $failures of 7" "$failures" $((7 - passes))
+        expect_eq "glass manager: $what fails $failures of 8" "$failures" $((8 - passes))
     done <<'CHANGES'
 0|the bar and the popovers at their tokens, every switch honoured|.
 1|the bar at the popovers' sigma|.manager.glass.panel.radius = 120
@@ -1298,7 +1299,9 @@ CHANGES
 1|a scrim in background mode|.manager.scrims.overview.background = true
 1|a scrim left on after the overview|.manager.scrims.hidden.enabled = true
 1|a forwarded damage that leaves a stale halo|.manager.scrims.forwarded.differingFromFull = 120
-7|no manager|.manager = null
+1|an OSD without glass|.manager.derived.osd = null
+1|an Alt+Tab list at the bar's saturation|.manager.derived.switcher.saturation = 1.6
+8|no manager|.manager = null
 CHANGES
 }
 
