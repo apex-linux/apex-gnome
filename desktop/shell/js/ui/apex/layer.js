@@ -22,6 +22,7 @@ const _features = new Map();
 const _failed = new Set();
 const _enabled = new Set();
 let _names = [];
+const _unknownDisabled = new Set();
 let _settings = null;
 let _on = false;
 let _queue = Promise.resolve();
@@ -43,8 +44,16 @@ function _featureNames() {
     return [...FEATURES_IN_ENABLE_ORDER, 'fault', 'witness'];
 }
 
+// A schema without <choices> takes any name: a typo would leave its feature on silently.
 function _disabledFeatures() {
-    return new Set(_settings.get_strv('disabled-features'));
+    const disabled = new Set(_settings.get_strv('disabled-features'));
+    for (const name of disabled) {
+        if (!_names.includes(name) && !_unknownDisabled.has(name)) {
+            _unknownDisabled.add(name);
+            console.warn(`Apex: disabled-features names no feature ${name}`);
+        }
+    }
+    return disabled;
 }
 
 function _offForTheSession(name, phase, e) {

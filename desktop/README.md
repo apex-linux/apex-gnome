@@ -67,6 +67,8 @@ Rules, which the lane and `.github/scripts/selftest.sh` enforce:
 
 `FEATURES_IN_ENABLE_ORDER` in `layer.js` lists `spotlight` (S1b), `panel` (S2a), `glass`
 (S2b), `dock` (S2a) and `overview` (S3a), by the names DESIGN's `disabled-features` uses.
+A name in `disabled-features` that is no feature is logged once (`Apex: disabled-features
+names no feature NAME`); a schema whose key lists `<choices>` refuses it outright.
 `spotlight`
 registers `toggle-spotlight` from `io.github.apex_linux.Apex.Desktop.Keybindings`
 (`['<Super>space']`) with `Main.wm.addKeybinding` at enable, in the normal and overview
