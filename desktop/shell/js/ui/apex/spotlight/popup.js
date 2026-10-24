@@ -44,7 +44,7 @@ export class Popup {
             this.open();
     }
 
-    open() {
+    open(text = '') {
         if (this.isOpen)
             return;
         Toast.hide();
@@ -53,6 +53,8 @@ export class Popup {
         Main.uiGroup.add_child(this._actor);
         this._grab = Main.pushModal(this._actor, {actionMode: Shell.ActionMode.POPUP});
         this._entry.grab_key_focus();
+        if (text !== '')
+            this._entry.set_text(text);
         this._overlayKeyId = global.display.connect('overlay-key', () => {
             this.close();
             Main.overview.show();
@@ -289,6 +291,7 @@ export class Popup {
             return;
         this.close();
         if (row.copyText === null) {
+            Main.overview.hide();
             row.activate();
             return;
         }

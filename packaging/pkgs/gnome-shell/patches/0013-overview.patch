@@ -13,13 +13,48 @@ layer provides (apex-fedora ROADMAP S3a):
   layout, through which the layer hides the background card and adds the
   empty-workspace label;
 - ThumbnailsBox: value hooks over the maximum thumbnail scale and over
-  the number of dynamic workspaces above which the thumbnails show.
+  the number of dynamic workspaces above which the thumbnails show;
+- SearchController: a behaviour hook when text arrives in the search
+  entry or the entry takes the key focus, given the text and a reset,
+  through which Spotlight takes over the overview's search.
 ---
+ js/ui/searchController.js   | 6 ++++++
  js/ui/windowPreview.js      | 9 +++++----
  js/ui/workspace.js          | 2 ++
  js/ui/workspaceThumbnail.js | 5 +++--
- 3 files changed, 10 insertions(+), 6 deletions(-)
+ 4 files changed, 16 insertions(+), 6 deletions(-)
 
+diff --git a/js/ui/searchController.js b/js/ui/searchController.js
+index 1547ade..2b2e6b6 100644
+--- a/js/ui/searchController.js
++++ b/js/ui/searchController.js
+@@ -3,6 +3,7 @@ import GObject from 'gi://GObject';
+ import St from 'gi://St';
+ 
+ import * as Main from './main.js';
++import * as ApexHooks from './apex/hooks.js';
+ import * as Search from './search.js';
+ import * as ShellEntry from './shellEntry.js';
+ 
+@@ -204,6 +205,8 @@ export const SearchController = GObject.registerClass({
+         const appearFocused = focus != null &&
+             (this._entry.contains(focus) ||
+              this._searchResults.contains(focus));
++        if (appearFocused && ApexHooks.run('overview-search', this._entry.get_text(), () => this.reset()))
++            return;
+ 
+         this._text.set_cursor_visible(appearFocused);
+ 
+@@ -233,6 +236,9 @@ export const SearchController = GObject.registerClass({
+     }
+ 
+     _onTextChanged() {
++        const text = this._entry.get_text();
++        if (text !== '' && ApexHooks.run('overview-search', text, () => this.reset()))
++            return;
+         const terms = getTermsForSearchString(this._entry.get_text());
+ 
+         const searchActive = terms.length > 0;
 diff --git a/js/ui/windowPreview.js b/js/ui/windowPreview.js
 index a9b9bdd..0d9f541 100644
 --- a/js/ui/windowPreview.js

@@ -766,6 +766,8 @@ spotlight_style() {
             and (.check | (.width | px_is($t.apex_toast_check_size)) and (.height | px_is($t.apex_toast_check_size)) and .radius >= ($t.apex_toast_check_size | px) / 2
                 and (.background | colour_is($a)) and (.icon | px_is($t.apex_toast_check_icon_size)))
             and .label.text == "Copied 1920"'
+    "${metric[@]}" 'typing in the overview opens Spotlight with the typed text and clears the overview'"'"'s own search (patch 0013)' \
+        '.surfaces.overviewSearch' '.opened and .text == "disk" and .overviewText == ""'
 }
 
 scenes_captured() {

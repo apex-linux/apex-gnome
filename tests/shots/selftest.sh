@@ -458,7 +458,8 @@ REPORT_OF_A_SPOTLIGHT_DRAWN_FROM_TOKENS='
         bottomGap: ($t.apex_toast_bottom | px),
         check: {width: ($t.apex_toast_check_size | px), height: ($t.apex_toast_check_size | px), radius: 11, background: "#3584e4ff",
             icon: ($t.apex_toast_check_icon_size | px)},
-        label: {text: "Copied 1920"}}}}}'
+        label: {text: "Copied 1920"}}},
+    overviewSearch: {opened: true, text: "disk", overviewText: ""}}}'
 # shellcheck disable=SC2016 # a jq program
 # shellcheck disable=SC2016 # a jq program
 HEX_DEF='def hex: rgba | map([., 16] | "0123456789abcdef"[(.[0] / .[1] | floor):(.[0] / .[1] | floor) + 1]
@@ -897,7 +898,7 @@ test_spotlight_style() {
     local variant change what passes failures open_gaps
     for variant in light dark; do
         read -r passes failures open_gaps <<<"$(assert_run spotlight_style "$variant")"
-        if ((failures == 0 && open_gaps == 0 && passes == 15)); then
+        if ((failures == 0 && open_gaps == 0 && passes == 16)); then
             ok "Spotlight ($variant): drawn from the tokens it passes all $passes assertions"
         else
             not_ok "Spotlight ($variant): drawn from the tokens it passes (passed/failed/gaps $passes/$failures/$open_gaps): $(grep -m3 '^FAIL' "$T/top-bar.out" | paste -sd'|' -)"
@@ -932,6 +933,8 @@ test_spotlight_style() {
 .surfaces.spotlight.closedOnCopy = false|Spotlight left open after the copy
 .surfaces.spotlight.toast.box.borderColor = "#00000000"|a toast without its ring
 .surfaces.spotlight.toast.check.background = "#1d1d21ff"|a check circle without the accent
+.surfaces.overviewSearch.opened = false|the overview's stock search
+.surfaces.overviewSearch.overviewText = "disk"|the typed text left in the overview's field too
 CHANGES
 }
 

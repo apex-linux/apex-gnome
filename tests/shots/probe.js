@@ -1162,6 +1162,25 @@ async function spotlightStyle(unit) {
     }
 }
 
+// Text typed in the overview reaches its search entry; patch 0013 hands it to Spotlight.
+async function overviewSearch() {
+    const feature = await import('resource:///org/gnome/shell/ui/apex/spotlight/feature.js').catch(() => null);
+    const popup = feature?.popup();
+    if (!popup)
+        return null;
+    const entry = Main.overview._overview.controls._searchEntry;
+    entry.set_text('disk');
+    await settle();
+    const result = {
+        opened: popup.isOpen,
+        text: popup.isOpen ? popup.panel.get_children()[0].get_children()[1].get_text() : null,
+        overviewText: entry.get_text(),
+    };
+    popup.close();
+    await settle();
+    return result;
+}
+
 // What the overview draws without windows; a caption and a search section are stand-ins.
 function overviewStyle(unit) {
     const {controls} = Main.overview._overview;
@@ -1363,6 +1382,7 @@ async function scenes() {
         dockClearance: dockClearance(unit),
     };
     surfaces.overview = overviewStyle(unit);
+    surfaces.overviewSearch = await overviewSearch();
     surfaces.overviewLayer = await overviewLayer(unit);
     surfaces.appGrid = await appGrid(unit);
     delete overview.bytes;

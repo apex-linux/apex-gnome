@@ -67,6 +67,11 @@ it opens the overview as before.
 apex-desktop's override moves `switch-input-source` to Super+Alt+Space, so nothing else
 owns Super+Space; a Super tap (the overview) and Super+A (the launcher) are upstream's.
 
+DESIGN's one engine: text typed in the overview, or its search pill taking the key focus,
+opens Spotlight with that text through patch 0013's `overview-search` hook, and the overview's
+own search resets; activating a result hides the overview. With `spotlight` off the hook gives
+stock, and the overview searches as upstream does.
+
 Spotlight draws its own rows over the stock search providers: upstream's app search
 (`AppSearchProvider`), then the remote providers `remoteSearch.js` loads, of which it keeps
 gnome-calculator, gnome-control-center and nautilus. The sections and caps are Calculator 1,

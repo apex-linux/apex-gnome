@@ -313,12 +313,15 @@ probe disabled "$CMDLINE_PLAIN" APEX_SHELL_TEST_FAULT=enable PROBE_DISABLED=faul
 has "disabled-features skips a feature" 'Apex: feature fault is in disabled-features'
 fact "and its hook gives stock" 'test-fault=stock'
 
-probe spotlight-disabled "$CMDLINE_PLAIN" PROBE_DISABLED=spotlight PROBE_ENABLE=1 PROBE_PRESS=1
+probe spotlight-disabled "$CMDLINE_PLAIN" PROBE_DISABLED=spotlight PROBE_ENABLE=1 PROBE_PRESS=1 PROBE_OVERVIEW_SEARCH=1
 has "disabled-features=['spotlight']: skips the feature" 'Apex: feature spotlight is in disabled-features'
 keybindings_are "disabled-features=['spotlight']: no Super+Space binding" ''
 fact "disabled-features=['spotlight']: Super+Space opens nothing" 'press\.1=overview=false spotlight=false'
 fact "disabled-features=['spotlight']: no handler gets the press" 'unbound-press=toggle-spotlight'
 fact "disabled-features=['spotlight']: the rest of the layer runs" 'scheme\.user\.after-enable=prefer-light'
+fact "disabled-features=['spotlight']: the overview's search stays stock" 'overview-search=stock'
+lacks "disabled-features=['spotlight']: and is not reset" 'overview-search\.reset'
+
 
 probe spotlight-live "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_DISABLE_LIVE=spotlight
 keybindings_are "spotlight in and out of disabled-features, and the layer off and on: the binding follows each change" \
@@ -379,6 +382,11 @@ fact "spotlight: a click outside closes it" 'spotlight\.click-outside=closed'
 fact "spotlight: hovering a row selects it" "spotlight\.hover=APPLICATIONS: Disks Disk Usage Analyzer\*Open .*"
 fact "spotlight: clicking a row activates it" 'spotlight\.launched=org\.gnome\.baobab\.desktop'
 fact "spotlight: closing leaves no popup on the stage" 'spotlight\.stage=0'
+fact "spotlight: text typed in the overview opens Spotlight with it, through 0013's hook" \
+    "spotlight\.from-overview=true APPLICATIONS: Disks\*Open Disk Usage Analyzer Disk Benchmark Disk Images \| $SETTINGS \| $FILES"
+fact "spotlight: and resets the overview's own search" 'spotlight\.overview-reset=yes'
+fact "spotlight: while Spotlight is open the overview's search keeps its stock path" 'spotlight\.from-overview-again=false'
+fact "spotlight: activating a result from the overview closes Spotlight and hides the overview" 'spotlight\.from-overview-enter=closed overview=false'
 fact "spotlight: put in disabled-features while open, it closes and goes" 'spotlight\.live-disabled=0 popup=true'
 fact "spotlight: taken out again, Super+Space opens it afresh" 'spotlight\.live-enabled=field only'
 count_is "spotlight: every grab is given back" '^probe: modal\.push=' "$(grep -c '^probe: modal\.pop=' "$OUT")"
