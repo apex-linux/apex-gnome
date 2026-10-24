@@ -57,7 +57,8 @@ Rules, which the lane and `.github/scripts/selftest.sh` enforce:
 ### The layer
 
 `FEATURES_IN_ENABLE_ORDER` in `layer.js` lists `spotlight` (S1b), `panel` (S2a), `glass`
-(S2b), `dock` (S2a) and `overview` (S3a), by the names DESIGN's `disabled-features` uses. `spotlight`
+(S2b), `dock` (S2a) and `overview` (S3a), by the names DESIGN's `disabled-features` uses.
+`spotlight`
 registers `toggle-spotlight` from `io.github.apex_linux.Apex.Desktop.Keybindings`
 (`['<Super>space']`) with `Main.wm.addKeybinding` at enable, in the normal and overview
 action modes and without autorepeat, and removes it at disable. Until S3a's Spotlight it
