@@ -37,7 +37,7 @@ const BACKGROUND_BRIGHTNESS = 0.8;
 const FRAME_TIMEOUT_MS = 2000;
 const APEX_SCHEMA = 'io.github.apex_linux.Apex.Desktop';
 const GLASS_EFFECT = 'apex-glass';
-const STOCK_TRIES = 5;
+const CLIP_TRIES = 5;
 const SOLID_STYLE_CLASS = 'apex-solid';
 
 function colourOf(column, row, generation = 0) {
@@ -116,11 +116,26 @@ async function fullFrame(group, scale) {
 }
 
 // Damage under the box that does not reach its edges: the redraw clip is the tile alone.
-function damage(tiles, generation, index = generation) {
+let damages = 0;
+function damage(tiles, index) {
     const [column, row] = DAMAGED_TILES[index - 1];
     const tile = tiles.get(`${column},${row}`);
-    tile.colour = colourOf(column, row, generation);
+    tile.colour = colourOf(column, row, ++damages);
     tile.style = `background-color: ${tile.colour};`;
+}
+
+// Another redraw can land in the frame after a damage and cover the box: a full redraw, which
+// shows no clip at all, so the tile is damaged again for a frame whose clip misses the box.
+async function clippedFrame(group, tiles, index, scale, label) {
+    let last, frame, tries = 0;
+    do {
+        // eslint-disable-next-line no-await-in-loop
+        last = await fullFrame(group, scale);
+        damage(tiles, index);
+        // eslint-disable-next-line no-await-in-loop
+        frame = await nextFrame(scale, label);
+    } while (frame.covered && ++tries < CLIP_TRIES);
+    return {last, frame, tries: tries + 1};
 }
 
 // Device pixels per stage pixel, and per CSS pixel: mutter may lay the stage out in either.
@@ -141,17 +156,15 @@ async function pixelTests() {
             saturation: SATURATION, corner_radius: CORNER_RADIUS * deviceCss, fine: true,
         });
         glass.add_effect(effect);
-        await fullFrame(group, scale);
 
-        damage(tiles, 1);
-        const clippedOnce = await nextFrame(scale, 'clipped once');
+        const {frame: clippedOnce, tries: referenceTries} = await clippedFrame(group, tiles, 1, scale, 'clipped once');
         const reblurred = await nextFrame(scale, 'reblurred');
         const [width, height] = [BOX.width * scale, BOX.height * scale];
         const options = {sigma: SIGMA * deviceCss, saturation: SATURATION, cornerRadius: CORNER_RADIUS * deviceCss};
         const expected = BlurRef.glass(patternUnder(tiles, scale), width, height, options);
         const downscale = BlurRef.fineDownscale(width, height, options.sigma);
         const reference = {
-            clippedFirst: clippedOnce.covered === false, reblurCovered: reblurred.covered, downscale,
+            clippedFirst: clippedOnce.covered === false, reblurCovered: reblurred.covered, tries: referenceTries, downscale,
             ...BlurRef.errors(reblurred.rgba, expected, width, height, downscale / 2),
         };
 
@@ -165,31 +178,20 @@ async function pixelTests() {
             differingFromFull: BlurRef.differing(forwarded.rgba, await fullFrame(group, scale)),
         };
 
-        const last = await fullFrame(group, scale);
-        damage(tiles, 3);
-        const clipped = await nextFrame(scale, 'clipped');
+        const {last, frame: clipped, tries: clippedTries} = await clippedFrame(group, tiles, 3, scale, 'clipped');
         const after = await nextFrame(scale, 'after clipped');
         const clippedRedraw = {
-            covered: clipped.covered,
+            covered: clipped.covered, tries: clippedTries,
             differingFromLast: BlurRef.differing(clipped.rgba, last),
             nextCovered: after.covered,
             nextDifferingFromFull: BlurRef.differing(after.rgba, await fullFrame(group, scale)),
         };
 
         effect.fine = false;
-        // Another redraw can land in the stock frame and cover the box: then it is a full
-        // redraw, which shows nothing, so the case damages again for a frame that misses it.
-        let stockLast, stockClipped, tries = 0;
-        do {
-            // eslint-disable-next-line no-await-in-loop
-            stockLast = await fullFrame(group, scale);
-            damage(tiles, 4 + tries, 4);
-            // eslint-disable-next-line no-await-in-loop
-            stockClipped = await nextFrame(scale, 'stock clipped');
-        } while (stockClipped.covered && ++tries < STOCK_TRIES);
+        const {last: stockLast, frame: stockClipped, tries} = await clippedFrame(group, tiles, 4, scale, 'stock clipped');
         const stockFull = await fullFrame(group, scale);
         const stock = {
-            covered: stockClipped.covered, tries: tries + 1,
+            covered: stockClipped.covered, tries,
             differingFromLast: BlurRef.differing(stockClipped.rgba, stockLast),
             differingFromFull: BlurRef.differing(stockClipped.rgba, stockFull),
             ...BlurRef.errors(stockClipped.rgba, BlurRef.glass(patternUnder(tiles, scale), width, height, options),

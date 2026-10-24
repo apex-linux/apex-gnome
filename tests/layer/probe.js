@@ -179,6 +179,19 @@ function shown(popup) {
     return parts.join(' | ');
 }
 
+// Each Settings row's tile: its colour, the accent, or neutral.
+function tiles(popup) {
+    const [, results] = popup.panel.get_children();
+    return results.get_children()
+        .filter(row => row.get_children?.()[0]?.has_style_class_name('apex-spotlight-tile'))
+        .map(row => {
+            const [tile, text] = row.get_children();
+            const colour = tile.has_style_class_name('apex-spotlight-tile-accent') ? 'accent'
+                : tile.style?.match(/#[0-9a-f]{6}/)?.[0] ?? 'neutral';
+            return `${text.get_children()[0].text}=${colour}`;
+        }).join(' ');
+}
+
 const SEARCH_SETTLE_MS = 300;
 
 async function exerciseSpotlight() {
@@ -241,6 +254,7 @@ async function exerciseSpotlight() {
     fact('spotlight.glass-open', spotlightGlass());
     fact('spotlight.focus', entry().focused === true);
     await type('disk', 'disk');
+    fact('spotlight.tiles', tiles(popup));
     for (let i = 0; i < 4; i++)
         key(Clutter.KEY_Down);
     report('down-4');
@@ -272,6 +286,11 @@ async function exerciseSpotlight() {
     await spin(2300);
     fact('spotlight.toast-later', Toast.current() ? 'shown' : 'gone');
     fact('spotlight.glass-later', spotlightGlass());
+
+    open();
+    await type('apex', 'apex');
+    fact('spotlight.tiles-apex', tiles(popup));
+    key(Clutter.KEY_Escape);
 
     open();
     await type('none', 'zzz');
@@ -871,7 +890,7 @@ async function overviewFacts(label) {
         `overlay=${Hooks.value('window-overlay', ['title', 'close'], preview).join('+')} ` +
         `scale=${Hooks.value('thumbnail-scale', 0.05)} threshold=${Hooks.value('thumbnails-threshold', 2)} ` +
         `box=${box._maxThumbnailScale} grid=${JSON.stringify(grid._gridModes)} ` +
-        `icon=${grid.layout_manager.fixed_icon_size}`);
+        `icon=${grid.layout_manager.fixed_icon_size} strip=${Hooks.value('app-grid-workspaces-height', 130)}`);
     fact(`overview.${label}.relayout`, `mode=${grid._currentMode} page-width=${grid.layout_manager._pageWidth}`);
     buildWorkspaces(label);
 }

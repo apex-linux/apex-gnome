@@ -384,6 +384,7 @@ const controls = {
             queue_relayout: () => {},
         },
     },
+    queue_relayout: () => printerr('probe: controls=relayout'),
 };
 
 function emitter(props) {
