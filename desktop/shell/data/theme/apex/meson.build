@@ -18,5 +18,6 @@ theme_sources += files(
   '_derived.scss',
   '_dock.scss',
   '_spotlight.scss',
+  '_glass.scss',
   '_apex-structure.scss',
 )

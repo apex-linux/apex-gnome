@@ -22,10 +22,10 @@ function newEmitter(props = {}) {
         disconnect(id) {
             signalHandlers.delete(id);
         },
-        emit(signal) {
+        emit(signal, ...args) {
             for (const [s, fn] of [...signalHandlers.values()]) {
                 if (s === signal)
-                    fn();
+                    fn(this, ...args);
             }
         },
         connectObject(...args) {
@@ -36,6 +36,7 @@ function newEmitter(props = {}) {
 }
 
 const windows = [];
+const windowActors = [];
 const TOGGLE_KEYCODE = 65;
 let mainModule = null;
 globalThis.global = {
@@ -43,6 +44,8 @@ globalThis.global = {
         get_keybinding_action: keycode =>
             keycode === TOGGLE_KEYCODE ? mainModule?.wm.actionOf('toggle-spotlight') ?? 0 : 0,
     }),
+    window_group: newEmitter(),
+    get_window_actors: () => [...windowActors],
     stage: {width: 1440},
     window_manager: newEmitter(),
     workspace_manager: newEmitter({get_active_workspace: () => ({list_windows: () => windows})}),
@@ -483,6 +486,100 @@ async function exerciseMaximisedWindow() {
     global.display.emit('restacked');
 }
 
+function glassOf(actor) {
+    const effect = actor.get_effect('apex-glass');
+    if (!effect)
+        return `${actor.name}:none`;
+    const mode = effect.mode === 1 ? 'background' : 'actor';
+    return `${actor.name}:r${effect.radius}/s${effect.saturation}/c${effect.corner_radius}/${effect.enabled ? 'on' : 'paused'}` +
+        `${effect.fine && effect.follow_opacity ? '' : '/stock'}/${mode}`;
+}
+
+async function exerciseGlass() {
+    if (GLib.getenv('PROBE_GLASS') !== '1')
+        return;
+    const Main = await import(`file://${shellDir}/js/ui/main.js`);
+    const Registry = await import(`file://${shellDir}/js/ui/apex/glass/registry.js`);
+    const {default: St} = await import(`file://${GLib.path_get_dirname(shellDir)}/St.js`);
+    const {panel} = Main;
+    const {quickSettings, dateMenu} = panel.statusArea;
+    const surfaces = () => [panel, quickSettings.menu.box, dateMenu.menu.box, ...Main.messageTray._bannerBin.children];
+    const report = label => fact(`glass.${label}`, `${surfaces().map(glassOf).join(' ')} ` +
+        `solid=${Main.uiGroup.has_style_class_name('apex-solid')} redirects=${panel.redirect},${quickSettings.menu.box.parent.redirect}`);
+    report('enabled');
+    Main.messageTray.showBanner();
+    report('banner');
+
+    panel.add_style_class_name('apex-solid-bar');
+    report('solid-bar');
+    panel.remove_style_class_name('apex-solid-bar');
+    quickSettings.menu.box.mapped = false;
+    quickSettings.menu.box.emit('notify::mapped');
+    report('menu-closed');
+    quickSettings.menu.box.mapped = true;
+    quickSettings.menu.box.emit('notify::mapped');
+
+    const dock = new Main.StubActor('dock', {glass: {blur: 28, saturation: 1.8, radius: 22}, extents: [420, 820, 600, 62]});
+    Registry.register(dock, {name: 'dock'});
+    Registry.register(dock, {name: 'dock', paused: () => true});
+    fact('glass.registered-twice', `${glassOf(dock)} ${Registry.surfaces().filter(r => r.actor === dock).length}`);
+    Registry.register(dock, {name: 'dock'});
+    fact('glass.registered', glassOf(dock));
+    const window = Object.assign(new Main.StubActor('window', {extents: [100, 100, 400, 300]}), {get_meta_window: () => ({})});
+    windowActors.push(window);
+    global.window_group.emit('child-added', window);
+    const redraws = () => [panel, quickSettings.menu.box, dock].map(a => `${a.name}=${a.redraws}`).join(' ');
+    const before = redraws();
+    window.emit('damaged');
+    fact('glass.damage-elsewhere', `${before} -> ${redraws()}`);
+    window.box = [400, 0, 400, 300];
+    window.emit('notify::allocation');
+    fact('glass.moved-under-the-bar', redraws());
+    window.box = [400, 600, 400, 300];
+    window.emit('notify::allocation');
+    window.emit('damaged');
+    fact('glass.damage-under-the-dock', redraws());
+    global.display.emit('restacked');
+    fact('glass.restacked', redraws());
+
+    for (const [label, key, on, off] of [
+        ['reduce-transparency', 'reduce-transparency', true, false],
+        ['disabled', 'disabled-features', ['glass'], []],
+    ]) {
+        const set = value => Array.isArray(value) ? settings.set_strv(key, value) : settings.set_boolean(key, value);
+        set(on);
+        // eslint-disable-next-line no-await-in-loop
+        await spin(200);
+        report(label);
+        fact(`glass.${label}.dock`, glassOf(dock));
+        set(off);
+        // eslint-disable-next-line no-await-in-loop
+        await spin(200);
+    }
+    St.Settings.get().setHighContrast(true);
+    report('high-contrast');
+    St.Settings.get().setHighContrast(false);
+
+    settings.set_strv('disabled-features', ['glass']);
+    await spin(200);
+    const later = new Main.StubActor('later', {glass: {blur: 34, saturation: 1.8, radius: 26}});
+    Registry.register(later, {name: 'later'});
+    fact('glass.registered-while-disabled', glassOf(later));
+    settings.set_strv('disabled-features', []);
+    await spin(200);
+    fact('glass.registered-while-disabled.enabled', glassOf(later));
+
+    Registry.unregister(dock);
+    Registry.unregister(dock);
+    fact('glass.unregistered', glassOf(dock));
+    settings.set_boolean('layer-enabled', false);
+    await spin(200);
+    report('off');
+    settings.set_boolean('layer-enabled', true);
+    await spin(200);
+    report('on');
+}
+
 function newWorkspace(nWindows) {
     return {
         _background: {
@@ -667,6 +764,7 @@ if (layer && GLib.getenv('PROBE_ENABLE') === '1') {
     await exerciseMaximisedWindow();
     await exerciseOverview();
     await exerciseDock();
+    await exerciseGlass();
     await setDisabledLive();
     await switchLayer();
     for (const [signal, fn] of [...handlers.values()]) {

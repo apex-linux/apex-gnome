@@ -21,9 +21,12 @@ $apex_font_bar_percentage_size: 12.5px;
 
 $apex_bar_transition: 300ms;
 
-// St draws no backdrop filter: the glass manager of S2b reads these.
+// ADR 0014's glass: a Gaussian of this sigma in CSS px behind the surface, then saturate().
+// _glass.scss hands them to the glass manager (js/ui/apex/glass/).
 $apex_bar_blur: 24px;
 $apex_bar_saturation: 160%;
+$apex_dock_blur: 28px;
+$apex_dock_saturation: 180%;
 
 $apex_bar_height: 32px;
 $apex_bar_padding: 8px;
@@ -83,6 +86,7 @@ $apex_shadow: if($variant == 'light', rgba(20, 30, 60, .22), rgba(0, 0, 0, .5));
 $apex_surface_border: 1px;
 $apex_shadow_y: 18px;
 $apex_shadow_blur: 50px;
+// Quick Settings, the calendar and banners.
 $apex_panel_blur: 30px;
 $apex_panel_saturation: 180%;
 
