@@ -3,6 +3,7 @@
 // G2's accessibility cases (G2_A11Y=1): each Apex surface open, its text and symbolic icons
 // measured against what the stage draws behind them. tests/shots/README.md, "Accessibility".
 
+import Clutter from 'gi://Clutter';
 import Gio from 'gi://Gio';
 import Shell from 'gi://Shell';
 import St from 'gi://St';
@@ -10,6 +11,7 @@ import St from 'gi://St';
 import * as BoxPointer from 'resource:///org/gnome/shell/ui/boxpointer.js';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import * as MessageTray from 'resource:///org/gnome/shell/ui/messageTray.js';
+import * as SwitcherPopup from 'resource:///org/gnome/shell/ui/switcherPopup.js';
 
 import * as Png from './png.js';
 
@@ -18,6 +20,7 @@ Gio._promisify(Shell.Screenshot.prototype, 'screenshot_area');
 // Below this share of a target's pixels the backdrop is an outlier: an antialiased corner.
 const BACKDROP_PERCENTILE = 0.05;
 const MAX_SAMPLES = 4000;
+const SWITCHER_APPS = ['Text Editor', 'Terminal', 'Web', 'Files', 'Settings'];
 
 function srgb(channel) {
     const c = channel / 255;
@@ -159,6 +162,7 @@ function measure(target, image) {
     const {extents: unusedExtents, rgb: unusedRgb, fill: unusedFill, ...rest} = target;
     return {
         ...rest,
+        fill: fill ? `${hex(fill.slice(0, 3))} at ${Math.round(fill[3] * 1000) / 1000}` : null,
         // Wholly outside the surface's capture, as another workspace's label is.
         offscreen: samples.length === 0,
         ink: hex(rgb),
@@ -206,6 +210,23 @@ async function withOpen(open, close, read) {
     }
 }
 
+function switcher() {
+    const list = new SwitcherPopup.SwitcherList(true);
+    for (const name of SWITCHER_APPS) {
+        const app = new St.BoxLayout({style_class: 'alt-tab-app', orientation: Clutter.Orientation.VERTICAL});
+        app.add_child(new St.Icon({icon_name: 'application-x-executable', icon_size: 96}));
+        app.add_child(new St.Label({text: name, x_align: Clutter.ActorAlign.CENTER}));
+        list.addItem(app, app.get_last_child());
+    }
+    Main.uiGroup.add_child(list);
+    const [, width] = list.get_preferred_width(-1);
+    const [, height] = list.get_preferred_height(width);
+    const {primaryMonitor: monitor} = Main.layoutManager;
+    list.set_position(monitor.x + Math.floor((monitor.width - width) / 2), monitor.y + Math.floor((monitor.height - height) / 2));
+    list.highlight(1);
+    return list;
+}
+
 function notifications() {
     const source = new MessageTray.Source({title: 'G2 Updates', iconName: 'software-update-available-symbolic'});
     Main.messageTray.add(source);
@@ -217,7 +238,7 @@ function notifications() {
     return source;
 }
 
-// The panel's surfaces in turn; h holds probe.js's openers and helpers.
+// Every Apex surface in turn; h holds probe.js's openers and helpers.
 export async function a11yReport(h) {
     const {settle, unit} = h;
     const report = root => settle().then(() => surfaceReport(root, settle, unit));
@@ -253,6 +274,20 @@ export async function a11yReport(h) {
         dateMenu.close(BoxPointer.PopupAnimation.NONE);
         source.destroy();
     }, () => report(dateMenu.box));
+    out.switcher = await withOpen(switcher, list => list.destroy(), list => report(list));
+    out.dialog = await withOpen(() => h.openModalDialog(), d => d.close(), d => report(d.root));
+    out.endSession = await withOpen(() => h.openEndSessionDialog(), d => d?.cancel(), d => report(d?.dialogLayout._dialog));
+    out.spotlight = await h.withSpotlight(async (popup, toast) => {
+        popup.panel.get_children()[0].get_children()[1].set_text('disk');
+        return {popup: await report(popup.panel), toast: await report(await toast())};
+    }) ?? {error: 'no Spotlight'};
+    Main.overview.show();
+    global.stage.set_key_focus(null);
+    out.overview = await report(Main.overview._overview);
+    const {showAppsButton} = Main.overview.dash;
+    out.appGrid = await withOpen(() => (showAppsButton.checked = true), () => (showAppsButton.checked = false),
+        () => report(Main.overview._overview._controls._appDisplay));
+    Main.overview.hide();
     await settle();
     return out;
 }

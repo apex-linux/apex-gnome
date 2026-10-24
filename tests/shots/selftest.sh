@@ -641,7 +641,8 @@ REPORT_OF_LEGIBLE_SURFACES='
 | ($text + {kind: "icon", name: "glyph-symbolic", ratio: 4, box: {x: 80, y: 10, width: 16, height: 16}}) as $icon
 | {box: {x: 0, y: 0, width: 200, height: 100}, targets: [$text, $icon]} as $s
 | {textScalingFactor: 1.25, monitor: {x: 0, y: 0, width: 1440, height: 900},
-    bar: $s, dock: $s, popupMenu: $s, osd: $s, banner: $s, quickSettings: $s, wifiMenu: $s, dateMenu: $s}'
+    bar: $s, dock: $s, popupMenu: $s, osd: $s, banner: $s, quickSettings: $s, wifiMenu: $s, dateMenu: $s, switcher: $s,
+    dialog: $s, endSession: $s, spotlight: {popup: $s, toast: $s}, overview: $s, appGrid: $s}'
 
 a11y_run() {
     local assertions=$1 change=${2:-.}
@@ -653,7 +654,7 @@ a11y_run() {
 
 test_a11y() {
     local assertions expected change what passes failures open_gaps want
-    for assertions in a11y_contrast:8 a11y_layout:9; do
+    for assertions in a11y_contrast:15 a11y_layout:16; do
         expected=${assertions#*:}
         read -r passes failures open_gaps <<<"$(a11y_run "${assertions%:*}")"
         if ((failures == 0 && open_gaps == 0 && passes == expected)); then
@@ -673,6 +674,8 @@ test_a11y() {
 a11y_contrast|1|.bar.targets[0].ratio = 4.4|text at 4.4:1
 a11y_contrast|1|.dock.targets[1].ratio = 2.9|a glyph at 2.9:1
 a11y_contrast|1|.wifiMenu.targets[0].ratio = 3|a menu row's text at 3:1
+a11y_contrast|1|.spotlight.toast.targets[0].ratio = 3|the toast's text at 3:1
+a11y_contrast|1|.endSession.targets[1].ratio = 2|the end-session glyph at 2:1
 a11y_contrast|1|.banner = {error: "not shown"}|a surface that never showed
 a11y_contrast|1|.popupMenu.targets = []|a surface with nothing measured
 a11y_contrast|0|.osd.targets[0] += {inactive: true, ratio: 1}|a disabled control's text

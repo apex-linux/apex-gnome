@@ -79,15 +79,7 @@ $_end_session_share: $_end_session_row /
   &:last-child { width: $_end_session_share * $apex_end_session_confirm_share; }
 }
 
-.apex-end-session-icon {
-  width: $apex_end_session_icon_size;
-  height: $apex_end_session_icon_size;
-  border-radius: $apex_end_session_icon_size / 2;
-  color: $apex_fg;
-  background-color: $apex_button;
-
-  StIcon { icon-size: $apex_end_session_icon_glyph_size; }
-}
+@import "end-session-icon";
 
 @mixin apex-entry {
   min-height: $apex_entry_height;

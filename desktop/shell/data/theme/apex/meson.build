@@ -5,6 +5,7 @@
 theme_sources += files(
   '_apex-tokens.scss',
   '_apex.scss',
+  '_apex-base.scss',
   '_top-bar.scss',
   '_popup-menus.scss',
   '_osd.scss',
@@ -12,6 +13,7 @@ theme_sources += files(
   '_quick-settings.scss',
   '_switcher.scss',
   '_dialogs.scss',
+  '_end-session-icon.scss',
   '_date-menu.scss',
   '_overview.scss',
   '_app-grid.scss',
