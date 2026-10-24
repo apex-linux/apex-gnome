@@ -205,12 +205,13 @@ function filled(actor, unit) {
     return {...boxOf(actor, unit), radius: radiusOf(actor, unit), colour: hex(actor.get_theme_node().get_background_color())};
 }
 
-// Board 39's "everything": the camera and microphone in use, a recording, and two input sources.
+// Board 39's "everything": the camera and microphone in use, a recording, a share and two input sources.
 async function everything(unit, settle, capture) {
-    const {quickSettings, screenRecording, keyboard} = Main.panel.statusArea;
+    const {quickSettings, screenRecording, screenSharing, keyboard} = Main.panel.statusArea;
     const inUse = [quickSettings._camera._indicator, quickSettings._volumeInput._indicator];
     inUse.forEach(icon => icon.show());
     screenRecording.show();
+    screenSharing.show();
     screenRecording._label.text = '0:42';
     await settle();
     const pill = quickSettings.get_first_child();
@@ -220,6 +221,8 @@ async function everything(unit, settle, capture) {
     const next = pill.get_children().find(a => a !== group && a.visible);
     const [stop, timer] = screenRecording._box.get_children().filter(c => c.visible);
     const chip = keyboard._container.get_children().find(label => label.visible);
+    const sharing = screenSharing.get_first_child();
+    const [shared, square] = sharing.get_children().filter(c => c.visible);
     const report = {
         order: rightBoxOrder(),
         pill: {...boxOf(pill, unit), paddingLeft: round(pill.get_theme_node().get_padding(St.Side.LEFT) / unit.length)},
@@ -229,11 +232,16 @@ async function everything(unit, settle, capture) {
         } : null,
         recording: {...filled(screenRecording._box, unit), stop: filled(stop, unit), timer: {...boxOf(timer, unit), ...textOf(timer, unit)}},
         input: {pill: {...boxOf(keyboard._container, unit), radius: radiusOf(keyboard._container, unit)}, ...textOf(chip, unit)},
+        sharing: {
+            ...filled(sharing, unit), name: screenSharing.accessible_name, stop: filled(square, unit), next: boxOf(pill, unit),
+            glyph: {...boxOf(shared, unit), iconName: shared.icon_name, colour: hex(shared.get_theme_node().get_foreground_color())},
+        },
         search: boxOf(Main.panel.statusArea[SEARCH_ROLE].get_first_child(), unit),
     };
     report.capture = (await capture('indicators-everything')).file;
     inUse.forEach(icon => icon.hide());
     screenRecording.hide();
+    screenSharing.hide();
     await settle();
     report.after = {privacy: group?.visible ?? null, paddingLeft: round(pill.get_theme_node().get_padding(St.Side.LEFT) / unit.length)};
     return report;

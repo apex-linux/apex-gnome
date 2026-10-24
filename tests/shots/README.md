@@ -187,8 +187,9 @@ bar, against Fedora's, whose desktop has none.
 
 ## App indicators
 
-In `default`, `default-scale1` and `dark-style`, `G2_INDICATORS=1` runs `indicators.js`
-after the scenes. It starts `sni-items.js`, a gjs process that exports four
+The cases `indicators`, `indicators-scale1` and `indicators-dark` are shells of their own,
+set as `default`, `default-scale1` and `dark-style` are plus two input sources (US and
+French). `G2_INDICATORS=1` runs `indicators.js`, which starts `sni-items.js`, a gjs process that exports four
 StatusNotifierItems, each with a DBusMenu and on its own session-bus connection as separate
 apps are, and registers them with the shell's watcher. Every call an item gets lands in
 `<case>-sni.log`. `indicator_metrics` asserts, against the token file:
@@ -207,10 +208,18 @@ apps are, and registers them with the shell's watcher. Every call an item gets l
   app's states, "Ctrl+Shift+C" dimmed; the opened, clicked and closed events in the log;
 - Activate on a primary click;
 - with a fifth item, three shown and "+2", and the overflow menu's two rows: glyph, title
-  and chevron.
+  and chevron;
+- board 39's "everything", with the camera and microphone indicators, the recording and
+  the sharing buttons shown by the probe: the right box's order (indicators, divider,
+  search, recording, input chip, sharing, status pill); the privacy group's size, colour,
+  glyphs and place in the status pill, whose start narrows for it and widens again once
+  nothing is in use; the recording pill's stop square and tabular timer; the sharing
+  pill's glyph, square, name and gap to the status pill; the input chip's "EN", font,
+  tracking and minimum width.
 
-The captures `<case>-indicators.png`, `<case>-indicator-menu.png` and
-`<case>-indicator-overflow.png` show the bar, Chat's menu and the overflow menu.
+The captures `<case>-indicators.png`, `<case>-indicators-everything.png`,
+`<case>-indicator-menu.png` and `<case>-indicator-overflow.png` show the bar, the bar in
+"everything", Chat's menu and the overflow menu.
 
 ## The shell surfaces' metrics
 

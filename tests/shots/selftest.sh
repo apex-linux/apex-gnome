@@ -563,7 +563,7 @@ REPORT_OF_INDICATORS_DRAWN_FROM_TOKENS='
    colour: ("rgba(\($fg[0]), \($fg[1]), \($fg[2]), \($t.apex_indicators_divider_opacity))" | hex)} as $divider
 | {width: ($t.apex_indicator_switch_width | px), height: ($t.apex_indicator_switch_height | px), radius: 9} as $switch
 | ($t.apex_privacy_height | px) as $ph | ($t.apex_privacy_icon_size | px) as $pi | ($t.apex_privacy_padding | px) as $pp
-| ($t.apex_privacy_gap | px) as $pg | ($t.apex_recording_stop_size | px) as $ss
+| ($t.apex_privacy_gap | px) as $pg | ($t.apex_screen_stop_size | px) as $ss
 | {x: 1240, y: 4, width: 160, height: $h, paddingLeft: ($t.apex_bar_pill_padding_privacy | px)} as $pill
 | ($pill.x + $pill.paddingLeft) as $gx
 | {x: $gx, y: (4 + ($h - $ph) / 2), width: (2 * $pp + 2 * $pi + $pg), height: $ph, radius: ($t.apex_radius_privacy | px),
@@ -573,16 +573,22 @@ REPORT_OF_INDICATORS_DRAWN_FROM_TOKENS='
      iconName: "camera-web-symbolic", colour: ($t.apex_privacy_fg | hex)}]}) as $privacy
 | (1100 + ($t.apex_recording_padding_start | px)) as $sx | ($sx + $ss + ($t.apex_recording_gap | px)) as $tx
 | {x: 1100, y: 4, width: ($tx + 26 + ($t.apex_recording_padding_end | px) - 1100), height: $h, radius: $r, colour: ($t.apex_recording | hex),
-   stop: {x: $sx, y: (4 + ($h - $ss) / 2), width: $ss, height: $ss, radius: ($t.apex_radius_recording_stop | px), colour: ($t.apex_recording_fg | hex)},
+   stop: {x: $sx, y: (4 + ($h - $ss) / 2), width: $ss, height: $ss, radius: ($t.apex_radius_screen_stop | px), colour: ($t.apex_recording_fg | hex)},
    timer: {x: $tx, y: 8, width: 26, height: 16, text: "0:42", size: ($t.apex_font_recording_size | px),
      weight: ($t.apex_font_recording_weight | tonumber), tracking: 0, features: "tnum", colour: ($t.apex_recording_fg | hex)}} as $recording
 | {pill: {x: 1190, y: 4, width: ($t.apex_input_chip_min_width | px), height: $h, radius: $r}, text: "EN",
    size: ($t.apex_font_input_chip_size | px), weight: ($t.apex_font_input_chip_weight | tonumber),
    tracking: (($t.apex_font_input_chip_tracking | rtrimstr("em") | num) * ($t.apex_font_input_chip_size | px)), features: "",
    colour: ($t.apex_bar_fg | hex)} as $input
+| ($t.apex_sharing_icon_size | px) as $si | (1240 - ($t.apex_sharing_margin | px) - $g) as $se
+| ($se - ($t.apex_sharing_padding_end | px) - $ss) as $qx | ($qx - ($t.apex_sharing_gap | px) - $si) as $gx2
+| ($gx2 - ($t.apex_sharing_padding_start | px)) as $sx2
+| {x: $sx2, y: 4, width: ($se - $sx2), height: $h, radius: $r, colour: ($t.apex_privacy | hex), name: "Stop screen sharing",
+   next: $pill, glyph: {x: $gx2, y: (4 + ($h - $si) / 2), width: $si, height: $si, iconName: "screen-shared-symbolic", colour: ($t.apex_privacy_fg | hex)},
+   stop: {x: $qx, y: (4 + ($h - $ss) / 2), width: $ss, height: $ss, radius: ($t.apex_radius_screen_stop | px), colour: ($t.apex_privacy_fg | hex)}} as $sharing
 | {empty: {visible: false, divider: null}, accent: "#3584e4ff",
-   everything: {order: ["indicators", "divider", "apex-search", "screenRecording", "keyboard", "quickSettings"], pill: $pill,
-     privacy: $privacy, recording: $recording, input: $input, search: {x: 1060, y: 4, width: 32, height: $h},
+   everything: {order: ["indicators", "divider", "apex-search", "screenRecording", "keyboard", "screenSharing", "quickSettings"], pill: $pill,
+     privacy: $privacy, recording: $recording, input: $input, sharing: $sharing, search: {x: 1060, y: 4, width: 32, height: $h},
      after: {privacy: false, paddingLeft: ($t.apex_bar_pill_padding | px)}},
    four: {visible: true, order: ["indicators", "divider", "apex-search", "quickSettings"], items: $items, divider: $divider,
      search: {x: ($dx + $divider.width + $around), y: 4, width: 32, height: $h},
@@ -777,7 +783,7 @@ test_indicators() {
     local variant change what passes failures open_gaps
     for variant in light dark; do
         read -r passes failures open_gaps <<<"$(assert_run indicator_metrics "$variant")"
-        if ((failures == 0 && passes == 28)); then
+        if ((failures == 0 && passes == 30)); then
             ok "indicators ($variant): indicators drawn from the tokens pass all $passes assertions"
         else
             not_ok "indicators ($variant): indicators drawn from the tokens pass (passed/failed/gaps $passes/$failures/$open_gaps): $(grep -m3 '^FAIL' "$T/top-bar.out" | paste -sd'|' -)"
@@ -813,7 +819,10 @@ test_indicators() {
 .five.overflow.text = "+1"|the wrong overflow count
 .overflowMenu.rows[1].chevron = null|a row without its chevron
 .gone.visible = true|indicators left after the apps quit
-.everything.order = ["indicators", "divider", "screenRecording", "keyboard", "apex-search", "quickSettings"]|the search button after the stock items
+.everything.order = ["indicators", "divider", "screenRecording", "keyboard", "screenSharing", "apex-search", "quickSettings"]|the search button after the stock items
+.everything.order = ["indicators", "divider", "apex-search", "screenRecording", "screenSharing", "keyboard", "quickSettings"]|the sharing pill before the input chip
+.everything.sharing.name = "Stop Screen Sharing"|the sharing pill under stock's name
+.everything.sharing.stop.radius = 4|a sharing stop dot instead of a square
 .everything.privacy.colour = "#c01c28ff"|a privacy group in the recording's red
 .everything.pill.paddingLeft = 10|the pill's stock start beside the group
 .everything.privacy.glyphs[0].colour = "#c64600ff"|a privacy glyph in the group's orange

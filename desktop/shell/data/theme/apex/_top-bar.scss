@@ -168,17 +168,27 @@ $_open_states: hover, focus, active, checked;
       background-color: transparent;
       box-shadow: none;
     }
+  }
+
+  .panel-button.screen-recording-indicator > StBoxLayout {
+    padding: 0 $apex_recording_padding_end 0 $apex_recording_padding_start;
+    spacing: $apex_recording_gap;
+    color: $apex_recording_fg;
+    font-size: apex-text-size($apex_font_recording_size);
+    font-weight: $apex_font_recording_weight;
+    font-feature-settings: "tnum";
+  }
+
+  .panel-button.screen-sharing-indicator {
+    margin-right: $apex_sharing_margin;
 
     > StBoxLayout {
-      padding: 0 $apex_recording_padding_end 0 $apex_recording_padding_start;
-      spacing: $apex_recording_gap;
-      color: $apex_recording_fg;
-      font-size: apex-text-size($apex_font_recording_size);
-      font-weight: $apex_font_recording_weight;
-      font-feature-settings: "tnum";
+      padding: 0 $apex_sharing_padding_end 0 $apex_sharing_padding_start;
+      spacing: $apex_sharing_gap;
+      color: $apex_privacy_fg;
     }
 
-    StIcon { icon-size: $apex_bar_icon_size; }
+    StIcon { icon-size: $apex_sharing_icon_size; }
   }
 
   @each $state in join(('',), $_open_states) {
@@ -187,10 +197,10 @@ $_open_states: hover, focus, active, checked;
     .panel-button.screen-sharing-indicator#{$s} > StBoxLayout { background-color: $apex_privacy; }
   }
 
-  .apex-recording-stop {
-    width: $apex_recording_stop_size;
-    height: $apex_recording_stop_size;
-    border-radius: $apex_radius_recording_stop;
+  .apex-screen-stop {
+    width: $apex_screen_stop_size;
+    height: $apex_screen_stop_size;
+    border-radius: $apex_radius_screen_stop;
     background-color: $apex_recording_fg;
   }
 }

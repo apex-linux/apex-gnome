@@ -191,6 +191,14 @@ function box(children) {
             this.children.splice(index, 0, child);
             child.connect?.('destroy', () => this.children.includes(child) && this.remove_child(child));
         },
+        set_child_below_sibling(child, sibling) {
+            this.remove_child(child);
+            this.children.splice(this.children.indexOf(sibling), 0, child);
+        },
+        set_child_above_sibling(child, sibling) {
+            this.remove_child(child);
+            this.children.splice(this.children.indexOf(sibling) + 1, 0, child);
+        },
     };
 }
 
@@ -205,16 +213,16 @@ const PRIVACY_INDICATORS = ['_remoteAccess', '_camera', '_volumeInput', '_locati
 
 const rightBox = box([{name: 'a11y'}, {name: 'keyboard'}]);
 
-// remoteAccess.js's screen-recording button and keyboard.js's input-source labels.
-function newScreenRecording() {
-    const recording = {
-        _box: new St.BoxLayout(),
-        _label: new St.Label({text: '0:42'}),
-        _icon: new St.Icon({icon_name: 'screencast-stop-symbolic'}),
-    };
-    recording._box.add_child(recording._label);
-    recording._box.add_child(recording._icon);
-    return recording;
+// remoteAccess.js's screen-recording and screen-sharing buttons, where panel.js puts them,
+// and keyboard.js's input-source labels.
+function newScreenButton(role, accessibleName, index, children) {
+    const content = new St.BoxLayout();
+    children.forEach(child => content.add_child(child));
+    const button = new St.Widget({name: role, accessible_name: accessibleName});
+    button.add_child(content);
+    button.container = {name: role, get_parent: () => rightBox};
+    rightBox.children.splice(index, 0, button.container);
+    return button;
 }
 
 function newInputSources() {
@@ -379,7 +387,10 @@ export const panel = Object.assign(new StubActor('panel', {glass: PANEL_GLASS, e
             get_first_child: () => ({get_children: () => [0, 1].map(() => workspaceDot)}),
         },
         quickSettings: newQuickSettings(),
-        screenRecording: newScreenRecording(),
+        screenRecording: newScreenButton('screenRecording', 'Stop Screencast', 0,
+            [new St.Label({text: '0:42'}), new St.Icon({icon_name: 'screencast-stop-symbolic'})]),
+        screenSharing: newScreenButton('screenSharing', 'Stop Screen Sharing', 1,
+            [new St.Icon({icon_name: 'screen-shared-symbolic'}), new St.Icon({icon_name: 'screencast-stop-symbolic'})]),
         keyboard: newInputSources(),
         dateMenu: {menu: {box: new StubActor('calendar', {glass: POPOVER_GLASS, extents: [354, 40, 732, 468], parent: boxPointer})}},
     },

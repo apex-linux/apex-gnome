@@ -424,10 +424,11 @@ function showIndicator(indicator, visible) {
     indicator.emit('notify::visible');
 }
 
-function recordingParts({_box: box, _icon: icon}) {
-    const parts = box.get_children().filter(c => c.visible)
-        .map(c => c.has_style_class_name('apex-recording-stop') ? 'stop' : c.text ?? c.icon_name);
-    return `${parts.join(',')} stock-icon=${icon.visible}`;
+function screenParts(button) {
+    const children = button.get_first_child().get_children();
+    const part = c => c.has_style_class_name('apex-screen-stop') ? 'square' : c.text ?? c.icon_name;
+    const hidden = children.filter(c => !c.visible).map(part).join(',') || 'none';
+    return `${children.filter(c => c.visible).map(part).join(',')} hidden=${hidden} name=${button.accessible_name}`;
 }
 
 function inputChipTexts({_container: container}) {
@@ -740,8 +741,14 @@ async function exerciseTopBar() {
     fact('pill.set-up-after-enable', pillNames(later));
 
     const {default: St} = await import(`file://${GLib.path_get_dirname(shellDir)}/St.js`);
-    const {screenRecording, keyboard} = Main.panel.statusArea;
-    fact('recording', recordingParts(screenRecording));
+    const {screenRecording, screenSharing, keyboard} = Main.panel.statusArea;
+    fact('recording', screenParts(screenRecording));
+    fact('sharing', screenParts(screenSharing));
+    fact('right-box', rightBoxOrder(Main));
+    // panel.js puts its own items back in stock order at each session-mode change.
+    Main.panel.rightBox.set_child_above_sibling(screenSharing.container, screenRecording.container);
+    Main.sessionMode.lock(false);
+    fact('right-box.after-session-update', rightBoxOrder(Main));
     fact('input-chip', inputChipTexts(keyboard));
     // keyboard.js renames a label for an IBus input mode, and adds one for a new source.
     const [, vietnamese] = keyboard._container.get_children();
@@ -772,12 +779,15 @@ async function exerciseTopBar() {
     topBarHooks('top-bar.off');
     fact('pill.off', pillNames(quickSettings));
     fact('privacy.off', privacyState(quickSettings));
-    fact('recording.off', recordingParts(screenRecording));
+    fact('recording.off', screenParts(screenRecording));
+    fact('sharing.off', screenParts(screenSharing));
+    fact('right-box.off', rightBoxOrder(Main));
     fact('input-chip.off', inputChipTexts(keyboard));
     settings.set_boolean('layer-enabled', true);
     await spin(200);
     fact('pill.on', pillNames(quickSettings));
-    fact('recording.on', recordingParts(screenRecording));
+    fact('recording.on', screenParts(screenRecording));
+    fact('sharing.on', screenParts(screenSharing));
     fact('input-chip.on', inputChipTexts(keyboard));
 }
 

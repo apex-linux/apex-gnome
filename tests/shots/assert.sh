@@ -390,8 +390,8 @@ indicator_metrics() {
             and ((.colour | rgba) as $c | ($c[0:3] == $fg[0:3]) and ($c[3] - 255 * ($t.apex_indicators_divider_opacity | num) | fabs <= 1)))
             and (.d.x - .last.x - .last.width | px_is(($t.apex_indicators_divider_margin | px) + ($t.apex_bar_gap | px)))
             and (.search.x - .d.x - .d.width | px_is(($t.apex_indicators_divider_margin | px) + ($t.apex_bar_gap | px)))'
-    "${metric[@]}" 'the search button starts the stock items, before the recording pill, the input chip and the status pill' \
-        '.everything.order' 'index("apex-search") as $s | $s >= 2 and .[$s - 2:$s] == ["indicators", "divider"] and .[$s + 1:] == ["screenRecording", "keyboard", "quickSettings"]'
+    "${metric[@]}" 'the search button starts the stock items, before the recording pill, the input chip, the sharing pill and the status pill' \
+        '.everything.order' 'index("apex-search") as $s | $s >= 2 and .[$s - 2:$s] == ["indicators", "divider"] and .[$s + 1:] == ["screenRecording", "keyboard", "screenSharing", "quickSettings"]'
     "${metric[@]}" 'the camera and microphone in use: a $apex_privacy_height $apex_privacy group, radius $apex_radius_privacy, $apex_bar_pill_padding_privacy into the status pill' \
         '.everything | {g: .privacy, pill}' '(.g | (.height | px_is($t.apex_privacy_height)) and (.radius | px_is($t.apex_radius_privacy)) and (.colour | colour_is($t.apex_privacy)))
             and (.g.x - .pill.x | px_is($t.apex_bar_pill_padding_privacy)) and (.pill.paddingLeft | px_is($t.apex_bar_pill_padding_privacy))
@@ -406,8 +406,8 @@ indicator_metrics() {
         '.everything.after' '.privacy == false and (.paddingLeft | px_is($t.apex_bar_pill_padding))'
     "${metric[@]}" 'a recording is a $apex_bar_pill_height $apex_recording pill, radius $apex_radius_bar_pill' \
         '.everything.recording' '(.height | px_is($t.apex_bar_pill_height)) and (.radius | px_is($t.apex_radius_bar_pill)) and (.colour | colour_is($t.apex_recording))'
-    "${metric[@]}" 'its stop square is $apex_recording_stop_size in $apex_recording_fg, radius $apex_radius_recording_stop, $apex_recording_padding_start in and $apex_recording_gap before the timer' \
-        '.everything.recording' '(.stop | (.width | px_is($t.apex_recording_stop_size)) and (.height | px_is($t.apex_recording_stop_size)) and (.radius | px_is($t.apex_radius_recording_stop)) and (.colour | colour_is($t.apex_recording_fg)))
+    "${metric[@]}" 'its stop square is $apex_screen_stop_size in $apex_recording_fg, radius $apex_radius_screen_stop, $apex_recording_padding_start in and $apex_recording_gap before the timer' \
+        '.everything.recording' '(.stop | (.width | px_is($t.apex_screen_stop_size)) and (.height | px_is($t.apex_screen_stop_size)) and (.radius | px_is($t.apex_radius_screen_stop)) and (.colour | colour_is($t.apex_recording_fg)))
             and (.stop.x - .x | px_is($t.apex_recording_padding_start)) and (.timer.x - .stop.x - .stop.width | px_is($t.apex_recording_gap))
             and (.x + .width - .timer.x - .timer.width | px_is($t.apex_recording_padding_end))'
     "${metric[@]}" 'its timer is $apex_font_recording_size at weight $apex_font_recording_weight in $apex_recording_fg, in tabular figures' \
@@ -418,6 +418,13 @@ indicator_metrics() {
             and (.tracking - ($t.apex_font_input_chip_tracking | rtrimstr("em") | num) * ($t.apex_font_input_chip_size | px) | fabs < 0.05)'
     "${metric[@]}" 'the chip is a $apex_bar_pill_height pill, radius $apex_radius_bar_pill, at least $apex_input_chip_min_width wide' \
         '.everything.input.pill' '(.height | px_is($t.apex_bar_pill_height)) and (.radius | px_is($t.apex_radius_bar_pill)) and .width >= ($t.apex_input_chip_min_width | px) - 0.01'
+    "${metric[@]}" 'a share is a $apex_bar_pill_height $apex_privacy pill, radius $apex_radius_bar_pill, named "Stop screen sharing", $apex_sharing_margin + $apex_bar_gap before the status pill' \
+        '.everything.sharing' '(.height | px_is($t.apex_bar_pill_height)) and (.radius | px_is($t.apex_radius_bar_pill)) and (.colour | colour_is($t.apex_privacy))
+            and .name == "Stop screen sharing" and (.next.x - .x - .width | px_is(($t.apex_sharing_margin | px) + ($t.apex_bar_gap | px)))'
+    "${metric[@]}" 'its glyph is $apex_sharing_icon_size in $apex_privacy_fg, $apex_sharing_padding_start in and $apex_sharing_gap before a $apex_screen_stop_size stop square, $apex_sharing_padding_end from the end' \
+        '.everything.sharing' '(.glyph | (.width | px_is($t.apex_sharing_icon_size)) and (.colour | colour_is($t.apex_privacy_fg))) and (.glyph.x - .x | px_is($t.apex_sharing_padding_start))
+            and (.stop.x - .glyph.x - .glyph.width | px_is($t.apex_sharing_gap)) and (.stop | (.width | px_is($t.apex_screen_stop_size)) and (.radius | px_is($t.apex_radius_screen_stop)))
+            and (.x + .width - .stop.x - .stop.width | px_is($t.apex_sharing_padding_end))'
     "${metric[@]}" 'a secondary click opens its menu: solid, radius $apex_radius_menu, at least $apex_indicator_menu_width wide' \
         '.menu' '.open and (.content.radius | px_is($t.apex_radius_menu)) and (.content.width >= ($t.apex_indicator_menu_width | px) - 0.01)'
     "${metric[@]}" 'its first row is the item'"'"'s title, $apex_indicator_menu_header_height high, in $apex_fg_dim' \

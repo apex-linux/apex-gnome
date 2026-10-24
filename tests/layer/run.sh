@@ -580,7 +580,12 @@ fact "status-pill: and so for indicators set up after enable" "pill\.set-up-afte
 fact "privacy group: hidden while no privacy indicator shows" 'privacy\.idle=group=false in-use=false'
 fact "privacy group: the camera in use shows it, and the pill narrows its start for it" 'privacy\.camera=group=true in-use=true'
 fact "privacy group: hidden again once the camera is off" 'privacy\.camera-off=group=false in-use=false'
-fact "recording pill: a stop square before the timer, with stock's glyph hidden" 'recording=stop,0:42 stock-icon=false'
+fact "screen pills: the recording's stop square before the timer, stock's glyph hidden" 'recording=square,0:42 hidden=screencast-stop-symbolic name=Stop Screencast'
+fact "screen pills: sharing's glyph then the square, named for its click" 'sharing=screen-shared-symbolic,square hidden=screencast-stop-symbolic name=Stop screen sharing'
+fact "screen pills: sharing moves from after the recording to after the input source" \
+    'right-box=screenRecording,a11y,keyboard,screenSharing,indicators,divider,quickSettings,'
+fact "screen pills: right before the status pill again after panel.js re-adds its items" \
+    'right-box\.after-session-update=screenRecording,a11y,keyboard,indicators,divider,screenSharing,quickSettings,'
 fact "input chip: the sources' short names in capitals" 'input-chip=EN,VI'
 fact "input chip: and so after keyboard.js renames one or adds a source" 'input-chip\.changed=EN,VI₂,FR'
 fact "hot-corner: the corner becomes a reactive 4 x 4 zone at its own position, in scaled px" \
@@ -591,10 +596,13 @@ fact "hot-corner: leaving it while on the barrier keeps the barrier's trigger" '
 fact "layer-enabled=false: the dot hooks give stock" 'top-bar\.off\.dots=99 99 99 inactive="stock"'
 fact "layer-enabled=false: the status pill gets every indicator back, in order" "pill\.off=$STOCK_PILL"
 fact "layer-enabled=false: no privacy group, and the pill's start is stock" 'privacy\.off=group=none in-use=false'
-fact "layer-enabled=false: the recording button is stock's, timer then glyph" 'recording\.off=0:42,screencast-stop-symbolic stock-icon=true'
+fact "layer-enabled=false: the recording button is stock's, timer then glyph" 'recording\.off=0:42,screencast-stop-symbolic hidden=none name=Stop Screencast'
+fact "layer-enabled=false: so is sharing, named as stock names it" 'sharing\.off=screen-shared-symbolic,screencast-stop-symbolic hidden=none name=Stop Screen Sharing'
+fact "layer-enabled=false: sharing goes back after the recording" 'right-box\.off=screenRecording,screenSharing,a11y,keyboard,quickSettings,'
 fact "layer-enabled=false: the input chip has stock's names back" 'input-chip\.off=en,vi₂,fr'
 fact "layer-enabled=true: the filter again" "pill\.on=$KEPT_PILL"
-fact "layer-enabled=true: the stop square again" 'recording\.on=stop,0:42 stock-icon=false'
+fact "layer-enabled=true: the stop squares again" 'recording\.on=square,0:42 hidden=screencast-stop-symbolic name=Stop Screencast'
+fact "layer-enabled=true: and sharing's name" 'sharing\.on=screen-shared-symbolic,square hidden=screencast-stop-symbolic name=Stop screen sharing'
 fact "layer-enabled=true: capitals again" 'input-chip\.on=EN,VI₂,FR'
 count_is "both dots restyle at each enable and disable" '^probe: workspace-dot=restyled$' 6
 count_is "the hot corners are rebuilt at each enable and disable" '^probe: hot-corners=rebuilt$' 3
@@ -607,7 +615,8 @@ probe top-bar-disabled "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_TOP_BAR=1 PROBE_DIS
 has "disabled-features=['panel']: skips the feature" 'Apex: feature panel is in disabled-features'
 fact "disabled-features=['panel']: the dot hooks give stock" 'top-bar\.dots=99 99 99 inactive="stock"'
 fact "disabled-features=['panel']: the status pill keeps every indicator" "pill=$STOCK_PILL"
-fact "disabled-features=['panel']: the recording button stays stock's" 'recording=0:42,screencast-stop-symbolic stock-icon=true'
+fact "disabled-features=['panel']: the recording button stays stock's" 'recording=0:42,screencast-stop-symbolic hidden=none name=Stop Screencast'
+fact "disabled-features=['panel']: sharing stays where panel.js puts it" 'right-box\.after-session-update=screenRecording,screenSharing,a11y,keyboard,indicators,divider,quickSettings,'
 fact "disabled-features=['panel']: the input chip keeps stock's names" 'input-chip\.changed=en,vi₂,fr'
 fact "disabled-features=['panel']: the corner stays stock" 'hot-corner\.zone=none reactive=false x=undefined y=undefined undefinedxundefined'
 lacks "disabled-features=['panel']: nothing is rebuilt or restyled" 'hot-corners=rebuilt|workspace-dot=restyled'
@@ -999,9 +1008,9 @@ probe indicators "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_INDICATORS=1 \
 has "indicators: the feature enables" 'Apex: feature indicators enabled'
 fact "indicators: the shell owns org.kde.StatusNotifierWatcher while nobody else does" 'indicators\.watcher=shell'
 fact "indicators: with no items, no indicators and no divider; both sit before the status pill" \
-    'indicators\.empty=hidden overflow=none divider=false order=a11y,keyboard,indicators,divider,quickSettings'
+    'indicators\.empty=hidden overflow=none divider=false order=screenRecording,a11y,keyboard,screenSharing,indicators,divider,quickSettings'
 fact "indicators: four items show in the order they registered: the theme's -symbolic icon, or a full-colour icon or a pixmap as a mask" \
-    'indicators\.four=File sync:symbolic,Game launcher:mask,Password manager:pixmap,Chat:symbolic overflow=none divider=true order=a11y,keyboard,indicators,divider,quickSettings'
+    'indicators\.four=File sync:symbolic,Game launcher:mask,Password manager:pixmap,Chat:symbolic overflow=none divider=true order=screenRecording,a11y,keyboard,screenSharing,indicators,divider,quickSettings'
 fact "indicators: a fifth moves two to the overflow: three show, and +2" \
     'indicators\.five=File sync:symbolic,Game launcher:mask,Password manager:pixmap overflow=\+2 divider=true'
 fact "indicators: a pixmap's network-order ARGB becomes RGBA" 'indicators\.pixmap=16x16 alpha=true first-pixel-rgba=10,20,30,255'
@@ -1032,7 +1041,7 @@ fact "indicators: primary click on an item that is only a menu opens it" 'indica
 fact "indicators: an item whose app leaves the bus goes" \
     'indicators\.vanished=Game launcher:mask,Password manager:pixmap,Chat:symbolic\+dot overflow=none divider=true'
 fact "indicators: disabled-features=['indicators'] takes them, the divider and the watcher away" \
-    'indicators\.disabled=none watcher=none order=a11y,keyboard,quickSettings'
+    'indicators\.disabled=none watcher=none order=screenRecording,a11y,keyboard,screenSharing,quickSettings'
 readonly REREGISTERED='(Password manager:pixmap|Chat:symbolic\+dot|Game launcher:mask)(,(Password manager:pixmap|Chat:symbolic\+dot|Game launcher:mask)){2} overflow=none divider=true'
 fact "indicators: back out of it, the shell owns the watcher again and the items register again" \
     "indicators\.re-enabled=$REREGISTERED watcher=shell"
