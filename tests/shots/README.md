@@ -60,6 +60,10 @@ The direct cases:
 Every case: the probe ran (so the static import graph loaded), from `startup-complete`, and no `JS ERROR`;
 the wall clock stands at the fixed time and the top bar's clock shows it (`Mon Sep 28`, EN SPACE, `09:41`).
 
+A probe that runs longer than 30 s keeps `gnome-shell-perf-helper` awake with a call every 10 s:
+the helper quits after 30 s without one, and `scripting.js`'s last call to it would then end the
+shell with exit 1.
+
 ## Fixtures and the clock
 
 Before the first case, `direct.sh` lets root own and call the fixtures' names on the
@@ -248,6 +252,12 @@ a title shown without hover.
 the window group plays the window and the stock `TilePreview` opens over the left half of the
 work area, captured with `G2_SURFACE_SCENES=1`. It reads the preview's box against the tile, its
 clear inset border, the radius inside it, the accent fill and the inset accent ring.
+
+`screenshot_ui` runs in the same cases. The probe opens the stock screenshot UI in its
+selection mode, captures it with `G2_SURFACE_SCENES=1`, and reads the panel, the close button
+in the heading row, the area buttons (Window insensitive with no window), the pointer toggle,
+the capture button and its recording state, the screenshot/screencast switch, the selection's
+shade, outline and handles, then the screen mode's frame; a checked window frame is a stand-in.
 
 `quick_settings_layer` checks the `quick-settings` layer feature in the same cases, and
 stock in the stock cases. The probe reads the grid's toggles in order (the VPN toggle by

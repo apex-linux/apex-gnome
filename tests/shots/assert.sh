@@ -535,6 +535,8 @@ quick_settings() {
             and (.title.font.size | px_is($t.apex_font_quick_menu_title_size)) and .title.font.weight == ($t.apex_font_heading_weight | tonumber)'
     "${metric[@]}" 'its rows are $apex_quick_menu_row_height high, padded $apex_menu_row_padding, radius $apex_radius_menu_row' \
         "$q.wifiMenu.rows" 'length > 0 and all((.height | px_is($t.apex_quick_menu_row_height)) and (.padding.left | px_is($t.apex_menu_row_padding)) and (.radius | px_is($t.apex_radius_menu_row)))'
+    "${metric[@]}" 'its rows hover in $apex_quick_menu_row_hover, lighter than popup menus' \
+        "$q.wifiMenu" '.rowHover.background | colour_is($t.apex_quick_menu_row_hover)'
 }
 
 # shellcheck disable=SC2016 # jq programs and token names, not shell expansions
@@ -746,6 +748,62 @@ tile_preview() {
         "{p: $tp.preview, accent: .topBar.accent}" "$tinted"' .accent as $a | .p | (.radius - .border.top | px_is($t.apex_radius_tile_preview))
             and (.background | tinted($a; $t.apex_tile_preview_fill_opacity))
             and (.boxShadow | .inset and (.spread | px_is($t.apex_tile_preview_ring)) and .blur == 0 and (.color | tinted($a; $t.apex_tile_preview_ring_opacity)))'
+}
+
+# shellcheck disable=SC2016 # jq programs and token names, not shell expansions
+screenshot_ui() {
+    local label=$1 log=$2 variant=$3 scenes tokens
+    scenes=$(report_of "$log" APEXG2-SCENES)
+    tokens=$(tokens_for "$variant")
+    local -a metric=(top_bar_metric "$label screenshot UI" "$scenes" "$tokens")
+    local s=.surfaces.screenshot
+
+    "${metric[@]}" 'the panel is $apex_screenshot_width of $apex_panel ringed in $apex_panel_border with the shadow, radius $apex_radius_screenshot, inset $apex_screenshot_padding with a heading row of $apex_screenshot_close_size, rows $apex_screenshot_gap apart, $apex_screenshot_bottom above the bottom edge' \
+        "$s" '.monitorHeight as $h | .panel | (.width | px_is($t.apex_screenshot_width)) and (.background | colour_is($t.apex_panel))
+            and (.borderColor | colour_is($t.apex_panel_border)) and (.border.top | px_is($t.apex_surface_border)) and (.radius | px_is($t.apex_radius_screenshot))
+            and (.boxShadow | .y == ($t.apex_shadow_y | px) and .blur == ($t.apex_shadow_blur | px) and (.color | colour_is($t.apex_shadow)))
+            and (.padding.left + .border.left | px_is($t.apex_screenshot_padding))
+            and (.padding.top + .border.top | px_is(($t.apex_screenshot_padding | px) + ($t.apex_screenshot_close_size | px) + ($t.apex_screenshot_gap | px) | tostring + "px"))
+            and (.spacing | px_is($t.apex_screenshot_gap)) and ($h - .y - .height | px_is($t.apex_screenshot_bottom))'
+    "${metric[@]}" 'the close button is a $apex_screenshot_close_size $apex_button circle in the heading row, $apex_screenshot_padding from the top and $apex_screenshot_padding + $apex_screenshot_close_inset from the side' \
+        "$s" '.panel as $p | .close | (.width | px_is($t.apex_screenshot_close_size)) and (.height | px_is($t.apex_screenshot_close_size)) and .radius * 2 >= .width
+            and (.background | colour_is($t.apex_button)) and (.foreground | colour_is($t.apex_fg)) and .boxShadow == null
+            and (.y - $p.y | px_is($t.apex_screenshot_padding))
+            and ($p.x + $p.width - .x - .width | px_is(($t.apex_screenshot_padding | px) + ($t.apex_screenshot_close_inset | px) | tostring + "px"))'
+    "${metric[@]}" 'the area buttons are $apex_screenshot_type_height high, radius $apex_radius_screenshot_type, in $apex_button ($apex_button_hover checked), a $apex_screenshot_type_icon_size glyph $apex_screenshot_type_label_gap above a $apex_font_screenshot_type_size $apex_font_label_weight name; with no window, Window is $apex_fg_faint' \
+        "$s" '(.types | (map(.height | px_is($t.apex_screenshot_type_height)) | all) and (map(.radius | px_is($t.apex_radius_screenshot_type)) | all)
+                and (.[0].checked and (.[0].background | colour_is($t.apex_button_hover))) and (.[1].background | colour_is($t.apex_button))
+                and (.[2].background | colour_is($t.apex_button)) and (.[2].foreground | colour_is($t.apex_fg_faint)))
+            and (.checkedType.background | colour_is($t.apex_button_hover))
+            and (.typeContent | (.icon.height | px_is($t.apex_screenshot_type_icon_size)) and (.spacing | px_is($t.apex_screenshot_type_label_gap))
+                and (.labelFont.size | px_is($t.apex_font_screenshot_type_size)) and .labelFont.weight == ($t.apex_font_label_weight | tonumber))'
+    "${metric[@]}" 'the pointer toggle is a $apex_screenshot_pointer_size $apex_button circle, the raw accent when on' \
+        "{p: $s.pointer, accent: .topBar.accent}" '.accent as $a | .p | (.width | px_is($t.apex_screenshot_pointer_size)) and (.height | px_is($t.apex_screenshot_pointer_size))
+            and .radius * 2 >= .width and (.background | colour_is($t.apex_button)) and (.checked.background | colour_is($a))'
+    "${metric[@]}" 'the capture button is $apex_screenshot_capture_size, a $apex_screenshot_capture_ring $apex_fg ring around a $apex_fg dot $apex_screenshot_capture_gap inside it; recording, a $apex_screenshot_record_dot $apex_screenshot_record square, radius $apex_radius_screenshot_record_dot' \
+        "$s.capture" '(.width | px_is($t.apex_screenshot_capture_size)) and (.height | px_is($t.apex_screenshot_capture_size))
+            and (.border.top | px_is($t.apex_screenshot_capture_ring)) and (.borderColor | colour_is($t.apex_fg)) and (.padding.top | px_is($t.apex_screenshot_capture_gap))
+            and (.circle | (.background | colour_is($t.apex_fg)) and .radius * 2 >= .width
+                and (.width | px_is(($t.apex_screenshot_capture_size | px) - 2 * (($t.apex_screenshot_capture_ring | px) + ($t.apex_screenshot_capture_gap | px)) | tostring + "px")))
+            and (.circle.width - 2 * .cast.margin | px_is($t.apex_screenshot_record_dot)) and (.cast.radius | px_is($t.apex_radius_screenshot_record_dot))
+            and (.cast.background | colour_is($t.apex_screenshot_record))'
+    "${metric[@]}" 'the screenshot and screencast switch is $apex_button inset $apex_screenshot_switch_padding; its buttons $apex_screenshot_switch_button_width x $apex_screenshot_switch_button_height, the checked one $apex_panel_solid with a $apex_screenshot_switch_shadow shadow' \
+        "$s" '(.switcher | (.padding.top | px_is($t.apex_screenshot_switch_padding)) and (.background | colour_is($t.apex_button))
+                and (.radius | px_is(($t.apex_screenshot_switch_button_height | px) / 2 + ($t.apex_screenshot_switch_padding | px) | tostring + "px")))
+            and (.shot | .checked and (.width | px_is($t.apex_screenshot_switch_button_width)) and (.height | px_is($t.apex_screenshot_switch_button_height))
+                and (.background | colour_is($t.apex_panel_solid)) and (.foreground | colour_is($t.apex_fg))
+                and (.boxShadow | .y == ($t.apex_screenshot_switch_shadow_y | px) and .blur == ($t.apex_screenshot_switch_shadow_blur | px) and (.color | colour_is($t.apex_screenshot_switch_shadow))))'
+    "${metric[@]}" 'the selection is shaded $apex_screenshot_shade, outlined $apex_screenshot_selection_border in $apex_screenshot_selection, with $apex_screenshot_handle_size white handles shadowed $apex_screenshot_handle_shadow' \
+        "$s" '(.shade.background | colour_is($t.apex_screenshot_shade))
+            and (.selection | (.border.top | px_is($t.apex_screenshot_selection_border)) and (.borderColor | colour_is($t.apex_screenshot_selection)))
+            and (.handle | (.width | px_is($t.apex_screenshot_handle_size)) and (.height | px_is($t.apex_screenshot_handle_size)) and .radius * 2 >= .width
+                and (.background | colour_is("#ffffff"))
+                and (.boxShadow | .y == ($t.apex_screenshot_handle_shadow_y | px) and .blur == ($t.apex_screenshot_handle_shadow_blur | px) and (.color | colour_is($t.apex_screenshot_handle_shadow))))'
+    "${metric[@]}" 'the chosen screen is ringed $apex_screenshot_frame in the raw accent over $apex_screenshot_screen_tint; the window selector shades $apex_screenshot_shade and rings the chosen window $apex_screenshot_frame in the accent, radius $apex_radius_screenshot_window' \
+        "{s: $s, accent: .topBar.accent}" '.accent as $a | .s | (.screen | .checked and (.border.top | px_is($t.apex_screenshot_frame)) and (.borderColor | colour_is($a))
+                and (.background | colour_is($t.apex_screenshot_screen_tint)))
+            and (.windowSelector.background | colour_is($t.apex_screenshot_shade))
+            and (.windowFrame | (.border.top | px_is($t.apex_screenshot_frame)) and (.borderColor | colour_is($a)) and (.radius | px_is($t.apex_radius_screenshot_window)))'
 }
 
 # shellcheck disable=SC2016 # jq programs and token names, not shell expansions
@@ -1062,6 +1120,7 @@ direct_cases() {
     derived_surfaces default "$f" light
     tile_preview default "$f" light
     spotlight_style default "$f" light
+    screenshot_ui default "$f" light
 
     f=$run/default-scale1.log
     exits "$run" default-scale1 0
@@ -1085,6 +1144,7 @@ direct_cases() {
     derived_surfaces default-scale1 "$f" light
     tile_preview default-scale1 "$f" light
     spotlight_style default-scale1 "$f" light
+    screenshot_ui default-scale1 "$f" light
 
     f=$run/dark-style.log
     exits "$run" dark-style 0
@@ -1111,6 +1171,7 @@ direct_cases() {
     derived_surfaces dark-style "$f" dark
     tile_preview dark-style "$f" dark
     spotlight_style dark-style "$f" dark
+    screenshot_ui dark-style "$f" dark
     dark_style_off dark-style "$f"
 
     for c in stock-light stock-dark; do
