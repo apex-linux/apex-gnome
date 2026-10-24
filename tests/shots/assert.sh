@@ -48,6 +48,7 @@ readonly SPOTLIGHT_MODES='["NORMAL", "OVERVIEW"]'
 readonly MOTION_CURVE='[0.2, 0.8, 0.2, 1]'
 readonly MOTION_WINDOW_MS=300
 readonly MOTION_OVERVIEW_MS=200
+readonly LOCATE_POINTER_RIPPLE_MS=830
 # direct.sh's G2_CLOCK, in UTC; the clock shows it as weekday, date, EN SPACE, 24-hour time.
 readonly FIXED_CLOCK=2026-09-28T09:41:00Z
 readonly FIXED_CLOCK_TEXT='Mon Sep 28\u200209:41'
@@ -897,6 +898,8 @@ motion_curve() {
         "then enable-animations=false, and the window maximised and the overview opened again"
     expect motion "$m" '.still.maximise.transition == null and .still.overview.transition == null' \
         "with enable-animations=false neither creates a transition: both take 0 ms"
+    expect motion "$m" ".still.locatePointer.duration == $LOCATE_POINTER_RIPPLE_MS" \
+        "and Locate Pointer's ripple, an animationRequired a11y aid, still takes stock's ${LOCATE_POINTER_RIPPLE_MS} ms"
 }
 
 direct_cases() {

@@ -1,8 +1,4 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
-//
-// DESIGN's Quick Settings, one feature for disabled-features ('quick-settings'): VPN after
-// Airplane Mode, Power Mode lit at every profile through apex-lit (its checked state and
-// the indicator binding stay stock), and "On" or "Off" under a toggle that has no subtitle.
 
 import * as Hooks from '../hooks.js';
 import * as Main from '../../main.js';
