@@ -480,9 +480,17 @@ fact "lock: blanking tears the prompt down and cancels its verifier" 'lock\.blan
 fact "lock: waking builds a new conversation" 'lock\.wake=page=prompt prompt=conversation-2 cancelled=conversation-1'
 fact "lock: standby is blank too" 'lock\.standby=page=clock prompt=none cancelled=conversation-1,conversation-2'
 fact "lock: and waking again builds another" 'lock\.wake-again=page=prompt prompt=conversation-3 cancelled=conversation-1,conversation-2'
-fact "lock: the hint stays after the rebuilt prompt" 'lock\.prompt-box\.after-wake=conversation-3,Press Enter to unlock'
-fact "lock: locked while blank, no conversation starts" 'lock\.open-blank=page=clock prompt=none cancelled=none'
-fact "lock: until the screen wakes" 'lock\.open-blank\.wake=page=prompt prompt=conversation-1 cancelled=none'
+fact "lock: suspend is blank too" 'lock\.suspend=page=clock prompt=none cancelled=conversation-1,conversation-2,conversation-3'
+fact "lock: a display without power saving keeps a prompt" \
+    'lock\.unsupported=page=prompt prompt=conversation-4 cancelled=conversation-1,conversation-2,conversation-3'
+fact "lock: the hint stays after the rebuilt prompt" 'lock\.prompt-box\.after-wake=conversation-4,Press Enter to unlock'
+fact "lock: locked while blank, the first conversation ends as DisplayConfig answers" \
+    'lock\.open-blank=page=clock prompt=none cancelled=conversation-1'
+fact "lock: and the next starts when the screen wakes" 'lock\.open-blank\.wake=page=prompt prompt=conversation-2 cancelled=conversation-1'
+fact "lock: a DisplayConfig that never answers leaves the prompt up" \
+    'lock\.display-config-silent=page=prompt prompt=conversation-1 cancelled=none'
+fact "lock: so does one that fails" 'lock\.display-config-error=page=prompt prompt=conversation-1 cancelled=none'
+has "lock: and says so" 'Apex: lock: no org\.gnome\.Mutter\.DisplayConfig, so the prompt stays at blank'
 fact "lock: the clock never slides away" 'lock\.clock-progress=0 0 0'
 fact "lock: blur sigma 30 (radius 60), no darkening" 'lock\.blur=\{"brightness":1,"radius":60\}'
 fact "lock: PAM's exact \"Password:\" reads \"Enter Password\"" 'lock\.question\."Password:"="Enter Password"'

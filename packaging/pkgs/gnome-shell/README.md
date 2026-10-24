@@ -37,9 +37,10 @@ Fedora's gnome-shell SRPM, rebuilt with the Apex layer inside it
 | `0001-build` | `data/theme/gnome-shell-{light,dark,high-contrast}.scss`, `data/theme/meson.build`, `js/meson.build`, `src/meson.build` | +13 | the `@import` hooks; `subdir('apex')`; `apex.gresource.xml` compiled and linked into libshell next to `js-resources` |
 | `0002-loader` | `js/ui/main.js`, `js/ui/sessionMode.js` | +16 −1 | the static import of `ui/apex/hooks.js`; the layer loaded (configure) before the session mode exists; `enable()` at `startup-prepared`; the stock sheets in safe mode; a value hook over each session mode's parameters |
 | `0010-panel` | `js/ui/panel.js`, `js/ui/layout.js` | +13 −4 | value hooks over the workspace dots' inactive opacity and scale and over a dot's width; a behaviour hook once Quick Settings has set up its indicators (the status-pill filter); a behaviour hook once a hot corner is built (the 4 × 4 zone) |
+| `0015-lock` | `js/ui/unlockDialog.js`, `js/gdm/authPrompt.js`, `js/ui/userWidget.js` | +19 −13 | value hooks over the unlock blur and the clock's slide; a behaviour hook once the unlock dialog is built (the single stage, its hint, the prompt following the screen); a value hook over the prompt's question, given PAM's own; a value hook over the avatar without a picture. Unlocking stays upstream's: no hook is on its path |
 
 Budget (ADR 0014): at most 450 changed lines of hook hunks in at most 33 upstream files.
-In use: 47 lines in 10 files. The C budget for `shell-blur-effect.{c,h}` (300 lines) is
+In use: 79 lines in 13 files. The C budget for `shell-blur-effect.{c,h}` (300 lines) is
 untouched until 0003-blur (S2b).
 
 The patches are `git format-patch` output against Fedora's `%prep` tree (upstream

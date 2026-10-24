@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
-<!-- The Meta values the layer uses, as mutter 51.0's src/meta/prefs.h, window.h and meta-monitor-manager.h define them. -->
+<!-- The Meta values the layer uses, as mutter 51.0's src/meta/prefs.h and window.h define them. -->
 <repository version="1.2" xmlns="http://www.gtk.org/introspection/core/1.0"
             xmlns:c="http://www.gtk.org/introspection/c/1.0">
   <namespace name="Meta" version="51" c:identifier-prefixes="Meta" c:symbol-prefixes="meta">
@@ -17,13 +17,6 @@
     </bitfield>
     <enumeration name="KeyBindingAction" c:type="MetaKeyBindingAction">
       <member name="none" value="0" c:identifier="META_KEYBINDING_ACTION_NONE"/>
-    </enumeration>
-    <enumeration name="PowerSaveMode" c:type="MetaPowerSave">
-      <member name="unsupported" value="-1" c:identifier="META_POWER_SAVE_UNSUPPORTED"/>
-      <member name="on" value="0" c:identifier="META_POWER_SAVE_ON"/>
-      <member name="standby" value="1" c:identifier="META_POWER_SAVE_STANDBY"/>
-      <member name="suspend" value="2" c:identifier="META_POWER_SAVE_SUSPEND"/>
-      <member name="off" value="3" c:identifier="META_POWER_SAVE_OFF"/>
     </enumeration>
     <enumeration name="WindowType" c:type="MetaWindowType">
       <member name="normal" value="0" c:identifier="META_WINDOW_NORMAL"/>

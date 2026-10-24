@@ -51,7 +51,13 @@
     selected-color: $apex_lock_fg;
     &:ltr { padding-right: $apex_lock_field_padding; margin-right: $apex_lock_field_gap + $apex_lock_field_height; }
     &:rtl { padding-left: $apex_lock_field_padding; margin-left: $apex_lock_field_gap + $apex_lock_field_height; }
-    &:hover, &:focus { background-color: $apex_lock_glass; }
+    &:hover { background-color: $apex_lock_glass; }
+    // Upstream's focus ring is !important; the brighter border marks focus instead.
+    &:focus {
+      border-color: $apex_lock_glass_focus;
+      background-color: $apex_lock_glass;
+      box-shadow: none !important;
+    }
 
     StLabel.hint-text { color: $apex_lock_placeholder; }
   }
@@ -107,6 +113,16 @@
 }
 
 #lockDialogGroup { background-color: $apex_lock_greeter_base; }
+
+.login-dialog-not-listed-button {
+  &, &:hover, &:focus, &:active { background-color: transparent; }
+
+  .login-dialog-not-listed-label {
+    color: $apex_lock_fg_dim;
+    font-size: apex-text-size($apex_font_lock_hint_size);
+  }
+  &:hover .login-dialog-not-listed-label, &:focus .login-dialog-not-listed-label { color: $apex_lock_fg; }
+}
 
 .login-dialog-user-list-view {
   width: $apex_lock_list_width;

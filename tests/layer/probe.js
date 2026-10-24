@@ -33,10 +33,27 @@ function newEmitter(props = {}) {
 
 globalThis._ = text => text;
 
-const monitorManager = newEmitter({power_save_mode: 0});
+// mutter's DisplayConfig as the lock reads it, one cached PowerSaveMode; it answers, never
+// answers ('silent') or fails ('error'), as displayConfig.reply says.
+const displayConfig = newEmitter({powerSaveMode: 0, reply: 'answer'});
+displayConfig.get_cached_property = name =>
+    name === 'PowerSaveMode' ? new GLib.Variant('i', displayConfig.powerSaveMode) : null;
+displayConfig.connectObject = (signal, fn, owner) => {
+    const id = displayConfig.connect(signal, fn);
+    owner.connect('destroy', () => displayConfig.disconnect(id));
+};
+Gio.DBusProxy.new_for_bus = (_bus, _flags, _info, name, _path, _iface, cancellable) => new Promise((resolve, reject) => {
+    if (displayConfig.reply === 'silent')
+        return;
+    if (cancellable.is_cancelled())
+        reject(new GLib.Error(Gio.IOErrorEnum, Gio.IOErrorEnum.CANCELLED, 'cancelled'));
+    else if (displayConfig.reply === 'error' || name !== 'org.gnome.Mutter.DisplayConfig')
+        reject(new GLib.Error(Gio.DBusError, Gio.DBusError.SERVICE_UNKNOWN, `no ${name}`));
+    else
+        resolve(displayConfig);
+});
 const windows = [];
 globalThis.global = {
-    backend: {get_monitor_manager: () => monitorManager},
     display: newEmitter(),
     stage: {width: 1440},
     window_manager: newEmitter(),
@@ -374,19 +391,20 @@ function lockState(dialog) {
 }
 
 function setScreen(mode) {
-    monitorManager.power_save_mode = mode;
-    monitorManager.emit('power-save-mode-changed');
+    displayConfig.powerSaveMode = mode;
+    displayConfig.emit('g-properties-changed');
 }
 
 async function exerciseLock() {
     if (GLib.getenv('PROBE_LOCK') !== '1')
         return;
     const {default: St} = await import(`file://${GLib.path_get_dirname(shellDir)}/St.js`);
-    const {default: Meta} = await import('gi://Meta');
+    const PowerSave = {UNSUPPORTED: -1, ON: 0, STANDBY: 1, SUSPEND: 2, OFF: 3};
 
-    setScreen(Meta.PowerSaveMode.ON);
+    setScreen(PowerSave.ON);
     const dialog = newUnlockDialog(St);
     fact('lock.run', `${Hooks.run('unlock-dialog', dialog)}`);
+    await spin(50);
     const stage = dialog._stack.children[0];
     fact('lock.layout', `dialog=${dialog.styleClasses.join(' ')} stack=${names(dialog._stack.children)} ` +
         `stage=${names(stage.children ?? [])} clock=${names(dialog._clock.children)} ` +
@@ -394,20 +412,36 @@ async function exerciseLock() {
     fact('lock.open', lockState(dialog));
     const promptBoxChildren = () => dialog._promptBox.children.map(c => c.text ?? c.name).join(',');
     fact('lock.prompt-box', promptBoxChildren());
-    for (const [label, mode] of [['blank', Meta.PowerSaveMode.OFF], ['wake', Meta.PowerSaveMode.ON],
-        ['standby', Meta.PowerSaveMode.STANDBY], ['wake-again', Meta.PowerSaveMode.ON]]) {
+    for (const [label, mode] of [['blank', PowerSave.OFF], ['wake', PowerSave.ON],
+        ['standby', PowerSave.STANDBY], ['wake-again', PowerSave.ON],
+        ['suspend', PowerSave.SUSPEND], ['unsupported', PowerSave.UNSUPPORTED]]) {
         setScreen(mode);
         fact(`lock.${label}`, lockState(dialog));
     }
     fact('lock.prompt-box.after-wake', promptBoxChildren());
     dialog.emit('destroy');
 
-    setScreen(Meta.PowerSaveMode.OFF);
+    setScreen(PowerSave.OFF);
     const lockedWhileBlank = newUnlockDialog(St);
     Hooks.run('unlock-dialog', lockedWhileBlank);
+    await spin(50);
     fact('lock.open-blank', lockState(lockedWhileBlank));
-    setScreen(Meta.PowerSaveMode.ON);
+    setScreen(PowerSave.ON);
     fact('lock.open-blank.wake', lockState(lockedWhileBlank));
+    lockedWhileBlank.emit('destroy');
+
+    for (const reply of ['silent', 'error']) {
+        displayConfig.reply = reply;
+        setScreen(PowerSave.OFF);
+        const unanswered = newUnlockDialog(St);
+        Hooks.run('unlock-dialog', unanswered);
+        // eslint-disable-next-line no-await-in-loop
+        await spin(50);
+        fact(`lock.display-config-${reply}`, lockState(unanswered));
+        unanswered.emit('destroy');
+    }
+    displayConfig.reply = 'answer';
+    setScreen(PowerSave.ON);
 
     fact('lock.clock-progress', [0, 0.5, 1].map(p => Hooks.value('unlock-clock-progress', p)).join(' '));
     fact('lock.blur', JSON.stringify(Hooks.value('unlock-blur', {brightness: 0.65, radius: 90})));

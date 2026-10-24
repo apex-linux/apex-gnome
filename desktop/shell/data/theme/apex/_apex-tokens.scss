@@ -262,9 +262,11 @@ $apex_lock_greeter_base: #0c1122;
 $apex_lock_blur: 30px;
 $apex_lock_saturation: 130%;
 
-$apex_lock_clock_top: 128px;
+// Board 20 puts the date 128px down; upstream's stack starts 90px down.
+$apex_lock_clock_top: 128px - 90px;
 $apex_lock_clock_gap: 2px;
-$apex_lock_stage_gap: 259px;
+$apex_lock_stage_gap: 240px;
+$apex_lock_glass_focus: rgba(255, 255, 255, .45);
 $apex_font_lock_date_size: 22px;
 $apex_font_lock_date_weight: 600;
 $apex_font_lock_time_size: 118px;
