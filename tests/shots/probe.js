@@ -2185,6 +2185,17 @@ async function runProbe() {
         console.log(`APEXG2-SCENES ${JSON.stringify(result)}`);
     }
 
+    if (GLib.getenv('G2_INDICATORS') === '1') {
+        let result;
+        try {
+            const Indicators = await import('./indicators.js');
+            result = await Indicators.indicatorsReport({cssUnit, settle, capture});
+        } catch (e) {
+            result = {error: `${e.message}\n${e.stack}`};
+        }
+        console.log(`APEXG2-INDICATORS ${JSON.stringify(result)}`);
+    }
+
     if (GLib.getenv('G2_TURN_DARK_OFF') === '1') {
         let toggled;
         try {

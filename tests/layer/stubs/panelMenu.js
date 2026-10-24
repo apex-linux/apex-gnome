@@ -2,6 +2,8 @@
 //
 // run.sh installs this as js/ui/panelMenu.js: the parts of PanelMenu.Button the features use.
 
+import St from '../../../St.js';
+
 export class Button {
     constructor(_menuAlignment, nameText, dontCreateMenu) {
         this.accessible_name = nameText ?? '';
@@ -10,7 +12,8 @@ export class Button {
         this.children = [];
         this.actions = [];
         this.styleClasses = [];
-        this.container = {visible: true};
+        this.container = new St.Bin({child: this});
+        this.pseudoClasses = new Set();
         this.destroyed = false;
         this.hover = false;
         this._handlers = [];
@@ -49,8 +52,17 @@ export class Button {
         this._handlers.filter(([s]) => s === signal).forEach(([, fn]) => fn(this));
     }
 
+    add_style_pseudo_class(name) {
+        this.pseudoClasses.add(name);
+    }
+
+    remove_style_pseudo_class(name) {
+        this.pseudoClasses.delete(name);
+    }
+
     destroy() {
         this.destroyed = true;
         this.emit('destroy');
+        this.container.destroy();
     }
 }

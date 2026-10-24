@@ -226,5 +226,6 @@ glass_frames glass "$run/glass.log"
 shadows_under_glass glass "$run/glass.log"
 glass_manager glass "$run/glass.log" light
 glass_unlock_vs_fedora "$run"
+indicator_cases "$run"
 echo "# logs and captures: $run"
 summary

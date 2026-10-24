@@ -177,6 +177,7 @@ function box(children) {
         },
         insert_child_at_index(child, index) {
             this.children.splice(index, 0, child);
+            child.connect?.('destroy', () => this.children.includes(child) && this.remove_child(child));
         },
     };
 }
@@ -328,6 +329,16 @@ export const panel = Object.assign(new StubActor('panel', {glass: PANEL_GLASS, e
         fact('panel.add', `${role} at ${position} in ${boxName}`);
         return indicator;
     },
+    menuManager: {
+        menus: [],
+        addMenu(menu) {
+            this.menus.push(menu);
+        },
+        removeMenu(menu) {
+            this.menus = this.menus.filter(m => m !== menu);
+        },
+    },
+    rightBox,
     statusArea: {
         activities: {
             get_first_child: () => ({get_children: () => [0, 1].map(() => workspaceDot)}),
