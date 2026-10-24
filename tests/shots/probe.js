@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+import Atk from 'gi://Atk';
 import Clutter from 'gi://Clutter';
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
@@ -1226,7 +1227,9 @@ function updateCardOf(dialog, unit) {
         subtitle: {...styleOf(find('apex-update-card-subtitle'), unit), text: find('apex-update-card-subtitle').text},
         toggle: {
             ...styleOf(toggle, unit), on: toggle.state, sensitive: toggle.get_parent().reactive,
-            knob: styleOf(find('handle'), unit),
+            knob: styleOf(find('handle'), unit), opacity: round(toggle.get_parent().opacity / 255),
+            focusable: toggle.get_parent().can_focus,
+            a11ySensitive: toggle.get_accessible().ref_state_set().contains_state(Atk.StateType.SENSITIVE),
         },
         buttons: dialog.buttonLayout.get_children().filter(b => b.visible).map(b => b.label),
     };

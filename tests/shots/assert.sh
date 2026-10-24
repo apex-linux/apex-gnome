@@ -837,6 +837,9 @@ modal_dialog() {
             and .buttons == ["Cancel", "Restart & Update"]'
     "${metric[@]}" 'ready-for-reboot: the same card, its switch on and insensitive, Restart & Update' \
         "$card.ready" '.below and .toggle.on and (.toggle.sensitive | not) and .buttons == ["Cancel", "Restart & Update"] and .title.text == "Start the new version next time"'
+    "${metric[@]}" 'that switch draws at $apex_update_switch_insensitive_opacity, takes no focus and is unavailable to assistive technology; the staged one is whole' \
+        "$card" '(.ready.toggle | (.opacity - ($t.apex_update_switch_insensitive_opacity | tonumber) | fabs < 0.01) and (.focusable | not) and (.a11ySensitive | not))
+            and (.staged.toggle | .opacity == 1 and .focusable and .a11ySensitive)'
     "${metric[@]}" 'above its title, stock'"'"'s system-shutdown-symbolic at $apex_end_session_icon_glyph_size in a $apex_end_session_icon_size circle of $apex_button' \
         "$d.endSession.icon" '.iconName == "system-shutdown-symbolic" and .above and (.glyph | px_is($t.apex_end_session_icon_glyph_size))
             and (.width | px_is($t.apex_end_session_icon_size)) and (.height | px_is($t.apex_end_session_icon_size))

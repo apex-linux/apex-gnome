@@ -324,8 +324,9 @@ REPORT_OF_A_DIALOG_DRAWN_FROM_TOKENS='
         subtitle: {text: "45.20261010.133 · GNOME 51.1, Linux 7.2.9, Mesa 26.1.2", foreground: ($t.apex_fg_dim | hex),
             font: {size: ($t.apex_font_update_card_subtitle_size | px)}},
         toggle: {on: true, sensitive: true, width: ($t.apex_update_switch_width | px), height: ($t.apex_update_switch_height | px),
-            background: "#3584e4ff", knob: {width: ($t.apex_update_switch_knob | px)}},
-        buttons: ["Cancel", "Restart & Update"]} | {staged: ., ready: (.toggle.sensitive = false)}),
+            background: "#3584e4ff", knob: {width: ($t.apex_update_switch_knob | px)}, opacity: 1, focusable: true, a11ySensitive: true},
+        buttons: ["Cancel", "Restart & Update"]}
+        | {staged: ., ready: (.toggle += {sensitive: false, opacity: ($t.apex_update_switch_insensitive_opacity | tonumber), focusable: false, a11ySensitive: false})}),
     contentSpacing: ($t.apex_dialog_gap | px), textSpacing: ($t.apex_dialog_text_gap | px),
     title: {font: {size: ($t.apex_font_dialog_title_size | px), weight: ($t.apex_font_heading_weight | tonumber)}},
     description: {font: {size: ($t.apex_font_size | px)}, foreground: ($t.apex_fg_dim | hex)},
@@ -1069,7 +1070,7 @@ test_modal_dialog() {
     local variant change what passes failures open_gaps
     for variant in light dark; do
         read -r passes failures open_gaps <<<"$(assert_run modal_dialog "$variant")"
-        if ((failures == 0 && open_gaps == 0 && passes == 16)); then
+        if ((failures == 0 && open_gaps == 0 && passes == 17)); then
             ok "modal dialog ($variant): drawn from the tokens it passes all $passes assertions"
         else
             not_ok "modal dialog ($variant): drawn from the tokens it passes (passed/failed/gaps $passes/$failures/$open_gaps): $(grep -m3 '^FAIL' "$T/top-bar.out" | paste -sd'|' -)"
@@ -1111,6 +1112,9 @@ del(.surfaces.dialog.endSession.buttons[1])|stock's row, without Restart
 .surfaces.dialog.updateCard.staged.toggle.on = false|the switch off by default
 .surfaces.dialog.updateCard.staged.buttons = ["Cancel", "Restart"]|Restart not relabelled while the switch is on
 .surfaces.dialog.updateCard.ready.toggle.sensitive = true|a ready-for-reboot switch that turns off
+.surfaces.dialog.updateCard.ready.toggle.opacity = 1|a ready-for-reboot switch drawn like an active one
+.surfaces.dialog.updateCard.ready.toggle.focusable = true|a ready-for-reboot switch that takes focus
+.surfaces.dialog.updateCard.ready.toggle.a11ySensitive = true|a ready-for-reboot switch announced as available
 CHANGES
 }
 
