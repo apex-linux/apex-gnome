@@ -93,8 +93,10 @@ if (settings) {
     if (GLib.getenv('PROBE_HINT_SHOWN') === '1')
         settings.set_boolean('search-hint-shown', true);
     const disabled = GLib.getenv('PROBE_DISABLED');
-    if (disabled)
+    if (disabled) {
         settings.set_strv('disabled-features', disabled.split(','));
+        fact('disabled-features', settings.get_strv('disabled-features').join(','));
+    }
 }
 
 const Hooks = await import(`file://${shellDir}/js/ui/apex/hooks.js`);
