@@ -119,8 +119,14 @@ const PANEL_GLASS = {blur: 24, saturation: 1.6, radius: 0};
 const POPOVER_GLASS = {blur: 30, saturation: 1.8, radius: 26};
 
 export const uiGroup = Object.assign(new StubActor('uiGroup', {extents: [0, 0, 1440, 900]}), {
-    add_child() {},
-    remove_child() {},
+    children: [],
+    add_child(actor) {
+        this.children.push(actor);
+        actor._parent = this;
+    },
+    remove_child(actor) {
+        this.children = this.children.filter(a => a !== actor);
+    },
 });
 const boxPointer = new StubActor('boxpointer', {parent: uiGroup, redirect: 2});
 
@@ -235,17 +241,6 @@ export function notify(title) {
 
 // layout.js's chrome parameters: Params.parse throws on any other.
 const CHROME_PARAMS = ['trackFullscreen', 'affectsStruts'];
-
-export const uiGroup = {
-    children: [],
-    add_child(actor) {
-        this.children.push(actor);
-        actor._parent = this;
-    },
-    remove_child(actor) {
-        this.children = this.children.filter(a => a !== actor);
-    },
-};
 
 let modals = 0;
 
