@@ -3,6 +3,7 @@
 // G2's glass cases (G2_GLASS=1): with patch 0003, frames as the shell drew them (frame.c);
 // in every shell, a capture of the stock unlock blur. tests/shots/README.md, "Glass".
 
+import Clutter from 'gi://Clutter';
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import Mtk from 'gi://Mtk';
@@ -12,9 +13,12 @@ import St from 'gi://St';
 import * as BoxPointer from 'resource:///org/gnome/shell/ui/boxpointer.js';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import * as MessageTray from 'resource:///org/gnome/shell/ui/messageTray.js';
+import * as ModalDialog from 'resource:///org/gnome/shell/ui/modalDialog.js';
+import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 import * as Scripting from 'resource:///org/gnome/shell/ui/scripting.js';
 
 import * as BlurRef from './blur-ref.js';
+import * as Png from './png.js';
 
 Gio._promisify(Shell.Screenshot.prototype, 'screenshot_area');
 
@@ -37,8 +41,11 @@ const BACKGROUND_BRIGHTNESS = 0.8;
 const FRAME_TIMEOUT_MS = 2000;
 const APEX_SCHEMA = 'io.github.apex_linux.Apex.Desktop';
 const GLASS_EFFECT = 'apex-glass';
-const STOCK_TRIES = 5;
+const CLIP_TRIES = 5;
 const SOLID_STYLE_CLASS = 'apex-solid';
+const SHADOW_RIM = 2;
+const SHADOW_CROP = 20;
+const SHADOW_ZOOM = 4;
 
 function colourOf(column, row, generation = 0) {
     return PALETTE[(column * 7 + row * 5 + generation) % PALETTE.length];
@@ -85,9 +92,9 @@ function patternUnder(tiles, scale) {
 // The frame after the next paint of the stage view, as it went out, and whether that
 // paint's redraw clip covered the box.
 let step = '';
-function nextFrame(scale, label = '') {
+function nextFrame(scale, label = '', rect = BOX) {
     step = label;
-    const box = new Mtk.Rectangle(BOX);
+    const box = new Mtk.Rectangle(rect);
     return new Promise((resolve, reject) => {
         let covered = null;
         const paintId = global.stage.connect('paint-view', (_stage, _view, clip) => {
@@ -103,11 +110,22 @@ function nextFrame(scale, label = '') {
             global.stage.disconnect(paintId);
             global.stage.disconnect(afterId);
             GLib.source_remove(timeoutId);
-            const bytes = G2Frame.read(view.get_framebuffer(), BOX.x * scale, BOX.y * scale,
-                BOX.width * scale, BOX.height * scale);
+            const bytes = G2Frame.read(view.get_framebuffer(), rect.x * scale, rect.y * scale,
+                rect.width * scale, rect.height * scale);
             resolve({covered, rgba: bytes.toArray()});
         });
     });
+}
+
+// An actor's box on the next frame, as drawn, in device pixels.
+export async function framePixels(actor) {
+    G2Frame ??= (await import('gi://G2Frame')).default;
+    const [x, y] = actor.get_transformed_position().map(Math.round);
+    const [width, height] = actor.get_transformed_size().map(Math.round);
+    const scale = actor.get_resource_scale();
+    actor.queue_redraw();
+    const frame = await nextFrame(scale, `framePixels ${actor}`, {x, y, width, height});
+    return {...frame, width: width * scale, height: height * scale};
 }
 
 async function fullFrame(group, scale) {
@@ -116,11 +134,26 @@ async function fullFrame(group, scale) {
 }
 
 // Damage under the box that does not reach its edges: the redraw clip is the tile alone.
-function damage(tiles, generation, index = generation) {
+let damages = 0;
+function damage(tiles, index) {
     const [column, row] = DAMAGED_TILES[index - 1];
     const tile = tiles.get(`${column},${row}`);
-    tile.colour = colourOf(column, row, generation);
+    tile.colour = colourOf(column, row, ++damages);
     tile.style = `background-color: ${tile.colour};`;
+}
+
+// Another redraw can land in the frame after a damage and cover the box: a full redraw, which
+// shows no clip at all, so the tile is damaged again for a frame whose clip misses the box.
+async function clippedFrame(group, tiles, index, scale, label) {
+    let last, frame, tries = 0;
+    do {
+        // eslint-disable-next-line no-await-in-loop
+        last = await fullFrame(group, scale);
+        damage(tiles, index);
+        // eslint-disable-next-line no-await-in-loop
+        frame = await nextFrame(scale, label);
+    } while (frame.covered && ++tries < CLIP_TRIES);
+    return {last, frame, tries: tries + 1};
 }
 
 // Device pixels per stage pixel, and per CSS pixel: mutter may lay the stage out in either.
@@ -141,17 +174,15 @@ async function pixelTests() {
             saturation: SATURATION, corner_radius: CORNER_RADIUS * deviceCss, fine: true,
         });
         glass.add_effect(effect);
-        await fullFrame(group, scale);
 
-        damage(tiles, 1);
-        const clippedOnce = await nextFrame(scale, 'clipped once');
+        const {frame: clippedOnce, tries: referenceTries} = await clippedFrame(group, tiles, 1, scale, 'clipped once');
         const reblurred = await nextFrame(scale, 'reblurred');
         const [width, height] = [BOX.width * scale, BOX.height * scale];
         const options = {sigma: SIGMA * deviceCss, saturation: SATURATION, cornerRadius: CORNER_RADIUS * deviceCss};
         const expected = BlurRef.glass(patternUnder(tiles, scale), width, height, options);
         const downscale = BlurRef.fineDownscale(width, height, options.sigma);
         const reference = {
-            clippedFirst: clippedOnce.covered === false, reblurCovered: reblurred.covered, downscale,
+            clippedFirst: clippedOnce.covered === false, reblurCovered: reblurred.covered, tries: referenceTries, downscale,
             ...BlurRef.errors(reblurred.rgba, expected, width, height, downscale / 2),
         };
 
@@ -165,31 +196,20 @@ async function pixelTests() {
             differingFromFull: BlurRef.differing(forwarded.rgba, await fullFrame(group, scale)),
         };
 
-        const last = await fullFrame(group, scale);
-        damage(tiles, 3);
-        const clipped = await nextFrame(scale, 'clipped');
+        const {last, frame: clipped, tries: clippedTries} = await clippedFrame(group, tiles, 3, scale, 'clipped');
         const after = await nextFrame(scale, 'after clipped');
         const clippedRedraw = {
-            covered: clipped.covered,
+            covered: clipped.covered, tries: clippedTries,
             differingFromLast: BlurRef.differing(clipped.rgba, last),
             nextCovered: after.covered,
             nextDifferingFromFull: BlurRef.differing(after.rgba, await fullFrame(group, scale)),
         };
 
         effect.fine = false;
-        // Another redraw can land in the stock frame and cover the box: then it is a full
-        // redraw, which shows nothing, so the case damages again for a frame that misses it.
-        let stockLast, stockClipped, tries = 0;
-        do {
-            // eslint-disable-next-line no-await-in-loop
-            stockLast = await fullFrame(group, scale);
-            damage(tiles, 4 + tries, 4);
-            // eslint-disable-next-line no-await-in-loop
-            stockClipped = await nextFrame(scale, 'stock clipped');
-        } while (stockClipped.covered && ++tries < STOCK_TRIES);
+        const {last: stockLast, frame: stockClipped, tries} = await clippedFrame(group, tiles, 4, scale, 'stock clipped');
         const stockFull = await fullFrame(group, scale);
         const stock = {
-            covered: stockClipped.covered, tries: tries + 1,
+            covered: stockClipped.covered, tries,
             differingFromLast: BlurRef.differing(stockClipped.rgba, stockLast),
             differingFromFull: BlurRef.differing(stockClipped.rgba, stockFull),
             ...BlurRef.errors(stockClipped.rgba, BlurRef.glass(patternUnder(tiles, scale), width, height, options),
@@ -331,7 +351,7 @@ async function withMenuOpen(menu, read) {
     menu.open(BoxPointer.PopupAnimation.NONE);
     try {
         await Scripting.waitLeisure();
-        return read(menu.box);
+        return await read(menu.box);
     } finally {
         menu.close(BoxPointer.PopupAnimation.NONE);
     }
@@ -381,6 +401,176 @@ async function withSetting(settings, key, value, read) {
     }
 }
 
+// The pixels the rounded box covers fully, a band in from its edges: no shadow layer reaches them.
+function interiorMask(width, height, radius, band) {
+    const mask = BlurRef.fullyCovered(width, height, radius);
+    for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+            if (Math.min(x, y, width - 1 - x, height - 1 - y) < band)
+                mask[y * width + x] = 0;
+        }
+    }
+    return mask;
+}
+
+// A surface's frame with its shadows and with `shadows` in disabled-features: the same pixels
+// wherever the rounded box covers fully, but for a 2 px band in from its edges.
+function compareFrames(on, off) {
+    const {width, height, radius} = on;
+    return {
+        covered: on.covered && off.covered,
+        sameSize: width === off.width && height === off.height,
+        interiorDiffering: BlurRef.differing(on.rgba, off.rgba, interiorMask(width, height, radius, SHADOW_RIM)),
+        rim: rimMax(on.rgba, off.rgba, width, height, radius),
+        picked: on.picked,
+        samePick: on.picked === off.picked,
+    };
+}
+
+// The largest channel difference in the rim the rounded box covers at least in part: outside
+// its arc, in the corners, the layer's shadow is meant to show.
+function rimMax(a, b, width, height, radius) {
+    let max = 0;
+    for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+            if (Math.min(x, y, width - 1 - x, height - 1 - y) >= SHADOW_RIM || BlurRef.coverage(x, y, width, height, radius) === 0)
+                continue;
+            const i = 4 * (y * width + x);
+            max = Math.max(max, ...[0, 1, 2].map(c => Math.abs(a[i + c] - b[i + c])));
+        }
+    }
+    return max;
+}
+
+// The four corners of a box and SHADOW_CROP px around them, each four times over, in one PNG.
+async function writeCorners(box, name) {
+    const [x, y] = box.get_transformed_position().map(Math.round);
+    const [width, height] = box.get_transformed_size().map(Math.round);
+    const scale = box.get_resource_scale();
+    const c = SHADOW_CROP;
+    const rect = {x: x - c, y: y - c, width: width + 2 * c, height: height + 2 * c};
+    global.stage.queue_redraw();
+    const frame = await nextFrame(scale, `corners ${name}`, rect);
+    const [fw, side] = [rect.width * scale, 2 * c * scale];
+    const out = 2 * side * SHADOW_ZOOM;
+    const rgba = new Uint8Array(out * out * 4);
+    const origins = [[0, 0], [fw - side, 0], [0, rect.height * scale - side], [fw - side, rect.height * scale - side]];
+    origins.forEach(([ox, oy], i) => {
+        for (let py = 0; py < side * SHADOW_ZOOM; py++) {
+            for (let px = 0; px < side * SHADOW_ZOOM; px++) {
+                const from = 4 * ((oy + Math.floor(py / SHADOW_ZOOM)) * fw + ox + Math.floor(px / SHADOW_ZOOM));
+                const to = 4 * (((i >> 1) * side * SHADOW_ZOOM + py) * out + (i & 1) * side * SHADOW_ZOOM + px);
+                rgba.set(frame.rgba.subarray(from, from + 4), to);
+            }
+        }
+    });
+    const file = Gio.File.new_for_path(`${GLib.getenv('G2_CAPTURES')}/shadow-corners-${name}.png`);
+    file.replace_contents(Png.encode({width: out, height: out, rgba}), null, false, Gio.FileCreateFlags.NONE, null);
+    return file.get_basename();
+}
+
+// What a click just inside the box's left edge reaches: the same actor with shadows on and off.
+function pickedInside(box) {
+    const [x, y] = box.get_transformed_position();
+    const [, height] = box.get_transformed_size();
+    const actor = global.stage.get_actor_at_pos(Clutter.PickMode.REACTIVE, Math.round(x) + 1, Math.round(y + height / 2));
+    return `${actor?.constructor.name}.${actor?.style_class ?? ''}`;
+}
+
+// A BoxPointer draws a background and border of its own only with an arrow colour or border.
+function drawsNothingOutside(boxPointer) {
+    const node = boxPointer.get_theme_node();
+    const [hasColour, colour] = node.lookup_color('-arrow-background-color', false);
+    return (!hasColour || colour.alpha === 0) && node.get_length('-arrow-border-width') === 0;
+}
+
+async function popupMenuOver(read) {
+    const source = new St.Widget({x: 400, y: 300, width: 40, height: 20, reactive: true});
+    Main.uiGroup.add_child(source);
+    const menu = new PopupMenu.PopupMenu(source, 0.5, St.Side.TOP);
+    ['Open', 'Rename', 'Move to Trash'].forEach(label => menu.addAction(label, () => {}));
+    Main.uiGroup.add_child(menu.actor);
+    try {
+        return await withMenuOpen(menu, box => read(box, menu.actor));
+    } finally {
+        menu.destroy();
+        source.destroy();
+    }
+}
+
+async function dialogOver(read) {
+    const dialog = new ModalDialog.ModalDialog();
+    dialog.contentLayout.add_child(new St.Label({text: 'Move "Report.pdf" to the Trash?'}));
+    dialog.addButton({label: 'Cancel', action: () => {}});
+    dialog.open();
+    try {
+        await Scripting.waitLeisure();
+        return await read(dialog.dialogLayout._dialog, null);
+    } finally {
+        dialog.close();
+        await Scripting.waitLeisure();
+    }
+}
+
+// The shadow layers, above their surfaces and cut out inside them, leave each surface's own
+// pixels alone: Quick Settings (glass, over the pattern), a popup menu and a dialog, light and dark.
+async function shadowsOverSurfaces() {
+    const apex = new Gio.Settings({schema_id: APEX_SCHEMA});
+    const disabled = apex.get_strv('disabled-features');
+    const group = new St.Widget();
+    Main.uiGroup.insert_child_above(group, global.window_group);
+    buildPattern(group);
+    const surfaces = {
+        quickSettings: read => withMenuOpen(Main.panel.statusArea.quickSettings.menu,
+            box => read(box, Main.panel.statusArea.quickSettings.menu.actor)),
+        popupMenu: popupMenuOver,
+        dialog: dialogOver,
+    };
+    const readAll = async withShadows => {
+        const frames = {};
+        for (const [name, open] of Object.entries(surfaces)) {
+            // eslint-disable-next-line no-await-in-loop
+            frames[name] = await open(async (box, boxPointer) => {
+                const [x, y] = box.get_transformed_position();
+                group.set_position(Math.round(x) - PATTERN.x, Math.round(y) - PATTERN.y);
+                await Scripting.waitLeisure();
+                const radius = box.get_theme_node().get_border_radius(St.Corner.TOPLEFT) * box.get_resource_scale();
+                return {
+                    ...await framePixels(box), radius,
+                    picked: pickedInside(box),
+                    arrowless: boxPointer ? drawsNothingOutside(boxPointer) : null,
+                    corners: withShadows && name === 'quickSettings' ? await writeCorners(box, readAll.variant) : null,
+                };
+            });
+        }
+        return frames;
+    };
+    const compareVariant = async variant => {
+        readAll.variant = variant;
+        const on = await readAll(true);
+        apex.set_strv('disabled-features', [...disabled, 'shadows']);
+        await Scripting.waitLeisure();
+        const off = await readAll(false);
+        apex.set_strv('disabled-features', disabled);
+        await Scripting.waitLeisure();
+        return Object.fromEntries(Object.keys(surfaces).map(name => [name, {
+            ...compareFrames(on[name], off[name]),
+            arrowless: on[name].arrowless, corners: on[name].corners,
+        }]));
+    };
+    const iface = new Gio.Settings({schema_id: 'org.gnome.desktop.interface'});
+    try {
+        return {
+            light: await compareVariant('light'),
+            dark: await withSetting(iface, 'color-scheme', new GLib.Variant('s', 'prefer-dark'), () => compareVariant('dark')),
+        };
+    } finally {
+        apex.set_strv('disabled-features', disabled);
+        group.destroy();
+        await Scripting.waitLeisure();
+    }
+}
+
 // The glass manager's surfaces, then Reduce Transparency, high contrast and the kill switch.
 async function managerTests() {
     const apex = new Gio.Settings({schema_id: APEX_SCHEMA});
@@ -406,5 +596,6 @@ export async function glassReport() {
         unlock: await unlockCapture(),
         pixels: patched ? await pixelTests() : null,
         manager: patched ? await managerTests() : null,
+        shadows: patched ? await shadowsOverSurfaces() : null,
     };
 }
