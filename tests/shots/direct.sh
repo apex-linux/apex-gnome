@@ -39,7 +39,8 @@ readonly FRAME_DIR=/run/g2-frame
 readonly G2_CLOCK='2026-09-28 09:41:00'
 G2_CLOCK_EPOCH=$(date -u -d "$G2_CLOCK" +%s)
 readonly G2_CLOCK_EPOCH
-readonly FIXTURE_NAMES=(org.freedesktop.UPower org.freedesktop.NetworkManager org.bluez net.hadess.SwitcherooControl)
+readonly FIXTURE_NAMES=(org.freedesktop.UPower org.freedesktop.NetworkManager org.bluez net.hadess.SwitcherooControl
+    org.freedesktop.UPower.PowerProfiles)
 # Two fixed workspaces: stock widens the active workspace dot by a factor that depends on
 # the count. A 24-hour clock: in 12 hours a one-digit hour adds a figure space.
 readonly NO_HOT_CORNER='org.gnome.desktop.interface enable-hot-corners false'
@@ -64,7 +65,7 @@ mkdir -p /etc/dbus-1
 } >/etc/dbus-1/system-local.conf
 dbus-daemon --system --fork || echo "no system bus"
 mkdir -p "/out/fixtures-$part"
-python3 /w/fixtures.py "/out/fixtures-$part" >"/out/fixtures-$part.txt" 2>&1 || echo "fixtures.py: exit $?"
+G2_POWER_PROFILES=1 python3 /w/fixtures.py "/out/fixtures-$part" >"/out/fixtures-$part.txt" 2>&1 || echo "fixtures.py: exit $?"
 mkdir -p /tmp/.X11-unix && chmod 1777 /tmp/.X11-unix
 gcc -O2 -Wall -Werror -shared -fPIC -o "$CLOCK_LIB" /w/clock.c || { echo "direct.sh: cannot build clock.c" >&2; exit 1; }
 # ld.so only warns when a preload is missing, and the shells would keep the real clock.

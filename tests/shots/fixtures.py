@@ -5,13 +5,15 @@
 G2's python-dbusmock fixtures on the system bus (DBUS_SYSTEM_BUS_ADDRESS, or the
 default): UPower with a battery at 87 %, NetworkManager on the Wi-Fi network
 "Apex-5G" with "Apex-2.4G" and the open "Library Guest" in range, and BlueZ with the
-Bluetooth keyboard "Keychron K3" connected, and switcheroo-control with an integrated and
-a discrete GPU. The mocks keep running after this exits; each logs to LOG_DIR/fixture-NAME.log and leaves
+Bluetooth keyboard "Keychron K3" connected, switcheroo-control with an integrated and a
+discrete GPU, and with G2_POWER_PROFILES=1 power-profiles-daemon at Balanced. The mocks
+keep running after this exits; each logs to LOG_DIR/fixture-NAME.log and leaves
 its pid in LOG_DIR/fixture-NAME.pid.
 Prints one line, G2-FIXTURES and what the bus then reports, as JSON.
 """
 
 import json
+import os
 import subprocess
 import sys
 import time
@@ -55,6 +57,7 @@ NM_PATH = "/org/freedesktop/NetworkManager"
 BLUEZ = "org.bluez"
 SWITCHEROO = "net.hadess.SwitcherooControl"
 SWITCHEROO_PATH = "/net/hadess/SwitcherooControl"
+POWER_PROFILES = "org.freedesktop.UPower.PowerProfiles"
 TEMPLATE_PARAMETERS = {"upower": {"DaemonVersion": "1.90", "OnBattery": True}}
 # python-dbusmock has no switcheroo-control template: that mock is a bare object.
 SERVICES = {
@@ -62,10 +65,18 @@ SERVICES = {
        for template, name in (("upower", UPOWER), ("networkmanager", NM), ("bluez5", BLUEZ))},
     "switcheroo": (SWITCHEROO, [SWITCHEROO, SWITCHEROO_PATH, SWITCHEROO]),
 }
+# Opt-in, so the app tests that share these fixtures keep Quick Settings without Power Mode.
+OPTIONAL_SERVICES = {"upower_power_profiles_daemon": (POWER_PROFILES, ["--template", "upower_power_profiles_daemon"])}
+
+
+def services():
+    if os.environ.get("G2_POWER_PROFILES") == "1":
+        return {**SERVICES, **OPTIONAL_SERVICES}
+    return SERVICES
 
 
 def spawn(log_dir):
-    for fixture, (_name, args) in SERVICES.items():
+    for fixture, (_name, args) in services().items():
         log = open(f"{log_dir}/fixture-{fixture}.log", "w", encoding="utf-8")
         mock = subprocess.Popen(
             [sys.executable, "-m", "dbusmock", "--system", *args],
@@ -75,7 +86,7 @@ def spawn(log_dir):
             print(mock.pid, file=pid)
     bus = dbus.SystemBus()
     deadline = time.monotonic() + READY_TIMEOUT_S
-    names = [name for name, _args in SERVICES.values()]
+    names = [name for name, _args in services().values()]
     while not all(bus.name_has_owner(name) for name in names):
         if time.monotonic() > deadline:
             missing = [name for name in names if not bus.name_has_owner(name)]
@@ -184,13 +195,21 @@ def gpus(bus):
             "names": [str(gpu["Name"]) for gpu in props.Get(SWITCHEROO, "GPUs")]}
 
 
+def power_profiles(bus):
+    if "upower_power_profiles_daemon" not in services():
+        return None
+    props = Service(bus, POWER_PROFILES).props("/org/freedesktop/UPower/PowerProfiles")
+    return {"active": str(props.Get(POWER_PROFILES, "ActiveProfile")),
+            "profiles": [str(p["Profile"]) for p in props.Get(POWER_PROFILES, "Profiles")]}
+
+
 def main():
     if len(sys.argv) != 2 or sys.argv[1].startswith("-"):
         print(__doc__, file=sys.stderr)
         return 2
     bus = spawn(sys.argv[1])
     print("G2-FIXTURES " + json.dumps({"battery": battery(bus), "wifi": wifi(bus), "keyboard": keyboard(bus),
-                                         "gpus": gpus(bus)}))
+                                         "gpus": gpus(bus), "powerProfiles": power_profiles(bus)}))
     return 0
 
 

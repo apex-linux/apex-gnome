@@ -201,6 +201,7 @@ no_dock stock-dark "$run/stock-dark.log"
 for c in default:light default-scale1:light dark-style:dark; do
     shell_surfaces "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
     quick_settings "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
+    quick_settings_layer "${c%:*}" "$run/${c%:*}.log" apex
     window_switcher "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
     modal_dialog "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
     date_menu "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
@@ -210,6 +211,10 @@ for c in default:light default-scale1:light dark-style:dark; do
     derived_surfaces "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
     tile_preview "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
     spotlight_style "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
+    screenshot_ui "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
+done
+for c in stock-light stock-dark; do
+    quick_settings_layer "$c" "$run/$c.log" stock
 done
 layer_cycles "$run"
 motion_curve "$run"

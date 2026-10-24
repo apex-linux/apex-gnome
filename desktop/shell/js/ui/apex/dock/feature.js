@@ -7,6 +7,7 @@ import Clutter from 'gi://Clutter';
 import Gio from 'gi://Gio';
 import St from 'gi://St';
 
+import * as Glass from '../glass/registry.js';
 import * as Hooks from '../hooks.js';
 import * as Main from '../../main.js';
 import {ApexDock} from './dock.js';
@@ -88,6 +89,7 @@ export function enable() {
     _dock = new ApexDock(_iconSize());
     _box = new St.Widget({name: 'apexDockBox', layout_manager: new Clutter.BinLayout()});
     _box.add_child(_dock);
+    Glass.register(_dock._background, {name: 'dock'});
     Main.layoutManager.addChrome(_box, {trackFullscreen: true});
     Main.overview.dash.hide();
 

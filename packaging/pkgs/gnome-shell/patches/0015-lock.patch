@@ -91,17 +91,12 @@ index 21b4736..8c77b98 100644
                  });
              }
          }
-@@ -894,8 +897,9 @@ export const UnlockDialog = GObject.registerClass({
-     }
- 
-     _setTransitionProgress(progress) {
-+        const clockProgress = ApexHooks.value('unlock-clock-progress', progress);
+@@ -897,3 +900,4 @@ export const UnlockDialog = GObject.registerClass({
          this._promptBox.visible = progress > 0;
 -        this._clock.visible = progress < 1;
++        const clockProgress = ApexHooks.value('unlock-clock-progress', progress);
 +        this._clock.visible = clockProgress < 1;
  
-         this._otherUserButton.set({
-             reactive: progress > 0,
 @@ -926,13 +930,13 @@ export const UnlockDialog = GObject.registerClass({
  
          const clockMotionParams = useMotion

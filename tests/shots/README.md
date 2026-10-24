@@ -61,12 +61,17 @@ The direct cases:
 Every case: the probe ran (so the static import graph loaded), from `startup-complete`, and no `JS ERROR`;
 the wall clock stands at the fixed time and the top bar's clock shows it (`Mon Sep 28`, EN SPACE, `09:41`).
 
+A probe that runs longer than 30 s keeps `gnome-shell-perf-helper` awake with a call every 10 s:
+the helper quits after 30 s without one, and `scripting.js`'s last call to it would then end the
+shell with exit 1.
+
 ## Fixtures and the clock
 
 Before the first case, `direct.sh` lets root own and call the fixtures' names on the
 container's system bus (`/etc/dbus-1/system-local.conf`) and runs `fixtures.py`, which
-starts python-dbusmock's `upower`, `networkmanager` and `bluez5` templates there, and a bare
-mock of switcheroo-control, which has no template:
+starts python-dbusmock's `upower`, `networkmanager` and `bluez5` templates there, a bare
+mock of switcheroo-control, which has no template, and (`G2_POWER_PROFILES=1`)
+`upower_power_profiles_daemon`:
 
 | Service | Fixture | The shell shows |
 |---|---|---|
@@ -74,6 +79,7 @@ mock of switcheroo-control, which has no template:
 | NetworkManager | the primary connection: Wi-Fi "Apex-5G" at signal 90, connected globally, with "Apex-2.4G" (72) and the open "Library Guest" (48) in range, each with WPA2's ciphers or none, as libnm needs to list a network | `network-wireless-signal-excellent-symbolic`, and three networks in the Wi-Fi menu |
 | BlueZ | the Bluetooth keyboard "Keychron K3", paired and connected | no glyph: the status pill shows network, volume and battery only (the `panel` feature) |
 | switcheroo-control | two GPUs, "Intel Graphics" the default and "NVIDIA GeForce RTX 4060" (`HasDualGpu`) | "Launch Using Discrete Graphics Card" in an app's menu, the dock's included |
+| power-profiles-daemon | the Balanced profile, with Power Saver and Performance | the Power Mode toggle, lit at Balanced (the `quick-settings` feature); no glyph in the status pill |
 
 `fixtures-PART.txt` holds what the bus reports afterwards, and `assert.sh` checks it for
 each container. `direct.sh` builds `clock.c` and preloads it into each shell with
@@ -247,6 +253,20 @@ a title shown without hover.
 the window group plays the window and the stock `TilePreview` opens over the left half of the
 work area, captured with `G2_SURFACE_SCENES=1`. It reads the preview's box against the tile, its
 clear inset border, the radius inside it, the accent fill and the inset accent ring.
+
+`screenshot_ui` runs in the same cases. The probe opens the stock screenshot UI in its
+selection mode, captures it with `G2_SURFACE_SCENES=1`, and reads the panel, the close button
+in the heading row, the area buttons (Window insensitive with no window), the pointer toggle,
+the capture button and its recording state, the screenshot/screencast switch, the selection's
+shade, outline and handles, then the screen mode's frame; a checked window frame is a stand-in.
+
+`quick_settings_layer` checks the `quick-settings` layer feature in the same cases, and
+stock in the stock cases. The probe reads the grid's toggles in order (the VPN toggle by
+its class: it has no title without a VPN connection), Power Mode, the status pill and Do
+Not Disturb's subtitle, then clicks Power Mode twice: VPN right after Airplane Mode, Power
+Mode lit through `apex-lit` with `checked` stock, the power-profile indicator out of the
+pill, "Off" under a toggle without a subtitle of its own, and the clicks switching to the
+last profile and back, still lit. Stock keeps VPN before Airplane Mode and nothing lit.
 
 `derived_surfaces` reads surfaces with no board, which G2 never opens, from nested
 stand-ins in the same cases: the workspace switcher and its dots, the resize popup, the
