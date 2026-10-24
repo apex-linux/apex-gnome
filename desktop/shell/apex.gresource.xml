@@ -50,6 +50,7 @@
     <file alias="shadows/cutout.js">js/ui/apex/shadows/cutout.js</file>
     <file alias="quick-settings/feature.js">js/ui/apex/quick-settings/feature.js</file>
     <file alias="quick-settings/submenu.js">js/ui/apex/quick-settings/submenu.js</file>
+    <file alias="end-session/feature.js">js/ui/apex/end-session/feature.js</file>
     <file alias="indicators/feature.js">js/ui/apex/indicators/feature.js</file>
     <file alias="indicators/watcher.js">js/ui/apex/indicators/watcher.js</file>
     <file alias="indicators/item.js">js/ui/apex/indicators/item.js</file>
