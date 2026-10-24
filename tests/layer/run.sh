@@ -526,6 +526,18 @@ fact "spotlight: taken out again, Super+Space opens it afresh" 'spotlight\.live-
 count_is "spotlight: every grab is given back" '^probe: modal\.push=' "$(grep -c '^probe: modal\.pop=' "$OUT")"
 lacks "spotlight: nothing fails" 'off for this session|did not disable cleanly|Spotlight search failed|JS ERROR|Gjs-WARNING'
 
+probe spotlight-refused "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_REFUSE_KEYBINDING=toggle-spotlight PROBE_PRESS=1
+fact "spotlight: mutter refusing Super+Space is noted" 'keybinding\.refused=toggle-spotlight'
+has "spotlight: and keeps the feature off for the session, with the reason" \
+    'Apex: feature spotlight off for this session \(enable: Error: mutter refused the keybinding toggle-spotlight\)'
+fact "spotlight: refused, Super+Space opens nothing" 'press\.1=overview=false spotlight=false'
+fact "spotlight: refused, the rest of the layer runs" 'scheme\.user\.after-enable=prefer-light'
+
+probe spotlight-no-action "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_SPOTLIGHT=no-action
+fact "spotlight: with a toggle action of NONE, Down moves the selection and leaves it open" \
+    "spotlight\.no-action\.down=APPLICATIONS: Disks Disk Usage Analyzer\*Open .*"
+fact "spotlight: and Esc still closes it" 'spotlight\.no-action\.escape=closed'
+
 probe spotlight-slow "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_SPOTLIGHT=slow PROBE_SPOTLIGHT_SLOW=org.gnome.Settings.desktop
 fact "spotlight: a slow provider does not hold back the sections that answered" \
     "spotlight\.slow\.at-700ms=APPLICATIONS: Disks\*Open Disk Usage Analyzer Disk Benchmark Disk Images \| $FILES"

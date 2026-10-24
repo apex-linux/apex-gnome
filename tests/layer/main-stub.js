@@ -2,6 +2,7 @@
 //
 // run.sh installs this as js/ui/main.js: the parts of main.js the layer and its features use.
 
+import GLib from 'gi://GLib';
 import Meta from 'gi://Meta';
 import Shell from 'gi://Shell';
 
@@ -518,7 +519,7 @@ export const overview = {
 
 export const wm = {
     addKeybinding(name, settings, flags, modes, handler) {
-        if (handlers.has(name)) {
+        if (handlers.has(name) || GLib.getenv('PROBE_REFUSE_KEYBINDING') === name) {
             fact('keybinding.refused', name);
             return Meta.KeyBindingAction.NONE;
         }
