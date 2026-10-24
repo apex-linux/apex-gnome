@@ -21,12 +21,12 @@ false keeps stock's 0 ms. Without the layer every hook returns stock.
 ---
  js/ui/boxpointer.js       | 7 +++++--
  js/ui/environment.js      | 7 +++++--
- js/ui/overviewControls.js | 9 +++++----
+ js/ui/overviewControls.js | 8 ++++----
  js/ui/windowManager.js    | 5 +++--
- 4 files changed, 18 insertions(+), 10 deletions(-)
+ 4 files changed, 17 insertions(+), 10 deletions(-)
 
 diff --git a/js/ui/boxpointer.js b/js/ui/boxpointer.js
-index 41c3a80..76d905f 100644
+index 621b368..8cfc1e7 100644
 --- a/js/ui/boxpointer.js
 +++ b/js/ui/boxpointer.js
 @@ -2,6 +2,7 @@ import Clutter from 'gi://Clutter';
@@ -37,7 +37,7 @@ index 41c3a80..76d905f 100644
  import * as Main from './main.js';
  
  export const PopupAnimation = {
-@@ -81,7 +82,8 @@ export const BoxPointer = GObject.registerClass({
+@@ -74,7 +75,8 @@ export const BoxPointer = GObject.registerClass({
      open(animate, onComplete) {
          const themeNode = this.get_theme_node();
          const rise = themeNode.get_length('-arrow-rise');
@@ -47,7 +47,7 @@ index 41c3a80..76d905f 100644
  
          const {reducedMotion} = St.Settings.get();
          const useMotion = reducedMotion !== St.ReducedMotion.REDUCE;
-@@ -145,7 +147,8 @@ export const BoxPointer = GObject.registerClass({
+@@ -138,7 +140,8 @@ export const BoxPointer = GObject.registerClass({
          const themeNode = this.get_theme_node();
          const rise = themeNode.get_length('-arrow-rise');
          const fade = animate & PopupAnimation.FADE;
@@ -104,18 +104,10 @@ index 074837d..781ced2 100644
      transition.set_to(target);
  
 diff --git a/js/ui/overviewControls.js b/js/ui/overviewControls.js
-index d7ef077..3e9ef4f 100644
+index 43d2bec..d9b5572 100644
 --- a/js/ui/overviewControls.js
 +++ b/js/ui/overviewControls.js
-@@ -6,6 +6,7 @@ import Meta from 'gi://Meta';
- import Shell from 'gi://Shell';
- import St from 'gi://St';
- 
-+import * as ApexHooks from './apex/hooks.js';
- import * as AppDisplay from './appDisplay.js';
- import * as Dash from './dash.js';
- import * as Main from './main.js';
-@@ -649,7 +650,7 @@ class ControlsManager extends St.Widget {
+@@ -650,7 +650,7 @@ class ControlsManager extends St.Widget {
              ? ControlsState.APP_GRID : ControlsState.WINDOW_PICKER;
          this._stateAdjustment.remove_transition('value');
          this._stateAdjustment.ease(value, {
@@ -124,7 +116,7 @@ index d7ef077..3e9ef4f 100644
              mode: Clutter.AnimationMode.EASE_OUT_SINE,
          });
      }
-@@ -681,7 +682,7 @@ class ControlsManager extends St.Widget {
+@@ -682,7 +682,7 @@ class ControlsManager extends St.Widget {
              Main.overview.hide();
          } else {
              this._stateAdjustment.ease(finalState, {
@@ -133,7 +125,7 @@ index d7ef077..3e9ef4f 100644
                  mode: Clutter.AnimationMode.EASE_OUT_QUAD,
                  onComplete: () => {
                      this.dash.showAppsButton.checked =
-@@ -720,7 +721,7 @@ class ControlsManager extends St.Widget {
+@@ -721,7 +721,7 @@ class ControlsManager extends St.Widget {
  
          this._stateAdjustment.value = ControlsState.HIDDEN;
          this._stateAdjustment.ease(state, {
@@ -142,7 +134,7 @@ index d7ef077..3e9ef4f 100644
              mode: Clutter.AnimationMode.EASE_OUT_SINE,
              onStopped: () => {
                  if (callback)
-@@ -738,7 +739,7 @@ class ControlsManager extends St.Widget {
+@@ -739,7 +739,7 @@ class ControlsManager extends St.Widget {
          this._ignoreShowAppsButtonToggle = true;
  
          this._stateAdjustment.ease(ControlsState.HIDDEN, {

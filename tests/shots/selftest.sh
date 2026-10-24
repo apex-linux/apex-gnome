@@ -397,7 +397,7 @@ REPORT_OF_AN_OVERVIEW_LAYER_FROM_TOKENS='
         workspace: {x: 250, y: 205, width: 939, height: 566, background: false,
             empty: {x: 644, y: 477, width: 150, height: 22, visible: true, text: "No open windows", foreground: ($t.apex_fg_dim | hex),
                 font: {size: ($t.apex_font_workspace_empty_size | px), weight: ($t.apex_font_heading_weight | tonumber)}}}},
-    appGrid: {grid: {columns: 7, rows: 4, iconSize: 88}}}}'
+    appGrid: {grid: {columns: 7, rows: 4, iconSize: 88}, strip: 0, box: {y: 132}}}}'
 # shellcheck disable=SC2016 # a jq program
 REPORT_OF_A_TILE_PREVIEW_DRAWN_FROM_TOKENS='
 ($t.apex_tile_preview_inset | px) as $i
@@ -881,7 +881,7 @@ test_overview_layer() {
     local variant change what passes failures open_gaps
     for variant in light dark; do
         read -r passes failures open_gaps <<<"$(assert_run overview_layer "$variant")"
-        if ((failures == 0 && open_gaps == 0 && passes == 6)); then
+        if ((failures == 0 && open_gaps == 0 && passes == 7)); then
             ok "overview feature ($variant): the layer's overview passes all $passes assertions"
         else
             not_ok "overview feature ($variant): the layer's overview passes (passed/failed/gaps $passes/$failures/$open_gaps): $(grep -m3 '^FAIL' "$T/top-bar.out" | paste -sd'|' -)"
@@ -903,6 +903,7 @@ test_overview_layer() {
 .surfaces.overviewLayer.workspace.empty.y = 300|the empty label off centre
 .surfaces.overviewLayer.workspace.empty.foreground = "#1d1d21ff"|the empty label in full $apex_fg
 .surfaces.appGrid.grid.iconSize = 96|upstream's 96 px launcher icons
+.surfaces.appGrid.box.y = 262|upstream's workspace strip above the grid
 CHANGES
 }
 
@@ -1295,6 +1296,11 @@ test_motion() {
 .animated.maximise.maximised = false|a window that did not maximise
 .still.locatePointer = null|a Locate Pointer ripple that no longer animates with animations off
 CHANGES
+    write_motion_run '{error: "the test client never mapped (Gtk-WARNING: Failed to open display)\nprobe.js:1700"}'
+    read -r passes failures <<<"$(assertion_counts motion_curve "$T/motion")"
+    expect_eq "motion: a client that never mapped fails once, with its stderr, not every assertion after it" \
+        "$((all - 6))/1 the test client never mapped (Gtk-WARNING: Failed to open display)" \
+        "$passes/$failures $(sed -n 's/^FAIL motion: //p' "$T/assertions.out")"
 }
 
 fixtures_report() {
