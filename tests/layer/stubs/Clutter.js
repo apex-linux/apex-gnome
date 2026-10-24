@@ -12,6 +12,8 @@ class Actor {}
 
 class BinLayout {}
 
+class Stage {}
+
 // The probe sets the key a press reports, as Clutter does before emitting key-press.
 class KeyController {
     connect(signal, fn) {
@@ -51,6 +53,7 @@ export default {
     BindCoordinate: {X: 0, Y: 1, WIDTH: 2, HEIGHT: 3, POSITION: 4, SIZE: 5, ALL: 6},
     BUTTON_SECONDARY: 3,
     BinLayout,
+    Stage,
     ClickGesture,
     KeyController,
     EventPhase: {BUBBLE: 0, CAPTURE: 1},

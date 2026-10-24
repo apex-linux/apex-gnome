@@ -105,7 +105,23 @@ class Widget {
     }
 
     get_stage() {
-        return null;
+        return this._stage ?? this._parent?.get_stage() ?? null;
+    }
+
+    get_theme_node() {
+        return this._themeNode ?? {get_shadow: () => null, get_border_radius: () => 0};
+    }
+
+    set_size(width, height) {
+        Object.assign(this, {width, height});
+    }
+
+    // Translation only: the probe's actors are neither scaled nor rotated.
+    apply_relative_transform_to_point(ancestor, point) {
+        let {x, y} = point;
+        for (let a = this; a && a !== ancestor; a = a._parent)
+            [x, y] = [x + a.x, y + a.y];
+        return {x, y};
     }
 
     get_effect() {
@@ -246,6 +262,7 @@ export default {
     BoxLayout,
     Button,
     ButtonMask: {ONE: 1, TWO: 2, THREE: 4},
+    Corner: {TOPLEFT: 0, TOPRIGHT: 1, BOTTOMRIGHT: 2, BOTTOMLEFT: 3},
     Clipboard: {get_default: () => clipboard},
     ClipboardType: {PRIMARY: 0, CLIPBOARD: 1},
     Entry,

@@ -3,6 +3,7 @@
 // Glass, like the OSD: the tint until S2b's glass manager blurs behind it.
 .notification-banner {
   @include apex-surface($apex_panel);
+  @include apex-shadow-layer;
   width: $apex_banner_width - 2 * $apex_banner_padding;
   min-height: 0;
   padding: $apex_banner_padding - $apex_surface_border;

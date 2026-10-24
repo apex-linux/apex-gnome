@@ -3,6 +3,7 @@
 // Modal dialogs stay solid (DESIGN.md). dialog.js sets the 12 px gap between the buttons.
 .modal-dialog {
   @include apex-surface($apex_panel_solid);
+  @include apex-shadow-layer;
   padding: ($apex_dialog_padding - $apex_surface_border) ($apex_dialog_padding - $apex_surface_border)
     ($apex_dialog_padding_bottom - $apex_surface_border);
   border-radius: $apex_radius_dialog;
