@@ -7,20 +7,21 @@ usage() {
 usage: tests/shots/signoff.sh RPM_DIR [OUT]
        tests/shots/signoff.sh --collect G2_RUN SHELL_SHOTS OUT
 
-The owner's sign-off set: each shell board's scene from the gnome-shell RPMs in RPM_DIR
-(the lane's _build/gnome-shell/out), headless at scale 2, light and dark, as root in a
-throwaway Fedora 45 container. Review captures, not tests: no golden and no assertion
-beyond the scene having opened. It first installs the apex-desktop of tests/lib/pins.sh
-(built with its make rpm, or from APEX_DESKTOP_SRC), whose vendor defaults bring the Facets
-wallpapers, the Apex icon theme and the fonts, and the apps its dock lists. patched.sh then
-runs direct.sh's signoff part (main's capture and indicator cases, every scene saved, and
-G2_SIGNOFF's real windows for the switcher and the overview); tests/shell/shoot.sh shoots
-the greeter, the lock screen, polkit's dialog and the power-off dialog. OUT (default _build/signoff)
-gets board-NN-SLUG-light.png and -dark.png for each board, and signoff.json: each board's
-number, title, scene and fixture state, the apex-gnome and apex-desktop pins, the layer's
-features enabled, the scale and the monitor; the runs' logs stay in _build/signoff-work. A board
-whose scene has no capture fails the run, named. --collect does only that last step, from a G2 run directory and shoot.sh's
-captures.
+The owner's sign-off set: each shell board's scene from the gnome-shell RPMs in RPM_DIR (the
+lane's _build/gnome-shell/out), headless at scale 2, light and dark, as root in a throwaway
+Fedora 45 container. Review captures, not tests: no golden and no assertion beyond the scene
+having opened and the sign-off windows having shown. It first installs the apex-desktop of
+tests/lib/pins.sh (built with its make rpm, or from APEX_DESKTOP_SRC), whose vendor defaults
+bring the Facets wallpapers, the Apex icon theme and the fonts, and the apps its dock lists.
+patched.sh then runs direct.sh's signoff part (main's capture and indicator cases, every
+scene saved, and G2_SIGNOFF's real windows for the switcher and the overview);
+tests/shell/shoot.sh shoots the greeter, the lock screen, polkit's dialog and the power-off
+dialog. OUT (default _build/signoff) gets board-NN-SLUG-light.png and -dark.png for each
+board, and signoff.json: each board's number, title, scene and fixture state, the apex-gnome
+and apex-desktop pins, the layer's features enabled, the scale and the monitor; the runs'
+logs stay in _build/signoff-work. A board whose scene has no capture, or a probe whose
+windows never all reached the overview, fails the run, named. --collect does only that last
+step, from a G2 run directory and shoot.sh's captures.
 EOF
 }
 
@@ -80,6 +81,11 @@ collect() {
             '{board: $board, title: $title, slug: $slug, source: $source, fixture: $fixture, scene: {light: $light, dark: $dark},
               files: {light: "board-\($board)-\($slug)-light.png", dark: "board-\($board)-\($slug)-dark.png"}}')")
     done <<<"$BOARDS"
+    for variant in default dark-style; do
+        { cat "$g2/$variant.log" "$g2/$variant.late.log" 2>/dev/null || :; } | sed -n 's/.*APEXG2-SIGNOFF //p' |
+            jq -se 'any(.previews == true)' >/dev/null ||
+            missing+=("boards 15 and 35, $variant: the sign-off windows never all showed in the overview")
+    done
     if ((${#missing[@]})); then
         printf 'signoff.sh: %s\n' "${missing[@]}" >&2
         die "${#missing[@]} scene(s) did not open"

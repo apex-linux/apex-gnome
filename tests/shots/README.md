@@ -498,7 +498,8 @@ dialog and the power-off dialog with an update staged. Each board's scene is cop
 `board-NN-SLUG-light.png` and `-dark.png`, and `signoff.json` records its title, its scene
 and fixture state, the apex-gnome and apex-desktop pins, the layer's features enabled, the
 scale and the monitor. These are review captures: nothing is compared, and only a scene
-without a capture fails the run, named. The `signoff` workflow (`workflow_dispatch` only)
+without a capture, or a probe whose three windows never all reached the overview, fails the
+run, named. The `signoff` workflow (`workflow_dispatch` only)
 uploads the set as `signoff-SHA`.
 
 ## Known gaps

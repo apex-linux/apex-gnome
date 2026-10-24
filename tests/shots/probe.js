@@ -2181,6 +2181,10 @@ function findDescendant(actor, matches) {
     return null;
 }
 
+function countDescendants(actor, matches) {
+    return actor.get_children().reduce((n, child) => n + (matches(child) ? 1 : 0) + countDescendants(child, matches), 0);
+}
+
 function darkStyleToggle() {
     return findDescendant(Main.panel.statusArea.quickSettings.menu.box,
         actor => actor.icon_name === DARK_STYLE_TOGGLE_ICON && 'checked' in actor);
@@ -2486,6 +2490,9 @@ async function signoffWindows() {
     pointer.notify_absolute_motion(GLib.get_monotonic_time(), monitor.x + monitor.width - 1, monitor.y + monitor.height / 4);
     await settle();
     Main.overview.show();
+    // A window still mapping joins the overview's workspace late: wait for its preview.
+    const previews = await until(() => countDescendants(Main.layoutManager.overviewGroup,
+        a => a.constructor.name === 'WindowPreview' && a.mapped) >= SIGNOFF_APPS.length, SIGNOFF_WINDOWS_MS);
     await settle();
     global.stage.set_key_focus(null);
     const overview = withoutBytes(await capture('signoff-overview'));
@@ -2499,7 +2506,7 @@ async function signoffWindows() {
     const altTab = withoutBytes(await capture('signoff-alt-tab'));
     popup.destroy();
     await settle();
-    return {shown, apps: appsShown(), overview: overview.file, altTab: altTab.file};
+    return {shown, previews, apps: appsShown(), overview: overview.file, altTab: altTab.file};
 }
 
 async function until(condition, timeoutMs = 10000) {
