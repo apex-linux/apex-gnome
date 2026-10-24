@@ -1,0 +1,114 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Sat, 24 Oct 2026 10:09:10 +0000
+Subject: [PATCH] overview: hooks for the Apex overview
+
+Value and behaviour hooks for the overview of DESIGN.md, which the Apex
+layer provides (apex-fedora ROADMAP S3a):
+
+- WindowPreview: a value hook over the title's initial visibility, and
+  one over the actors the overlay fades in and out, given the preview,
+  through which the layer keeps titles shown;
+- Workspace: a behaviour hook once the workspace is built, given its
+  layout, through which the layer hides the background card and adds the
+  empty-workspace label;
+- ThumbnailsBox: value hooks over the maximum thumbnail scale and over
+  the number of dynamic workspaces above which the thumbnails show.
+---
+ js/ui/windowPreview.js      | 9 +++++----
+ js/ui/workspace.js          | 2 ++
+ js/ui/workspaceThumbnail.js | 5 +++--
+ 3 files changed, 10 insertions(+), 6 deletions(-)
+
+diff --git a/js/ui/windowPreview.js b/js/ui/windowPreview.js
+index a9b9bdd..0d9f541 100644
+--- a/js/ui/windowPreview.js
++++ b/js/ui/windowPreview.js
+@@ -10,6 +10,7 @@ import St from 'gi://St';
+ 
+ import * as DND from './dnd.js';
+ import * as OverviewControls from './overviewControls.js';
++import * as ApexHooks from './apex/hooks.js';
+ 
+ const WINDOW_DND_SIZE = 256;
+ 
+@@ -172,7 +173,7 @@ export class WindowPreview extends Shell.WindowPreview {
+ 
+         const {scaleFactor} = St.ThemeContext.get_for_stage(global.stage);
+         this._title = new St.Label({
+-            visible: false,
++            visible: ApexHooks.value('window-title-visible', false),
+             style_class: 'window-caption',
+             text: this._getCaption(),
+             reactive: true,
+@@ -345,9 +346,9 @@ export class WindowPreview extends Shell.WindowPreview {
+             ongoingTransition.get_interval().peek_final_value() === 255)
+             return;
+ 
+-        const toShow = this._windowCanClose()
++        const toShow = ApexHooks.value('window-overlay', this._windowCanClose()
+             ? [this._title, this._closeButton]
+-            : [this._title];
++            : [this._title], this);
+ 
+         toShow.forEach(a => {
+             a.opacity = 0;
+@@ -390,7 +391,7 @@ export class WindowPreview extends Shell.WindowPreview {
+             ongoingTransition.get_interval().peek_final_value() === 0)
+             return;
+ 
+-        [this._title, this._closeButton].forEach(a => {
++        ApexHooks.value('window-overlay', [this._title, this._closeButton], this).forEach(a => {
+             a.opacity = 255;
+             a.ease({
+                 opacity: 0,
+diff --git a/js/ui/workspace.js b/js/ui/workspace.js
+index 3c8ed9f..f72c26c 100644
+--- a/js/ui/workspace.js
++++ b/js/ui/workspace.js
+@@ -14,6 +14,7 @@ import * as Params from '../misc/params.js';
+ 
+ import * as Util from '../misc/util.js';
+ import {WindowPreview} from './windowPreview.js';
++import * as ApexHooks from './apex/hooks.js';
+ 
+ const WINDOW_PREVIEW_MAXIMUM_SCALE = 0.95;
+ 
+@@ -1107,6 +1108,7 @@ class Workspace extends St.Widget {
+         // Create clones for windows that should be
+         // visible in the Overview
+         global.get_window_actors().map(a => this._doAddWindow(a.meta_window));
++        ApexHooks.run('workspace', this, layoutManager);
+     }
+ 
+     _shouldLeaveOverview() {
+diff --git a/js/ui/workspaceThumbnail.js b/js/ui/workspaceThumbnail.js
+index 79892f0..edf7a3f 100644
+--- a/js/ui/workspaceThumbnail.js
++++ b/js/ui/workspaceThumbnail.js
+@@ -12,6 +12,7 @@ import * as Main from './main.js';
+ import {TransientSignalHolder} from '../misc/signalTracker.js';
+ import * as Util from '../misc/util.js';
+ import * as Workspace from './workspace.js';
++import * as ApexHooks from './apex/hooks.js';
+ 
+ const NUM_WORKSPACES_THRESHOLD = 2;
+ 
+@@ -614,7 +615,7 @@ export const ThumbnailsBox = GObject.registerClass({
+         this.add_child(this._dropPlaceholder);
+         this._spliceIndex = -1;
+ 
+-        this._maxThumbnailScale = MAX_THUMBNAIL_SCALE;
++        this._maxThumbnailScale = ApexHooks.value('thumbnail-scale', MAX_THUMBNAIL_SCALE);
+         this._targetScale = 0;
+         this._scale = 0;
+         this._expandFraction = 1;
+@@ -697,7 +698,7 @@ export const ThumbnailsBox = GObject.registerClass({
+     _updateShouldShow() {
+         const {nWorkspaces} = global.workspace_manager;
+         const shouldShow = this._settings.get_boolean('dynamic-workspaces')
+-            ? nWorkspaces > NUM_WORKSPACES_THRESHOLD
++            ? nWorkspaces > ApexHooks.value('thumbnails-threshold', NUM_WORKSPACES_THRESHOLD)
+             : nWorkspaces > 1;
+ 
+         if (this._shouldShow === shouldShow)
