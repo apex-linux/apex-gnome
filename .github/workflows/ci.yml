@@ -187,6 +187,39 @@ jobs:
           path: _build/ptyxis/shots/
           if-no-files-found: ignore
 
+  control-center-lane:
+    # The gnome-control-center recipe through apex-lane's own container half, built from
+    # a pinned apex-image; the builder VM adds only the signing and the store.
+    name: tests/control-center/lane.sh (Fedora 45, gnome-control-center rebuilt)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    container:
+      image: registry.fedoraproject.org/fedora:45@sha256:1e13e11f63e147a40a935c9046c79d53a30b861a3cf05ebb023bb53c562382cb
+    steps:
+      - name: git for the checkout and the Source1 archive
+        run: >-
+          dnf5 -y --setopt=install_weak_deps=False --repo=fedora --repo=updates install
+          git-core bash coreutils findutils sed grep
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: tests/control-center/selftest.sh
+        run: tests/control-center/selftest.sh
+
+      - name: tests/control-center/lane.sh
+        run: tests/control-center/lane.sh
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: failure()
+        with:
+          name: control-center-lane
+          path: _build/control-center/out/
+          if-no-files-found: ignore
+
   nautilus-lane:
     # The nautilus recipe through apex-lane's own container half, built from a pinned
     # apex-image; the builder VM adds only the signing and the store.
