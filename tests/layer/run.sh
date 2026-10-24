@@ -48,7 +48,9 @@ mkdir -p "$T/schemas" "$T/noschema" "$T/nochild" "$T/data" "$T/home" "$T/shell" 
 # main.js and the Meta and Shell typelibs come only with gnome-shell and mutter.
 cp -R "$REPO/desktop/shell/js" "$T/shell/"
 cp "$HERE/main-stub.js" "$T/shell/js/ui/main.js"
-cp "$HERE/stubs/panelMenu.js" "$T/shell/js/ui/panelMenu.js"
+for upstream in panelMenu dash iconGrid popupMenu; do
+    cp "$HERE/stubs/$upstream.js" "$T/shell/js/ui/$upstream.js"
+done
 cp "$HERE"/stubs/St.js "$HERE"/stubs/Clutter.js "$HERE"/stubs/Shell.js "$T/"
 # gjs outside the shell has no St or Clutter typelib, and the fixture's Shell no
 # WindowTracker: the features get stubs instead.
@@ -66,6 +68,10 @@ awk '/<child name="keybindings"/ { next }
     skip && /<\/schema>/ { skip = 0 }' "$SCHEMA_DIR/io.github.apex_linux.Apex.Desktop.gschema.xml" \
     >"$T/nochild/io.github.apex_linux.Apex.Desktop.gschema.xml"
 glib-compile-schemas --strict "$T/nochild"
+mkdir -p "$T/nodock"
+awk '/<key name="dock-show-trash"/ { skip = 1 } !skip { print } skip && /<\/key>/ { skip = 0 }' \
+    "$SCHEMA_DIR/io.github.apex_linux.Apex.Desktop.gschema.xml" >"$T/nodock/io.github.apex_linux.Apex.Desktop.gschema.xml"
+glib-compile-schemas --strict "$T/nodock"
 mkdir -p "$T/nohint"
 awk '/<key name="search-hint-shown"/ { skip = 1 } !skip { print } skip && /<\/key>/ { skip = 0 }' \
     "$SCHEMA_DIR/io.github.apex_linux.Apex.Desktop.gschema.xml" >"$T/nohint/io.github.apex_linux.Apex.Desktop.gschema.xml"
@@ -468,6 +474,65 @@ probe search-hint-nokey "$CMDLINE_PLAIN" GSETTINGS_SCHEMA_DIR="$T/nohint" PROBE_
 count_is "search hint: a schema without search-hint-shown shows none" "$SEARCH_HINT" 0
 count_is "search hint: and says so once" 'has no key search-hint-shown: no search hint' 1
 has "search hint: the rest of the panel runs" 'Apex: feature panel enabled'
+
+readonly OVERVIEW_ON='title-visible=true overlay=close scale=0\.081 threshold=1 box=0\.081 grid=\[\{"rows":4,"columns":7\}\] icon=88'
+readonly OVERVIEW_STOCK='title-visible=false overlay=title\+close scale=0\.05 threshold=2 box=0\.05 grid="stock" icon=-1'
+readonly EMPTY_LABEL='"No open windows" \.apex-workspace-empty'
+probe overview "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_OVERVIEW=1
+has "overview: the overview feature enables" 'Apex: feature overview enabled'
+fact "overview: titles always shown, the overlay fades only the close button; thumbnails at .081 from two workspaces; the launcher 7 columns of 88 px" \
+    "overview\.enabled=$OVERVIEW_ON"
+fact "launcher: the grid picks its mode and icon size afresh" 'overview\.enabled\.relayout=mode=-1 page-width=0'
+fact "workspaces: no background card, and an empty workspace says so" "workspace\.enabled\.empty=background=false $EMPTY_LABEL visible=true opacity=255"
+fact "workspaces: the label goes when a window arrives" "workspace\.enabled\.window-added=background=false $EMPTY_LABEL visible=false opacity=255"
+fact "workspaces: and fades with the overview" "workspace\.enabled\.half-open=background=false $EMPTY_LABEL visible=true opacity=128"
+fact "workspaces: a workspace with windows hides it from the start" "workspace\.enabled\.with-windows=background=false $EMPTY_LABEL visible=false opacity=255"
+fact "layer-enabled=false: the stock overview, the primary thumbnails and the launcher restored" "overview\.off=$OVERVIEW_STOCK"
+fact "layer-enabled=false: workspaces keep their background and get no label" 'workspace\.off\.empty=background=true no label'
+fact "layer-enabled=true: the overview again" "overview\.on=$OVERVIEW_ON"
+lacks "overview: no feature fails or disables uncleanly" 'off for this session|did not disable cleanly|cannot restyle'
+
+probe overview-disabled "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_OVERVIEW=1 PROBE_DISABLED=overview
+has "disabled-features=['overview']: skips the feature" 'Apex: feature overview is in disabled-features'
+fact "disabled-features=['overview']: the stock overview and launcher" "overview\.enabled=$OVERVIEW_STOCK"
+fact "disabled-features=['overview']: the grid is left alone" 'overview\.enabled\.relayout=mode=0 page-width=1272'
+fact "disabled-features=['overview']: workspaces stay stock" 'workspace\.enabled\.empty=background=true no label'
+
+probe overview-live "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_DISABLE_LIVE=overview
+count_is "overview in and out of disabled-features while enabled: it says so" 'Apex: feature overview is in disabled-features' 2
+lacks "overview live: the feature disables cleanly" 'off for this session|did not disable cleanly|cannot restyle'
+
+readonly DOCK_TAIL='separator show-apps:54 trash:54'
+probe dock "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_DOCK=1
+has "dock: the feature enables" 'Apex: feature dock enabled'
+fact "dock: the favourites, then the separator, Show Apps and Trash, at 54 (medium); dots on; the overview's dash hidden" \
+    "dock\.enabled=Files:54 Web:54 $DOCK_TAIL indicators=true visible=true dash=false dash-height=0"
+fact "dock: dock-icon-size small is 46" 'dock\.dock-icon-size=small=Files:46 Web:46 separator show-apps:46 trash:46 .*'
+fact "dock: large is 62" 'dock\.dock-icon-size=large=Files:62 Web:62 separator show-apps:62 trash:62 .*'
+fact "dock: dock-show-trash=false hides Trash" 'dock\.dock-show-trash=false=.* trash:62\(hidden\) .*'
+fact "dock: dock-running-indicators=false hides the dots" 'dock\.dock-running-indicators=false=.* indicators=false .*'
+fact "dock: the lock screen hides it" "dock\.locked=Files:54 Web:54 $DOCK_TAIL indicators=true visible=false dash=false dash-height=0"
+fact "dock: its Show Apps opens the overview's app grid" 'dock\.show-apps=overview=true overview-button=true'
+fact "dock: and follows the overview's own button" 'dock\.overview-show-apps-off=dock-button=false'
+fact "dock: no separator between the dock's favourites and running apps, upstream's elsewhere; a full-colour Show Apps" \
+    'dock\.hooks=separator=false stock-separator=true show-apps=view-app-grid'
+fact "dock: layer-enabled=false takes it away and gives the overview its dash back, at its own height" 'dock\.off=none dash=true dash-height=-1'
+fact "dock: layer-enabled=true brings it back" "dock\.on=Files:54 Web:54 $DOCK_TAIL indicators=true visible=true dash=false dash-height=0"
+count_is "dock: the old dock is destroyed" '^probe: dock\.destroyed=apexDock$' 1
+lacks "dock: no feature fails or disables uncleanly" 'off for this session|did not disable cleanly|cannot restyle'
+
+probe dock-disabled "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_DOCK=1 PROBE_DISABLED=dock
+has "disabled-features=['dock']: skips the feature" 'Apex: feature dock is in disabled-features'
+fact "disabled-features=['dock']: no dock, and the overview keeps its dash" 'dock\.enabled=none dash=true dash-height=-1'
+
+probe dock-live "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_DISABLE_LIVE=dock
+count_is "dock in and out of disabled-features while enabled: it says so" 'Apex: feature dock is in disabled-features' 2
+lacks "dock live: the feature disables cleanly" 'off for this session|did not disable cleanly|cannot restyle'
+
+probe dock-nokey "$CMDLINE_PLAIN" GSETTINGS_SCHEMA_DIR="$T/nodock" PROBE_ENABLE=1
+has "a schema without dock-show-trash: only the dock is off, and says why" \
+    'Apex: feature dock off for this session \(configure: Error: io\.github\.apex_linux\.Apex\.Desktop has no key dock-show-trash\)'
+has "and the rest of the layer runs" 'Apex: feature panel enabled'
 
 printf '1..%d\n' "$tests"
 ((failed == 0))

@@ -1,0 +1,84 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+"""Checks the Software Updates page against update1.py's scenario, and each button's call, through AT-SPI."""
+
+import json
+import os
+import sys
+
+from ccatspi import Atspi, activate, failures, find_app, finish, wait_for, walk
+
+STAGED_DIGEST = "sha256:9e41aa07c3b2d1e0f9a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c80c2b"
+
+EXPECT = {
+    "ready": [
+        "Restart to Finish Updating",
+        "45.20261010.133 is downloaded and its signature checked. Your current version stays in place until you "
+        "restart.",
+        "gnome-control-center is held back",
+        "GNOME 51.0 → 51.1, Linux 7.2.7 → 7.2.9, Mesa 26.1.0 → 26.1.2",
+        "45.20261008.131 · sha256:3f9c…a71e",
+        "45.20261010.133 · sha256:9e41…0c2b",
+        "45.20261001.124 · sha256:b02d…19c4",
+        "today at 09:00",
+    ],
+    "up-to-date": [
+        "Apex Is Up to Date",
+        "45.20261008.131 is the newest build on the stable (running image) channel. Checked today at 09:00.",
+    ],
+    "available": ["Update Available"],
+    "health-failure": ["Update Failed Its Startup Check"],
+    "unavailable": ["Software Updates Are Unavailable"],
+}
+
+# (button label, the call update1.py must log, or the text the page shows after it when it calls nothing)
+PRESSES = {
+    "ready": [("Check Now", ["Check"]), ("Use at Next Restart…", ["Rollback", False]),
+              ("Keep Current Version", "Update Downloaded"), ("Restart Now", ["Apply", STAGED_DIGEST])],
+    "available": [("Download", ["Download", False])],
+    "health-failure": [("Keep This Version", ["AcknowledgeHealthFailure"]), ("Go Back…", ["Rollback", True])],
+}
+
+
+def texts(app):
+    return (node.get_name() or "" for node in walk(app))
+
+
+def calls(log):
+    try:
+        with open(log, encoding="utf-8") as f:
+            return [json.loads(line) for line in f]
+    except FileNotFoundError:
+        return []
+
+
+def button(app, label):
+    for node in walk(app):
+        if node.get_role() == Atspi.Role.PUSH_BUTTON and node.get_name() == label:
+            return node
+    return None
+
+
+def main():
+    scenario = sys.argv[1]
+    log = os.environ.get("APEX_UPDATE1_LOG", "")
+    app = find_app()
+    for want in EXPECT[scenario]:
+        wait_for(f"{scenario}: shows “{want}”", lambda: any(want in t for t in texts(app)))
+    for label, call in PRESSES.get(scenario, []):
+        node = button(app, label)
+        if node is None:
+            failures.append(f"{scenario}: no button “{label}”")
+            print(f"FAIL {scenario}: no button “{label}”", flush=True)
+            continue
+        wait_for(f"{scenario}: “{label}” is sensitive",
+                 lambda: node.get_state_set().contains(Atspi.StateType.SENSITIVE))
+        activate(node)
+        if isinstance(call, str):
+            if wait_for(f"{scenario}: “{label}” shows “{call}”", lambda: any(call in t for t in texts(app))):
+                print(f"ok {scenario}: “{label}” shows “{call}” and calls nothing", flush=True)
+        elif wait_for(f"{scenario}: “{label}” calls {call}", lambda: call in calls(log)):
+            print(f"ok {scenario}: “{label}” calls {call[0]}", flush=True)
+    finish()
+
+
+main()

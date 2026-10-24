@@ -2,12 +2,9 @@
 """Checks every row of the Apex Desktop panel against its key, both ways, through AT-SPI."""
 
 import sys
-import time
 
-import gi
-
-gi.require_version("Atspi", "2.0")
-from gi.repository import Atspi, Gio, GLib  # noqa: E402
+from ccatspi import Atspi, activate, checked, failures, find, find_app, finish, radios, wait_for, walk
+from gi.repository import Gio, GLib
 
 APEX = "io.github.apex_linux.Apex.Desktop"
 IFACE = "org.gnome.desktop.interface"
@@ -38,8 +35,6 @@ CHOICES = [
      {"All": "appmenu:minimize,maximize,close", "Close only": "appmenu:close"}),
 ]
 
-TIMEOUT_S = 5
-failures = []
 settings = {}
 
 
@@ -47,72 +42,6 @@ def gsettings(schema):
     if schema not in settings:
         settings[schema] = Gio.Settings.new(schema)
     return settings[schema]
-
-
-def spin(seconds=0.05):
-    end = time.monotonic() + seconds
-    ctx = GLib.MainContext.default()
-    while time.monotonic() < end:
-        while ctx.pending():
-            ctx.iteration(False)
-        time.sleep(0.01)
-
-
-def wait_for(what, check):
-    end = time.monotonic() + TIMEOUT_S
-    while time.monotonic() < end:
-        if check():
-            return True
-        spin()
-    failures.append(what)
-    print(f"FAIL {what}", flush=True)
-    return False
-
-
-def walk(node):
-    yield node
-    for i in range(node.get_child_count()):
-        child = node.get_child_at_index(i)
-        if child is not None:
-            yield from walk(child)
-
-
-def find_app():
-    end = time.monotonic() + 30
-    while time.monotonic() < end:
-        desktop = Atspi.get_desktop(0)
-        for i in range(desktop.get_child_count()):
-            app = desktop.get_child_at_index(i)
-            if app is not None and app.get_name() in ("Settings", "gnome-control-center"):
-                return app
-        time.sleep(0.5)
-    sys.exit("bindings.py: Settings is not on the accessibility bus")
-
-
-def find(root, name, roles):
-    for node in walk(root):
-        if node.get_name() == name and node.get_role() in roles:
-            return node
-    return None
-
-
-def checked(node):
-    return node.get_state_set().contains(Atspi.StateType.CHECKED)
-
-
-def activate(node):
-    """Runs the action of NODE, or of the switch inside it: AdwSwitchRow itself has none."""
-    for n in walk(node):
-        action = n.get_action_iface() if n.get_role() == node.get_role() else None
-        if action is not None and action.get_n_actions() > 0:
-            action.do_action(0)
-            return
-    sys.exit(f"bindings.py: {node.get_name()} has no action")
-
-
-def radios(group):
-    kids = (group.get_child_at_index(i) for i in range(group.get_child_count()))
-    return {k.get_name(): k for k in kids if k is not None and k.get_role() == Atspi.Role.RADIO_BUTTON}
 
 
 def check_switch(app, title, schema, key, inverted, second):
@@ -195,8 +124,7 @@ def main():
             check_switch(app, *row)
         for row in CHOICES:
             check_choice(app, *row)
-    print(f"APEXCC-BINDINGS {'ok' if not failures else 'FAIL ' + str(len(failures))}", flush=True)
-    sys.exit(1 if failures else 0)
+    finish()
 
 
 main()

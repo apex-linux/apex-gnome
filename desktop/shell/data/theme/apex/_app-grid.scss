@@ -1,0 +1,95 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+
+.overview-tile {
+  padding: $apex_app_tile_padding;
+  border-radius: $apex_radius_app_tile;
+  color: $apex_fg;
+  background-color: transparent;
+  font-size: apex-text-size($apex_font_app_label_size);
+  font-weight: $apex_font_label_weight;
+
+  &:hover, &:active, &:checked, &:highlighted { color: $apex_fg; background-color: $apex_button; }
+
+  // Upstream's focus ring is !important, at 80 % of the accent.
+  &:focus, &:selected {
+    color: $apex_fg;
+    background-color: $apex_button;
+    box-shadow: inset 0 0 0 $apex_entry_focus_ring $apex_accent !important;
+  }
+
+  .overview-icon.overview-icon-with-label > StBoxLayout { spacing: $apex_app_tile_gap; }
+}
+
+// Stock folds the folder's fill into its whole tile, where the board fills only the icon.
+.overview-tile.app-folder {
+  border: $apex_surface_border solid $apex_pill_border;
+  background-color: $apex_folder;
+
+  &:hover, &:active, &:checked { background-color: $apex_button_hover; }
+}
+
+.app-grid-running-dot {
+  width: $apex_running_dot_size;
+  height: $apex_running_dot_size;
+  border-radius: $apex_running_dot_size / 2;
+  background-color: transparentize($apex_fg, 1 - $apex_running_dot_opacity);
+}
+
+.app-folder-dialog {
+  @include apex-surface($apex_folder_panel);
+  width: $apex_folder_dialog_width - 2 * $apex_folder_dialog_padding;
+  padding: ($apex_folder_dialog_padding - $apex_surface_border) ($apex_folder_dialog_padding - $apex_surface_border)
+    ($apex_folder_dialog_padding_bottom - $apex_surface_border);
+  border-radius: $apex_radius_folder_dialog;
+
+  .folder-name-container {
+    padding: 0;
+
+    .folder-name-label, .folder-name-entry {
+      color: $apex_fg;
+      font-size: apex-text-size($apex_font_folder_title_size);
+      font-weight: $apex_font_heading_weight;
+    }
+  }
+
+  .icon-button {
+    min-width: $apex_folder_close_size;
+    min-height: $apex_folder_close_size;
+    padding: 0;
+    border-radius: $apex_folder_close_size / 2;
+    color: $apex_fg;
+    background-color: $apex_button;
+
+    &:hover, &:active { color: $apex_fg; background-color: $apex_button_hover; }
+  }
+
+  .page-navigation-arrow { color: $apex_fg; }
+
+  .overview-tile { background-color: transparent; }
+}
+
+.page-indicator .page-indicator-icon { background-color: $apex_fg; }
+
+.system-action-icon {
+  color: $apex_fg;
+  background-color: $apex_button;
+}
+
+// Flat fills only (DESIGN.md): the page hints lose upstream's gradients.
+.page-navigation-hint {
+  &.next:ltr, &.previous:rtl, &.previous:ltr, &.next:rtl {
+    background-gradient-direction: none;
+    background-color: transparent;
+  }
+
+  &.dnd, &.dnd:ltr, &.dnd:rtl { background-color: $apex_button; }
+}
+
+.page-navigation-arrow {
+  color: $apex_fg;
+  background-color: transparent;
+
+  > StIcon { color: $apex_fg; }
+
+  &:hover, &:active { color: $apex_fg; background-color: $apex_button_hover; }
+}

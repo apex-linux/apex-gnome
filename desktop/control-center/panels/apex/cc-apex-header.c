@@ -6,17 +6,15 @@
 #include <json-glib/json-glib.h>
 
 #include "cc-apex-header.h"
+#include "cc-apex-tile.h"
 
 #define MANIFEST_PATH "/usr/share/apex/manifest.json"
-#define TILE_SIZE 72
 
 struct _CcApexHeader {
     GtkWidget parent_instance;
 
-    GSettings *background_settings;
     GCancellable *cancellable;
 
-    GtkPicture *wallpaper;
     GtkLabel *versions_label;
 
     char *image_version;
@@ -121,70 +119,6 @@ request_shell_version (CcApexHeader *self)
 }
 
 static void
-load_wallpaper_thread (GTask *task, gpointer source, gpointer task_data, GCancellable *cancellable)
-{
-    const char *uri = task_data;
-    g_autofree char *path = g_filename_from_uri (uri, NULL, NULL);
-    g_autoptr(GdkPixbuf) scaled = NULL;
-    g_autoptr(GdkPixbuf) pixbuf = NULL;
-    g_autoptr(GBytes) bytes = NULL;
-    g_autoptr(GError) error = NULL;
-    int width, height, size = TILE_SIZE * 3;
-
-    if (path == NULL || gdk_pixbuf_get_file_info (path, &width, &height) == NULL) {
-        g_task_return_new_error (task, G_IO_ERROR, G_IO_ERROR_FAILED, "cannot read %s", uri);
-        return;
-    }
-
-    scaled = gdk_pixbuf_new_from_file_at_scale (path, width >= height ? -1 : size, width >= height ? size : -1,
-                                                TRUE, &error);
-    if (scaled == NULL) {
-        g_task_return_error (task, g_steal_pointer (&error));
-        return;
-    }
-    pixbuf = gdk_pixbuf_new_subpixbuf (scaled, (gdk_pixbuf_get_width (scaled) - size) / 2,
-                                       (gdk_pixbuf_get_height (scaled) - size) / 2, size, size);
-
-    bytes = g_bytes_new (gdk_pixbuf_read_pixels (pixbuf),
-                         (gsize) gdk_pixbuf_get_rowstride (pixbuf) * (gdk_pixbuf_get_height (pixbuf) - 1) +
-                             gdk_pixbuf_get_width (pixbuf) * gdk_pixbuf_get_n_channels (pixbuf));
-    g_task_return_pointer (task,
-                           gdk_memory_texture_new (gdk_pixbuf_get_width (pixbuf), gdk_pixbuf_get_height (pixbuf),
-                                                   gdk_pixbuf_get_has_alpha (pixbuf) ? GDK_MEMORY_R8G8B8A8
-                                                                                      : GDK_MEMORY_R8G8B8,
-                                                   bytes, gdk_pixbuf_get_rowstride (pixbuf)),
-                           g_object_unref);
-}
-
-static void
-wallpaper_loaded_cb (GObject *source, GAsyncResult *result, gpointer user_data)
-{
-    g_autoptr(GdkTexture) texture = NULL;
-    g_autoptr(GError) error = NULL;
-
-    texture = g_task_propagate_pointer (G_TASK (result), &error);
-    if (texture == NULL) {
-        if (!g_error_matches (error, G_IO_ERROR, G_IO_ERROR_CANCELLED))
-            g_debug ("No wallpaper in the header: %s", error->message);
-        return;
-    }
-    gtk_picture_set_paintable (CC_APEX_HEADER (source)->wallpaper, GDK_PAINTABLE (texture));
-}
-
-static void
-update_wallpaper (CcApexHeader *self)
-{
-    gboolean dark = adw_style_manager_get_dark (adw_style_manager_get_default ());
-    g_autoptr(GTask) task = NULL;
-
-    task = g_task_new (self, self->cancellable, wallpaper_loaded_cb, NULL);
-    g_task_set_task_data (task,
-                          g_settings_get_string (self->background_settings, dark ? "picture-uri-dark" : "picture-uri"),
-                          g_free);
-    g_task_run_in_thread (task, load_wallpaper_thread);
-}
-
-static void
 cc_apex_header_dispose (GObject *object)
 {
     CcApexHeader *self = CC_APEX_HEADER (object);
@@ -203,7 +137,6 @@ cc_apex_header_finalize (GObject *object)
     CcApexHeader *self = CC_APEX_HEADER (object);
 
     g_clear_object (&self->cancellable);
-    g_clear_object (&self->background_settings);
     g_free (self->image_version);
     g_free (self->shell_version);
 
@@ -215,46 +148,23 @@ cc_apex_header_class_init (CcApexHeaderClass *klass)
 {
     GObjectClass *object_class = G_OBJECT_CLASS (klass);
     GtkWidgetClass *widget_class = GTK_WIDGET_CLASS (klass);
-    g_autoptr(GtkCssProvider) provider = gtk_css_provider_new ();
-
     object_class->dispose = cc_apex_header_dispose;
     object_class->finalize = cc_apex_header_finalize;
 
     gtk_widget_class_set_layout_manager_type (widget_class, GTK_TYPE_BOX_LAYOUT);
     gtk_widget_class_set_css_name (widget_class, "apex-header");
-
-    gtk_css_provider_load_from_resource (provider, "/org/gnome/Settings/apex/apex.css");
-    gtk_style_context_add_provider_for_display (gdk_display_get_default (), GTK_STYLE_PROVIDER (provider),
-                                                GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
 }
 
 static void
 cc_apex_header_init (CcApexHeader *self)
 {
-    GtkWidget *clamp, *tile, *diamond, *text, *title;
+    GtkWidget *text, *title;
 
     gtk_orientable_set_orientation (GTK_ORIENTABLE (gtk_widget_get_layout_manager (GTK_WIDGET (self))),
                                     GTK_ORIENTATION_VERTICAL);
     gtk_box_layout_set_spacing (GTK_BOX_LAYOUT (gtk_widget_get_layout_manager (GTK_WIDGET (self))), 14);
     gtk_widget_add_css_class (GTK_WIDGET (self), "card");
-
-    tile = gtk_overlay_new ();
-    gtk_widget_add_css_class (tile, "apex-tile");
-    gtk_widget_set_overflow (tile, GTK_OVERFLOW_HIDDEN);
-    gtk_widget_set_size_request (tile, TILE_SIZE, TILE_SIZE);
-    self->wallpaper = GTK_PICTURE (gtk_picture_new ());
-    gtk_picture_set_content_fit (self->wallpaper, GTK_CONTENT_FIT_COVER);
-    gtk_overlay_set_child (GTK_OVERLAY (tile), GTK_WIDGET (self->wallpaper));
-    diamond = gtk_image_new ();
-    gtk_widget_add_css_class (diamond, "apex-diamond");
-    gtk_widget_set_halign (diamond, GTK_ALIGN_CENTER);
-    gtk_widget_set_valign (diamond, GTK_ALIGN_CENTER);
-    gtk_overlay_add_overlay (GTK_OVERLAY (tile), diamond);
-    clamp = adw_clamp_new ();
-    adw_clamp_set_maximum_size (ADW_CLAMP (clamp), TILE_SIZE);
-    adw_clamp_set_tightening_threshold (ADW_CLAMP (clamp), TILE_SIZE);
-    adw_clamp_set_child (ADW_CLAMP (clamp), tile);
-    gtk_widget_set_parent (clamp, GTK_WIDGET (self));
+    gtk_widget_set_parent (GTK_WIDGET (g_object_new (CC_TYPE_APEX_TILE, NULL)), GTK_WIDGET (self));
 
     text = gtk_box_new (GTK_ORIENTATION_VERTICAL, 3);
     title = gtk_label_new (_("Apex Desktop"));
@@ -274,13 +184,4 @@ cc_apex_header_init (CcApexHeader *self)
     self->image_version = read_image_version ();
     update_versions (self);
     request_shell_version (self);
-
-    self->background_settings = g_settings_new ("org.gnome.desktop.background");
-    g_signal_connect_object (self->background_settings, "changed::picture-uri", G_CALLBACK (update_wallpaper), self,
-                             G_CONNECT_SWAPPED);
-    g_signal_connect_object (self->background_settings, "changed::picture-uri-dark", G_CALLBACK (update_wallpaper),
-                             self, G_CONNECT_SWAPPED);
-    g_signal_connect_object (adw_style_manager_get_default (), "notify::dark", G_CALLBACK (update_wallpaper), self,
-                             G_CONNECT_SWAPPED);
-    update_wallpaper (self);
 }
