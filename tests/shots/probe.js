@@ -33,6 +33,7 @@ const SETTLE_TIMEOUT_MS = 20000;
 const SETTLE_EXTRA_MS = 500;
 const PERF_HELPER_PING_S = 10;
 const DEFERRED_WORK_TIMEOUT_MS = 21000;
+const OSD_SETTLE_TIMEOUT_MS = 3000;
 const CALIBRATION_PX = 100;
 const INK_MAX_RGB_DISTANCE = 60;
 const TRANSLUCENT_BAR_KEY = 'translucent-top-bar';
@@ -42,6 +43,8 @@ const HIGH_CONTRAST_SHEET = 'resource:///org/gnome/shell/theme/gnome-shell-high-
 const STRUCTURE_MARKER = '/*! apex-shell-structure */';
 const LAYER_ENABLED_KEY = 'layer-enabled';
 const SEARCH_HINT_KEY = 'search-hint-shown';
+const DOCK_INTELLIHIDE_KEY = 'dock-intellihide';
+const G2_WINDOW_TITLE = 'G2 maximised window';
 const OSD_LEVEL = 0.62;
 const POWER_PROFILE_WAIT_MS = 3000;
 const IDLE_PAINT_MS = 2000;
@@ -54,6 +57,7 @@ const SWITCHER_APPS = ['Text Editor', 'Terminal', 'Web', 'Files', 'Settings'];
 const SWITCHER_ICON_SIZE = 96;
 
 Gio._promisify(Shell.Screenshot.prototype, 'screenshot');
+Gio._promisify(Gio.Subprocess.prototype, 'communicate_utf8_async');
 
 function hex(color) {
     return `#${[color.red, color.green, color.blue, color.alpha]
@@ -733,12 +737,59 @@ function openPopupMenu() {
     };
 }
 
-function openOsd() {
+// Resolves at the stage's next painted frame, or false once the deadline (µs) passes.
+function nextFrame(deadline) {
+    return new Promise(resolve => {
+        const timeoutId = GLib.timeout_add(GLib.PRIORITY_DEFAULT,
+            Math.max(0, Math.ceil((deadline - GLib.get_monotonic_time()) / 1000)), () => {
+                global.stage.disconnect(paintId);
+                resolve(false);
+                return GLib.SOURCE_REMOVE;
+            });
+        const paintId = global.stage.connect('after-paint', () => {
+            global.stage.disconnect(paintId);
+            GLib.source_remove(timeoutId);
+            resolve(true);
+        });
+        global.stage.queue_redraw();
+    });
+}
+
+// Whether condition held and actor's allocation stayed the same, non-empty, over two frames.
+async function settledOverTwoFrames(actor, condition, timeoutMs) {
+    const deadline = GLib.get_monotonic_time() + timeoutMs * 1000;
+    let last = null;
+    // eslint-disable-next-line no-await-in-loop
+    while (await nextFrame(deadline)) {
+        const box = actor.get_allocation_box();
+        const now = condition() && box.get_width() > 0 && box.get_height() > 0
+            ? [box.x1, box.y1, box.x2, box.y2].join() : null;
+        if (now !== null && now === last)
+            return true;
+        last = now;
+    }
+    return false;
+}
+
+// An OSD still fading out from an earlier show resets itself, level and all, once the fade
+// ends: it goes first. The new one would hide 1.5 s on, often before settle() returns.
+async function openOsd() {
     const {primaryIndex, primaryMonitor} = Main.layoutManager;
-    Main.osdWindowManager.showOne(primaryIndex, Gio.ThemedIcon.new(OSD_GLYPH), null, OSD_LEVEL);
     const window = Main.osdWindowManager._osdWindows[primaryIndex];
+    window.cancel();
+    const gone = await settledOverTwoFrames(global.stage, () => !window.visible, OSD_SETTLE_TIMEOUT_MS);
+    Main.osdWindowManager.showOne(primaryIndex, Gio.ThemedIcon.new(OSD_GLYPH), null, OSD_LEVEL);
+    if (window._hideTimeoutId)
+        GLib.source_remove(window._hideTimeoutId);
+    window._hideTimeoutId = 0;
+    const settled = gone && await settledOverTwoFrames(window._hbox,
+        () => window.visible && window._hbox.mapped && window._level.visible, OSD_SETTLE_TIMEOUT_MS);
     return {
         measure: unit => {
+            if (!settled)
+                return {error: 'the OSD never settled'};
+            if (!window.visible)
+                return {error: 'the OSD hid before it was measured'};
             const box = styleOf(window._hbox, unit);
             const levelNode = window._level.get_theme_node();
             return {
@@ -753,7 +804,7 @@ function openOsd() {
                 },
             };
         },
-        close: () => window.cancel(),
+        close: () => window._hide(),
     };
 }
 
@@ -795,7 +846,7 @@ function openBanner() {
 
 // Open together as on board 16; G2_SURFACE_SCENES=1 also captures them.
 async function shellSurfaces(unit) {
-    const opened = {popupMenu: openPopupMenu(), osd: openOsd(), banner: openBanner()};
+    const opened = {popupMenu: openPopupMenu(), osd: await openOsd(), banner: openBanner()};
     try {
         await settle();
         const scene = GLib.getenv('G2_SURFACE_SCENES') === '1' ? await capture('surfaces') : null;
@@ -1294,6 +1345,25 @@ async function spotlightStyle(unit) {
     }
 }
 
+// Text typed in the overview reaches its search entry; patch 0013 hands it to Spotlight.
+async function overviewSearch() {
+    const feature = await import('resource:///org/gnome/shell/ui/apex/spotlight/feature.js').catch(() => null);
+    const popup = feature?.popup();
+    if (!popup)
+        return null;
+    const entry = Main.overview._overview.controls._searchEntry;
+    entry.set_text('disk');
+    await settle();
+    const result = {
+        opened: popup.isOpen,
+        text: popup.isOpen ? popup.panel.get_children()[0].get_children()[1].get_text() : null,
+        overviewText: entry.get_text(),
+    };
+    popup.close();
+    await settle();
+    return result;
+}
+
 // What the overview draws without windows; a caption and a search section are stand-ins.
 function overviewStyle(unit) {
     const {controls} = Main.overview._overview;
@@ -1605,6 +1675,7 @@ async function scenes() {
         dockClearance: dockClearance(unit),
     };
     surfaces.overview = overviewStyle(unit);
+    surfaces.overviewSearch = await overviewSearch();
     surfaces.overviewLayer = await overviewLayer(unit);
     surfaces.appGrid = await appGrid(unit);
     delete overview.bytes;
@@ -1766,15 +1837,22 @@ async function motion() {
     Main.overview.hide();
     await Scripting.sleep(MOTION_SETTLE_MS);
     const client = Gio.File.new_for_uri(import.meta.url).get_parent().get_child('window.js').get_path();
-    Gio.Subprocess.new(['gjs', '-m', client], Gio.SubprocessFlags.NONE);
+    // The shell's environment names no display: the client gets the shell's own, on Wayland.
+    const launcher = new Gio.SubprocessLauncher({flags: Gio.SubprocessFlags.STDERR_PIPE});
+    launcher.setenv('WAYLAND_DISPLAY', GLib.getenv('G2_WAYLAND_DISPLAY') ?? 'apex-g2', true);
+    launcher.setenv('GDK_BACKEND', 'wayland', true);
+    const clientProcess = launcher.spawnv(['gjs', '-m', client]);
     const find = () => global.get_window_actors().map(a => a.meta_window)
         .find(w => w.get_gtk_application_id() === MOTION_WINDOW_ID);
     let window;
     for (let waited = 0; !(window = find()) && waited < MOTION_WAIT_MS; waited += 100)
         // eslint-disable-next-line no-await-in-loop
         await Scripting.sleep(100);
-    if (!window)
-        throw new Error(`no ${MOTION_WINDOW_ID} window in ${MOTION_WAIT_MS} ms`);
+    if (!window) {
+        clientProcess.force_exit();
+        const [, , stderr] = await clientProcess.communicate_utf8_async(null, null);
+        throw new Error(`the test client never mapped (${stderr?.trim() || `no ${MOTION_WINDOW_ID} window in ${MOTION_WAIT_MS} ms`})`);
+    }
     // Mutter gives a window's first size change a 0 x 0 old frame, which stock never animates.
     window.maximize();
     await Scripting.sleep(MOTION_SETTLE_MS);
@@ -1808,6 +1886,98 @@ export function init() {
         return;
     console.log('APEXG2-LATE startup completed while main.js imported the probe');
     import(import.meta.url).then(self => Scripting.runPerfScript(self, GLib.getenv('SHELL_PERF_OUTPUT')));
+}
+
+function withoutBytes(captured) {
+    delete captured.bytes;
+    return captured;
+}
+
+async function until(condition, timeoutMs = 10000) {
+    for (let waited = 0; waited < timeoutMs; waited += 100) {
+        if (condition())
+            return true;
+        // eslint-disable-next-line no-await-in-loop
+        await Scripting.sleep(100);
+    }
+    return condition();
+}
+
+function dockHidden() {
+    return (apexDock()?.get_parent().translation_y ?? 0) > 0;
+}
+
+function maximisedWindow() {
+    return global.display.list_all_windows().some(w => w.title === G2_WINDOW_TITLE && w.is_maximized());
+}
+
+// A window counts once its actor is mapped, which mutter does at its first frame.
+function maximisedWindowShown() {
+    return global.get_window_actors().some(a => a.mapped &&
+        a.meta_window.title === G2_WINDOW_TITLE && a.meta_window.is_maximized());
+}
+
+// The scripted case of ROADMAP S2a: a maximised window hides the dock, the bottom edge under
+// it reveals it, and leaving it hides it again.
+async function withDockIntellihide() {
+    const unit = cssUnit();
+    dropStartupNotifications();
+    Main.overview.hide();
+    await settle();
+    const steps = {initial: {hidden: dockHidden()}};
+    const here = GLib.path_get_dirname(GLib.filename_from_uri(import.meta.url)[0]);
+    const client = Gio.Subprocess.new(['gjs', '-m', GLib.build_filenamev([here, 'maximised-window.js'])],
+        Gio.SubprocessFlags.NONE);
+    try {
+        steps.maximised = {window: await until(maximisedWindowShown)};
+        await until(dockHidden, 3000);
+        await settle();
+        steps.maximised.hidden = dockHidden();
+        steps.maximised.barSolid = Main.panel.has_style_class_name('apex-solid-bar');
+        steps.maximised.capture = withoutBytes(await capture('maximised'));
+
+        const box = apexDock().get_parent();
+        const [boxX] = box.get_transformed_position();
+        const monitor = Main.layoutManager.primaryMonitor;
+        const seat = global.stage.context.get_backend().get_default_seat();
+        const pointer = seat.create_virtual_device(Clutter.InputDeviceType.POINTER_DEVICE);
+        const now = () => GLib.get_monotonic_time();
+        pointer.notify_absolute_motion(now(), boxX + box.width / 2, monitor.y + monitor.height - 1);
+        for (let push = 0; push < 5; push++) {
+            pointer.notify_relative_motion(now(), 0, 20);
+            // eslint-disable-next-line no-await-in-loop
+            await Scripting.sleep(50);
+        }
+        await until(() => !dockHidden(), 3000);
+        await settle();
+        const underPointer = global.stage.get_actor_at_pos(Clutter.PickMode.REACTIVE,
+            boxX + box.width / 2, monitor.y + monitor.height - 1);
+        steps.revealed = {hidden: dockHidden(), underPointer: box === underPointer || box.contains(underPointer)};
+        steps.revealed.capture = withoutBytes(await capture('revealed'));
+
+        pointer.notify_absolute_motion(now(), monitor.x + monitor.width / 2, monitor.y + monitor.height / 2);
+        await until(dockHidden, 3000);
+        steps.left = {hidden: dockHidden()};
+
+        Main.overview.show();
+        await settle();
+        steps.overview = {hidden: dockHidden()};
+        Main.overview.hide();
+        await settle();
+
+        const settings = new Gio.Settings({schema_id: APEX_SCHEMA});
+        settings.set_boolean(DOCK_INTELLIHIDE_KEY, false);
+        await until(() => !dockHidden(), 3000);
+        steps.intellihideOff = {hidden: dockHidden(), window: maximisedWindow()};
+        settings.reset(DOCK_INTELLIHIDE_KEY);
+        await until(dockHidden, 3000);
+        steps.intellihideOn = {hidden: dockHidden()};
+    } finally {
+        client.force_exit();
+    }
+    await until(() => !maximisedWindow() && !dockHidden(), 5000);
+    steps.closed = {hidden: dockHidden(), window: maximisedWindow()};
+    return {unit, steps};
 }
 
 // gnome-shell-perf-helper quits after 30 s without a call, and scripting.js's last call to it
@@ -1882,6 +2052,16 @@ async function runProbe() {
             result = {error: `${e.message}\n${e.stack}`};
         }
         console.log(`APEXG2-CYCLES ${JSON.stringify(result)}`);
+    }
+
+    if (GLib.getenv('G2_DOCK') === '1') {
+        let result;
+        try {
+            result = await withDockIntellihide();
+        } catch (e) {
+            result = {error: `${e.message}\n${e.stack}`};
+        }
+        console.log(`APEXG2-DOCK ${JSON.stringify(result)}`);
     }
 
     const wait = Number(GLib.getenv('PROBE_WAIT') ?? '0');

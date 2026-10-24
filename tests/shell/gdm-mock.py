@@ -1,13 +1,15 @@
 #!/usr/bin/python3
 # SPDX-License-Identifier: GPL-3.0-or-later
-"""usage: gdm-mock.py LOG QUESTION
+"""usage: gdm-mock.py LOG QUESTION [--fingerprint]
 
 GDM for the lock screen and the greeter, on the system bus: Manager's
 OpenReauthenticationChannel and OpenSession open a peer-to-peer UserVerifier that asks
 QUESTION for gdm-password and finds no other service. It never completes a verification: every
 answer is a failure, so nothing it does can unlock the screen. An empty QUESTION
-refuses every channel instead, as a GDM that cannot reauthenticate does. Each call, and each
-signal it sends, is a line in LOG.
+refuses every channel instead, as a GDM that cannot reauthenticate does. With --fingerprint,
+gdm-fingerprint runs too, as pam_fprintd does, until it is cancelled; the test method
+FailScan() fails a scan in every such conversation, and Mark(STEP) writes "-- STEP". Each call, and each signal it sends, is
+a line in LOG.
 """
 
 import os
@@ -20,6 +22,10 @@ NAME = "org.gnome.DisplayManager"
 MANAGER_PATH = "/org/gnome/DisplayManager/Manager"
 SESSION_PATH = "/org/gnome/DisplayManager/Session"
 PASSWORD_SERVICE = "gdm-password"
+FINGERPRINT_SERVICE = "gdm-fingerprint"
+# pam_fprintd's own texts.
+FINGERPRINT_INFO = "Place your finger on the fingerprint reader"
+FINGERPRINT_PROBLEM = "Failed to match fingerprint"
 PROBLEM = "Sorry, that didn't work. Please try again."
 
 MANAGER_XML = """<node><interface name="org.gnome.DisplayManager.Manager">
@@ -28,6 +34,10 @@ MANAGER_XML = """<node><interface name="org.gnome.DisplayManager.Manager">
   </method>
   <method name="OpenSession"><arg name="address" direction="out" type="s"/></method>
   <property name="Version" type="s" access="read"/>
+</interface>
+<interface name="io.github.apex_linux.GdmMock">
+  <method name="FailScan"><arg name="conversations" direction="out" type="u"/></method>
+  <method name="Mark"><arg name="step" direction="in" type="s"/></method>
 </interface></node>"""
 
 VERIFIER_XML = """<node>
@@ -69,9 +79,11 @@ VERIFIER_XML = """<node>
 
 
 class Mock:
-    def __init__(self, log, question):
-        self.log = open(log, "a", buffering=1, encoding="utf-8")
+    def __init__(self, log, question, fingerprint):
+        self.log = open(log, "a", buffering=1, encoding="utf-8")  # noqa: SIM115 (open for the mock's life)
         self.question = question
+        self.fingerprint = fingerprint
+        self.scanning = {}
         self.channels = 0
         self.connections = []
         self.verifier = Gio.DBusNodeInfo.new_for_xml(VERIFIER_XML)
@@ -99,7 +111,7 @@ class Mock:
         for interface in self.verifier.interfaces:
             connection.register_object(SESSION_PATH, interface,
                                        lambda *args, c=channel: self.on_verifier_call(c, *args), None, None)
-        connection.connect("closed", lambda *_: self.note(f"channel {channel}: closed"))
+        connection.connect("closed", lambda *_: (self.scanning.pop(channel, None), self.note(f"channel {channel}: closed")))
         return True
 
     def emit(self, connection, channel, signal, *args):
@@ -115,8 +127,15 @@ class Mock:
         else:
             self.note(f"channel {channel}: {method} {' '.join(map(str, args))}".rstrip())
         invocation.return_value(None)
+        if method == "Cancel":
+            self.scanning.pop(channel, None)
         if method in ("BeginVerification", "BeginVerificationForUser"):
             service = args[0]
+            if service == FINGERPRINT_SERVICE and self.fingerprint:
+                self.scanning[channel] = connection
+                self.emit(connection, channel, "ConversationStarted", service)
+                self.emit(connection, channel, "Info", service, FINGERPRINT_INFO)
+                return
             if service != PASSWORD_SERVICE:
                 self.emit(connection, channel, "ServiceUnavailable", service, "")
                 return
@@ -127,6 +146,16 @@ class Mock:
             self.emit(connection, channel, "VerificationFailed", args[0])
 
     def on_manager_call(self, _connection, sender, _path, _interface, method, params, invocation):
+        if method == "Mark":
+            self.note(f"-- {params.unpack()[0]}")
+            invocation.return_value(None)
+            return
+        if method == "FailScan":
+            self.note(f"FailScan: {len(self.scanning)} conversations")
+            for channel, connection in self.scanning.items():
+                self.emit(connection, channel, "Problem", FINGERPRINT_SERVICE, FINGERPRINT_PROBLEM)
+            invocation.return_value(GLib.Variant("(u)", (len(self.scanning),)))
+            return
         address = self.server.get_client_address()
         self.note(f"{method} {' '.join(params.unpack())} from {sender}".replace("  ", " "))
         if not self.question:
@@ -139,8 +168,8 @@ class Mock:
         return GLib.Variant("s", "51.0")
 
     def on_bus(self, connection, _name):
-        connection.register_object(MANAGER_PATH, self.manager.interfaces[0],
-                                   self.on_manager_call, self.on_manager_property, None)
+        for interface in self.manager.interfaces:
+            connection.register_object(MANAGER_PATH, interface, self.on_manager_call, self.on_manager_property, None)
 
     def run(self):
         Gio.bus_own_name(Gio.BusType.SYSTEM, NAME, Gio.BusNameOwnerFlags.NONE, self.on_bus,
@@ -150,10 +179,10 @@ class Mock:
 
 
 def main():
-    if len(sys.argv) != 3:
+    if len(sys.argv) not in (3, 4) or sys.argv[3:] not in ([], ["--fingerprint"]):
         print(__doc__, file=sys.stderr)
         return 2
-    Mock(sys.argv[1], sys.argv[2]).run()
+    Mock(sys.argv[1], sys.argv[2], sys.argv[3:] == ["--fingerprint"]).run()
     return 0
 
 

@@ -4,11 +4,13 @@
 
 Asserts each shoot.sh case from its log's APEXLOCK lines and gdm-mock.py's log: what
 boards 20 and 12 show, that no case unlocks, that a wrong answer leaves the screen
-locked, that a GDM refusing to reauthenticate leaves it locked, that blanking cancels the conversation and waking starts a new one, that
+locked, that a GDM refusing to reauthenticate leaves it locked, that the fingerprint
+conversation stops while the screen is blank, that blanking cancels the conversation and waking starts a new one, that
 stock and safe mode keep upstream's lock, and that the greeter runs no Apex JS.
 Prints one line per assertion and exits 1 when one fails.
 """
 
+import itertools
 import json
 import os
 import re
@@ -29,6 +31,8 @@ LOCK_CASES = {
     "lock-light": {"apex": True, "question": "Enter Password"},
     "lock-dark": {"apex": True, "question": "Enter Password"},
     "lock-question": {"apex": True, "question": "Verification code:"},
+    "lock-high-contrast": {"apex": True, "question": "Enter Password", "overlay_alpha": 0x8c},
+    "lock-large-text": {"apex": True, "question": "Enter Password"},
     "lock-disabled": {"apex": False, "question": "Password", "layer": True},
     "lock-safe": {"apex": False, "question": "Password", "layer": False},
 }
@@ -109,6 +113,30 @@ def channels(gdm_log):
     return by_channel
 
 
+# Top to bottom, as board 20 stacks them.
+LAYOUT_ORDER = ("date", "time", "avatar", "field", "message", "hint")
+# $apex_lock_overlay, rgba(8, 10, 20, .34); the high-contrast sheet's own is darker.
+OVERLAY = "#080a1457"
+
+
+def check_layout(case, layout, overlay_alpha=None):
+    screen = layout.get("screen") or {}
+    parts = [(name, layout[name]) for name in LAYOUT_ORDER if name in layout]
+    off = [name for name, b in parts if b["x"] < screen.get("x", 0) or b["y"] < screen.get("y", 0)
+           or b["x"] + b["width"] > screen.get("x", 0) + screen.get("width", 0) + 1
+           or b["y"] + b["height"] > screen.get("y", 0) + screen.get("height", 0) + 1]
+    check(f"{case}: date, time, avatar, field and hint are all on screen",
+          {"date", "time", "avatar", "field", "hint"} <= dict(parts).keys() and not off, json.dumps(layout))
+    overlaps = [f"{a}/{b}" for (a, ba), (b, bb) in itertools.pairwise(parts) if ba["y"] + ba["height"] > bb["y"] + 1]
+    check(f"{case}: top to bottom, nothing overlaps", not overlaps, ", ".join(overlaps))
+    got = layout.get("overlay") or ""
+    if overlay_alpha is None:
+        check(f"{case}: the overlay darkens as $apex_lock_overlay", got == OVERLAY, got)
+    else:
+        check(f"{case}: high contrast darkens more, to alpha {overlay_alpha:#x}",
+              got[:7] == "#000000" and len(got) == 9 and int(got[7:], 16) >= overlay_alpha, got)
+
+
 def check_lock(shots, case, want):
     log = read(shots, f"{case}.log")
     gdm = read(shots, f"{case}.gdm.log")
@@ -145,6 +173,7 @@ def check_lock(shots, case, want):
         check(f"{case}: the initial-letter avatar", (opened["prompt"] or {}).get("avatar") == "initial A",
               json.dumps(opened["prompt"]))
         check(f"{case}: the user's name", (opened["prompt"] or {}).get("name") == "Apex")
+        check_layout(case, opened.get("layout") or {}, want.get("overlay_alpha"))
         check(f"{case}: blanking takes the prompt down", blank["prompt"] is None, json.dumps(blank["prompt"]))
         if answered:
             check(f"{case}: and cancels its conversation", "Cancel" in calls[answered[0]])
@@ -168,6 +197,48 @@ def check_lock(shots, case, want):
         check(f"{case}: upstream keeps its prompt at blank", blank["prompt"] is not None)
         check(f"{case}: the layer {'loaded' if want['layer'] else 'did not load'}",
               (LOAD_WITNESS in log) == want["layer"])
+
+
+def between(gdm_log, start, end):
+    """The mock's lines after the probe's step START and before END ("" for the log's start)."""
+    lines = gdm_log.splitlines()
+    first = lines.index(f"-- {start}") + 1 if start else 0
+    last = lines.index(f"-- {end}", first)
+    return lines[first:last]
+
+
+# pam_fprintd's texts reach the prompt through upstream's own; S4 owns the wording.
+FINGERPRINT_HINT = "(or place finger on reader)"
+FINGERPRINT_PROBLEM = "Failed to match fingerprint"
+
+
+def check_fingerprint(shots, case):
+    log, gdm = read(shots, f"{case}.log"), read(shots, f"{case}.gdm.log")
+    f = facts(log)
+    steps = ("opened", "scan-failed", "blank", "still-blank", "wake", "end")
+    check(f"{case}: every step is reported", all(step in f for step in steps))
+    if not all(step in f for step in steps):
+        return
+    for step in steps:
+        check(f"{case}: {step}: locked", f[step]["locked"] is True)
+    check(f"{case}: GDM never completes a verification", "VerificationComplete" not in gdm)
+    check(f"{case}: no JS error", "JS ERROR" not in until(log, "end") and "APEXLOCK-ERROR" not in log)
+    check(f"{case}: the shell found fprintd's reader", "GetDefaultDevice" in read(shots, f"{case}.fprintd.log"))
+    begun = "BeginVerificationForUser gdm-fingerprint apex"
+    check(f"{case}: a fingerprint conversation runs beside the password one",
+          any(line.endswith(begun) for line in between(gdm, "", "opened")))
+    check(f"{case}: the prompt says so, in upstream's words", (f["opened"]["prompt"] or {}).get("message") == FINGERPRINT_HINT,
+          json.dumps(f["opened"]["prompt"]))
+    check(f"{case}: a failed scan is shown, and the screen stays locked",
+          (f["scan-failed"]["prompt"] or {}).get("message") == FINGERPRINT_PROBLEM, json.dumps(f["scan-failed"]["prompt"]))
+    before_blank = between(gdm, "capture.scan-failed", "blank")
+    check(f"{case}: blanking cancels the conversation the reader was in", any(line.endswith(": Cancel") for line in before_blank),
+          json.dumps(before_blank))
+    blank = between(gdm, "blank", "still-blank")
+    check(f"{case}: while blank, no conversation starts and the reader is left alone", blank == [], json.dumps(blank))
+    check(f"{case}: blank: no prompt", f["blank"]["prompt"] is None and f["still-blank"]["prompt"] is None)
+    check(f"{case}: waking starts the reader's conversation again",
+          any(line.endswith(begun) for line in between(gdm, "still-blank", "wake")) and f["wake"]["prompt"] is not None)
 
 
 def check_refused(shots, case):
@@ -241,6 +312,7 @@ def main():
     for case, want in LOCK_CASES.items():
         check_lock(shots, case, want)
     check_refused(shots, "lock-refused")
+    check_fingerprint(shots, "lock-fingerprint")
     for case in GREETER_CASES:
         check_greeter(shots, case)
     return 1 if failed else 0

@@ -19,8 +19,8 @@ readonly APEX_LIGHT_SHEET=resource:///org/gnome/shell/theme/gnome-shell-light.cs
 readonly APEX_DARK_SHEET=resource:///org/gnome/shell/theme/gnome-shell-dark.css
 readonly STOCK_SHEETS=resource:///org/gnome/shell/theme/stock
 readonly FEDORA_SHEETS=resource:///org/gnome/shell/theme
-readonly DIRECT_CASES=(default default-scale1 dark-style stock-light stock-dark safe-env layer-disabled
-    layer-cycles motion fault-configure fault-enable fault-abort kernel-safe fedora-light fedora-dark glass fedora-glass)
+readonly DIRECT_CASES=(default default-scale1 dark-style dock-intellihide dock-intellihide-dark stock-light stock-dark safe-env
+    layer-disabled layer-cycles motion fault-configure fault-enable fault-abort kernel-safe fedora-light fedora-dark glass fedora-glass)
 readonly DIRECT_PARTS=(main kernel fedora)
 readonly CAPTURE_CASES=(default default-scale1 dark-style stock-light stock-dark fedora-light fedora-dark)
 readonly SCENES=(desktop overview)
@@ -329,6 +329,25 @@ dock_metrics() {
         '{dock: .dock, clearance: .scenes.overview.dockClearance}' '.dock != null and .clearance != null and .clearance >= 0'
     "${metric[@]}" "its apps' menu offers Launch Using Discrete Graphics Card while switcheroo-control reports two GPUs" \
         '.dock.appMenu' '.hasDualGpu == true and (.items | any(. == "Launch Using Discrete Graphics Card"))'
+}
+
+dock_intellihide() {
+    local label=$1 log=$2
+    expect_report "$label" "$log" '.error == null and .steps.initial.hidden == false' \
+        "the dock shows while no window is maximised" APEXG2-DOCK
+    expect_report "$label" "$log" '.steps.maximised | .window == true and .hidden == true and .barSolid == true' \
+        "a maximised window hides it (dock-intellihide) and makes the bar solid" APEXG2-DOCK
+    expect_report "$label" "$log" '.steps.revealed | .hidden == false and .underPointer == true' \
+        "pushing against the bottom edge under it reveals it, under the pointer" APEXG2-DOCK
+    expect_report "$label" "$log" '.steps.left.hidden == true' "leaving it hides it again" APEXG2-DOCK
+    expect_report "$label" "$log" '.steps.overview.hidden == false' "the overview shows it over the maximised window" APEXG2-DOCK
+    expect_report "$label" "$log" '.steps.intellihideOff | .hidden == false and .window == true' \
+        "with dock-intellihide off it stays over the maximised window" APEXG2-DOCK
+    expect_report "$label" "$log" '.steps.intellihideOn.hidden == true' "turned back on, it hides again" APEXG2-DOCK
+    expect_report "$label" "$log" '.steps.closed | .hidden == false and .window == false' \
+        "the window gone, it shows" APEXG2-DOCK
+    check "$label: the maximised and revealed scenes are captured" \
+        test -s "$3/captures/$label-maximised.png" -a -s "$3/captures/$label-revealed.png"
 }
 
 no_dock() {
@@ -897,6 +916,8 @@ spotlight_style() {
             and (.check | (.width | px_is($t.apex_toast_check_size)) and (.height | px_is($t.apex_toast_check_size)) and .radius >= ($t.apex_toast_check_size | px) / 2
                 and (.background | colour_is($a)) and (.icon | px_is($t.apex_toast_check_icon_size)))
             and .label.text == "Copied 1920"'
+    "${metric[@]}" 'typing in the overview opens Spotlight with the typed text and clears the overview'"'"'s own search (patch 0013)' \
+        '.surfaces.overviewSearch' '.opened and .text == "disk" and .overviewText == ""'
 }
 
 scenes_captured() {
@@ -1052,6 +1073,12 @@ motion_curve() {
     apex_light motion "$f"
     no_apex_failure motion "$f"
     m=$(report_of "$f" APEXG2-MOTION)
+    local error
+    error=$(jq -r '.error // empty' <<<"$m" 2>/dev/null)
+    if [[ -n $error ]]; then
+        fail "motion: ${error%%$'\n'*}"
+        return
+    fi
     expect motion "$m" '.error == null and .animated.maximise.maximised and .animated.overview.visible' \
         "the probe maximised a GTK window and opened the overview, with animations on"
     expect motion "$m" ".animated.maximise.transition | .mode == \"CUBIC_BEZIER\" and .curve == $MOTION_CURVE and .duration == $MOTION_WINDOW_MS" \
@@ -1173,6 +1200,12 @@ direct_cases() {
     spotlight_style dark-style "$f" dark
     screenshot_ui dark-style "$f" dark
     dark_style_off dark-style "$f"
+
+    for c in dock-intellihide dock-intellihide-dark; do
+        exits "$run" "$c" 0
+        no_apex_failure "$c" "$run/$c.log"
+        dock_intellihide "$c" "$run/$c.log" "$run"
+    done
 
     for c in stock-light stock-dark; do
         exits "$run" "$c" 0

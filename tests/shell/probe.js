@@ -27,6 +27,9 @@ let pointer;
 
 function fact(name, value) {
     console.log(`APEXLOCK ${JSON.stringify({[name]: value})}`);
+    // gdm-mock.py's log then shows its calls and signals between the probe's steps.
+    Gio.DBus.system.call('org.gnome.DisplayManager', '/org/gnome/DisplayManager/Manager', 'io.github.apex_linux.GdmMock',
+        'Mark', new GLib.Variant('(s)', [name]), null, Gio.DBusCallFlags.NONE, -1, null, null);
 }
 
 function tap(keyval) {
@@ -88,7 +91,49 @@ function describeLock(dialog) {
         blur: dialog._backgroundGroup.get_children().map(b => b.get_effect('blur'))
             .map(e => e && `radius=${e.radius} brightness=${e.brightness.toFixed(2)} saturation=${e.saturation.toFixed(2)}`)[0] ?? null,
         prompt: describePrompt(dialog._authPrompt),
+        layout: describeLayout(dialog, hint),
     };
+}
+
+// What the eye reads, top to bottom, in logical pixels; only what is on screen.
+function describeLayout(dialog, hint) {
+    const prompt = dialog._authPrompt;
+    const parts = {
+        date: dialog._clock._date, time: dialog._clock._time, avatar: prompt?._userWell,
+        field: prompt?._entry, message: prompt?._message?.text ? prompt._message : null, hint,
+    };
+    const overlay = dialog.get_children().find(c => c.has_style_class_name?.('apex-lock-overlay'));
+    const layout = {screen: box(dialog), overlay: overlay ? color(overlay.get_theme_node().get_background_color()) : null};
+    for (const [name, actor] of Object.entries(parts)) {
+        if (actor?.mapped && actor.opacity > 0)
+            layout[name] = box(actor);
+    }
+    return layout;
+}
+
+// gdm-mock.py's test method: pam_fprintd's "no match" in every live fingerprint conversation.
+function failScan() {
+    return Gio.DBus.system.call('org.gnome.DisplayManager', '/org/gnome/DisplayManager/Manager',
+        'io.github.apex_linux.GdmMock', 'FailScan', null, null, Gio.DBusCallFlags.NONE, -1, null);
+}
+
+async function shootFingerprint(dialog) {
+    fact('opened', describeLock(dialog));
+    await capture('open');
+    await failScan();
+    await Scripting.sleep(STEP_MS * 2);
+    fact('scan-failed', describeLock(dialog));
+    await capture('scan-failed');
+    await setPowerSaveMode(POWER_SAVE_OFF);
+    await Scripting.sleep(STEP_MS);
+    fact('blank', describeLock(dialog));
+    await Scripting.sleep(STEP_MS * 2);
+    fact('still-blank', describeLock(dialog));
+    await setPowerSaveMode(POWER_SAVE_ON);
+    await Scripting.sleep(STEP_MS * 2);
+    fact('wake', describeLock(dialog));
+    await Scripting.sleep(SETTLE_MS);
+    fact('end', {locked: Main.screenShield.locked});
 }
 
 // Locking fades to black, as before the screen blanks; activity lifts it. A move does not
@@ -98,6 +143,10 @@ async function shootLock() {
     await Scripting.sleep(STEP_MS);
     pointer.notify_relative_motion(GLib.get_monotonic_time(), POINTER_NUDGE, POINTER_NUDGE);
     await Scripting.sleep(SETTLE_MS);
+    if (GLib.getenv('APEX_FINGERPRINT') === '1') {
+        await shootFingerprint(Main.screenShield._dialog);
+        return;
+    }
     const dialog = Main.screenShield._dialog;
     fact('opened', describeLock(dialog));
     await capture('open');

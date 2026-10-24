@@ -3,3 +3,7 @@
 // Imported last by the high-contrast entry file, which does not import the Apex tokens.
 
 /*! apex-shell-structure */
+
+// The lock blurs without darkening and leaves that to its overlay (lock/stage.js): without
+// this, high contrast's white text sits on the bright blurred wallpaper.
+.apex-lock-overlay { background-color: rgba(0, 0, 0, .55); }

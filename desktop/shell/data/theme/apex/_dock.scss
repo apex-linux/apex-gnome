@@ -4,9 +4,12 @@
 
 $_item_bottom: $apex_dock_dot_gap + $apex_dock_dot_size;
 
-#apexDock {
-  -apex-bottom-gap: $apex_dock_bottom_gap;
+// The box reaches the bottom edge: its gap belongs to the dock's hover and slide.
+#apexDockBox {
+  padding-bottom: $apex_dock_bottom_gap;
+}
 
+#apexDock {
   // The background's height follows the Show Apps icon (dash.js), so its padding adds the
   // items' room for the dot below the icons.
   .dash-background {
