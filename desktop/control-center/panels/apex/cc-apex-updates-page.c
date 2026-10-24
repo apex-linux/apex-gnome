@@ -536,8 +536,16 @@ set_deployment (AdwActionRow *row, GtkLabel *built_label, GVariant *dict)
     g_autofree char *line = cc_apex_updates_deployment_line (dict_string (dict, "version"), dict_string (dict, "digest"));
     g_autofree char *built = cc_apex_updates_built (dict_timestamp (dict, "timestamp"));
 
+    const char *pin_reason = dict_string (dict, "pin-reason");
+    g_autofree char *subtitle = NULL;
+
+    if (pin_reason && *pin_reason) {
+        g_autofree char *escaped = g_markup_escape_text (pin_reason, -1);
+
+        subtitle = g_strdup_printf (_("%s\nKept by Apex: %s"), line ? line : "", escaped);
+    }
     gtk_widget_set_visible (GTK_WIDGET (row), !dict_is_empty (dict));
-    adw_action_row_set_subtitle (row, line ? line : "");
+    adw_action_row_set_subtitle (row, subtitle ? subtitle : line ? line : "");
     if (built_label)
         gtk_label_set_label (built_label, built ? built : "");
 }

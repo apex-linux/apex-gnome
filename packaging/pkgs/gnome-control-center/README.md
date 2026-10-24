@@ -103,7 +103,8 @@ and polkit asks in the daemon, never in Settings.
 - **What's New**: `GetChanges` for the staged digest, summed up as its GNOME, Linux and
   Mesa versions (then other packages), with every change in the expanded row.
 - **Versions**: Booted, Staged and Rollback, each as version, short digest and build
-  date; Use at Next Restart… on the previous one calls `Rollback(false)`.
+  date, and "Kept by Apex: …" with the `pin-reason` of a deployment the daemon pinned;
+  Use at Next Restart… on the previous one calls `Rollback(false)`.
 - **Preferences**: Automatic Downloads (`AutomaticDownloads`, set with
   `SetAutomaticDownloads`; polkit's `update.configure` is auth_admin, so the daemon asks
   each time and a refusal puts the switch back), the channel, the last check and Check

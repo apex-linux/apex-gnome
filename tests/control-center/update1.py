@@ -37,7 +37,8 @@ SIZE = dbus.UInt64(412_000_000)
 STAGED = deployment("45.20261010.133", "sha256:9e41aa07c3b2d1e0f9a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c80c2b", 10,
                     held=dbus.Array(["gnome-control-center"], signature="s"),
                     degraded=dbus.Array([], signature="s"), holds=HOLDS, stock=STOCK, **{"download-size": SIZE})
-ROLLBACK = deployment("45.20261001.124", "sha256:b02d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b19c4", 1)
+ROLLBACK = deployment("45.20261001.124", "sha256:b02d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b19c4", 1,
+                      pinned=True, **{"pin-reason": "the last version that started cleanly"})
 EMPTY = dbus.Dictionary({}, signature="sv")
 CHANGES = [
     ("glibc", "i686", "upgraded", "2.42-3.fc45", "2.42-4.fc45"),

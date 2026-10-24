@@ -23,6 +23,7 @@ EXPECT = {
         "45.20261008.131 · sha256:3f9c…a71e",
         "45.20261010.133 · sha256:9e41…0c2b",
         "45.20261001.124 · sha256:b02d…19c4",
+        "Kept by Apex: the last version that started cleanly",
         "today at 09:00",
     ],
     "up-to-date": [
