@@ -373,6 +373,11 @@ fact "notifications: a card shows the source's icon without one of its own, else
 fact "notifications: the switch follows show-banners; Clear stays shown with nothing to clear" \
     'nf\.dnd-from-settings=checked=true switch=true clear=true'
 fact "notifications: a click turns Do Not Disturb off" 'nf\.dnd-click=show-banners=true checked=false'
+fact "notifications: the month on the left, both chevrons on the right" 'nf\.calendar=header=month,back,forward align=1 class=true'
+fact "notifications: every day keeps a dot under its number" 'nf\.days=27/apex-event-dot 28/apex-event-dot 29/apex-event-dot'
+fact "notifications: layer off: stock's header" 'nf\.off\.calendar=header=back,month,forward align=2 class=false'
+fact "notifications: layer off: stock's day buttons" 'nf\.off\.days=27 28 29'
+fact "notifications: layer back on: the header and dots again" 'nf\.on\.calendar=header=month,back,forward align=1 class=true'
 fact "notifications: layer off: stock's groups, a new one too" "nf\.off\.groups=Mail:$STACKED stacked=true \| Chat:$STACKED stacked=true"
 fact "notifications: layer off: stock's header" 'nf\.off\.header=icon=true line=Mail now'
 fact "notifications: layer off: stock's footer, Clear hidden with the placeholder shown" 'nf\.off\.footer=clear clear=align:1 visible:false'

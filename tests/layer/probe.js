@@ -427,14 +427,25 @@ async function exerciseNotifications() {
     fact('nf.dnd-from-settings', `checked=${dnd.checked} switch=${dnd.child.get_children()[1].state} clear=${list.clear.visible}`);
     dnd.emit('clicked');
     fact('nf.dnd-click', `show-banners=${notifications.get_boolean('show-banners')} checked=${dnd.checked}`);
+    const month = MessageList.newCalendar();
+    const calendarState = label => {
+        fact(`${label}.calendar`, `header=${month.topBox.get_children().map(c => c.name).join(',')} ` +
+            `align=${month.topBox.get_children().find(c => c.name === 'month').x_align} ` +
+            `class=${month.calendar.has_style_class_name('apex-calendar')}`);
+        const day = child => child.get_children().map(c => c.text ?? c.style_class).join('/') || child.text;
+        fact(`${label}.days`, month.days.map(b => day(b.get_child())).join(' '));
+    };
+    calendarState('nf');
     settings.set_boolean('layer-enabled', false);
     await spin(200);
+    calendarState('nf.off');
     groups.push(new MessageList.NotificationMessageGroup({title: 'Chat', icon: 'chat-icon'}, 2));
     notificationsState('nf.off', list, groups);
     fact('nf.off.icons', `fallback=${groups[0].get_children()[0].child.icon} own=${own.icon}`);
     settings.set_boolean('layer-enabled', true);
     await spin(200);
     notificationsState('nf.on', list, groups);
+    calendarState('nf.on');
 }
 
 // A surface two actors below the stage's child, its sheet naming one further layer.

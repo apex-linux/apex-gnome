@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
-// run.sh installs this as js/ui/messageList.js: messages, a group and the calendar's list, with patch 0012's hooks.
+// run.sh installs this as js/ui/messageList.js: messages, a group, and calendar.js's parts that
+// carry patch 0012's hooks.
 
 import St from '../../../St.js';
 import * as Hooks from './apex/hooks.js';
@@ -73,4 +74,20 @@ export function newCalendarMessageList() {
     footer.add_child(clear);
     Hooks.run('message-list-controls', footer, clear, placeholder);
     return {footer, clear, placeholder};
+}
+
+// calendar.js's Calendar: the month header between its chevrons, and a week of day buttons.
+export function newCalendar() {
+    const calendar = new St.Widget({name: 'calendar'});
+    const topBox = new St.BoxLayout({name: 'header'});
+    const label = new St.Label({name: 'month', text: 'September', x_align: 2});
+    [new St.Button({name: 'back'}), label, new St.Button({name: 'forward'})].forEach(c => topBox.add_child(c));
+    Hooks.run('calendar-header', calendar, topBox, label);
+    const days = [27, 28, 29].map(day => {
+        const button = new St.Button({style_class: `calendar-day${day === 28 ? ' calendar-day-with-events' : ''}`,
+            child: new St.Label({text: `${day}`})});
+        Hooks.run('calendar-day', button);
+        return button;
+    });
+    return {calendar, topBox, days};
 }

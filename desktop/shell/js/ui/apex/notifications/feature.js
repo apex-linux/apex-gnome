@@ -10,6 +10,8 @@ import * as PopupMenu from '../../popupMenu.js';
 export const DND_STYLE_CLASS = 'apex-dnd-button';
 export const DND_LABEL = 'Do Not Disturb';
 export const SEPARATOR_STYLE_CLASS = 'apex-message-separator';
+export const CALENDAR_STYLE_CLASS = 'apex-calendar';
+export const EVENT_DOT_STYLE_CLASS = 'apex-event-dot';
 const NOTIFICATIONS_SCHEMA = 'org.gnome.desktop.notifications';
 const STACK_PSEUDO_CLASSES = ['second-in-stack', 'lower-in-stack'];
 
@@ -18,6 +20,8 @@ let _footer = null;
 const _headers = new Map();
 const _messages = new Map();
 const _groups = new Map();
+const _calendars = new Map();
+const _days = new Map();
 
 function _track(map, actor, parts) {
     map.set(actor, parts);
@@ -106,6 +110,41 @@ function _plainFooter() {
     _footer.dnd = null;
 }
 
+// Board 34: the month on the left, both chevrons on the right.
+function _furnishCalendar(calendar, parts) {
+    calendar.add_style_class_name(CALENDAR_STYLE_CLASS);
+    parts.xAlign = parts.label.x_align;
+    parts.label.x_align = Clutter.ActorAlign.START;
+    parts.topBox.set_child_at_index(parts.label, 0);
+}
+
+function _plainCalendar(calendar, parts) {
+    calendar.remove_style_class_name(CALENDAR_STYLE_CLASS);
+    parts.label.x_align = parts.xAlign;
+    parts.topBox.set_child_at_index(parts.label, 1);
+}
+
+// The number over a dot every day keeps, so the numbers stay put; the sheet colours it on event days.
+function _furnishDay(button, parts) {
+    parts.label = button.get_child();
+    button.set_child(null);
+    parts.box = new St.BoxLayout({
+        orientation: Clutter.Orientation.VERTICAL,
+        x_align: Clutter.ActorAlign.CENTER,
+        y_align: Clutter.ActorAlign.CENTER,
+    });
+    parts.box.add_child(parts.label);
+    parts.box.add_child(new St.Widget({style_class: EVENT_DOT_STYLE_CLASS, x_align: Clutter.ActorAlign.CENTER}));
+    button.set_child(parts.box);
+}
+
+function _plainDay(button, parts) {
+    parts.box.remove_child(parts.label);
+    button.set_child(parts.label);
+    parts.box.destroy();
+    parts.box = null;
+}
+
 export function configure(featureName) {
     Hooks.provide(featureName, 'message-header', (header, sourceIcon, content) => {
         const parts = {sourceIcon, content};
@@ -123,6 +162,18 @@ export function configure(featureName) {
     });
     Hooks.provide(featureName, 'message-group-expanded', (expanded, group) =>
         _enabled && _groups.has(group) ? true : expanded);
+    Hooks.provide(featureName, 'calendar-header', (calendar, topBox, label) => {
+        const parts = {topBox, label};
+        _calendars.set(calendar, parts);
+        if (_enabled)
+            _furnishCalendar(calendar, parts);
+    });
+    Hooks.provide(featureName, 'calendar-day', button => {
+        const parts = {};
+        _track(_days, button, parts);
+        if (_enabled)
+            _furnishDay(button, parts);
+    });
     Hooks.provide(featureName, 'message-list-controls', (hbox, clear, placeholder) => {
         _footer = {hbox, clear, placeholder};
         if (_enabled)
@@ -141,6 +192,8 @@ export function enable() {
     _enabled = true;
     _headers.forEach(parts => _furnishHeader(parts));
     _groups.forEach((parts, group) => _flatten(group, parts));
+    _calendars.forEach((parts, calendar) => _furnishCalendar(calendar, parts));
+    _days.forEach((parts, button) => _furnishDay(button, parts));
     if (_footer)
         _furnishFooter();
     _refreshIcons();
@@ -150,6 +203,8 @@ export function disable() {
     _enabled = false;
     _headers.forEach(_plainHeader);
     _groups.forEach((parts, group) => _restack(group, parts));
+    _calendars.forEach((parts, calendar) => _plainCalendar(calendar, parts));
+    _days.forEach((parts, button) => _plainDay(button, parts));
     if (_footer?.dnd)
         _plainFooter();
     _refreshIcons();
