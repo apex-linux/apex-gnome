@@ -15,7 +15,7 @@ the Apex layer; libadwaita, Settings and Files patch series join it in S2.
 | `desktop/control-center/`, `packaging/pkgs/gnome-control-center/` | gnome-control-center rebuilt in the lane for the Apex Settings, boards 11, 18, 23, 24 and 26: its sources (`panels/apex/`) and its recipe ([README](packaging/pkgs/gnome-control-center/README.md)) |
 | `tests/control-center/` | the gnome-control-center recipe through apex-lane's container half (`lane.sh`), and the checks of `desktop/control-center/` |
 | `desktop/nautilus/`, `packaging/pkgs/nautilus/` | nautilus rebuilt in the lane for Files, boards 27 to 29: its sources (`src/apex/`) and its recipe ([README](packaging/pkgs/nautilus/README.md)) |
-| `tests/nautilus/` | the nautilus recipe through apex-lane's container half (`lane.sh`), and the checks of `desktop/nautilus/` |
+| `tests/nautilus/` | the nautilus recipe through apex-lane's container half (`lane.sh`), the checks of `desktop/nautilus/`, the texts' unit test, and the captures with board 27's home (`shoot.sh`) |
 
 [apex-image](https://github.com/apex-linux/apex-image) pins this repository by commit in
 `components.lock`, builds gnome-shell from the recipe in its builder VM, and runs G2 on the
@@ -45,6 +45,7 @@ just ptyxis-lane  # podman or docker: Ptyxis rebuilt as the lane builds it, RPMs
 just ptyxis-shots # podman or docker: that Ptyxis captured in a headless gnome-shell, light and dark
 just control-center-lane # podman or docker: gnome-control-center rebuilt as the lane builds it, RPMs in _build/control-center/out
 just nautilus-lane # podman or docker: nautilus rebuilt as the lane builds it, RPMs in _build/nautilus/out
+just nautilus-shots # podman or docker: that nautilus captured in a headless gnome-shell, light and dark
 ```
 
 `just eslint` lints `desktop/shell/js` and the gjs tests with gnome-shell's own
