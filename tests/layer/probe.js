@@ -781,6 +781,18 @@ async function exerciseShadows() {
     surface.emit('notify::mapped');
     await spin(50);
     layers('mapped-again');
+    const [kept] = Registry.layersOf(surface);
+    surface.emit('style-changed');
+    await spin(50);
+    fact('shadows.restyled-alike', Registry.layersOf(surface)[0] === kept ? 'the same layer' : 'rebuilt');
+    const sheet = surface._themeNode;
+    surface._themeNode = {...sheet, get_shadow: p => p === '-apex-shadow-layer' ? {...sheet.get_shadow(p), blur: 12} : null};
+    surface.emit('style-changed');
+    await spin(50);
+    layers('restyled');
+    surface._themeNode = sheet;
+    surface.emit('style-changed');
+    await spin(50);
     settings.set_boolean('layer-enabled', false);
     await spin(200);
     layers('off');
