@@ -8,6 +8,20 @@ const TextDirection = {DEFAULT: 0, LTR: 1, RTL: 2};
 
 class BinLayout {}
 
+class BindConstraint {
+    constructor(params) {
+        Object.assign(this, params);
+    }
+}
+
+class Clone {
+    constructor(params) {
+        Object.assign(this, params);
+    }
+
+    destroy() {}
+}
+
 // The probe sets the key a press reports, as Clutter does before emitting key-press.
 class KeyController {
     connect(signal, fn) {
@@ -38,7 +52,10 @@ export default {
     AnimationMode: {EASE_OUT_QUAD: 5, EASE_OUT_CUBIC: 8},
     BUTTON_SECONDARY: 3,
     BinLayout,
+    BindConstraint,
+    BindCoordinate: {X: 0, Y: 1, WIDTH: 2, HEIGHT: 3, POSITION: 4, SIZE: 5, ALL: 6},
     ClickGesture,
+    Clone,
     KeyController,
     EventPhase: {BUBBLE: 0, CAPTURE: 1},
     Orientation: {HORIZONTAL: 0, VERTICAL: 1},

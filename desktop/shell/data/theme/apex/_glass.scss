@@ -14,6 +14,9 @@
 .popup-menu-content.datemenu-popover,
 .notification-banner { @include apex-glass($apex_panel_blur, $apex_panel_saturation); }
 
+.apex-glass-scrim { @include apex-glass($apex_overview_scrim_blur, $apex_overview_scrim_saturation); }
+.apex-glass-scrim.apex-launcher { @include apex-glass($apex_launcher_scrim_blur, $apex_launcher_scrim_saturation); }
+
 .apex-solid {
   #panel { background-color: $apex_bar_solid; }
 
