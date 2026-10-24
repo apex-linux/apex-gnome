@@ -5,7 +5,8 @@
 Seeds HOME with the folders and files of the design canvas's board 27 ("Files: Home"):
 their names, sizes and modification times, relative to CLOCK ("YYYY-MM-DD HH:MM:SS",
 UTC), with the XDG user directories named, the images as real PNGs in the board's
-colours, and the board's four recent files in recently-used.xbel.
+colours, the sidebar's bookmarks, and the board's four recent files in
+recently-used.xbel.
 """
 
 import datetime
@@ -98,6 +99,9 @@ IMAGE_COLOURS = {
 DEFAULT_IMAGE_COLOUR = (0xE8, 0xEB, 0xF0)
 IMAGE_SIZE = (320, 200)
 
+# The sidebar's bookmarks, as xdg-user-dirs-gtk writes them at a first login.
+BOOKMARKS = ["Documents", "Downloads", "Music", "Pictures", "Videos"]
+
 RECENT = [
     ("Pictures/mockup-2880x1800.png", "today 08:55"),
     ("Documents/Apex Fedora — Spec.odt", "today 09:12"),
@@ -158,7 +162,7 @@ def recent_xbel(home, clock):
     entries = []
     for rel, spec in RECENT:
         stamp = when(clock, spec).strftime("%Y-%m-%dT%H:%M:%S.000000Z")
-        uri = "file://" + "/".join(_quote(part) for part in os.path.join(home, rel).split("/"))
+        uri = "file://" + _quote_path(os.path.join(home, rel))
         mime = RECENT_MIME[os.path.splitext(rel)[1]]
         entries.append(
             f'  <bookmark href="{uri}" added="{stamp}" modified="{stamp}" visited="{stamp}">\n'
@@ -173,6 +177,10 @@ def recent_xbel(home, clock):
         '<xbel version="1.0" xmlns:bookmark="http://www.freedesktop.org/standards/desktop-bookmarks"'
         ' xmlns:mime="http://www.freedesktop.org/standards/shared-mime-info">\n' + "".join(entries) + "</xbel>\n"
     )
+
+
+def _quote_path(path):
+    return "/".join(_quote(part) for part in path.split("/"))
 
 
 def _quote(part):
@@ -205,6 +213,9 @@ def main():
     with open(os.path.join(config, "user-dirs.dirs"), "w") as f:
         for key, name in XDG_DIRS.items():
             f.write(f'XDG_{key}_DIR="$HOME/{name}"\n')
+    os.makedirs(os.path.join(config, "gtk-3.0"), exist_ok=True)
+    with open(os.path.join(config, "gtk-3.0", "bookmarks"), "w") as f:
+        f.writelines(f"file://{_quote_path(os.path.join(home, name))}\n" for name in BOOKMARKS)
     data = os.path.join(home, ".local", "share")
     os.makedirs(data, exist_ok=True)
     with open(os.path.join(data, "recently-used.xbel"), "w") as f:
