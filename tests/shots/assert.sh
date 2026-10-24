@@ -325,6 +325,70 @@ top_bar_gaps() {
         '{dot: .topBar.withDot.dot.background, accent: .topBar.accent}' '. as $x | $x.dot | colour_is($x.accent)'
 }
 
+# shellcheck disable=SC2016 # jq programs and token names, not shell expansions
+shell_surfaces() {
+    local label=$1 log=$2 variant=$3 scenes tokens
+    scenes=$(report_of "$log" APEXG2-SCENES)
+    tokens=$(tokens_for "$variant")
+    local -a metric=(top_bar_metric "$label" "$scenes" "$tokens")
+    local m=.surfaces.popupMenu o=.surfaces.osd b=.surfaces.banner
+    local surface='(.border | [.top, .right, .bottom, .left] | all(px_is($t.apex_surface_border))) and (.borderColor | colour_is($t.apex_panel_border))
+        and (.boxShadow | .inset == false and .x == 0 and (.y | px_is($t.apex_shadow_y)) and (.blur | px_is($t.apex_shadow_blur)) and (.color | colour_is($t.apex_shadow)))'
+
+    "${metric[@]}" 'a popup menu is solid $apex_panel_solid with $apex_fg text at $apex_font_size, radius $apex_radius_menu' \
+        "$m.content" '(.background | colour_is($t.apex_panel_solid)) and (.foreground | colour_is($t.apex_fg)) and (.font.size | px_is($t.apex_font_size)) and (.radius | px_is($t.apex_radius_menu))'
+    "${metric[@]}" 'its ring is a $apex_surface_border border in $apex_panel_border, its shadow 0 $apex_shadow_y $apex_shadow_blur $apex_shadow' \
+        "$m.content" "$surface"
+    "${metric[@]}" 'it is inset $apex_menu_padding and at least $apex_menu_min_width wide' \
+        "$m.content" '(.padding | [.top, .right, .bottom, .left] | all(. + ($t.apex_surface_border | px) | px_is($t.apex_menu_padding))) and .width >= ($t.apex_menu_min_width | px)'
+    "${metric[@]}" 'its rows are $apex_menu_row_height high, radius $apex_radius_menu_row, padded $apex_menu_row_padding, $apex_menu_row_spacing between glyph and label' \
+        "$m.rows" 'length == 3 and all((.height | px_is($t.apex_menu_row_height)) and (.radius | px_is($t.apex_radius_menu_row))
+            and (.padding.left | px_is($t.apex_menu_row_padding)) and (.padding.right | px_is($t.apex_menu_row_padding)) and (.spacing | px_is($t.apex_menu_row_spacing)))'
+    "${metric[@]}" 'a row has no fill until hovered, then $apex_button_hover' \
+        "$m.rows" 'all((.background | rgba | .[3] == 0) and (.hover.background | colour_is($t.apex_button_hover)))'
+    "${metric[@]}" 'adjacent rows are $apex_menu_row_gap apart' \
+        "$m.rows" '.[1].y - .[0].y - .[0].height | px_is($t.apex_menu_row_gap)'
+    "${metric[@]}" 'a separator is a 1 px $apex_border line, inset $apex_menu_separator_inset, with $apex_menu_separator_margin + $apex_menu_row_gap above and below' \
+        "$m" '(.separator.height | px_is(1)) and (.separator.background | colour_is($t.apex_border))
+            and (.separator.x - .content.x - .content.padding.left - .content.border.left | px_is($t.apex_menu_separator_inset))
+            and ((.separator.y - .rows[1].y - .rows[1].height) | px_is(($t.apex_menu_separator_margin | px) + ($t.apex_menu_row_gap | px)))
+            and ((.rows[2].y - .separator.y - .separator.height) | px_is(($t.apex_menu_separator_margin | px) + ($t.apex_menu_row_gap | px)))'
+    "${metric[@]}" 'a row glyph is $apex_menu_icon_size' \
+        "$m.icon" 'px_is($t.apex_menu_icon_size)'
+
+    "${metric[@]}" 'the OSD is $apex_osd_height high, radius $apex_radius_osd, tinted $apex_panel' \
+        "$o.box" '(.height | px_is($t.apex_osd_height)) and (.radius | px_is($t.apex_radius_osd)) and (.background | colour_is($t.apex_panel)) and (.foreground | colour_is($t.apex_fg))'
+    "${metric[@]}" 'its ring is a $apex_surface_border border in $apex_panel_border, its shadow 0 $apex_shadow_y $apex_shadow_blur $apex_shadow' \
+        "$o.box" "$surface"
+    "${metric[@]}" 'it is inset $apex_osd_padding at the sides, $apex_osd_gap between its parts, its text $apex_font_size at $apex_font_label_weight' \
+        "$o.box" '(.padding.left + .border.left | px_is($t.apex_osd_padding)) and (.padding.right + .border.right | px_is($t.apex_osd_padding)) and (.spacing | px_is($t.apex_osd_gap))
+            and (.font.size | px_is($t.apex_font_size)) and .font.weight == ($t.apex_font_label_weight | tonumber)'
+    "${metric[@]}" 'its glyph is $apex_osd_icon_size; its level $apex_osd_level_width x $apex_osd_level_height in $apex_button_hover, filled with the accent' \
+        "{osd: $o, accent: .topBar.accent}" '.accent as $accent | (.osd.icon | px_is($t.apex_osd_icon_size)) and (.osd.level | (.width | px_is($t.apex_osd_level_width)) and (.barHeight | px_is($t.apex_osd_level_height))
+            and (.background | colour_is($t.apex_button_hover))) and (.osd.level.active | colour_is($accent))'
+    "${metric[@]}" 'it sits $apex_osd_bottom above the screen'"'"'s bottom edge' \
+        "$o.bottomGap" 'px_is($t.apex_osd_bottom)'
+
+    "${metric[@]}" 'a banner is $apex_banner_width wide, radius $apex_radius_banner, tinted $apex_panel, $apex_banner_top below the bar' \
+        "$b" '(.box.width | px_is($t.apex_banner_width)) and (.box.radius | px_is($t.apex_radius_banner)) and (.box.background | colour_is($t.apex_panel)) and (.topGap | px_is($t.apex_banner_top))'
+    "${metric[@]}" 'its ring is a $apex_surface_border border in $apex_panel_border, its shadow 0 $apex_shadow_y $apex_shadow_blur $apex_shadow' \
+        "$b.box" "$surface"
+    "${metric[@]}" 'it is inset $apex_banner_padding' \
+        "$b.box" '[.padding, .border] | [.[0].top + .[1].top, .[0].right + .[1].right, .[0].bottom + .[1].bottom, .[0].left + .[1].left] | all(px_is($t.apex_banner_padding))'
+    "${metric[@]}" 'its header is $apex_font_banner_header_size in $apex_fg_dim; its title $apex_font_size at $apex_font_heading_weight; its body $apex_font_banner_body_size in $apex_fg_dim' \
+        "$b" '(.header.font.size | px_is($t.apex_font_banner_header_size)) and (.header.foreground | colour_is($t.apex_fg_dim))
+            and (.title.font.size | px_is($t.apex_font_size)) and .title.font.weight == ($t.apex_font_heading_weight | tonumber)
+            and (.body.font.size | px_is($t.apex_font_banner_body_size)) and (.body.foreground | colour_is($t.apex_fg_dim))'
+    "${metric[@]}" 'its icon is $apex_banner_icon_size, $apex_banner_gap from the text' \
+        "$b" '(.icon | px_is($t.apex_banner_icon_size)) and (.title.x - .box.x - .box.padding.left - .box.border.left | px_is(($t.apex_banner_icon_size | px) + ($t.apex_banner_gap | px)))'
+    "${metric[@]}" 'its close button is a $apex_banner_close_size circle filled with $apex_button' \
+        "$b.close" '(.width | px_is($t.apex_banner_close_size)) and (.height | px_is($t.apex_banner_close_size)) and .radius >= (($t.apex_banner_close_size | px) / 2) and (.background | colour_is($t.apex_button))'
+    "${metric[@]}" 'its action buttons are $apex_banner_button_height high, radius $apex_radius_banner_button, $apex_button, $apex_font_banner_button_size at $apex_font_label_weight, $apex_banner_button_gap apart under the text' \
+        "$b" '(.button | (.minHeight | px_is($t.apex_banner_button_height)) and (.radius | px_is($t.apex_radius_banner_button)) and (.background | colour_is($t.apex_button))
+            and (.font.size | px_is($t.apex_font_banner_button_size)) and .font.weight == ($t.apex_font_label_weight | tonumber))
+            and (.actions | (.spacing | px_is($t.apex_banner_button_gap)) and (.padding.left | px_is(($t.apex_banner_icon_size | px) + ($t.apex_banner_gap | px))))'
+}
+
 scenes_captured() {
     local run=$1 case_name=$2
     local log=$run/$case_name.log scene
@@ -499,6 +563,7 @@ direct_cases() {
     top_bar default "$f" light
     top_bar_today default "$f" light
     top_bar_gaps default "$f" light
+    shell_surfaces default "$f" light
 
     f=$run/default-scale1.log
     exits "$run" default-scale1 0
@@ -508,6 +573,7 @@ direct_cases() {
     virtual_monitor default-scale1 "$f" 1
     top_bar default-scale1 "$f" light
     top_bar_today default-scale1 "$f" light
+    shell_surfaces default-scale1 "$f" light
 
     f=$run/dark-style.log
     exits "$run" dark-style 0
@@ -520,6 +586,7 @@ direct_cases() {
     top_bar dark-style "$f" dark
     top_bar_today dark-style "$f" dark
     top_bar_gaps dark-style "$f" dark
+    shell_surfaces dark-style "$f" dark
     dark_style_off dark-style "$f"
 
     for c in stock-light stock-dark; do

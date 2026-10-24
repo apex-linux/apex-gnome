@@ -16,4 +16,15 @@
   @return $px / 1px * .75pt;
 }
 
+// St draws one box-shadow, so the board's inset ring is the border.
+@mixin apex-surface($fill) {
+  color: $apex_fg;
+  background-color: $fill;
+  border: $apex_surface_border solid $apex_panel_border;
+  box-shadow: 0 $apex_shadow_y $apex_shadow_blur 0 $apex_shadow;
+}
+
 @import "top-bar";
+@import "popup-menus";
+@import "osd";
+@import "notification-banner";

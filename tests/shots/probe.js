@@ -6,8 +6,10 @@ import GLib from 'gi://GLib';
 import Shell from 'gi://Shell';
 import St from 'gi://St';
 
+import * as BoxPointer from 'resource:///org/gnome/shell/ui/boxpointer.js';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import * as MessageTray from 'resource:///org/gnome/shell/ui/messageTray.js';
+import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 import * as Scripting from 'resource:///org/gnome/shell/ui/scripting.js';
 import * as WorkspaceThumbnail from 'resource:///org/gnome/shell/ui/workspaceThumbnail.js';
 
@@ -32,6 +34,8 @@ const HIGH_CONTRAST_SHEET = 'resource:///org/gnome/shell/theme/gnome-shell-high-
 const STRUCTURE_MARKER = '/*! apex-shell-structure */';
 const LAYER_ENABLED_KEY = 'layer-enabled';
 const SEARCH_HINT_KEY = 'search-hint-shown';
+const OSD_LEVEL = 0.62;
+const OSD_GLYPH = 'audio-volume-medium-symbolic';
 
 Gio._promisify(Shell.Screenshot.prototype, 'screenshot');
 
@@ -250,6 +254,7 @@ function styleOf(actor, unit) {
         width: round(width / unit.length),
         height: round(height / unit.length),
         border: sides(side => node.get_border_width(side), unit),
+        borderColor: hex(node.get_border_color(St.Side.TOP)),
         padding: sides(side => node.get_padding(side), unit),
         hpadding: {
             natural: lengthOrNull(node, '-natural-hpadding', unit),
@@ -613,6 +618,113 @@ async function withOpaqueBar(unit) {
     return measured;
 }
 
+// A stock PopupMenu holding the board's rows: two adjacent rows, a separator, an icon row.
+function openPopupMenu() {
+    const anchor = new St.Widget({x: 400, y: 300, width: 1, height: 1});
+    Main.uiGroup.add_child(anchor);
+    const menu = new PopupMenu.PopupMenu(anchor, 0.5, St.Side.TOP);
+    Main.uiGroup.add_child(menu.actor);
+    const rows = [new PopupMenu.PopupMenuItem('Unpin'), new PopupMenu.PopupMenuItem('App Details')];
+    const separator = new PopupMenu.PopupSeparatorMenuItem();
+    const iconRow = new PopupMenu.PopupImageMenuItem('Home', 'user-home-symbolic');
+    [...rows, separator, iconRow].forEach(item => menu.addMenuItem(item));
+    menu.open(BoxPointer.PopupAnimation.NONE);
+    return {
+        measure: unit => {
+            const line = separator.get_children().find(c => c.has_style_class_name('popup-separator-menu-item-separator'));
+            return {
+                content: styleOf(menu.box, unit),
+                rows: [...rows, iconRow].map(row => ({
+                    ...styleOf(row, unit),
+                    hover: underPseudoClass(row, 'hover', () => paint(row.get_theme_node(), unit)),
+                })),
+                separator: {...boxOf(line, unit), background: hex(line.get_theme_node().get_background_color())},
+                icon: lengthOrNull(iconRow._icon.get_theme_node(), 'icon-size', unit),
+            };
+        },
+        close: () => {
+            menu.close(BoxPointer.PopupAnimation.NONE);
+            menu.destroy();
+            anchor.destroy();
+        },
+    };
+}
+
+function openOsd() {
+    const {primaryIndex, primaryMonitor} = Main.layoutManager;
+    Main.osdWindowManager.showOne(primaryIndex, Gio.ThemedIcon.new(OSD_GLYPH), null, OSD_LEVEL);
+    const window = Main.osdWindowManager._osdWindows[primaryIndex];
+    return {
+        measure: unit => {
+            const box = styleOf(window._hbox, unit);
+            const levelNode = window._level.get_theme_node();
+            return {
+                box,
+                bottomGap: round((primaryMonitor.y + primaryMonitor.height) / unit.length - box.y - box.height),
+                icon: lengthOrNull(window._icon.get_theme_node(), 'icon-size', unit),
+                level: {
+                    ...boxOf(window._level, unit),
+                    barHeight: lengthOrNull(levelNode, '-barlevel-height', unit),
+                    background: hex(levelNode.get_color('-barlevel-background-color')),
+                    active: hex(levelNode.get_color('-barlevel-active-background-color')),
+                },
+            };
+        },
+        close: () => window.cancel(),
+    };
+}
+
+// A normal-urgency notification with an action shows a banner under the bar.
+function openBanner() {
+    const source = new MessageTray.Source({title: 'G2 Updates', iconName: 'software-update-available-symbolic'});
+    Main.messageTray.add(source);
+    const notification = new MessageTray.Notification({
+        source, title: 'Updates Ready', body: 'They start at the next restart.',
+        gicon: Gio.ThemedIcon.new('system-software-install'), urgency: MessageTray.Urgency.NORMAL,
+    });
+    notification.addAction('Restart Now', () => {});
+    source.addNotification(notification);
+    return {
+        measure: unit => {
+            const message = Main.messageTray._banner;
+            if (!message)
+                return {error: 'no banner'};
+            const find = styleClass => findDescendant(message, a => a.has_style_class_name?.(styleClass));
+            const box = styleOf(message, unit);
+            return {
+                box,
+                topGap: round(box.y - (Main.layoutManager.primaryMonitor.y + Main.panel.height) / unit.length),
+                header: styleOf(find('message-header'), unit),
+                title: styleOf(find('message-title'), unit),
+                body: styleOf(find('message-body'), unit),
+                icon: lengthOrNull(find('message-icon').get_theme_node(), 'icon-size', unit),
+                close: styleOf(find('message-close-button'), unit),
+                actions: styleOf(find('message-action-bin'), unit),
+                button: {
+                    ...styleOf(find('notification-button'), unit),
+                    minHeight: lengthOrNull(find('notification-button').get_theme_node(), 'min-height', unit),
+                },
+            };
+        },
+        close: () => source.destroy(),
+    };
+}
+
+// Open together as on board 16; G2_SURFACE_SCENES=1 also captures them.
+async function shellSurfaces(unit) {
+    const opened = {popupMenu: openPopupMenu(), osd: openOsd(), banner: openBanner()};
+    try {
+        await settle();
+        const scene = GLib.getenv('G2_SURFACE_SCENES') === '1' ? await capture('surfaces') : null;
+        if (scene)
+            delete scene.bytes;
+        return {scene, ...Object.fromEntries(Object.entries(opened).map(([name, s]) => [name, s.measure(unit)]))};
+    } finally {
+        Object.values(opened).forEach(s => s.close());
+        await settle();
+    }
+}
+
 // Without GDM the shell posts "Screen Lock disabled" at startup; its banner would cover
 // the scenes for as long as it happens to stay.
 function dropStartupNotifications() {
@@ -637,6 +749,7 @@ async function scenes() {
     bar.opaque = await withOpaqueBar(unit);
     bar.lockScreen = await withLockScreenPanel(unit);
     bar.largeText = await withLargeText();
+    const surfaces = await shellSurfaces(unit);
 
     Main.overview.show();
     await settle();
@@ -652,6 +765,7 @@ async function scenes() {
         unit, startedInOverview,
         monitorScale: global.display.get_monitor_scale(primary.index),
         topBar: {...bar, diamond},
+        surfaces,
         scenes: {desktop, overview},
     };
 }
