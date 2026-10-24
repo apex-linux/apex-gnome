@@ -22,5 +22,6 @@ theme_sources += files(
   '_tile-preview.scss',
   '_spotlight.scss',
   '_glass.scss',
+  '_screenshot.scss',
   '_apex-structure.scss',
 )

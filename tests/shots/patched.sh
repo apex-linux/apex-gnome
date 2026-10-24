@@ -204,6 +204,7 @@ for c in default:light default-scale1:light dark-style:dark; do
     derived_surfaces "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
     tile_preview "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
     spotlight_style "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
+    screenshot_ui "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
 done
 layer_cycles "$run"
 motion_curve "$run"
