@@ -120,6 +120,7 @@ const POPOVER_GLASS = {blur: 30, saturation: 1.8, radius: 26};
 
 export const uiGroup = Object.assign(new StubActor('uiGroup', {extents: [0, 0, 1440, 900]}), {
     children: [],
+    get_stage: () => null,
     add_child(actor) {
         this.children.push(actor);
         actor._parent = this;
@@ -346,6 +347,9 @@ export function notify(title) {
 // layout.js's chrome parameters: Params.parse throws on any other.
 const CHROME_PARAMS = ['trackFullscreen', 'affectsStruts'];
 
+// The containers the shadows feature scans: the probe registers its own actors.
+const emptyContainer = () => ({get_children: () => [], connect: () => 1, disconnect: () => {}});
+
 let modals = 0;
 
 export function pushModal(actor, params) {
@@ -360,6 +364,8 @@ export function popModal() {
 }
 
 export const layoutManager = {
+    modalDialogGroup: emptyContainer(),
+    overviewGroup: emptyContainer(),
     ...emitter({}),
     primaryMonitor: {x: 0, y: 0, width: 1440, height: 900},
     chrome: [],

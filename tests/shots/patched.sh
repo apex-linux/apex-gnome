@@ -202,6 +202,7 @@ for c in default:light default-scale1:light dark-style:dark; do
     shell_surfaces "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
     quick_settings "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
     quick_settings_layer "${c%:*}" "$run/${c%:*}.log" apex
+    shadow_layers "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
     window_switcher "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
     modal_dialog "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
     date_menu "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
@@ -220,6 +221,7 @@ layer_cycles "$run"
 motion_curve "$run"
 no_js_error glass "$run/glass.log"
 glass_frames glass "$run/glass.log"
+shadows_under_glass glass "$run/glass.log"
 glass_manager glass "$run/glass.log" light
 glass_unlock_vs_fedora "$run"
 indicator_cases "$run"
