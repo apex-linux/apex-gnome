@@ -153,6 +153,25 @@ export const layoutManager = {
 const overviewHandlers = new Map();
 let nextOverviewHandler = 1;
 
+function searchEntry() {
+    const classes = new Set();
+    return {
+        hint_text: 'Type to search',
+        _text: '',
+        clutter_text: emitter({}),
+        get_text() {
+            return this._text;
+        },
+        set_text(text) {
+            this._text = text;
+            this.clutter_text.emit('text-changed');
+        },
+        add_style_class_name: name => classes.add(name),
+        remove_style_class_name: name => classes.delete(name),
+        has_style_class_name: name => classes.has(name),
+    };
+}
+
 // The parts of the overview's controls the overview feature changes, as stock leaves them.
 const controls = {
     _thumbnailsBox: {
@@ -160,7 +179,25 @@ const controls = {
         _updateShouldShow: () => {},
         queue_relayout: () => {},
     },
+    _searchEntry: searchEntry(),
     _appDisplay: {
+        _box: {
+            visible: true,
+            show() {
+                this.visible = true;
+            },
+            hide() {
+                this.visible = false;
+            },
+        },
+        children: [],
+        add_child(actor) {
+            this.children.push(actor);
+            actor._parent = this;
+        },
+        remove_child(actor) {
+            this.children = this.children.filter(a => a !== actor);
+        },
         _grid: {
             _gridModes: 'stock',
             _currentMode: 0,

@@ -414,6 +414,27 @@ fact "spotlight: no rows yet and the query not done: only the field, no 'No resu
 fact "spotlight: a late sum still puts Calculator first among the applications" \
     'spotlight\.late-sum\.at-900ms=CALCULATOR: 1920\(2880 / 1\.5\)\*Copy \| APPLICATIONS: Calculator'
 
+probe launcher "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_LAUNCHER=1
+rc_is "launcher: the probe runs" 0
+fact "launcher: outside the app grid the overview's pill is stock" 'launcher\.desktop=hint=Type to search pill=false grid'
+fact "launcher: in the app grid it is the launcher's own, \"Search apps\"" 'launcher\.app-grid=hint=Search apps pill=true grid'
+fact "launcher: there 0013's hook keeps typed text from the stock search" 'launcher\.hook-text=true'
+fact "launcher: and leaves the focus to the stock entry" 'launcher\.hook-focus=false'
+lacks "launcher: without resetting the pill" 'launcher\.reset='
+fact "launcher: apps only, by name, the grid filtered in place, the first match selected" \
+    'launcher\.dis=hint=Search apps pill=true Disk Usage Analyzer\*, Disks'
+fact "launcher: Spotlight stays closed" 'launcher\.spotlight=false'
+fact "launcher: Enter launches the first match" 'launcher\.launched=disk-usage-analyzer\.desktop'
+fact "launcher: no match says so, and that Super+Space searches everything" \
+    'launcher\.zzz=hint=Search apps pill=true No Results / The launcher searches apps only\. Super\+Space searches everything\.'
+fact "launcher: an empty pill shows the grid again" 'launcher\.cleared=hint=Search apps pill=true grid'
+fact "launcher: apps inside folders are found too" 'launcher\.folder-app=hint=Search apps pill=true Characters\*'
+fact "launcher: leaving the app grid gives the stock pill and grid back" 'launcher\.left=hint=Type to search pill=false grid'
+fact "launcher: and empties it" 'launcher\.left-text=""'
+fact "launcher: with spotlight in disabled-features the app grid keeps the stock pill" 'launcher\.disabled=hint=Type to search pill=false grid'
+fact "launcher: taken out again, the launcher's pill is back" 'launcher\.enabled-again=hint=Search apps pill=true grid'
+lacks "launcher: nothing fails" 'off for this session|did not disable cleanly|JS ERROR'
+
 readonly KEPT_PILL='remoteAccess,camera,volumeInput,location,network,volumeOutput,unsafeMode,system'
 readonly STOCK_PILL='remoteAccess,camera,volumeInput,location,brightness,thunderbolt,nightLight,network,darkMode,doNotDisturb,backlight,bluetooth,rfkill,autoRotate,volumeOutput,unsafeMode,powerProfiles,system'
 probe top-bar "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_TOP_BAR=1 PROBE_SCALE=2

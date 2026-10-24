@@ -251,7 +251,14 @@ calculator's result in tabular figures with Calculator as the first application;
 empty query shows only the field, and the row of a query with no results; and, after Enter on the result, that Spotlight closed and the toast's size, tint,
 inset, check circle, text and distance from the bottom edge. In the overview scene, after its capture, the probe
 types into the overview's search entry and checks that Spotlight opened with the text and
-the overview's own field emptied (patch 0013's hook).
+the overview's own field emptied (patch 0013's hook). `launcher_search` then checks the app grid's
+pill: 400 px with "Search apps", "files" filtering the grid in its own box to apps with Files
+first and selected and Spotlight closed, and "No Results" with its hint where board 36 puts it
+(scenes `launcher` and `launcher-none`).
+
+A probe that runs longer than 30 s keeps `gnome-shell-perf-helper` awake with a call every 10 s:
+the helper quits after 30 s without one, and `scripting.js`'s last call to it would then end the
+shell with exit 1.
 
 None of these surfaces is in a capture compared with Fedora, so the comparison with Fedora's build
 is unchanged: the Apex overview is compared only run to run, and safe mode's with Fedora's.

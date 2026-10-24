@@ -462,6 +462,16 @@ REPORT_OF_A_SPOTLIGHT_DRAWN_FROM_TOKENS='
     overviewSearch: {opened: true, text: "disk", overviewText: ""}}}'
 # shellcheck disable=SC2016 # a jq program
 # shellcheck disable=SC2016 # a jq program
+REPORT_OF_A_LAUNCHER_SEARCH_FROM_TOKENS='
+{surfaces: {launcher: {
+    pill: {width: ($t.apex_launcher_search_width | px), hint: "Search apps"},
+    found: {gridHidden: true, names: ["Files"], firstSelected: true, spotlightOpen: false,
+        appDisplay: {x: 0, y: 262, width: 1440, height: 541}, results: {x: 0, y: 262, width: 1440, height: 541}},
+    empty: {top: 0, padding: {top: ($t.apex_launcher_empty_top | px)}, spacing: ($t.apex_launcher_empty_gap | px),
+        title: {text: "No Results", font: {size: ($t.apex_font_launcher_empty_title_size | px), weight: ($t.apex_font_heading_weight | tonumber)}, foreground: ($t.apex_fg | hex)},
+        hint: {text: "The launcher searches apps only. Super+Space searches everything.", font: {size: ($t.apex_font_launcher_empty_hint_size | px)},
+            foreground: ($t.apex_fg_dim | hex)}}}}}'
+# shellcheck disable=SC2016 # a jq program
 HEX_DEF='def hex: rgba | map([., 16] | "0123456789abcdef"[(.[0] / .[1] | floor):(.[0] / .[1] | floor) + 1]
                                     + "0123456789abcdef"[(.[0] % .[1]):(.[0] % .[1]) + 1]) | "#" + join("");'
 
@@ -483,6 +493,7 @@ assert_run() {
     [[ $assertions == derived_surfaces ]] && report=$REPORT_OF_DERIVED_SURFACES_DRAWN_FROM_TOKENS
     [[ $assertions == overview_layer ]] && report=$REPORT_OF_AN_OVERVIEW_LAYER_FROM_TOKENS
     [[ $assertions == spotlight_style ]] && report=$REPORT_OF_A_SPOTLIGHT_DRAWN_FROM_TOKENS
+    [[ $assertions == launcher_search ]] && report=$REPORT_OF_A_LAUNCHER_SEARCH_FROM_TOKENS
     tokens=$(tokens_for "$variant")
     jq -nc --argjson t "$tokens" "$JQ_DEFS $HEX_DEF $report | $change" | sed 's/^/APEXG2-SCENES /' >"$T/top-bar.log"
     # shellcheck disable=SC2016 # expanded by the inner bash
@@ -938,6 +949,36 @@ test_spotlight_style() {
 CHANGES
 }
 
+test_launcher_search() {
+    local variant change what passes failures open_gaps
+    for variant in light dark; do
+        read -r passes failures open_gaps <<<"$(assert_run launcher_search "$variant")"
+        if ((failures == 0 && open_gaps == 0 && passes == 3)); then
+            ok "launcher search ($variant): drawn from the tokens it passes all $passes assertions"
+        else
+            not_ok "launcher search ($variant): drawn from the tokens it passes (passed/failed/gaps $passes/$failures/$open_gaps): $(grep -m3 '^FAIL' "$T/top-bar.out" | paste -sd'|' -)"
+        fi
+    done
+    while IFS='|' read -r change what; do
+        read -r passes failures open_gaps <<<"$(assert_run launcher_search light "$change")"
+        if ((failures == 1)); then
+            ok "launcher search: $what fails one assertion"
+        else
+            not_ok "launcher search: $what fails one assertion (passed/failed/gaps $passes/$failures/$open_gaps)"
+        fi
+    done <<'CHANGES'
+.surfaces.launcher.pill.width = 440|the overview's 440 px pill
+.surfaces.launcher.pill.hint = "Type to search"|upstream's hint
+.surfaces.launcher.found.spotlightOpen = true|Spotlight opened instead
+.surfaces.launcher.found.names = []|no app found for "files"
+.surfaces.launcher.found.gridHidden = false|results under the full grid
+.surfaces.launcher.found.results.y = 422|results centred in the grid's box instead of filling it
+.surfaces.launcher.empty.top = 160|"No Results" centred instead of at its place
+.surfaces.launcher.empty.title.font.weight = 600|a lighter "No Results"
+.surfaces.launcher.empty.hint.foreground = "#1d1d21ff"|a hint at full strength
+CHANGES
+}
+
 test_today_pins() {
     local pin_count what change passes failures open_gaps
     read -r passes failures open_gaps <<<"$(assert_run top_bar_today light)"
@@ -1383,6 +1424,7 @@ test_app_grid
 test_overview_layer
 test_derived_surfaces
 test_spotlight_style
+test_launcher_search
 test_today_pins
 test_known_gaps
 test_fixed_clock
