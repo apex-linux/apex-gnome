@@ -721,6 +721,10 @@ async function exerciseGlass() {
     panel.add_style_class_name('apex-solid-bar');
     report('solid-bar');
     panel.remove_style_class_name('apex-solid-bar');
+    Main.sessionMode.lock(true);
+    report('locked');
+    Main.sessionMode.lock(false);
+    report('unlocked');
     quickSettings.menu.box.mapped = false;
     quickSettings.menu.box.emit('notify::mapped');
     report('menu-closed');
@@ -896,6 +900,8 @@ async function exerciseDock() {
     const dock = Main.layoutManager.chrome.find(actor => actor.name === 'apexDockBox' && !actor.destroyed)
         ?.get_children()[0];
     if (dock?.tailItems) {
+        const Registry = await import(`file://${shellDir}/js/ui/apex/glass/registry.js`);
+        fact('dock.glass', Registry.surfaces().filter(s => s.actor === dock._background).map(s => s.name).join(','));
         const {showAppsButton} = dock;
         const overviewButton = Main.overview.dash.showAppsButton;
         showAppsButton.checked = true;

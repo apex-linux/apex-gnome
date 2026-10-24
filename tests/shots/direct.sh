@@ -39,7 +39,7 @@ readonly FRAME_DIR=/run/g2-frame
 readonly G2_CLOCK='2026-09-28 09:41:00'
 G2_CLOCK_EPOCH=$(date -u -d "$G2_CLOCK" +%s)
 readonly G2_CLOCK_EPOCH
-readonly FIXTURE_NAMES=(org.freedesktop.UPower org.freedesktop.NetworkManager org.bluez
+readonly FIXTURE_NAMES=(org.freedesktop.UPower org.freedesktop.NetworkManager org.bluez net.hadess.SwitcherooControl
     org.freedesktop.UPower.PowerProfiles)
 # Two fixed workspaces: stock widens the active workspace dot by a factor that depends on
 # the count. A 24-hour clock: in 12 hours a one-digit hour adds a figure space.
