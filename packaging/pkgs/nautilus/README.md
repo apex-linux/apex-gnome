@@ -78,7 +78,7 @@ patch is the owner's.
 | `0001-build` | `src/meson.build`, `src/nautilus-main.c` | +3 | `subdir('apex')` after upstream's sources; the include and `apex_files_init()` after `nautilus_register_resource()` |
 | `0002-window` | `src/nautilus-window.c` | +4 | the include; `apex_window_attach()` in `nautilus_window_init()` |
 | `0003-zoom` | `src/nautilus-enums.h`, `src/nautilus-grid-view.c`, `src/nautilus-ui-utilities.c`, `data/org.gnome.nautilus.gschema.xml` | +17 −5 | the 72 px size and level; its case in the size switch; the standard level; the empty-folder border's metrics at 72 px (the 64 px ones); the schema's enum, renumbered above it, and its default |
-| `0006-search-chips` | `src/nautilus-view-model.c`, `src/nautilus-view-model.h` | +7 | `nautilus_view_model_get_unfiltered()`, the root store under the model's filter, for the chips' counts |
+| `0006-unfiltered` | `src/nautilus-view-model.c`, `src/nautilus-view-model.h` | +7 | `nautilus_view_model_get_unfiltered()`, the root store under the model's filter, for the chips' counts |
 
 libnautilus is a static library: an object nothing calls is left out of the binary, so
 `main()` registers the resource itself rather than relying on a constructor.
@@ -86,12 +86,20 @@ libnautilus is a static library: an object nothing calls is left out of the bina
 Budget (ADR 0014): at most 400 changed lines in upstream files, in hook hunks only; the
 added files under `src/apex/` do not count. In use: 36 lines in 9 files.
 
-ROADMAP S2d names the footer, the count and the zoom 0001 to 0003, and S7 the rest 0004 to
-0007. Here `0001-build` wires Source1 in, the footer and the count share one hook
-(`0002-window`), and the zoom is `0003-zoom`, so the series stays at ADR 0014's seven
-patches and S7's numbers hold. 0004, 0005 and 0007 need no upstream line: the details
-pane, the recent strip and the toggle group attach from `0002-window`'s hook, so they have
-no patch file.
+Each feature and the upstream lines it takes. A feature with no upstream line can't fail a
+rebase, so it has no patch file; the lane holds the family as a whole either way.
+
+| Feature | Upstream hunks |
+|---|---|
+| 0001, the disk footer | `0002-window`'s hook (shared with 0002) |
+| 0002, the item-count bar | `0002-window`'s hook |
+| 0003, the 72 px zoom level | `0003-zoom` |
+| 0004, the details pane | none: `0002-window`'s hook |
+| 0005, the recent strip | none: `0002-window`'s hook |
+| 0006, the search chips | `0006-unfiltered`, for the counts; the filter goes on the slot's existing `filter` |
+| 0007, the grid/list toggle group | none: `0002-window`'s hook |
+
+`0001-build` wires Source1 in for all of them.
 
 The zoom level's nick is `apex`: GSettings stores a level by its nick, so the renumbered
 levels above it keep every stored value, and a stock nautilus reading `apex` falls back
