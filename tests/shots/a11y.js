@@ -250,6 +250,9 @@ export async function a11yReport(h) {
         monitor: (m => ({x: m.x / unit.length, y: m.y / unit.length, width: m.width / unit.length, height: m.height / unit.length}))(
             Main.layoutManager.primaryMonitor),
     };
+    // A startup notification's banner would lie behind whatever it covers.
+    for (const source of Main.messageTray.getSources())
+        source.destroy();
     Main.overview.hide();
     out.bar = await report(Main.panel);
     out.dock = await report(h.apexDock());

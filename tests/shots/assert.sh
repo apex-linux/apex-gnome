@@ -44,9 +44,8 @@ readonly A11Y_ACCENTS=(blue teal green yellow orange red pink purple slate)
 readonly A11Y_SURFACES=(bar dock popupMenu osd banner quickSettings "${A11Y_ACCENTS[@]/#/quickSettingsAccents.}" wifiMenu dateMenu
     switcher dialog endSession spotlight.popup spotlight.toast overview appGrid)
 # The failures still open: upstream's high-contrast sheet, which safe mode keeps as Fedora's.
-readonly A11Y_HC_SEARCH="upstream HC sheet: the overview search entry's glyph, white at .7 on the entry's white (1.01:1)"
 readonly A11Y_HC_TOGGLE="upstream HC sheet: Quick Settings' checked toggle, white on its accent (3.15:1), and its menu arrow (2.31:1)"
-declare -A A11Y_GAPS=([high-contrast:quickSettings]=$A11Y_HC_TOGGLE [high-contrast:overview]=$A11Y_HC_SEARCH)
+declare -A A11Y_GAPS=([high-contrast:quickSettings]=$A11Y_HC_TOGGLE)
 for a11y_accent in "${A11Y_ACCENTS[@]}"; do
     A11Y_GAPS[high-contrast:quickSettingsAccents.$a11y_accent]=$A11Y_HC_TOGGLE
 done

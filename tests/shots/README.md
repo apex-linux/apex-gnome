@@ -453,9 +453,6 @@ copy of the sheet for safe mode. A report for upstream, which is the owner's to 
 > high-contrast sheet, a checked quick toggle draws white text on the accent: 3.15:1 for the
 > default blue (WCAG 1.4.3 wants 4.5:1), and the menu arrow beside it 2.31:1 (1.4.11 wants
 > 3:1). Measured from the stage's pixels with the toggle's own colours.
->
-> **High contrast: the overview search entry's glyph is invisible.** The search glyph draws
-> white at 70 % opacity on the entry's near-white fill: 1.01:1 (1.4.11 wants 3:1).
 
 ## The idle desktop
 
