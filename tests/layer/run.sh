@@ -601,6 +601,7 @@ fact "dock: large is 62" 'dock\.dock-icon-size=large=Files:62 Web:62 separator s
 fact "dock: dock-show-trash=false hides Trash" 'dock\.dock-show-trash=false=.* trash:62\(hidden\) .*'
 fact "dock: dock-running-indicators=false hides the dots" 'dock\.dock-running-indicators=false=.* indicators=false .*'
 fact "dock: the lock screen hides it" "dock\.locked=Files:54 Web:54 $DOCK_TAIL indicators=true visible=false dash=false dash-height=0"
+fact "dock: its background registers with the glass registry as 'dock'" 'dock\.glass=dock'
 fact "dock: its Show Apps opens the overview's app grid" 'dock\.show-apps=overview=true overview-button=true'
 fact "dock: and follows the overview's own button" 'dock\.overview-show-apps-off=dock-button=false'
 fact "dock: no separator between the dock's favourites and running apps, upstream's elsewhere; a full-colour Show Apps" \
