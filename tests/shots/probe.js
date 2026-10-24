@@ -12,6 +12,7 @@ import * as MessageTray from 'resource:///org/gnome/shell/ui/messageTray.js';
 import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 import * as Scripting from 'resource:///org/gnome/shell/ui/scripting.js';
 import * as Slider from 'resource:///org/gnome/shell/ui/slider.js';
+import * as SwitcherPopup from 'resource:///org/gnome/shell/ui/switcherPopup.js';
 import * as WorkspaceThumbnail from 'resource:///org/gnome/shell/ui/workspaceThumbnail.js';
 
 import * as Png from './png.js';
@@ -36,6 +37,8 @@ const STRUCTURE_MARKER = '/*! apex-shell-structure */';
 const LAYER_ENABLED_KEY = 'layer-enabled';
 const OSD_LEVEL = 0.62;
 const OSD_GLYPH = 'audio-volume-medium-symbolic';
+const SWITCHER_APPS = ['Text Editor', 'Terminal', 'Web', 'Files', 'Settings'];
+const SWITCHER_ICON_SIZE = 96;
 
 Gio._promisify(Shell.Screenshot.prototype, 'screenshot');
 
@@ -821,6 +824,41 @@ async function quickSettings(unit) {
     }
 }
 
+// G2 opens no windows, so the switcher is a stock SwitcherList of AppIcon-shaped items.
+async function windowSwitcher(unit) {
+    const list = new SwitcherPopup.SwitcherList(true);
+    const apps = SWITCHER_APPS.map(name => {
+        const app = new St.BoxLayout({style_class: 'alt-tab-app', orientation: Clutter.Orientation.VERTICAL});
+        app.add_child(new St.Icon({icon_name: 'application-x-executable', icon_size: SWITCHER_ICON_SIZE}));
+        app.add_child(new St.Label({text: name, x_align: Clutter.ActorAlign.CENTER}));
+        list.addItem(app, app.get_last_child());
+        return app;
+    });
+    Main.uiGroup.add_child(list);
+    try {
+        const [, width] = list.get_preferred_width(-1);
+        const [, height] = list.get_preferred_height(width);
+        const {primaryMonitor: monitor} = Main.layoutManager;
+        list.set_position(monitor.x + Math.floor((monitor.width - width) / 2), monitor.y + Math.floor((monitor.height - height) / 2));
+        list.highlight(1);
+        await settle();
+        const scene = GLib.getenv('G2_SURFACE_SCENES') === '1' ? await capture('switcher') : null;
+        if (scene)
+            delete scene.bytes;
+        const label = apps[0].get_last_child();
+        return {
+            scene,
+            list: styleOf(list, unit),
+            spacing: lengthOrNull(list._list.get_theme_node(), 'spacing', unit),
+            items: list._items.map(item => styleOf(item, unit)),
+            app: {spacing: lengthOrNull(apps[0].get_theme_node(), 'spacing', unit), label: font(label.get_theme_node(), unit)},
+        };
+    } finally {
+        list.destroy();
+        await settle();
+    }
+}
+
 // Without GDM the shell posts "Screen Lock disabled" at startup; its banner would cover
 // the scenes for as long as it happens to stay.
 function dropStartupNotifications() {
@@ -847,6 +885,7 @@ async function scenes() {
     bar.largeText = await withLargeText();
     const surfaces = await shellSurfaces(unit);
     surfaces.quickSettings = await quickSettings(unit);
+    surfaces.switcher = await windowSwitcher(unit);
 
     Main.overview.show();
     await settle();

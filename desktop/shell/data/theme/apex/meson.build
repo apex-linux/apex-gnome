@@ -10,5 +10,6 @@ theme_sources += files(
   '_osd.scss',
   '_notification-banner.scss',
   '_quick-settings.scss',
+  '_switcher.scss',
   '_apex-structure.scss',
 )

@@ -183,6 +183,11 @@ and shade, without a separator; a slider in a stand-in `.quick-slider` row (no s
 without audio or a backlight); and the Wi-Fi card, its header glyph circle, title and rows.
 The fixtures' NetworkManager lists no access points, so the card's network list is empty.
 
+`window_switcher` runs in the same cases. G2 opens no windows, so the probe shows a stock
+`SwitcherList` of five AppIcon-shaped items (a 96 px icon over a name, as `altTab.js`
+builds them) with the second selected, and reads the list's tint, radius, inset, ring and
+shadow, the tiles' gap, radius, padding and fills, and the names' type.
+
 None of these surfaces is in a compared capture, so the comparison with Fedora's build
 is unchanged.
 
@@ -192,8 +197,8 @@ is unchanged.
 tree's `desktop/shell/` in a Fedora 45 container, as the lane does (spec-edit, the series
 from Patch1001, Source1), then runs `direct.sh apex` on it in a second container: the
 `default` and `dark-style` cases, which also capture the `surfaces` scene with the menu,
-the OSD and the banner open, and the `quick-settings` scene.
-It asserts `top_bar`, `shell_surfaces` and `quick_settings`, and writes the
+the OSD and the banner open, and the `quick-settings` and `switcher` scenes. It asserts
+`top_bar`, `shell_surfaces`, `quick_settings` and `window_switcher`, and writes the
 RPMs, logs, captures and `assert.txt` to `_build/local/`. It takes about 10 minutes the
 first time, with podman or docker. The shells run on Fedora's packages rather than the
 image, with no wallpaper, so it is a fast check and a source of captures for the
@@ -242,7 +247,7 @@ it is at least 4.8:1), and what the goldens judge: the Apex Symbolic glyphs (S1b
 | `fixtures.py` | the direct cases' containers | the python-dbusmock services on the system bus |
 | `clock.c` | the direct cases' shells (`LD_PRELOAD`) | the fixed wall clock |
 | `smoke.sh` | CI's Fedora 45 container | `direct.sh fedora` on Fedora's gnome-shell, and the assertions that need no Apex build |
-| `local.sh` | a host with podman or docker | the Apex build from this tree, `direct.sh apex`, and the top-bar and surface and Quick Settings assertions |
+| `local.sh` | a host with podman or docker | the Apex build from this tree, `direct.sh apex`, and the top-bar and surface, Quick Settings and switcher assertions |
 | `probe.js` | the shell (`--automation-script`) | prints `APEXG2 {…}` and, for the capture cases, `APEXG2-SCENES {…}` |
 | `assert.sh`, `stable.sh`, `lib.sh` | the builder VM | the assertions |
 | `png.js`, `compare.js` | gjs | PNG with GLib's zlib only, and the masked comparison |
