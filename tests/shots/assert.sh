@@ -361,6 +361,26 @@ dock_metrics() {
         '.dock.appMenu' '.hasDualGpu == true and (.items | any(. == "Launch Using Discrete Graphics Card"))'
 }
 
+# shellcheck disable=SC2016 # jq programs and token names, not shell expansions
+dock_live_keys() {
+    local label=$1 log=$2 variant=$3 report tokens
+    report=$(report_of "$log" APEXG2-DOCK)
+    tokens=$(tokens_for "$variant")
+    local -a metric=(top_bar_metric "$label live keys" "$report" "$tokens")
+    local k=.steps.liveKeys medium='all(px_is($t.apex_dock_icon_size))'
+
+    "${metric[@]}" 'show-focused-app-name=false hides the focused app'"'"'s name, and its reset shows it again' \
+        "$k.focusedAppOff" '.set.focusedApp.visible == false and .reset.focusedApp.visible == true'
+    "${metric[@]}" 'dock-icon-size small makes every icon 46, its reset $apex_dock_icon_size again' \
+        "$k.small" "(.set.iconSizes | length > 0 and all(. == 46)) and (.reset.iconSizes | $medium)"
+    "${metric[@]}" 'dock-icon-size large makes every icon 62, its reset $apex_dock_icon_size again' \
+        "$k.large" "(.set.iconSizes | length > 0 and all(. == 62)) and (.reset.iconSizes | $medium)"
+    "${metric[@]}" 'dock-running-indicators=false clears the running app'"'"'s dot, and its reset draws it in $apex_dock_dot again' \
+        "$k.dotsOff" '(.set.dots | length > 0 and all(.colour | rgba | .[3] == 0)) and (.reset.dots | length > 0 and all(.colour | colour_is($t.apex_dock_dot)))'
+    "${metric[@]}" 'dock-show-trash=false takes Trash out, and its reset puts it last again' \
+        "$k.trashOff" '(.set.kinds | index("trash") == null) and .reset.kinds[-1] == "trash"'
+}
+
 dock_intellihide() {
     local label=$1 log=$2
     expect_report "$label" "$log" '.error == null and .steps.initial.hidden == false' \
@@ -373,6 +393,7 @@ dock_intellihide() {
     expect_report "$label" "$log" '.steps.overview.hidden == false' "the overview shows it over the maximised window" APEXG2-DOCK
     expect_report "$label" "$log" '.steps.intellihideOff | .hidden == false and .window == true' \
         "with dock-intellihide off it stays over the maximised window" APEXG2-DOCK
+    dock_live_keys "$label" "$log" "$4"
     expect_report "$label" "$log" '.steps.intellihideOn.hidden == true' "turned back on, it hides again" APEXG2-DOCK
     expect_report "$label" "$log" '.steps.closed | .hidden == false and .window == false' \
         "the window gone, it shows" APEXG2-DOCK
@@ -1627,10 +1648,10 @@ direct_cases() {
     dark_style_off dark-style "$f"
     a11y_cases "$run"
 
-    for c in dock-intellihide dock-intellihide-dark; do
-        exits "$run" "$c" 0
-        no_apex_failure "$c" "$run/$c.log"
-        dock_intellihide "$c" "$run/$c.log" "$run"
+    for c in dock-intellihide:light dock-intellihide-dark:dark; do
+        exits "$run" "${c%:*}" 0
+        no_apex_failure "${c%:*}" "$run/${c%:*}.log"
+        dock_intellihide "${c%:*}" "$run/${c%:*}.log" "$run" "${c#*:}"
     done
 
     for c in stock-light stock-dark; do
