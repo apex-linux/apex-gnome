@@ -6,7 +6,8 @@
 
 G_BEGIN_DECLS
 
-void     apex_window_attach         (PtyxisWindow *window);
-gboolean apex_window_shows_sessions (PtyxisWindow *window);
+void       apex_window_attach         (PtyxisWindow *window);
+gboolean   apex_window_shows_sessions (PtyxisWindow *window);
+PtyxisTab *apex_window_focused_pane   (PtyxisWindow *window);
 
 G_END_DECLS

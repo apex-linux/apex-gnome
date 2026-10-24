@@ -2,6 +2,7 @@
 
 #include "config.h"
 
+#include <glib/gi18n.h>
 #include <pwd.h>
 #include <unistd.h>
 
@@ -30,6 +31,8 @@ struct _ApexSession
   char             *group_label;
   char             *group_pill;
   double            progress;
+  ApexSession      *second;
+  ApexSplit         split;
 };
 
 enum {
@@ -42,6 +45,7 @@ enum {
   PROP_GROUP_KEY,
   PROP_PROGRESS,
   PROP_WHEN,
+  PROP_SPLIT,
   N_PROPS
 };
 
@@ -94,7 +98,7 @@ apex_session_status_changed (ApexSession *self)
 
   if (self->state.remote)
     program = g_strdup ("ssh");
-  else if (apex_session_state_status (&self->state) == APEX_STATUS_RUNNING && self->state.command != NULL)
+  else if (self->state.in_command && self->state.command != NULL)
     program = g_strndup (self->state.command, strcspn (self->state.command, " "));
   set_str (self, &self->tag, program != NULL ? program : user_shell (), PROP_TAG);
 
@@ -275,6 +279,7 @@ apex_session_dispose (GObject *object)
 
   g_clear_weak_pointer (&self->page);
   g_clear_weak_pointer (&self->tab);
+  g_clear_object (&self->second);
 
   G_OBJECT_CLASS (apex_session_parent_class)->dispose (object);
 }
@@ -338,6 +343,10 @@ apex_session_get_property (GObject    *object,
       g_value_take_string (value, apex_session_dup_when (self));
       break;
 
+    case PROP_SPLIT:
+      g_value_set_int (value, self->split);
+      break;
+
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
     }
@@ -361,6 +370,7 @@ apex_session_class_init (ApexSessionClass *klass)
   properties[PROP_GROUP_KEY] = g_param_spec_string ("group-key", NULL, NULL, NULL, flags);
   properties[PROP_PROGRESS] = g_param_spec_double ("progress", NULL, NULL, NO_PROGRESS, 1, NO_PROGRESS, flags);
   properties[PROP_WHEN] = g_param_spec_string ("when", NULL, NULL, NULL, flags);
+  properties[PROP_SPLIT] = g_param_spec_int ("split", NULL, NULL, APEX_SPLIT_NONE, APEX_SPLIT_DOWN, APEX_SPLIT_NONE, flags);
 
   g_object_class_install_properties (object_class, N_PROPS, properties);
 }
@@ -372,13 +382,12 @@ apex_session_init (ApexSession *self)
 }
 
 static ApexSession *
-apex_session_new (AdwTabPage *page)
+apex_session_new (PtyxisTab *tab)
 {
   ApexSession *self = g_object_new (APEX_TYPE_SESSION, NULL);
   PtyxisTerminal *terminal;
 
-  g_set_weak_pointer (&self->page, page);
-  g_set_weak_pointer (&self->tab, PTYXIS_TAB (adw_tab_page_get_child (page)));
+  g_set_weak_pointer (&self->tab, tab);
   terminal = ptyxis_tab_get_terminal (self->tab);
   apex_session_state_init (&self->state, g_get_real_time ());
 
@@ -409,20 +418,26 @@ apex_session_new (AdwTabPage *page)
 /* The session lives as long as its tab, so it keeps its state when the tab moves to
  * another window. */
 ApexSession *
-apex_session_for_page (AdwTabPage *page)
+apex_session_for_tab (PtyxisTab *tab)
 {
-  GtkWidget *tab = adw_tab_page_get_child (page);
   ApexSession *self = g_object_get_data (G_OBJECT (tab), "apex-session");
 
   if (self == NULL)
     {
-      self = apex_session_new (page);
+      self = apex_session_new (tab);
       g_object_set_data_full (G_OBJECT (tab), "apex-session", self, g_object_unref);
     }
-  else
-    g_set_weak_pointer (&self->page, page);
 
   return g_object_ref (self);
+}
+
+ApexSession *
+apex_session_for_page (AdwTabPage *page)
+{
+  ApexSession *self = apex_session_for_tab (PTYXIS_TAB (adw_tab_page_get_child (page)));
+
+  g_set_weak_pointer (&self->page, page);
+  return self;
 }
 
 AdwTabPage *
@@ -438,9 +453,85 @@ apex_session_get_tab (ApexSession *self)
 }
 
 ApexStatus
-apex_session_get_status (ApexSession *self)
+apex_session_get_pane_status (ApexSession *self)
 {
   return apex_session_state_status (&self->state);
+}
+
+static int
+status_rank (ApexStatus status)
+{
+  switch (status)
+    {
+    case APEX_STATUS_NEEDS_YOU:
+      return 4;
+    case APEX_STATUS_RUNNING:
+      return 3;
+    case APEX_STATUS_FAILED:
+      return 2;
+    case APEX_STATUS_DONE:
+      return 1;
+    case APEX_STATUS_IDLE:
+    default:
+      return 0;
+    }
+}
+
+ApexStatus
+apex_session_get_status (ApexSession *self)
+{
+  ApexStatus own = apex_session_get_pane_status (self);
+  ApexStatus second;
+
+  if (self->second == NULL)
+    return own;
+
+  second = apex_session_get_pane_status (self->second);
+  return status_rank (second) > status_rank (own) ? second : own;
+}
+
+const char *
+apex_session_get_pane_title (ApexSession *self)
+{
+  if (self->state.in_command && self->state.command != NULL)
+    return self->state.command;
+  return _("Shell");
+}
+
+ApexSession *
+apex_session_get_second (ApexSession *self)
+{
+  return self->second;
+}
+
+ApexSplit
+apex_session_get_split (ApexSession *self)
+{
+  return self->split;
+}
+
+static void
+apex_session_second_status_cb (ApexSession *self)
+{
+  notify (self, PROP_STATUS);
+}
+
+void
+apex_session_set_second (ApexSession *self,
+                         ApexSession *second,
+                         ApexSplit    split)
+{
+  if (self->second != NULL)
+    g_signal_handlers_disconnect_by_func (self->second, apex_session_second_status_cb, self);
+
+  g_set_object (&self->second, second);
+  self->split = second != NULL ? split : APEX_SPLIT_NONE;
+
+  if (second != NULL)
+    g_signal_connect_object (second, "notify::status", G_CALLBACK (apex_session_second_status_cb), self, G_CONNECT_SWAPPED);
+
+  notify (self, PROP_SPLIT);
+  notify (self, PROP_STATUS);
 }
 
 const char *

@@ -15,10 +15,23 @@ const NAME = 'Search (Super+Space)';
 const ICON_NAME = 'system-search-symbolic';
 
 let _button = null;
+let _tooltip = null;
 let _lockId = 0;
 
 function _sync() {
     _button.container.visible = !Main.sessionMode.isLocked;
+}
+
+function _syncTooltip() {
+    if (!_button.hover) {
+        _tooltip.hide();
+        return;
+    }
+    _tooltip.show();
+    const [x, y] = _button.get_transformed_position();
+    const [width, height] = _button.get_transformed_size();
+    const left = Math.min(x + (width - _tooltip.width) / 2, global.stage.width - _tooltip.width);
+    _tooltip.set_position(Math.round(left), Math.round(y + height));
 }
 
 function _beforeTheStatusPill() {
@@ -43,6 +56,9 @@ export function enable() {
     click.connect('recognize', () => toggleSpotlight());
     _button.add_action(click);
     Main.panel.addToStatusArea(ROLE, _button, _beforeTheStatusPill(), 'right');
+    _tooltip = new St.Label({style_class: 'dash-label', text: NAME, visible: false});
+    Main.layoutManager.addChrome(_tooltip);
+    _button.connect('notify::hover', _syncTooltip);
     _lockId = Main.sessionMode.connect('updated', _sync);
     _sync();
 }
@@ -53,6 +69,8 @@ export function disable() {
     if (_lockId)
         Main.sessionMode.disconnect(_lockId);
     _lockId = 0;
+    _tooltip?.destroy();
+    _tooltip = null;
     _button?.destroy();
     _button = null;
 }

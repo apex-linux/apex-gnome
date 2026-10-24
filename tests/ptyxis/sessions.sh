@@ -65,3 +65,9 @@ localhost/apex                build  3c1e9a2f7b4d  2 hours ago   4.12 GB
 quay.io/fedora/fedora-bootc   45     8f02d6a1c9e3  3 days ago    1.71 GB
 ${green}builder@apex-builder${off}${dim}:${off}${blue}~${off}${dim}\$ ${off}
 EOF
+
+cat >"$dir/git.out" <<EOF
+${red} M${off} desktop/shell/data/theme/apex/_apex-tokens.scss
+${red} M${off} desktop/shell/js/ui/apex/layer.js
+EOF
+printf '0\n' >"$dir/git.exit"
