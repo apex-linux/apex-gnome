@@ -162,15 +162,15 @@ draws one `box-shadow` per actor, so the sheet gives a surface its first layer a
 second as `-apex-shadow-layer` (the `apex-shadow-layer` mixin in `_apex-tokens.scss`: popovers,
 Quick Settings, the calendar, menus, the banner and dialogs). The feature scans `uiGroup`,
 `modalDialogGroup` and the banner bin, and their new children, for such surfaces;
-`shadows/registry.js` puts a transparent St widget under each while it is mapped, with the
+`shadows/registry.js` puts a transparent St widget just above each while it is mapped, with the
 layer as its own `box-shadow` and the surface's radius, and keeps it on the surface's box and
 opacity through the ancestors' allocation and transform signals. It adds and removes layers
 before the next frame, never inside Clutter's or St's walk over the parent's children, and a
 closed menu or dialog keeps none, so an idle desktop repaints nothing more. A dialog's layer
-goes inside the dialog, above the lightbox that ModalDialog keeps under its box. St draws a
-`box-shadow` from the whole silhouette, so `shadows/cutout.js`, a shader effect on each layer,
-clears it inside the surface's rounded box: a glass surface's blur samples the same pixels
-with or without shadows. In the overview, each window preview gets the
+goes inside the dialog, just above its box. Painted after the surface, a layer is never in a
+glass surface's backdrop, as CSS keeps a `box-shadow` out; St draws it from the whole
+silhouette, so `shadows/cutout.js`, a shader effect on each layer, clears it inside the
+surface's rounded box, where it would cover the surface. In the overview, each window preview gets the
 `apex-window-preview` class and two layers (`$apex_preview_shadow`, `$apex_preview_shadow_2`)
 on its window container. `register(actor, {name})` and `unregister(actor)` are the registry's
 API for features that draw their own surfaces (the dock, Spotlight): registrations persist

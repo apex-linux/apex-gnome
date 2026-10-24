@@ -419,8 +419,25 @@ function compareFrames(on, off) {
         covered: on.covered && off.covered,
         sameSize: width === off.width && height === off.height,
         interiorDiffering: BlurRef.differing(on.rgba, off.rgba, interiorMask(width, height, radius, SHADOW_RIM)),
-        edge: BlurRef.errors(on.rgba, BlurRef.rgbOf(off.rgba), width, height, SHADOW_RIM).edge,
+        rim: rimMax(on.rgba, off.rgba, width, height, radius),
+        picked: on.picked,
+        samePick: on.picked === off.picked,
     };
+}
+
+// The largest channel difference in the rim the rounded box covers at least in part: outside
+// its arc, in the corners, the layer's shadow is meant to show.
+function rimMax(a, b, width, height, radius) {
+    let max = 0;
+    for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+            if (Math.min(x, y, width - 1 - x, height - 1 - y) >= SHADOW_RIM || BlurRef.coverage(x, y, width, height, radius) === 0)
+                continue;
+            const i = 4 * (y * width + x);
+            max = Math.max(max, ...[0, 1, 2].map(c => Math.abs(a[i + c] - b[i + c])));
+        }
+    }
+    return max;
 }
 
 // The four corners of a box and SHADOW_CROP px around them, each four times over, in one PNG.
@@ -450,12 +467,12 @@ async function writeCorners(box, name) {
     return file.get_basename();
 }
 
-// What lies at a point just inside the box's left edge for a click: the surface, not its layer.
+// What a click just inside the box's left edge reaches: the same actor with shadows on and off.
 function pickedInside(box) {
     const [x, y] = box.get_transformed_position();
     const [, height] = box.get_transformed_size();
     const actor = global.stage.get_actor_at_pos(Clutter.PickMode.REACTIVE, Math.round(x) + 1, Math.round(y + height / 2));
-    return box.contains(actor);
+    return `${actor?.constructor.name}.${actor?.style_class ?? ''}`;
 }
 
 // A BoxPointer draws a background and border of its own only with an arrow colour or border.
@@ -518,7 +535,7 @@ async function shadowsOverSurfaces() {
                 const radius = box.get_theme_node().get_border_radius(St.Corner.TOPLEFT) * box.get_resource_scale();
                 return {
                     ...await framePixels(box), radius,
-                    picked: withShadows ? pickedInside(box) : null,
+                    picked: pickedInside(box),
                     arrowless: boxPointer ? drawsNothingOutside(boxPointer) : null,
                     corners: withShadows && name === 'quickSettings' ? await writeCorners(box, readAll.variant) : null,
                 };
@@ -536,7 +553,7 @@ async function shadowsOverSurfaces() {
         await Scripting.waitLeisure();
         return Object.fromEntries(Object.keys(surfaces).map(name => [name, {
             ...compareFrames(on[name], off[name]),
-            picked: on[name].picked, arrowless: on[name].arrowless, corners: on[name].corners,
+            arrowless: on[name].arrowless, corners: on[name].corners,
         }]));
     };
     const iface = new Gio.Settings({schema_id: 'org.gnome.desktop.interface'});

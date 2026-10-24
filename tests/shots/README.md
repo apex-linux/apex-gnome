@@ -324,11 +324,14 @@ actor on the stage carries a `Shell.BlurEffect` and the root carries `apex-solid
 with `disabled-features=['glass']` no actor carries one and the tints stay; and that the
 glass comes back after each.
 
-`shadows_under_glass` checks the `shadows` feature against the glass in the same case:
-`glass.js` lays the tile grid under Quick Settings and reads its box with `framePixels()`,
-once with the shadows on and once with `shadows` in `disabled-features`. The pixels the
-rounded box covers fully, 2 device px in from its edges, are the same in both frames, and
-that 2 px rim is within 12/255.
+`shadows_under_glass` checks the `shadows` feature against the glass in the same case, light
+and dark: `glass.js` lays the tile grid under Quick Settings, a popup menu and a dialog and
+reads each box with `framePixels()`, once with the shadows on and once with `shadows` in
+`disabled-features`. The pixels the rounded box covers fully, 2 device px in from its edges,
+are the same in both frames; the 2 px rim's covered pixels are within 12/255; the reactive
+pick just inside the box is the same actor in both, never a layer; the menus draw no arrow.
+It writes `shadow-corners-light.png` and `shadow-corners-dark.png`, Quick Settings' four
+corners at 4×, for review.
 
 `G2_GLASS=1 G2_GLASS_STRESS=SECONDS` runs a stress instead, by hand: for that long a
 stand-in window moves and tiles change under the box, every other change forwarded. Each
