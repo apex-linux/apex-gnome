@@ -47,8 +47,11 @@ export function enable() {
     _sync();
 }
 
+export function configure() {}
+
 export function disable() {
-    Main.sessionMode.disconnect(_lockId);
+    if (_lockId)
+        Main.sessionMode.disconnect(_lockId);
     _lockId = 0;
     _button?.destroy();
     _button = null;

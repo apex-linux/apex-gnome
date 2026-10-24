@@ -68,7 +68,7 @@ starts python-dbusmock's `upower`, `networkmanager` and `bluez5` templates there
 |---|---|---|
 | UPower | a battery at 87 %, discharging (the display device) | `battery-level-80-symbolic` and, with `show-battery-percentage`, "87%" |
 | NetworkManager | the primary connection: Wi-Fi "Apex-5G" at signal 90, connected globally | `network-wireless-signal-excellent-symbolic` |
-| BlueZ | the Bluetooth keyboard "Keychron K3", paired and connected | no glyph: the status pill shows network, volume and battery only (the `status-pill` feature) |
+| BlueZ | the Bluetooth keyboard "Keychron K3", paired and connected | no glyph: the status pill shows network, volume and battery only (the `panel` feature) |
 
 `fixtures-PART.txt` holds what the bus reports afterwards, and `assert.sh` checks it for
 each container. `direct.sh` builds `clock.c` and preloads it into each shell with
@@ -143,13 +143,13 @@ case's variant: the bar's height, fill and type; the boxes' insets and gaps; eac
 button's height and colour; each pill's height, radius, padding, and fill while closed,
 hovered and open; the clock's weight; where the pills sit, and that the Activities and
 status buttons still reach the screen's left and right edges; the bar's transition; with `translucent-top-bar` off, the bar `$apex_bar_solid` over a
-`0 1px 0 $apex_border` line (the `solid-bar` feature); the
+`0 1px 0 $apex_border` line (the `panel` feature); the
 workspace dots' gap, height and radius, the active dot `$apex_bar_dot_active_width` wide and
 the others `$apex_bar_dot_size` square at .45; that the top-left pixel reaches the reactive
 4 × 4 hot-corner zone; "Desktop" at `$apex_font_bar_emphasis_weight` after the Activities pill,
-as nothing has focus (the `focused-app` feature); the search button just before the status pill, a
-`$apex_bar_search_width` × `$apex_bar_pill_height` pill named "Search (Super+Space)" (the
-`search-button` feature); the clock's unread-notification dot (the probe
+as nothing has focus; the search button just before the status pill, a
+`$apex_bar_search_width` × `$apex_bar_pill_height` pill named "Search (Super+Space)" (both
+the `panel` feature); the clock's unread-notification dot (the probe
 posts one low-urgency notification); that the diamond is drawn (at least a quarter of
 its stroke's area in capture pixels of the bar's colour, left of the dots, at the
 capture's scale); the status pill's glyph gap and glyph size, the fixtures' Wi-Fi and
