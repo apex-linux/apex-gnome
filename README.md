@@ -17,6 +17,7 @@ the Apex layer; libadwaita, Settings and Files patch series join it in S2.
 | `desktop/control-center/`, `packaging/pkgs/gnome-control-center/` | gnome-control-center rebuilt in the lane for the Apex Settings, boards 11, 18, 23, 24 and 26: its sources (`panels/apex/`) and its recipe ([README](packaging/pkgs/gnome-control-center/README.md)) |
 | `tests/control-center/` | the checks of `desktop/control-center/`, and the Apex Desktop panel in a headless shell: board 11's captures and every row's binding (`run.sh`) |
 | `tests/s2c/` | S2c's live window radius end to end: apex-session-agent from the pinned apex-system (`agent.sh`), and Settings' Corner Radius pressed through AT-SPI under open Ptyxis, Files and Settings windows beside maximised, half-tiled and fullscreen ones (`radius-test.sh`) |
+| `tests/s7/` | S7's accent exit end to end: Files on `~`, GTK's file chooser and Spotlight on a folder while the accent turns green, then pink, each drawing the new folder colour within 1 s, with a control run without apex-session-agent that must stay blue (`accent-test.sh`, asserted by `check.sh`, whose `selftest.sh` runs in CI); the folder themes are built from the apex-desktop commit pinned in `tests/lib/pins.sh` |
 | `desktop/nautilus/`, `packaging/pkgs/nautilus/` | nautilus rebuilt in the lane for Files, boards 27 to 29: its sources (`src/apex/`) and its recipe ([README](packaging/pkgs/nautilus/README.md)) |
 | `tests/nautilus/` | the checks of `desktop/nautilus/`, the texts' unit test, and the captures with board 27's home (`shoot.sh`) |
 | `tests/shell/` | the lock screen and the greeter of the lane's gnome-shell, boards 20 and 12, against a GDM mock that fails every answer (`gdm-mock.py`): captures and their assertions (`shoot.sh`) |
@@ -55,6 +56,7 @@ just s2c-radius     # podman or docker, after the three lanes: Settings' Corner 
 just nautilus-lane # podman or docker: nautilus rebuilt as the lane builds it, RPMs in _build/nautilus/out
 just nautilus-shots # podman or docker: that nautilus captured in a headless gnome-shell, light and dark
 just gnome-shell-lane # podman or docker: gnome-shell rebuilt as the lane builds it, RPMs in _build/gnome-shell/out
+just s7-accent       # podman or docker, after gnome-shell-lane: the accent from blue to green and pink under Files, the chooser and Spotlight
 just lock-shots  # podman or docker: its lock screen and greeter, light and dark, against a GDM mock
 ```
 
