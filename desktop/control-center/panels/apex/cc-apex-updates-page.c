@@ -1,0 +1,561 @@
+/* SPDX-License-Identifier: GPL-2.0-or-later */
+#include <config.h>
+
+#include <glib/gi18n.h>
+
+#include "cc-apex-tile.h"
+#include "cc-apex-update1.h"
+#include "cc-apex-updates-page.h"
+#include "cc-apex-updates-state.h"
+
+#define UPDATE1_NAME "io.github.apex_linux.Apex.Update1"
+#define UPDATE1_PATH "/io/github/apex_linux/Apex/Update1"
+#define NOT_AUTHORIZED UPDATE1_NAME ".Error.NotAuthorized"
+
+struct _CcApexUpdatesPage {
+    AdwNavigationPage parent_instance;
+
+    CcApexUpdate1 *update1;
+    GCancellable *cancellable;
+    char *changes_digest;
+    char *kept_digest;
+    GPtrArray *change_rows;
+    gboolean busy;
+    CcApexUpdatesAction pending_action;
+    CcApexUpdatesAction primary_action;
+    CcApexUpdatesAction secondary_action;
+
+    GtkStack *stack;
+    CcApexTile *hero_tile;
+    GtkLabel *hero_title;
+    GtkLabel *hero_subtitle;
+    GtkWidget *hero_progress_box;
+    GtkProgressBar *hero_progress;
+    GtkLabel *hero_progress_label;
+    GtkButton *hero_primary;
+    GtkButton *hero_secondary;
+    GtkLabel *error_label;
+    GtkBox *notes;
+    AdwPreferencesGroup *changes_group;
+    AdwExpanderRow *changes_row;
+    AdwActionRow *running_row;
+    GtkLabel *running_built;
+    AdwActionRow *staged_row;
+    GtkLabel *staged_built;
+    AdwActionRow *rollback_row;
+    GtkButton *rollback_button;
+    AdwActionRow *channel_row;
+    AdwActionRow *last_check_row;
+    GtkButton *check_button;
+};
+
+G_DEFINE_FINAL_TYPE (CcApexUpdatesPage, cc_apex_updates_page, ADW_TYPE_NAVIGATION_PAGE)
+
+static void refresh (CcApexUpdatesPage *self);
+
+static const char *
+or_empty (const char *s)
+{
+    return s ? s : "";
+}
+
+static const char *
+dict_string (GVariant *dict, const char *key)
+{
+    const char *value = NULL;
+
+    if (dict)
+        g_variant_lookup (dict, key, "&s", &value);
+    return value;
+}
+
+static gint64
+dict_timestamp (GVariant *dict, const char *key)
+{
+    guint64 value = 0;
+
+    if (dict)
+        g_variant_lookup (dict, key, "t", &value);
+    return (gint64) value;
+}
+
+static gboolean
+dict_is_empty (GVariant *dict)
+{
+    return dict == NULL || g_variant_n_children (dict) == 0;
+}
+
+static void
+show_error (CcApexUpdatesPage *self, const GError *error)
+{
+    g_autofree char *remote = g_dbus_error_get_remote_error (error);
+    g_autoptr(GError) copy = g_error_copy (error);
+
+    if (g_error_matches (error, G_IO_ERROR, G_IO_ERROR_CANCELLED) || g_strcmp0 (remote, NOT_AUTHORIZED) == 0)
+        return;
+    g_dbus_error_strip_remote_error (copy);
+    gtk_label_set_label (self->error_label, copy->message);
+    gtk_widget_set_visible (GTK_WIDGET (self->error_label), TRUE);
+}
+
+static void
+set_busy (CcApexUpdatesPage *self, gboolean busy)
+{
+    self->busy = busy;
+    if (busy)
+        gtk_widget_set_visible (GTK_WIDGET (self->error_label), FALSE);
+    refresh (self);
+}
+
+static void
+reboot_cb (GObject *source, GAsyncResult *result, gpointer user_data)
+{
+    g_autoptr(GVariant) reply = NULL;
+    g_autoptr(GError) error = NULL;
+
+    reply = g_dbus_connection_call_finish (G_DBUS_CONNECTION (source), result, &error);
+    if (reply == NULL && !g_error_matches (error, G_IO_ERROR, G_IO_ERROR_CANCELLED))
+        show_error (CC_APEX_UPDATES_PAGE (user_data), error);
+}
+
+static void
+reboot (CcApexUpdatesPage *self)
+{
+    g_autoptr(GDBusConnection) bus = g_bus_get_sync (G_BUS_TYPE_SESSION, NULL, NULL);
+
+    if (bus == NULL)
+        return;
+    g_dbus_connection_call (bus, "org.gnome.SessionManager", "/org/gnome/SessionManager",
+                            "org.gnome.SessionManager", "Reboot", NULL, NULL, G_DBUS_CALL_FLAGS_NONE, G_MAXINT,
+                            self->cancellable, reboot_cb, self);
+}
+
+/* Every Update1 call ends here; polkit asks in the daemon, and only the reply comes back. */
+static void
+update1_call_cb (GObject *source, GAsyncResult *result, gpointer user_data)
+{
+    CcApexUpdatesPage *self = CC_APEX_UPDATES_PAGE (user_data);
+    g_autoptr(GVariant) reply = NULL;
+    g_autoptr(GError) error = NULL;
+
+    reply = g_dbus_proxy_call_finish (G_DBUS_PROXY (source), result, &error);
+    if (g_error_matches (error, G_IO_ERROR, G_IO_ERROR_CANCELLED))
+        return;
+    set_busy (self, FALSE);
+    if (reply == NULL)
+        show_error (self, error);
+    else if (self->pending_action == CC_APEX_UPDATES_ACTION_APPLY_AND_RESTART)
+        reboot (self);
+}
+
+static void
+call_update1 (CcApexUpdatesPage *self, CcApexUpdatesAction action, const char *method, GVariant *args)
+{
+    self->pending_action = action;
+    set_busy (self, TRUE);
+    g_dbus_proxy_call (G_DBUS_PROXY (self->update1), method, args, G_DBUS_CALL_FLAGS_NONE, G_MAXINT,
+                       self->cancellable, update1_call_cb, self);
+}
+
+static void
+run_action (CcApexUpdatesPage *self, CcApexUpdatesAction action)
+{
+    g_autoptr(GVariant) staged = NULL;
+
+    switch (action) {
+    case CC_APEX_UPDATES_ACTION_CHECK:
+        call_update1 (self, action, "Check", NULL);
+        break;
+    case CC_APEX_UPDATES_ACTION_DOWNLOAD:
+    case CC_APEX_UPDATES_ACTION_DOWNLOAD_ANYWAY:
+        call_update1 (self, action, "Download",
+                      g_variant_new ("(b)", action == CC_APEX_UPDATES_ACTION_DOWNLOAD_ANYWAY));
+        break;
+    case CC_APEX_UPDATES_ACTION_APPLY_AND_RESTART:
+        staged = cc_apex_update1_dup_staged (self->update1);
+        call_update1 (self, action, "Apply", g_variant_new ("(s)", or_empty (dict_string (staged, "digest"))));
+        break;
+    case CC_APEX_UPDATES_ACTION_RESTART:
+        reboot (self);
+        break;
+    case CC_APEX_UPDATES_ACTION_ROLLBACK_BAD:
+        call_update1 (self, action, "Rollback", g_variant_new ("(b)", TRUE));
+        break;
+    case CC_APEX_UPDATES_ACTION_ACKNOWLEDGE:
+        call_update1 (self, action, "AcknowledgeHealthFailure", NULL);
+        break;
+    case CC_APEX_UPDATES_ACTION_KEEP_CURRENT:
+        staged = cc_apex_update1_dup_staged (self->update1);
+        g_free (self->kept_digest);
+        self->kept_digest = g_strdup (dict_string (staged, "digest"));
+        refresh (self);
+        break;
+    case CC_APEX_UPDATES_ACTION_NONE:
+    default:
+        break;
+    }
+}
+
+static void
+hero_button_clicked_cb (CcApexUpdatesPage *self, GtkButton *button)
+{
+    run_action (self, button == self->hero_primary ? self->primary_action : self->secondary_action);
+}
+
+static void
+rollback_clicked_cb (CcApexUpdatesPage *self)
+{
+    call_update1 (self, CC_APEX_UPDATES_ACTION_NONE, "Rollback", g_variant_new ("(b)", FALSE));
+}
+
+static void
+check_clicked_cb (CcApexUpdatesPage *self)
+{
+    run_action (self, CC_APEX_UPDATES_ACTION_CHECK);
+}
+
+static void
+set_action (GtkButton *button, CcApexUpdatesAction action, CcApexUpdatesAction *slot, gboolean busy)
+{
+    const char *label = cc_apex_updates_action_label (action);
+
+    *slot = action;
+    gtk_widget_set_visible (GTK_WIDGET (button), label != NULL);
+    gtk_widget_set_sensitive (GTK_WIDGET (button), !busy);
+    if (label)
+        gtk_button_set_label (button, label);
+}
+
+static const char *
+badge_icon (const char *state, CcApexUpdatesTone tone)
+{
+    if (tone == CC_APEX_UPDATES_TONE_GOOD)
+        return "object-select-symbolic";
+    if (tone == CC_APEX_UPDATES_TONE_ERROR || g_strcmp0 (state, "health-failure") == 0)
+        return "dialog-warning-symbolic";
+    if (tone == CC_APEX_UPDATES_TONE_WARNING)
+        return "media-playback-pause-symbolic";
+    if (g_strcmp0 (state, "available") == 0 || g_strcmp0 (state, "downloading") == 0)
+        return "folder-download-symbolic";
+    return "view-refresh-symbolic";
+}
+
+static void
+add_note (CcApexUpdatesPage *self, const char *title, const char *body)
+{
+    GtkWidget *note, *icon, *text, *label;
+
+    note = gtk_box_new (GTK_ORIENTATION_HORIZONTAL, 12);
+    gtk_widget_add_css_class (note, "apex-note");
+    gtk_accessible_update_property (GTK_ACCESSIBLE (note), GTK_ACCESSIBLE_PROPERTY_LABEL, title, -1);
+    icon = gtk_image_new_from_icon_name ("dialog-warning-symbolic");
+    gtk_widget_set_valign (icon, GTK_ALIGN_START);
+    gtk_widget_add_css_class (icon, "apex-note-icon");
+    gtk_box_append (GTK_BOX (note), icon);
+    text = gtk_box_new (GTK_ORIENTATION_VERTICAL, 3);
+    label = gtk_label_new (title);
+    gtk_label_set_xalign (GTK_LABEL (label), 0);
+    gtk_label_set_wrap (GTK_LABEL (label), TRUE);
+    gtk_widget_add_css_class (label, "apex-note-title");
+    gtk_box_append (GTK_BOX (text), label);
+    label = gtk_label_new (body);
+    gtk_label_set_xalign (GTK_LABEL (label), 0);
+    gtk_label_set_wrap (GTK_LABEL (label), TRUE);
+    gtk_widget_add_css_class (label, "dim-label");
+    gtk_widget_add_css_class (label, "caption");
+    gtk_box_append (GTK_BOX (text), label);
+    gtk_box_append (GTK_BOX (note), text);
+    gtk_box_append (self->notes, note);
+}
+
+static void
+refresh_notes (CcApexUpdatesPage *self, GVariant *newest)
+{
+    g_autofree const char **held = NULL;
+    g_autofree const char **degraded = NULL;
+    GtkWidget *child;
+
+    while ((child = gtk_widget_get_first_child (GTK_WIDGET (self->notes))))
+        gtk_box_remove (self->notes, child);
+
+    if (newest) {
+        g_variant_lookup (newest, "held", "^a&s", &held);
+        g_variant_lookup (newest, "degraded", "^a&s", &degraded);
+    }
+    for (guint i = 0; held && held[i]; i++) {
+        g_autofree char *title = g_strdup_printf (_("%s is held back"), held[i]);
+        g_autofree char *body = g_strdup_printf (_("Apex’s changes to %s do not apply to Fedora’s newest build yet, "
+                                                   "so this version keeps its last good build."),
+                                                 held[i]);
+        add_note (self, title, body);
+    }
+    for (guint i = 0; degraded && degraded[i]; i++) {
+        g_autofree char *title = g_strdup_printf (_("%s runs without Apex’s changes"), degraded[i]);
+        g_autofree char *body = g_strdup_printf (_("This version ships Fedora’s own %s."), degraded[i]);
+        add_note (self, title, body);
+    }
+    gtk_widget_set_visible (GTK_WIDGET (self->notes), gtk_widget_get_first_child (GTK_WIDGET (self->notes)) != NULL);
+}
+
+static void
+changes_cb (GObject *source, GAsyncResult *result, gpointer user_data)
+{
+    CcApexUpdatesPage *self;
+    g_autoptr(GVariant) changes = NULL;
+    g_autoptr(GPtrArray) parsed = NULL;
+    g_autoptr(GVariant) staged = NULL;
+    g_autoptr(GError) error = NULL;
+    g_autofree char *summary = NULL;
+    g_autofree char *built = NULL;
+    g_autofree char *subtitle = NULL;
+    guint others = 0;
+
+    if (!cc_apex_update1_call_get_changes_finish (CC_APEX_UPDATE1 (source), &changes, result, &error)) {
+        if (!g_error_matches (error, G_IO_ERROR, G_IO_ERROR_CANCELLED))
+            g_warning ("Cannot read the staged changes: %s", error->message);
+        return;
+    }
+    self = CC_APEX_UPDATES_PAGE (user_data);
+
+    for (guint i = 0; i < self->change_rows->len; i++)
+        adw_expander_row_remove (self->changes_row, g_ptr_array_index (self->change_rows, i));
+    g_ptr_array_set_size (self->change_rows, 0);
+
+    parsed = cc_apex_updates_changes (changes);
+    gtk_widget_set_visible (GTK_WIDGET (self->changes_group), parsed->len > 0);
+    if (parsed->len == 0)
+        return;
+
+    summary = cc_apex_updates_changes_summary (parsed, &others);
+    staged = cc_apex_update1_dup_staged (self->update1);
+    built = cc_apex_updates_built (dict_timestamp (staged, "timestamp"));
+    adw_preferences_row_set_title (ADW_PREFERENCES_ROW (self->changes_row),
+                                   summary ? summary : _("Package changes"));
+    if (others > 0)
+        subtitle = g_strdup_printf (g_dngettext (GETTEXT_PACKAGE, "and %u other package · %s%s%s",
+                                                 "and %u other packages · %s%s%s", others),
+                                    others, or_empty (dict_string (staged, "version")), built ? ", " : "",
+                                    built ? built : "");
+    else
+        subtitle = g_strdup_printf ("%s%s%s", or_empty (dict_string (staged, "version")), built ? ", " : "",
+                                    built ? built : "");
+    adw_expander_row_set_subtitle (self->changes_row, subtitle);
+
+    for (guint i = 0; i < parsed->len; i++) {
+        CcApexUpdatesChange *c = g_ptr_array_index (parsed, i);
+        GtkWidget *row = adw_action_row_new ();
+        GtkWidget *kind = gtk_label_new (c->kind);
+
+        adw_preferences_row_set_title (ADW_PREFERENCES_ROW (row), c->name);
+        adw_action_row_set_subtitle (ADW_ACTION_ROW (row), c->versions);
+        gtk_widget_add_css_class (kind, "dim-label");
+        adw_action_row_add_suffix (ADW_ACTION_ROW (row), kind);
+        adw_expander_row_add_row (self->changes_row, row);
+        g_ptr_array_add (self->change_rows, row);
+    }
+}
+
+static void
+refresh_changes (CcApexUpdatesPage *self, GVariant *staged)
+{
+    const char *digest = dict_string (staged, "digest");
+
+    if (g_strcmp0 (digest, self->changes_digest) == 0)
+        return;
+    g_free (self->changes_digest);
+    self->changes_digest = g_strdup (digest);
+    if (digest == NULL) {
+        gtk_widget_set_visible (GTK_WIDGET (self->changes_group), FALSE);
+        return;
+    }
+    cc_apex_update1_call_get_changes (self->update1, self->cancellable, changes_cb, self);
+}
+
+static void
+set_deployment (AdwActionRow *row, GtkLabel *built_label, GVariant *dict)
+{
+    g_autofree char *line = cc_apex_updates_deployment_line (dict_string (dict, "version"), dict_string (dict, "digest"));
+    g_autofree char *built = cc_apex_updates_built (dict_timestamp (dict, "timestamp"));
+
+    gtk_widget_set_visible (GTK_WIDGET (row), !dict_is_empty (dict));
+    adw_action_row_set_subtitle (row, line ? line : "");
+    if (built_label)
+        gtk_label_set_label (built_label, built ? built : "");
+}
+
+static void
+refresh (CcApexUpdatesPage *self)
+{
+    g_autoptr(GVariant) booted = NULL;
+    g_autoptr(GVariant) staged = NULL;
+    g_autoptr(GVariant) rollback = NULL;
+    g_autoptr(GVariant) available = NULL;
+    g_autofree char *owner = NULL;
+    g_autofree char *checked = NULL;
+    g_auto(CcApexUpdatesHero) hero = { 0 };
+    CcApexUpdatesFacts facts = { 0 };
+    const char *channel;
+    double progress;
+
+    if (self->update1 == NULL)
+        return;
+    owner = g_dbus_proxy_get_name_owner (G_DBUS_PROXY (self->update1));
+    gtk_stack_set_visible_child_name (self->stack, owner ? "page" : "unavailable");
+    if (owner == NULL)
+        return;
+
+    booted = cc_apex_update1_dup_booted (self->update1);
+    staged = cc_apex_update1_dup_staged (self->update1);
+    rollback = cc_apex_update1_dup_rollback (self->update1);
+    available = cc_apex_update1_dup_available (self->update1);
+    channel = cc_apex_update1_get_channel (self->update1);
+
+    facts.state = cc_apex_update1_get_state (self->update1);
+    facts.booted_version = dict_string (booted, "version");
+    facts.target_version = dict_string (dict_is_empty (staged) ? available : staged, "version");
+    facts.rollback_version = dict_string (rollback, "version");
+    facts.channel = channel;
+    facts.deferred_reason = cc_apex_update1_get_deferred_reason (self->update1);
+    facts.last_error = cc_apex_update1_get_last_error (self->update1);
+    facts.last_check = (gint64) cc_apex_update1_get_last_check (self->update1);
+    facts.now = g_get_real_time () / G_USEC_PER_SEC;
+    facts.kept_current = self->kept_digest != NULL && g_strcmp0 (self->kept_digest, dict_string (staged, "digest")) == 0;
+    cc_apex_updates_hero_init (&hero, &facts);
+
+    cc_apex_tile_set_badge (self->hero_tile, badge_icon (facts.state, hero.tone),
+                            (const char *[]) { "good", "accent", "warning", "error" }[hero.tone]);
+    gtk_label_set_label (self->hero_title, hero.title);
+    gtk_label_set_label (self->hero_subtitle, hero.subtitle);
+    gtk_widget_set_visible (self->hero_progress_box, hero.show_progress);
+    progress = cc_apex_update1_get_progress (self->update1);
+    if (hero.show_progress && progress >= 0) {
+        g_autofree char *percent = g_strdup_printf (_("%.0f %% downloaded"), progress * 100);
+        gtk_progress_bar_set_fraction (self->hero_progress, progress);
+        gtk_label_set_label (self->hero_progress_label, percent);
+    } else if (hero.show_progress) {
+        gtk_progress_bar_pulse (self->hero_progress);
+        gtk_label_set_label (self->hero_progress_label, "");
+    }
+    set_action (self->hero_primary, hero.primary, &self->primary_action, self->busy);
+    set_action (self->hero_secondary, hero.secondary, &self->secondary_action, self->busy);
+
+    refresh_notes (self, dict_is_empty (staged) ? booted : staged);
+    refresh_changes (self, staged);
+
+    set_deployment (self->running_row, self->running_built, booted);
+    set_deployment (self->staged_row, self->staged_built, staged);
+    set_deployment (self->rollback_row, NULL, rollback);
+    gtk_widget_set_sensitive (GTK_WIDGET (self->rollback_button),
+                              !self->busy && g_strcmp0 (facts.state, "rollback-queued") != 0);
+
+    adw_action_row_set_subtitle (self->channel_row,
+                                 g_str_has_prefix (channel ? channel : "", "testing")
+                                     ? _("Testing: candidate builds signed with the CI key")
+                                     : _("Stable: qualified builds signed with the release key"));
+    checked = facts.last_check > 0 ? cc_apex_updates_when (facts.last_check, facts.now) : NULL;
+    adw_action_row_set_subtitle (self->last_check_row, checked ? checked : _("Never"));
+    gtk_widget_set_sensitive (GTK_WIDGET (self->check_button), !self->busy);
+}
+
+static void
+proxy_ready_cb (GObject *source, GAsyncResult *result, gpointer user_data)
+{
+    g_autoptr(GError) error = NULL;
+    CcApexUpdate1 *proxy;
+    CcApexUpdatesPage *self;
+
+    proxy = cc_apex_update1_proxy_new_for_bus_finish (result, &error);
+    if (proxy == NULL) {
+        if (!g_error_matches (error, G_IO_ERROR, G_IO_ERROR_CANCELLED))
+            g_warning ("Cannot reach %s: %s", UPDATE1_NAME, error->message);
+        if (!g_error_matches (error, G_IO_ERROR, G_IO_ERROR_CANCELLED))
+            gtk_stack_set_visible_child_name (CC_APEX_UPDATES_PAGE (user_data)->stack, "unavailable");
+        return;
+    }
+
+    self = CC_APEX_UPDATES_PAGE (user_data);
+    self->update1 = proxy;
+    g_dbus_proxy_set_default_timeout (G_DBUS_PROXY (proxy), G_MAXINT);
+    g_signal_connect_object (proxy, "g-properties-changed", G_CALLBACK (refresh), self, G_CONNECT_SWAPPED);
+    g_signal_connect_object (proxy, "notify::g-name-owner", G_CALLBACK (refresh), self, G_CONNECT_SWAPPED);
+    refresh (self);
+}
+
+static void
+cc_apex_updates_page_dispose (GObject *object)
+{
+    CcApexUpdatesPage *self = CC_APEX_UPDATES_PAGE (object);
+
+    g_cancellable_cancel (self->cancellable);
+    g_clear_object (&self->update1);
+
+    G_OBJECT_CLASS (cc_apex_updates_page_parent_class)->dispose (object);
+}
+
+static void
+cc_apex_updates_page_finalize (GObject *object)
+{
+    CcApexUpdatesPage *self = CC_APEX_UPDATES_PAGE (object);
+
+    g_clear_object (&self->cancellable);
+    g_clear_pointer (&self->change_rows, g_ptr_array_unref);
+    g_free (self->changes_digest);
+    g_free (self->kept_digest);
+
+    G_OBJECT_CLASS (cc_apex_updates_page_parent_class)->finalize (object);
+}
+
+static void
+cc_apex_updates_page_class_init (CcApexUpdatesPageClass *klass)
+{
+    GObjectClass *object_class = G_OBJECT_CLASS (klass);
+    GtkWidgetClass *widget_class = GTK_WIDGET_CLASS (klass);
+
+    object_class->dispose = cc_apex_updates_page_dispose;
+    object_class->finalize = cc_apex_updates_page_finalize;
+
+    g_type_ensure (CC_TYPE_APEX_TILE);
+
+    gtk_widget_class_set_template_from_resource (widget_class, "/org/gnome/Settings/apex/cc-apex-updates-page.ui");
+
+    gtk_widget_class_bind_template_child (widget_class, CcApexUpdatesPage, stack);
+    gtk_widget_class_bind_template_child (widget_class, CcApexUpdatesPage, hero_tile);
+    gtk_widget_class_bind_template_child (widget_class, CcApexUpdatesPage, hero_title);
+    gtk_widget_class_bind_template_child (widget_class, CcApexUpdatesPage, hero_subtitle);
+    gtk_widget_class_bind_template_child (widget_class, CcApexUpdatesPage, hero_progress_box);
+    gtk_widget_class_bind_template_child (widget_class, CcApexUpdatesPage, hero_progress);
+    gtk_widget_class_bind_template_child (widget_class, CcApexUpdatesPage, hero_progress_label);
+    gtk_widget_class_bind_template_child (widget_class, CcApexUpdatesPage, hero_primary);
+    gtk_widget_class_bind_template_child (widget_class, CcApexUpdatesPage, hero_secondary);
+    gtk_widget_class_bind_template_child (widget_class, CcApexUpdatesPage, error_label);
+    gtk_widget_class_bind_template_child (widget_class, CcApexUpdatesPage, notes);
+    gtk_widget_class_bind_template_child (widget_class, CcApexUpdatesPage, changes_group);
+    gtk_widget_class_bind_template_child (widget_class, CcApexUpdatesPage, changes_row);
+    gtk_widget_class_bind_template_child (widget_class, CcApexUpdatesPage, running_row);
+    gtk_widget_class_bind_template_child (widget_class, CcApexUpdatesPage, running_built);
+    gtk_widget_class_bind_template_child (widget_class, CcApexUpdatesPage, staged_row);
+    gtk_widget_class_bind_template_child (widget_class, CcApexUpdatesPage, staged_built);
+    gtk_widget_class_bind_template_child (widget_class, CcApexUpdatesPage, rollback_row);
+    gtk_widget_class_bind_template_child (widget_class, CcApexUpdatesPage, rollback_button);
+    gtk_widget_class_bind_template_child (widget_class, CcApexUpdatesPage, channel_row);
+    gtk_widget_class_bind_template_child (widget_class, CcApexUpdatesPage, last_check_row);
+    gtk_widget_class_bind_template_child (widget_class, CcApexUpdatesPage, check_button);
+
+    gtk_widget_class_bind_template_callback (widget_class, hero_button_clicked_cb);
+    gtk_widget_class_bind_template_callback (widget_class, rollback_clicked_cb);
+    gtk_widget_class_bind_template_callback (widget_class, check_clicked_cb);
+}
+
+static void
+cc_apex_updates_page_init (CcApexUpdatesPage *self)
+{
+    gtk_widget_init_template (GTK_WIDGET (self));
+
+    self->cancellable = g_cancellable_new ();
+    self->change_rows = g_ptr_array_new ();
+    gtk_widget_set_visible (GTK_WIDGET (self->changes_group), FALSE);
+    gtk_widget_set_visible (GTK_WIDGET (self->notes), FALSE);
+
+    cc_apex_update1_proxy_new_for_bus (G_BUS_TYPE_SYSTEM, G_DBUS_PROXY_FLAGS_NONE, UPDATE1_NAME, UPDATE1_PATH,
+                                       self->cancellable, proxy_ready_cb, self);
+}
