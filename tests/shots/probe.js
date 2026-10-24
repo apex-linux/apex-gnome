@@ -504,7 +504,7 @@ function dockReport(unit) {
 }
 
 // The menu a right click opens on the dock's first app: stock's AppMenu, which offers the
-// other GPU while switcheroo-control reports two.
+// other GPU while switcheroo-control reports two, and builds its items once per icon.
 async function dockAppMenu() {
     const icon = apexDock()?._box.get_children().find(item => item.child?._delegate?.app)?.child;
     if (!icon)
@@ -2430,6 +2430,16 @@ async function runProbe() {
             result = {error: `${e.message}\n${e.stack}`};
         }
         console.log(`APEXG2-SCENES ${JSON.stringify(result)}`);
+    }
+
+    if (GLib.getenv('G2_ONE_GPU') === '1') {
+        let result;
+        try {
+            result = await dockAppMenu();
+        } catch (e) {
+            result = {error: `${e.message}\n${e.stack}`};
+        }
+        console.log(`APEXG2-GPU ${JSON.stringify(result)}`);
     }
 
     if (GLib.getenv('G2_INDICATORS') === '1') {

@@ -152,6 +152,9 @@ run_and_record_case dark-style "$CAPTURE_SETTINGS;org.gnome.desktop.interface co
 # The headless pointer starts at 0,0, in the hot corner, which its first motion would trip.
 run_and_record_case dock-intellihide "$CAPTURE_SETTINGS;$NO_HOT_CORNER" G2_DOCK=1
 run_and_record_case dock-intellihide-dark "$CAPTURE_SETTINGS;$NO_HOT_CORNER;org.gnome.desktop.interface color-scheme prefer-dark" G2_DOCK=1
+python3 /w/fixtures.py --gpus 1 >"/out/fixtures-one-gpu.txt" 2>&1 || echo "fixtures.py --gpus 1: exit $?"
+run_and_record_case dock-one-gpu "$CAPTURE_SETTINGS" G2_ONE_GPU=1
+python3 /w/fixtures.py --gpus 2 >>"/out/fixtures-one-gpu.txt" 2>&1 || echo "fixtures.py --gpus 2: exit $?"
 # The indicators get shells of their own, as default, default-scale1 and dark-style.
 run_and_record_case indicators "$CAPTURE_SETTINGS;$NO_HOT_CORNER;$TWO_SOURCES" G2_INDICATORS=1
 run_and_record_case indicators-scale1 "$CAPTURE_SETTINGS;$NO_HOT_CORNER;$TWO_SOURCES" G2_INDICATORS=1 G2_SCALE=1 G2_MONITOR=1440x900

@@ -19,7 +19,7 @@ readonly APEX_LIGHT_SHEET=resource:///org/gnome/shell/theme/gnome-shell-light.cs
 readonly APEX_DARK_SHEET=resource:///org/gnome/shell/theme/gnome-shell-dark.css
 readonly STOCK_SHEETS=resource:///org/gnome/shell/theme/stock
 readonly FEDORA_SHEETS=resource:///org/gnome/shell/theme
-readonly DIRECT_CASES=(default default-scale1 dark-style dock-intellihide dock-intellihide-dark stock-light stock-dark safe-env
+readonly DIRECT_CASES=(default default-scale1 dark-style dock-intellihide dock-intellihide-dark dock-one-gpu stock-light stock-dark safe-env
     layer-disabled layer-cycles motion idle fault-configure fault-enable fault-abort kernel-safe fedora-light fedora-dark glass fedora-glass
     indicators indicators-scale1 indicators-dark)
 readonly DIRECT_PARTS=(main kernel fedora)
@@ -1256,7 +1256,7 @@ fixtures_on_the_bus() {
             "BlueZ: the keyboard \"Keychron K3\" is connected"
         expect "fixtures ($part)" "$fixtures" '.powerProfiles | .active == "balanced" and (.profiles | index("performance") != null)' \
             "power-profiles-daemon: Balanced, with Performance to switch to"
-        expect "fixtures ($part)" "$fixtures" '.gpus | .hasDualGpu and .names == ["Intel Graphics", "NVIDIA GeForce RTX 4060"]' \
+        expect "fixtures ($part)" "$fixtures" '.gpus | .hasDualGpu and .names == ["AMD Radeon Graphics", "NVIDIA GeForce RTX 3050 Laptop GPU"]' \
             "switcheroo-control: an integrated and a discrete GPU"
     done
 }
@@ -1587,6 +1587,25 @@ direct_cases() {
     glass_manager glass "$run/glass.log" light
     glass_unlock_vs_fedora "$run"
     indicator_cases "$run"
+    one_gpu_case "$run"
+}
+
+# The dock-one-gpu case: fixtures.py --gpus 1, as switcheroo-control reports a laptop
+# whose NVIDIA driver is not bound.
+one_gpu_case() {
+    local run=$1
+    exits "$run" dock-one-gpu 0
+    no_js_error dock-one-gpu "$run/dock-one-gpu.log"
+    no_apex_failure dock-one-gpu "$run/dock-one-gpu.log"
+    one_gpu_menu dock-one-gpu "$run/dock-one-gpu.log"
+}
+
+one_gpu_menu() {
+    local label=$1 log=$2
+    expect_report "$label" "$log" '.hasDualGpu == false and (.items | length > 0)' \
+        "the dock's app menu opens while switcheroo-control reports one GPU" APEXG2-GPU
+    expect_report "$label" "$log" '.items != null and (.items | all(. != "Launch Using Discrete Graphics Card"))' \
+        "and offers no Launch Using Discrete Graphics Card" APEXG2-GPU
 }
 
 indicator_cases() {
