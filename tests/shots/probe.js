@@ -31,6 +31,7 @@ const CRASH_GUARD_MARKER = 'apex-shell-starting';
 const REPORT_AFTER_MS = 1500;
 const SETTLE_TIMEOUT_MS = 20000;
 const SETTLE_EXTRA_MS = 500;
+const PERF_HELPER_PING_S = 10;
 const DEFERRED_WORK_TIMEOUT_MS = 21000;
 const CALIBRATION_PX = 100;
 const INK_MAX_RGB_DISTANCE = 60;
@@ -1518,7 +1519,25 @@ export function init() {
     import(import.meta.url).then(self => Scripting.runPerfScript(self, GLib.getenv('SHELL_PERF_OUTPUT')));
 }
 
+// gnome-shell-perf-helper quits after 30 s without a call, and scripting.js's last call to it
+// then fails the shell: a probe that runs longer pings it.
+function keepPerfHelperAwake() {
+    return GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, PERF_HELPER_PING_S, () => {
+        Scripting._getPerfHelper().then(helper => helper.DestroyWindowsAsync()).catch(() => {});
+        return GLib.SOURCE_CONTINUE;
+    });
+}
+
 export async function run() {
+    const pingId = keepPerfHelperAwake();
+    try {
+        await runProbe();
+    } finally {
+        GLib.source_remove(pingId);
+    }
+}
+
+async function runProbe() {
     await Scripting.sleep(REPORT_AFTER_MS);
     console.log(`APEXG2 ${JSON.stringify(await report())}`);
 
