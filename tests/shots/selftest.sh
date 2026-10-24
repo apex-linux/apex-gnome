@@ -253,6 +253,7 @@ REPORT_OF_QUICK_SETTINGS_DRAWN_FROM_TOKENS='
 | ($t.apex_quick_toggle_height | px) as $th | ($t.apex_quick_settings_button_size | px) as $bs | ($t.apex_quick_settings_icon_size | px) as $icon
 | ((($t.apex_quick_settings_width | px) - 2 * $qp - $gap) / 2) as $tw | ($t.apex_quick_toggle_padding | px) as $tp
 | ($t.apex_quick_toggle_menu_button_shade | rtrimstr("%") | tonumber / 100) as $shade
+| ($t.apex_quick_toggle_checked_shade | rtrimstr("%") | tonumber / 100) as $checked
 | {size: ($t.apex_font_quick_toggle_title_size | px), weight: ($t.apex_font_heading_weight | tonumber)} as $title
 | {topBar: {accent: "#3584e4ff"}, surfaces: {quickSettings: {
     box: {width: ($t.apex_quick_settings_width | px), radius: ($t.apex_radius_quick_settings | px), background: ($t.apex_panel | hex),
@@ -266,11 +267,11 @@ REPORT_OF_QUICK_SETTINGS_DRAWN_FROM_TOKENS='
             box: {padding: {left: ($t.apex_quick_settings_battery_padding | px), right: ($t.apex_quick_settings_battery_padding | px)}, spacing: ($t.apex_quick_settings_battery_gap | px)},
             title: {font: {size: ($t.apex_font_quick_settings_battery_size | px), weight: ($t.apex_font_label_weight | tonumber)}}}},
     wifi: {y: (44 + $bs + ($t.apex_quick_settings_section_gap | px)), width: $tw, height: $th,
-        toggle: {background: "#3584e4ff", foreground: "#ffffffff", icon: $icon, title: {font: $title},
+        toggle: {background: ([53, 132, 228] | map(. * (1 - $checked) | round) | "rgb(\(.[0]), \(.[1]), \(.[2]))" | hex), foreground: "#ffffffff", icon: $icon, title: {font: $title},
             subtitle: {foreground: ("rgba(255, 255, 255, \($t.apex_quick_toggle_subtitle_opacity))" | hex), font: {size: ($t.apex_font_quick_toggle_subtitle_size | px)}},
             box: {padding: {left: $tp, right: ($t.apex_quick_toggle_menu_padding | px)}, spacing: ($t.apex_quick_toggle_gap | px)}},
         separator: {width: 0},
-        menuButton: {width: ($t.apex_quick_toggle_menu_button_width | px), background: ([53, 132, 228] | map(. * (1 - $shade) | round) | "rgb(\(.[0]), \(.[1]), \(.[2]))" | hex)}},
+        menuButton: {width: ($t.apex_quick_toggle_menu_button_width | px), background: ([53, 132, 228] | map(. * (1 - $checked) * (1 - $shade) | round) | "rgb(\(.[0]), \(.[1]), \(.[2]))" | hex)}},
     unchecked: {width: $tw, height: $th, radius: 999, background: ($t.apex_button | hex), foreground: ($t.apex_fg | hex),
         hover: {background: ($t.apex_button_hover | hex)}, icon: $icon, box: {padding: {left: $tp, right: $tp}, spacing: ($t.apex_quick_toggle_gap | px)}},
     slider: {spacing: ($t.apex_quick_slider_gap | px), trackHeight: ($t.apex_quick_slider_track_height | px), track: ($t.apex_button_hover | hex),

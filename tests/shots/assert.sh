@@ -690,8 +690,9 @@ quick_settings() {
             and (.[1].radius >= (\$t.apex_quick_toggle_height | px) / 2)"
     "${metric[@]}" 'an unchecked toggle is $apex_button with $apex_fg text, $apex_button_hover when hovered' \
         "$q.unchecked" '(.background | colour_is($t.apex_button)) and (.foreground | colour_is($t.apex_fg)) and (.hover.background | colour_is($t.apex_button_hover))'
-    "${metric[@]}" 'a checked toggle is the accent, its text the accent'"'"'s foreground, its subtitle that at $apex_quick_toggle_subtitle_opacity' \
-        "{t: $q.wifi.toggle, accent: .topBar.accent}" '.accent as $a | (.t.background | colour_is($a)) and (.t.foreground | colour_is("#ffffff"))
+    "${metric[@]}" 'a checked toggle is the accent shaded $apex_quick_toggle_checked_shade with black, its text the accent'"'"'s foreground, its subtitle that at $apex_quick_toggle_subtitle_opacity' \
+        "{t: $q.wifi.toggle, accent: .topBar.accent}" '(.accent | rgba) as $a | (.t.background | rgba) as $f | ($t.apex_quick_toggle_checked_shade | rtrimstr("%") | tonumber / 100) as $k
+            | ([range(3)] | all(($f[.] - $a[.] * (1 - $k)) | fabs <= 1)) and (.t.foreground | colour_is("#ffffff"))
             and (.t.subtitle.foreground | colour_is("rgba(255, 255, 255, \($t.apex_quick_toggle_subtitle_opacity))"))'
     "${metric[@]}" 'a toggle is padded $apex_quick_toggle_padding ($apex_quick_toggle_menu_padding before a menu arrow), $apex_quick_toggle_gap between glyph and text, its glyph $apex_quick_settings_icon_size' \
         "[$q.wifi.toggle, $q.unchecked]" 'all((.box.padding.left | px_is($t.apex_quick_toggle_padding)) and (.box.spacing | px_is($t.apex_quick_toggle_gap)) and (.icon | px_is($t.apex_quick_settings_icon_size)))
@@ -699,10 +700,11 @@ quick_settings() {
     "${metric[@]}" 'its title is $apex_font_quick_toggle_title_size at $apex_font_heading_weight, its subtitle $apex_font_quick_toggle_subtitle_size' \
         "$q.wifi.toggle" '(.title.font.size | px_is($t.apex_font_quick_toggle_title_size)) and .title.font.weight == ($t.apex_font_heading_weight | tonumber)
             and (.subtitle.font.size | px_is($t.apex_font_quick_toggle_subtitle_size))'
-    "${metric[@]}" 'the menu arrow is $apex_quick_toggle_menu_button_width wide, the checked fill shaded $apex_quick_toggle_menu_button_shade with black, with no separator' \
+    "${metric[@]}" 'the menu arrow is $apex_quick_toggle_menu_button_width wide, the checked fill shaded $apex_quick_toggle_menu_button_shade more with black, with no separator' \
         "{w: $q.wifi, accent: .topBar.accent}" "(.accent | rgba) as \$a | (.w.menuButton.background | rgba) as \$m
+            | (\$t.apex_quick_toggle_checked_shade | rtrimstr(\"%\") | tonumber / 100) as \$k
             | (.w.menuButton.width | px_is(\$t.apex_quick_toggle_menu_button_width)) and (.w.separator.width == 0)
-            and ([range(3)] | all((\$m[.] - \$a[.] * $shade) | fabs <= 1))"
+            and ([range(3)] | all((\$m[.] - \$a[.] * (1 - \$k) * $shade) | fabs <= 1))"
     "${metric[@]}" 'a slider has $apex_quick_slider_gap beside its glyph, a $apex_quick_slider_track_height track in $apex_button_hover filled with the accent, a $apex_quick_slider_handle_size $apex_slider_handle handle' \
         "{s: $q.slider, accent: .topBar.accent}" '.accent as $a | .s | (.spacing | px_is($t.apex_quick_slider_gap)) and (.trackHeight | px_is($t.apex_quick_slider_track_height))
             and (.track | colour_is($t.apex_button_hover)) and (.fill | colour_is($a)) and (.handleRadius * 2 | px_is($t.apex_quick_slider_handle_size)) and (.handle | colour_is($t.apex_slider_handle))'
