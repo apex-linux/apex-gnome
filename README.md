@@ -11,7 +11,7 @@ the Apex layer; libadwaita, Settings and Files patch series join it in S2.
 | `tests/layer/` | The layer's safety net in gjs: kill switches, fault injection, the crash guard and live layer cycles |
 | `tests/shots/` | G2, the headless shell of a built image, and its self-test |
 | `desktop/ptyxis/`, `packaging/pkgs/ptyxis/` | Ptyxis rebuilt in the lane with the Apex terminal, the sessions sidebar and split panes of boards 32 and 33: its sources (`src/apex/`) and its recipe ([README](packaging/pkgs/ptyxis/README.md)) |
-| `tests/ptyxis/` | the ptyxis recipe through apex-lane's container half (`lane.sh`), and the checks of `desktop/ptyxis/` |
+| `tests/ptyxis/` | the ptyxis recipe through apex-lane's container half (`lane.sh`), the checks of `desktop/ptyxis/`, the status logic's unit test, and the captures (`shoot.sh`) |
 
 [apex-image](https://github.com/apex-linux/apex-image) pins this repository by commit in
 `components.lock`, builds gnome-shell from the recipe in its builder VM, and runs G2 on the
@@ -38,6 +38,7 @@ just shots-test   # gjs, GdkPixbuf and jq; dbus-daemon and python3-dbusmock for 
 just eslint       # node, npm and git: gnome-shell 51.0's eslint rules, pinned in lint/package-lock.json
 just theme        # sassc and git; dnf5, rpm2cpio, cpio and xz for Fedora's gnome-shell SRPM
 just ptyxis-lane  # podman or docker: Ptyxis rebuilt as the lane builds it, RPMs in _build/ptyxis/out
+just ptyxis-shots # podman or docker: that Ptyxis captured in a headless gnome-shell, light and dark
 ```
 
 `just eslint` lints `desktop/shell/js` and the gjs tests with gnome-shell's own
