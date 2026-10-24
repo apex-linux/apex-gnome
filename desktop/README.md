@@ -328,7 +328,11 @@ icons and the footer; a group built while every hook was stock (the layer off) s
 - in the overview too, whose own dash is hidden at the dock's height plus its gap, so the
   overview lays its views out above the dock; the dock's Show Apps opens the app grid,
   and the overview's Show Apps button and the dock's follow each other;
-- Ctrl+Alt+Tab reaches it, as upstream's `Dash` registers itself there.
+- Ctrl+Alt+Tab reaches it, as upstream's `Dash` registers itself there;
+- each app's menu is stock's `AppMenu`, so "Launch Using Discrete Graphics Card" shows while
+  switcheroo-control's `HasDualGpu` is true. With `/apex/pair-mode` off no NVIDIA driver is
+  bound, the dGPU has no DRM card and the item is hidden; with the pair, the card's
+  `mutter-device-ignore` keeps it from mutter, not from switcheroo-control.
 
 A schema without one of the keys turns off only this feature, logged.
 

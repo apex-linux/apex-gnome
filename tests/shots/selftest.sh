@@ -1821,20 +1821,34 @@ EOF
     dbus-daemon --config-file="$T/bus.conf" --fork --print-address=3 --print-pid=4 3>"$T/bus.address" 4>"$T/bus.pid"
 }
 
+test_one_gpu() {
+    local failures what menu passes
+    while IFS='|' read -r failures what menu; do
+        printf 'APEXG2-GPU %s\n' "$menu" >"$T/one-gpu.log"
+        read -r passes _ <<<"$(assertion_counts one_gpu_menu dock-one-gpu "$T/one-gpu.log")"
+        expect_eq "one GPU: $what fails $failures of 2" "$failures" $((2 - passes))
+    done <<'MENUS'
+0|stock's menu without the discrete GPU|{"app": "Files", "hasDualGpu": false, "items": ["Open Windows", "New Window", "Unpin", "App Details"]}
+1|a menu that still offers it|{"app": "Files", "hasDualGpu": false, "items": ["New Window", "Launch Using Discrete Graphics Card", "Unpin"]}
+1|a switcheroo-control still reporting two GPUs|{"app": "Files", "hasDualGpu": true, "items": ["New Window", "Unpin"]}
+2|no menu at all|null
+MENUS
+}
+
 test_fixtures() {
     local passes failures address missing=()
     mkdir -p "$T/fixtures"
     local report='G2-FIXTURES {"battery": {"percentage": 87.0, "present": true, "onBattery": true}, '
     report+='"wifi": {"primary": "Apex-5G", "ssid": "Apex-5G", "strength": 90, "inRange": ["Apex-5G", "Apex-2.4G", "Library Guest"], '
     report+='"state": 70, "connectivity": 4}, "keyboard": {"alias": "Keychron K3", "connected": true, "icon": "input-keyboard"}, '
-    report+='"gpus": {"hasDualGpu": true, "names": ["Intel Graphics", "NVIDIA GeForce RTX 4060"]}, '
+    report+='"gpus": {"hasDualGpu": true, "names": ["AMD Radeon Graphics", "NVIDIA GeForce RTX 3050 Laptop GPU"]}, '
     report+='"powerProfiles": {"active": "balanced", "profiles": ["power-saver", "balanced", "performance"]}}'
     fixtures_report "$report"
     read -r passes failures <<<"$(assertion_counts fixtures_on_the_bus "$T/fixtures")"
     expect_eq "fixtures: what fixtures.py reports passes each part's six assertions" "18/0" "$passes/$failures"
     report='G2-FIXTURES {"battery": {"percentage": 0.0, "present": false, "onBattery": false}, '
     report+='"wifi": {"primary": "Apex-5G", "ssid": "Apex-5G", "strength": 30, "inRange": ["Apex-5G"], "state": 70, "connectivity": 4}, '
-    report+='"keyboard": {"alias": "Keychron K3", "connected": false, "icon": "phone"}, "gpus": {"hasDualGpu": false, "names": ["Intel Graphics"]}, '
+    report+='"keyboard": {"alias": "Keychron K3", "connected": false, "icon": "phone"}, "gpus": {"hasDualGpu": false, "names": ["AMD Radeon Graphics"]}, '
     report+='"powerProfiles": null}'
     fixtures_report "$report"
     read -r passes failures <<<"$(assertion_counts fixtures_on_the_bus "$T/fixtures")"
@@ -2118,6 +2132,7 @@ test_layer_cycles
 test_motion
 test_idle
 test_spotlight_key
+test_one_gpu
 test_fixtures
 test_glass
 test_shadows_under_glass
