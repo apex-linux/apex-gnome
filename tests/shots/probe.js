@@ -889,7 +889,9 @@ async function quickSettings(unit) {
 // clicks on Power Mode, which stock answers by switching to the last profile and back.
 async function quickSettingsLayer() {
     const indicator = Main.panel.statusArea.quickSettings;
-    const toggles = indicator.menu._grid.get_children().filter(t => 'checked' in t && t.title);
+    // Without a VPN connection the VPN toggle is hidden and has no title.
+    const name = t => t.constructor.name === 'NMVpnToggle' ? 'VPN' : t.title;
+    const toggles = indicator.menu._grid.get_children().filter(t => 'checked' in t && name(t));
     const power = indicator._powerProfiles?.quickSettingsItems[0] ?? null;
     const dnd = toggles.find(t => t.constructor.name === 'DoNotDisturbToggle');
     const powerState = () => power && {
@@ -908,7 +910,7 @@ async function quickSettingsLayer() {
         return powerState();
     };
     const state = {
-        order: toggles.map(t => ({title: t.title, visible: t.visible})),
+        order: toggles.map(t => ({title: name(t), visible: t.visible})),
         power: powerState(),
         pillShowsPower: indicator._powerProfiles?.get_parent() === indicator._indicators &&
             indicator._powerProfiles.visible,
@@ -1119,6 +1121,145 @@ async function calendarMenu(unit) {
     }
 }
 
+// Board 38's rows, from providers of the probe's own: G2's image has no files or settings
+// to find, so a real query would draw nothing to measure.
+const CALCULATOR = 'org.gnome.Calculator.desktop';
+const SPOTLIGHT_ROWS = {
+    [CALCULATOR]: [{id: '2880 / 1.5', name: '2880 / 1.5', description: ' = 1920', clipboardText: '1920'}],
+    'applications': [
+        {id: 'org.gnome.DiskUtility.desktop', name: 'Disks', description: 'Manage drives and media', icon: 'drive-harddisk'},
+        {id: 'org.gnome.baobab.desktop', name: 'Disk Usage Analyzer', description: 'Check folder sizes and available disk space', icon: 'drive-harddisk'},
+        {id: CALCULATOR, name: 'Calculator', description: 'Perform arithmetic, scientific or financial calculations', icon: 'accessories-calculator'},
+    ],
+    'org.gnome.Settings.desktop': [
+        {id: 'about', name: 'About', description: 'System · name, memory and disk capacity', icon: 'help-about-symbolic'},
+        {id: 'privacy', name: 'File History & Trash', description: 'Privacy & Security', icon: 'user-trash-symbolic', keywords: 'disk'},
+        {id: 'removable', name: 'Removable Media', description: 'Apps · what happens when a disk is plugged in', icon: 'media-removable-symbolic'},
+        {id: 'storage', name: 'Disk Encryption', description: 'Privacy & Security', icon: 'drive-harddisk-symbolic'},
+    ],
+    'org.gnome.Nautilus.desktop': [
+        {id: 'csv', name: 'disk-usage-2026-10.csv', description: '~/Documents', icon: 'text-x-generic'},
+        {id: 'png', name: 'disk-unlock-board.png', description: '~/Pictures/Screenshots', icon: 'image-x-generic'},
+        {id: 'images', name: 'Disk Images', description: '~/Downloads', icon: 'folder'},
+        {id: 'md', name: 'diskspace-notes.md', description: '~/apex/docs', icon: 'text-x-generic'},
+        {id: 'old', name: 'disk-old.md', description: '~/apex/docs', icon: 'text-x-generic'},
+    ],
+};
+
+function spotlightMatches(providerId, row, terms) {
+    if (providerId === CALCULATOR)
+        return row.id === terms.join(' ');
+    const text = `${row.name} ${row.description} ${row.keywords ?? ''}`.toLowerCase();
+    return terms.every(t => text.includes(t));
+}
+
+function spotlightProviders() {
+    return new Map(Object.entries(SPOTLIGHT_ROWS).map(([id, rows]) => [id, {
+        id,
+        appInfo: {get_icon: () => Gio.ThemedIcon.new('accessories-calculator')},
+        getInitialResultSet: terms => Promise.resolve(rows.filter(r => spotlightMatches(id, r, terms)).map(r => r.id)),
+        filterResults: (ids, max) => ids.slice(0, max),
+        getResultMetas: ids => Promise.resolve(rows.filter(r => ids.includes(r.id)).map(r => ({
+            ...r, createIcon: size => new St.Icon({icon_name: r.icon ?? 'image-missing', icon_size: size}),
+        }))),
+        activateResult: () => {},
+    }]));
+}
+
+async function spotlightScene(popup, name, text) {
+    popup.panel.get_children()[0].get_children()[1].set_text(text);
+    await settle();
+    global.stage.set_key_focus(null);
+    const scene = name && GLib.getenv('G2_SURFACE_SCENES') === '1' ? await capture(`spotlight-${name}`) : null;
+    if (scene)
+        delete scene.bytes;
+    return scene;
+}
+
+// Board 38's four scenes: search, calculator, copied and empty, through Spotlight's own popup.
+async function spotlightStyle(unit) {
+    if ((await apexHooks())?.safe() !== false)
+        return null;
+    let Popup, Toast;
+    try {
+        ({Popup} = await import('resource:///org/gnome/shell/ui/apex/spotlight/popup.js'));
+        Toast = await import('resource:///org/gnome/shell/ui/apex/spotlight/toast.js');
+    } catch {
+        return null;
+    }
+    const {primaryMonitor: monitor} = Main.layoutManager;
+    const popup = new Popup(spotlightProviders, 0);
+    popup.open();
+    try {
+        const captured = {};
+        captured.empty = await spotlightScene(popup, 'empty', '');
+        const fieldOnly = popup.panel.get_children().filter(a => a.visible).length === 1;
+        captured.search = await spotlightScene(popup, 'search', 'disk');
+        const [field, results] = popup.panel.get_children();
+        const rows = results.get_children().filter(a => a.has_style_class_name('apex-spotlight-row'));
+        const row = actor => {
+            const [icon, text, action] = actor.get_children();
+            const [title, subtitle] = text.get_children();
+            return {
+                ...styleOf(actor, unit), icon: styleOf(icon, unit), text: styleOf(text, unit),
+                title: {...styleOf(title, unit), text: title.get_text()},
+                subtitle: {...styleOf(subtitle, unit), text: subtitle.get_text()},
+                action: {
+                    ...styleOf(action, unit),
+                    verb: {...styleOf(action.get_children()[0], unit), text: action.get_children()[0].get_text()},
+                    chip: styleOf(action.get_children()[1], unit),
+                },
+            };
+        };
+        const headers = results.get_children().filter(a => a.has_style_class_name('apex-spotlight-header'));
+        const measured = {
+            fieldOnly,
+            panel: {...styleOf(popup.panel, unit), top: round((popup.panel.get_transformed_position()[1] - monitor.y) / unit.length)},
+            field: styleOf(field, unit),
+            glyph: {...styleOf(field.get_children()[0], unit), size: lengthOrNull(field.get_children()[0].get_theme_node(), 'icon-size', unit)},
+            entry: {
+                ...styleOf(field.get_children()[1], unit),
+                hint: hex(field.get_children()[1].get_hint_actor().get_theme_node().get_foreground_color()),
+            },
+            results: styleOf(results, unit),
+            headers: headers.map(h => ({...styleOf(h, unit), tracking: round(h.get_theme_node().get_letter_spacing() / unit.length)})),
+            sections: headers.map(h => h.get_child().get_text()),
+            rows: rows.map(row),
+            selected: rows.map(r => r.has_style_pseudo_class('selected')),
+        };
+        captured.calculator = await spotlightScene(popup, 'calculator', '2880 / 1.5');
+        const [, calculator] = popup.panel.get_children();
+        measured.calculator = {
+            sections: calculator.get_children().filter(a => a.has_style_class_name('apex-spotlight-header')).map(h => h.get_child().get_text()),
+            row: row(calculator.get_children().find(a => a.has_style_class_name('apex-spotlight-row'))),
+        };
+        captured.none = await spotlightScene(popup, 'none', 'zzz');
+        measured.empty = styleOf(popup.panel.get_children()[2], unit);
+        await spotlightScene(popup, null, '2880 / 1.5');
+        popup.activateSelected();
+        await settle();
+        const scene = GLib.getenv('G2_SURFACE_SCENES') === '1' ? await capture('spotlight-copied') : null;
+        if (scene)
+            delete scene.bytes;
+        captured.copied = scene;
+        const pill = Toast.current()?.get_first_child();
+        if (pill) {
+            const check = pill.get_first_child();
+            const box = styleOf(pill, unit);
+            measured.toast = {
+                box, label: {...styleOf(pill.get_last_child(), unit), text: pill.get_last_child().get_text()},
+                bottomGap: round((monitor.y + monitor.height) / unit.length - box.y - box.height),
+                check: {...styleOf(check, unit), icon: lengthOrNull(check.get_child().get_theme_node(), 'icon-size', unit)},
+            };
+        }
+        measured.closedOnCopy = !popup.isOpen;
+        return {scenes: captured, ...measured};
+    } finally {
+        popup.destroy();
+        await settle();
+    }
+}
+
 // What the overview draws without windows; a caption and a search section are stand-ins.
 function overviewStyle(unit) {
     const {controls} = Main.overview._overview;
@@ -1310,6 +1451,7 @@ async function scenes() {
     surfaces.dialog = await modalDialog(unit);
     surfaces.dateMenu = await calendarMenu(unit);
     surfaces.derived = derivedSurfaces(unit);
+    surfaces.spotlight = await spotlightStyle(unit);
 
     Main.overview.show();
     await settle();

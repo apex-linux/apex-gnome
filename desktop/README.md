@@ -18,7 +18,7 @@ directory with `git archive` and unpacks it at the top of Fedora's gnome-shell t
 | `js/ui/apex/hooks.js` | the only Apex module upstream files import: `safe()`, `value()`, `run()`, and `loadLayer()` for `main.js` |
 | `js/ui/apex/layer.js` | the layer: the configure and enable phases, one `try/catch` per feature, the session-mode colour hook, the crash guard's marker file |
 | `js/ui/apex/motion/feature.js` | DESIGN's motion (below): one curve and fixed durations through patch 0016's hooks |
-| `js/ui/apex/spotlight/feature.js` | Super+Space (below) |
+| `js/ui/apex/spotlight/` | Spotlight (below): `feature.js` (Super+Space), `search.js` (the sections, caps and budget), `providers.js` (the stock providers), `popup.js` and `toast.js` |
 | `js/ui/apex/quick-settings/feature.js` | DESIGN's Quick Settings (below): VPN after Airplane Mode, Power Mode lit, On/Off subtitles, through patch 0011's hook |
 | `js/ui/apex/panel/feature.js` | the top bar of S2a (below): its parts in `panel/`, one module each |
 | `js/ui/apex/dock/feature.js`, `dock.js`, `trash.js` | the dock of S2a (below): ApexDock, a subclass of upstream's `Dash`, and its Trash |
@@ -37,6 +37,7 @@ directory with `git archive` and unpacks it at the top of Fedora's gnome-shell t
 | `data/theme/apex/_overview.scss` | the overview (board 35): the `$apex_scrim` tint over everything (S2b's glass manager blurs behind it with `$apex_scrim_blur`), the search field a 440 × 40 `$apex_pill` 20 px under the bar with a 2 px accent focus ring, workspace thumbnails in an unpadded box (`$apex_thumbnails_padding`, so they keep the full .081), radius 8 and 10 px apart in a `$apex_pill_border` ring with the current one in a 2 px accent ring, window titles 28 px pills at 12.5/700; search sections, which have no board until Spotlight, as glass cards. "No open windows" (`.apex-workspace-empty`) at 18/700 in `$apex_fg_dim`. The workspace background cards and always-visible window titles are the `overview` feature's |
 | `data/theme/apex/_app-grid.scss` | the launcher (board 36): unfilled app tiles radius 22, padded 12, names at 13/600 in `$apex_fg` 8 px under the icon, `$apex_button` when hovered and an accent ring when focused; folders filled `$apex_folder` (stock fills the whole tile, the board only the icon); the folder dialog 600 px of `$apex_folder_panel` glass, radius 26, a 16/700 title and a 28 px button; 4 px running dots; and flat page hints, without upstream's gradients. `appDisplay.js` sets the grid's columns and icon sizes and the dialog's 720 px height |
 | `data/theme/apex/_derived.scss` | stock surfaces with no board, from their nearest board (DESIGN.md): the workspace switcher and resize popup take the OSD's tint, ring and radius, with `$apex_fg_faint` and `$apex_fg` dots; the input method's candidates the popup menu's; the run dialog's entry the password entry; audio device tiles the switcher's; the monitor number the OSD's radius. Glass surfaces take only the tint here: the glass manager registers them for the blur |
+| `data/theme/apex/_spotlight.scss` | Spotlight and its toast (board 38): a 680 px glass panel tinted `$apex_panel`, radius 24, 96 px below the monitor's top edge; the 60 px field with 20/500 text and a 20 px glyph; 11.5/700 uppercase section headers; 48 px rows with 32 px icons, 14/600 titles over 12.5 px subtitles, the selected one in the accent at 16 % with its verb and an Enter chip; the calculator's result at 18/700 in tabular figures; the "Copied" toast a 40 px glass pill 92 px above the screen's bottom edge. St draws no backdrop filter: S2b's glass manager blurs behind the panel with `$apex_spotlight_blur` and `$apex_spotlight_saturation` (σ 34, 1.8) and behind the toast with `$apex_toast_blur` and `$apex_toast_saturation` (σ 30, 1.8, ADR 0014's toast row) |
 | `data/theme/apex/_apex-structure.scss` | Apex actors' geometry for the high-contrast sheet |
 | `data/theme/apex/meson.build` | adds the partials to upstream's `theme_sources`, so an edit recompiles the sheets |
 
@@ -60,12 +61,27 @@ Rules, which the lane and `.github/scripts/selftest.sh` enforce:
 `overview` (S3a), by the names DESIGN's `disabled-features` uses. `spotlight`
 registers `toggle-spotlight` from `io.github.apex_linux.Apex.Desktop.Keybindings`
 (`['<Super>space']`) with `Main.wm.addKeybinding` at enable, in the normal and overview
-action modes and without autorepeat, and removes it at disable. Until S3a's Spotlight it
-opens the stock overview with its search entry focused, and pressed while the overview is
-up it hides it. apex-desktop's override moves `switch-input-source` to Super+Alt+Space,
-so nothing else owns Super+Space; a Super tap (the overview) and Super+A (the launcher)
-are upstream's. The feature follows the kill switches and `disabled-features` like any
-other, and a missing Keybindings child schema turns off only this feature, logged once.
+action modes and without autorepeat, and removes it at disable. A press opens Spotlight
+(board 38, DESIGN's Spotlight rules), a modal popup in the popup action mode; Esc, a click
+outside or Super+Space again close it. Upstream allows the Super tap only in the normal and
+overview modes, so it does nothing while Spotlight is open (no hook); with Spotlight closed
+it opens the overview as before.
+apex-desktop's override moves `switch-input-source` to Super+Alt+Space, so nothing else
+owns Super+Space; a Super tap (the overview) and Super+A (the launcher) are upstream's.
+
+Spotlight draws its own rows over the stock search providers: upstream's app search
+(`AppSearchProvider`), then the remote providers `remoteSearch.js` loads, of which it keeps
+gnome-calculator, gnome-control-center and nautilus. The sections and caps are Calculator 1,
+Applications 4, Settings 3 and Files 4, in that order. Sections show as their providers
+answer, each in its place; each provider has 1 s per query, and one past it is cancelled and
+left out of that query. The selection is the first row until Up, Down or the pointer moves it;
+after that an arriving section never moves it. A sum puts Calculator first among the
+applications, whichever answers first. Up and Down move one selection across the
+sections, Enter activates it through its provider, and Enter on the calculator's result
+copies it, closes Spotlight and shows the "Copied" toast above the dock for 2 s. An empty
+query shows only the field; a query with no results says so. The feature follows the kill
+switches and `disabled-features` like any other; a missing Keybindings child schema, or one
+without `toggle-spotlight`, turns off only this feature, logged once. It adds no hook.
 
 `panel` is the top bar. Its parts provide the hooks of patch 0010-panel
 ([the series](../packaging/pkgs/gnome-shell/README.md#the-series)); the feature follows the
@@ -101,9 +117,9 @@ the key turns off the `panel` feature, logged.
 
 `panel/search-button.js` adds a pill just before the status pill (role `apex-search`), named
 "Search (Super+Space)", `$apex_bar_search_width` wide with the 16 px search glyph. A click
-does what Super+Space does (`toggleSpotlight()` of `spotlight`): the overview with its
-search entry focused, or, while the overview is up, hides it. It works with `spotlight`
-in `disabled-features` too. The lock screen hides it; keyboard focus reaches it, but
+does what Super+Space does (`toggleSpotlight()` of `spotlight`): it opens or closes
+Spotlight. With `spotlight` in `disabled-features` it opens the overview with its search
+entry focused, or, while the overview is up, hides it. The lock screen hides it; keyboard focus reaches it, but
 Super+Space is its key. Hovered, it shows the tooltip "Search (Super+Space)" below it, a
 `dash-label` in the chrome, as the dash's labels are.
 

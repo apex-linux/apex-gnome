@@ -204,6 +204,7 @@ for c in default:light default-scale1:light dark-style:dark; do
     app_grid "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
     overview_layer "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
     derived_surfaces "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
+    spotlight_style "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
 done
 for c in stock-light stock-dark; do
     quick_settings_layer "$c" "$run/$c.log" stock
