@@ -127,9 +127,9 @@ async function apexHooks() {
     }
 }
 
-// direct.sh freezes the wall clock with libfaketime; the guard's shells keep the real one.
+// direct.sh freezes the wall clock with clock.c; the guard's shells keep the real one.
 function clock() {
-    if (GLib.getenv('FAKETIME') === null)
+    if (GLib.getenv('G2_CLOCK_EPOCH') === null)
         return null;
     return {
         now: GLib.DateTime.new_now_local().format_iso8601(),
@@ -503,6 +503,13 @@ function diamondInk(bytes) {
     return {box: leftPadding, colour: hex(ink), inkPixels: inkPixelCount(image, leftPadding, ink)};
 }
 
+// The overview lays out in the primary monitor's work area, which starts below the bar.
+function workArea(unit) {
+    const {primaryIndex, primaryMonitor} = Main.layoutManager;
+    const area = Main.layoutManager.getWorkAreaForMonitor(primaryIndex);
+    return {y: round((area.y - primaryMonitor.y) / unit.length), height: round(area.height / unit.length)};
+}
+
 function thumbnails() {
     const box = Main.overview._overview.controls._thumbnailsBox;
     return {shown: box.visible && box.should_show, maxScale: box.maxThumbnailScale, scale: round(box.scale)};
@@ -633,7 +640,7 @@ async function scenes() {
     // The search entry's cursor blinks: without key focus the scene is still.
     global.stage.set_key_focus(null);
     const overviewIdle = await settle();
-    const overview = {idle: overviewIdle, ...await capture('overview'), thumbnails: thumbnails()};
+    const overview = {idle: overviewIdle, ...await capture('overview'), thumbnails: thumbnails(), workArea: workArea(unit)};
     delete overview.bytes;
     Main.overview.hide();
 
