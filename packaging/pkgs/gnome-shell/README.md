@@ -41,10 +41,11 @@ Fedora's gnome-shell SRPM, rebuilt with the Apex layer inside it
 | `0011-quick-settings` | `js/ui/panel.js` | +1 | a behaviour hook once Quick Settings has added its items (the quick-settings feature); 0010's `status-indicators` hook at the same place belongs to the panel feature, and a hook has one provider |
 | `0013-overview` | `js/ui/windowPreview.js`, `js/ui/workspace.js`, `js/ui/workspaceThumbnail.js` | +10 −6 | value hooks over a window title's initial visibility and over the actors the overlay fades (always-visible titles); a behaviour hook once a workspace is built (no background card, the empty label); value hooks over the thumbnails' maximum scale and the dynamic-workspace threshold |
 | `0014-dash` | `js/ui/dash.js` | +3 −2 | value hooks over the Show Apps icon's name and over whether a dash puts its separator between the favourites and the running apps, for ApexDock |
+| `0015-lock` | `js/ui/unlockDialog.js`, `js/gdm/authPrompt.js`, `js/ui/userWidget.js` | +19 −13 | value hooks over the unlock blur and the clock's slide; a behaviour hook once the unlock dialog is built (the single stage, its hint, the prompt following the screen); a value hook over the prompt's question, given PAM's own; a value hook over the avatar without a picture. Unlocking stays upstream's: no hook is on its path |
 | `0016-motion` | `js/ui/environment.js`, `js/ui/windowManager.js`, `js/ui/overviewControls.js`, `js/ui/boxpointer.js` | +18 −10 | a value hook over every ease's parameters in `_easeActor` and `_easeAnimatableProperty` (the curve's mode) and a behaviour hook once their transitions exist (its control points); a `motion-duration` value hook at the window size change's two eases, the overview's four state transitions and a popover's open and close; `adjustAnimationTime` still applies after them |
 
 Budget (ADR 0014): at most 450 changed lines of hook hunks in at most 33 upstream files.
-In use: 97 lines in 18 files. The C budget for `shell-blur-effect.{c,h}` (300 lines): 299
+In use: 129 lines in 21 files. The C budget for `shell-blur-effect.{c,h}` (300 lines): 299
 lines, all in 0003-blur.
 
 The patches are `git format-patch` output against Fedora's `%prep` tree (upstream

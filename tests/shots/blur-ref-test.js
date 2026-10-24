@@ -77,6 +77,12 @@ ok(zones.edge.max[2] === 60 && zones.edge.pixels === 16 && near(zones.edge.mean[
 ok(BlurRef.differing(exact, exact) === 0 && BlurRef.differing(exact, image(4, 2, (x, y) => x + y ? [10, 20, 30] : [0, 0, 0])) === 1,
     'differing counts pixels, not channels');
 
+const inside = BlurRef.fullyCovered(100, 40, 18);
+ok(inside[0] === 0 && inside[20 * 100 + 50] === 1 && inside[20 * 100] === 1, 'fullyCovered: the corners are out, the rest in');
+const cornerOnly = image(4, 2, (x, y) => x + y ? [10, 20, 30] : [0, 0, 0]);
+ok(BlurRef.differing(exact, cornerOnly, Uint8Array.from([0, 1, 1, 1, 1, 1, 1, 1])) === 0,
+    'differing with a mask counts only the pixels it marks');
+
 // ADR 0014's cost model (0014-blurcost.py, apex_cost): the bar at 2880x64, sigma 48.
 ok(BlurRef.fineDownscale(2880, 64, 48) === 16, 'fineDownscale: the bar downscales by 16, as the cost model does');
 ok(BlurRef.fineDownscale(640, 160, 48) === 16 && BlurRef.fineDownscale(100, 100, 3) === 1,

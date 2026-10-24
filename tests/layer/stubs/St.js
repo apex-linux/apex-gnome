@@ -41,6 +41,34 @@ class Widget {
         child._parent = this;
     }
 
+    insert_child_above(child, sibling) {
+        this._children.splice(this._children.indexOf(sibling) + 1, 0, child);
+        child._parent = this;
+    }
+
+    set_child_above_sibling(child, sibling) {
+        this._children = this._children.filter(c => c !== child);
+        const at = sibling === null ? this._children.length : this._children.indexOf(sibling) + 1;
+        this._children.splice(at, 0, child);
+    }
+
+    set_child_below_sibling(child, sibling) {
+        this._children = this._children.filter(c => c !== child);
+        this._children.splice(this._children.indexOf(sibling), 0, child);
+    }
+
+    add_constraint(constraint) {
+        (this.constraints ??= []).push(constraint);
+    }
+
+    get children() {
+        return this.get_children();
+    }
+
+    get styleClasses() {
+        return [...this._styleClasses];
+    }
+
     remove_child(child) {
         this._children = this._children.filter(c => c !== child);
         child._parent = null;
@@ -179,6 +207,27 @@ const clipboard = {
     },
 };
 
+// St.Settings' high-contrast, which the probe turns on and off.
+const settingsHandlers = new Map();
+let nextSettingsHandler = 1;
+const settings = {
+    high_contrast: false,
+    connect(signal, fn) {
+        settingsHandlers.set(nextSettingsHandler, [signal, fn]);
+        return nextSettingsHandler++;
+    },
+    disconnect(id) {
+        settingsHandlers.delete(id);
+    },
+    setHighContrast(on) {
+        this.high_contrast = on;
+        for (const [signal, fn] of [...settingsHandlers.values()]) {
+            if (signal === 'notify::high-contrast')
+                fn();
+        }
+    },
+};
+
 export default {
     Bin,
     BoxLayout,
@@ -190,6 +239,8 @@ export default {
     Entry,
     Icon,
     Label,
+    Corner: {TOPLEFT: 0, TOPRIGHT: 1, BOTTOMRIGHT: 2, BOTTOMLEFT: 3},
+    Settings: {get: () => settings},
     Side: {TOP: 0, RIGHT: 1, BOTTOM: 2, LEFT: 3},
     ThemeContext: {get_for_stage: () => ({scale_factor: scaleFactor})},
     Widget,

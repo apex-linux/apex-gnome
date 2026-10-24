@@ -15,8 +15,10 @@ theme_sources += files(
   '_date-menu.scss',
   '_overview.scss',
   '_app-grid.scss',
+  '_lock.scss',
   '_derived.scss',
   '_dock.scss',
   '_spotlight.scss',
+  '_glass.scss',
   '_apex-structure.scss',
 )

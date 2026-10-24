@@ -17,6 +17,131 @@ function flagNames(value, flags) {
     return names.length > 0 ? names.join('|') : 'NONE';
 }
 
+// The actor calls the glass feature makes, and a theme node with ADR 0014's glass.
+export class StubActor {
+    constructor(name, {glass = null, extents = [0, 0, 100, 32], parent = null, redirect = 0} = {}) {
+        Object.assign(this, {name, glass, box: extents, parent, redirect, mapped: true, redraws: 0});
+        this._effects = [];
+        this._classes = new Set();
+        this._handlers = new Map();
+        this._nextHandler = 1;
+    }
+
+    connect(signal, fn) {
+        this._handlers.set(this._nextHandler, [signal, fn]);
+        return this._nextHandler++;
+    }
+
+    disconnect(id) {
+        this._handlers.delete(id);
+    }
+
+    emit(signal, ...args) {
+        for (const [s, fn] of [...this._handlers.values()]) {
+            if (s === signal)
+                fn(this, ...args);
+        }
+    }
+
+    get_effect(name) {
+        return this._effects.find(e => e.name === name) ?? null;
+    }
+
+    add_effect(effect) {
+        this._effects.push(effect);
+    }
+
+    remove_effect(effect) {
+        this._effects.splice(this._effects.indexOf(effect), 1);
+    }
+
+    peek_theme_node() {
+        const {glass} = this;
+        return {
+            lookup_length: p => glass && p === '-apex-glass-blur' ? [true, glass.blur] : [false, 0],
+            lookup_double: p => glass && p === '-apex-glass-saturation' ? [true, glass.saturation] : [false, 0],
+            get_border_radius: () => glass?.radius ?? 0,
+        };
+    }
+
+    get_resource_scale() {
+        return 2;
+    }
+
+    get_parent() {
+        return this.parent;
+    }
+
+    get_children() {
+        return this.children ?? [];
+    }
+
+    get_offscreen_redirect() {
+        return this.redirect;
+    }
+
+    set_offscreen_redirect(redirect) {
+        this.redirect = redirect;
+    }
+
+    get_transformed_position() {
+        return this.box.slice(0, 2);
+    }
+
+    get_transformed_size() {
+        return this.box.slice(2);
+    }
+
+    queue_redraw() {
+        this.redraws++;
+    }
+
+    has_style_class_name(name) {
+        return this._classes.has(name);
+    }
+
+    add_style_class_name(name) {
+        this._classes.add(name);
+        this.emit('style-changed');
+    }
+
+    remove_style_class_name(name) {
+        this._classes.delete(name);
+        this.emit('style-changed');
+    }
+
+    destroy() {
+        this.emit('destroy');
+    }
+}
+
+const PANEL_GLASS = {blur: 24, saturation: 1.6, radius: 0};
+const POPOVER_GLASS = {blur: 30, saturation: 1.8, radius: 26};
+
+export const uiGroup = Object.assign(new StubActor('uiGroup', {extents: [0, 0, 1440, 900]}), {
+    children: [],
+    get_stage: () => null,
+    add_child(actor) {
+        this.children.push(actor);
+        actor._parent = this;
+    },
+    remove_child(actor) {
+        this.children = this.children.filter(a => a !== actor);
+    },
+});
+const boxPointer = new StubActor('boxpointer', {parent: uiGroup, redirect: 2});
+
+export const messageTray = {
+    _bannerBin: Object.assign(new StubActor('banner-bin', {parent: uiGroup}), {children: []}),
+    showBanner() {
+        const banner = new StubActor('banner', {glass: {...POPOVER_GLASS, radius: 16}, extents: [490, 44, 460, 80], parent: this._bannerBin});
+        banner._classes.add('notification-banner');
+        this._bannerBin.children.push(banner);
+        this._bannerBin.emit('child-added', banner);
+        return banner;
+    },
+};
+
 const sessionModeHandlers = new Map();
 let nextSessionModeHandler = 1;
 
@@ -142,7 +267,10 @@ function quickSettingsGrid(toggles) {
 }
 
 export function newQuickSettings() {
-    const quickSettings = {_indicators: box([]), container: {get_parent: () => rightBox}};
+    const quickSettings = {
+        _indicators: box([]), container: {get_parent: () => rightBox},
+        menu: {box: new StubActor('quick-settings', {glass: POPOVER_GLASS, extents: [1056, 40, 376, 420], parent: boxPointer})},
+    };
     rightBox.children.push(quickSettings.container);
     for (const field of QUICK_SETTINGS_INDICATORS) {
         quickSettings[field] = {name: field.slice(1)};
@@ -159,7 +287,7 @@ export function newQuickSettings() {
         airplane: new Toggle('Airplane Mode'),
         autoRotate: new Toggle('Auto Rotate'),
     };
-    quickSettings.menu = {_grid: quickSettingsGrid(Object.values(toggles))};
+    quickSettings.menu._grid = quickSettingsGrid(Object.values(toggles));
     quickSettings._network._vpnToggle = toggles.vpn;
     quickSettings._rfkill.quickSettingsItems = [toggles.airplane];
     quickSettings._powerProfiles.quickSettingsItems = [toggles.power];
@@ -177,11 +305,13 @@ const panelStyleClasses = new Set();
 function syncPanelStyleClasses(change) {
     change();
     fact('panel.classes', [...panelStyleClasses].join(',') || 'none');
+    panel.emit('style-changed');
 }
 
-export const panel = {
+export const panel = Object.assign(new StubActor('panel', {glass: PANEL_GLASS, extents: [0, 0, 1440, 32], parent: uiGroup, redirect: 2}), {
     add_style_class_name: name => syncPanelStyleClasses(() => panelStyleClasses.add(name)),
     remove_style_class_name: name => syncPanelStyleClasses(() => panelStyleClasses.delete(name)),
+    has_style_class_name: name => panelStyleClasses.has(name),
     addToStatusArea(role, indicator, position, boxName) {
         if (this.statusArea[role])
             throw new Error(`there is already a status indicator for role ${role}`);
@@ -195,8 +325,9 @@ export const panel = {
             get_first_child: () => ({get_children: () => [0, 1].map(() => workspaceDot)}),
         },
         quickSettings: newQuickSettings(),
+        dateMenu: {menu: {box: new StubActor('calendar', {glass: POPOVER_GLASS, extents: [354, 40, 732, 468], parent: boxPointer})}},
     },
-};
+});
 
 export function notify(title) {
     fact('notify', title);
@@ -207,19 +338,6 @@ const CHROME_PARAMS = ['trackFullscreen', 'affectsStruts'];
 
 // The containers the shadows feature scans: the probe registers its own actors.
 const emptyContainer = () => ({get_children: () => [], connect: () => 1, disconnect: () => {}});
-export const messageTray = {_bannerBin: emptyContainer()};
-
-export const uiGroup = {
-    ...emptyContainer(),
-    children: [],
-    add_child(actor) {
-        this.children.push(actor);
-        actor._parent = this;
-    },
-    remove_child(actor) {
-        this.children = this.children.filter(a => a !== actor);
-    },
-};
 
 let modals = 0;
 
@@ -240,6 +358,7 @@ export const layoutManager = {
     ...emitter({}),
     primaryMonitor: {x: 0, y: 0, width: 1440, height: 900},
     chrome: [],
+    _bgManagers: [new StubActor('background')],
     _updateHotCorners: () => fact('hot-corners', 'rebuilt'),
     addChrome(actor, params = {}) {
         const unknown = Object.keys(params).filter(key => !CHROME_PARAMS.includes(key));
