@@ -379,5 +379,21 @@ probe focused-app-disabled "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_FOCUSED_APP=1 P
 lacks "disabled-features=['panel']: no item in the bar" 'panel\.add=apex-focused-app'
 fact "disabled-features=['panel']: nothing follows the focus" 'focused-app\.files=none'
 
+readonly SEARCH_ITEM='Search \(Super\+Space\) pill=apex-search-pill icon=system-search-symbolic'
+probe search-button "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_SEARCH_BUTTON=1
+has "search-button: the panel feature enables" 'Apex: feature panel enabled'
+fact "search-button: just before the status pill in the right box" 'panel\.add=apex-search at 2 in right'
+fact "search-button: a pill with the search glyph, named for its key" "search\.enabled=$SEARCH_ITEM visible=true"
+fact "search-button: a click opens the overview with its search entry focused" 'search\.click\.1=overview=true'
+fact "search-button: a second click hides it, as Super+Space does" 'search\.click\.2=overview=false'
+fact "search-button: the lock screen hides it" "search\.locked=$SEARCH_ITEM visible=false"
+fact "search-button: layer-enabled=false takes it out of the bar" 'search\.off=none'
+fact "search-button: layer-enabled=true brings it back" "search\.on=$SEARCH_ITEM visible=true"
+lacks "search-button: no feature fails or disables uncleanly" 'off for this session|did not disable cleanly|cannot restyle'
+
+probe search-disabled "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_SEARCH_BUTTON=1 PROBE_DISABLED=panel
+fact "disabled-features=['panel']: no search button" 'search\.enabled=none'
+fact "disabled-features=['panel']: and Super+Space stays" 'keybinding\.add=toggle-spotlight .*'
+
 printf '1..%d\n' "$tests"
 ((failed == 0))

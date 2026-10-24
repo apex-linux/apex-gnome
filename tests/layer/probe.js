@@ -191,6 +191,36 @@ async function exerciseFocusedApp() {
     report('on');
 }
 
+async function exerciseSearchButton() {
+    if (GLib.getenv('PROBE_SEARCH_BUTTON') !== '1')
+        return;
+    const Main = await import(`file://${shellDir}/js/ui/main.js`);
+    const report = label => {
+        const item = Main.panel.statusArea['apex-search'];
+        if (!item) {
+            fact(`search.${label}`, 'none');
+            return;
+        }
+        const [pill] = item.children;
+        fact(`search.${label}`, `${item.accessible_name} pill=${pill.style_class} icon=${pill.child.icon_name} ` +
+            `visible=${item.container.visible}`);
+    };
+    report('enabled');
+    Main.panel.statusArea['apex-search']?.actions[0].recognize();
+    fact('search.click.1', `overview=${Main.overview.visible}`);
+    Main.panel.statusArea['apex-search']?.actions[0].recognize();
+    fact('search.click.2', `overview=${Main.overview.visible}`);
+    Main.sessionMode.lock(true);
+    report('locked');
+    Main.sessionMode.lock(false);
+    settings.set_boolean('layer-enabled', false);
+    await spin(200);
+    report('off');
+    settings.set_boolean('layer-enabled', true);
+    await spin(200);
+    report('on');
+}
+
 async function switchLayer() {
     const cycles = Number(GLib.getenv('PROBE_SWITCH') ?? '0');
     for (let cycle = 1; cycle <= cycles; cycle++) {
@@ -238,6 +268,7 @@ if (layer && GLib.getenv('PROBE_ENABLE') === '1') {
     await exerciseTopBar();
     await exerciseSolidBar();
     await exerciseFocusedApp();
+    await exerciseSearchButton();
     await setDisabledLive();
     await switchLayer();
     for (const [signal, fn] of [...handlers.values()]) {

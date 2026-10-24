@@ -8,6 +8,7 @@ export class Button {
         this.hasMenu = !dontCreateMenu;
         this.reactive = true;
         this.children = [];
+        this.actions = [];
         this.styleClasses = [];
         this.container = {visible: true};
         this.destroyed = false;
@@ -20,6 +21,10 @@ export class Button {
 
     add_style_class_name(name) {
         this.styleClasses.push(name);
+    }
+
+    add_action(action) {
+        this.actions.push(action);
     }
 
     add_child(child) {

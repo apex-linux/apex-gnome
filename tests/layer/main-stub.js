@@ -60,8 +60,11 @@ const QUICK_SETTINGS_INDICATORS = ['_remoteAccess', '_camera', '_volumeInput', '
     '_backlight', '_bluetooth', '_rfkill', '_autoRotate', '_volumeOutput', '_unsafeMode',
     '_powerProfiles', '_system'];
 
+const rightBox = box([{name: 'a11y'}, {name: 'keyboard'}]);
+
 export function newQuickSettings() {
-    const quickSettings = {_indicators: box([])};
+    const quickSettings = {_indicators: box([]), container: {get_parent: () => rightBox}};
+    rightBox.children.push(quickSettings.container);
     for (const field of QUICK_SETTINGS_INDICATORS) {
         quickSettings[field] = {name: field.slice(1)};
         quickSettings._indicators.children.push(quickSettings[field]);

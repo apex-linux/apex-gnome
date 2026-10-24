@@ -13,7 +13,8 @@ $_upstream_panel_button_minimum_hpadding: $base_padding;
   .panel-button#panelActivities#{$s} > StBoxLayout,
   .panel-button.clock-display#{$s} > .clock-display-box,
   .panel-button#{$s} > .panel-status-indicators-box,
-  .panel-button#{$s} > .system-status-icon { @content; }
+  .panel-button#{$s} > .system-status-icon,
+  .panel-button.apex-search#{$s} > .apex-search-pill { @content; }
 }
 
 #panel, #panel:overview {
@@ -75,6 +76,13 @@ $_upstream_panel_button_minimum_hpadding: $base_padding;
       border-radius: $apex_radius_workspace_dot;
       background-color: $apex_bar_fg;
     }
+  }
+
+  .panel-button.apex-search > .apex-search-pill {
+    width: $apex_bar_search_width;
+    padding: 0;
+
+    > .system-status-icon { padding: 0; }
   }
 
   .panel-button.apex-focused-app > .apex-focused-app-label {

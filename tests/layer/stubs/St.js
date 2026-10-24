@@ -12,7 +12,12 @@ class Label {
     }
 }
 
+class Bin extends Label {}
+class Icon extends Label {}
+
 export default {
+    Bin,
+    Icon,
     Label,
     ThemeContext: {get_for_stage: () => ({scale_factor: scaleFactor})},
 };

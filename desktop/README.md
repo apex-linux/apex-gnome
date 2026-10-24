@@ -84,6 +84,13 @@ the name of `Shell.WindowTracker`'s focus app, or "Desktop" while nothing has fo
 clicks, and `show-focused-app-name` (live) and the lock screen hide it. A schema without
 the key turns off the `panel` feature, logged.
 
+`panel/search-button.js` adds a pill just before the status pill (role `apex-search`), named
+"Search (Super+Space)", `$apex_bar_search_width` wide with the 16 px search glyph. A click
+does what Super+Space does (`toggleSpotlight()` of `spotlight`): the overview with its
+search entry focused, or, while the overview is up, hides it. It works with `spotlight`
+in `disabled-features` too. The lock screen hides it; keyboard focus reaches it, but
+Super+Space is its key.
+
 The layer also does what every feature relies on:
 
 - In the user and unlock-dialog modes it gives the session mode the colour scheme
