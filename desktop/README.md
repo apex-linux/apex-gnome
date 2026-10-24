@@ -19,8 +19,9 @@ directory with `git archive` and unpacks it at the top of Fedora's gnome-shell t
 | `js/ui/apex/layer.js` | the layer: the configure and enable phases, one `try/catch` per feature, the session-mode colour hook, the crash guard's marker file |
 | `js/ui/apex/lock/` | the lock screen of S3b (board 20), the `lock` feature: `stage.js` (the single stage: date over time over the prompt and its hint, the overlay, the prompt torn down while `org.gnome.Mutter.DisplayConfig`'s `PowerSaveMode` blanks the screen and rebuilt on wake), `background.js` (the blur, σ 30 and saturation 1.3, without upstream's darkening), `question.js` ("Enter Password" for PAM's exact `Password:` only) and `avatar.js` (the name's initial in place of the generic icon), through patch 0015's hooks. Unlocking stays upstream's: no Apex code is on its path, which `tests/layer/run.sh`'s unlock guard checks. Stock keeps, until S4: the show-password eye and the chevron button; the failure text on a message line above the hint, where the board puts it in the hint's place with a red ring; and pam_fprintd's "(or place finger on reader)", "Failed to match fingerprint" and the "Unlock with fingerprint" indicator, where the board has one hint line, "Or touch the fingerprint reader" with the print glyph, and "Fingerprint not recognized. Try again." |
 | `js/ui/apex/motion/feature.js` | DESIGN's motion (below): one curve and fixed durations through patch 0016's hooks |
-| `js/ui/apex/spotlight/` | Spotlight (below): `feature.js` (Super+Space), `search.js` (the sections, caps and budget), `providers.js` (the stock providers), `popup.js` and `toast.js` |
+| `js/ui/apex/spotlight/` | Spotlight (below): `feature.js` (Super+Space), `search.js` (the sections, caps and budget), `providers.js` (the stock providers), `popup.js`, `toast.js`, and `tiles.js` with `settings-tiles.json`, the Settings tile colours by panel id. That JSON mirrors gnome-control-center's `panels/apex/settings-tiles.json` byte for byte and is the one file here without an SPDX line, since JSON has no comments |
 | `js/ui/apex/quick-settings/feature.js`, `submenu.js` | DESIGN's Quick Settings (below): VPN after Airplane Mode, Power Mode lit, On/Off subtitles, and board 17's submenus, through patch 0011's hooks |
+| `js/ui/apex/shadows/feature.js`, `registry.js`, `cutout.js` | DESIGN's second shadow layer (below): a shadow-layer actor under each surface whose sheet names `-apex-shadow-layer`, cut out under the surface, and the window previews' two layers |
 | `js/ui/apex/panel/feature.js` | the top bar of S2a (below): its parts in `panel/`, one module each |
 | `js/ui/apex/glass/feature.js` | the glass manager of S2b (below), with `glass/surfaces.js`, the layer's own glass, and `glass/registry.js`, where any feature registers an actor |
 | `js/ui/apex/dock/feature.js`, `dock.js`, `trash.js`, `intellihide.js` | the dock of S2a (below): ApexDock, a subclass of upstream's `Dash`, its Trash and its intellihide |
@@ -67,6 +68,8 @@ Rules, which the lane and `.github/scripts/selftest.sh` enforce:
 
 `FEATURES_IN_ENABLE_ORDER` in `layer.js` lists `spotlight` (S1b), `panel` (S2a), `glass`
 (S2b), `dock` (S2a) and `overview` (S3a), by the names DESIGN's `disabled-features` uses.
+A name in `disabled-features` that is no feature is logged once (`Apex: disabled-features
+names no feature NAME`); a schema whose key lists `<choices>` refuses it outright.
 `spotlight`
 registers `toggle-spotlight` from `io.github.apex_linux.Apex.Desktop.Keybindings`
 (`['<Super>space']`) with `Main.wm.addKeybinding` at enable, in the normal and overview
@@ -90,7 +93,10 @@ Applications 4, Settings 3 and Files 4, in that order. Sections show as their pr
 answer, each in its place; each provider has 1 s per query, and one past it is cancelled and
 left out of that query. The selection is the first row until Up, Down or the pointer moves it;
 after that an arriving section never moves it. A sum puts Calculator first among the
-applications, whichever answers first. Up and Down move one selection across the
+applications, whichever answers first. Settings rows draw the provider's symbolic icon on a 32 px tile
+in the panel's colour from `settings-tiles.json`, the same table as the Settings sidebar's
+tiles: System's search-only pages take System's, Apex Desktop the accent, and a panel
+without a colour a neutral tile. Up and Down move one selection across the
 sections, Enter activates it through its provider, and Enter on the calculator's result
 copies it, closes Spotlight and shows the "Copied" toast above the dock for 2 s. An empty
 query shows only the field; a query with no results says so. The feature follows the kill
@@ -172,6 +178,26 @@ network's row is `:checked` while its network is active, from the start (stock's
 after the name, styled `apex-network-lock` (`$apex_quick_menu_lock_size` in `$apex_fg` at
 `$apex_quick_menu_lock_opacity`). Menus and rows built before the feature enabled are found
 in Quick Settings' tree. Disabled, every row and header goes back as stock built it.
+
+`shadows/feature.js` draws DESIGN's two-layer shadows (ROADMAP S3c) without a hook. St
+draws one `box-shadow` per actor, so the sheet gives a surface its first layer and names the
+second as `-apex-shadow-layer` (the `apex-shadow-layer` mixin in `_apex-tokens.scss`: popovers,
+Quick Settings, the calendar, menus, the banner and dialogs). The feature scans `uiGroup`,
+`modalDialogGroup` and the banner bin, and their new children, for such surfaces;
+`shadows/registry.js` puts a transparent St widget just above each while it is mapped, with the
+layer as its own `box-shadow` and the surface's radius, and keeps it on the surface's box and
+opacity through the ancestors' allocation and transform signals. It adds and removes layers
+before the next frame, never inside Clutter's or St's walk over the parent's children, and a
+closed menu or dialog keeps none, so an idle desktop repaints nothing more. A dialog's layer
+goes inside the dialog, just above its box. Painted after the surface, a layer is never in a
+glass surface's backdrop, as CSS keeps a `box-shadow` out; St draws it from the whole
+silhouette, so `shadows/cutout.js`, a shader effect on each layer, clears it inside the
+surface's rounded box, where it would cover the surface. In the overview, each window preview gets the
+`apex-window-preview` class and two layers (`$apex_preview_shadow`, `$apex_preview_shadow_2`)
+on its window container. `register(actor, {name})` and `unregister(actor)` are the registry's
+API for features that draw their own surfaces (the dock, Spotlight): registrations persist
+while the feature is off and draw once it is on. Disabled, the feature removes every layer
+and the preview class.
 
 `glass` is ADR 0014's glass manager, on patch 0003's `ShellBlurEffect`. A surface is any
 actor in `glass/registry.js`: the top bar, Quick Settings, the calendar and each banner
