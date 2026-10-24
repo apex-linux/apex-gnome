@@ -9,4 +9,6 @@ class Point {
     }
 }
 
-export default {Point};
+class Point3D extends Point {}
+
+export default {Point, Point3D};

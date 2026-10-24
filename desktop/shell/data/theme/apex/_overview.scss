@@ -47,6 +47,12 @@
   border-radius: $apex_radius_thumbnail;
 }
 
+.apex-window-preview {
+  border-radius: $apex_radius_window_preview;
+  -apex-shadow-layer: 0 $apex_preview_shadow_y $apex_preview_shadow_blur 0 $apex_preview_shadow;
+  -apex-shadow-layer-2: 0 $apex_preview_shadow_2_y $apex_preview_shadow_2_blur 0 $apex_preview_shadow_2;
+}
+
 .window-caption {
   min-height: $apex_caption_height - 2 * $apex_surface_border;
   padding: 0 ($apex_caption_padding - $apex_surface_border);

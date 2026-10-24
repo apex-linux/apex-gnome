@@ -399,6 +399,13 @@ REPORT_OF_AN_OVERVIEW_LAYER_FROM_TOKENS='
                 font: {size: ($t.apex_font_workspace_empty_size | px), weight: ($t.apex_font_heading_weight | tonumber)}}}},
     appGrid: {grid: {columns: 7, rows: 4, iconSize: 88}, strip: 0, box: {y: 132}}}}'
 # shellcheck disable=SC2016 # a jq program
+REPORT_OF_SHADOW_LAYERS_FROM_TOKENS='
+{shown: true, sameBox: true, radius: 0, boxShadow: {color: ($t.apex_shadow_2 | hex), inset: false, x: 0,
+    y: ($t.apex_shadow_2_y | px), blur: ($t.apex_shadow_2_blur | px), spread: 0}} as $layer
+| {surfaces: {idleRepaints: {withShadows: 3, withoutShadows: 3}, shadowLayers: {
+    quickSettings: [$layer | .radius = ($t.apex_radius_quick_settings | px)], dateMenu: [$layer],
+    dialog: [$layer | .besideBox = true]}}}'
+# shellcheck disable=SC2016 # a jq program
 REPORT_OF_A_TILE_PREVIEW_DRAWN_FROM_TOKENS='
 ($t.apex_tile_preview_inset | px) as $i
 | def tint($o): "rgba(53, 132, 228, \($o))" | hex;
@@ -497,7 +504,11 @@ REPORT_OF_A_SPOTLIGHT_DRAWN_FROM_TOKENS='
             foreground: ($t.apex_fg_dim | hex), spacing: ($t.apex_spotlight_action_gap | px),
             chip: {height: ($t.apex_spotlight_chip_height | px), radius: ($t.apex_radius_spotlight_chip | px), background: ($t.apex_button | hex),
                 label: {text: "Enter", font: {size: ($t.apex_font_spotlight_chip_size | px), weight: ($t.apex_font_heading_weight | tonumber)}}}}}]
-        + [range(8) | $row]),
+        + [range(8) | $row]
+        | (.[2].tile, .[3].tile, .[4].tile) = {width: $icon, radius: ($t.apex_radius_spotlight_tile | px), glyph: ($t.apex_spotlight_tile_glyph_size | px)}
+        | .[2].tile += {background: "#6f8396ff", foreground: "#ffffffff"}
+        | .[3].tile += {background: "#3584e4ff", foreground: "#ffffffff"}
+        | .[4].tile += {background: ($t.apex_button | hex), foreground: ($t.apex_fg | hex)}),
     selected: ([true] + [range(8) | false]),
     calculator: {sections: ["CALCULATOR", "APPLICATIONS"], row: {title: {text: "1920",
         font: {size: ($t.apex_font_spotlight_result_size | px), weight: ($t.apex_font_heading_weight | tonumber), features: "\"tnum\""}},
@@ -537,6 +548,7 @@ assert_run() {
     [[ $assertions == screenshot_ui ]] && report=$REPORT_OF_A_SCREENSHOT_UI_DRAWN_FROM_TOKENS
     [[ $assertions == overview_layer ]] && report=$REPORT_OF_AN_OVERVIEW_LAYER_FROM_TOKENS
     [[ $assertions == spotlight_style ]] && report=$REPORT_OF_A_SPOTLIGHT_DRAWN_FROM_TOKENS
+    [[ $assertions == shadow_layers ]] && report=$REPORT_OF_SHADOW_LAYERS_FROM_TOKENS
     tokens=$(tokens_for "$variant")
     jq -nc --argjson t "$tokens" "$JQ_DEFS $HEX_DEF $report | $change" | sed 's/^/APEXG2-SCENES /' >"$T/top-bar.log"
     # shellcheck disable=SC2016 # expanded by the inner bash
@@ -866,6 +878,29 @@ test_overview_style() {
 CHANGES
 }
 
+test_shadow_layers() {
+    local variant change what passes failures open_gaps
+    for variant in light dark; do
+        read -r passes failures open_gaps <<<"$(assert_run shadow_layers "$variant")"
+        if ((failures == 0 && passes == 4)); then
+            ok "shadows ($variant): layers drawn from the tokens pass all $passes assertions"
+        else
+            not_ok "shadows ($variant): layers drawn from the tokens pass (passed/failed $passes/$failures): $(grep -m3 '^FAIL' "$T/top-bar.out" | paste -sd'|' -)"
+        fi
+    done
+    while IFS='|' read -r change what; do
+        read -r passes failures open_gaps <<<"$(assert_run shadow_layers light "$change")"
+        expect_eq "shadows: $what fails one assertion" "3/1" "$passes/$failures"
+    done <<'CHANGES'
+.surfaces.shadowLayers.quickSettings[0].radius = 0|a Quick Settings layer with square corners
+.surfaces.shadowLayers.dateMenu = []|a calendar without its second layer
+.surfaces.shadowLayers.dialog[0].besideBox = false|a dialog layer under the lightbox
+.surfaces.shadowLayers.dateMenu[0].sameBox = false|a layer off its surface's box
+.surfaces.shadowLayers.dialog[0].boxShadow.blur = 50|the first layer's blur on the second
+.surfaces.idleRepaints.withShadows = 9|an idle desktop that repaints more with shadows
+CHANGES
+}
+
 test_overview_layer() {
     local variant change what passes failures open_gaps
     for variant in light dark; do
@@ -1013,7 +1048,7 @@ test_spotlight_style() {
     local variant change what passes failures open_gaps
     for variant in light dark; do
         read -r passes failures open_gaps <<<"$(assert_run spotlight_style "$variant")"
-        if ((failures == 0 && open_gaps == 0 && passes == 16)); then
+        if ((failures == 0 && open_gaps == 0 && passes == 17)); then
             ok "Spotlight ($variant): drawn from the tokens it passes all $passes assertions"
         else
             not_ok "Spotlight ($variant): drawn from the tokens it passes (passed/failed/gaps $passes/$failures/$open_gaps): $(grep -m3 '^FAIL' "$T/top-bar.out" | paste -sd'|' -)"
@@ -1048,6 +1083,9 @@ test_spotlight_style() {
 .surfaces.spotlight.closedOnCopy = false|Spotlight left open after the copy
 .surfaces.spotlight.toast.box.borderColor = "#00000000"|a toast without its ring
 .surfaces.spotlight.toast.check.background = "#1d1d21ff"|a check circle without the accent
+.surfaces.spotlight.rows[3].tile.background = "#6f8396ff"|Privacy in board 38's old grey
+.surfaces.spotlight.rows[4].tile = null|a panel without a colour drawn bare
+.surfaces.spotlight.rows[2].tile.foreground = "#1d1d21ff"|a dark glyph on a coloured tile
 .surfaces.overviewSearch.opened = false|the overview's stock search
 .surfaces.overviewSearch.overviewText = "disk"|the typed text left in the overview's field too
 CHANGES
@@ -1222,7 +1260,10 @@ readonly MOTION_REPORT='{enableAnimations: false,
   animated: {maximise: {maximised: true, transition: {mode: "CUBIC_BEZIER", duration: 300, curve: [0.2, 0.8, 0.2, 1]}},
              overview: {visible: true, transition: {mode: "CUBIC_BEZIER", duration: 200, curve: [0.2, 0.8, 0.2, 1]}}},
   still: {maximise: {maximised: true, transition: null}, overview: {visible: true, transition: null},
-         locatePointer: {mode: "CUBIC_BEZIER", duration: 830, curve: [0.2, 0.8, 0.2, 1]}}}'
+         locatePointer: {mode: "CUBIC_BEZIER", duration: 830, curve: [0.2, 0.8, 0.2, 1]}},
+  previews: [{styled: true, layers: [
+    {shown: true, radius: 14, boxShadow: {color: "#141e3c33", inset: false, x: 0, y: 12, blur: 32, spread: 0}},
+    {shown: true, radius: 14, boxShadow: {color: "#141e3c1a", inset: false, x: 0, y: 1, blur: 4, spread: 0}}]}]}'
 
 write_motion_run() {
     local change=$1 dir=$T/motion
@@ -1255,11 +1296,12 @@ test_motion() {
 .still.maximise.transition = {mode: "CUBIC_BEZIER", duration: 1}|a transition left with animations off
 .animated.maximise.maximised = false|a window that did not maximise
 .still.locatePointer = null|a Locate Pointer ripple that no longer animates with animations off
+.previews[0].layers = [.previews[0].layers[0]]|a window preview with one shadow layer
 CHANGES
     write_motion_run '{error: "the test client never mapped (Gtk-WARNING: Failed to open display)\nprobe.js:1700"}'
     read -r passes failures <<<"$(assertion_counts motion_curve "$T/motion")"
     expect_eq "motion: a client that never mapped fails once, with its stderr, not every assertion after it" \
-        "$((all - 6))/1 the test client never mapped (Gtk-WARNING: Failed to open display)" \
+        "$((all - 7))/1 the test client never mapped (Gtk-WARNING: Failed to open display)" \
         "$passes/$failures $(sed -n 's/^FAIL motion: //p' "$T/assertions.out")"
 }
 
@@ -1485,6 +1527,28 @@ REPORTS
 REPORTS
 }
 
+test_shadows_under_glass() {
+    local surface='{"covered": true, "sameSize": true, "interiorDiffering": 0, "rim": 9, "picked": "St.BoxLayout.popup-menu-content", "samePick": true}'
+    local good passes failures what change
+    good=$(jq -nc --argjson s "$surface" '{patched: true, shadows: ({quickSettings: ($s + {arrowless: true}), popupMenu: ($s + {arrowless: true}),
+        dialog: ($s + {arrowless: null})} as $v | {light: ($v | .quickSettings.corners = "shadow-corners-light.png"),
+        dark: ($v | .quickSettings.corners = "shadow-corners-dark.png")})}')
+    while IFS='|' read -r failures what change; do
+        jq -c "$change" <<<"$good" | sed 's/^/APEXG2-GLASS /' >"$T/glass.log"
+        read -r passes _ <<<"$(assertion_counts shadows_under_glass glass "$T/glass.log")"
+        expect_eq "shadows over surfaces: $what fails $failures of 5" "$failures" $((5 - passes))
+    done <<'CHANGES'
+0|exact interiors, rims within the tolerance, clicks through, no arrows, corners captured|.
+1|one dark dialog pixel the layer darkened|.shadows.dark.dialog.interiorDiffering = 1
+1|a popup menu rim 12.5/255 off|.shadows.light.popupMenu.rim = 13
+1|a layer that takes the click|.shadows.light.quickSettings.picked = "St.Widget.apex-shadow-layer"
+1|a click that lands elsewhere with shadows on|.shadows.dark.dialog.samePick = false
+1|a BoxPointer that draws an arrow|.shadows.dark.popupMenu.arrowless = false
+1|no dark corner crops|.shadows.dark.quickSettings.corners = null
+5|a probe that never read the frames|.shadows = null
+CHANGES
+}
+
 # glass.js's reference and frame reader, and glass_frames over reports built for it.
 test_glass() {
     local line rc=0 passes failures what change
@@ -1583,6 +1647,7 @@ test_date_menu
 test_overview_style
 test_app_grid
 test_overview_layer
+test_shadow_layers
 test_derived_surfaces
 test_tile_preview
 test_spotlight_style
@@ -1597,6 +1662,7 @@ test_motion
 test_spotlight_key
 test_fixtures
 test_glass
+test_shadows_under_glass
 
 printf '1..%d\n' "$tests"
 ((failed == 0))
