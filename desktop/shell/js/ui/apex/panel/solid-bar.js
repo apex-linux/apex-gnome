@@ -33,7 +33,8 @@ export function enable() {
 }
 
 export function disable() {
-    _settings.disconnect(_changedId);
+    if (_changedId)
+        _settings.disconnect(_changedId);
     _changedId = 0;
     Main.panel.remove_style_class_name(SOLID_STYLE_CLASS);
 }
