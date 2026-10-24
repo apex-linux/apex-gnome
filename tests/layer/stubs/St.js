@@ -41,6 +41,34 @@ class Widget {
         child._parent = this;
     }
 
+    insert_child_above(child, sibling) {
+        this._children.splice(this._children.indexOf(sibling) + 1, 0, child);
+        child._parent = this;
+    }
+
+    set_child_above_sibling(child, sibling) {
+        this._children = this._children.filter(c => c !== child);
+        const at = sibling === null ? this._children.length : this._children.indexOf(sibling) + 1;
+        this._children.splice(at, 0, child);
+    }
+
+    set_child_below_sibling(child, sibling) {
+        this._children = this._children.filter(c => c !== child);
+        this._children.splice(this._children.indexOf(sibling), 0, child);
+    }
+
+    add_constraint(constraint) {
+        (this.constraints ??= []).push(constraint);
+    }
+
+    get children() {
+        return this.get_children();
+    }
+
+    get styleClasses() {
+        return [...this._styleClasses];
+    }
+
     remove_child(child) {
         this._children = this._children.filter(c => c !== child);
         child._parent = null;
