@@ -81,8 +81,13 @@ $_calendar_day_width: ($apex_date_menu_column_width - 2 * $apex_calendar_padding
 
       .message-icon {
         icon-size: $apex_message_icon_size;
+        width: $apex_message_icon_size;
+        height: $apex_message_icon_size;
+        min-width: $apex_message_icon_size;
+        min-height: $apex_message_icon_size;
 
         &:ltr, &:rtl { margin: 0; }
+        &.message-themed-icon { padding: 0; background-color: transparent; }
       }
     }
 
