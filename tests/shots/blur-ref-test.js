@@ -64,13 +64,16 @@ ok(sharp.every((v, i) => near(v, pattern[4 * Math.floor(i / 3) + (i % 3)])), 'gl
 
 const exact = image(4, 2, () => [10, 20, 30]);
 const expected = Float64Array.from([10, 20, 30, 10, 20, 30, 10, 20, 30, 10, 20, 30, 10, 20, 30, 10, 20, 30, 10, 20, 30, 10, 20, 34]);
-const stats = BlurRef.errors(exact, expected, 4, 2);
-ok(stats.max[2] === 4 && near(stats.mean[2], 0.5) && stats.max[0] === 0, 'errors: per-channel max and mean');
+const {box} = BlurRef.errors(exact, expected, 4, 2);
+ok(box.max[2] === 4 && near(box.mean[2], 0.5) && box.max[0] === 0 && box.pixels === 8, 'errors: per-channel max and mean');
 const wide = image(6, 4, () => [10, 20, 30]);
 const offAtCorner = BlurRef.rgbOf(wide);
 offAtCorner[2] = 90;
-ok(BlurRef.errors(wide, offAtCorner, 6, 4).max[2] === 60 && BlurRef.errors(wide, offAtCorner, 6, 4, 1).max[2] === 0,
-    'errors: a band leaves the edges out');
+const zones = BlurRef.errors(wide, offAtCorner, 6, 4, 1);
+ok(zones.box.max[2] === 60 && zones.interior.max[2] === 0 && zones.interior.pixels === 8,
+    'errors: the interior leaves a band of the given width out');
+ok(zones.edge.max[2] === 60 && zones.edge.pixels === 16 && near(zones.edge.mean[2], 60 / 16),
+    'errors: and the edge band is that band alone');
 ok(BlurRef.differing(exact, exact) === 0 && BlurRef.differing(exact, image(4, 2, (x, y) => x + y ? [10, 20, 30] : [0, 0, 0])) === 1,
     'differing counts pixels, not channels');
 

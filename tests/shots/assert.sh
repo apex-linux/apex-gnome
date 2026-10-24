@@ -46,8 +46,10 @@ readonly WIFI_GLYPH=network-wireless-signal-excellent-symbolic
 readonly BATTERY_GLYPH=battery-level-80-symbolic
 readonly BLUETOOTH_GLYPH=bluetooth-active-symbolic
 readonly ALWAYS_LOADED_USER_UNIT=default.target
-# ROADMAP S2b: glass against blur-ref.js after partial damage, per channel out of 255.
-readonly GLASS_MAX_ERROR=3
+# ROADMAP S2b: glass against blur-ref.js after partial damage, per channel out of 255, as the
+# first run fixed them (lead, 2026-10-24). The edge band is ds/2 px wide, ds the effect's own.
+readonly GLASS_INTERIOR_MAX=4
+readonly GLASS_EDGE_MAX=12
 readonly GLASS_MEAN_ERROR=1
 readonly APEX_UNIT_STARTED='(Starting|Started) [^ ]*[Aa]pex|Activating service name=.[^ ]*[Aa]pex'
 
@@ -881,14 +883,15 @@ glass_frames() {
     expect_report "$label" "$log" '.error == null and .patched' "the probe ran the glass cases on the patched ShellBlurEffect" APEXG2-GLASS
     expect_report "$label" "$log" '.pixels.reference | .clippedFirst and .reblurCovered' \
         "damage under the glass: the first frame's redraw clip leaves the box out, the effect's own redraw covers it" APEXG2-GLASS
-    expect_report "$label" "$log" ".pixels.reference.box | (.max | max) <= $GLASS_MAX_ERROR and (.mean | max) <= $GLASS_MEAN_ERROR" \
-        "then the box is blur-ref.js's Gaussian, saturate() and corners within $GLASS_MAX_ERROR/255 at most and $GLASS_MEAN_ERROR/255 on average per channel" APEXG2-GLASS
+    local within="(.interior.max | max) <= $GLASS_INTERIOR_MAX and (.edge.max | max) <= $GLASS_EDGE_MAX and (.box.mean | max) <= $GLASS_MEAN_ERROR"
+    expect_report "$label" "$log" ".pixels.reference | .downscale > 1 and $within" \
+        "then the box is blur-ref.js's Gaussian, saturate() and corners per channel: within $GLASS_INTERIOR_MAX/255 inside, $GLASS_EDGE_MAX/255 in the ds/2 band along the edges, $GLASS_MEAN_ERROR/255 on average" APEXG2-GLASS
     expect_report "$label" "$log" '.pixels.sameFrame | .covered and .changed > 0 and .differingFromFull == 0' \
         "damage forwarded to the glass box re-blurs in the same frame, as a full redraw draws it" APEXG2-GLASS
     expect_report "$label" "$log" '.pixels.clippedRedraw | (.covered | not) and .differingFromLast == 0 and .nextCovered and .nextDifferingFromFull == 0' \
         "a redraw clip that misses the box draws the last result, pixel for pixel; the next frame is the full redraw's" APEXG2-GLASS
-    expect_report "$label" "$log" '.pixels.stock | (.covered | not) and .differingFromFull > 0' \
-        "stock's blur in such a frame samples pixels the frame did not repaint, so the case can see it" APEXG2-GLASS
+    expect_report "$label" "$log" ".pixels.stock | (.covered | not) and .differingFromFull > 0 and (($within) | not)" \
+        "stock's blur in such a frame samples pixels the frame did not repaint and misses those tolerances, so the case can see it" APEXG2-GLASS
 }
 
 fedora_glass() {

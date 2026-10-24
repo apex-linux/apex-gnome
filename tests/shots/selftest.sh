@@ -1065,24 +1065,31 @@ test_glass() {
         skip_or_fail "frame.c: needs gcc, pkg-config and glib2-devel's gi-compile-repository"
     fi
 
-    local good='{"patched": true, "pixels": {"reference": {"clippedFirst": true, "reblurCovered": true, "box": {"max": [2.9, 2.3, 3], "mean": [0.6, 0.5, 0.6]}},
+    local good='{"patched": true, "pixels": {"reference": {"clippedFirst": true, "reblurCovered": true, "downscale": 16,
+            "box": {"max": [11.03, 6.23, 11.67], "mean": [0.744, 0.555, 0.749]}, "interior": {"max": [2.9, 2.32, 3.2], "mean": [0.612, 0.488, 0.636]},
+            "edge": {"max": [11.03, 6.23, 11.67], "mean": [1.4, 0.9, 1.3]}},
         "sameFrame": {"covered": true, "changed": 44893, "differingFromFull": 0},
         "clippedRedraw": {"covered": false, "differingFromLast": 0, "nextCovered": true, "nextDifferingFromFull": 0},
-        "stock": {"covered": false, "differingFromLast": 2304, "differingFromFull": 43927}}}'
+        "stock": {"covered": false, "differingFromLast": 2304, "differingFromFull": 43927,
+            "box": {"max": [180, 150, 170], "mean": [9, 7, 8]}, "interior": {"max": [180, 150, 170], "mean": [9, 7, 8]}, "edge": {"max": [60, 50, 40], "mean": [5, 4, 4]}}}}'
     while IFS='|' read -r failures what change; do
         jq -c "$change" <<<"$good" | sed 's/^/APEXG2-GLASS /' >"$T/glass.log"
         read -r passes _ <<<"$(assertion_counts glass_frames glass "$T/glass.log")"
         expect_eq "glass: $what fails $failures of 6" "$failures" $((6 - passes))
     done <<'CHANGES'
 0|a run within the tolerance, the frames as drawn|.
-1|a channel 3.2/255 off|.pixels.reference.box.max[2] = 3.2
+0|the 4/255 the lead accepted inside|.pixels.reference.interior.max[2] = 4
+1|a channel 4.2/255 off inside|.pixels.reference.interior.max[2] = 4.2
+1|a channel 12.5/255 off in the edge band|.pixels.reference.edge.max[0] = 12.5
 1|a mean 1.1/255 off|.pixels.reference.box.mean[0] = 1.1
+1|a run without a downscale to size the band|.pixels.reference.downscale = 1
 1|a damaged frame that already covered the box|.pixels.reference.clippedFirst = false
 1|a forwarded damage that waits a frame|.pixels.sameFrame.differingFromFull = 120
 1|a forwarded damage that changed nothing|.pixels.sameFrame.changed = 0
 1|a clipped frame that re-blurred from stale pixels|.pixels.clippedRedraw.differingFromLast = 2304
 1|a clipped frame never followed by its redraw|.pixels.clippedRedraw.nextCovered = false
 1|a stock control that sees nothing|.pixels.stock.differingFromFull = 0
+1|a stock control within the tolerances|.pixels.stock += (.pixels.reference | {box, interior, edge})
 6|Fedora's effect|{patched: false, pixels: null}
 6|a probe that failed|{error: "no frame within 2000 ms"}
 CHANGES

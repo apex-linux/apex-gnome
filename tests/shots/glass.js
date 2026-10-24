@@ -141,13 +141,12 @@ async function pixelTests() {
         const clippedOnce = await nextFrame(scale, 'clipped once');
         const reblurred = await nextFrame(scale, 'reblurred');
         const [width, height] = [BOX.width * scale, BOX.height * scale];
-        const expected = BlurRef.glass(patternUnder(tiles, scale), width, height,
-            {sigma: SIGMA * deviceCss, saturation: SATURATION, cornerRadius: CORNER_RADIUS * deviceCss});
-        const downscale = BlurRef.fineDownscale(width, height, SIGMA * deviceCss);
+        const options = {sigma: SIGMA * deviceCss, saturation: SATURATION, cornerRadius: CORNER_RADIUS * deviceCss};
+        const expected = BlurRef.glass(patternUnder(tiles, scale), width, height, options);
+        const downscale = BlurRef.fineDownscale(width, height, options.sigma);
         const reference = {
             clippedFirst: clippedOnce.covered === false, reblurCovered: reblurred.covered, downscale,
-            box: BlurRef.errors(reblurred.rgba, expected, width, height),
-            interior: BlurRef.errors(reblurred.rgba, expected, width, height, downscale / 2),
+            ...BlurRef.errors(reblurred.rgba, expected, width, height, downscale / 2),
         };
 
         const before = await fullFrame(group, scale);
@@ -180,6 +179,8 @@ async function pixelTests() {
             covered: stockClipped.covered,
             differingFromLast: BlurRef.differing(stockClipped.rgba, stockLast),
             differingFromFull: BlurRef.differing(stockClipped.rgba, stockFull),
+            ...BlurRef.errors(stockClipped.rgba, BlurRef.glass(patternUnder(tiles, scale), width, height, options),
+                width, height, downscale / 2),
         };
         return {scale: deviceCss, sigma: SIGMA, saturation: SATURATION, reference, sameFrame, clippedRedraw, stock};
     } finally {

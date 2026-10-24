@@ -92,13 +92,15 @@ export function glass(rgba, width, height, {sigma, saturation, cornerRadius}) {
     return out;
 }
 
-// Over the box, or its interior without a band of `band` pixels along the edges.
-export function errors(rgba, expectedRgb, width, height, band = 0) {
+function stats(rgba, expectedRgb, width, height, counts) {
     const max = [0, 0, 0];
     const sum = [0, 0, 0];
     let n = 0;
-    for (let y = band; y < height - band; y++) {
-        for (let x = band; x < width - band; x++, n++) {
+    for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+            if (!counts(x, y))
+                continue;
+            n++;
             const p = y * width + x;
             for (let c = 0; c < 3; c++) {
                 const e = Math.abs(rgba[4 * p + c] - expectedRgb[3 * p + c]);
@@ -107,7 +109,21 @@ export function errors(rgba, expectedRgb, width, height, band = 0) {
             }
         }
     }
-    return {max: max.map(v => Math.round(v * 100) / 100), mean: sum.map(v => Math.round(v / n * 1000) / 1000)};
+    return {
+        max: max.map(v => Math.round(v * 100) / 100),
+        mean: sum.map(v => Math.round(v / Math.max(n, 1) * 1000) / 1000),
+        pixels: n,
+    };
+}
+
+// Per channel, over the box, its interior and the band of `band` pixels along its edges.
+export function errors(rgba, expectedRgb, width, height, band = 0) {
+    const inBand = (x, y) => Math.min(x, y, width - 1 - x, height - 1 - y) < band;
+    return {
+        box: stats(rgba, expectedRgb, width, height, () => true),
+        interior: stats(rgba, expectedRgb, width, height, (x, y) => !inBand(x, y)),
+        edge: stats(rgba, expectedRgb, width, height, inBand),
+    };
 }
 
 // patch 0003's fine downscale: the smallest power of two with sigma / ds <= 4 and a side of 4 px.
