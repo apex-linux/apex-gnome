@@ -38,9 +38,10 @@ Fedora's gnome-shell SRPM, rebuilt with the Apex layer inside it
 | `0002-loader` | `js/ui/main.js`, `js/ui/sessionMode.js` | +16 −1 | the static import of `ui/apex/hooks.js`; the layer loaded (configure) before the session mode exists; `enable()` at `startup-prepared`; the stock sheets in safe mode; a value hook over each session mode's parameters |
 | `0010-panel` | `js/ui/panel.js`, `js/ui/layout.js` | +13 −4 | value hooks over the workspace dots' inactive opacity and scale and over a dot's width; a behaviour hook once Quick Settings has set up its indicators (the status-pill filter); a behaviour hook once a hot corner is built (the 4 × 4 zone) |
 | `0020-motion` | `js/ui/environment.js`, `js/ui/windowManager.js`, `js/ui/overviewControls.js`, `js/ui/boxpointer.js` | +18 −10 | a value hook over every ease's parameters in `_easeActor` and `_easeAnimatableProperty` (the curve's mode) and a behaviour hook once their transitions exist (its control points); a `motion-duration` value hook at the window size change's two eases, the overview's four state transitions and a popover's open and close; `adjustAnimationTime` still applies after them |
+| `0022-quick-settings` | `js/ui/panel.js` | +1 | a behaviour hook once Quick Settings has added its items (the quick-settings feature); 0010's `status-indicators` hook at the same place belongs to the panel feature, and a hook has one provider |
 
 Budget (ADR 0014): at most 450 changed lines of hook hunks in at most 33 upstream files.
-In use: 75 lines in 14 files. The C budget for `shell-blur-effect.{c,h}` (300 lines) is
+In use: 76 lines in 14 files. The C budget for `shell-blur-effect.{c,h}` (300 lines) is
 untouched until 0003-blur (S2b).
 
 The patches are `git format-patch` output against Fedora's `%prep` tree (upstream

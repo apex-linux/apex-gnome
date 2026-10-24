@@ -19,6 +19,7 @@ directory with `git archive` and unpacks it at the top of Fedora's gnome-shell t
 | `js/ui/apex/layer.js` | the layer: the configure and enable phases, one `try/catch` per feature, the session-mode colour hook, the crash guard's marker file |
 | `js/ui/apex/motion/feature.js` | DESIGN's motion (below): one curve and fixed durations through patch 0020's hooks |
 | `js/ui/apex/spotlight/feature.js` | Super+Space (below) |
+| `js/ui/apex/quick-settings/feature.js` | DESIGN's Quick Settings (below): VPN after Airplane Mode, Power Mode lit, On/Off subtitles, through patch 0022's hook |
 | `js/ui/apex/panel/feature.js` | the top bar of S2a (below): its parts in `panel/`, one module each |
 | `js/ui/apex/fault/feature.js` | the fault-injection feature: loaded only when `APEX_SHELL_TEST_FAULT` names a phase, it fails in that phase (below) |
 | `data/theme/apex/_apex-tokens.scss` | the design tokens as SCSS variables, imported after upstream's `_colors` |
@@ -119,6 +120,18 @@ DESIGN's duration: `window` (the size change's two eases) .3 s, `overview` (the 
 state transitions in and out and to and from the app grid) .2 s, `popover` (a BoxPointer
 opening and closing) .18 s. The dock's .38 s is the dock's. `adjustAnimationTime` runs
 after the hooks, so `enable-animations=false` keeps stock's 0 ms.
+
+`quick-settings/feature.js` follows DESIGN's Quick Settings (ROADMAP S3c) once patch 0022's
+`quick-settings` hook says the items are in the grid. It moves the VPN toggle right after
+Airplane Mode, the end of DESIGN's order (Wi-Fi, Bluetooth, Power Mode, Night Light, Dark
+Style, Do Not Disturb, Airplane Mode, VPN). It lights Power Mode at every profile with the
+`apex-lit` class, which `_quick-settings.scss` styles as `:checked`; the toggle's `checked`
+stays stock, so a click still switches between Balanced and the last profile, and the
+status pill keeps the power-profile indicator out (`panel/status-pill.js`). A toggle with no
+subtitle of its own reads "On" or "Off" from `checked`; one that sets its own (Wi-Fi's
+network, Bluetooth's device, Power Mode's profile) keeps it, and gets ours back once it
+drops it. Disabled, the feature puts VPN back, unlights Power Mode and clears only the
+subtitles it wrote.
 
 The layer also does what every feature relies on:
 

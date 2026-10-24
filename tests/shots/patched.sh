@@ -175,12 +175,16 @@ top_bar_gaps dark-style "$run/dark-style.log" dark
 for c in default:light default-scale1:light dark-style:dark; do
     shell_surfaces "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
     quick_settings "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
+    quick_settings_layer "${c%:*}" "$run/${c%:*}.log" apex
     window_switcher "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
     modal_dialog "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
     date_menu "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
     overview_style "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
     app_grid "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
     derived_surfaces "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
+done
+for c in stock-light stock-dark; do
+    quick_settings_layer "$c" "$run/$c.log" stock
 done
 layer_cycles "$run"
 motion_curve "$run"

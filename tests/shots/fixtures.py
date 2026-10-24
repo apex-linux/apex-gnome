@@ -5,13 +5,15 @@
 G2's python-dbusmock fixtures on the system bus (DBUS_SYSTEM_BUS_ADDRESS, or the
 default): UPower with a battery at 87 %, NetworkManager on the Wi-Fi network
 "Apex-5G" with "Apex-2.4G" and the open "Library Guest" in range, and BlueZ with the
-Bluetooth keyboard "Keychron K3" connected. The
+Bluetooth keyboard "Keychron K3" connected, and with G2_POWER_PROFILES=1 power-profiles-daemon
+at Balanced. The
 mocks keep running after this exits; each logs to LOG_DIR/fixture-NAME.log and leaves
 its pid in LOG_DIR/fixture-NAME.pid.
 Prints one line, G2-FIXTURES and what the bus then reports, as JSON.
 """
 
 import json
+import os
 import subprocess
 import sys
 import time
@@ -50,12 +52,21 @@ UPOWER = "org.freedesktop.UPower"
 NM = "org.freedesktop.NetworkManager"
 NM_PATH = "/org/freedesktop/NetworkManager"
 BLUEZ = "org.bluez"
+POWER_PROFILES = "org.freedesktop.UPower.PowerProfiles"
 SERVICES = {"upower": UPOWER, "networkmanager": NM, "bluez5": BLUEZ}
+# Opt-in, so the app tests that share these fixtures keep Quick Settings without Power Mode.
+OPTIONAL_SERVICES = {"upower_power_profiles_daemon": POWER_PROFILES}
 TEMPLATE_PARAMETERS = {"upower": {"DaemonVersion": "1.90", "OnBattery": True}}
 
 
+def services():
+    if os.environ.get("G2_POWER_PROFILES") == "1":
+        return {**SERVICES, **OPTIONAL_SERVICES}
+    return SERVICES
+
+
 def spawn(log_dir):
-    for template, name in SERVICES.items():
+    for template, name in services().items():
         log = open(f"{log_dir}/fixture-{template}.log", "w", encoding="utf-8")
         mock = subprocess.Popen(
             [sys.executable, "-m", "dbusmock", "--system", "--template", template,
@@ -66,9 +77,9 @@ def spawn(log_dir):
             print(mock.pid, file=pid)
     bus = dbus.SystemBus()
     deadline = time.monotonic() + READY_TIMEOUT_S
-    while not all(bus.name_has_owner(name) for name in SERVICES.values()):
+    while not all(bus.name_has_owner(name) for name in services().values()):
         if time.monotonic() > deadline:
-            missing = [name for name in SERVICES.values() if not bus.name_has_owner(name)]
+            missing = [name for name in services().values() if not bus.name_has_owner(name)]
             sys.exit(f"fixtures.py: no owner for {', '.join(missing)} after {READY_TIMEOUT_S} s")
         time.sleep(0.1)
     return bus
@@ -160,12 +171,21 @@ def keyboard(bus):
             "icon": str(props.Get("org.bluez.Device1", "Icon"))}
 
 
+def power_profiles(bus):
+    if POWER_PROFILES not in services().values():
+        return None
+    props = Service(bus, POWER_PROFILES).props("/org/freedesktop/UPower/PowerProfiles")
+    return {"active": str(props.Get(POWER_PROFILES, "ActiveProfile")),
+            "profiles": [str(p["Profile"]) for p in props.Get(POWER_PROFILES, "Profiles")]}
+
+
 def main():
     if len(sys.argv) != 2 or sys.argv[1].startswith("-"):
         print(__doc__, file=sys.stderr)
         return 2
     bus = spawn(sys.argv[1])
-    print("G2-FIXTURES " + json.dumps({"battery": battery(bus), "wifi": wifi(bus), "keyboard": keyboard(bus)}))
+    print("G2-FIXTURES " + json.dumps({"battery": battery(bus), "wifi": wifi(bus), "keyboard": keyboard(bus),
+                                       "powerProfiles": power_profiles(bus)}))
     return 0
 
 

@@ -39,6 +39,7 @@ const STRUCTURE_MARKER = '/*! apex-shell-structure */';
 const LAYER_ENABLED_KEY = 'layer-enabled';
 const SEARCH_HINT_KEY = 'search-hint-shown';
 const OSD_LEVEL = 0.62;
+const POWER_PROFILE_WAIT_MS = 3000;
 const MOTION_WINDOW_ID = 'io.github.apex_linux.G2Window';
 const MOTION_WAIT_MS = 10000;
 const MOTION_SETTLE_MS = 1000;
@@ -833,6 +834,38 @@ async function quickSettings(unit) {
 }
 
 // G2 opens no windows, so the switcher is a stock SwitcherList of AppIcon-shaped items.
+// The quick-settings feature: the toggles' order, Power Mode lit, On/Off subtitles; then two
+// clicks on Power Mode, which stock answers by switching to the last profile and back.
+async function quickSettingsLayer() {
+    const indicator = Main.panel.statusArea.quickSettings;
+    const toggles = indicator.menu._grid.get_children().filter(t => 'checked' in t && t.title);
+    const power = indicator._powerProfiles?.quickSettingsItems[0] ?? null;
+    const dnd = toggles.find(t => t.constructor.name === 'DoNotDisturbToggle');
+    const powerState = () => power && {lit: power.has_style_class_name('apex-lit'), checked: power.checked,
+        subtitle: power.subtitle, visible: power.visible};
+    const clickPower = async () => {
+        const before = power.checked;
+        power.emit('clicked', Clutter.BUTTON_PRIMARY);
+        for (let waited = 0; power.checked === before && waited < POWER_PROFILE_WAIT_MS; waited += 50)
+            // eslint-disable-next-line no-await-in-loop
+            await Scripting.sleep(50);
+        await settle();
+        return powerState();
+    };
+    const state = {
+        order: toggles.map(t => ({title: t.title, visible: t.visible})),
+        power: powerState(),
+        pillShowsPower: indicator._powerProfiles?.get_parent() === indicator._indicators &&
+            indicator._powerProfiles.visible,
+        dndSubtitle: dnd?.subtitle ?? null,
+    };
+    if (power?.visible) {
+        state.switched = await clickPower();
+        state.back = await clickPower();
+    }
+    return state;
+}
+
 async function windowSwitcher(unit) {
     const list = new SwitcherPopup.SwitcherList(true);
     const apps = SWITCHER_APPS.map(name => {
@@ -1131,6 +1164,7 @@ async function scenes() {
     bar.largeText = await withLargeText();
     const surfaces = await shellSurfaces(unit);
     surfaces.quickSettings = await quickSettings(unit);
+    surfaces.quickSettingsLayer = await quickSettingsLayer();
     surfaces.switcher = await windowSwitcher(unit);
     surfaces.dialog = await modalDialog(unit);
     surfaces.dateMenu = await calendarMenu(unit);
