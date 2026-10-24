@@ -15,7 +15,27 @@ function flagNames(value, flags) {
     return names.length > 0 ? names.join('|') : 'NONE';
 }
 
-export const sessionMode = {_sync: () => printerr('probe: restyled')};
+const sessionModeHandlers = new Map();
+let nextSessionModeHandler = 1;
+
+export const sessionMode = {
+    isLocked: false,
+    _sync: () => printerr('probe: restyled'),
+    connect(signal, fn) {
+        sessionModeHandlers.set(nextSessionModeHandler, [signal, fn]);
+        return nextSessionModeHandler++;
+    },
+    disconnect(id) {
+        sessionModeHandlers.delete(id);
+    },
+    lock(locked) {
+        this.isLocked = locked;
+        for (const [signal, fn] of [...sessionModeHandlers.values()]) {
+            if (signal === 'updated')
+                fn();
+        }
+    },
+};
 
 export const actionMode = Shell.ActionMode.NORMAL;
 
@@ -64,6 +84,14 @@ function syncPanelStyleClasses(change) {
 export const panel = {
     add_style_class_name: name => syncPanelStyleClasses(() => panelStyleClasses.add(name)),
     remove_style_class_name: name => syncPanelStyleClasses(() => panelStyleClasses.delete(name)),
+    addToStatusArea(role, indicator, position, boxName) {
+        if (this.statusArea[role])
+            throw new Error(`there is already a status indicator for role ${role}`);
+        this.statusArea[role] = indicator;
+        indicator.connect('destroy', () => delete this.statusArea[role]);
+        fact('panel.add', `${role} at ${position} in ${boxName}`);
+        return indicator;
+    },
     statusArea: {
         activities: {
             get_first_child: () => ({get_children: () => [0, 1].map(() => workspaceDot)}),

@@ -78,6 +78,12 @@ style class `apex-solid-bar`, which `_top-bar.scss` draws as `$apex_bar_solid` o
 their transparent panel. A schema without the key turns off the `panel` feature, logged.
 The maximised-window trigger comes in its own change.
 
+`panel/focused-app.js` adds an item after the Activities pill (status-area role `apex-focused-app`):
+the name of `Shell.WindowTracker`'s focus app, or "Desktop" while nothing has focus, at
+`$apex_font_bar_emphasis_weight` and padded `$apex_bar_app_name_padding`. It takes no
+clicks, and `show-focused-app-name` (live) and the lock screen hide it. A schema without
+the key turns off the `panel` feature, logged.
+
 The layer also does what every feature relies on:
 
 - In the user and unlock-dialog modes it gives the session mode the colour scheme
@@ -109,8 +115,8 @@ aborted shell, and Super+Space: its registration and removal through enable, the
 switches, `layer-enabled` and `disabled-features` cycles and a missing Keybindings schema,
 and the top bar's hooks with stub dots, indicators and hot corners, against
 `tests/layer/main-stub.js` for `main.js`, fixture typelibs for Meta and Shell, and
-`tests/layer/stubs/` for the features' St and Clutter imports, which gjs outside the shell
-cannot load.
+`tests/layer/stubs/` for `panelMenu.js` and the features' St, Clutter and Shell imports
+(gjs outside the shell has no St or Clutter, and the fixture's Shell no WindowTracker).
 
 For the fault injection in the VM, the variable goes into the shell's environment with
 a user drop-in on its unit, which the image never ships:

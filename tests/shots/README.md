@@ -146,7 +146,8 @@ status buttons still reach the screen's left and right edges; the bar's transiti
 `0 1px 0 $apex_border` line (the `panel` feature); the
 workspace dots' gap, height and radius, the active dot `$apex_bar_dot_active_width` wide and
 the others `$apex_bar_dot_size` square at .45; that the top-left pixel reaches the reactive
-4 × 4 hot-corner zone; the clock's unread-notification dot (the probe
+4 × 4 hot-corner zone; "Desktop" at `$apex_font_bar_emphasis_weight` after the Activities pill,
+as nothing has focus (the `panel` feature); the clock's unread-notification dot (the probe
 posts one low-urgency notification); that the diamond is drawn (at least a quarter of
 its stroke's area in capture pixels of the bar's colour, left of the dots, at the
 capture's scale); the status pill's glyph gap and glyph size, the fixtures' Wi-Fi and
@@ -174,7 +175,6 @@ removes its pin.
 
 | Until | Assertion | S1a measures |
 |---|---|---|
-| S2a (the layer) | "Desktop" at 700 follows the Activities pill while nothing has focus | no item |
 | S2a (the layer) | a 32 × 24 search button named "Search…" | none |
 | S2b (patch 0003, the glass manager) | a 24 px blur at 160 % saturation behind the bar | no blur effect |
 | S1b (the Facets wallpaper and the light overview) | the unread-notification dot is the raw accent | `$apex_bar_fg`: over Fedora's wallpaper an accent dot is about 1.4:1 against the light bar |

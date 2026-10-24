@@ -77,6 +77,11 @@ $_upstream_panel_button_minimum_hpadding: $base_padding;
     }
   }
 
+  .panel-button.apex-focused-app > .apex-focused-app-label {
+    padding: 0 $apex_bar_app_name_padding;
+    font-weight: $apex_font_bar_emphasis_weight;
+  }
+
   .panel-button.clock-display {
     color: $apex_bar_fg;
 

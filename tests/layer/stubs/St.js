@@ -6,6 +6,13 @@ import GLib from 'gi://GLib';
 
 const scaleFactor = Number(GLib.getenv('PROBE_SCALE') ?? '1');
 
+class Label {
+    constructor(params) {
+        Object.assign(this, params);
+    }
+}
+
 export default {
+    Label,
     ThemeContext: {get_for_stage: () => ({scale_factor: scaleFactor})},
 };
