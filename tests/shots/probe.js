@@ -1097,7 +1097,7 @@ async function windowSwitcher(unit) {
     }
 }
 
-// The shell's own power-off dialog, opened as gnome-session opens it, so that patch 0017's
+// The shell's own power-off dialog, opened as gnome-session opens it, so that patch 0018's
 // hook runs: Cancel, the end-session feature's Restart, then Power Off.
 async function endSessionDialog(unit) {
     try {

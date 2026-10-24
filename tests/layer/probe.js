@@ -439,7 +439,7 @@ async function exerciseQuickSettings() {
     quickSettingsState('qs.on', quickSettings);
 }
 
-// endSessionDialog.js as patch 0017's hook sees it: a stock row of Cancel and the confirm
+// endSessionDialog.js as patch 0018's hook sees it: a stock row of Cancel and the confirm
 // button, a theme spacing of 10 once the row is styled.
 function endSessionDialog(St) {
     const buttonLayout = new St.BoxLayout({style_class: 'modal-dialog-button-box'});

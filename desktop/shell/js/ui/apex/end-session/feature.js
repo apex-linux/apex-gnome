@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 //
-// DESIGN's end-session dialog (board 14), through patch 0017's hook: stock's icon in a circle
+// DESIGN's end-session dialog (board 14), through patch 0018's hook: stock's icon in a circle
 // above the title, Restart between Cancel and Power Off, and the theme's gap and widths.
 
 import Clutter from 'gi://Clutter';

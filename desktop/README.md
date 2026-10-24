@@ -22,7 +22,7 @@ directory with `git archive` and unpacks it at the top of Fedora's gnome-shell t
 | `js/ui/apex/spotlight/` | Spotlight (below): `feature.js` (Super+Space), `search.js` (the sections, caps and budget), `providers.js` (the stock providers), `popup.js`, `toast.js`, and `tiles.js` with `settings-tiles.json`, the Settings tile colours by panel id. That JSON mirrors gnome-control-center's `panels/apex/settings-tiles.json` byte for byte and is the one file here without an SPDX line, since JSON has no comments |
 | `js/ui/apex/quick-settings/feature.js` | DESIGN's Quick Settings (below): VPN after Airplane Mode, Power Mode lit, On/Off subtitles, through patch 0011's hook |
 | `js/ui/apex/shadows/feature.js`, `registry.js`, `cutout.js` | DESIGN's second shadow layer (below): a shadow-layer actor under each surface whose sheet names `-apex-shadow-layer`, cut out under the surface, and the window previews' two layers |
-| `js/ui/apex/end-session/feature.js` | DESIGN's end-session dialog (board 14, below): stock's icon in a circle, Restart in the power-off dialog, the theme's gap and widths for the buttons, through patch 0017's hook |
+| `js/ui/apex/end-session/feature.js` | DESIGN's end-session dialog (board 14, below): stock's icon in a circle, Restart in the power-off dialog, the theme's gap and widths for the buttons, through patch 0018's hook |
 | `js/ui/apex/panel/feature.js` | the top bar of S2a (below): its parts in `panel/`, one module each |
 | `js/ui/apex/glass/feature.js` | the glass manager of S2b (below), with `glass/surfaces.js`, the layer's own glass, and `glass/registry.js`, where any feature registers an actor |
 | `js/ui/apex/dock/feature.js`, `dock.js`, `trash.js`, `intellihide.js` | the dock of S2a (below): ApexDock, a subclass of upstream's `Dash`, its Trash and its intellihide |
@@ -171,7 +171,7 @@ network, Bluetooth's device, Power Mode's profile) keeps it, and gets ours back 
 drops it. Disabled, the feature puts VPN back, unlights Power Mode and clears only the
 subtitles it wrote.
 
-`end-session/feature.js` follows board 14 once patch 0017's `end-session-buttons` hook says
+`end-session/feature.js` follows board 14 once patch 0018's `end-session-buttons` hook says
 the dialog has built its buttons, which it does each time it opens. Above the title it puts
 stock's own `iconName` for the type (none for Log Out) in a circle. In the power-off dialog
 it adds Restart between Cancel and Power Off, through stock's `ConfirmedReboot`; that row
