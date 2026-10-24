@@ -1441,6 +1441,12 @@ readonly MOTION_REPORT='{enableAnimations: false,
              overview: {visible: true, transition: {mode: "CUBIC_BEZIER", duration: 200, curve: [0.2, 0.8, 0.2, 1]}}},
   still: {maximise: {maximised: true, transition: null}, overview: {visible: true, transition: null},
          locatePointer: {mode: "CUBIC_BEZIER", duration: 830, curve: [0.2, 0.8, 0.2, 1]}},
+  surfaces: (["dock-lift", "intellihide", "overview", "spotlight", "quick-settings", "calendar", "dialog"]
+    | map({name: ., eases: 2, apexEases: 1}) as $steps
+    | {animated: {steps: $steps, eases: 14, apexEases: 6,
+                  lasting: [{apex: true, where: "ui/apex/dock/dock.js:71:23", durations: [180]},
+                            {apex: false, where: "ui/popupMenu.js:1132:26", durations: [180, 0]}]},
+       still: {steps: $steps, eases: 14, apexEases: 6, lasting: []}}),
   previews: [{styled: true, layers: [
     {shown: true, radius: 14, boxShadow: {color: "#141e3c33", inset: false, x: 0, y: 12, blur: 32, spread: 0}},
     {shown: true, radius: 14, boxShadow: {color: "#141e3c1a", inset: false, x: 0, y: 1, blur: 4, spread: 0}}]}]}'
@@ -1450,7 +1456,7 @@ write_motion_run() {
     rm -rf "$dir" && mkdir -p "$dir"
     {
         printf 'APEXG2 %s\n' "$APEX_LIGHT_REPORT"
-        printf 'APEXG2-MOTION %s\n' "$(jq -nc "$MOTION_REPORT | $change")"
+        printf 'APEXG2-MOTION %s\n' "$(jq -nc "$MOTION_REPORT | .animated.surfaces = .surfaces.animated | .still.surfaces = .surfaces.still | del(.surfaces) | $change")"
     } >"$dir/motion.log"
     echo 'motion exit=0 secs=24 marker-after-exit=no' >"$dir/results-main.txt"
 }
@@ -1477,11 +1483,16 @@ test_motion() {
 .animated.maximise.maximised = false|a window that did not maximise
 .still.locatePointer = null|a Locate Pointer ripple that no longer animates with animations off
 .previews[0].layers = [.previews[0].layers[0]]|a window preview with one shadow layer
+.animated.surfaces.lasting = []|a control in which no Apex ease lasts
+.still.surfaces.lasting = [{apex: true, where: "ui/apex/dock/intellihide.js:74:19", durations: [380]}]|an Apex ease left at 380 ms with animations off
+.still.surfaces.lasting = [{apex: false, where: "ui/boxpointer.js:1:1", durations: [180]}]|a stock ease left at 180 ms with animations off
+.still.surfaces.steps = .still.surfaces.steps[:-1]|a surface the probe never opened
+.still.surfaces.apexEases = 0|a run in which no Apex code eased
 CHANGES
     write_motion_run '{error: "the test client never mapped (Gtk-WARNING: Failed to open display)\nprobe.js:1700"}'
     read -r passes failures <<<"$(assertion_counts motion_curve "$T/motion")"
     expect_eq "motion: a client that never mapped fails once, with its stderr, not every assertion after it" \
-        "$((all - 7))/1 the test client never mapped (Gtk-WARNING: Failed to open display)" \
+        "$((all - 9))/1 the test client never mapped (Gtk-WARNING: Failed to open display)" \
         "$passes/$failures $(sed -n 's/^FAIL motion: //p' "$T/assertions.out")"
 }
 
