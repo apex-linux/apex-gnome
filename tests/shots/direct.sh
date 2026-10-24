@@ -149,8 +149,8 @@ case $part in
         exit 0 ;;
     signoff)
         G2_SURFACE_SCENES=1
-        run_and_record_case default "$CAPTURE_SETTINGS" G2_SCENES=1
-        run_and_record_case dark-style "$CAPTURE_SETTINGS;$DARK" G2_SCENES=1
+        run_and_record_case default "$CAPTURE_SETTINGS" G2_SCENES=1 G2_SIGNOFF=1
+        run_and_record_case dark-style "$CAPTURE_SETTINGS;$DARK" G2_SCENES=1 G2_SIGNOFF=1
         run_and_record_case indicators "$CAPTURE_SETTINGS;$NO_HOT_CORNER;$TWO_SOURCES" G2_INDICATORS=1
         run_and_record_case indicators-dark "$CAPTURE_SETTINGS;$NO_HOT_CORNER;$TWO_SOURCES;$DARK" G2_INDICATORS=1
         exit 0 ;;

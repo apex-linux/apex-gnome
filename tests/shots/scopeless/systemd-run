@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Ptyxis runs its shell under systemd-run --user --scope; G2 has no user manager, so the
+# sign-off windows put this first on PATH: the options are dropped and the command runs as is.
+while [[ ${1:-} == -* ]]; do
+    [[ $1 == -- ]] && { shift; break; }
+    shift
+done
+exec "$@"

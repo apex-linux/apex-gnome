@@ -59,6 +59,9 @@ const MOTION_WINDOW_SIZE = {width: 640, height: 400};
 const OSD_GLYPH = 'audio-volume-medium-symbolic';
 const SWITCHER_APPS = ['Text Editor', 'Terminal', 'Web', 'Files', 'Settings'];
 const SWITCHER_ICON_SIZE = 96;
+// Nautilus refuses to run as root, as G2 does: Calendar, from the dock, stands in.
+const SIGNOFF_APPS = [['gnome-text-editor', '--new-window'], ['gnome-calendar'], ['ptyxis', '--new-window']];
+const SIGNOFF_WINDOWS_MS = 30000;
 
 Gio._promisify(Shell.Screenshot.prototype, 'screenshot');
 Gio._promisify(Gio.Subprocess.prototype, 'communicate_utf8_async');
@@ -1935,6 +1938,8 @@ async function appGrid(unit) {
             pageIndicator: standInStyle('page-indicator-icon', 'page-indicator', unit),
             pageHint: standInStyle('page-navigation-hint next', null, unit),
         };
+        // Board 36 is the grid itself, with no folder open: signoff.sh's capture.
+        measured.launcherScene = GLib.getenv('G2_SURFACE_SCENES') === '1' ? withoutBytes(await capture('launcher')) : null;
         if (folder) {
             folder.open();
             await settle();
@@ -2174,6 +2179,10 @@ function findDescendant(actor, matches) {
             return found;
     }
     return null;
+}
+
+function countDescendants(actor, matches) {
+    return actor.get_children().reduce((n, child) => n + (matches(child) ? 1 : 0) + countDescendants(child, matches), 0);
 }
 
 function darkStyleToggle() {
@@ -2461,6 +2470,45 @@ function withoutBytes(captured) {
     return captured;
 }
 
+// Boards 15 and 35 have windows: three real apps for the owner's sign-off (G2_SIGNOFF=1).
+async function signoffWindows() {
+    const launcher = new Gio.SubprocessLauncher({flags: Gio.SubprocessFlags.NONE});
+    launcher.setenv('WAYLAND_DISPLAY', GLib.getenv('G2_WAYLAND_DISPLAY') ?? 'apex-g2', true);
+    launcher.setenv('GDK_BACKEND', 'wayland', true);
+    const scopeless = Gio.File.new_for_uri(import.meta.url).get_parent().get_child('scopeless').get_path();
+    launcher.setenv('PATH', `${scopeless}:${GLib.getenv('PATH')}`, true);
+    for (const argv of SIGNOFF_APPS)
+        launcher.spawnv(argv);
+    const tracker = Shell.WindowTracker.get_default();
+    const appsShown = () => [...new Set(global.get_window_actors().map(a => tracker.get_window_app(a.meta_window)?.get_id()))]
+        .filter(Boolean);
+    const shown = await until(() => appsShown().length >= SIGNOFF_APPS.length, SIGNOFF_WINDOWS_MS);
+    // Off every window preview, so none of them shows its hover caption.
+    const monitor = Main.layoutManager.primaryMonitor;
+    const pointer = global.stage.context.get_backend().get_default_seat()
+        .create_virtual_device(Clutter.InputDeviceType.POINTER_DEVICE);
+    pointer.notify_absolute_motion(GLib.get_monotonic_time(), monitor.x + monitor.width - 1, monitor.y + monitor.height / 4);
+    await settle();
+    Main.overview.show();
+    // A window still mapping joins the overview's workspace late: wait for its preview.
+    const previews = await until(() => countDescendants(Main.layoutManager.overviewGroup,
+        a => a.constructor.name === 'WindowPreview' && a.mapped) >= SIGNOFF_APPS.length, SIGNOFF_WINDOWS_MS);
+    await settle();
+    global.stage.set_key_focus(null);
+    const overview = withoutBytes(await capture('signoff-overview'));
+    Main.overview.hide();
+    await settle();
+    const {AppSwitcherPopup} = await import('resource:///org/gnome/shell/ui/altTab.js');
+    const popup = new AppSwitcherPopup();
+    // No modifier mask: nothing held down, so the popup stays until it is destroyed.
+    popup.show(false, 'switch-applications', 0);
+    await settle();
+    const altTab = withoutBytes(await capture('signoff-alt-tab'));
+    popup.destroy();
+    await settle();
+    return {shown, previews, apps: appsShown(), overview: overview.file, altTab: altTab.file};
+}
+
 async function until(condition, timeoutMs = 10000) {
     for (let waited = 0; waited < timeoutMs; waited += 100) {
         if (condition())
@@ -2651,6 +2699,16 @@ async function runProbe() {
             result = {error: `${e.message}\n${e.stack}`};
         }
         console.log(`APEXG2-INDICATORS ${JSON.stringify(result)}`);
+    }
+
+    if (GLib.getenv('G2_SIGNOFF') === '1') {
+        let result;
+        try {
+            result = await signoffWindows();
+        } catch (e) {
+            result = {error: `${e.message}\n${e.stack}`};
+        }
+        console.log(`APEXG2-SIGNOFF ${JSON.stringify(result)}`);
     }
 
     if (GLib.getenv('G2_TURN_DARK_OFF') === '1') {
