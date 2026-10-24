@@ -9,5 +9,6 @@ theme_sources += files(
   '_popup-menus.scss',
   '_osd.scss',
   '_notification-banner.scss',
+  '_quick-settings.scss',
   '_apex-structure.scss',
 )

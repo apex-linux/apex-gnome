@@ -181,6 +181,15 @@ overview. Every expected value comes from `_apex-tokens.scss`, for the case's va
   action buttons' height, radius, fill, type and gap (read from the theme: stock shows
   them only in an expanded banner).
 
+`quick_settings` runs in the same cases. The probe opens Quick Settings and the Wi-Fi
+toggle's menu (the fixtures' Wi-Fi checks the toggle), captures them with `G2_SURFACE_SCENES=1`, and
+reads: the panel's width, radius, tint, inset, ring and shadow; the grid's gaps and the gap
+under the top row; the round buttons and the battery pill; the toggles' size, fills
+(checked, unchecked, hovered), padding, type and subtitle opacity; the menu arrow's width
+and shade, without a separator; a slider in a stand-in `.quick-slider` row (no slider shows
+without audio or a backlight); and the Wi-Fi card, its header glyph circle, title and rows.
+The fixtures' NetworkManager lists no access points, so the card's network list is empty.
+
 None of these surfaces is in a compared capture, so the comparison with Fedora's build
 is unchanged.
 
@@ -241,9 +250,10 @@ and asserts each case's log, the top bar of `default`, `default-scale1` and `dar
 (the metrics, today's pins and the known gaps) and the layer cycles. G1, the crash guard,
 the captures against Fedora's and `rpm -V` stay with G2 in the builder VM. With
 `PATCHED_RPMS=DIR` it installs built RPMs instead; `PATCHED_OUT=DIR` keeps the RPMs and logs.
-It also asserts the shell surfaces of the same three cases. With `-e G2_SURFACE_SCENES=1`,
-`direct.sh` passes the variable to the shells, and the capture cases also save the
-`surfaces` scene (the menu, the OSD and the banner open), for placing beside the boards.
+It also asserts the shell surfaces and Quick Settings of the same three cases. With
+`-e G2_SURFACE_SCENES=1`, `direct.sh` passes the variable to the shells, and the capture
+cases also save the `surfaces` scene (the menu, the OSD and the banner open) and the
+`quick-settings` scene, for placing beside the boards.
 
 ## Not yet
 

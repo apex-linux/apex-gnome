@@ -11,6 +11,7 @@ import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import * as MessageTray from 'resource:///org/gnome/shell/ui/messageTray.js';
 import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 import * as Scripting from 'resource:///org/gnome/shell/ui/scripting.js';
+import * as Slider from 'resource:///org/gnome/shell/ui/slider.js';
 import * as WorkspaceThumbnail from 'resource:///org/gnome/shell/ui/workspaceThumbnail.js';
 
 import * as Png from './png.js';
@@ -725,6 +726,104 @@ async function shellSurfaces(unit) {
     }
 }
 
+// A slider never shows in the container (no audio, no backlight): one in a stand-in row.
+function quickSlider(unit) {
+    const box = new St.BoxLayout({style_class: 'popup-menu-content quick-settings'});
+    const row = new St.BoxLayout();
+    const slider = new Slider.Slider(OSD_LEVEL);
+    row.add_child(slider);
+    box.add_child(new St.Bin({style_class: 'quick-slider', child: row}));
+    return withStyledActor(box, () => {
+        const node = slider.get_theme_node();
+        return {
+            spacing: lengthOrNull(row.get_theme_node(), 'spacing', unit),
+            trackHeight: lengthOrNull(node, '-barlevel-height', unit),
+            track: hex(node.get_color('-barlevel-background-color')),
+            fill: hex(node.get_color('-barlevel-active-background-color')),
+            handleRadius: lengthOrNull(node, '-slider-handle-radius', unit),
+            handle: hex(node.get_foreground_color()),
+        };
+    });
+}
+
+function quickToggle(toggle, unit) {
+    const box = toggle.get_first_child();
+    const [title, subtitle] = findDescendant(box, a => a.has_style_class_name?.('quick-toggle-title'))
+        ?.get_parent().get_children() ?? [];
+    return {
+        ...styleOf(toggle, unit),
+        box: styleOf(box, unit),
+        icon: lengthOrNull(findDescendant(box, a => a.has_style_class_name?.('quick-toggle-icon')).get_theme_node(), 'icon-size', unit),
+        title: styleOf(title, unit),
+        subtitle: subtitle?.visible ? styleOf(subtitle, unit) : null,
+        hover: underPseudoClass(toggle, 'hover', () => paint(toggle.get_theme_node(), unit)),
+    };
+}
+
+// The fixtures' Wi-Fi makes the network toggle checked, with a menu: board 17 opens it.
+async function quickSettings(unit) {
+    const {quickSettings: indicator} = Main.panel.statusArea;
+    const {menu} = indicator;
+    const grid = findDescendant(menu.box, a => a.has_style_class_name?.('quick-settings-grid'));
+    const byType = name => findDescendant(menu.box, a => a.constructor.name === name);
+    menu.open(BoxPointer.PopupAnimation.NONE);
+    const wifi = byType('NMWirelessToggle');
+    try {
+        await settle();
+        wifi?.menu.open(BoxPointer.PopupAnimation.NONE);
+        await settle();
+        const scene = GLib.getenv('G2_SURFACE_SCENES') === '1' ? await capture('quick-settings') : null;
+        if (scene)
+            delete scene.bytes;
+        const system = byType('SystemItem');
+        const wifiToggle = wifi && findDescendant(wifi, a => a.has_style_class_name?.('quick-toggle'));
+        const menuButton = wifi && findDescendant(wifi, a => a.has_style_class_name?.('quick-toggle-menu-button'));
+        const header = wifi && findDescendant(wifi.menu.box, a => a.has_style_class_name?.('header'));
+        const find = (root, styleClass) => findDescendant(root, a => a.has_style_class_name?.(styleClass));
+        return {
+            scene,
+            box: styleOf(menu.box, unit),
+            grid: {
+                rows: lengthOrNull(grid.get_theme_node(), 'spacing-rows', unit),
+                columns: lengthOrNull(grid.get_theme_node(), 'spacing-columns', unit),
+            },
+            system: {
+                ...boxOf(system, unit),
+                spacing: lengthOrNull(system.get_first_child().get_theme_node(), 'spacing', unit),
+                battery: quickToggle(byType('PowerToggle'), unit),
+                screenshot: {
+                    ...styleOf(byType('ScreenshotItem'), unit),
+                    icon: lengthOrNull(byType('ScreenshotItem').get_first_child().get_theme_node(), 'icon-size', unit),
+                },
+            },
+            wifi: wifi ? {
+                ...boxOf(wifi, unit),
+                toggle: quickToggle(wifiToggle, unit),
+                separator: boxOf(find(wifi, 'quick-toggle-separator'), unit),
+                menuButton: styleOf(menuButton, unit),
+            } : null,
+            unchecked: quickToggle(byType('DoNotDisturbToggle'), unit),
+            slider: quickSlider(unit),
+            wifiMenu: wifi ? {
+                box: styleOf(wifi.menu.box, unit),
+                header: styleOf(header, unit),
+                headerIcon: {
+                    ...styleOf(find(header, 'icon'), unit),
+                    iconSize: lengthOrNull(find(header, 'icon').get_theme_node(), 'icon-size', unit),
+                },
+                title: styleOf(find(header, 'title'), unit),
+                subtitle: styleOf(find(header, 'subtitle'), unit),
+                rows: wifi.menu._getMenuItems().filter(i => i.visible && i.label?.text).map(i => styleOf(i, unit)),
+                separator: styleOf(wifi.menu._getMenuItems().find(i => i instanceof PopupMenu.PopupSeparatorMenuItem), unit),
+            } : null,
+        };
+    } finally {
+        wifi?.menu.close(BoxPointer.PopupAnimation.NONE);
+        menu.close(BoxPointer.PopupAnimation.NONE);
+        await settle();
+    }
+}
+
 // Without GDM the shell posts "Screen Lock disabled" at startup; its banner would cover
 // the scenes for as long as it happens to stay.
 function dropStartupNotifications() {
@@ -750,6 +849,7 @@ async function scenes() {
     bar.lockScreen = await withLockScreenPanel(unit);
     bar.largeText = await withLargeText();
     const surfaces = await shellSurfaces(unit);
+    surfaces.quickSettings = await quickSettings(unit);
 
     Main.overview.show();
     await settle();
