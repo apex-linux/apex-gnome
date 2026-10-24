@@ -29,6 +29,7 @@ const CRASH_GUARD_MARKER = 'apex-shell-starting';
 const REPORT_AFTER_MS = 1500;
 const SETTLE_TIMEOUT_MS = 20000;
 const SETTLE_EXTRA_MS = 500;
+const DEFERRED_WORK_TIMEOUT_MS = 21000;
 const CALIBRATION_PX = 100;
 const INK_MAX_RGB_DISTANCE = 60;
 const TRANSLUCENT_BAR_KEY = 'translucent-top-bar';
@@ -441,6 +442,53 @@ function topBar(unit) {
     };
 }
 
+function apexDock() {
+    return findDescendant(Main.layoutManager.uiGroup, actor => actor.get_name() === 'apexDock');
+}
+
+// ApexDock's items in order: the box's apps, then dock.js's tail.
+function dockItem(item, dock) {
+    const iconSize = item.child?._delegate?.icon?.iconSize ?? null;
+    if (item.has_style_class_name?.('apex-dock-separator'))
+        return {kind: 'separator'};
+    if (item === dock._showAppsIcon)
+        return {kind: 'show-apps', iconSize, iconName: item._iconActor?.icon_name ?? null};
+    if (item === dock.tailItems?.trash)
+        return {kind: 'trash', iconSize};
+    if (item.child?._delegate?.app)
+        return {kind: 'app', name: item.child._delegate.app.get_name(), iconSize};
+    return {kind: item.constructor.name};
+}
+
+// How far the overview's workspace view stays above the dock's background.
+function dockClearance(unit) {
+    const dock = apexDock();
+    const workspaces = Main.overview._overview?.controls?._workspacesDisplay;
+    if (!dock || !workspaces)
+        return null;
+    const view = boxOf(workspaces, unit);
+    return round(boxOf(dock._background, unit).y - view.y - view.height);
+}
+
+function dockReport(unit) {
+    const dock = apexDock();
+    if (!dock)
+        return null;
+    const monitor = Main.layoutManager.primaryMonitor;
+    const background = boxOf(dock._background, unit);
+    const items = [...dock._box.get_children(), ...dock._dashContainer.get_children().slice(1)]
+        .filter(item => item.visible);
+    return {
+        visible: dock.visible && dock.get_parent().visible,
+        background,
+        bottomGap: round((monitor.y + monitor.height) / unit.length - background.y - background.height),
+        centreOffset: round(background.x + background.width / 2 - (monitor.x + monitor.width / 2) / unit.length),
+        radius: round(dock._background.get_theme_node().get_border_radius(St.Corner.TOPLEFT) / unit.length),
+        items: items.map(item => dockItem(item, dock)),
+        overviewDashVisible: Main.overview.dash.visible,
+    };
+}
+
 async function settle() {
     let idle = false;
     await Promise.race([
@@ -484,6 +532,7 @@ async function capture(scene) {
         file: name, width, height, bytes,
         boxes: {
             panel: captureBox(Main.panel, scale),
+            dock: captureBox(apexDock(), scale),
             clock: captureBox(Main.panel.statusArea.dateMenu, scale),
         },
     };
@@ -1008,6 +1057,30 @@ function overviewStyle(unit) {
     }
 }
 
+// What the overview feature changes, in the empty overview the scene captured. With no
+// window to show a title, its hook's answer stands in.
+async function overviewLayer(unit) {
+    const {controls} = Main.overview._overview;
+    const view = controls._workspacesDisplay._getPrimaryView();
+    const workspace = view._workspaces[global.workspace_manager.get_active_workspace_index()];
+    const empty = workspace.get_children().find(a => a.has_style_class_name?.('apex-workspace-empty'));
+    const thumbnailsBox = controls._thumbnailsBox;
+    const hooks = await apexHooks();
+    return {
+        titleVisible: hooks?.value('window-title-visible', false) ?? null,
+        thumbnailsThreshold: hooks?.value('thumbnails-threshold', null) ?? null,
+        thumbnails: {
+            maxScale: thumbnailsBox.maxThumbnailScale,
+            first: thumbnailsBox._thumbnails?.[0] ? boxOf(thumbnailsBox._thumbnails[0], unit) : null,
+        },
+        workspace: {
+            ...boxOf(workspace, unit),
+            background: workspace._background.visible,
+            empty: empty ? {...styleOf(empty, unit), visible: empty.visible, text: empty.text} : null,
+        },
+    };
+}
+
 function standInStyle(styleClass, parentClass, unit) {
     const parent = new St.BoxLayout({style_class: parentClass ?? ''});
     const actor = new St.Widget({style_class: styleClass});
@@ -1045,6 +1118,11 @@ async function appGrid(unit) {
                 focus: underPseudoClass(app, 'focus', () => paint(app.get_theme_node(), unit)),
             } : null,
             folder: folder ? styleOf(folder, unit) : null,
+            grid: {
+                columns: appDisplay._grid.layout_manager.columns_per_page,
+                rows: appDisplay._grid.layout_manager.rows_per_page,
+                iconSize: app?.icon.iconSize ?? null,
+            },
             runningDot: standInStyle('app-grid-running-dot', null, unit),
             pageIndicator: standInStyle('page-indicator-icon', 'page-indicator', unit),
             pageHint: standInStyle('page-navigation-hint next', null, unit),
@@ -1124,6 +1202,7 @@ async function scenes() {
     delete desktop.bytes;
     // After the capture: reading the hover and checked styles restyles the pills.
     const bar = topBar(unit);
+    const dock = dockReport(unit);
     bar.withDot = await withUnreadNotification(unit);
     bar.dnd = await withDoNotDisturb();
     bar.opaque = await withOpaqueBar(unit);
@@ -1141,8 +1220,13 @@ async function scenes() {
     // The search entry's cursor blinks: without key focus the scene is still.
     global.stage.set_key_focus(null);
     const overviewIdle = await settle();
-    const overview = {idle: overviewIdle, ...await capture('overview'), thumbnails: thumbnails(), workArea: workArea(unit)};
+    const overview = {
+        idle: overviewIdle, ...await capture('overview'), thumbnails: thumbnails(), workArea: workArea(unit),
+        dockVisible: apexDock()?.visible ?? null,
+        dockClearance: dockClearance(unit),
+    };
     surfaces.overview = overviewStyle(unit);
+    surfaces.overviewLayer = await overviewLayer(unit);
     surfaces.appGrid = await appGrid(unit);
     delete overview.bytes;
     Main.overview.hide();
@@ -1152,6 +1236,7 @@ async function scenes() {
         unit, startedInOverview,
         monitorScale: global.display.get_monitor_scale(primary.index),
         topBar: {...bar, diamond},
+        dock,
         surfaces,
         scenes: {desktop, overview},
     };
@@ -1188,12 +1273,14 @@ async function withDarkStyleOffInQuickSettings() {
     };
 }
 
+// An St.Icon counts, not the texture child St gives it once it is first styled.
 function actorCensus() {
     const counts = {};
     const visit = actor => {
         const type = actor.constructor.name;
         counts[type] = (counts[type] ?? 0) + 1;
-        actor.get_children().forEach(visit);
+        if (!(actor instanceof St.Icon))
+            actor.get_children().forEach(visit);
     };
     visit(global.stage);
     return counts;
@@ -1211,6 +1298,8 @@ async function layerState(layerEnabled) {
 async function withLayerCycles(cycles) {
     const settings = new Gio.Settings({schema_id: APEX_SCHEMA});
     dropStartupNotifications();
+    // main.js runs an unmapped actor's deferred work (the overview's hidden dash) 20 s on.
+    await Scripting.sleep(DEFERRED_WORK_TIMEOUT_MS);
     await settle();
     const states = [await layerState(settings.get_boolean(LAYER_ENABLED_KEY))];
     for (let cycle = 1; cycle <= cycles; cycle++) {
@@ -1348,6 +1437,17 @@ export async function run() {
             result = {error: `${e.message}\n${e.stack}`};
         }
         console.log(`APEXG2-MOTION ${JSON.stringify(result)}`);
+    }
+
+    if (GLib.getenv('G2_GLASS') === '1') {
+        let result;
+        try {
+            const Glass = await import('./glass.js');
+            result = await Glass.glassReport();
+        } catch (e) {
+            result = {error: `${e.message}\n${e.stack}`};
+        }
+        console.log(`APEXG2-GLASS ${JSON.stringify(result)}`);
     }
 
     const cycles = Number(GLib.getenv('G2_CYCLES') ?? '0');

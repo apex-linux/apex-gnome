@@ -1,0 +1,47 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Sat, 24 Oct 2026 08:13:26 +0000
+Subject: [PATCH] dash: hooks for the Apex dock
+
+Value hooks for ApexDock, the layer's subclass of Dash (apex-fedora ADR
+0014, ROADMAP S2a), where a subclass cannot reach:
+
+- ShowAppsIcon: the icon name, given the ShowAppsIcon, so the dock's tile
+  can be full colour;
+- Dash._redisplay: whether the separator goes between the favourites and
+  the running apps, given the dash; the dock draws its own before Show
+  Apps.
+---
+ js/ui/dash.js | 5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/js/ui/dash.js b/js/ui/dash.js
+index 61bd14c..83e41fc 100644
+--- a/js/ui/dash.js
++++ b/js/ui/dash.js
+@@ -12,6 +12,7 @@ import * as DND from './dnd.js';
+ import * as IconGrid from './iconGrid.js';
+ import * as Main from './main.js';
+ import * as Overview from './overview.js';
++import * as ApexHooks from './apex/hooks.js';
+ 
+ export const DASH_ANIMATION_TIME = 200;
+ const DASH_ITEM_LABEL_SHOW_TIME = 150;
+@@ -213,7 +214,7 @@ class ShowAppsIcon extends DashItemContainer {
+ 
+     _createIcon(size) {
+         this._iconActor = new St.Icon({
+-            icon_name: 'view-app-grid-symbolic',
++            icon_name: ApexHooks.value('show-apps-icon-name', 'view-app-grid-symbolic', this),
+             icon_size: size,
+             style_class: 'show-apps-icon',
+             track_hover: true,
+@@ -806,7 +807,7 @@ export const Dash = GObject.registerClass({
+         // Update separator
+         const nFavorites = Object.keys(favorites).length;
+         const nIcons = children.length + addedItems.length - removedActors.length;
+-        if (nFavorites > 0 && nFavorites < nIcons) {
++        if (ApexHooks.value('dash-favorites-separator', nFavorites > 0 && nFavorites < nIcons, this)) {
+             if (!this._separator) {
+                 this._separator = new St.Widget({
+                     style_class: 'dash-separator',

@@ -16,8 +16,11 @@ RPM_DIR holds the lane's built RPMs (_build/gnome-control-center/out); without i
 gnome-control-center runs. For a user '$USER_NAME', with apex-desktop's schema from
 tests/layer/fixtures, it captures board 11 at both scroll positions, light and dark, and
 checks every row against its key both ways through AT-SPI (bindings.py). Without the
-schema it captures and checks the explanation the panel shows instead. The captures and
-logs land in _build/control-center/shots/.
+schema it captures and checks the explanation the panel shows instead. Then, with
+update1.py standing in for apex-updated on the system bus, it opens System > Software
+Updates and captures board 18 light and dark, and updates.py checks each state's texts
+and that each button makes its Update1 call. The captures and logs land in
+_build/control-center/shots/.
 
 It needs gnome-shell, mesa-dri-drivers, dbus-daemon, python3-dbusmock, python3-gobject,
 at-spi2-core, gcc, util-linux and adwaita-sans-fonts. G2's clock.c and fixtures.py
@@ -54,10 +57,30 @@ run_case() {
 
 status=0
 headless_apex_schema yes
-run_case light default APEX_SCROLL=1 APEX_CHECK=rows || status=1
+run_case light default APEX_SCROLL=1 "APEX_CHECK=bindings.py rows" || status=1
 run_case dark prefer-dark APEX_SCROLL=1 || status=1
 headless_apex_schema no
-run_case no-schema default APEX_CHECK=no-schema || status=1
+run_case no-schema default "APEX_CHECK=bindings.py no-schema" || status=1
+headless_apex_schema yes
+
+# update_case SCENARIO NAME SCHEME [NAME=VALUE...]: System > Software Updates on update1.py's SCENARIO.
+update_case() {
+    local scenario=$1 name=$2 scheme=$3 log=$out/update1-$2.log
+    shift 3
+    if [[ $scenario == unavailable ]]; then
+        headless_update1_stop
+    else
+        headless_update1 "$scenario" "$log"
+    fi
+    run_case "$name" "$scheme" "APEX_OPEN=system software-updates" APEX_UPDATE1_LOG="$log" "$@"
+}
+
+update_case ready updates-light default APEX_SCROLL=1 "APEX_CHECK=updates.py ready" || status=1
+update_case ready updates-dark prefer-dark APEX_SCROLL=1 || status=1
+for scenario in up-to-date available downloading health-failure fallback unavailable; do
+    update_case "$scenario" "updates-$scenario" default "APEX_CHECK=updates.py $scenario" || status=1
+done
+headless_update1_stop
 grep -h '^ok \|^FAIL \|APEXCC-' "$out"/*.log || true
 ((status == 0)) || die "run.sh: a case failed; see ${out#"$APEX_ROOT/"}/*.log"
-log "run.sh: every row is bound; captures in ${out#"$APEX_ROOT/"}"
+log "run.sh: every row is bound and every Software Updates state checked; captures in ${out#"$APEX_ROOT/"}"
