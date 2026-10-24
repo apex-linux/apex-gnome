@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-"""AT-SPI helpers shared by bindings.py and updates.py."""
+"""AT-SPI helpers shared by bindings.py, updates.py and appearance.py."""
 
 import sys
 import time

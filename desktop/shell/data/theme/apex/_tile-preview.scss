@@ -1,0 +1,10 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+
+// Board 22 also blurs behind the preview: that waits for S2b's glass manager. Mutter sizes the
+// preview to the tile, so a clear border insets it and an inset shadow draws its ring.
+.tile-preview {
+  border: $apex_tile_preview_inset solid transparent;
+  border-radius: $apex_radius_tile_preview + $apex_tile_preview_inset;
+  background-color: st-transparentize($apex_accent, 1 - $apex_tile_preview_fill_opacity);
+  box-shadow: inset 0 0 0 $apex_tile_preview_ring st-transparentize($apex_accent, 1 - $apex_tile_preview_ring_opacity);
+}

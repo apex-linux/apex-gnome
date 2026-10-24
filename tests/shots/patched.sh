@@ -202,11 +202,13 @@ for c in default:light default-scale1:light dark-style:dark; do
     app_grid "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
     overview_layer "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
     derived_surfaces "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
+    tile_preview "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
     spotlight_style "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
 done
 layer_cycles "$run"
 no_js_error glass "$run/glass.log"
 glass_frames glass "$run/glass.log"
+glass_manager glass "$run/glass.log" light
 glass_unlock_vs_fedora "$run"
 echo "# logs and captures: $run"
 summary

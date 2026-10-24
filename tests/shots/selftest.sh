@@ -196,7 +196,7 @@ REPORT_OF_A_BAR_DRAWN_FROM_TOKENS='
             pill: {x: 1303, y: 4, width: ($t.apex_bar_search_width | px), height: 24, radius: 12}},
         {accessibleName: "System", label: null, pill: {x: 1337, y: 4, width: 95, height: 24, radius: 12}}],
     opaque: {background: ($t.apex_bar_solid | hex), boxShadow: {color: ($t.apex_border | hex), inset: false, x: 0, y: 1, blur: 0, spread: 0}},
-    glass: []},
+    glass: [{actor: "panel", radius: (2 * ($t.apex_bar_blur | px) * 2), saturation: 1.6}]},
   dock: {visible: true, bottomGap: ($t.apex_dock_bottom_gap | px), centreOffset: 0, radius: ($t.apex_radius_dock | px),
     background: {x: 470, y: 820, width: 500, height: 70},
     items: [{kind: "app", name: "Files", iconSize: ($t.apex_dock_icon_size | px)},
@@ -204,6 +204,8 @@ REPORT_OF_A_BAR_DRAWN_FROM_TOKENS='
             {kind: "separator"},
             {kind: "show-apps", iconSize: ($t.apex_dock_icon_size | px), iconName: "view-app-grid"},
             {kind: "trash", iconSize: ($t.apex_dock_icon_size | px)}],
+    appMenu: {app: "Files", hasDualGpu: true,
+      items: ["Open Windows", "New Window", "Launch Using Discrete Graphics Card", "Unpin", "App Details"]},
     overviewDashVisible: false},
   scenes: {overview: {dockVisible: true, dockClearance: 12}}}'
 # shellcheck disable=SC2016 # a jq program
@@ -396,6 +398,16 @@ REPORT_OF_AN_OVERVIEW_LAYER_FROM_TOKENS='
                 font: {size: ($t.apex_font_workspace_empty_size | px), weight: ($t.apex_font_heading_weight | tonumber)}}}},
     appGrid: {grid: {columns: 7, rows: 4, iconSize: 88}}}}'
 # shellcheck disable=SC2016 # a jq program
+REPORT_OF_A_TILE_PREVIEW_DRAWN_FROM_TOKENS='
+($t.apex_tile_preview_inset | px) as $i
+| def tint($o): "rgba(53, 132, 228, \($o))" | hex;
+{topBar: {accent: "#3584e4ff"}, surfaces: {tilePreview: {
+    tile: {x: 0, y: 32, width: 720, height: 868},
+    preview: {styleClass: "tile-preview on-primary tile-preview-left", x: 0, y: 32, width: 720, height: 868,
+        border: {top: $i, right: $i, bottom: $i, left: $i}, borderColor: "#00000000",
+        radius: (($t.apex_radius_tile_preview | px) + $i), background: tint($t.apex_tile_preview_fill_opacity),
+        boxShadow: {inset: true, x: 0, y: 0, blur: 0, spread: ($t.apex_tile_preview_ring | px), color: tint($t.apex_tile_preview_ring_opacity)}}}}}'
+# shellcheck disable=SC2016 # a jq program
 REPORT_OF_DERIVED_SURFACES_DRAWN_FROM_TOKENS='
 ($t.apex_surface_border | px) as $b
 | {border: {top: $b}, borderColor: ($t.apex_panel_border | hex),
@@ -469,8 +481,7 @@ HEX_DEF='def hex: rgba | map([., 16] | "0123456789abcdef"[(.[0] / .[1] | floor):
                                     + "0123456789abcdef"[(.[0] % .[1]):(.[0] % .[1]) + 1]) | "#" + join("");'
 
 # shellcheck disable=SC2016 # jq programs
-GAP_CLOSERS='the glass|.topBar.glass = [{actor: "panel", radius: 96, saturation: 1.6}]
-the clock gap|.topBar.clockTextGap = 8
+GAP_CLOSERS='the clock gap|.topBar.clockTextGap = 8
 the clock pill without the pad|.topBar.withDot.pillWidth -= ($t.apex_bar_clock_gap | px) + ($t.apex_bar_clock_dot_size | px)
 the raw accent dot|.topBar.withDot.dot.background = .topBar.accent'
 
@@ -484,6 +495,7 @@ assert_run() {
     [[ $assertions == overview_style ]] && report=$REPORT_OF_AN_OVERVIEW_DRAWN_FROM_TOKENS
     [[ $assertions == app_grid ]] && report=$REPORT_OF_A_LAUNCHER_DRAWN_FROM_TOKENS
     [[ $assertions == derived_surfaces ]] && report=$REPORT_OF_DERIVED_SURFACES_DRAWN_FROM_TOKENS
+    [[ $assertions == tile_preview ]] && report=$REPORT_OF_A_TILE_PREVIEW_DRAWN_FROM_TOKENS
     [[ $assertions == overview_layer ]] && report=$REPORT_OF_AN_OVERVIEW_LAYER_FROM_TOKENS
     [[ $assertions == spotlight_style ]] && report=$REPORT_OF_A_SPOTLIGHT_DRAWN_FROM_TOKENS
     tokens=$(tokens_for "$variant")
@@ -566,9 +578,9 @@ del(.topBar.statusGlyphs[1])|no Wi-Fi glyph
 .topBar.dnd.on = ["notifications-disabled-symbolic"] + .topBar.dnd.off|a Do Not Disturb glyph in the status pill
 .topBar.statusGlyphs += [{name: "bluetooth-active-symbolic", width: 16, height: 16, iconSize: 16}]|the connected keyboard's Bluetooth glyph
 CHANGES
-    assert_run top_bar light '.monitorScale = 1 | .topBar.diamond.inkPixels = 16' >/dev/null
+    assert_run top_bar light '.monitorScale = 1 | .topBar.glass[0].radius /= 2 | .topBar.diamond.inkPixels = 16' >/dev/null
     expect_eq "top bar: at scale 1 a quarter of the diamond's stroke is 16 capture pixels" 0 "$(grep -c '^FAIL' "$T/top-bar.out")"
-    assert_run top_bar light '.monitorScale = 1 | .topBar.diamond.inkPixels = 15' >/dev/null
+    assert_run top_bar light '.monitorScale = 1 | .topBar.glass[0].radius /= 2 | .topBar.diamond.inkPixels = 15' >/dev/null
     expect_eq "top bar: and fewer fail" 1 "$(grep -c '^FAIL' "$T/top-bar.out")"
     assert_run top_bar light 'del(.topBar)' >/dev/null
     expect_eq "top bar: a report without the top bar passes none" 0 "$(grep -c '^PASS' "$T/top-bar.out")"
@@ -578,7 +590,7 @@ test_dock() {
     local variant change what passes failures open_gaps
     for variant in light dark; do
         read -r passes failures open_gaps <<<"$(assert_run dock_metrics "$variant")"
-        if ((failures == 0 && passes == 7)); then
+        if ((failures == 0 && passes == 8)); then
             ok "dock ($variant): a dock drawn from the tokens passes all $passes assertions"
         else
             not_ok "dock ($variant): a dock drawn from the tokens passes (passed/failed/gaps $passes/$failures/$open_gaps): $(grep -m3 '^FAIL' "$T/top-bar.out" | paste -sd'|' -)"
@@ -605,6 +617,7 @@ test_dock() {
 .dock.overviewDashVisible = true|the overview's own dash beside the dock
 .scenes.overview.dockVisible = false|no dock in the overview
 .scenes.overview.dockClearance = -15|workspaces under the dock in the overview
+.dock.appMenu.items -= ["Launch Using Discrete Graphics Card"]|an app menu without the discrete GPU
 CHANGES
     assert_run dock_metrics light 'del(.dock)' >/dev/null
     expect_eq "dock: a report without the dock passes none" 0 "$(grep -c '^PASS' "$T/top-bar.out")"
@@ -870,6 +883,33 @@ test_app_grid() {
 CHANGES
 }
 
+test_tile_preview() {
+    local variant change what passes failures open_gaps
+    for variant in light dark; do
+        read -r passes failures open_gaps <<<"$(assert_run tile_preview "$variant")"
+        if ((failures == 0 && open_gaps == 0 && passes == 2)); then
+            ok "tile preview ($variant): drawn from the tokens it passes all $passes assertions"
+        else
+            not_ok "tile preview ($variant): drawn from the tokens it passes (passed/failed/gaps $passes/$failures/$open_gaps): $(grep -m3 '^FAIL' "$T/top-bar.out" | paste -sd'|' -)"
+        fi
+    done
+    while IFS='|' read -r change what; do
+        read -r passes failures open_gaps <<<"$(assert_run tile_preview light "$change")"
+        if ((failures == 1)); then
+            ok "tile preview: $what fails one assertion"
+        else
+            not_ok "tile preview: $what fails one assertion (passed/failed/gaps $passes/$failures/$open_gaps)"
+        fi
+    done <<'CHANGES'
+.surfaces.tilePreview.preview.width = 708|a preview shrunk to the inset instead of bordered
+.surfaces.tilePreview.preview.borderColor = "#3584e4ff"|upstream's opaque accent border
+.surfaces.tilePreview.preview.x = 6|a preview moved instead of inset
+.surfaces.tilePreview.preview.radius = 0|upstream's square corners
+.surfaces.tilePreview.preview.background = "#3584e480"|upstream's half-accent fill
+.surfaces.tilePreview.preview.boxShadow = null|no ring
+CHANGES
+}
+
 test_derived_surfaces() {
     local variant change what passes failures open_gaps
     for variant in light dark; do
@@ -1113,8 +1153,8 @@ fixtures_report() {
     done
 }
 
-# What the shell's indicators read: network.js through libnm, bluetooth.js through
-# gnome-bluetooth, system.js the display device's properties.
+# What the shell reads: network.js through libnm, bluetooth.js through gnome-bluetooth,
+# system.js the display device's properties and appMenu.js switcheroo-control's.
 write_fixture_reader() {
     cat >"$T/read-fixtures.js" <<'EOF'
 import Gio from 'gi://Gio';
@@ -1133,6 +1173,8 @@ const listed = (device?.get_access_points() ?? []).filter(a => securityTypes.som
     .map(a => NM.utils_ssid_to_utf8(a.get_ssid().get_data()));
 const upower = Gio.DBusProxy.new_for_bus_sync(Gio.BusType.SYSTEM, Gio.DBusProxyFlags.NONE, null,
     'org.freedesktop.UPower', '/org/freedesktop/UPower/devices/DisplayDevice', 'org.freedesktop.UPower.Device', null);
+const switcheroo = Gio.DBusProxy.new_for_bus_sync(Gio.BusType.SYSTEM, Gio.DBusProxyFlags.NONE, null,
+    'net.hadess.SwitcherooControl', '/net/hadess/SwitcherooControl', 'net.hadess.SwitcherooControl', null);
 const bluetooth = new GnomeBluetooth.Client();
 const loop = new GLib.MainLoop(null, false);
 GLib.timeout_add(GLib.PRIORITY_DEFAULT, 1000, () => {
@@ -1148,6 +1190,7 @@ GLib.timeout_add(GLib.PRIORITY_DEFAULT, 1000, () => {
         battery: {present: upower.get_cached_property('IsPresent')?.unpack() ?? null,
             percentage: upower.get_cached_property('Percentage')?.unpack() ?? null},
         connectedBluetooth: connected,
+        hasDualGpu: switcheroo.get_cached_property('HasDualGpu')?.unpack() ?? null,
     }));
     loop.quit();
     return GLib.SOURCE_REMOVE;
@@ -1171,15 +1214,22 @@ EOF
 test_fixtures() {
     local passes failures address missing=()
     mkdir -p "$T/fixtures"
-    fixtures_report 'G2-FIXTURES {"battery": {"percentage": 87.0, "present": true, "onBattery": true}, "wifi": {"primary": "Apex-5G", "ssid": "Apex-5G", "strength": 90, "inRange": ["Apex-5G", "Apex-2.4G", "Library Guest"], "state": 70, "connectivity": 4}, "keyboard": {"alias": "Keychron K3", "connected": true, "icon": "input-keyboard"}}'
+    local report='G2-FIXTURES {"battery": {"percentage": 87.0, "present": true, "onBattery": true}, '
+    report+='"wifi": {"primary": "Apex-5G", "ssid": "Apex-5G", "strength": 90, "inRange": ["Apex-5G", "Apex-2.4G", "Library Guest"], '
+    report+='"state": 70, "connectivity": 4}, "keyboard": {"alias": "Keychron K3", "connected": true, "icon": "input-keyboard"}, '
+    report+='"gpus": {"hasDualGpu": true, "names": ["Intel Graphics", "NVIDIA GeForce RTX 4060"]}}'
+    fixtures_report "$report"
     read -r passes failures <<<"$(assertion_counts fixtures_on_the_bus "$T/fixtures")"
-    expect_eq "fixtures: what fixtures.py reports passes each part's four assertions" "12/0" "$passes/$failures"
-    fixtures_report 'G2-FIXTURES {"battery": {"percentage": 0.0, "present": false, "onBattery": false}, "wifi": {"primary": "Apex-5G", "ssid": "Apex-5G", "strength": 30, "inRange": ["Apex-5G"], "state": 70, "connectivity": 4}, "keyboard": {"alias": "Keychron K3", "connected": false, "icon": "phone"}}'
+    expect_eq "fixtures: what fixtures.py reports passes each part's five assertions" "15/0" "$passes/$failures"
+    report='G2-FIXTURES {"battery": {"percentage": 0.0, "present": false, "onBattery": false}, '
+    report+='"wifi": {"primary": "Apex-5G", "ssid": "Apex-5G", "strength": 30, "inRange": ["Apex-5G"], "state": 70, "connectivity": 4}, '
+    report+='"keyboard": {"alias": "Keychron K3", "connected": false, "icon": "phone"}, "gpus": {"hasDualGpu": false, "names": ["Intel Graphics"]}}'
+    fixtures_report "$report"
     read -r passes failures <<<"$(assertion_counts fixtures_on_the_bus "$T/fixtures")"
-    expect_eq "fixtures: no battery, a weak signal, one network in range and a keyboard left unconnected fail all four" "0/12" "$passes/$failures"
+    expect_eq "fixtures: no battery, a weak signal, one network in range, a keyboard left unconnected and one GPU fail all five" "0/15" "$passes/$failures"
     fixtures_report 'fixtures.py: no owner for org.bluez after 20 s'
     read -r passes failures <<<"$(assertion_counts fixtures_on_the_bus "$T/fixtures")"
-    expect_eq "fixtures: a fixtures.py that failed fails them" "0/12" "$passes/$failures"
+    expect_eq "fixtures: a fixtures.py that failed fails them" "0/15" "$passes/$failures"
 
     command -v dbus-daemon >/dev/null 2>&1 || missing+=(dbus-daemon)
     python3 -c 'import dbusmock' >/dev/null 2>&1 || missing+=(python3-dbusmock)
@@ -1196,10 +1246,10 @@ test_fixtures() {
     cp "$T/fixtures/fixtures-main.txt" "$T/fixtures/fixtures-kernel.txt"
     cp "$T/fixtures/fixtures-main.txt" "$T/fixtures/fixtures-fedora.txt"
     read -r passes failures <<<"$(assertion_counts fixtures_on_the_bus "$T/fixtures")"
-    expect_eq "fixtures: fixtures.py on a private bus passes the fixture assertions" "12/0" "$passes/$failures"
+    expect_eq "fixtures: fixtures.py on a private bus passes the fixture assertions" "15/0" "$passes/$failures"
     write_fixture_reader
-    expect_eq "fixtures: libnm, gnome-bluetooth and UPower's display device read them as the shell does" \
-        '{"wifi":{"id":"Apex-5G","strength":90,"listed":["Apex-5G","Apex-2.4G","Library Guest"],"full":true,"wireless":true},"battery":{"present":true,"percentage":87},"connectedBluetooth":["Keychron K3"]}' \
+    expect_eq "fixtures: libnm, gnome-bluetooth, UPower's display device and switcheroo-control read them as the shell does" \
+        '{"wifi":{"id":"Apex-5G","strength":90,"listed":["Apex-5G","Apex-2.4G","Library Guest"],"full":true,"wireless":true},"battery":{"present":true,"percentage":87},"connectedBluetooth":["Keychron K3"],"hasDualGpu":true}' \
         "$(DBUS_SYSTEM_BUS_ADDRESS=$address gjs -m "$T/read-fixtures.js" 2>"$T/read-fixtures.err")"
     local -a pids
     mapfile -t pids < <(cat "$T/bus.pid" "$T"/fixtures/fixture-*.pid 2>/dev/null)
@@ -1346,12 +1396,12 @@ test_glass() {
             "edge": {"max": [11.03, 6.23, 11.67], "mean": [1.4, 0.9, 1.3]}},
         "sameFrame": {"covered": true, "changed": 44893, "differingFromFull": 0},
         "clippedRedraw": {"covered": false, "differingFromLast": 0, "nextCovered": true, "nextDifferingFromFull": 0},
-        "stock": {"covered": false, "differingFromLast": 2304, "differingFromFull": 43927,
+        "stock": {"covered": false, "tries": 1, "differingFromLast": 2304, "differingFromFull": 43927,
             "box": {"max": [180, 150, 170], "mean": [9, 7, 8]}, "interior": {"max": [180, 150, 170], "mean": [9, 7, 8]}, "edge": {"max": [60, 50, 40], "mean": [5, 4, 4]}}}}'
     while IFS='|' read -r failures what change; do
         jq -c "$change" <<<"$good" | sed 's/^/APEXG2-GLASS /' >"$T/glass.log"
         read -r passes _ <<<"$(assertion_counts glass_frames glass "$T/glass.log")"
-        expect_eq "glass: $what fails $failures of 6" "$failures" $((6 - passes))
+        expect_eq "glass: $what fails $failures of 7" "$failures" $((7 - passes))
     done <<'CHANGES'
 0|a run within the tolerance, the frames as drawn|.
 0|the 4/255 the lead accepted inside|.pixels.reference.interior.max[2] = 4
@@ -1366,8 +1416,34 @@ test_glass() {
 1|a clipped frame never followed by its redraw|.pixels.clippedRedraw.nextCovered = false
 1|a stock control that sees nothing|.pixels.stock.differingFromFull = 0
 1|a stock control within the tolerances|.pixels.stock += (.pixels.reference | {box, interior, edge})
-6|Fedora's effect|{patched: false, pixels: null}
-6|a probe that failed|{error: "no frame within 2000 ms"}
+0|a stock control that needed 3 tries|.pixels.stock.tries = 3
+2|5 tries that never obtained a partial redraw|.pixels.stock += {covered: true, tries: 5, differingFromFull: 0}
+7|Fedora's effect|{patched: false, pixels: null}
+7|a probe that failed|{error: "no frame within 2000 ms"}
+CHANGES
+
+    local on='{"radius": 96, "saturation": 1.6, "enabled": true, "fine": true, "followOpacity": true, "background": true}'
+    local popover='{"radius": 120, "saturation": 1.8, "enabled": true, "fine": true, "followOpacity": true, "background": true}'
+    local manager
+    manager=$(jq -nc --argjson on "$on" --argjson p "$popover" '{panel: $on, quickSettings: $p, calendar: $p, banner: $p, blurEffects: ["panel"], solidClass: false} as $g
+        | {panel: null, quickSettings: null, calendar: null, banner: null, blurEffects: []} as $none
+        | {manager: {monitorScale: 2, glass: $g, reduceTransparency: ($none + {solidClass: true}), highContrast: ($none + {solidClass: true}),
+            disabled: ($none + {solidClass: false}), restored: $g}}')
+    while IFS='|' read -r failures what change; do
+        jq -c "$change" <<<"$manager" | sed 's/^/APEXG2-GLASS /' >"$T/glass.log"
+        read -r passes _ <<<"$(assertion_counts glass_manager glass "$T/glass.log" light)"
+        expect_eq "glass manager: $what fails $failures of 5" "$failures" $((5 - passes))
+    done <<'CHANGES'
+0|the bar and the popovers at their tokens, every switch honoured|.
+1|the bar at the popovers' sigma|.manager.glass.panel.radius = 120
+1|a banner at the bar's saturation|.manager.glass.banner.saturation = 1.6
+1|a popover without fine|.manager.glass.calendar.fine = false
+1|a blur left behind by Reduce Transparency|.manager.reduceTransparency.blurEffects = ["St_BoxLayout"]
+1|Reduce Transparency without apex-solid|.manager.reduceTransparency.solidClass = false
+1|high contrast that keeps the bar's glass|.manager.highContrast.panel = .manager.glass.panel
+1|the kill switch that turns the tints solid|.manager.disabled.solidClass = true
+1|glass that does not come back|.manager.restored.panel = null
+5|no manager|.manager = null
 CHANGES
 }
 
@@ -1386,6 +1462,7 @@ test_overview_style
 test_app_grid
 test_overview_layer
 test_derived_surfaces
+test_tile_preview
 test_spotlight_style
 test_today_pins
 test_known_gaps

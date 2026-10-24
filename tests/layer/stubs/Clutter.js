@@ -34,7 +34,15 @@ class ClickGesture {
     }
 }
 
+class BindConstraint {
+    constructor(params) {
+        Object.assign(this, params);
+    }
+}
+
 export default {
+    BindConstraint,
+    BindCoordinate: {X: 0, Y: 1, WIDTH: 2, HEIGHT: 3, POSITION: 4, SIZE: 5, ALL: 6},
     AnimationMode: {EASE_OUT_QUAD: 5, EASE_OUT_CUBIC: 8},
     BUTTON_SECONDARY: 3,
     BinLayout,
