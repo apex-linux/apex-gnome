@@ -179,6 +179,7 @@ copy keeps apex-system's bytes and licence, GPL-3.0-or-later, so the built packa
 | `panels/apex/cc-apex-tile.{c,h}` | the wallpaper tile with the Apex diamond, and a badge, shared by the panel's header and the updates page |
 | `panels/apex/cc-apex-updates-page.{c,h,blp}` | the Software Updates page |
 | `panels/apex/cc-apex-updates-state.{c,h}` | its logic, without GTK |
+| `panels/apex/cc-apex-background.{c,h}` | Appearance's wallpaper name and note (0004) |
 | `panels/apex/io.github.apex_linux.Apex.Update1.xml` | apex-system's interface, the one file without an SPDX line: a byte-identical copy |
 
 ## The series
