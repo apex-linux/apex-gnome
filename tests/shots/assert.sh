@@ -427,6 +427,8 @@ fixtures_on_the_bus() {
             "UPower's display device: a battery at $BATTERY_PERCENT %, discharging"
         expect "fixtures ($part)" "$fixtures" '.wifi | .primary == "Apex-5G" and .ssid == "Apex-5G" and .strength >= 80 and .state == 70 and .connectivity == 4' \
             "NetworkManager: the primary connection is Wi-Fi \"Apex-5G\" at full signal, connected globally"
+        expect "fixtures ($part)" "$fixtures" '.wifi.inRange == ["Apex-5G", "Apex-2.4G", "Library Guest"]' \
+            "NetworkManager: \"Apex-2.4G\" and the open \"Library Guest\" are in range too"
         expect "fixtures ($part)" "$fixtures" '.keyboard | .alias == "Keychron K3" and .connected and .icon == "input-keyboard"' \
             "BlueZ: the keyboard \"Keychron K3\" is connected"
     done
