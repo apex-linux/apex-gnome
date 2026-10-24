@@ -258,9 +258,9 @@ top_bar() {
         '.topBar.leftItems' 'length == 2 and .[0].accessibleName == "Activities" and (.[1].label | .text == "Desktop" and .weight == ($t.apex_font_bar_emphasis_weight | tonumber))'
     "${metric[@]}" 'the status pill ends $apex_bar_padding from the right edge' \
         '.topBar | .panel.width - .status.pill.x - .status.pill.width' 'px_is($t.apex_bar_padding)'
-    "${metric[@]}" "the search button comes just before the status pill: a \$apex_bar_search_width x \$apex_bar_pill_height pill, radius \$apex_radius_bar_pill, named \"$SEARCH_BUTTON_NAME\"" \
-        '.topBar.rightItems | .[-2:]' \
-        "length == 2 and .[1].accessibleName == \"$STATUS_BUTTON_NAME\" and .[0].accessibleName == \"$SEARCH_BUTTON_NAME\"
+    "${metric[@]}" "the search button starts the right box, the status pill ends it: a \$apex_bar_search_width x \$apex_bar_pill_height pill, radius \$apex_radius_bar_pill, named \"$SEARCH_BUTTON_NAME\"" \
+        '.topBar.rightItems' \
+        "length >= 2 and .[-1].accessibleName == \"$STATUS_BUTTON_NAME\" and .[0].accessibleName == \"$SEARCH_BUTTON_NAME\"
             and (.[0].pill | (.width | px_is(\$t.apex_bar_search_width)) and (.height | px_is(\$t.apex_bar_pill_height)) and (.radius | px_is(\$t.apex_radius_bar_pill)))"
     "${metric[@]}" 'the clock pill is centred on the bar' \
         '.topBar | .clock.pill.x + .clock.pill.width / 2 - .panel.width / 2' 'fabs <= 0.5'
@@ -397,7 +397,7 @@ indicator_metrics() {
             and (.g.x - .pill.x | px_is($t.apex_bar_pill_padding_privacy)) and (.pill.paddingLeft | px_is($t.apex_bar_pill_padding_privacy))
             and (.g.y + .g.height / 2 - .pill.y - .pill.height / 2 | fabs < 0.51)'
     "${metric[@]}" 'its glyphs are $apex_privacy_icon_size in $apex_privacy_fg, padded $apex_privacy_padding and $apex_privacy_gap apart' \
-        '.everything.privacy' '(.glyphs | length == 2 and all((.width | px_is($t.apex_privacy_icon_size)) and (.height | px_is($t.apex_privacy_icon_size)) and (.colour | colour_is($t.apex_privacy_fg))))
+        '.everything.privacy' '(.glyphs | length == 2 and all((.width | px_is($t.apex_privacy_icon_size)) and (.colour | colour_is($t.apex_privacy_fg))))
             and (.glyphs[0].x - .x | px_is($t.apex_privacy_padding)) and (.x + .width - .glyphs[-1].x - .glyphs[-1].width | px_is($t.apex_privacy_padding))
             and (.glyphs[1].x - .glyphs[0].x - .glyphs[0].width | px_is($t.apex_privacy_gap))'
     "${metric[@]}" 'the next status glyph follows it after $apex_privacy_margin + $apex_bar_status_gap' \

@@ -70,7 +70,7 @@ function rightBoxOrder() {
         if (a.has_style_class_name('apex-indicators-divider'))
             return 'divider';
         return roles.find(([, indicator]) => indicator.container === a)?.[0] ?? a.name;
-    });
+    }).filter(role => Main.panel.statusArea[role]?.visible !== false);
 }
 
 function bar(unit) {
@@ -209,6 +209,9 @@ function filled(actor, unit) {
 async function everything(unit, settle, capture) {
     const {quickSettings, screenRecording, screenSharing, keyboard} = Main.panel.statusArea;
     const inUse = [quickSettings._camera._indicator, quickSettings._volumeInput._indicator];
+    // Without a stream the microphone's icon has no name yet.
+    const micName = inUse[1].icon_name;
+    inUse[1].icon_name = 'microphone-sensitivity-medium-symbolic';
     inUse.forEach(icon => icon.show());
     screenRecording.show();
     screenSharing.show();
@@ -240,6 +243,7 @@ async function everything(unit, settle, capture) {
     };
     report.capture = (await capture('indicators-everything')).file;
     inUse.forEach(icon => icon.hide());
+    inUse[1].icon_name = micName;
     screenRecording.hide();
     screenSharing.hide();
     await settle();

@@ -160,7 +160,7 @@ bar's glass, a `Shell.BlurEffect` of radius 2 × `$apex_bar_blur` × the monitor
 workspace dots' gap, height and radius, the active dot `$apex_bar_dot_active_width` wide and
 the others `$apex_bar_dot_size` square at .45; that the top-left pixel reaches the reactive
 4 × 4 hot-corner zone; "Desktop" at `$apex_font_bar_emphasis_weight` after the Activities pill,
-as nothing has focus; the search button just before the status pill, a
+as nothing has focus; the search button at the start of the right box and the status pill at its end, a
 `$apex_bar_search_width` × `$apex_bar_pill_height` pill named "Search (Super+Space)" (both
 the `panel` feature); the clock's unread-notification dot (the probe
 posts one low-urgency notification); that the diamond is drawn (at least a quarter of
