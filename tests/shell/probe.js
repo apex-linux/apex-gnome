@@ -253,6 +253,8 @@ const STAGED = {
 };
 const POLICY_DENIED = 'Plug in the charger to install the update.';
 const COUNTDOWN_SECONDS = 3;
+// gnome-shell-perf-helper exits after 30 s idle, and the end-session run is longer.
+const PERF_HELPER_PING_S = 10;
 
 // update1-mock.py through python-dbusmock's own interface.
 function mock(method, params) {
@@ -300,11 +302,15 @@ async function openEndSession(type, seconds = 60) {
     await Scripting.sleep(STEP_MS);
     const dialog = endSessionDialog();
     dialog.confirmed = [];
-    const emit = dialog._dbusImpl.emit_signal;
-    dialog._dbusImpl.emit_signal = (signal, params) => {
-        dialog.confirmed.push(signal);
-        emit.call(dialog._dbusImpl, signal, params);
-    };
+    // The dialog is the shell's one EndSessionDialog: its signals are recorded once.
+    if (!dialog.recording) {
+        const emit = dialog._dbusImpl.emit_signal;
+        dialog._dbusImpl.emit_signal = (signal, params) => {
+            dialog.confirmed.push(signal);
+            emit.call(dialog._dbusImpl, signal, params);
+        };
+        dialog.recording = true;
+    }
     return dialog;
 }
 
@@ -317,7 +323,23 @@ async function endSessionStep(name, dialog) {
     fact(name, {...describeEndSession(dialog), signals: dialog.confirmed.splice(0), apply: await applyCalls()});
 }
 
+function keepPerfHelperAwake() {
+    return GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, PERF_HELPER_PING_S, () => {
+        Scripting._getPerfHelper().then(helper => helper.DestroyWindowsAsync()).catch(() => {});
+        return GLib.SOURCE_CONTINUE;
+    });
+}
+
 async function shootEndSession() {
+    const pingId = keepPerfHelperAwake();
+    try {
+        await shootEndSessionCases();
+    } finally {
+        GLib.source_remove(pingId);
+    }
+}
+
+async function shootEndSessionCases() {
     await Scripting.sleep(SETTLE_MS);
     let dialog = await openEndSession(DIALOG_TYPE.powerOff);
     await endSessionStep('up-to-date', dialog);
