@@ -56,11 +56,11 @@ jobs:
     env:
       APEX_SHOTS_TESTS_NO_SKIP: "1"
     steps:
-      - name: gjs, GdkPixbuf, jq, and the fixtures' dbus-daemon, python3-dbusmock and client libraries
+      - name: gjs, GdkPixbuf, jq, the fixtures' dbus-daemon, python3-dbusmock and client libraries, and frame.c's glib2-devel
         run: >-
           dnf5 -y --setopt=install_weak_deps=False --repo=fedora --repo=updates install
           gjs gdk-pixbuf2 jq bash coreutils gawk grep sed
-          dbus-daemon python3-dbusmock NetworkManager-libnm gnome-bluetooth-libs gcc
+          dbus-daemon python3-dbusmock NetworkManager-libnm gnome-bluetooth-libs gcc glib2-devel
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -80,10 +80,10 @@ jobs:
     container:
       image: registry.fedoraproject.org/fedora:45@sha256:1e13e11f63e147a40a935c9046c79d53a30b861a3cf05ebb023bb53c562382cb
     steps:
-      - name: Fedora's gnome-shell, the fixtures' services, gcc for clock.c, gjs and jq
+      - name: Fedora's gnome-shell, the fixtures' services, gcc and glib2-devel for clock.c and frame.c, gjs and jq
         run: >-
           dnf5 -y --setopt=install_weak_deps=False --repo=fedora --repo=updates install
-          gnome-shell mesa-dri-drivers dbus-daemon python3-dbusmock gcc gjs jq bash coreutils gawk grep sed
+          gnome-shell mesa-dri-drivers dbus-daemon python3-dbusmock gcc glib2-devel gjs jq bash coreutils gawk grep sed
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

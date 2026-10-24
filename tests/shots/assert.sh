@@ -20,7 +20,7 @@ readonly APEX_DARK_SHEET=resource:///org/gnome/shell/theme/gnome-shell-dark.css
 readonly STOCK_SHEETS=resource:///org/gnome/shell/theme/stock
 readonly FEDORA_SHEETS=resource:///org/gnome/shell/theme
 readonly DIRECT_CASES=(default default-scale1 dark-style stock-light stock-dark safe-env layer-disabled
-    layer-cycles fault-configure fault-enable fault-abort kernel-safe fedora-light fedora-dark)
+    layer-cycles fault-configure fault-enable fault-abort kernel-safe fedora-light fedora-dark glass fedora-glass)
 readonly DIRECT_PARTS=(main kernel fedora)
 readonly CAPTURE_CASES=(default default-scale1 dark-style stock-light stock-dark fedora-light fedora-dark)
 readonly SCENES=(desktop overview)
@@ -46,6 +46,9 @@ readonly WIFI_GLYPH=network-wireless-signal-excellent-symbolic
 readonly BATTERY_GLYPH=battery-level-80-symbolic
 readonly BLUETOOTH_GLYPH=bluetooth-active-symbolic
 readonly ALWAYS_LOADED_USER_UNIT=default.target
+# ROADMAP S2b: glass against blur-ref.js after partial damage, per channel out of 255.
+readonly GLASS_MAX_ERROR=3
+readonly GLASS_MEAN_ERROR=1
 readonly APEX_UNIT_STARTED='(Starting|Started) [^ ]*[Aa]pex|Activating service name=.[^ ]*[Aa]pex'
 
 result_of() {
@@ -868,6 +871,41 @@ direct_cases() {
         overview_below_bar "$c" "$run/$c.log"
     done
     compare_with_fedora "$run"
+    glass_frames glass "$run/glass.log"
+    glass_unlock_vs_fedora "$run"
+}
+
+# Patch 0003's glass in the frames the shell drew (glass.js, the glass case).
+glass_frames() {
+    local label=$1 log=$2
+    expect_report "$label" "$log" '.error == null and .patched' "the probe ran the glass cases on the patched ShellBlurEffect" APEXG2-GLASS
+    expect_report "$label" "$log" '.pixels.reference | .clippedFirst and .reblurCovered' \
+        "damage under the glass: the first frame's redraw clip leaves the box out, the effect's own redraw covers it" APEXG2-GLASS
+    expect_report "$label" "$log" ".pixels.reference.box | (.max | max) <= $GLASS_MAX_ERROR and (.mean | max) <= $GLASS_MEAN_ERROR" \
+        "then the box is blur-ref.js's Gaussian, saturate() and corners within $GLASS_MAX_ERROR/255 at most and $GLASS_MEAN_ERROR/255 on average per channel" APEXG2-GLASS
+    expect_report "$label" "$log" '.pixels.sameFrame | .covered and .changed > 0 and .differingFromFull == 0' \
+        "damage forwarded to the glass box re-blurs in the same frame, as a full redraw draws it" APEXG2-GLASS
+    expect_report "$label" "$log" '.pixels.clippedRedraw | (.covered | not) and .differingFromLast == 0 and .nextCovered and .nextDifferingFromFull == 0' \
+        "a redraw clip that misses the box draws the last result, pixel for pixel; the next frame is the full redraw's" APEXG2-GLASS
+    expect_report "$label" "$log" '.pixels.stock | (.covered | not) and .differingFromFull > 0' \
+        "stock's blur in such a frame samples pixels the frame did not repaint, so the case can see it" APEXG2-GLASS
+}
+
+fedora_glass() {
+    local run=$1
+    exits "$run" fedora-glass 0
+    expect_report fedora-glass "$run/fedora-glass.log" '.error == null and (.patched | not) and .unlock.file == "fedora-glass-unlock.png"' \
+        "Fedora's ShellBlurEffect has none of 0003's properties; the unlock blur captured" APEXG2-GLASS
+    check "fedora-glass: fedora-glass-unlock.png written" test -s "$run/captures/fedora-glass-unlock.png"
+}
+
+# The stock unlock blur, at default values of 0003's properties, is Fedora's to the pixel.
+glass_unlock_vs_fedora() {
+    local run=$1 plan=$1/compare/glass-plan.json results=$1/compare/glass-results.json
+    mkdir -p "$run/compare"
+    fedora_glass "$run"
+    plan_entry stock-unlock-vs-fedora "$run" fedora-glass "$run" glass unlock "$run/compare" | jq -s . >"$plan"
+    compare_and_expect_equal "$plan" "$results"
 }
 
 g1_on_the_image() {
