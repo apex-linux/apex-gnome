@@ -186,7 +186,8 @@ async function drag(window, from, to, ms, onStep) {
     for (let i = 0; i <= steps; i++) {
         const t = i / steps;
         window.move_frame(false, Math.round(from[0] + (to[0] - from[0]) * t), Math.round(from[1] + (to[1] - from[1]) * t));
-        onStep();
+        if (i > 0)
+            onStep();
         // eslint-disable-next-line no-await-in-loop
         await Scripting.sleep(STEP_MS);
     }

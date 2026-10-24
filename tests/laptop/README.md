@@ -24,6 +24,8 @@ just glass-protocol score DIR    # scores a recorded directory again
 | Wi-Fi off (`power` only) | every `wlan` radio under `/sys/class/rfkill` is soft- or hard-blocked |
 
 A failed check stops the kit. `--ignore-preflight` runs anyway, and the report says so.
+Unplug other monitors first: the scenarios' geometry is the laptop's panel, 1440×900
+logical px at scale 2, and a second monitor fails the 90 Hz check.
 
 `run` and `power A` drive the shell through `org.gnome.Shell.Eval`, which the shell only
 answers in unsafe mode. The owner turns it on before starting, in Looking Glass (Alt+F2,
@@ -79,6 +81,12 @@ and B's drops, which need the shell's steps, are unmeasured.
   window change counts as dropped when no frame showing it was presented, read from GTK's
   own frame timings as each frame completes. In B and C, a shell step counts as dropped
   when no `presented()` mark follows it before the next step.
+  - With the glass, every step must reach the screen: every surface on B's path is
+    translucent.
+  - With Reduce Transparency, a step the compositor answers with no dispatch at all needs
+    no frame, and is not counted. Mutter correctly paints nothing while B's window moves
+    entirely under the opaque Quick Settings. Headless, that is 73 of B's 601 steps in a
+    20 s run. The report counts them as `stepsNeedingNoFrame`.
   - Both count against the content, not the panel: a 60 fps window on a 90 Hz panel
     presents at one and two intervals and drops nothing.
   - A change made in the last 200 ms of the recording is not counted.

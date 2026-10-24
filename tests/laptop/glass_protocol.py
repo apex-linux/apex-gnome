@@ -167,20 +167,31 @@ def read_client(path):
     return changes, shown
 
 
-def drops(client_path, steps, presented_us, start_us, end_us):
-    """Updates that never got a presented frame: the client's changes, then the shell's steps."""
+def within(times, after, until):
+    j = bisect.bisect_right(times, after)
+    return j < len(times) and times[j] <= until
+
+
+def drops(client_path, steps, presented_us, dispatch_us, start_us, end_us, strict):
+    """Updates that never got a presented frame: the client's changes, then the shell's steps.
+
+    A step the compositor answered with no dispatch at all needed no frame, as under an opaque
+    popover with Reduce Transparency. With the glass (STRICT) every step must reach the screen."""
     changes, shown = read_client(client_path)
     counted = [c for c, when in changes.items() if start_us <= when <= end_us - END_MARGIN_US]
     lost = [c for c in counted if c not in shown]
     steps = [s for s in steps if start_us <= s <= end_us - END_MARGIN_US]
-    lost_steps = 0
+    lost_steps = unneeded = 0
     for i, s in enumerate(steps):
         following = steps[i + 1] if i + 1 < len(steps) else end_us
-        j = bisect.bisect_right(presented_us, s)
-        if not (j < len(presented_us) and presented_us[j] <= following):
+        if within(presented_us, s, following):
+            continue
+        if strict or within(dispatch_us, s, following):
             lost_steps += 1
-    updates = len(counted) + len(steps)
-    return {"updates": updates, "clientChanges": len(counted), "steps": len(steps),
+        else:
+            unneeded += 1
+    updates = len(counted) + len(steps) - unneeded
+    return {"updates": updates, "clientChanges": len(counted), "steps": len(steps), "stepsNeedingNoFrame": unneeded,
             "lost": len(lost) + lost_steps, "share": (len(lost) + lost_steps) / updates if updates else None}
 
 
@@ -207,8 +218,10 @@ def score_run(directory, scenario, mode):
     start, end = times["startUs"], times["endUs"]
     marks = read_marks(base.with_suffix(".syscap"))
     presented = sorted(m.time // 1000 for m in marks if m.name == PRESENTED)
+    dispatched = sorted(m.time // 1000 for m in marks if m.name == DISPATCH)
     result = frame_stats(marks, start, end)
-    result["drops"] = drops(base.with_suffix(".client"), times.get("steps", []), presented, start, end)
+    result["drops"] = drops(base.with_suffix(".client"), times.get("steps", []), presented, dispatched, start, end,
+                            strict=mode == "glass")
     result["gpuBusyMean"] = mean(read_samples(base.with_suffix(".gpu"), start, end))
     result["manual"] = bool(times.get("manual"))
     return result
@@ -262,7 +275,8 @@ def score(directory):
     directory = Path(directory)
     report = {"definitions": {
         "frameTime": "the duration of mutter's Clutter::FrameClock::dispatch() mark: frame clock dispatch through swap",
-        "dropped": "a client change or a shell step with no presented frame before the next one",
+        "dropped": "a client change or a shell step with no presented frame before the next one; with Reduce "
+                   "Transparency, a step the compositor answered with no dispatch needed no frame",
         "dispatchToPresented": "report only: from dispatch() to the next presented() mark",
         "lateMedianMs": "report only: the median of dispatch()'s 'dispatched N µs late'",
         "framesWithSeveralCommits": "report only: frames with more than one surface commit since the last dispatch",

@@ -35,7 +35,7 @@ def mark(when_us, name, duration_us=0, message=""):
 
 
 def synth(directory, scenario, mode, frame_ms=None, slow_share=0.0, coalesce_share=0.0, coalesce_one=False,
-          lost_step_share=0.0, gpu=None, error=None, manual=False):
+          lost_step_share=0.0, occluded=None, gpu=None, error=None, manual=False):
     """One recorded run: a 90 Hz frame clock, a 60 fps client on it, and B's and C's steps."""
     base = Path(directory) / f"{scenario}-{mode}"
     if error:
@@ -51,8 +51,14 @@ def synth(directory, scenario, mode, frame_ms=None, slow_share=0.0, coalesce_sha
         if lost_every and i % lost_every == 0:
             following = steps[i + 1] if i + 1 < len(steps) else END_US
             hidden |= {v for v in vsyncs if s < v + 2000 <= following}
+    idle = set()
+    if occluded:
+        first, last = occluded
+        idle = {v for v in vsyncs if steps[first] < v <= steps[last + 1]}
     marks, slow_every = [], round(1 / slow_share) if slow_share else 0
     for i, v in enumerate(vsyncs):
+        if v in idle:
+            continue
         duration = 12.0 if slow_every and i % slow_every == 0 else frame_ms
         marks.append(mark(v, g.DISPATCH, duration * 1000, "Meta-0, dispatched 16300 µs late"))
         marks.append(mark(v + 100, g.COMMIT, 500))
@@ -159,6 +165,22 @@ class Scoring(unittest.TestCase):
                 self.tmp = tempfile.TemporaryDirectory()
                 self.dir = Path(self.tmp.name)
                 self.assert_fails_only(failing, **changes)
+
+    def test_a_hidden_window_needs_no_frame_only_without_glass(self):
+        report, statuses = self.statuses(**{"B-rt": {"occluded": (100, 139)}})
+        self.assertEqual(statuses, dict.fromkeys(ROWS, "PASS"))
+        rt = report["scenarios"]["B"]["rt"]["drops"]
+        self.assertEqual((rt["lost"], rt["stepsNeedingNoFrame"]), (0, 40))
+        self.tmp.cleanup()
+        self.tmp = tempfile.TemporaryDirectory()
+        self.dir = Path(self.tmp.name)
+        self.assert_fails_only("B dropped frames", **{"B-glass": {"occluded": (100, 139)}})
+
+    def test_a_dispatched_step_never_presented_is_lost_without_glass_too(self):
+        passing(self.dir, **{"B-rt": {"lost_step_share": 0.02}})
+        rt = g.score(self.dir)["scenarios"]["B"]["rt"]["drops"]
+        self.assertEqual(rt["stepsNeedingNoFrame"], 0)
+        self.assertEqual(rt["lost"], len(range(0, rt["steps"], 50)))
 
     def test_limits_hold_at_the_edge(self):
         _, statuses = self.statuses(**{"A-glass": {"frame_ms": 4.3}, "idle": (6.3, 6.0), "power-A": (8.5, 8.0)})
