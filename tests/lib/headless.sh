@@ -13,7 +13,7 @@ readonly MONITOR=2880x1800
 readonly SCALE=2
 readonly CLOCK_LIB=/run/apex-ptyxis-clock.so
 readonly CLOCK='2026-10-24 10:24:00'
-readonly FIXTURE_NAMES=(org.freedesktop.UPower org.freedesktop.NetworkManager org.bluez)
+readonly FIXTURE_NAMES=(org.freedesktop.UPower org.freedesktop.NetworkManager org.bluez net.hadess.SwitcherooControl)
 # apex-desktop's values (schemas/90_apex.gschema.override, dconf/distro.d/50-apex-ptyxis).
 readonly PROFILE_UUID=d14b2180d28c41f3a9ee7785f4daa697
 readonly PROFILE_SCHEMA=org.gnome.Ptyxis.Profile:/org/gnome/Ptyxis/Profiles/$PROFILE_UUID/

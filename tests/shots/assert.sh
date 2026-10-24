@@ -20,7 +20,7 @@ readonly APEX_DARK_SHEET=resource:///org/gnome/shell/theme/gnome-shell-dark.css
 readonly STOCK_SHEETS=resource:///org/gnome/shell/theme/stock
 readonly FEDORA_SHEETS=resource:///org/gnome/shell/theme
 readonly DIRECT_CASES=(default default-scale1 dark-style stock-light stock-dark safe-env layer-disabled
-    layer-cycles fault-configure fault-enable fault-abort kernel-safe fedora-light fedora-dark)
+    layer-cycles fault-configure fault-enable fault-abort kernel-safe fedora-light fedora-dark glass fedora-glass)
 readonly DIRECT_PARTS=(main kernel fedora)
 readonly CAPTURE_CASES=(default default-scale1 dark-style stock-light stock-dark fedora-light fedora-dark)
 readonly SCENES=(desktop overview)
@@ -52,6 +52,11 @@ readonly WIFI_GLYPH=network-wireless-signal-excellent-symbolic
 readonly BATTERY_GLYPH=battery-level-80-symbolic
 readonly BLUETOOTH_GLYPH=bluetooth-active-symbolic
 readonly ALWAYS_LOADED_USER_UNIT=default.target
+# ROADMAP S2b: glass against blur-ref.js after partial damage, per channel out of 255, as the
+# first run fixed them (lead, 2026-10-24). The edge band is ds/2 px wide, ds the effect's own.
+readonly GLASS_INTERIOR_MAX=4
+readonly GLASS_EDGE_MAX=12
+readonly GLASS_MEAN_ERROR=1
 readonly APEX_UNIT_STARTED='(Starting|Started) [^ ]*[Aa]pex|Activating service name=.[^ ]*[Aa]pex'
 
 result_of() {
@@ -250,6 +255,9 @@ top_bar() {
         '.topBar | .clock.pill.x + .clock.pill.width / 2 - .panel.width / 2' 'fabs <= 0.5'
     "${metric[@]}" 'the bar changes over $apex_bar_transition' \
         '.topBar.panel.transition' '. == ($t.apex_bar_transition | rtrimstr("ms") | tonumber)'
+    "${metric[@]}" 'the bar is glass: a Shell.BlurEffect of radius 2 x $apex_bar_blur x the monitor scale at $apex_bar_saturation' \
+        '{glass: .topBar.glass, scale: .monitorScale}' \
+        '.scale as $s | .glass | any((.radius - 2 * ($t.apex_bar_blur | px) * $s | fabs < 0.01) and .saturation != null and ((.saturation - ($t.apex_bar_saturation | rtrimstr("%") | tonumber / 100)) | fabs < 0.01))'
     "${metric[@]}" 'with translucent-top-bar off the bar is $apex_bar_solid over a 0 1px 0 $apex_border line' \
         '.topBar.opaque' \
         '(.background | colour_is($t.apex_bar_solid)) and (.boxShadow | .inset == false and .x == 0 and .y == 1 and .blur == 0 and .spread == 0 and (.color | colour_is($t.apex_border)))'
@@ -314,6 +322,8 @@ dock_metrics() {
         '{dash: .dock.overviewDashVisible, overview: .scenes.overview.dockVisible}' '.dash == false and .overview == true'
     "${metric[@]}" 'and lays its workspaces out above the dock' \
         '{dock: .dock, clearance: .scenes.overview.dockClearance}' '.dock != null and .clearance != null and .clearance >= 0'
+    "${metric[@]}" "its apps' menu offers Launch Using Discrete Graphics Card while switcheroo-control reports two GPUs" \
+        '.dock.appMenu' '.hasDualGpu == true and (.items | any(. == "Launch Using Discrete Graphics Card"))'
 }
 
 no_dock() {
@@ -328,8 +338,6 @@ top_bar_today() {
     tokens=$(tokens_for "$variant")
     local -a metric=(top_bar_metric "$label top bar, until its known gap closes" "$scenes" "$tokens")
 
-    "${metric[@]}" 'the bar has no blur effect' \
-        '.topBar.glass' '. == []'
     "${metric[@]}" "the clock's date and time are $TODAY_CLOCK_TEXT_GAP px apart (one EN SPACE, 24-hour clock)" \
         '.topBar.clockTextGap' "(. - $TODAY_CLOCK_TEXT_GAP) | fabs <= 0.5"
     "${metric[@]}" "with the dot, the clock pill is $TODAY_CLOCK_PILL_EXTRA px wider than \$apex_bar_pill_padding + the text + \$apex_bar_clock_gap + \$apex_bar_clock_dot_size + \$apex_bar_pill_padding" \
@@ -348,9 +356,6 @@ top_bar_gaps() {
     local clock_hook='no step yet (a clock hook, or the owner accepts it)'
     local wallpaper='S1b (the Facets wallpaper and the light overview)'
 
-    known_gap 'S2b (patch 0003, the glass manager)' "${metric[@]}" 'the bar is glass: a Shell.BlurEffect of radius 2 x $apex_bar_blur x the monitor scale at $apex_bar_saturation' \
-        '{glass: .topBar.glass, scale: .monitorScale}' \
-        '.scale as $s | .glass | any((.radius - 2 * ($t.apex_bar_blur | px) * $s | fabs < 0.01) and .saturation != null and ((.saturation - ($t.apex_bar_saturation | rtrimstr("%") | tonumber / 100)) | fabs < 0.01))'
     known_gap "$clock_hook" "${metric[@]}" 'the clock'"'"'s date and time are $apex_bar_clock_gap apart (G2'"'"'s 24-hour clock puts an EN SPACE between them; en-US'"'"'s 12-hour clock adds a FIGURE SPACE before a one-digit hour, about 14 px in all)' \
         '.topBar.clockTextGap' '(. - ($t.apex_bar_clock_gap | px)) | fabs <= 0.5'
     known_gap "$clock_hook" "${metric[@]}" 'with the dot, the clock pill is $apex_bar_pill_padding + the text + $apex_bar_clock_gap + $apex_bar_clock_dot_size + $apex_bar_pill_padding wide' \
@@ -776,6 +781,73 @@ derived_surfaces() {
         "$d.monitorLabel.radius" 'px_is($t.apex_radius_osd)'
 }
 
+# shellcheck disable=SC2016 # jq programs and token names, not shell expansions
+spotlight_style() {
+    local label=$1 log=$2 variant=$3 scenes tokens
+    scenes=$(report_of "$log" APEXG2-SCENES)
+    tokens=$(tokens_for "$variant")
+    local -a metric=(top_bar_metric "$label Spotlight" "$scenes" "$tokens")
+    local s=.surfaces.spotlight
+    local surface='(.border | [.top, .right, .bottom, .left] | all(px_is($t.apex_surface_border))) and (.borderColor | colour_is($t.apex_panel_border))
+        and (.boxShadow | .inset == false and .x == 0 and (.y | px_is($t.apex_shadow_y)) and (.blur | px_is($t.apex_shadow_blur)) and (.color | colour_is($t.apex_shadow)))'
+    local selected='(.background | rgba) as $got | ($a | rgba) as $want | ([$got[0:3], $want[0:3]] | transpose | all(.[0] - .[1] | fabs <= 1))
+        and ($got[3] - 255 * ($t.apex_selection_opacity | num) | fabs <= 1)'
+    local tracking='(.tracking - ($t.apex_spotlight_header_tracking | rtrimstr("em") | num) * ($t.apex_font_spotlight_header_size | px) | fabs < 0.05)'
+
+    "${metric[@]}" 'the panel is $apex_spotlight_width wide, $apex_spotlight_top below the monitor'"'"'s top edge, radius $apex_radius_spotlight, tinted $apex_panel with $apex_fg text' \
+        "$s.panel" '(.width | px_is($t.apex_spotlight_width)) and (.top | px_is($t.apex_spotlight_top)) and (.radius | px_is($t.apex_radius_spotlight))
+            and (.background | colour_is($t.apex_panel)) and (.foreground | colour_is($t.apex_fg))'
+    "${metric[@]}" 'its ring is a $apex_surface_border border in $apex_panel_border, its shadow 0 $apex_shadow_y $apex_shadow_blur $apex_shadow' \
+        "$s.panel" "$surface"
+    "${metric[@]}" 'the field is $apex_spotlight_field_height high, inset $apex_spotlight_field_padding, $apex_spotlight_field_gap between its parts; its glyph $apex_spotlight_glyph_size in $apex_fg_dim' \
+        "$s" '(.field | (.height | px_is($t.apex_spotlight_field_height)) and (.padding.left | px_is($t.apex_spotlight_field_padding))
+            and (.padding.right | px_is($t.apex_spotlight_field_padding)) and (.spacing | px_is($t.apex_spotlight_field_gap)))
+            and (.glyph | (.size | px_is($t.apex_spotlight_glyph_size)) and (.foreground | colour_is($t.apex_fg_dim)))'
+    "${metric[@]}" 'its text is $apex_font_spotlight_field_size at $apex_font_spotlight_field_weight in $apex_fg, unframed and unfilled; its hint $apex_fg_hint' \
+        "$s.entry" '(.font.size | px_is($t.apex_font_spotlight_field_size)) and .font.weight == ($t.apex_font_spotlight_field_weight | tonumber)
+            and (.foreground | colour_is($t.apex_fg)) and (.background | rgba | .[3] == 0) and .border.top == 0 and (.hint | colour_is($t.apex_fg_hint))'
+    "${metric[@]}" 'under a $apex_surface_border line in $apex_border, the results are inset $apex_spotlight_results_padding_top at the top and $apex_spotlight_results_padding elsewhere' \
+        "$s.results" '(.border.top | px_is($t.apex_surface_border)) and (.borderColor | colour_is($t.apex_border)) and (.padding.top | px_is($t.apex_spotlight_results_padding_top))
+            and ([.padding.right, .padding.bottom, .padding.left] | all(px_is($t.apex_spotlight_results_padding)))'
+    "${metric[@]}" 'section headers, in board order, are $apex_spotlight_header_height high with their text $apex_spotlight_header_padding_bottom above the bottom and $apex_spotlight_header_padding in, $apex_font_spotlight_header_size $apex_font_heading_weight in $apex_fg_dim, tracked $apex_spotlight_header_tracking' \
+        "$s" ".sections == [\"APPLICATIONS\", \"SETTINGS\", \"FILES\"] and (.headers | all((.height | px_is(\$t.apex_spotlight_header_height))
+            and (.padding.bottom | px_is(\$t.apex_spotlight_header_padding_bottom)) and (.padding.left | px_is(\$t.apex_spotlight_header_padding))
+            and (.font.size | px_is(\$t.apex_font_spotlight_header_size)) and .font.weight == (\$t.apex_font_heading_weight | tonumber)
+            and (.foreground | colour_is(\$t.apex_fg_dim)) and $tracking))"
+    "${metric[@]}" 'rows are $apex_spotlight_row_height high, radius $apex_radius_spotlight_row, inset $apex_spotlight_row_padding, $apex_spotlight_row_gap between icon, text and action; icons $apex_spotlight_icon_size' \
+        "$s.rows" 'length == 9 and all((.height | px_is($t.apex_spotlight_row_height)) and (.radius | px_is($t.apex_radius_spotlight_row))
+            and (.padding.left | px_is($t.apex_spotlight_row_padding)) and (.padding.right | px_is($t.apex_spotlight_row_padding)) and (.spacing | px_is($t.apex_spotlight_row_gap))
+            and (.icon.width | px_is($t.apex_spotlight_icon_size)) and (.icon.height | px_is($t.apex_spotlight_icon_size)))'
+    "${metric[@]}" 'the first row is selected, filled with the accent at $apex_selection_opacity; the others are unfilled' \
+        "{s: $s, accent: .topBar.accent}" ".accent as \$a | .s.selected == [true, false, false, false, false, false, false, false, false]
+            and (.s.rows[0] | $selected) and (.s.rows[1:] | all(.background | rgba | .[3] == 0))"
+    "${metric[@]}" 'a title is $apex_font_spotlight_title_size $apex_font_label_weight in $apex_fg, $apex_spotlight_text_gap over its subtitle, $apex_font_spotlight_subtitle_size in $apex_fg_dim' \
+        "$s.rows" 'all((.title.font.size | px_is($t.apex_font_spotlight_title_size)) and .title.font.weight == ($t.apex_font_label_weight | tonumber) and (.title.foreground | colour_is($t.apex_fg))
+            and (.text.spacing | px_is($t.apex_spotlight_text_gap)) and (.subtitle.font.size | px_is($t.apex_font_spotlight_subtitle_size)) and (.subtitle.foreground | colour_is($t.apex_fg_dim)))'
+    "${metric[@]}" 'the selected row ends in "Open", $apex_font_spotlight_action_size $apex_font_label_weight in $apex_fg_dim, $apex_spotlight_action_gap before an Enter chip $apex_spotlight_chip_height high, radius $apex_radius_spotlight_chip, in $apex_button at $apex_font_spotlight_chip_size $apex_font_heading_weight' \
+        "$s.rows[0].action" '(.verb.text == "Open") and (.font.size | px_is($t.apex_font_spotlight_action_size)) and .font.weight == ($t.apex_font_label_weight | tonumber)
+            and (.foreground | colour_is($t.apex_fg_dim)) and (.spacing | px_is($t.apex_spotlight_action_gap))
+            and (.chip | (.height | px_is($t.apex_spotlight_chip_height)) and (.radius | px_is($t.apex_radius_spotlight_chip)) and (.background | colour_is($t.apex_button))
+                and (.label.text == "Enter") and (.label.font.size | px_is($t.apex_font_spotlight_chip_size)) and .label.font.weight == ($t.apex_font_heading_weight | tonumber))'
+    "${metric[@]}" 'a sum shows its result, $apex_font_spotlight_result_size $apex_font_heading_weight in tabular figures over the sum, then Calculator as the first application' \
+        "$s.calculator" '.sections == ["CALCULATOR", "APPLICATIONS"] and (.row | .title.text == "1920" and .subtitle.text == "2880 / 1.5" and .action.verb.text == "Copy"
+            and (.title.font.size | px_is($t.apex_font_spotlight_result_size)) and .title.font.weight == ($t.apex_font_heading_weight | tonumber) and (.title.font.features | test("tnum")))'
+    "${metric[@]}" 'an empty query shows only the field; a query with no results says so in $apex_fg_dim, $apex_spotlight_empty_height high under a $apex_border line' \
+        "$s" '.fieldOnly and (.empty | (.label.text | startswith("No results for")) and (.height | px_is($t.apex_spotlight_empty_height)) and (.border.top | px_is($t.apex_surface_border))
+            and (.borderColor | colour_is($t.apex_border)) and (.foreground | colour_is($t.apex_fg_dim)))'
+    "${metric[@]}" 'Enter on the result closes Spotlight for a toast $apex_toast_height high, radius $apex_radius_toast, tinted $apex_panel, $apex_toast_bottom above the screen'"'"'s bottom edge' \
+        "$s" '.closedOnCopy and (.toast.box | (.height | px_is($t.apex_toast_height)) and (.radius | px_is($t.apex_radius_toast)) and (.background | colour_is($t.apex_panel)))
+            and (.toast.bottomGap | px_is($t.apex_toast_bottom))'
+    "${metric[@]}" 'the toast'"'"'s ring is a $apex_surface_border border in $apex_panel_border, its shadow 0 $apex_shadow_y $apex_shadow_blur $apex_shadow' \
+        "$s.toast.box" "$surface"
+    "${metric[@]}" 'it is inset $apex_toast_padding_start and $apex_toast_padding_end, $apex_toast_gap between a $apex_toast_check_size accent circle with a $apex_toast_check_icon_size check and "Copied 1920", $apex_font_size $apex_font_label_weight' \
+        "{t: $s.toast, accent: .topBar.accent}" '.accent as $a | .t | (.box | (.padding.left + .border.left | px_is($t.apex_toast_padding_start)) and (.padding.right + .border.right | px_is($t.apex_toast_padding_end))
+            and (.spacing | px_is($t.apex_toast_gap)) and (.font.size | px_is($t.apex_font_size)) and .font.weight == ($t.apex_font_label_weight | tonumber))
+            and (.check | (.width | px_is($t.apex_toast_check_size)) and (.height | px_is($t.apex_toast_check_size)) and .radius >= ($t.apex_toast_check_size | px) / 2
+                and (.background | colour_is($a)) and (.icon | px_is($t.apex_toast_check_icon_size)))
+            and .label.text == "Copied 1920"'
+}
+
 scenes_captured() {
     local run=$1 case_name=$2
     local log=$run/$case_name.log scene
@@ -882,6 +954,8 @@ fixtures_on_the_bus() {
             "NetworkManager: \"Apex-2.4G\" and the open \"Library Guest\" are in range too"
         expect "fixtures ($part)" "$fixtures" '.keyboard | .alias == "Keychron K3" and .connected and .icon == "input-keyboard"' \
             "BlueZ: the keyboard \"Keychron K3\" is connected"
+        expect "fixtures ($part)" "$fixtures" '.gpus | .hasDualGpu and .names == ["Intel Graphics", "NVIDIA GeForce RTX 4060"]' \
+            "switcheroo-control: an integrated and a discrete GPU"
     done
 }
 
@@ -963,6 +1037,7 @@ direct_cases() {
     overview_layer default "$f" light
     derived_surfaces default "$f" light
     tile_preview default "$f" light
+    spotlight_style default "$f" light
     screenshot_ui default "$f" light
 
     f=$run/default-scale1.log
@@ -984,6 +1059,7 @@ direct_cases() {
     overview_layer default-scale1 "$f" light
     derived_surfaces default-scale1 "$f" light
     tile_preview default-scale1 "$f" light
+    spotlight_style default-scale1 "$f" light
     screenshot_ui default-scale1 "$f" light
 
     f=$run/dark-style.log
@@ -1008,6 +1084,7 @@ direct_cases() {
     overview_layer dark-style "$f" dark
     derived_surfaces dark-style "$f" dark
     tile_preview dark-style "$f" dark
+    spotlight_style dark-style "$f" dark
     screenshot_ui dark-style "$f" dark
     dark_style_off dark-style "$f"
 
@@ -1077,6 +1154,67 @@ direct_cases() {
         overview_below_bar "$c" "$run/$c.log"
     done
     compare_with_fedora "$run"
+    glass_frames glass "$run/glass.log"
+    glass_manager glass "$run/glass.log" light
+    glass_unlock_vs_fedora "$run"
+}
+
+# Patch 0003's glass in the frames the shell drew (glass.js, the glass case).
+glass_frames() {
+    local label=$1 log=$2
+    expect_report "$label" "$log" '.error == null and .patched' "the probe ran the glass cases on the patched ShellBlurEffect" APEXG2-GLASS
+    expect_report "$label" "$log" '.pixels.reference | .clippedFirst and .reblurCovered' \
+        "damage under the glass: the first frame's redraw clip leaves the box out, the effect's own redraw covers it" APEXG2-GLASS
+    local within="(.interior.max | max) <= $GLASS_INTERIOR_MAX and (.edge.max | max) <= $GLASS_EDGE_MAX and (.box.mean | max) <= $GLASS_MEAN_ERROR"
+    expect_report "$label" "$log" ".pixels.reference | .downscale > 1 and $within" \
+        "then the box is blur-ref.js's Gaussian, saturate() and corners per channel: within $GLASS_INTERIOR_MAX/255 inside, $GLASS_EDGE_MAX/255 in the ds/2 band along the edges, $GLASS_MEAN_ERROR/255 on average" APEXG2-GLASS
+    expect_report "$label" "$log" '.pixels.sameFrame | .covered and .changed > 0 and .differingFromFull == 0' \
+        "damage forwarded to the glass box re-blurs in the same frame, as a full redraw draws it" APEXG2-GLASS
+    expect_report "$label" "$log" '.pixels.clippedRedraw | (.covered | not) and .differingFromLast == 0 and .nextCovered and .nextDifferingFromFull == 0' \
+        "a redraw clip that misses the box draws the last result, pixel for pixel; the next frame is the full redraw's" APEXG2-GLASS
+    expect_report "$label" "$log" '.pixels.stock | (.covered | not) and .tries >= 1' \
+        "the stock control obtained a partial redraw, a frame whose redraw clip misses the box (it damages again up to 5 times; else: could not obtain a partial redraw)" APEXG2-GLASS
+    expect_report "$label" "$log" ".pixels.stock | (.covered | not) and .differingFromFull > 0 and (($within) | not)" \
+        "stock's blur in such a frame samples pixels the frame did not repaint and misses those tolerances, so the case can see it" APEXG2-GLASS
+}
+
+fedora_glass() {
+    local run=$1
+    exits "$run" fedora-glass 0
+    expect_report fedora-glass "$run/fedora-glass.log" '.error == null and (.patched | not) and .unlock.file == "fedora-glass-unlock.png"' \
+        "Fedora's ShellBlurEffect has none of 0003's properties; the unlock blur captured" APEXG2-GLASS
+    check "fedora-glass: fedora-glass-unlock.png written" test -s "$run/captures/fedora-glass-unlock.png"
+}
+
+# shellcheck disable=SC2016 # jq programs and token names, not shell expansions
+glass_manager() {
+    local label=$1 log=$2 variant=$3 tokens glass
+    tokens=$(tokens_for "$variant")
+    local -a expect_glass=(expect "$label" "$(report_of "$log" APEXG2-GLASS | jq -c --argjson t "$tokens" '. + {t: $t}' 2>/dev/null)")
+    glass='def glass($blur; $saturation; $s): .radius == 2 * ($blur | px) * $s and ((.saturation - ($saturation | rtrimstr("%") | tonumber / 100)) | fabs < 0.001)
+        and .enabled and .fine and .followOpacity and .background;
+        def none: [.panel, .quickSettings, .calendar, .banner] | all(. == null);'
+
+    "${expect_glass[@]}" "$glass"' .t as $t | .manager.monitorScale as $s | .manager.glass | (.panel | glass($t.apex_bar_blur; $t.apex_bar_saturation; $s))
+        and ([.quickSettings, .calendar, .banner] | all(glass($t.apex_panel_blur; $t.apex_panel_saturation; $s))) and (.solidClass | not)' \
+        'the bar blurs at $apex_bar_blur and $apex_bar_saturation; Quick Settings, the calendar and a banner at $apex_panel_blur and $apex_panel_saturation, each as radius 2 x sigma x the monitor scale, fine, following opacity'
+    "${expect_glass[@]}" "$glass"' .manager.reduceTransparency | none and .blurEffects == [] and .solidClass' \
+        'with Reduce Transparency no actor carries a blur effect, and the root carries apex-solid'
+    "${expect_glass[@]}" "$glass"' .manager.highContrast | none and .blurEffects == [] and .solidClass' \
+        'nor with high contrast'
+    "${expect_glass[@]}" "$glass"' .manager.disabled | none and .blurEffects == [] and (.solidClass | not)' \
+        "with disabled-features=['glass'] no blur effect either, and the tints stay"
+    "${expect_glass[@]}" "$glass"' .t as $t | .manager.monitorScale as $s | .manager.restored | (.panel | glass($t.apex_bar_blur; $t.apex_bar_saturation; $s)) and (.solidClass | not)' \
+        'each switch turned back, the glass is back'
+}
+
+# The stock unlock blur, at default values of 0003's properties, is Fedora's to the pixel.
+glass_unlock_vs_fedora() {
+    local run=$1 plan=$1/compare/glass-plan.json results=$1/compare/glass-results.json
+    mkdir -p "$run/compare"
+    fedora_glass "$run"
+    plan_entry stock-unlock-vs-fedora "$run" fedora-glass "$run" glass unlock "$run/compare" | jq -s . >"$plan"
+    compare_and_expect_equal "$plan" "$results"
 }
 
 g1_on_the_image() {

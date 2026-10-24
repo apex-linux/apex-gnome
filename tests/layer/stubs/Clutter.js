@@ -8,6 +8,25 @@ const TextDirection = {DEFAULT: 0, LTR: 1, RTL: 2};
 
 class BinLayout {}
 
+// The probe sets the key a press reports, as Clutter does before emitting key-press.
+class KeyController {
+    connect(signal, fn) {
+        if (signal === 'key-press')
+            this.press = (symbol, keycode = 0) => {
+                this._key = [true, symbol, keycode];
+                return fn(this);
+            };
+    }
+
+    get_key() {
+        return this._key;
+    }
+
+    get_state() {
+        return [true, 0, 0, 0];
+    }
+}
+
 class ClickGesture {
     connect(signal, fn) {
         if (signal === 'recognize')
@@ -15,11 +34,28 @@ class ClickGesture {
     }
 }
 
+class BindConstraint {
+    constructor(params) {
+        Object.assign(this, params);
+    }
+}
+
 export default {
+    BindConstraint,
+    BindCoordinate: {X: 0, Y: 1, WIDTH: 2, HEIGHT: 3, POSITION: 4, SIZE: 5, ALL: 6},
     AnimationMode: {EASE_OUT_QUAD: 5, EASE_OUT_CUBIC: 8},
     BUTTON_SECONDARY: 3,
     BinLayout,
     ClickGesture,
+    KeyController,
+    EventPhase: {BUBBLE: 0, CAPTURE: 1},
+    Orientation: {HORIZONTAL: 0, VERTICAL: 1},
+    KEY_Down: 0xff54,
+    KEY_Escape: 0xff1b,
+    KEY_ISO_Enter: 0xfe34,
+    KEY_KP_Enter: 0xff8d,
+    KEY_Return: 0xff0d,
+    KEY_Up: 0xff52,
     ActorAlign: {FILL: 0, START: 1, CENTER: 2, END: 3},
     TextDirection,
     EVENT_PROPAGATE: false,

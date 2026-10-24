@@ -28,10 +28,17 @@ def deployment(version, digest, day, **extra):
 
 BOOTED = deployment("45.20261008.131", "sha256:3f9c0e7a5d1b28c4e6f0a9b7c3d2e1f0a9b8c7d6e5f4a3b2c1d0e9f8a7b6a71e", 8,
                     held=dbus.Array([], signature="s"), degraded=dbus.Array([], signature="s"))
+HOLDS = dbus.Array([("gnome-control-center", "gnome-control-center-51.1-1.fc45", stamp(19), False,
+                      dbus.UInt64(stamp(19) + 14 * 86400), "")], signature="(sstbts)")
+OLD_HOLDS = dbus.Array([("nautilus", "nautilus-51.1-1.fc45", stamp(19), True, dbus.UInt64(stamp(19) + 3 * 86400))],
+                       signature="(sstbt)")
+STOCK = dbus.Array([("libadwaita", "Apex's window radius waits for libadwaita 1.10.1.")], signature="(ss)")
+SIZE = dbus.UInt64(412_000_000)
 STAGED = deployment("45.20261010.133", "sha256:9e41aa07c3b2d1e0f9a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c80c2b", 10,
                     held=dbus.Array(["gnome-control-center"], signature="s"),
-                    degraded=dbus.Array([], signature="s"))
-ROLLBACK = deployment("45.20261001.124", "sha256:b02d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b19c4", 1)
+                    degraded=dbus.Array([], signature="s"), holds=HOLDS, stock=STOCK, **{"download-size": SIZE})
+ROLLBACK = deployment("45.20261001.124", "sha256:b02d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b19c4", 1,
+                      pinned=True, **{"pin-reason": "the last version that started cleanly"})
 EMPTY = dbus.Dictionary({}, signature="sv")
 CHANGES = [
     ("glibc", "i686", "upgraded", "2.42-3.fc45", "2.42-4.fc45"),
@@ -44,12 +51,25 @@ CHANGES = [
     ("xorg-x11-fonts-misc", "noarch", "removed", "7.5-42.fc45", ""),
 ]
 
+AVAILABLE = deployment("45.20261010.133", "", 10, **{"download-size": SIZE})
+FALLEN = "sha256:9e41aa07c3b2d1e0f9a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c80c2b"
+
+KEPT = dbus.Array([deployment("45.20260924.118", "sha256:7c1d9a0b2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f5e21", 24,
+                              pinned=True, **{"pin-reason": "the version before the failed boots"})],
+                  signature="a{sv}")
+
+# "ready" also refuses SetAutomaticDownloads as polkit would; "up-to-date" accepts it.
 SCENARIOS = {
-    "ready": {"State": "staged", "Staged": STAGED, "Available": EMPTY},
-    "up-to-date": {"State": "up-to-date", "Staged": EMPTY, "Available": EMPTY},
-    "available": {"State": "available", "Staged": EMPTY, "Available": deployment("45.20261010.133", "", 10)},
+    "ready": {"State": "staged", "Staged": STAGED, "Available": EMPTY, "Kept": KEPT},
+    "up-to-date": {"State": "up-to-date", "Staged": EMPTY, "Available": EMPTY,
+                   "Booted": deployment(BOOTED["version"], BOOTED["digest"], 8, held=dbus.Array(["nautilus"], signature="s"),
+                                        holds=OLD_HOLDS)},
+    "available": {"State": "available", "Staged": EMPTY, "Available": AVAILABLE},
+    "downloading": {"State": "downloading", "Staged": EMPTY, "Available": AVAILABLE, "Progress": dbus.Double(0.64)},
     "health-failure": {"State": "health-failure", "Staged": EMPTY, "Available": EMPTY,
-                       "HealthFailure": BOOTED["digest"]},
+                       "HealthFailure": BOOTED["digest"],
+                       "HealthFailureChecks": dbus.Array(["failed-units"], signature="s")},
+    "fallback": {"State": "up-to-date", "Staged": EMPTY, "Available": EMPTY, "LastFallback": FALLEN},
 }
 
 
@@ -61,7 +81,10 @@ class Update1(dbus.service.Object):
             "State": "unknown", "Progress": dbus.Double(-1.0), "Booted": BOOTED, "Staged": EMPTY,
             "Rollback": ROLLBACK, "Available": EMPTY, "Channel": "stable (running image)",
             "LastCheck": stamp(21), "DeferredReason": "", "LastError": "", "HealthFailure": "",
+            "LastFallback": "", "AutomaticDownloads": True,
+            "HealthFailureChecks": dbus.Array([], signature="s"), "Kept": dbus.Array([], signature="a{sv}"),
         }
+        self.scenario = scenario
         self.props.update(SCENARIOS[scenario])
 
     def record(self, method, *args):
@@ -105,9 +128,22 @@ class Update1(dbus.service.Object):
         self.record("GetChanges")
         return dbus.Array(CHANGES if self.props["Staged"] else [], signature="(sssss)")
 
+    @dbus.service.method(IFACE, in_signature="s", out_signature="a(sssss)")
+    def GetChangesFor(self, digest):
+        self.record("GetChangesFor", str(digest))
+        return dbus.Array(CHANGES, signature="(sssss)")
+
     @dbus.service.method(IFACE)
     def AcknowledgeHealthFailure(self):
         self.record("AcknowledgeHealthFailure")
+
+    @dbus.service.method(IFACE, in_signature="b")
+    def SetAutomaticDownloads(self, enabled):
+        self.record("SetAutomaticDownloads", enabled)
+        if self.scenario == "ready":
+            raise dbus.exceptions.DBusException("polkit refused", name=f"{IFACE}.Error.NotAuthorized")
+        self.props["AutomaticDownloads"] = dbus.Boolean(enabled)
+        self.PropertiesChanged(IFACE, {"AutomaticDownloads": dbus.Boolean(enabled)}, [])
 
 
 def main():

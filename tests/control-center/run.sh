@@ -16,14 +16,19 @@ RPM_DIR holds the lane's built RPMs (_build/gnome-control-center/out); without i
 gnome-control-center runs. For a user '$USER_NAME', with apex-desktop's schema from
 tests/layer/fixtures, it captures board 11 at both scroll positions, light and dark, and
 checks every row against its key both ways through AT-SPI (bindings.py). Without the
-schema it captures and checks the explanation the panel shows instead. Then, with
+schema it captures and checks the explanation the panel shows instead. It captures
+Appearance (board 23) light and dark on a gnome-backgrounds wallpaper, and appearance.py
+checks that the name and note follow the wallpaper. It captures Power (board 24) with an
+NVIDIA card under umockdev, and power.py checks the Graphics and Display group: the refresh
+row against its key both ways, and the card's row following power/runtime_status. Then, with
 update1.py standing in for apex-updated on the system bus, it opens System > Software
 Updates and captures board 18 light and dark, and updates.py checks each state's texts
 and that each button makes its Update1 call. The captures and logs land in
 _build/control-center/shots/.
 
 It needs gnome-shell, mesa-dri-drivers, dbus-daemon, python3-dbusmock, python3-gobject,
-at-spi2-core, gcc, util-linux and adwaita-sans-fonts. G2's clock.c and fixtures.py
+at-spi2-core, gcc, util-linux, adwaita-sans-fonts, python3-dbus, systemd,
+gnome-backgrounds and umockdev. G2's clock.c and fixtures.py
 (tests/shots) are used as they are.
 EOF
 }
@@ -45,10 +50,11 @@ headless_user
 headless_bus "$out"
 
 # run_case NAME SCHEME [NAME=VALUE...]: one shell; libadwaita has no settings portal here, so ADW_DEBUG_COLOR_SCHEME.
+# CASE_SETTINGS holds extra "schema key value" lines for that shell.
 run_case() {
     local name=$1 scheme=$2
     shift 2
-    headless_run "$out/$name.log" "$CC_TESTS/probe.js" "$SHELL_TIMEOUT" "" \
+    headless_run "$out/$name.log" "$CC_TESTS/probe.js" "$SHELL_TIMEOUT" "${CASE_SETTINGS:-}" \
         APEX_SHOTS="$out" APEX_SHOT="$name" ADW_DEBUG_COLOR_SCHEME="$scheme" "$@"
     log "run.sh: $name: exit $?"
     grep -q 'APEXCC ' "$out/$name.log" && [[ -s $out/$name.png ]] || return 1
@@ -62,6 +68,22 @@ run_case dark prefer-dark APEX_SCROLL=1 || status=1
 headless_apex_schema no
 run_case no-schema default "APEX_CHECK=bindings.py no-schema" || status=1
 headless_apex_schema yes
+# Board 23: amber.xml's wallpaper as it lists it, so the chooser has an active item to ring.
+amber="org.gnome.desktop.background picture-uri 'file:///usr/share/backgrounds/gnome/amber-l.jxl'
+org.gnome.desktop.background picture-uri-dark 'file:///usr/share/backgrounds/gnome/amber-d.jxl'
+org.gnome.desktop.background primary-color '#F57511'
+org.gnome.desktop.background secondary-color '#DD4C38'"
+CASE_SETTINGS=$amber run_case appearance-light default APEX_OPEN=background APEX_SCROLL=1 \
+    "APEX_CHECK=appearance.py amber" || status=1
+CASE_SETTINGS=$amber run_case appearance-dark prefer-dark APEX_OPEN=background APEX_SCROLL=1 || status=1
+run_case appearance-custom default APEX_OPEN=background "APEX_CHECK=appearance.py custom" || status=1
+
+# Board 24: Power with headless_dgpu's graphics under umockdev, then without an NVIDIA card.
+headless_dgpu "$out/dgpu.devices"
+dgpu="APEX_LAUNCH=umockdev-run -d $out/dgpu.devices --"
+run_case power-light default APEX_OPEN=power APEX_SCROLL=1 "$dgpu" "APEX_CHECK=power.py dgpu" || status=1
+run_case power-dark prefer-dark APEX_OPEN=power APEX_SCROLL=1 "$dgpu" || status=1
+run_case power-no-dgpu default APEX_OPEN=power "APEX_CHECK=power.py plain" || status=1
 
 # update_case SCENARIO NAME SCHEME [NAME=VALUE...]: System > Software Updates on update1.py's SCENARIO.
 update_case() {
@@ -77,10 +99,10 @@ update_case() {
 
 update_case ready updates-light default APEX_SCROLL=1 "APEX_CHECK=updates.py ready" || status=1
 update_case ready updates-dark prefer-dark APEX_SCROLL=1 || status=1
-for scenario in up-to-date available health-failure unavailable; do
+for scenario in up-to-date available downloading health-failure fallback unavailable; do
     update_case "$scenario" "updates-$scenario" default "APEX_CHECK=updates.py $scenario" || status=1
 done
 headless_update1_stop
 grep -h '^ok \|^FAIL \|APEXCC-' "$out"/*.log || true
 ((status == 0)) || die "run.sh: a case failed; see ${out#"$APEX_ROOT/"}/*.log"
-log "run.sh: every row is bound and every Software Updates state checked; captures in ${out#"$APEX_ROOT/"}"
+log "run.sh: every row is bound, Appearance and Power check out and every Software Updates state is checked; captures in ${out#"$APEX_ROOT/"}"
