@@ -10,6 +10,7 @@ stock and safe mode keep upstream's lock, and that the greeter runs no Apex JS.
 Prints one line per assertion and exits 1 when one fails.
 """
 
+import itertools
 import json
 import os
 import re
@@ -30,6 +31,8 @@ LOCK_CASES = {
     "lock-light": {"apex": True, "question": "Enter Password"},
     "lock-dark": {"apex": True, "question": "Enter Password"},
     "lock-question": {"apex": True, "question": "Verification code:"},
+    "lock-high-contrast": {"apex": True, "question": "Enter Password", "overlay_alpha": 0x8c},
+    "lock-large-text": {"apex": True, "question": "Enter Password"},
     "lock-disabled": {"apex": False, "question": "Password", "layer": True},
     "lock-safe": {"apex": False, "question": "Password", "layer": False},
 }
@@ -110,6 +113,30 @@ def channels(gdm_log):
     return by_channel
 
 
+# Top to bottom, as board 20 stacks them.
+LAYOUT_ORDER = ("date", "time", "avatar", "field", "message", "hint")
+# $apex_lock_overlay, rgba(8, 10, 20, .34); the high-contrast sheet's own is darker.
+OVERLAY = "#080a1457"
+
+
+def check_layout(case, layout, overlay_alpha=None):
+    screen = layout.get("screen") or {}
+    parts = [(name, layout[name]) for name in LAYOUT_ORDER if name in layout]
+    off = [name for name, b in parts if b["x"] < screen.get("x", 0) or b["y"] < screen.get("y", 0)
+           or b["x"] + b["width"] > screen.get("x", 0) + screen.get("width", 0) + 1
+           or b["y"] + b["height"] > screen.get("y", 0) + screen.get("height", 0) + 1]
+    check(f"{case}: date, time, avatar, field and hint are all on screen",
+          {"date", "time", "avatar", "field", "hint"} <= dict(parts).keys() and not off, json.dumps(layout))
+    overlaps = [f"{a}/{b}" for (a, ba), (b, bb) in itertools.pairwise(parts) if ba["y"] + ba["height"] > bb["y"] + 1]
+    check(f"{case}: top to bottom, nothing overlaps", not overlaps, ", ".join(overlaps))
+    got = layout.get("overlay") or ""
+    if overlay_alpha is None:
+        check(f"{case}: the overlay darkens as $apex_lock_overlay", got == OVERLAY, got)
+    else:
+        check(f"{case}: high contrast darkens more, to alpha {overlay_alpha:#x}",
+              got[:7] == "#000000" and len(got) == 9 and int(got[7:], 16) >= overlay_alpha, got)
+
+
 def check_lock(shots, case, want):
     log = read(shots, f"{case}.log")
     gdm = read(shots, f"{case}.gdm.log")
@@ -146,6 +173,7 @@ def check_lock(shots, case, want):
         check(f"{case}: the initial-letter avatar", (opened["prompt"] or {}).get("avatar") == "initial A",
               json.dumps(opened["prompt"]))
         check(f"{case}: the user's name", (opened["prompt"] or {}).get("name") == "Apex")
+        check_layout(case, opened.get("layout") or {}, want.get("overlay_alpha"))
         check(f"{case}: blanking takes the prompt down", blank["prompt"] is None, json.dumps(blank["prompt"]))
         if answered:
             check(f"{case}: and cancels its conversation", "Cancel" in calls[answered[0]])
