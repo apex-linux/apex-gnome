@@ -44,6 +44,7 @@ globalThis.global = {
             keycode === TOGGLE_KEYCODE ? mainModule?.wm.actionOf('toggle-spotlight') ?? 0 : 0,
     }),
     stage: {width: 1440},
+    compositor: {get_laters: () => ({add: (_type, fn) => GLib.idle_add(GLib.PRIORITY_DEFAULT, fn), remove: id => GLib.source_remove(id)})},
     window_manager: newEmitter(),
     workspace_manager: newEmitter({get_active_workspace: () => ({list_windows: () => windows})}),
     session_mode: GLib.getenv('PROBE_MODE') ?? 'user',
@@ -395,9 +396,20 @@ async function exerciseShadows() {
             `below=${root.get_children().indexOf(l) < root.get_children().indexOf(bin)}`).join(' | ') || 'none');
     };
     Registry.register(surface, {name: 'probe', container: root});
+    fact('shadows.before-the-frame', Registry.layersOf(surface).length);
+    await spin(50);
     layers('registered');
     Registry.register(surface, {name: 'probe', container: root});
+    await spin(50);
     fact('shadows.registered-twice', Registry.layersOf(surface).length);
+    surface.mapped = false;
+    surface.emit('notify::mapped');
+    await spin(50);
+    layers('unmapped');
+    surface.mapped = true;
+    surface.emit('notify::mapped');
+    await spin(50);
+    layers('mapped-again');
     settings.set_boolean('layer-enabled', false);
     await spin(200);
     layers('off');
