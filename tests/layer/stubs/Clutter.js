@@ -6,6 +6,8 @@ import GLib from 'gi://GLib';
 
 const TextDirection = {DEFAULT: 0, LTR: 1, RTL: 2};
 
+class BinLayout {}
+
 class ClickGesture {
     connect(signal, fn) {
         if (signal === 'recognize')
@@ -14,6 +16,9 @@ class ClickGesture {
 }
 
 export default {
+    AnimationMode: {EASE_OUT_QUAD: 5, EASE_OUT_CUBIC: 8},
+    BUTTON_SECONDARY: 3,
+    BinLayout,
     ClickGesture,
     ActorAlign: {FILL: 0, START: 1, CENTER: 2, END: 3},
     TextDirection,

@@ -37,9 +37,10 @@ Fedora's gnome-shell SRPM, rebuilt with the Apex layer inside it
 | `0001-build` | `data/theme/gnome-shell-{light,dark,high-contrast}.scss`, `data/theme/meson.build`, `js/meson.build`, `src/meson.build` | +13 | the `@import` hooks; `subdir('apex')`; `apex.gresource.xml` compiled and linked into libshell next to `js-resources` |
 | `0002-loader` | `js/ui/main.js`, `js/ui/sessionMode.js` | +16 −1 | the static import of `ui/apex/hooks.js`; the layer loaded (configure) before the session mode exists; `enable()` at `startup-prepared`; the stock sheets in safe mode; a value hook over each session mode's parameters |
 | `0010-panel` | `js/ui/panel.js`, `js/ui/layout.js` | +13 −4 | value hooks over the workspace dots' inactive opacity and scale and over a dot's width; a behaviour hook once Quick Settings has set up its indicators (the status-pill filter); a behaviour hook once a hot corner is built (the 4 × 4 zone) |
+| `0014-dash` | `js/ui/dash.js` | +3 −2 | value hooks over the Show Apps icon's name and over whether a dash puts its separator between the favourites and the running apps, for ApexDock |
 
 Budget (ADR 0014): at most 450 changed lines of hook hunks in at most 33 upstream files.
-In use: 47 lines in 10 files. The C budget for `shell-blur-effect.{c,h}` (300 lines) is
+In use: 52 lines in 11 files. The C budget for `shell-blur-effect.{c,h}` (300 lines) is
 untouched until 0003-blur (S2b).
 
 The patches are `git format-patch` output against Fedora's `%prep` tree (upstream

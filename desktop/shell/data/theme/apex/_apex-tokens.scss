@@ -42,6 +42,34 @@ $apex_bar_clock_dot_size: 5px;
 $apex_bar_status_gap: 8px;
 $apex_bar_icon_size: 16px;
 
+$apex_dock: if($variant == 'light', rgba(250, 250, 252, .5), rgba(34, 34, 38, .5));
+$apex_dock_border: if($variant == 'light', rgba(255, 255, 255, .6), rgba(255, 255, 255, .12));
+$apex_dock_separator: if($variant == 'light', rgba(0, 0, 10, .14), rgba(255, 255, 255, .16));
+$apex_dock_fg: if($variant == 'light', #1d1d21, #f4f4f6);
+$apex_dock_dot: if($variant == 'light', rgba(29, 29, 33, .7), rgba(244, 244, 246, .7));
+$apex_dock_label: if($variant == 'light', #f6f6f8, #2a2a2e);
+$apex_dock_label_border: if($variant == 'light', rgba(255, 255, 255, .65), rgba(255, 255, 255, .09));
+
+$apex_radius_dock: 24px;
+$apex_radius_dock_label: 13px;
+
+$apex_font_dock_label_size: 12.5px;
+$apex_font_dock_label_weight: 600;
+
+$apex_dock_bottom_gap: 10px;
+$apex_dock_padding_top: 5px;
+$apex_dock_padding_x: 8px;
+$apex_dock_padding_bottom: 3px;
+$apex_dock_gap: 2px;
+$apex_dock_icon_size: 54px;
+$apex_dock_separator_height: 40px;
+$apex_dock_separator_margin_x: 4px;
+$apex_dock_separator_margin_bottom: 8px;
+$apex_dock_dot_size: 4px;
+$apex_dock_dot_gap: 4px;
+$apex_dock_label_padding: 10px;
+$apex_dock_label_gap: 12px;
+
 // The shell's own surfaces: popup menus, OSDs, banners, Quick Settings, dialogs.
 $apex_fg: if($variant == 'light', #1d1d21, #f4f4f6);
 $apex_fg_dim: if($variant == 'light', rgba(29, 29, 33, .62), rgba(244, 244, 246, .64));
