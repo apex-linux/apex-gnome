@@ -227,6 +227,32 @@ $apex_entry_focus_ring: 2px;
 $apex_font_entry_size: 14px;
 $apex_font_entry_weight: 500;
 
+// Board 13's authentication dialog (js/ui/apex/polkit/).
+$apex_polkit_icon_size: 56px;
+$apex_polkit_icon_glyph_size: 28px;
+$apex_polkit_icon_tint: .16;
+$apex_polkit_body_gap: 10px;
+$apex_polkit_avatar_size: 32px;
+$apex_polkit_user_gap: 10px;
+$apex_polkit_user_inset: 4px;
+$apex_font_polkit_role_size: 11.5px;
+$apex_polkit_hint_gap: 8px;
+$apex_polkit_hint_inset: 6px;
+$apex_polkit_hint_glyph_size: 16px;
+$apex_font_polkit_hint_size: 12.5px;
+$apex_radius_polkit_details: 12px;
+$apex_polkit_details_heading_height: 38px;
+$apex_polkit_details_inset: 12px;
+$apex_polkit_details_indent: 34px;
+$apex_polkit_details_key_width: 76px;
+$apex_polkit_details_gap: 8px;
+$apex_polkit_details_row_gap: 6px;
+$apex_polkit_chevron_size: 14px;
+$apex_font_polkit_details_heading_size: 12.5px;
+$apex_font_polkit_details_size: 12px;
+$apex_font_polkit_action_size: 11.5px;
+$apex_font_mono: "JetBrains Mono", monospace;
+
 $apex_fg_faint: if($variant == 'light', rgba(29, 29, 33, .4), rgba(244, 244, 246, .4));
 $apex_glass_card: if($variant == 'light', rgba(255, 255, 255, .72), rgba(255, 255, 255, .06));
 $apex_message_card: if($variant == 'light', #ffffff, #353539);

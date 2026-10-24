@@ -93,6 +93,10 @@ class Widget {
         return [...this._children];
     }
 
+    get_first_child() {
+        return this._children[0] ?? null;
+    }
+
     get_parent() {
         return this._parent ?? null;
     }
@@ -208,7 +212,26 @@ class Widget {
     }
 }
 
-class Label extends Widget {}
+// The polkit feature follows upstream's info label through its notify signals.
+class Label extends Widget {
+    get visible() {
+        return this._visible;
+    }
+
+    set visible(visible) {
+        this._visible = visible;
+        this.emit('notify::visible');
+    }
+
+    get text() {
+        return this._text;
+    }
+
+    set text(text) {
+        this._text = text;
+        this.emit('notify::text');
+    }
+}
 class Bin extends Widget {}
 class BoxLayout extends Widget {
     insert_child_at_index(child, index) {
