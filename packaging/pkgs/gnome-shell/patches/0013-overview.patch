@@ -18,13 +18,37 @@ layer provides (apex-fedora ROADMAP S3a):
   entry or the entry takes the key focus, given which of the two, the
   text and a reset, through which Spotlight takes over the overview's
   search.
+- ControlsManagerLayout: a value hook over the height of the app grid's
+  workspace strip, through which the layer gives the grid that space.
 ---
+ js/ui/overviewControls.js   | 3 ++-
  js/ui/searchController.js   | 6 ++++++
  js/ui/windowPreview.js      | 9 +++++----
  js/ui/workspace.js          | 2 ++
  js/ui/workspaceThumbnail.js | 5 +++--
- 4 files changed, 16 insertions(+), 6 deletions(-)
+ 5 files changed, 18 insertions(+), 7 deletions(-)
 
+diff --git a/js/ui/overviewControls.js b/js/ui/overviewControls.js
+index d7ef077..43d2bec 100644
+--- a/js/ui/overviewControls.js
++++ b/js/ui/overviewControls.js
+@@ -6,6 +6,7 @@ import Meta from 'gi://Meta';
+ import Shell from 'gi://Shell';
+ import St from 'gi://St';
+ 
++import * as ApexHooks from './apex/hooks.js';
+ import * as AppDisplay from './appDisplay.js';
+ import * as Dash from './dash.js';
+ import * as Main from './main.js';
+@@ -103,7 +104,7 @@ class ControlsManagerLayout extends Clutter.LayoutManager {
+             workspaceBox.set_origin(0, startY + searchHeight + spacing);
+             workspaceBox.set_size(
+                 width,
+-                Math.round(height * SMALL_WORKSPACE_RATIO));
++                ApexHooks.value('app-grid-workspaces-height', Math.round(height * SMALL_WORKSPACE_RATIO)));
+             break;
+         }
+ 
 diff --git a/js/ui/searchController.js b/js/ui/searchController.js
 index 1547ade..78a28fb 100644
 --- a/js/ui/searchController.js
