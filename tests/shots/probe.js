@@ -12,6 +12,7 @@ import * as Dialog from 'resource:///org/gnome/shell/ui/dialog.js';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import * as MessageTray from 'resource:///org/gnome/shell/ui/messageTray.js';
 import * as ModalDialog from 'resource:///org/gnome/shell/ui/modalDialog.js';
+import * as OverviewControls from 'resource:///org/gnome/shell/ui/overviewControls.js';
 import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 import * as Scripting from 'resource:///org/gnome/shell/ui/scripting.js';
 import * as Slider from 'resource:///org/gnome/shell/ui/slider.js';
@@ -56,6 +57,7 @@ const SWITCHER_ICON_SIZE = 96;
 
 Gio._promisify(Shell.Screenshot.prototype, 'screenshot');
 Gio._promisify(Gio.DBusConnection.prototype, 'call');
+Gio._promisify(Gio.Subprocess.prototype, 'communicate_utf8_async');
 
 function hex(color) {
     return `#${[color.red, color.green, color.blue, color.alpha]
@@ -1221,8 +1223,8 @@ const SPOTLIGHT_ROWS = {
     'org.gnome.Settings.desktop': [
         {id: 'about', name: 'About', description: 'System · name, memory and disk capacity', icon: 'help-about-symbolic'},
         {id: 'privacy', name: 'File History & Trash', description: 'Privacy & Security', icon: 'user-trash-symbolic', keywords: 'disk'},
-        {id: 'removable', name: 'Removable Media', description: 'Apps · what happens when a disk is plugged in', icon: 'media-removable-symbolic'},
-        {id: 'storage', name: 'Disk Encryption', description: 'Privacy & Security', icon: 'drive-harddisk-symbolic'},
+        {id: 'removable-media', name: 'Removable Media', description: 'Apps · what happens when a disk is plugged in', icon: 'media-removable-symbolic'},
+        {id: 'disk-encryption', name: 'Disk Encryption', description: 'Privacy & Security', icon: 'drive-harddisk-symbolic'},
     ],
     'org.gnome.Nautilus.desktop': [
         {id: 'csv', name: 'disk-usage-2026-10.csv', description: '~/Documents', icon: 'text-x-generic'},
@@ -1287,8 +1289,10 @@ async function spotlightStyle(unit) {
         const row = actor => {
             const [icon, text, action] = actor.get_children();
             const [title, subtitle] = text.get_children();
+            const tile = icon.has_style_class_name('apex-spotlight-tile')
+                ? {...styleOf(icon, unit), glyph: lengthOrNull(icon.get_child().get_theme_node(), 'icon-size', unit)} : null;
             return {
-                ...styleOf(actor, unit), icon: styleOf(icon, unit), text: styleOf(text, unit),
+                ...styleOf(actor, unit), icon: styleOf(icon, unit), tile, text: styleOf(text, unit),
                 title: {...styleOf(title, unit), text: title.get_text()},
                 subtitle: {...styleOf(subtitle, unit), text: subtitle.get_text()},
                 action: {
@@ -1458,6 +1462,10 @@ async function appGrid(unit) {
                 focus: underPseudoClass(app, 'focus', () => paint(app.get_theme_node(), unit)),
             } : null,
             folder: folder ? styleOf(folder, unit) : null,
+            strip: round(Main.overview._overview.controls.layoutManager
+                .getWorkspacesBoxForState(OverviewControls.ControlsState.APP_GRID).get_height() / unit.length),
+            box: boxOf(appDisplay, unit),
+            searchBottom: (b => b.y + b.height)(boxOf(Main.overview._overview.controls._searchEntry, unit)),
             grid: {
                 columns: appDisplay._grid.layout_manager.columns_per_page,
                 rows: appDisplay._grid.layout_manager.rows_per_page,
@@ -1816,15 +1824,22 @@ async function motion() {
     Main.overview.hide();
     await Scripting.sleep(MOTION_SETTLE_MS);
     const client = Gio.File.new_for_uri(import.meta.url).get_parent().get_child('window.js').get_path();
-    Gio.Subprocess.new(['gjs', '-m', client], Gio.SubprocessFlags.NONE);
+    // The shell's environment names no display: the client gets the shell's own, on Wayland.
+    const launcher = new Gio.SubprocessLauncher({flags: Gio.SubprocessFlags.STDERR_PIPE});
+    launcher.setenv('WAYLAND_DISPLAY', GLib.getenv('G2_WAYLAND_DISPLAY') ?? 'apex-g2', true);
+    launcher.setenv('GDK_BACKEND', 'wayland', true);
+    const clientProcess = launcher.spawnv(['gjs', '-m', client]);
     const find = () => global.get_window_actors().map(a => a.meta_window)
         .find(w => w.get_gtk_application_id() === MOTION_WINDOW_ID);
     let window;
     for (let waited = 0; !(window = find()) && waited < MOTION_WAIT_MS; waited += 100)
         // eslint-disable-next-line no-await-in-loop
         await Scripting.sleep(100);
-    if (!window)
-        throw new Error(`no ${MOTION_WINDOW_ID} window in ${MOTION_WAIT_MS} ms`);
+    if (!window) {
+        clientProcess.force_exit();
+        const [, , stderr] = await clientProcess.communicate_utf8_async(null, null);
+        throw new Error(`the test client never mapped (${stderr?.trim() || `no ${MOTION_WINDOW_ID} window in ${MOTION_WAIT_MS} ms`})`);
+    }
     // Mutter gives a window's first size change a 0 x 0 old frame, which stock never animates.
     window.maximize();
     await Scripting.sleep(MOTION_SETTLE_MS);

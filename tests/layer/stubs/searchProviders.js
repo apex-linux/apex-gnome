@@ -21,10 +21,11 @@ export const ITEMS = {
         ['org.gnome.Calculator.desktop', 'Calculator', 'Perform arithmetic, scientific or financial calculations'],
     ],
     'org.gnome.Settings.desktop': [
-        ['disk-encryption', 'Disk Encryption', 'Privacy & Security'],
-        ['disk-storage', 'Disk Storage', 'System'],
-        ['removable-disks', 'Removable Disks', 'Apps'],
-        ['disk-sleep', 'Disk Sleep', 'Power'],
+        ['privacy', 'Disk Encryption', 'Privacy & Security'],
+        ['about', 'Disk Storage', 'System'],
+        ['removable-media', 'Removable Disks', 'Apps'],
+        ['power', 'Disk Sleep', 'Power'],
+        ['apex', 'Apex Desktop', 'Dock, top bar, glass and corner radius'],
     ],
     'org.gnome.Nautilus.desktop': [
         ['file:///home/u/disk-usage.csv', 'disk-usage-2026-10.csv', '~/Documents'],

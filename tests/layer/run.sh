@@ -450,6 +450,9 @@ fact "spotlight: the field has the keyboard focus" 'spotlight\.focus=true'
 fact "spotlight: sections in order, capped at 4 apps, 3 settings, 4 files; the first row selected, Enter to open" \
     "spotlight\.disk=APPLICATIONS: Disks\*Open Disk Usage Analyzer Disk Benchmark Disk Images \| $SETTINGS \| $FILES"
 lacks "spotlight: a provider without a section shows nothing" 'Characters'
+fact "spotlight: Settings rows sit on tiles: the panel's colour from settings-tiles.json, System's for its search-only pages, neutral without one" \
+    'spotlight\.tiles=Disk Encryption=#3584e4 Disk Storage=#6f8396 Removable Disks=neutral'
+fact "spotlight: Apex Desktop's tile is the accent" 'spotlight\.tiles-apex=Apex Desktop=accent'
 fact "spotlight: Down moves across sections" \
     "spotlight\.down-4=$APPS \| SETTINGS: Disk Encryption\*Open Disk Storage Removable Disks \| $FILES"
 fact "spotlight: Up moves back" \
@@ -458,7 +461,7 @@ fact "spotlight: Down stops at the last row" \
     "spotlight\.down-20=$APPS \| $SETTINGS \| FILES: disk-usage-2026-10.csv disk-unlock-board.png Disk Images diskspace-notes.md\*Open"
 fact "spotlight: Up stops at the first" "spotlight\.up-20=APPLICATIONS: Disks\*Open .*"
 fact "spotlight: Enter activates the selected result through its provider, with the terms" \
-    'spotlight\.activated=org\.gnome\.Settings\.desktop:disk-encryption terms=disk'
+    'spotlight\.activated=org\.gnome\.Settings\.desktop:privacy terms=disk'
 fact "spotlight: and closes Spotlight" 'spotlight\.enter-on-a-setting=closed'
 fact "spotlight: Enter on an app launches it" 'spotlight\.launched=org\.gnome\.DiskUtility\.desktop'
 fact "spotlight: a sum: its result first, then Calculator as the first application" \
@@ -759,14 +762,15 @@ probe lock-gdm "$CMDLINE_PLAIN" PROBE_MODE=gdm PROBE_LOCK=1
 fact "gdm mode: no layer" 'layer=null'
 lock_is_stock "gdm mode"
 
-readonly OVERVIEW_ON='title-visible=true overlay=close scale=0\.081 threshold=1 box=0\.081 grid=\[\{"rows":4,"columns":7\}\] icon=88'
-readonly OVERVIEW_STOCK='title-visible=false overlay=title\+close scale=0\.05 threshold=2 box=0\.05 grid="stock" icon=-1'
+readonly OVERVIEW_ON='title-visible=true overlay=close scale=0\.081 threshold=1 box=0\.081 grid=\[\{"rows":4,"columns":7\}\] icon=88 strip=0'
+readonly OVERVIEW_STOCK='title-visible=false overlay=title\+close scale=0\.05 threshold=2 box=0\.05 grid="stock" icon=-1 strip=130'
 readonly EMPTY_LABEL='"No open windows" \.apex-workspace-empty'
 probe overview "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_OVERVIEW=1
 has "overview: the overview feature enables" 'Apex: feature overview enabled'
-fact "overview: titles always shown, the overlay fades only the close button; thumbnails at .081 from two workspaces; the launcher 7 columns of 88 px" \
+fact "overview: titles always shown, the overlay fades only the close button; thumbnails at .081 from two workspaces; the launcher 7 columns of 88 px, with no workspace strip above it" \
     "overview\.enabled=$OVERVIEW_ON"
 fact "launcher: the grid picks its mode and icon size afresh" 'overview\.enabled\.relayout=mode=-1 page-width=0'
+count_is "launcher: the controls lay out again at each enable and disable, so the strip comes and goes at once" '^probe: controls=relayout$' 3
 fact "workspaces: no background card, and an empty workspace says so" "workspace\.enabled\.empty=background=false $EMPTY_LABEL visible=true opacity=255"
 fact "workspaces: the label goes when a window arrives" "workspace\.enabled\.window-added=background=false $EMPTY_LABEL visible=false opacity=255"
 fact "workspaces: and fades with the overview" "workspace\.enabled\.half-open=background=false $EMPTY_LABEL visible=true opacity=128"

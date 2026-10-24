@@ -33,6 +33,8 @@ readonly LAUNCHER_ROWS=4
 readonly LAUNCHER_ICON_SIZE=88
 readonly MESSAGE_ICON_SIZE=32
 readonly DND_LABEL='Do Not Disturb'
+readonly LAUNCHER_GRID_TOP=128
+readonly LAUNCHER_GRID_TOP_TOLERANCE=8
 readonly DIAMOND_SQUARE_PX=8
 readonly DIAMOND_STROKE_PX=2
 readonly DIAMOND_STROKE_AREA_PX=$((4 * DIAMOND_SQUARE_PX * DIAMOND_STROKE_PX))
@@ -44,6 +46,7 @@ readonly INACTIVE_DOT_OPACITY=0.45
 readonly TODAY_CLOCK_TEXT_GAP=7.04
 readonly TODAY_CLOCK_PILL_EXTRA=13
 readonly LAYER_CYCLES=3
+readonly TILES_FILE=${G2_TILES_FILE:-$SHOTS_DIR/../../desktop/shell/js/ui/apex/spotlight/settings-tiles.json}
 readonly SPOTLIGHT_ACCELERATORS='["<Super>space"]'
 readonly SPOTLIGHT_MODES='["NORMAL", "OVERVIEW"]'
 # DESIGN's motion: cubic-bezier(.2,.8,.2,1); window geometry .3 s, the overview .2 s.
@@ -759,6 +762,8 @@ overview_layer() {
         "$o.workspace.empty" '(.font.size | px_is($t.apex_font_workspace_empty_size)) and .font.weight == ($t.apex_font_heading_weight | tonumber) and (.foreground | colour_is($t.apex_fg_dim))'
     expect_report "$label" "$log" ".surfaces.appGrid.grid == {columns: $LAUNCHER_COLUMNS, rows: $LAUNCHER_ROWS, iconSize: $LAUNCHER_ICON_SIZE}" \
         "launcher: $LAUNCHER_COLUMNS columns of $LAUNCHER_ICON_SIZE px icons, $LAUNCHER_ROWS rows a page" APEXG2-SCENES
+    expect_report "$label" "$log" ".surfaces.appGrid | .strip == 0 and (.box.y - $LAUNCHER_GRID_TOP | fabs) <= $LAUNCHER_GRID_TOP_TOLERANCE" \
+        "launcher: no workspace strip above the grid, which starts at board 36's ${LAUNCHER_GRID_TOP} px (within $LAUNCHER_GRID_TOP_TOLERANCE)" APEXG2-SCENES
 }
 
 # shellcheck disable=SC2016 # jq programs and token names, not shell expansions
@@ -866,7 +871,7 @@ derived_surfaces() {
 spotlight_style() {
     local label=$1 log=$2 variant=$3 scenes tokens
     scenes=$(report_of "$log" APEXG2-SCENES)
-    tokens=$(tokens_for "$variant")
+    tokens=$(tokens_for "$variant" | jq --slurpfile tiles "$TILES_FILE" '. + {settings_tiles: $tiles[0]}')
     local -a metric=(top_bar_metric "$label Spotlight" "$scenes" "$tokens")
     local s=.surfaces.spotlight
     local surface='(.border | [.top, .right, .bottom, .left] | all(px_is($t.apex_surface_border))) and (.borderColor | colour_is($t.apex_panel_border))
@@ -902,6 +907,11 @@ spotlight_style() {
     "${metric[@]}" 'the first row is selected, filled with the accent at $apex_selection_opacity; the others are unfilled' \
         "{s: $s, accent: .topBar.accent}" ".accent as \$a | .s.selected == [true, false, false, false, false, false, false, false, false]
             and (.s.rows[0] | $selected) and (.s.rows[1:] | all(.background | rgba | .[3] == 0))"
+    "${metric[@]}" 'Settings rows sit on $apex_spotlight_icon_size tiles, radius $apex_radius_spotlight_tile, with $apex_spotlight_tile_glyph_size glyphs: About in System'"'"'s colour and Privacy'"'"'s from settings-tiles.json in $apex_spotlight_tile_fg, a panel without one neutral $apex_button in $apex_fg' \
+        "[$s.rows[2:5][] | .tile]" 'length == 3 and all(. != null and (.width | px_is($t.apex_spotlight_icon_size)) and (.radius | px_is($t.apex_radius_spotlight_tile)) and (.glyph | px_is($t.apex_spotlight_tile_glyph_size)))
+            and (.[0] | (.background | colour_is($t.settings_tiles.system)) and (.foreground | colour_is($t.apex_spotlight_tile_fg)))
+            and (.[1] | (.background | colour_is($t.settings_tiles.privacy)) and (.foreground | colour_is($t.apex_spotlight_tile_fg)))
+            and (.[2] | (.background | colour_is($t.apex_button)) and (.foreground | colour_is($t.apex_fg)))'
     "${metric[@]}" 'a title is $apex_font_spotlight_title_size $apex_font_label_weight in $apex_fg, $apex_spotlight_text_gap over its subtitle, $apex_font_spotlight_subtitle_size in $apex_fg_dim' \
         "$s.rows" 'all((.title.font.size | px_is($t.apex_font_spotlight_title_size)) and .title.font.weight == ($t.apex_font_label_weight | tonumber) and (.title.foreground | colour_is($t.apex_fg))
             and (.text.spacing | px_is($t.apex_spotlight_text_gap)) and (.subtitle.font.size | px_is($t.apex_font_spotlight_subtitle_size)) and (.subtitle.foreground | colour_is($t.apex_fg_dim)))'
@@ -1084,6 +1094,12 @@ motion_curve() {
     apex_light motion "$f"
     no_apex_failure motion "$f"
     m=$(report_of "$f" APEXG2-MOTION)
+    local error
+    error=$(jq -r '.error // empty' <<<"$m" 2>/dev/null)
+    if [[ -n $error ]]; then
+        fail "motion: ${error%%$'\n'*}"
+        return
+    fi
     expect motion "$m" '.error == null and .animated.maximise.maximised and .animated.overview.visible' \
         "the probe maximised a GTK window and opened the overview, with animations on"
     expect motion "$m" ".animated.maximise.transition | .mode == \"CUBIC_BEZIER\" and .curve == $MOTION_CURVE and .duration == $MOTION_WINDOW_MS" \
@@ -1285,14 +1301,14 @@ glass_frames() {
     local label=$1 log=$2
     expect_report "$label" "$log" '.error == null and .patched' "the probe ran the glass cases on the patched ShellBlurEffect" APEXG2-GLASS
     expect_report "$label" "$log" '.pixels.reference | .clippedFirst and .reblurCovered' \
-        "damage under the glass: the first frame's redraw clip leaves the box out, the effect's own redraw covers it" APEXG2-GLASS
+        "damage under the glass: the first frame's redraw clip leaves the box out (it damages again up to 5 times; else: could not obtain a partial redraw), the effect's own redraw covers it" APEXG2-GLASS
     local within="(.interior.max | max) <= $GLASS_INTERIOR_MAX and (.edge.max | max) <= $GLASS_EDGE_MAX and (.box.mean | max) <= $GLASS_MEAN_ERROR"
     expect_report "$label" "$log" ".pixels.reference | .downscale > 1 and $within" \
         "then the box is blur-ref.js's Gaussian, saturate() and corners per channel: within $GLASS_INTERIOR_MAX/255 inside, $GLASS_EDGE_MAX/255 in the ds/2 band along the edges, $GLASS_MEAN_ERROR/255 on average" APEXG2-GLASS
     expect_report "$label" "$log" '.pixels.sameFrame | .covered and .changed > 0 and .differingFromFull == 0' \
         "damage forwarded to the glass box re-blurs in the same frame, as a full redraw draws it" APEXG2-GLASS
     expect_report "$label" "$log" '.pixels.clippedRedraw | (.covered | not) and .differingFromLast == 0 and .nextCovered and .nextDifferingFromFull == 0' \
-        "a redraw clip that misses the box draws the last result, pixel for pixel; the next frame is the full redraw's" APEXG2-GLASS
+        "a redraw clip that misses the box (as above, up to 5 damages) draws the last result, pixel for pixel; the next frame is the full redraw's" APEXG2-GLASS
     expect_report "$label" "$log" '.pixels.stock | (.covered | not) and .tries >= 1' \
         "the stock control obtained a partial redraw, a frame whose redraw clip misses the box (it damages again up to 5 times; else: could not obtain a partial redraw)" APEXG2-GLASS
     expect_report "$label" "$log" ".pixels.stock | (.covered | not) and .differingFromFull > 0 and (($within) | not)" \

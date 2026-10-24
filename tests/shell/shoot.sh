@@ -212,6 +212,8 @@ shoot lock-refused "$USER_NAME" user default '' || status=1
 notifications_off="io.github.apex_linux.Apex.Desktop disabled-features ['notifications']"
 shoot date-menu "$USER_NAME" user default 'Password:' -- APEX_DATE_MENU=1 || status=1
 shoot date-menu-disabled "$USER_NAME" user default 'Password:' "$notifications_off" -- APEX_DATE_MENU=1 || status=1
+shoot lock-high-contrast "$USER_NAME" user default 'Password:' "org.gnome.desktop.a11y.interface high-contrast true" || status=1
+shoot lock-large-text "$USER_NAME" user default 'Password:' "org.gnome.desktop.interface text-scaling-factor 1.25" || status=1
 # authselect locks GDM's fingerprint key off; an image with a reader enables the feature.
 if ! authselect enable-feature with-fingerprint >"$out/authselect.log" 2>&1 || ! dconf update; then
     die "authselect cannot enable with-fingerprint; see ${out#"$APEX_ROOT/"}/authselect.log"
