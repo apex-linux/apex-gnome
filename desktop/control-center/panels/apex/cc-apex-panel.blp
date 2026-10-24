@@ -1,0 +1,188 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+using Gtk 4.0;
+using Adw 1;
+
+template $CcApexPanel: $CcPanel {
+  child: Adw.ToolbarView {
+    [top]
+    Adw.HeaderBar {}
+
+    content: Stack stack {
+      StackPage {
+        name: "panel";
+
+        child: ScrolledWindow {
+          hscrollbar-policy: never;
+
+          child: Adw.Clamp {
+            maximum-size: 620;
+            margin-top: 12;
+            margin-bottom: 36;
+            margin-start: 32;
+            margin-end: 32;
+
+            child: Box {
+              orientation: vertical;
+              spacing: 28;
+
+              $CcApexHeader {}
+
+              Adw.PreferencesGroup {
+                title: _("Top Bar");
+
+                Adw.SwitchRow translucent_top_bar_row {
+                  title: _("Translucent Top Bar");
+                  subtitle: _("Turns solid when a window is maximized");
+                }
+
+                Adw.SwitchRow show_focused_app_name_row {
+                  title: _("Show Focused App Name");
+                }
+
+                Adw.SwitchRow clock_show_date_row {
+                  title: _("Show Date in Clock");
+                }
+
+                Adw.SwitchRow show_battery_percentage_row {
+                  title: _("Show Battery Percentage");
+                }
+
+                Adw.SwitchRow hot_corner_row {
+                  title: _("Hot Corner");
+                  subtitle: _("Touch the top-left corner to open the overview");
+                }
+              }
+
+              Adw.PreferencesGroup {
+                title: _("Dock");
+
+                Adw.ActionRow dock_icon_size_row {
+                  title: _("Icon Size");
+
+                  [suffix]
+                  Adw.ToggleGroup dock_icon_size_group {
+                    valign: center;
+                    homogeneous: true;
+
+                    Adw.Toggle {
+                      name: "small";
+                      label: C_("dock icon size", "S");
+                      tooltip: _("Small");
+                    }
+
+                    Adw.Toggle {
+                      name: "medium";
+                      label: C_("dock icon size", "M");
+                      tooltip: _("Medium");
+                    }
+
+                    Adw.Toggle {
+                      name: "large";
+                      label: C_("dock icon size", "L");
+                      tooltip: _("Large");
+                    }
+                  }
+                }
+
+                Adw.SwitchRow dock_intellihide_row {
+                  title: _("Hide Behind Maximized Windows");
+                  subtitle: _("Move the pointer to the bottom edge to reveal it");
+                }
+
+                Adw.SwitchRow dock_running_indicators_row {
+                  title: _("Show Running Indicators");
+                }
+
+                Adw.SwitchRow dock_show_trash_row {
+                  title: _("Show Trash");
+                }
+              }
+
+              Adw.PreferencesGroup {
+                title: _("Windows");
+
+                Adw.ActionRow window_corner_radius_row {
+                  title: _("Corner Radius");
+                  subtitle: _("Maximized windows are always square");
+
+                  [suffix]
+                  Adw.ToggleGroup window_corner_radius_group {
+                    valign: center;
+                    homogeneous: true;
+
+                    Adw.Toggle {
+                      name: "0";
+                      label: "0";
+                    }
+
+                    Adw.Toggle {
+                      name: "8";
+                      label: "8";
+                    }
+
+                    Adw.Toggle {
+                      name: "14";
+                      label: "14";
+                    }
+
+                    Adw.Toggle {
+                      name: "20";
+                      label: "20";
+                    }
+                  }
+                }
+
+                Adw.ActionRow titlebar_buttons_row {
+                  title: _("Titlebar Buttons");
+
+                  [suffix]
+                  Adw.ToggleGroup titlebar_buttons_group {
+                    valign: center;
+
+                    Adw.Toggle {
+                      name: "all";
+                      label: _("All");
+                    }
+
+                    Adw.Toggle {
+                      name: "close";
+                      label: _("Close only");
+                    }
+                  }
+                }
+
+                Adw.SwitchRow edge_tiling_row {
+                  title: _("Drag to Top Edge to Maximize");
+                }
+              }
+
+              Adw.PreferencesGroup {
+                title: _("Effects");
+
+                Adw.SwitchRow reduce_transparency_row {
+                  title: _("Reduce Transparency");
+                  subtitle: _("Replace glass surfaces with solid colors");
+                }
+
+                Adw.SwitchRow reduce_motion_row {
+                  title: _("Reduce Motion");
+                  subtitle: _("Disable window and dock animations");
+                }
+              }
+            };
+          };
+        };
+      }
+
+      StackPage {
+        name: "no-schema";
+
+        child: Adw.StatusPage {
+          icon-name: "org.gnome.Settings-apex-symbolic";
+          title: _("Apex Desktop Settings Are Missing");
+          description: _("The settings schema io.github.apex_linux.Apex.Desktop is not installed, so this panel cannot change the top bar, the dock or the window corners. It ships in the apex-desktop package.");
+        };
+      }
+    };
+  };
+}

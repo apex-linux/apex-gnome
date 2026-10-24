@@ -1,0 +1,12 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
+[Desktop Entry]
+Name=Apex Tweaks
+Comment=Change the top bar, the dock, windows and effects of the Apex desktop
+Exec=gnome-control-center apex
+Icon=org.gnome.Settings
+Terminal=false
+Type=Application
+StartupNotify=true
+Categories=GNOME;GTK;Settings;DesktopSettings;
+OnlyShowIn=GNOME;
+Keywords=Apex;Tweaks;Settings;Top Bar;Dock;Corner;Radius;
