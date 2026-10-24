@@ -138,6 +138,32 @@ jobs:
       - name: lint/theme.sh
         run: lint/theme.sh
 
+  ptyxis-lane:
+    # The ptyxis recipe through apex-lane's own container half, built from a pinned
+    # apex-image; the builder VM adds only the signing and the store.
+    name: tests/ptyxis/lane.sh (Fedora 45, Ptyxis rebuilt)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    container:
+      image: registry.fedoraproject.org/fedora:45@sha256:1e13e11f63e147a40a935c9046c79d53a30b861a3cf05ebb023bb53c562382cb
+    steps:
+      - name: git for the checkout and the Source1 archive
+        run: >-
+          dnf5 -y --setopt=install_weak_deps=False --repo=fedora --repo=updates install
+          git-core bash coreutils findutils sed
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: tests/ptyxis/selftest.sh
+        run: tests/ptyxis/selftest.sh
+
+      - name: tests/ptyxis/lane.sh
+        run: tests/ptyxis/lane.sh
+
   scripts:
     name: shellcheck, actionlint, selftest
     runs-on: ubuntu-24.04
