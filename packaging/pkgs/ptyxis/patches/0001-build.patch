@@ -1,0 +1,26 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Sat, 24 Oct 2026 06:07:30 +0000
+Subject: [PATCH] build: compile the Apex resource into ptyxis
+
+The Apex terminal ships inside Ptyxis. Its sources come from Source100, a
+git archive of desktop/ptyxis/ in apex-gnome, which %prep unpacks at the
+top of this tree as src/apex/. src/meson.build reads src/apex/meson.build
+right after upstream's resources, which adds the Apex resource,
+/org/gnome/Ptyxis/apex, to ptyxis_sources.
+---
+ src/meson.build | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/src/meson.build b/src/meson.build
+index 575f08c..045b542 100644
+--- a/src/meson.build
++++ b/src/meson.build
+@@ -59,6 +59,7 @@ ptyxis_sources += gnome.compile_resources('ptyxis-resources',
+   'ptyxis.gresource.xml',
+   c_name: 'ptyxis'
+ )
++subdir('apex')
+ 
+ ptyxis_sources += vcs_tag(
+       command: ['git', 'describe'],
