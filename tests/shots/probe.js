@@ -1456,8 +1456,11 @@ async function scenes() {
     const surfaces = await shellSurfaces(unit);
     surfaces.quickSettings = await quickSettings(unit);
     surfaces.quickSettingsLayer = await quickSettingsLayer();
-    surfaces.shadowLayers = await shadowLayers(unit);
-    surfaces.idleRepaints = await idleRepaints();
+    // Fedora's own shell, in smoke.sh, has no Apex layer to draw shadows.
+    if (await apexHooks()) {
+        surfaces.shadowLayers = await shadowLayers(unit);
+        surfaces.idleRepaints = await idleRepaints();
+    }
     surfaces.switcher = await windowSwitcher(unit);
     surfaces.dialog = await modalDialog(unit);
     surfaces.dateMenu = await calendarMenu(unit);
