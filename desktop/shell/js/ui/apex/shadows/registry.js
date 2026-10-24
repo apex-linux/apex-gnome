@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
-//
+
 // St draws one box-shadow per actor (DESIGN, Engineering notes). A registered actor gets one
 // shadow-layer actor per further layer its sheet names, below it and following its box.
 
