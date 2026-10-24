@@ -31,6 +31,7 @@ const CRASH_GUARD_MARKER = 'apex-shell-starting';
 const REPORT_AFTER_MS = 1500;
 const SETTLE_TIMEOUT_MS = 20000;
 const SETTLE_EXTRA_MS = 500;
+const PERF_HELPER_PING_S = 10;
 const DEFERRED_WORK_TIMEOUT_MS = 21000;
 const CALIBRATION_PX = 100;
 const INK_MAX_RGB_DISTANCE = 60;
@@ -1379,6 +1380,74 @@ async function tilePreview(unit) {
     }
 }
 
+// The stock screenshot UI in its selection mode, as board 19 opens it, then its screen
+// mode; G2 opens no windows, so a checked window frame is a stand-in.
+async function screenshotUI(unit) {
+    const ui = Main.screenshotUI;
+    await ui.open();
+    try {
+        await settle();
+        global.stage.set_key_focus(null);
+        const scene = GLib.getenv('G2_SURFACE_SCENES') === '1' ? await capture('screenshot') : null;
+        if (scene)
+            delete scene.bytes;
+        const types = [ui._selectionButton, ui._screenButton, ui._windowButton];
+        const typeContent = types[0].get_child();
+        const circle = ui._captureButton.get_child();
+        const area = ui._areaSelector;
+        const measured = {
+            scene,
+            monitorHeight: round(Main.layoutManager.primaryMonitor.height / unit.length),
+            panel: styleOf(ui._panel, unit),
+            close: styleOf(ui._closeButton, unit),
+            types: types.map(b => ({...styleOf(b, unit), checked: b.checked})),
+            typeContent: {
+                spacing: lengthOrNull(typeContent.get_theme_node(), 'spacing', unit),
+                icon: boxOf(typeContent.get_first_child(), unit),
+                labelFont: font(typeContent.get_last_child().get_theme_node(), unit),
+            },
+            checkedType: underPseudoClass(types[1], 'checked', () => paint(types[1].get_theme_node(), unit)),
+            pointer: {
+                ...styleOf(ui._showPointerButton, unit),
+                checked: underPseudoClass(ui._showPointerButton, 'checked', () => ({
+                    ...paint(ui._showPointerButton.get_theme_node(), unit),
+                    foreground: hex(ui._showPointerButton.get_theme_node().get_foreground_color()),
+                })),
+            },
+            capture: {
+                ...styleOf(ui._captureButton, unit),
+                circle: styleOf(circle, unit),
+                cast: underPseudoClass(ui._captureButton, 'cast', () => {
+                    const node = circle.get_theme_node();
+                    return {
+                        margin: lengthOrNull(node, 'margin', unit),
+                        radius: round(node.get_border_radius(St.Corner.TOPLEFT) / unit.length),
+                        background: hex(node.get_background_color()),
+                    };
+                }),
+            },
+            switcher: styleOf(ui._shotCastContainer, unit),
+            shot: {...styleOf(ui._shotButton, unit), checked: ui._shotButton.checked},
+            shade: styleOf(area._areaIndicator._topRect, unit),
+            selection: styleOf(area._areaIndicator._selectionRect, unit),
+            handle: styleOf(area._topLeftHandle, unit),
+        };
+        ui._screenButton.checked = true;
+        await settle();
+        const screen = ui._screenSelectors[Main.layoutManager.primaryIndex];
+        measured.screen = {...styleOf(screen, unit), checked: screen.checked};
+        measured.windowSelector = styleOf(ui._windowSelectors[Main.layoutManager.primaryIndex], unit);
+        const frame = new St.Widget({style_class: 'screenshot-ui-window-selector-window-border'});
+        const window = new St.Widget({style_class: 'screenshot-ui-window-selector-window'});
+        window.add_child(frame);
+        measured.windowFrame = withStyledActor(window, () => underPseudoClass(window, 'checked', () => styleOf(frame, unit)));
+        return measured;
+    } finally {
+        ui.close(true);
+        await settle();
+    }
+}
+
 // Surfaces G2 never opens, as nested stand-ins: each class is the parent of the next.
 function nestedStyle(classes, unit, Leaf = St.Widget) {
     const actors = classes.map((styleClass, i) => i === classes.length - 1
@@ -1450,6 +1519,7 @@ async function scenes() {
     surfaces.derived = derivedSurfaces(unit);
     surfaces.tilePreview = await tilePreview(unit);
     surfaces.spotlight = await spotlightStyle(unit);
+    surfaces.screenshot = await screenshotUI(unit);
 
     Main.overview.show();
     await settle();
@@ -1647,7 +1717,25 @@ export function init() {
     import(import.meta.url).then(self => Scripting.runPerfScript(self, GLib.getenv('SHELL_PERF_OUTPUT')));
 }
 
+// gnome-shell-perf-helper quits after 30 s without a call, and scripting.js's last call to it
+// then fails the shell: a probe that runs longer pings it.
+function keepPerfHelperAwake() {
+    return GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, PERF_HELPER_PING_S, () => {
+        Scripting._getPerfHelper().then(helper => helper.DestroyWindowsAsync()).catch(() => {});
+        return GLib.SOURCE_CONTINUE;
+    });
+}
+
 export async function run() {
+    const pingId = keepPerfHelperAwake();
+    try {
+        await runProbe();
+    } finally {
+        GLib.source_remove(pingId);
+    }
+}
+
+async function runProbe() {
     await Scripting.sleep(REPORT_AFTER_MS);
     console.log(`APEXG2 ${JSON.stringify(await report())}`);
 
