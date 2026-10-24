@@ -396,6 +396,15 @@ It also asserts the shell surfaces of the same three cases (below). With
 cases also save a scene per surface group (`surfaces`, `quick-settings`, `switcher`,
 `dialog`, `datemenu`, `appgrid`), for placing beside the boards.
 
+## The authentication dialog
+
+G2 has no polkit case. `tests/shell/shoot.sh`'s polkit cases capture board 13 from the
+lane's RPMs: they call the shell's own polkit component's `_onInitiate()` with a stubbed
+`PolkitAgent.Session`, which asks for the password (and sends pam_fprintd's prompt in
+`polkit-fingerprint`) and is never answered. They are for captures and style checks only:
+PAM, polkit-agent-helper-1 and polkitd's verdict never run, and polkitd only describes the
+action. The real `pkexec` path is G4's.
+
 ## Not yet
 
 - A bar-text contrast check over the fixture wallpapers.

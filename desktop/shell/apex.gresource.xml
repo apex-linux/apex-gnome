@@ -43,6 +43,10 @@
     <file alias="lock/question.js">js/ui/apex/lock/question.js</file>
     <file alias="lock/avatar.js">js/ui/apex/lock/avatar.js</file>
     <file alias="quick-settings/feature.js">js/ui/apex/quick-settings/feature.js</file>
+    <file alias="polkit/feature.js">js/ui/apex/polkit/feature.js</file>
+    <file alias="polkit/header.js">js/ui/apex/polkit/header.js</file>
+    <file alias="polkit/fingerprint.js">js/ui/apex/polkit/fingerprint.js</file>
+    <file alias="polkit/details.js">js/ui/apex/polkit/details.js</file>
   </gresource>
   <gresource prefix="/org/gnome/shell/theme/apex">
     <file alias="diamond-light.svg">data/theme/apex/diamond-light.svg</file>

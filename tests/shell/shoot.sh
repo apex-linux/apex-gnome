@@ -19,12 +19,14 @@ container (just lock-shots). gdm-mock.py stands in for GDM: it asks one question
 fails every answer, so no case can unlock; lock-refused's GDM refuses even to ask, and
 lock-fingerprint's also runs gdm-fingerprint against fprintd-mock.py's reader. Each lock
 case locks, answers wrongly (lock-fingerprint fails a scan), blanks and wakes the screen; each greeter case (--mode=gdm) shows the user list, then the
-prompt. check.py asserts the cases' logs and the mock's. The users apex and guest come
+prompt. Each polkit case opens the shell's own authentication dialog through the polkit
+component's _onInitiate(), with a stubbed PolkitAgent.Session that PAM never answers, for
+captures and style checks only (pkexec end to end is G4's). check.py asserts the cases' logs and the mock's. The users apex and guest come
 from accounts-daemon; the wallpapers, the greeter's background and its logo are apex-desktop's ($APEX_DESKTOP_REV, or
 APEX_DESKTOP_SRC, a checkout). Captures and logs land in _build/gnome-shell/shots/.
 
 It needs mesa-dri-drivers, dbus-daemon, python3-dbusmock, python3-gobject, gcc,
-accountsservice, librsvg2-tools, openssl, git-core and the Apex fonts (adwaita-sans-fonts,
+accountsservice, polkit, librsvg2-tools, openssl, git-core and the Apex fonts (adwaita-sans-fonts,
 jetbrains-mono-fonts-all). G2's clock.c and fixtures.py (tests/shots) are used as they are.
 EOF
 }
@@ -116,6 +118,8 @@ add_user() {
 }
 add_user "$USER_NAME" Apex
 add_user guest Guest
+# Board 13's user is an administrator, as accounts-daemon reads it from wheel.
+usermod -aG wheel "$USER_NAME"
 id "$GREETER_USER" >/dev/null 2>&1 || useradd -r -m -d /run/$GREETER_USER "$GREETER_USER"
 
 # From here to the shell's exec, the steps of tests/shots/direct.sh and its run_case, as
@@ -135,6 +139,9 @@ mkdir -p /run/dbus /etc/dbus-1 /tmp/.X11-unix && chmod 1777 /tmp/.X11-unix
 python3 "$SHOTS/fixtures.py" "$out" >"$out/fixtures.txt" 2>&1 || log "fixtures.py: exit $?"
 /usr/libexec/accounts-daemon >"$out/accounts-daemon.log" 2>&1 &
 python3 -m dbusmock --system --template logind >"$out/fixture-logind.log" 2>&1 &
+# polkitd only for its action descriptions: the probe drives the dialog itself.
+install -Dm0644 "$HERE/apex-test.policy" /usr/share/polkit-1/actions/io.github.apex-linux.apex.test.policy
+/usr/lib/polkit-1/polkitd --no-debug >"$out/polkitd.log" 2>&1 &
 for _ in $(seq 100); do
     gdbus call --system -d org.freedesktop.DBus -o /org/freedesktop/DBus -m org.freedesktop.DBus.NameHasOwner \
         "$LOGIND_NAME" 2>/dev/null | grep -q true && break
@@ -215,6 +222,14 @@ shoot lock-fingerprint "$USER_NAME" user default 'Password:' -- APEX_FINGERPRINT
 if ! authselect disable-feature with-fingerprint >>"$out/authselect.log" 2>&1 || ! dconf update; then
     log "authselect: cannot disable with-fingerprint"
 fi
+polkit_off="io.github.apex_linux.Apex.Desktop disabled-features ['polkit']"
+for scheme in light dark; do
+    color=default
+    [[ $scheme == dark ]] && color=prefer-dark
+    shoot "polkit-$scheme" "$USER_NAME" user "$color" 'Password:' -- APEX_POLKIT=1 || status=1
+done
+shoot polkit-fingerprint "$USER_NAME" user default 'Password:' -- APEX_POLKIT=1 APEX_POLKIT_INFO=fingerprint || status=1
+shoot polkit-disabled "$USER_NAME" user default 'Password:' "$polkit_off" -- APEX_POLKIT=1 || status=1
 ((status == 0)) || die "shoot.sh: a case failed; see ${out#"$APEX_ROOT/"}/*.log"
 python3 "$HERE/check.py" "$out" || die "shoot.sh: the cases' assertions failed"
 log "shoot.sh: captures in ${out#"$APEX_ROOT/"}"

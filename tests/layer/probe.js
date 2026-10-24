@@ -714,6 +714,125 @@ async function exerciseLock() {
     }
 }
 
+// The parts of upstream's AuthenticationDialog the polkit feature touches, as _init() leaves them.
+function newAuthenticationDialog(St, {
+    userName = 'apex', accountType = 1, loaded = true, actionId = 'io.github.apex-linux.apex.update.rollback',
+} = {}) {
+    const root = userName === 'root';
+    const userBox = new St.BoxLayout({style_class: 'polkit-dialog-user-layout', orientation: 1});
+    const avatar = new St.Bin({style_class: 'user-icon', name: 'avatar'});
+    const userLabel = new St.Label({
+        style_class: root ? 'polkit-dialog-user-root-label' : 'polkit-dialog-user-label',
+        text: root ? 'Administrator' : 'Apex',
+    });
+    userBox.add_child(avatar);
+    userBox.add_child(userLabel);
+    const info = new St.Label({style_class: 'prompt-dialog-info-label', visible: false, text: ''});
+    const warnings = new St.BoxLayout({name: 'warnings'});
+    for (const label of [new St.Label({name: 'caps-lock'}), new St.Label({name: 'error', visible: false}),
+        info, new St.Label({name: 'null'})])
+        warnings.add_child(label);
+    const body = new St.BoxLayout({name: 'body'});
+    for (const part of [userBox, new St.Entry({name: 'password'}), warnings])
+        body.add_child(part);
+    const contentLayout = new St.BoxLayout({name: 'content'});
+    contentLayout.add_child(new St.BoxLayout({name: 'header'}));
+    contentLayout.add_child(body);
+    const user = new St.Widget({name: 'user'});
+    Object.assign(user, {is_loaded: loaded, get_user_name: () => userName, get_account_type: () => accountType});
+    const dialog = new St.Widget({style_class: 'prompt-dialog'});
+    Object.assign(dialog, {
+        actionId, contentLayout, _userAvatar: avatar, _userLabel: userLabel, _user: user, _infoMessageLabel: info, warnings,
+    });
+    return dialog;
+}
+
+function polkitLayout(dialog) {
+    const row = dialog._userAvatar.get_parent();
+    const column = row.children.find(c => c.has_style_class_name('apex-polkit-names'));
+    return `dialog=${dialog.styleClasses.join(' ')} content=${names(dialog.contentLayout.children)} ` +
+        `user=${row.orientation === 0 ? 'row' : 'column'}:${names(row.children)} ` +
+        `names=${column?.children?.map(c => `${c.text}${c.visible ? '' : '(hidden)'}`).join('/') ?? 'none'}`;
+}
+
+function polkitInfo(dialog) {
+    const line = dialog._infoMessageLabel.get_parent();
+    if (line === dialog.warnings)
+        return `stock visible=${dialog._infoMessageLabel.visible}`;
+    const glyph = line.children[0];
+    return `${line.styleClasses.join(' ')} visible=${line.visible} glyph=${glyph.visible ? glyph.icon_name : 'none'}`;
+}
+
+function polkitDetails(dialog) {
+    const details = dialog.contentLayout.children.find(c => c.has_style_class_name?.('apex-polkit-details'));
+    if (!details)
+        return 'none';
+    const [toggle, grid] = details.children;
+    const rows = !grid.visible ? '' : grid.children.filter(r => r.visible).map(r => r.children.map(c => c.text).join('=')).join(' ');
+    const chevron = toggle.child.children[0].icon_name;
+    return `open=${grid.visible} checked=${toggle.has_style_pseudo_class('checked')} chevron=${chevron} rows=${rows}`;
+}
+
+async function exercisePolkit() {
+    if (GLib.getenv('PROBE_POLKIT') !== '1')
+        return;
+    const dir = GLib.path_get_dirname(shellDir);
+    const {default: St} = await import(`file://${dir}/St.js`);
+    const {default: Polkit} = await import(`file://${dir}/Polkit.js`);
+
+    const dialog = newAuthenticationDialog(St);
+    fact('polkit.run', `${Hooks.run('polkit-dialog', dialog)}`);
+    fact('polkit.layout', polkitLayout(dialog));
+    fact('polkit.details.open', polkitDetails(dialog));
+    await spin(50);
+    fact('polkit.details.vendor', polkitDetails(dialog));
+    const toggle = dialog.contentLayout.children.find(c => c.has_style_class_name('apex-polkit-details'))?.children[0];
+    toggle?.emit('clicked');
+    fact('polkit.details.closed', polkitDetails(dialog));
+    toggle?.emit('clicked');
+    fact('polkit.details.reopened', polkitDetails(dialog));
+
+    const info = dialog._infoMessageLabel;
+    fact('polkit.info.none', polkitInfo(dialog));
+    for (const [label, text] of [['generic', 'Place your finger on the fingerprint reader'],
+        ['swipe-reader', 'Swipe your right index finger across Goodix MOC Fingerprint Sensor'],
+        ['timed-out', 'Verification timed out'], ['other-module', 'Place your coffee on the table']]) {
+        info.text = text;
+        info.visible = true;
+        fact(`polkit.info.${label}`, polkitInfo(dialog));
+    }
+    info.text = 'Place your left thumb on the fingerprint reader';
+    info.visible = false;
+    fact('polkit.info.hidden', polkitInfo(dialog));
+
+    for (const [label, who] of [['standard', {accountType: 0}], ['root', {userName: 'root', accountType: 1}]]) {
+        const other = newAuthenticationDialog(St, who);
+        Hooks.run('polkit-dialog', other);
+        fact(`polkit.role.${label}`, polkitLayout(other));
+    }
+    const loading = newAuthenticationDialog(St, {loaded: false});
+    Hooks.run('polkit-dialog', loading);
+    fact('polkit.role.loading', polkitLayout(loading));
+    loading._user.is_loaded = true;
+    loading._user.emit('notify::is-loaded');
+    fact('polkit.role.loaded', polkitLayout(loading));
+
+    const unknown = newAuthenticationDialog(St, {actionId: 'org.example.unregistered'});
+    Hooks.run('polkit-dialog', unknown);
+    await spin(50);
+    fact('polkit.details.unknown-action', polkitDetails(unknown));
+    for (const reply of ['error', 'cancel']) {
+        Polkit.stub.reply = reply;
+        const failed = newAuthenticationDialog(St);
+        Hooks.run('polkit-dialog', failed);
+        // eslint-disable-next-line no-await-in-loop
+        await spin(50);
+        fact(`polkit.details.${reply}`, polkitDetails(failed));
+    }
+    Polkit.stub.reply = 'answer';
+    fact('polkit.authority-calls', Polkit.stub.calls);
+}
+
 function glassOf(actor) {
     const effect = actor.get_effect('apex-glass');
     if (!effect)
@@ -1057,6 +1176,7 @@ if (layer && GLib.getenv('PROBE_ENABLE') === '1') {
     await pressToggleSpotlight();
     overviewSearchWithoutSpotlight();
     await exerciseLock();
+    await exercisePolkit();
     await exerciseMotion();
     await exerciseQuickSettings();
     await exerciseSpotlight();
@@ -1081,6 +1201,8 @@ if (layer && GLib.getenv('PROBE_ENABLE') === '1') {
 }
 if (!layer && settings)
     await switchLayer();
-if (!layer)
+if (!layer) {
     await exerciseLock();
+    await exercisePolkit();
+}
 fact('done', 'yes');

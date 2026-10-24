@@ -27,6 +27,11 @@ class Widget {
         this._handlers[id - 1] = null;
     }
 
+    connectObject(...args) {
+        for (let i = 0; i + 1 < args.length; i += 2)
+            this.connect(args[i], args[i + 1]);
+    }
+
     emit(signal, ...args) {
         for (const handler of [...this._handlers]) {
             if (handler?.[0] === signal)
@@ -86,6 +91,10 @@ class Widget {
 
     get_children() {
         return [...this._children];
+    }
+
+    get_first_child() {
+        return this._children[0] ?? null;
     }
 
     get_parent() {
@@ -176,7 +185,26 @@ class Widget {
     }
 }
 
-class Label extends Widget {}
+// The polkit feature follows upstream's info label through its notify signals.
+class Label extends Widget {
+    get visible() {
+        return this._visible;
+    }
+
+    set visible(visible) {
+        this._visible = visible;
+        this.emit('notify::visible');
+    }
+
+    get text() {
+        return this._text;
+    }
+
+    set text(text) {
+        this._text = text;
+        this.emit('notify::text');
+    }
+}
 class Bin extends Widget {}
 class Icon extends Widget {}
 class Button extends Widget {}

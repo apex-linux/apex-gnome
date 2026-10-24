@@ -43,9 +43,10 @@ Fedora's gnome-shell SRPM, rebuilt with the Apex layer inside it
 | `0014-dash` | `js/ui/dash.js` | +3 −2 | value hooks over the Show Apps icon's name and over whether a dash puts its separator between the favourites and the running apps, for ApexDock |
 | `0015-lock` | `js/ui/unlockDialog.js`, `js/gdm/authPrompt.js`, `js/ui/userWidget.js` | +19 −13 | value hooks over the unlock blur and the clock's slide; a behaviour hook once the unlock dialog is built (the single stage, its hint, the prompt following the screen); a value hook over the prompt's question, given PAM's own; a value hook over the avatar without a picture. Unlocking stays upstream's: no hook is on its path |
 | `0016-motion` | `js/ui/environment.js`, `js/ui/windowManager.js`, `js/ui/overviewControls.js`, `js/ui/boxpointer.js` | +18 −10 | a value hook over every ease's parameters in `_easeActor` and `_easeAnimatableProperty` (the curve's mode) and a behaviour hook once their transitions exist (its control points); a `motion-duration` value hook at the window size change's two eases, the overview's four state transitions and a popover's open and close; `adjustAnimationTime` still applies after them |
+| `0017-polkit` | `js/ui/components/polkitAgent.js` | +2 | a behaviour hook once the authentication dialog is built (board 13: the shield, the user's role, Details with the action and its vendor, the fingerprint line for pam_fprintd's prompt). Its session, the answers and polkit's verdict stay upstream's: no hook is on their path |
 
 Budget (ADR 0014): at most 450 changed lines of hook hunks in at most 33 upstream files.
-In use: 135 lines in 22 files. The C budget for `shell-blur-effect.{c,h}` (300 lines): 299
+In use: 137 lines in 23 files. The C budget for `shell-blur-effect.{c,h}` (300 lines): 299
 lines, all in 0003-blur.
 
 The patches are `git format-patch` output against Fedora's `%prep` tree (upstream
