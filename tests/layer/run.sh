@@ -509,6 +509,9 @@ fact "shadows: registering again keeps one layer" 'shadows\.registered-twice=1'
 fact "shadows: an unmapped surface keeps no layer" 'shadows\.unmapped=none'
 fact "shadows: mapped again, it draws again" \
     'shadows\.mapped-again=box-shadow: 0px 2px 8px 0px rgba\(20, 30, 60, 0\.2\); border-radius: 14px; at 106,46 300x200 above=true cutout=14'
+fact "shadows: a style change that leaves the layer's CSS as it was rebuilds nothing" 'shadows\.restyled-alike=the same layer'
+fact "shadows: one that changes it rebuilds the layer" \
+    'shadows\.restyled=box-shadow: 0px 2px 12px 0px rgba\(20, 30, 60, 0\.2\); border-radius: 14px; at 106,46 300x200 above=true cutout=14'
 fact "shadows: layer off: no layer drawn" 'shadows\.off=none'
 fact "shadows: layer back on: the registration draws again" \
     'shadows\.on=box-shadow: 0px 2px 8px 0px rgba\(20, 30, 60, 0\.2\); border-radius: 14px; at 106,46 300x200 above=true cutout=14'

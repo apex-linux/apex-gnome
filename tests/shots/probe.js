@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+import Atk from 'gi://Atk';
 import Clutter from 'gi://Clutter';
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
@@ -1226,7 +1227,9 @@ function updateCardOf(dialog, unit) {
         subtitle: {...styleOf(find('apex-update-card-subtitle'), unit), text: find('apex-update-card-subtitle').text},
         toggle: {
             ...styleOf(toggle, unit), on: toggle.state, sensitive: toggle.get_parent().reactive,
-            knob: styleOf(find('handle'), unit),
+            knob: styleOf(find('handle'), unit), opacity: round(toggle.get_parent().opacity / 255),
+            focusable: toggle.get_parent().can_focus,
+            a11ySensitive: toggle.get_accessible().ref_state_set().contains_state(Atk.StateType.SENSITIVE),
         },
         buttons: dialog.buttonLayout.get_children().filter(b => b.visible).map(b => b.label),
     };
@@ -2472,6 +2475,43 @@ function dockHidden() {
     return (apexDock()?.get_parent().translation_y ?? 0) > 0;
 }
 
+function runningDots() {
+    return (apexDock()?._box.get_children() ?? []).map(item => item.child?._delegate)
+        .filter(icon => icon?.app?.state === Shell.AppState.RUNNING && icon._dot)
+        .map(icon => ({app: icon.app.get_name(), colour: hex(icon._dot.get_theme_node().get_background_color())}));
+}
+
+// ROADMAP S2a: each bar and dock key changes the running shell, and its reset changes it back.
+async function liveKeys(settings, unit) {
+    const read = () => {
+        const dock = dockReport(unit);
+        const focused = Main.panel.statusArea['apex-focused-app'];
+        return {
+            focusedApp: focused ? {visible: focused.container.visible, name: focused.accessible_name} : null,
+            iconSizes: dock.items.filter(item => item.iconSize != null).map(item => item.iconSize),
+            kinds: dock.items.map(item => item.kind),
+            dots: runningDots(),
+        };
+    };
+    const steps = {};
+    for (const [name, key, value] of [['focusedAppOff', 'show-focused-app-name', false],
+        ['small', 'dock-icon-size', 'small'], ['large', 'dock-icon-size', 'large'],
+        ['dotsOff', 'dock-running-indicators', false], ['trashOff', 'dock-show-trash', false]]) {
+        if (typeof value === 'boolean')
+            settings.set_boolean(key, value);
+        else
+            settings.set_string(key, value);
+        // eslint-disable-next-line no-await-in-loop
+        await settle();
+        steps[name] = {set: read()};
+        settings.reset(key);
+        // eslint-disable-next-line no-await-in-loop
+        await settle();
+        steps[name].reset = read();
+    }
+    return steps;
+}
+
 function maximisedWindow() {
     return global.display.list_all_windows().some(w => w.title === G2_WINDOW_TITLE && w.is_maximized());
 }
@@ -2534,6 +2574,7 @@ async function withDockIntellihide() {
         settings.set_boolean(DOCK_INTELLIHIDE_KEY, false);
         await until(() => !dockHidden(), 3000);
         steps.intellihideOff = {hidden: dockHidden(), window: maximisedWindow()};
+        steps.liveKeys = await liveKeys(settings, unit);
         settings.reset(DOCK_INTELLIHIDE_KEY);
         await until(dockHidden, 3000);
         steps.intellihideOn = {hidden: dockHidden()};

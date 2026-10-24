@@ -75,6 +75,17 @@ function _clear(entry) {
     entry.layers = [];
 }
 
+// Each layer's CSS from the surface's sheet, null for a property it does not name.
+function _styles(actor) {
+    const node = actor.get_theme_node();
+    const scale = St.ThemeContext.get_for_stage(global.stage).scale_factor;
+    const radius = node.get_border_radius(St.Corner.TOPLEFT);
+    return LAYER_PROPERTIES.map(property => {
+        const shadow = node.get_shadow(property);
+        return shadow ? _css(shadow, radius, scale) : null;
+    });
+}
+
 // Layers exist only while their surface is mapped: a closed menu or dialog keeps none.
 function _build(entry) {
     entry.laterId = 0;
@@ -82,19 +93,18 @@ function _build(entry) {
     const {actor} = entry;
     if (!actor.mapped || !(actor instanceof St.Widget))
         return;
-    const node = actor.get_theme_node();
-    const scale = St.ThemeContext.get_for_stage(global.stage).scale_factor;
-    const radius = node.get_border_radius(St.Corner.TOPLEFT);
+    const radius = actor.get_theme_node().get_border_radius(St.Corner.TOPLEFT);
     entry.host = _host(actor, entry.opts);
     if (!entry.host.parent)
         return;
-    for (const property of LAYER_PROPERTIES) {
-        const shadow = node.get_shadow(property);
-        if (!shadow)
+    entry.styles = _styles(actor);
+    for (const [i, property] of LAYER_PROPERTIES.entries()) {
+        const style = entry.styles[i];
+        if (!style)
             continue;
         const layer = new St.Widget({
             style_class: LAYER_STYLE_CLASS,
-            style: _css(shadow, radius, scale),
+            style,
             name: entry.opts.name ? `${entry.opts.name}${property}` : null,
             x_align: Clutter.ActorAlign.START,
             y_align: Clutter.ActorAlign.START,
@@ -111,9 +121,18 @@ function _queueBuild(entry) {
     entry.laterId ||= later(() => _build(entry));
 }
 
+// A pseudo-class or state class that leaves the layers' CSS as it was rebuilds nothing:
+// re-adding them to their container would cost a full frame.
+function _restyle(entry) {
+    const {actor} = entry;
+    if (entry.laterId || !actor.mapped || !(actor instanceof St.Widget) ||
+        _styles(actor).join('|') !== (entry.styles ?? []).join('|'))
+        _queueBuild(entry);
+}
+
 function _attach(entry) {
     const {actor} = entry;
-    const watched = [[actor, 'style-changed', () => _queueBuild(entry)], [actor, 'notify::mapped', () => _queueBuild(entry)]];
+    const watched = [[actor, 'style-changed', () => _restyle(entry)], [actor, 'notify::mapped', () => _queueBuild(entry)]];
     for (let a = entry.opts.box ?? actor; a && !(a instanceof Clutter.Stage); a = a.get_parent()) {
         for (const signal of ['notify::allocation', 'notify::translation-x', 'notify::translation-y',
             'notify::scale-x', 'notify::scale-y', 'notify::opacity'])
