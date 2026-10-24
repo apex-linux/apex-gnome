@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: GPL-3.0-or-later
 set -uo pipefail
-# shellcheck source=SCRIPTDIR/lib.sh
-. "$(dirname -- "${BASH_SOURCE[0]}")/lib.sh"
+# shellcheck source=SCRIPTDIR/../lib/headless.sh
+. "$(dirname -- "${BASH_SOURCE[0]}")/../lib/headless.sh"
+
+PTYXIS_TESTS=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+readonly PTYXIS_TESTS
 
 readonly SHELL_TIMEOUT=120
 
@@ -33,7 +36,7 @@ out=$APEX_ROOT/_build/ptyxis/shots
 rm -rf -- "$out"
 mkdir -p -- "$out"
 chmod 777 "$out"
-[[ -z ${1:-} ]] || headless_install_rpm "$1"
+[[ -z ${1:-} ]] || headless_install_rpm "$1" ptyxis
 rpm -q ptyxis >"$out/ptyxis.txt"
 
 headless_user

@@ -1,13 +1,13 @@
 # shellcheck shell=bash
 # SPDX-License-Identifier: GPL-3.0-or-later
-# A headless gnome-shell for tests/ptyxis; its bus, fixtures and clock follow tests/shots/direct.sh's run_case.
+# A headless gnome-shell for the app tests; its bus, fixtures and clock follow tests/shots/direct.sh's run_case.
 
-PTYXIS_TESTS=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
-readonly PTYXIS_TESTS
+HEADLESS_LIB=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+readonly HEADLESS_LIB
 # shellcheck source=SCRIPTDIR/../../.github/scripts/lib.sh
-. "$PTYXIS_TESTS/../../.github/scripts/lib.sh"
+. "$HEADLESS_LIB/../../.github/scripts/lib.sh"
 
-readonly SHOTS=$PTYXIS_TESTS/../shots
+readonly SHOTS=$HEADLESS_LIB/../shots
 readonly USER_NAME=apex
 readonly MONITOR=2880x1800
 readonly SCALE=2
@@ -35,12 +35,13 @@ headless_require_container() {
     ((EUID == 0)) || die "$1: runs as root, and the shell as the user $USER_NAME"
 }
 
+# headless_install_rpm DIR NAME: the lane's built NAME package from DIR.
 headless_install_rpm() {
-    local dir=$1 rpms
+    local dir=$1 name=$2 rpms
     shopt -s nullglob
-    rpms=("$dir"/ptyxis-[0-9]*.x86_64.rpm)
+    rpms=("$dir/$name"-[0-9]*.x86_64.rpm)
     shopt -u nullglob
-    ((${#rpms[@]} == 1)) || die "expected one ptyxis x86_64 RPM in $dir"
+    ((${#rpms[@]} == 1)) || die "expected one $name x86_64 RPM in $dir"
     dnf5 -y -q --setopt=install_weak_deps=False --repo=fedora --repo=updates install "${rpms[0]}" ||
         die "cannot install ${rpms[0]}"
 }
