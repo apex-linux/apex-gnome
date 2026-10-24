@@ -93,7 +93,10 @@ s2c_packages := "ptyxis gnome-shell mesa-dri-drivers dbus-daemon dconf python3-d
 
 # S2c's live radius end to end, after libadwaita-lane, control-center-lane and nautilus-lane: apex-session-agent from the pinned apex-system, Settings' Corner Radius pressed under open windows (podman or docker); in _build/s2c/radius.
 s2c-radius:
-    engine=$(command -v podman || command -v docker) && "$engine" run --rm -v "{{justfile_directory()}}:/apex-gnome:z" -w /apex-gnome {{s2c_image}} bash -c 'mkdir -p _build/s2c/rpms && cp _build/libadwaita/out/*.rpm _build/gnome-control-center/out/*.rpm _build/nautilus/out/*.rpm _build/s2c/rpms/ && tests/s2c/agent.sh && dnf5 -y -q --setopt=install_weak_deps=False install {{s2c_packages}} && tests/s2c/radius-test.sh _build/s2c/rpms _build/s2c/apex-session-agent'
+    mkdir -p _build/s2c/rpms
+    cp _build/libadwaita/out/*.rpm _build/gnome-control-center/out/*.rpm _build/nautilus/out/*.rpm _build/s2c/rpms/
+    engine=$(command -v podman || command -v docker) && "$engine" run --rm -v "{{justfile_directory()}}:/apex-gnome:z" -w /apex-gnome {{s2c_image}} \
+        bash -c 'tests/s2c/agent.sh && dnf5 -y -q --setopt=install_weak_deps=False install {{s2c_packages}} && tests/s2c/radius-test.sh _build/s2c/rpms _build/s2c/apex-session-agent'
 
 # The script self-tests, as ci.yml runs them.
 selftest:
