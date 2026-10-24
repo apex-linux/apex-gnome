@@ -1,0 +1,18 @@
+{
+  "apex": "accent",
+  "applications": "#9141ac",
+  "background": "#d56199",
+  "bluetooth": "#3584e4",
+  "display": "#7d5ce6",
+  "keyboard": "#6f8396",
+  "mouse": "#6f8396",
+  "multitasking": "#2190a4",
+  "network": "#6f8396",
+  "notifications": "#ed5b00",
+  "power": "#3a944a",
+  "privacy": "#3584e4",
+  "search": "#6f8396",
+  "sound": "#e62d42",
+  "system": "#6f8396",
+  "wifi": "#3584e4"
+}
