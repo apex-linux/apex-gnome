@@ -12,6 +12,12 @@ class Actor {}
 
 class BinLayout {}
 
+class BoxLayout {
+    constructor(params = {}) {
+        Object.assign(this, params);
+    }
+}
+
 class Stage {}
 
 // The probe sets the key a press reports, as Clutter does before emitting key-press.
@@ -80,6 +86,7 @@ export default {
     BUTTON_MIDDLE: 2,
     BUTTON_SECONDARY: 3,
     BinLayout,
+    BoxLayout,
     Stage,
     ClickGesture,
     KeyController,
