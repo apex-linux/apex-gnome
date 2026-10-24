@@ -5,8 +5,8 @@
 G2's python-dbusmock fixtures on the system bus (DBUS_SYSTEM_BUS_ADDRESS, or the
 default): UPower with a battery at 87 %, NetworkManager on the Wi-Fi network
 "Apex-5G" with "Apex-2.4G" and the open "Library Guest" in range, and BlueZ with the
-Bluetooth keyboard "Keychron K3" connected. The
-mocks keep running after this exits; each logs to LOG_DIR/fixture-NAME.log and leaves
+Bluetooth keyboard "Keychron K3" connected, and switcheroo-control with an integrated and
+a discrete GPU. The mocks keep running after this exits; each logs to LOG_DIR/fixture-NAME.log and leaves
 its pid in LOG_DIR/fixture-NAME.pid.
 Prints one line, G2-FIXTURES and what the bus then reports, as JSON.
 """
@@ -46,29 +46,39 @@ KEYBOARD_NAME = "Keychron K3"
 KEYBOARD_ADDRESS = "DC:2C:26:4B:33:01"
 BLUETOOTH_CLASS_KEYBOARD = 0x002540
 
+# switcheroo-control lists the default, integrated GPU first; the shell offers the other.
+GPUS = (("Intel Graphics", "pci-0000_00_02_0", True), ("NVIDIA GeForce RTX 4060", "pci-0000_01_00_0", False))
+
 UPOWER = "org.freedesktop.UPower"
 NM = "org.freedesktop.NetworkManager"
 NM_PATH = "/org/freedesktop/NetworkManager"
 BLUEZ = "org.bluez"
-SERVICES = {"upower": UPOWER, "networkmanager": NM, "bluez5": BLUEZ}
+SWITCHEROO = "net.hadess.SwitcherooControl"
+SWITCHEROO_PATH = "/net/hadess/SwitcherooControl"
 TEMPLATE_PARAMETERS = {"upower": {"DaemonVersion": "1.90", "OnBattery": True}}
+# python-dbusmock has no switcheroo-control template: that mock is a bare object.
+SERVICES = {
+    **{template: (name, ["--template", template, "--parameters", json.dumps(TEMPLATE_PARAMETERS.get(template, {}))])
+       for template, name in (("upower", UPOWER), ("networkmanager", NM), ("bluez5", BLUEZ))},
+    "switcheroo": (SWITCHEROO, [SWITCHEROO, SWITCHEROO_PATH, SWITCHEROO]),
+}
 
 
 def spawn(log_dir):
-    for template, name in SERVICES.items():
-        log = open(f"{log_dir}/fixture-{template}.log", "w", encoding="utf-8")
+    for fixture, (_name, args) in SERVICES.items():
+        log = open(f"{log_dir}/fixture-{fixture}.log", "w", encoding="utf-8")
         mock = subprocess.Popen(
-            [sys.executable, "-m", "dbusmock", "--system", "--template", template,
-             "--parameters", json.dumps(TEMPLATE_PARAMETERS.get(template, {}))],
+            [sys.executable, "-m", "dbusmock", "--system", *args],
             stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
         log.close()
-        with open(f"{log_dir}/fixture-{template}.pid", "w", encoding="utf-8") as pid:
+        with open(f"{log_dir}/fixture-{fixture}.pid", "w", encoding="utf-8") as pid:
             print(mock.pid, file=pid)
     bus = dbus.SystemBus()
     deadline = time.monotonic() + READY_TIMEOUT_S
-    while not all(bus.name_has_owner(name) for name in SERVICES.values()):
+    names = [name for name, _args in SERVICES.values()]
+    while not all(bus.name_has_owner(name) for name in names):
         if time.monotonic() > deadline:
-            missing = [name for name in SERVICES.values() if not bus.name_has_owner(name)]
+            missing = [name for name in names if not bus.name_has_owner(name)]
             sys.exit(f"fixtures.py: no owner for {', '.join(missing)} after {READY_TIMEOUT_S} s")
         time.sleep(0.1)
     return bus
@@ -160,12 +170,27 @@ def keyboard(bus):
             "icon": str(props.Get("org.bluez.Device1", "Icon"))}
 
 
+def gpus(bus):
+    switcheroo = Service(bus, SWITCHEROO)
+    switcheroo.mock(SWITCHEROO_PATH).AddProperties(SWITCHEROO, {
+        "HasDualGpu": True,
+        "NumGPUs": dbus.UInt32(len(GPUS)),
+        "GPUs": dbus.Array([dbus.Dictionary({
+            "Name": name, "Environment": dbus.Array(["DRI_PRIME", prime], signature="s"),
+            "Default": default}, signature="sv") for name, prime, default in GPUS], signature="a{sv}"),
+    })
+    props = switcheroo.props(SWITCHEROO_PATH)
+    return {"hasDualGpu": bool(props.Get(SWITCHEROO, "HasDualGpu")),
+            "names": [str(gpu["Name"]) for gpu in props.Get(SWITCHEROO, "GPUs")]}
+
+
 def main():
     if len(sys.argv) != 2 or sys.argv[1].startswith("-"):
         print(__doc__, file=sys.stderr)
         return 2
     bus = spawn(sys.argv[1])
-    print("G2-FIXTURES " + json.dumps({"battery": battery(bus), "wifi": wifi(bus), "keyboard": keyboard(bus)}))
+    print("G2-FIXTURES " + json.dumps({"battery": battery(bus), "wifi": wifi(bus), "keyboard": keyboard(bus),
+                                         "gpus": gpus(bus)}))
     return 0
 
 
