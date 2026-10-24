@@ -20,7 +20,7 @@ readonly APEX_DARK_SHEET=resource:///org/gnome/shell/theme/gnome-shell-dark.css
 readonly STOCK_SHEETS=resource:///org/gnome/shell/theme/stock
 readonly FEDORA_SHEETS=resource:///org/gnome/shell/theme
 readonly DIRECT_CASES=(default default-scale1 dark-style dock-intellihide dock-intellihide-dark stock-light stock-dark safe-env
-    layer-disabled layer-cycles motion fault-configure fault-enable fault-abort kernel-safe fedora-light fedora-dark glass fedora-glass
+    layer-disabled layer-cycles motion idle fault-configure fault-enable fault-abort kernel-safe fedora-light fedora-dark glass fedora-glass
     indicators indicators-scale1 indicators-dark)
 readonly DIRECT_PARTS=(main kernel fedora)
 readonly CAPTURE_CASES=(default default-scale1 dark-style stock-light stock-dark fedora-light fedora-dark)
@@ -55,6 +55,9 @@ readonly MOTION_CURVE='[0.2, 0.8, 0.2, 1]'
 readonly MOTION_WINDOW_MS=300
 readonly MOTION_OVERVIEW_MS=200
 readonly LOCATE_POINTER_RIPPLE_MS=830
+# ROADMAP S3c: an idle desktop shows no extra repaints, with every feature of the layer on.
+readonly APEX_JS_DIR=${G2_APEX_JS_DIR:-$SHOTS_DIR/../../desktop/shell/js/ui/apex}
+readonly IDLE_WINDOW_MS=10000
 # direct.sh's G2_CLOCK, in UTC; the clock shows it as weekday, date, EN SPACE, 24-hour time.
 readonly FIXED_CLOCK=2026-09-28T09:41:00Z
 readonly FIXED_CLOCK_TEXT='Mon Sep 28\u200209:41'
@@ -1333,6 +1336,62 @@ motion_curve() {
         "and Locate Pointer's ripple, an animationRequired a11y aid, still takes stock's ${LOCATE_POINTER_RIPPLE_MS} ms"
 }
 
+# The layer's features, in layer.js's own list, so a new feature is idle-tested at once.
+layer_features() {
+    sed -n '/^const FEATURES_IN_ENABLE_ORDER = \[/,/\];/p' "$APEX_JS_DIR/layer.js" | grep -o "'[a-z-]*'" | tr -d "'"
+}
+
+# The ui/apex/ file behind each JS class or apex- style class the offenders name.
+apex_sources() {
+    local token file
+    grep -oE '(^|[ <;])[A-Z][A-Za-z0-9]*|\.apex-[a-z0-9-]+' | sed -E 's/^[ <;.]//' | sort -u | while read -r token; do
+        if [[ $token == apex-* ]]; then
+            file=$(grep -rlE "['\" ]${token}['\" ]" "$APEX_JS_DIR" 2>/dev/null | head -n 1)
+        else
+            file=$(grep -rlE "class $token( |\\{)" "$APEX_JS_DIR" 2>/dev/null | head -n 1)
+        fi
+        if [[ -n $file ]]; then
+            printf '%s in ui/apex/%s\n' "$token" "${file#"$APEX_JS_DIR"/}"
+        fi
+    done | paste -sd';' - | sed 's/;/; /g'
+}
+
+# shellcheck disable=SC2016 # jq programs
+idle_desktop() {
+    local run=$1 f=$1/idle.log r error feature offenders sources relayouts
+    exits "$run" idle 0
+    apex_light idle "$f"
+    no_apex_failure idle "$f"
+    for feature in $(layer_features); do
+        logs idle "$f" "Apex: feature $feature enabled" "the $feature feature is on"
+    done
+    r=$(report_of "$f" APEXG2-IDLE)
+    error=$(jq -r '.error // empty' <<<"$r" 2>/dev/null)
+    if [[ -n $error ]]; then
+        fail "idle: ${error%%$'\n'*}"
+        return
+    fi
+    expect idle "$r" ".windowMs == $IDLE_WINDOW_MS and (.settled | (.startingUp | not) and (.overview | not) and .dock.visible and .dock.rested and .barGlass and .dockGlass and .easing == [])" \
+        "the session settled: startup over, no overview, the dock at rest, the bar's and the dock's glass on, nothing easing"
+    offenders=$(jq -r '[.idle.frames[] | "at \(.atMs) ms, \(.damage.rectangles) rectangle(s) in \(.damage.extents | "\(.x),\(.y) \(.width)x\(.height)") under \(.damage.under | map(join(" < ")) | join(" | "))"] | join("; ")' <<<"$r" 2>/dev/null)
+    sources=$(jq -r '[.idle.frames[].damage.under[][]] | join(" < ")' <<<"$r" 2>/dev/null | apex_sources)
+    if jq -e '.idle.afterPaints == 0 and .idle.frames == []' <<<"$r" >/dev/null 2>&1; then
+        pass "idle: over ${IDLE_WINDOW_MS} ms of an idle desktop the stage paints no frame"
+    else
+        fail "idle: over ${IDLE_WINDOW_MS} ms of an idle desktop the stage paints no frame ($(jq -r '.idle.afterPaints' <<<"$r" 2>/dev/null) painted: ${offenders:-none recorded}${sources:+; from $sources})"
+    fi
+    relayouts=$(jq -r '.idle.relayouts | to_entries | map("\(.key) x\(.value)") | join("; ")' <<<"$r" 2>/dev/null)
+    if jq -e '.idle.relayouts == {}' <<<"$r" >/dev/null 2>&1; then
+        pass "idle: and no actor queues a relayout"
+    else
+        fail "idle: and no actor queues a relayout (${relayouts:-unreadable}$(apex_sources <<<"$relayouts" | sed 's/^./; from &/'))"
+    fi
+    expect idle "$r" '.control.afterPaints > 0 and (.control.frames | length > 0)' \
+        "the control: opening Quick Settings in a window of the same counter paints frames"
+    expect idle "$r" '.control.frames | length > 0 and all(.damage.extents.width > 0 and .damage.extents.height > 0 and (.damage.under | length > 0))' \
+        "and each of its frames names its damage and the actors under it, as a failure would"
+}
+
 direct_cases() {
     local run=$1 c f
     echo "# the direct cases: $(grep -m1 -E '^gnome-shell-[0-9]' "$run/rpm.txt" 2>/dev/null)"
@@ -1480,6 +1539,7 @@ direct_cases() {
 
     layer_cycles "$run"
     motion_curve "$run"
+    idle_desktop "$run"
 
     f=$run/kernel-safe.log
     check "kernel-safe: /proc/cmdline carries apex.safe=1" grep -qw 'apex.safe=1' "$run/cmdline-kernel.txt"
