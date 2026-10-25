@@ -5,12 +5,14 @@
 
 import Clutter from 'gi://Clutter';
 import Gio from 'gi://Gio';
+import GLib from 'gi://GLib';
 import Shell from 'gi://Shell';
 import St from 'gi://St';
 
 import * as BoxPointer from 'resource:///org/gnome/shell/ui/boxpointer.js';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import * as MessageTray from 'resource:///org/gnome/shell/ui/messageTray.js';
+import * as Scripting from 'resource:///org/gnome/shell/ui/scripting.js';
 import * as SwitcherPopup from 'resource:///org/gnome/shell/ui/switcherPopup.js';
 
 import * as Png from './png.js';
@@ -224,7 +226,6 @@ async function surfaceReport(root, settle, unit) {
         image = await stagePixels(box);
     } finally {
         found.forEach((t, i) => setOpacity(t.ink, opacities[i]));
-        await settle();
     }
     return {box: roundedBox(box, unit), targets: targets.map(t => measure(t, image))};
 }
@@ -267,9 +268,44 @@ function notifications() {
 }
 
 // Every Apex surface in turn; h holds probe.js's openers and helpers.
+// The shell idle, then one frame painted after it: what the stage shows is what it last drew.
+const FRAME_TIMEOUT_MS = 1000;
+async function quiet() {
+    await Scripting.waitLeisure();
+    await new Promise(resolve => {
+        let id = 0;
+        const done = () => {
+            if (!id)
+                return;
+            global.stage.disconnect(id);
+            id = 0;
+            resolve();
+        };
+        id = global.stage.connect('after-paint', done);
+        global.stage.queue_redraw();
+        setTimeout(done, FRAME_TIMEOUT_MS);
+    });
+}
+
 export async function a11yReport(h) {
-    const {settle, unit} = h;
+    const {unit} = h;
+    const waits = {count: 0, ms: 0};
+    const settle = async () => {
+        const start = GLib.get_monotonic_time();
+        const idle = await quiet();
+        waits.count++;
+        waits.ms += Math.round((GLib.get_monotonic_time() - start) / 1000);
+        return idle;
+    };
     const report = root => settle().then(() => surfaceReport(root, settle, unit));
+    // How long each step takes, for the case's time limit.
+    const timings = {};
+    let mark = GLib.get_monotonic_time();
+    const lap = name => {
+        const now = GLib.get_monotonic_time();
+        timings[name] = Math.round((now - mark) / 1000);
+        mark = now;
+    };
     const out = {
         highContrast: St.Settings.get().high_contrast,
         textScalingFactor: new Gio.Settings({schema_id: 'org.gnome.desktop.interface'}).get_double('text-scaling-factor'),
@@ -281,24 +317,40 @@ export async function a11yReport(h) {
         source.destroy();
     Main.overview.hide();
     out.bar = await report(Main.panel);
+    lap('bar');
     out.dock = await report(h.apexDock());
+    lap('dock');
     out.popupMenu = await withOpen(() => h.openPopupMenu(), s => s.close(), s => report(s.root));
+    lap('popupMenu');
     out.osd = await withOpen(() => h.openOsd(), s => s.close(), s => report(s.root));
+    lap('osd');
     out.banner = await withOpen(() => h.openBanner(), s => s.close(), () => report(Main.messageTray._banner));
+    lap('banner');
     const {menu} = Main.panel.statusArea.quickSettings;
     out.quickSettings = await withOpen(() => menu.open(BoxPointer.PopupAnimation.NONE),
         () => menu.close(BoxPointer.PopupAnimation.NONE), () => report(menu.box));
+    lap('quickSettings');
     const iface = new Gio.Settings({schema_id: 'org.gnome.desktop.interface'});
-    if (iface.settings_schema.has_key('accent-color')) {
-        out.quickSettingsAccents = {};
-        for (const accent of ACCENTS) {
-            iface.set_string('accent-color', accent);
-            // eslint-disable-next-line no-await-in-loop
-            out.quickSettingsAccents[accent] = await withOpen(() => menu.open(BoxPointer.PopupAnimation.NONE),
-                () => menu.close(BoxPointer.PopupAnimation.NONE), () => report(menu.box));
+    // The surface stays open while the accent changes under it.
+    const underEachAccent = (open, close, root) => withOpen(open, close, async opened => {
+        const measured = {};
+        try {
+            for (const accent of ACCENTS) {
+                iface.set_string('accent-color', accent);
+                // eslint-disable-next-line no-await-in-loop
+                measured[accent] = await report(root(opened));
+            }
+        } finally {
+            iface.reset('accent-color');
         }
-        iface.reset('accent-color');
+        return measured;
+    });
+    const accents = iface.settings_schema.has_key('accent-color');
+    if (accents) {
+        out.quickSettingsAccents = await underEachAccent(() => menu.open(BoxPointer.PopupAnimation.NONE),
+            () => menu.close(BoxPointer.PopupAnimation.NONE), () => menu.box);
     }
+    lap('quickSettingsAccents');
     const wifi = h.findDescendant(menu.box, a => a.constructor.name === 'NMWirelessToggle');
     out.wifiMenu = wifi ? await withOpen(() => {
         menu.open(BoxPointer.PopupAnimation.NONE);
@@ -307,6 +359,7 @@ export async function a11yReport(h) {
         wifi.menu.close(BoxPointer.PopupAnimation.NONE);
         menu.close(BoxPointer.PopupAnimation.NONE);
     }, () => report(wifi.menu.box)) : {error: 'no Wi-Fi toggle'};
+    lap('wifiMenu');
     const dateMenu = Main.panel.statusArea.dateMenu.menu;
     out.dateMenu = await withOpen(() => {
         const source = notifications();
@@ -316,46 +369,44 @@ export async function a11yReport(h) {
         dateMenu.close(BoxPointer.PopupAnimation.NONE);
         source.destroy();
     }, () => report(dateMenu.box));
+    lap('dateMenu');
     // Today's fill is each accent shaded, as a checked toggle's is.
-    if (iface.settings_schema.has_key('accent-color')) {
-        out.dateMenuAccents = {};
-        for (const accent of ACCENTS) {
-            iface.set_string('accent-color', accent);
-            // eslint-disable-next-line no-await-in-loop
-            out.dateMenuAccents[accent] = await withOpen(() => dateMenu.open(BoxPointer.PopupAnimation.NONE),
-                () => dateMenu.close(BoxPointer.PopupAnimation.NONE), () => report(dateMenu.box));
-        }
-        iface.reset('accent-color');
+    if (accents) {
+        out.dateMenuAccents = await underEachAccent(() => dateMenu.open(BoxPointer.PopupAnimation.NONE),
+            () => dateMenu.close(BoxPointer.PopupAnimation.NONE), () => dateMenu.box);
     }
+    lap('dateMenuAccents');
     out.switcher = await withOpen(switcher, list => list.destroy(), list => report(list));
+    lap('switcher');
     out.dialog = await withOpen(() => h.openModalDialog(), d => d.close(), d => report(d.root));
+    lap('dialog');
     // A dialog's default button takes its fill from the accent; the screenshot UI is measured once.
     const screenshot = () => withOpen(async () => {
         await Main.screenshotUI.open();
         global.stage.set_key_focus(null);
     }, () => Main.screenshotUI.close(true), () => report(Main.screenshotUI._panel));
     out.screenshot = await screenshot();
-    if (iface.settings_schema.has_key('accent-color')) {
-        out.dialogAccents = {};
-        for (const accent of ACCENTS) {
-            iface.set_string('accent-color', accent);
-            // eslint-disable-next-line no-await-in-loop
-            out.dialogAccents[accent] = await withOpen(() => h.openModalDialog(), d => d.close(), d => report(d.root));
-        }
-        iface.reset('accent-color');
-    }
+    lap('screenshot');
+    if (accents)
+        out.dialogAccents = await underEachAccent(() => h.openModalDialog(), d => d.close(), d => d.root);
+    lap('dialogAccents');
     out.endSession = await withOpen(() => h.openEndSessionDialog(), d => d?.cancel(), d => report(d?.dialogLayout._dialog));
+    lap('endSession');
     out.spotlight = await h.withSpotlight(async (popup, toast) => {
         popup.panel.get_children()[0].get_children()[1].set_text('disk');
         return {popup: await report(popup.panel), toast: await report(await toast())};
     }) ?? {error: 'no Spotlight'};
+    lap('spotlight');
     Main.overview.show();
     global.stage.set_key_focus(null);
     out.overview = await report(Main.overview._overview);
+    lap('overview');
     const {showAppsButton} = Main.overview.dash;
     out.appGrid = await withOpen(() => (showAppsButton.checked = true), () => (showAppsButton.checked = false),
         () => report(Main.overview._overview._controls._appDisplay));
+    lap('appGrid');
     Main.overview.hide();
     await settle();
+    out.timingsMs = {...timings, settles: waits.count, settleMs: waits.ms};
     return out;
 }
