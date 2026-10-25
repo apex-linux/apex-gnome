@@ -151,7 +151,10 @@ export const uiGroup = Object.assign(new StubActor('uiGroup', {extents: [0, 0, 1
         return [...this.children];
     },
 });
-const overviewGroup = Object.assign(new StubActor('overviewGroup', {extents: [0, 0, 1440, 900]}), {visible: false});
+const overviewGroup = Object.assign(new StubActor('overviewGroup', {extents: [0, 0, 1440, 900]}), {
+    visible: false,
+    get_theme_node: () => ({lookup_length: p => p === '-apex-dock-clearance' ? [true, 10] : [false, 0]}),
+});
 const boxPointer = new StubActor('boxpointer', {parent: uiGroup, redirect: 2});
 
 export const messageTray = {
@@ -444,6 +447,11 @@ export const layoutManager = {
     modalDialogGroup: emptyContainer(),
     ...emitter({}),
     primaryMonitor: {x: 0, y: 0, width: 1440, height: 900},
+    primaryIndex: 0,
+    get monitors() {
+        return [this.primaryMonitor];
+    },
+    getWorkAreaForMonitor: () => ({x: 0, y: 32, width: 1440, height: 868}),
     chrome: [],
     overviewGroup,
     _bgManagers: [new StubActor('background')],

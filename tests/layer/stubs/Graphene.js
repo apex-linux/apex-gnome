@@ -11,4 +11,15 @@ class Point {
 
 class Point3D extends Point {}
 
-export default {Point, Point3D};
+class Rect {
+    init(x, y, width, height) {
+        Object.assign(this, {x, y, width, height});
+        return this;
+    }
+
+    inset(dx, dy) {
+        return this.init(this.x + dx, this.y + dy, this.width - 2 * dx, this.height - 2 * dy);
+    }
+}
+
+export default {Point, Point3D, Rect};

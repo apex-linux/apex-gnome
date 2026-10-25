@@ -48,7 +48,7 @@ mkdir -p "$T/schemas" "$T/noschema" "$T/nochild" "$T/data" "$T/home" "$T/shell" 
 # main.js and the Meta and Shell typelibs come only with gnome-shell and mutter.
 cp -R "$REPO/desktop/shell/js" "$T/shell/"
 cp "$HERE/main-stub.js" "$T/shell/js/ui/main.js"
-for upstream in panelMenu dash iconGrid popupMenu layout messageList; do
+for upstream in panelMenu dash iconGrid popupMenu layout messageList background; do
     cp "$HERE/stubs/$upstream.js" "$T/shell/js/ui/$upstream.js"
 done
 # Spotlight's providers: upstream's app search and remote providers, faked.
@@ -1034,12 +1034,18 @@ fact "overview: titles always shown, the overlay fades only the close button; th
     "overview\.enabled=$OVERVIEW_ON"
 fact "launcher: the grid picks its mode and icon size afresh" 'overview\.enabled\.relayout=mode=-1 page-width=0'
 count_is "launcher: the controls lay out again at each enable and disable, so the strip comes and goes at once" '^probe: controls=relayout$' 3
+fact "captions: rows leave room for the always-shown caption, and the last row's end the dock's clearance above the overview's dash, on the primary monitor only" \
+    'overview\.enabled\.layout=row=54 bottom=890 secondary-bottom=900 dash-height=0'
+fact "thumbnails: the wallpaper below the window clones, its clip the work area inside the border, rounded at the border's inner radius, both scaled up by the viewport's tenth, and gone with the thumbnail" \
+    'overview\.enabled\.thumbnail=classes=apex-thumbnail-wallpaper background=monitor0 below-windows=true radius=70 bounds=10,42,1420,848 destroyed=true'
 fact "workspaces: no background card, and an empty workspace says so" "workspace\.enabled\.empty=background=false $EMPTY_LABEL visible=true opacity=255"
 fact "workspaces: the label goes when a window arrives" "workspace\.enabled\.window-added=background=false $EMPTY_LABEL visible=false opacity=255"
 fact "workspaces: and fades with the overview" "workspace\.enabled\.half-open=background=false $EMPTY_LABEL visible=true opacity=128"
 fact "workspaces: a workspace with windows hides it from the start" "workspace\.enabled\.with-windows=background=false $EMPTY_LABEL visible=false opacity=255"
 fact "layer-enabled=false: the stock overview, the primary thumbnails and the launcher restored" "overview\.off=$OVERVIEW_STOCK"
 fact "layer-enabled=false: workspaces keep their background and get no label" 'workspace\.off\.empty=background=true no label'
+fact "layer-enabled=false: stock row spacing and bottom edge" 'overview\.off\.layout=row=19 bottom=900 secondary-bottom=900 dash-height=-?[0-9]+'
+fact "layer-enabled=false: thumbnails keep stock's fill" 'overview\.off\.thumbnail=classes=none background=none'
 fact "layer-enabled=true: the overview again" "overview\.on=$OVERVIEW_ON"
 lacks "overview: no feature fails or disables uncleanly" 'off for this session|did not disable cleanly|cannot restyle'
 
@@ -1048,6 +1054,12 @@ has "disabled-features=['overview']: skips the feature" 'Apex: feature overview 
 fact "disabled-features=['overview']: the stock overview and launcher" "overview\.enabled=$OVERVIEW_STOCK"
 fact "disabled-features=['overview']: the grid is left alone" 'overview\.enabled\.relayout=mode=0 page-width=1272'
 fact "disabled-features=['overview']: workspaces stay stock" 'workspace\.enabled\.empty=background=true no label'
+fact "disabled-features=['overview']: so do the rows and the bottom edge" 'overview\.enabled\.layout=row=19 bottom=900 secondary-bottom=900 dash-height=-?[0-9]+'
+fact "disabled-features=['overview']: and the thumbnails" 'overview\.enabled\.thumbnail=classes=none background=none'
+
+probe overview-no-dock "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_OVERVIEW=1 PROBE_DISABLED=dock
+fact "disabled-features=['dock']: the overview's dash is back, so the last row keeps stock's bottom edge; titles still get their rows" \
+    'overview\.enabled\.layout=row=54 bottom=900 secondary-bottom=900 dash-height=-?[0-9]+'
 
 probe overview-live "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_DISABLE_LIVE=overview
 count_is "overview in and out of disabled-features while enabled: it says so" 'Apex: feature overview is in disabled-features' 2

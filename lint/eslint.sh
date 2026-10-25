@@ -20,5 +20,5 @@ fi
 
 cd "$REPO"
 "$HERE/node_modules/.bin/eslint" --config lint/eslint.config.js --max-warnings 0 \
-    desktop/shell/js tests/layer/*.js tests/shots/*.js
+    desktop/shell/js tests/layer/*.js tests/shots/*.js tests/laptop/*.js
 printf 'eslint: clean\n' >&2

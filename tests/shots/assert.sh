@@ -19,7 +19,7 @@ readonly APEX_LIGHT_SHEET=resource:///org/gnome/shell/theme/gnome-shell-light.cs
 readonly APEX_DARK_SHEET=resource:///org/gnome/shell/theme/gnome-shell-dark.css
 readonly STOCK_SHEETS=resource:///org/gnome/shell/theme/stock
 readonly FEDORA_SHEETS=resource:///org/gnome/shell/theme
-readonly DIRECT_CASES=(default default-scale1 dark-style high-contrast large-text dock-intellihide dock-intellihide-dark dock-one-gpu stock-light stock-dark safe-env
+readonly DIRECT_CASES=(default default-scale1 dark-style high-contrast large-text dock-intellihide dock-intellihide-dark dock-one-gpu no-dock stock-light stock-dark safe-env
     layer-disabled layer-cycles motion idle dock-pin glass-load glass-stress fault-configure fault-enable fault-abort kernel-safe fedora-light fedora-dark glass fedora-glass
     indicators indicators-scale1 indicators-dark)
 readonly DIRECT_PARTS=(main kernel fedora)
@@ -29,6 +29,9 @@ readonly STOCK_MAX_THUMBNAIL_SCALE=0.05
 readonly OVERVIEW_THUMBNAIL_SCALE=0.081
 readonly OVERVIEW_THUMBNAILS_THRESHOLD=1
 readonly EMPTY_WORKSPACE_TEXT='No open windows'
+# probe.js's overview with windows, over its fixture gradient; stock's flat thumbnail is 0.
+readonly OVERVIEW_WINDOWS=3
+readonly OVERVIEW_THUMBNAIL_MIN_SPREAD=0.1
 readonly LAUNCHER_COLUMNS=7
 readonly LAUNCHER_ROWS=4
 readonly LAUNCHER_ICON_SIZE=88
@@ -991,6 +994,18 @@ overview_layer() {
         "overview: no workspace background card, and \"$EMPTY_WORKSPACE_TEXT\" centred on the empty workspace" APEXG2-SCENES
     top_bar_metric "$label overview" "$scenes" "$tokens" 'the empty-workspace label is $apex_font_workspace_empty_size $apex_font_heading_weight in $apex_overview_fg_dim' \
         "$o.workspace.empty" '(.font.size | px_is($t.apex_font_workspace_empty_size)) and .font.weight == ($t.apex_font_heading_weight | tonumber) and (.foreground | colour_is($t.apex_overview_fg_dim))'
+    local w=.surfaces.overviewWindows
+    expect_report "$label" "$log" "$w | . as \$o | (.previews | length) == $OVERVIEW_WINDOWS and .dock != null and all(.previews[]; .caption.visible)
+        and ([range(0; .previews | length) as \$i | .previews[\$i].caption as \$c
+            | ([.previews | to_entries[] | select(.key != \$i) | .value.window, .value.caption] + [\$o.dock])[]
+            | select(\$c.x < .x + .width and .x < \$c.x + \$c.width and \$c.y < .y + .height and .y < \$c.y + \$c.height)] | length == 0)" \
+        "overview with $OVERVIEW_WINDOWS windows: every caption shown, none over another window's preview, another caption or the dock" APEXG2-SCENES
+    top_bar_metric "$label overview" "$scenes" "$tokens" 'and the last row'"'"'s captions end $apex_dock_bottom_gap or more above the dock' \
+        "$w" '([.previews[].caption | .y + .height] | max) <= .dock.y - ($t.apex_dock_bottom_gap | px) + 0.5'
+    top_bar_metric "$label overview" "$scenes" "$tokens" 'the workspace-bottom hook takes the dock box'"'"'s live height and $apex_dock_bottom_gap off the monitor'"'"'s bottom' \
+        "$w" '.bottom.hook == .bottom.stock - .dockBox.height - ($t.apex_dock_bottom_gap | px)'
+    expect_report "$label" "$log" "$w.thumbnails | length >= 2 and all(.[]; .spread >= $OVERVIEW_THUMBNAIL_MIN_SPREAD)" \
+        "overview: every workspace thumbnail draws the wallpaper, not a flat fill (luminance spread $OVERVIEW_THUMBNAIL_MIN_SPREAD or more over its centre)" APEXG2-SCENES
     expect_report "$label" "$log" ".surfaces.appGrid.grid == {columns: $LAUNCHER_COLUMNS, rows: $LAUNCHER_ROWS, iconSize: $LAUNCHER_ICON_SIZE}" \
         "launcher: $LAUNCHER_COLUMNS columns of $LAUNCHER_ICON_SIZE px icons, $LAUNCHER_ROWS rows a page" APEXG2-SCENES
     top_bar_metric "$label overview" "$scenes" "$tokens" "launcher: no workspace strip; the grid starts at the work area + \$apex_search_top + \$apex_search_height + $STOCK_SEARCH_MARGIN_BOTTOM + twice the spacing, board 36's $LAUNCHER_GRID_TOP px" \
@@ -1545,6 +1560,8 @@ idle_desktop() {
     else
         fail "idle: and no actor queues a relayout (${relayouts:-unreadable}$(apex_sources <<<"$relayouts" | sed 's/^./; from &/'))"
     fi
+    expect idle "$r" '.overview | .shown and .wallpapers >= 2 and .idle.afterPaints == 0 and .idle.frames == [] and .idle.relayouts == {}' \
+        "over ${IDLE_WINDOW_MS} ms of the open overview, its thumbnails drawing the wallpaper, the stage paints no frame and queues no relayout"
     expect idle "$r" '.control.afterPaints > 0 and (.control.frames | length > 0)' \
         "the control: opening Quick Settings in a window of the same counter paints frames"
     expect idle "$r" '.control.frames | length > 0 and all(.damage.extents.width > 0 and .damage.extents.height > 0 and (.damage.under | length > 0))' \
@@ -1839,6 +1856,27 @@ direct_cases() {
     glass_unlock_vs_fedora "$run"
     indicator_cases "$run"
     one_gpu_case "$run"
+    no_dock_case "$run"
+}
+
+# The no-dock case: disabled-features=['dock'], so the overview's own dash is back and the
+# workspace-bottom hook leaves stock's edge.
+no_dock_case() {
+    local run=$1
+    exits "$run" no-dock 0
+    no_apex_failure no-dock "$run/no-dock.log"
+    overview_without_dock no-dock "$run/no-dock.log"
+}
+
+overview_without_dock() {
+    local label=$1 log=$2
+    expect_report "$label" "$log" '.error == null and .dock == null and .bottom.hook == .bottom.stock' \
+        "without the dock feature, the last row's captions may reach stock's bottom edge, the monitor's" APEXG2-OVERVIEW-WINDOWS
+    expect_report "$label" "$log" "(.previews | length) == $OVERVIEW_WINDOWS and all(.previews[]; .caption.visible)
+        and ([range(0; .previews | length) as \$i | .previews[\$i].caption as \$c
+            | (.previews | to_entries[] | select(.key != \$i) | .value.window, .value.caption)
+            | select(\$c.x < .x + .width and .x < \$c.x + \$c.width and \$c.y < .y + .height and .y < \$c.y + \$c.height)] | length == 0)" \
+        "and every caption is shown, none over another window's preview or caption" APEXG2-OVERVIEW-WINDOWS
 }
 
 # The dock-one-gpu case: fixtures.py --gpus 1, as switcheroo-control reports a laptop
