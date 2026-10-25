@@ -20,7 +20,7 @@ readonly APEX_DARK_SHEET=resource:///org/gnome/shell/theme/gnome-shell-dark.css
 readonly STOCK_SHEETS=resource:///org/gnome/shell/theme/stock
 readonly FEDORA_SHEETS=resource:///org/gnome/shell/theme
 readonly DIRECT_CASES=(default default-scale1 dark-style high-contrast large-text dock-intellihide dock-intellihide-dark dock-one-gpu stock-light stock-dark safe-env
-    layer-disabled layer-cycles motion idle dock-pin fault-configure fault-enable fault-abort kernel-safe fedora-light fedora-dark glass fedora-glass
+    layer-disabled layer-cycles motion idle dock-pin glass-load glass-stress fault-configure fault-enable fault-abort kernel-safe fedora-light fedora-dark glass fedora-glass
     indicators indicators-scale1 indicators-dark)
 readonly DIRECT_PARTS=(main kernel fedora)
 readonly CAPTURE_CASES=(default default-scale1 dark-style stock-light stock-dark fedora-light fedora-dark)
@@ -76,6 +76,12 @@ readonly LOCATE_POINTER_RIPPLE_MS=830
 # ROADMAP S3c: an idle desktop shows no extra repaints, with every feature of the layer on.
 readonly APEX_JS_DIR=${G2_APEX_JS_DIR:-$SHOTS_DIR/../../desktop/shell/js/ui/apex}
 readonly IDLE_WINDOW_MS=10000
+# ADR 0014's protocol in G2's terms (lead, 2026-10-24): glass may add at most 1 % frames over
+# Reduce Transparency for the same scenario; the stress runs at least 60 s.
+readonly GLASS_EXTRA_FRAMES_RATIO=1.01
+# B opens and closes Quick Settings and then the calendar: the bar's own buttons repaint at each.
+readonly GLASS_B_MENU_TOGGLES=4
+readonly GLASS_STRESS_MIN_SECONDS=60
 readonly DOCK_PIN_FALLBACK_MS=20000
 # direct.sh's G2_CLOCK, in UTC; the clock shows it as weekday, date, EN SPACE, 24-hour time.
 readonly FIXED_CLOCK=2026-09-28T09:41:00Z
@@ -1501,8 +1507,20 @@ apex_sources() {
 }
 
 # shellcheck disable=SC2016 # jq programs
+idle_window() {
+    local r=$1 at=$2 what=$3 offenders sources
+    offenders=$(jq -r "[$at.frames[] | \"at \\(.atMs) ms, \\(.damage.rectangles) rectangle(s) in \\(.damage.extents | \"\\(.x),\\(.y) \\(.width)x\\(.height)\") under \\(.damage.under | map(join(\" < \")) | join(\" | \"))\"] | join(\"; \")" <<<"$r" 2>/dev/null)
+    sources=$(jq -r "[$at.frames[].damage.under[][]] | join(\" < \")" <<<"$r" 2>/dev/null | apex_sources)
+    if jq -e "$at.afterPaints == 0 and $at.frames == []" <<<"$r" >/dev/null 2>&1; then
+        pass "idle: over ${IDLE_WINDOW_MS} ms of $what the stage paints no frame"
+    else
+        fail "idle: over ${IDLE_WINDOW_MS} ms of $what the stage paints no frame ($(jq -r "$at.afterPaints" <<<"$r" 2>/dev/null) painted: ${offenders:-none recorded}${sources:+; from $sources})"
+    fi
+}
+
+# shellcheck disable=SC2016 # jq programs
 idle_desktop() {
-    local run=$1 f=$1/idle.log r error feature offenders sources relayouts
+    local run=$1 f=$1/idle.log r error feature relayouts
     exits "$run" idle 0
     apex_light idle "$f"
     no_apex_failure idle "$f"
@@ -1517,13 +1535,10 @@ idle_desktop() {
     fi
     expect idle "$r" ".windowMs == $IDLE_WINDOW_MS and (.settled | (.startingUp | not) and (.overview | not) and .dock.visible and .dock.rested and .barGlass and .dockGlass and .easing == [])" \
         "the session settled: startup over, no overview, the dock at rest, the bar's and the dock's glass on, nothing easing"
-    offenders=$(jq -r '[.idle.frames[] | "at \(.atMs) ms, \(.damage.rectangles) rectangle(s) in \(.damage.extents | "\(.x),\(.y) \(.width)x\(.height)") under \(.damage.under | map(join(" < ")) | join(" | "))"] | join("; ")' <<<"$r" 2>/dev/null)
-    sources=$(jq -r '[.idle.frames[].damage.under[][]] | join(" < ")' <<<"$r" 2>/dev/null | apex_sources)
-    if jq -e '.idle.afterPaints == 0 and .idle.frames == []' <<<"$r" >/dev/null 2>&1; then
-        pass "idle: over ${IDLE_WINDOW_MS} ms of an idle desktop the stage paints no frame"
-    else
-        fail "idle: over ${IDLE_WINDOW_MS} ms of an idle desktop the stage paints no frame ($(jq -r '.idle.afterPaints' <<<"$r" 2>/dev/null) painted: ${offenders:-none recorded}${sources:+; from $sources})"
-    fi
+    idle_window "$r" .idle "an idle desktop"
+    idle_window "$r" .quickSettings "the desktop with Quick Settings open"
+    idle_window "$r" .reduceTransparency.idle "an idle desktop with Reduce Transparency"
+    idle_window "$r" .reduceTransparency.quickSettings "Quick Settings open with Reduce Transparency"
     relayouts=$(jq -r '.idle.relayouts | to_entries | map("\(.key) x\(.value)") | join("; ")' <<<"$r" 2>/dev/null)
     if jq -e '.idle.relayouts == {}' <<<"$r" >/dev/null 2>&1; then
         pass "idle: and no actor queues a relayout"
@@ -1534,6 +1549,65 @@ idle_desktop() {
         "the control: opening Quick Settings in a window of the same counter paints frames"
     expect idle "$r" '.control.frames | length > 0 and all(.damage.extents.width > 0 and .damage.extents.height > 0 and (.damage.under | length > 0))' \
         "and each of its frames names its damage and the actors under it, as a failure would"
+}
+
+# shellcheck disable=SC2016 # jq programs
+glass_load_scenario() {
+    local r=$1 s=$2 at=".scenarios.$2" missed surfaces trace
+    missed=$(jq -r "[$at.glass.missed[] | \"\\(.surface) at \\(.atMs) ms (\\(.overlap))\"] | join(\"; \")" <<<"$r" 2>/dev/null)
+    if jq -e "$at.glass.contentFrames > 0 and $at.glass.missed == []" <<<"$r" >/dev/null 2>&1; then
+        pass "glass-load $s: every change under a glass box re-blurs that box in the same frame (forwarded damage)"
+    else
+        fail "glass-load $s: every change under a glass box re-blurs that box in the same frame (forwarded damage) (missed: ${missed:-no content frame})"
+    fi
+    expect "glass-load $s" "$r" "$at.reduceTransparency.surfaces == {} and $at.reduceTransparency.contentFrames > 0" \
+        "with Reduce Transparency the same scenario runs and no glass is live"
+    surfaces=$(jq -r "$at.glass.surfaces | to_entries | map(\"\\(.key) \\(.value.reblurs) re-blurs/\\(.value.partial) partial/\\(.value.contentUnder) under\") | join(\", \")" <<<"$r" 2>/dev/null)
+    trace=$(jq -r "[$at.glass.trace[:6][] | \"\\(.clip | if . then \"\\(.x),\\(.y) \\(.width)x\\(.height)\" else \"none\" end): \\(.overlap | to_entries | map(\"\\(.key) \\(.value)\") | join(\" \"))\"] | join(\" / \")" <<<"$r" 2>/dev/null)
+    echo "# glass-load $s: modelled glass cost $(jq -r "$at.glass.modelledMsPerFrame" <<<"$r" 2>/dev/null) ms per frame (0014-blurcost.py's model, report only); ${surfaces:-no glass}"
+    [[ $s == C ]] && return
+    if jq -e "($at.glass.frames / $at.glass.contentFrames) <= ($at.reduceTransparency.frames / $at.reduceTransparency.contentFrames) * $GLASS_EXTRA_FRAMES_RATIO" <<<"$r" >/dev/null 2>&1; then
+        pass "glass-load $s: glass adds at most 1 % frames over Reduce Transparency, per change under it"
+    else
+        fail "glass-load $s: glass adds at most 1 % frames over Reduce Transparency, per change under it ($(jq -r "\"\\($at.glass.frames)/\\($at.glass.contentFrames) against \\($at.reduceTransparency.frames)/\\($at.reduceTransparency.contentFrames)\"" <<<"$r" 2>/dev/null); ${surfaces}; first clips: ${trace})"
+    fi
+}
+
+# shellcheck disable=SC2016 # jq programs
+glass_load() {
+    local run=$1 f=$1/glass-load.log r error
+    exits "$run" glass-load 0
+    no_apex_failure glass-load "$f"
+    r=$(report_of "$f" APEXG2-GLASS-LOAD)
+    error=$(jq -r '.error // empty' <<<"$r" 2>/dev/null)
+    if [[ -n $error ]]; then
+        fail "glass-load: ${error%%$'\n'*}"
+        return
+    fi
+    glass_load_scenario "$r" A
+    expect "glass-load A" "$r" '.scenarios.A.glass.surfaces | (.panel.reblurs // 0) == 0 and .dock.reblurs == .dock.contentUnder and .dock.contentUnder > 0 and ((."quick-settings".reblurs // 0) == (."quick-settings".contentUnder // 0))' \
+        "a glass box re-blurs exactly when the video changes under it: the dock each time, Quick Settings and the bar never"
+    glass_load_scenario "$r" B
+    expect "glass-load B" "$r" ".scenarios.B.glass.surfaces | (.panel.reblurs // 0) <= $GLASS_B_MENU_TOGGLES and .dock.contentUnder > 0 and .\"quick-settings\".contentUnder > 0 and .calendar.contentUnder > 0" \
+        "the window passes under the dock, Quick Settings and the calendar, and the bar, which it never passes under, re-blurs at most once per open or close of a bar menu ($GLASS_B_MENU_TOGGLES; got $(jq -r '.scenarios.B.glass.surfaces.panel.reblurs // 0' <<<"$r" 2>/dev/null))"
+    glass_load_scenario "$r" C
+}
+
+# shellcheck disable=SC2016 # jq programs
+glass_stress() {
+    local run=$1 f=$1/glass-stress.log synthetic real
+    exits "$run" glass-stress 0
+    no_apex_failure glass-stress "$f"
+    synthetic=$(report_of "$f" APEXG2-GLASS)
+    real=$(report_of "$f" APEXG2-GLASS-LOAD-STRESS)
+    expect glass-stress "$synthetic" ".patched and .stress.seconds >= $GLASS_STRESS_MIN_SECONDS and .stress.frames > 0 and .stress.clipped > 0 and .stress.compared > 0" \
+        "the synthetic box's stress ran $(jq -r '.stress.seconds // "?"' <<<"$synthetic" 2>/dev/null) s (at least $GLASS_STRESS_MIN_SECONDS), with clipped frames and compared ones"
+    expect glass-stress "$synthetic" '.stress.black == 0 and .stress.stale == 0 and .stress.unequal == 0' \
+        "no black frame, no stale one, and each compared frame equals a full redraw"
+    expect glass-stress "$real" ".seconds >= $GLASS_STRESS_MIN_SECONDS and .frames > 0 and .contentFrames > 0" \
+        "the real boxes' stress ran $(jq -r '.seconds // "?"' <<<"$real" 2>/dev/null) s: a video under the dock and Quick Settings"
+    expect glass-stress "$real" '.missed == []' \
+        "and every change under a glass box re-blurred that box in the same frame"
 }
 
 # shellcheck disable=SC2016 # jq programs
@@ -1714,6 +1788,8 @@ direct_cases() {
     layer_cycles "$run"
     motion_curve "$run"
     idle_desktop "$run"
+    glass_load "$run"
+    glass_stress "$run"
     dock_pin "$run"
 
     f=$run/kernel-safe.log

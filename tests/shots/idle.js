@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
-// G2's idle desktop (G2_IDLE=1): once the session has settled, the stage paints nothing for
-// IDLE_WINDOW_MS. tests/shots/README.md, "The idle desktop".
+// G2's idle desktop (G2_IDLE=1): settled, with Quick Settings open too, glass or Reduce
+// Transparency, the stage paints nothing for IDLE_WINDOW_MS. tests/shots/README.md.
 
 import Clutter from 'gi://Clutter';
+import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import Mtk from 'gi://Mtk';
 
@@ -18,6 +19,8 @@ const DOCK_REST_TIMEOUT_MS = 5000;
 const MAX_FRAMES_KEPT = 20;
 const MAX_ANCESTORS = 6;
 const GLASS_EFFECT = 'apex-glass';
+const APEX_SCHEMA = 'io.github.apex_linux.Apex.Desktop';
+const REDUCE_TRANSPARENCY_KEY = 'reduce-transparency';
 const STAGE_LIMIT = 1 << 15;
 const DAMAGE_SAMPLES = 4;
 // The properties the shell and the layer ease; an actor easing one is not at rest.
@@ -78,7 +81,7 @@ function edge(region, horizontal, lo, hi, fromStart) {
     return fromStart ? lo : hi;
 }
 
-function extentsOf(region) {
+export function extentsOf(region) {
     const x1 = edge(region, true, 0, STAGE_LIMIT, true);
     const x2 = edge(region, true, 0, STAGE_LIMIT, false);
     const y1 = edge(region, false, 0, STAGE_LIMIT, true);
@@ -178,8 +181,38 @@ async function control() {
     return {afterPaints: result.afterPaints, frames: result.frames};
 }
 
+// Quick Settings open and at rest: its glass and the bar's must not keep each other drawing.
+async function withQuickSettingsOpen() {
+    const menu = Main.panel.statusArea.quickSettings.menu;
+    menu.open(BoxPointer.PopupAnimation.NONE);
+    await Scripting.sleep(SETTLE_REST_MS);
+    try {
+        return await paintsOver(IDLE_WINDOW_MS);
+    } finally {
+        menu.close(BoxPointer.PopupAnimation.NONE);
+        await Scripting.sleep(SETTLE_REST_MS);
+    }
+}
+
+async function withReduceTransparency(read) {
+    const apex = new Gio.Settings({schema_id: APEX_SCHEMA});
+    apex.set_boolean(REDUCE_TRANSPARENCY_KEY, true);
+    await Scripting.sleep(SETTLE_REST_MS);
+    try {
+        return await read();
+    } finally {
+        apex.reset(REDUCE_TRANSPARENCY_KEY);
+        await Scripting.sleep(SETTLE_REST_MS);
+    }
+}
+
 export async function idleReport(helpers) {
     const settled = await settleDesktop(helpers);
     const idle = await paintsOver(IDLE_WINDOW_MS);
-    return {windowMs: IDLE_WINDOW_MS, settled, idle, control: await control()};
+    const quickSettings = await withQuickSettingsOpen();
+    const reduceTransparency = await withReduceTransparency(async () => ({
+        idle: await paintsOver(IDLE_WINDOW_MS),
+        quickSettings: await withQuickSettingsOpen(),
+    }));
+    return {windowMs: IDLE_WINDOW_MS, settled, idle, quickSettings, reduceTransparency, control: await control()};
 }

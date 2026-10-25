@@ -1806,6 +1806,8 @@ CHANGES
 readonly IDLE_REPORT='{windowMs: 10000,
   settled: {startingUp: false, overview: false, dock: {visible: true, rested: true}, barGlass: true, dockGlass: true, easing: []},
   idle: {afterPaints: 0, frames: [], relayouts: {}},
+  quickSettings: {afterPaints: 0, frames: [], relayouts: {}},
+  reduceTransparency: {idle: {afterPaints: 0, frames: [], relayouts: {}}, quickSettings: {afterPaints: 0, frames: [], relayouts: {}}},
   control: {afterPaints: 3, frames: [{atMs: 512, damage: {rectangles: 2, extents: {x: 1050, y: 36, width: 376, height: 418},
     under: [["StBoxLayout.quick-settings", "StBoxLayout.popup-menu-content"]]}}]}}'
 # shellcheck disable=SC2016 # a jq program
@@ -1893,6 +1895,9 @@ test_idle() {
 .windowMs = 2000|a window shorter than 10 s
 .control.afterPaints = 0|a counter that counts nothing
 .control.frames[0].damage.under = []|a control frame whose actors went unnamed
+.quickSettings += {afterPaints: 146, frames: [$frame]}|Quick Settings and the bar redrawing each other while idle
+.reduceTransparency.idle.afterPaints = 1|a paint while idle with Reduce Transparency
+.reduceTransparency.quickSettings.afterPaints = 1|a paint with Quick Settings open and Reduce Transparency
 CHANGES
     # shellcheck disable=SC2016 # a jq variable
     write_idle_run '.idle += {afterPaints: 1, frames: [$frame]}'
@@ -1907,8 +1912,101 @@ CHANGES
     write_idle_run '{error: "idle.js: settle never returned\nidle.js:150"}'
     read -r passes failures <<<"$(assertion_counts idle_desktop "$T/idle")"
     expect_eq "idle: a probe error fails once, with its message, not every assertion after it" \
-        "$((all - 5))/1 idle.js: settle never returned" \
+        "$((all - 8))/1 idle.js: settle never returned" \
         "$passes/$failures $(sed -n 's/^FAIL idle: //p' "$T/assertions.out")"
+}
+
+# shellcheck disable=SC2016 # a jq program
+readonly GLASS_LOAD_REPORT='def run($frames; $content; $surfaces): {frames: $frames, contentFrames: $content, extraFrames: ($frames - $content),
+    surfaces: $surfaces, missed: [], boxes: {}, trace: [], modelledMsPerFrame: 0.2};
+  {scenarioMs: 5000, toggles: 20, scenarios: {
+    A: {glass: run(151; 150; {dock: {reblurs: 150, partial: 0, contentUnder: 150}, "quick-settings": {reblurs: 0, partial: 0, contentUnder: 0}}),
+        reduceTransparency: run(151; 150; {})},
+    B: {glass: run(142; 137; {dock: {reblurs: 40, partial: 0, contentUnder: 38}, "quick-settings": {reblurs: 36, partial: 0, contentUnder: 34},
+                              calendar: {reblurs: 53, partial: 0, contentUnder: 52}, panel: {reblurs: 3, partial: 1, contentUnder: 0}}),
+        reduceTransparency: run(142; 137; {})},
+    C: {glass: run(241; 210; {panel: {reblurs: 57, partial: 0, contentUnder: 0}, dock: {reblurs: 240, partial: 0, contentUnder: 210}}),
+        reduceTransparency: run(211; 191; {})}}}'
+
+write_glass_load_run() {
+    local change=$1 dir=$T/glass-load
+    rm -rf "$dir" && mkdir -p "$dir"
+    printf 'APEXG2-GLASS-LOAD %s\n' "$(jq -nc "$GLASS_LOAD_REPORT | $change")" >"$dir/glass-load.log"
+    echo 'glass-load exit=0 secs=95 marker-after-exit=no' >"$dir/results-main.txt"
+}
+
+test_glass_load() {
+    local change what passes failures all
+    write_glass_load_run .
+    read -r all failures <<<"$(assertion_counts glass_load "$T/glass-load")"
+    if ((failures == 0 && all > 8)); then
+        ok "glass-load: forwarded damage, re-blurs where the content changes and no extra frames pass all $all assertions"
+    else
+        not_ok "glass-load: a clean run passes (passed/failed $all/$failures): $(grep -m3 '^FAIL' "$T/assertions.out" | paste -sd'|' -)"
+    fi
+    while IFS='|' read -r change what; do
+        write_glass_load_run "$change"
+        read -r passes failures <<<"$(assertion_counts glass_load "$T/glass-load")"
+        expect_eq "glass-load: $what fails one assertion" "$((all - 1))/1" "$passes/$failures"
+    done <<'CHANGES'
+.scenarios.A.glass.missed = [{atMs: 900, surface: "dock", overlap: "part"}]|a change under the dock it did not re-blur at once
+.scenarios.A.glass.frames = 300|the bar and Quick Settings keeping each other drawing
+.scenarios.A.glass.surfaces.panel = {reblurs: 1, partial: 0, contentUnder: 0}|the bar re-blurring with nothing under it
+.scenarios.A.glass.surfaces.dock.reblurs = 100|a dock that re-blurred less often than the video changed
+.scenarios.A.reduceTransparency.surfaces = {dock: {reblurs: 1, partial: 0, contentUnder: 1}}|glass left on with Reduce Transparency
+.scenarios.B.glass.missed = [{atMs: 3100, surface: "calendar", overlap: "out"}]|a window moved under the calendar without a re-blur
+.scenarios.B.glass.frames = 160|extra frames while a window is dragged
+.scenarios.B.glass.surfaces.calendar.contentUnder = 0|a drag that never reached the calendar
+.scenarios.B.glass.surfaces.panel.reblurs = 5|the bar re-blurring more than once per open or close of a bar menu
+.scenarios.C.glass.missed = [{atMs: 400, surface: "spotlight", overlap: "part"}]|a missed re-blur under Spotlight
+CHANGES
+    write_glass_load_run '.scenarios.B.glass.surfaces.panel.reblurs = 4'
+    read -r passes failures <<<"$(assertion_counts glass_load "$T/glass-load")"
+    expect_eq "glass-load: one bar re-blur per menu open or close in B passes" "$all/0" "$passes/$failures"
+    write_glass_load_run '.scenarios.C.glass.frames = 400'
+    read -r passes failures <<<"$(assertion_counts glass_load "$T/glass-load")"
+    expect_eq "glass-load: C's frame count is reported, not asserted" "$all/0" "$passes/$failures"
+    write_glass_load_run '.scenarios.A.glass.frames = 300'
+    assertion_counts glass_load "$T/glass-load" >/dev/null
+    expect_eq "glass-load: extra frames are named with both counts" 1 \
+        "$(grep -c '^FAIL glass-load A: glass adds at most 1 % frames over Reduce Transparency, per change under it (300/150 against 151/150; ' "$T/assertions.out")"
+    write_glass_load_run '{error: "the load window never mapped in 10000 ms\nglass-load.js:170"}'
+    read -r passes failures <<<"$(assertion_counts glass_load "$T/glass-load")"
+    expect_eq "glass-load: a probe error fails once" "2/1 the load window never mapped in 10000 ms" \
+        "$passes/$failures $(sed -n 's/^FAIL glass-load: //p' "$T/assertions.out")"
+}
+
+write_glass_stress_run() {
+    local synthetic=$1 real=$2 dir=$T/glass-stress
+    rm -rf "$dir" && mkdir -p "$dir"
+    {
+        printf 'APEXG2-GLASS %s\n' "$(jq -nc "{patched: true, stress: {seconds: 60, paint: null, stock: false, frames: 1800, clipped: 900, compared: 45, black: 0, stale: 0, unequal: 0}} | $synthetic")"
+        printf 'APEXG2-GLASS-LOAD-STRESS %s\n' "$(jq -nc "{seconds: 60, frames: 1810, contentFrames: 1800, extraFrames: 10, surfaces: {}, missed: [], boxes: {}, trace: [], modelledMsPerFrame: 0.2} | $real")"
+    } >"$dir/glass-stress.log"
+    echo 'glass-stress exit=0 secs=160 marker-after-exit=no' >"$dir/results-main.txt"
+}
+
+test_glass_stress() {
+    local synthetic real what passes failures all
+    write_glass_stress_run . .
+    read -r all failures <<<"$(assertion_counts glass_stress "$T/glass-stress")"
+    if ((failures == 0 && all > 4)); then
+        ok "glass-stress: 60 s on the synthetic box and on the real ones pass all $all assertions"
+    else
+        not_ok "glass-stress: a clean run passes (passed/failed $all/$failures): $(grep -m3 '^FAIL' "$T/assertions.out" | paste -sd'|' -)"
+    fi
+    while IFS='|' read -r synthetic real what; do
+        write_glass_stress_run "$synthetic" "$real"
+        read -r passes failures <<<"$(assertion_counts glass_stress "$T/glass-stress")"
+        expect_eq "glass-stress: $what fails one assertion" "$((all - 1))/1" "$passes/$failures"
+    done <<'CHANGES'
+.stress.seconds = 30|.|a synthetic stress shorter than 60 s
+.stress.black = 1|.|a black frame
+.stress.stale = 2|.|stale frames
+.stress.unequal = 1|.|a compared frame unlike a full redraw
+.|.seconds = 10|a real-box stress shorter than 60 s
+.|.missed = [{atMs: 5000, surface: "dock", overlap: "part"}]|a change under the dock it did not re-blur at once
+CHANGES
 }
 
 fixtures_report() {
@@ -2296,6 +2394,8 @@ test_layer_cycles
 test_motion
 test_idle
 test_dock_pin
+test_glass_load
+test_glass_stress
 test_spotlight_key
 test_one_gpu
 test_fixtures
