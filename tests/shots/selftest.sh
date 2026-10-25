@@ -367,10 +367,10 @@ REPORT_OF_A_DATE_MENU_DRAWN_FROM_TOKENS='
         font: {size: ($t.apex_font_calendar_heading_size | px), weight: ($t.apex_font_heading_weight | tonumber)}},
     day: {width: ((($t.apex_date_menu_column_width | px) - 2 * $cp - 7 * ($t.apex_calendar_day_gap | px)) / 7 | floor),
         height: ($t.apex_calendar_day_height | px), radius: 18, background: "#00000000", foreground: ($t.apex_fg | hex),
-        font: {size: ($t.apex_font_calendar_day_size | px)}},
-    weekend: {foreground: ($t.apex_fg | hex)},
-    otherMonth: {foreground: ($t.apex_fg_faint | hex)},
-    today: {background: "#3584e4ff", foreground: "#ffffffff", font: {weight: ($t.apex_font_heading_weight | tonumber)}},
+        ink: ($t.apex_fg | hex), font: {size: ($t.apex_font_calendar_day_size | px)}},
+    weekend: {foreground: ($t.apex_fg | hex), ink: ($t.apex_fg | hex)},
+    otherMonth: {foreground: ($t.apex_calendar_other_month | hex), ink: ($t.apex_calendar_other_month | hex)},
+    today: {background: "#2863abff", foreground: "#ffffffff", ink: "#ffffffff", font: {weight: ($t.apex_font_heading_weight | tonumber)}},
     events: {background: ($t.apex_glass_card | hex), radius: ($t.apex_radius_calendar | px), border: $border,
         padding: inset(($t.apex_events_padding_top | px); $ep; ($t.apex_events_padding_bottom | px); $ep)},
     eventsTitle: {font: {size: ($t.apex_font_events_title_size | px), weight: ($t.apex_font_heading_weight | tonumber)}, foreground: ($t.apex_fg_dim | hex)}}}}'
@@ -702,6 +702,7 @@ REPORT_OF_LEGIBLE_SURFACES='
 | {box: {x: 0, y: 0, width: 200, height: 100}, targets: [$text, $icon]} as $s
 | {textScalingFactor: 1.25, monitor: {x: 0, y: 0, width: 1440, height: 900},
     quickSettingsAccents: (["blue", "teal", "green", "yellow", "orange", "red", "pink", "purple", "slate"] | map({key: ., value: $s}) | from_entries),
+    dateMenuAccents: (["blue", "teal", "green", "yellow", "orange", "red", "pink", "purple", "slate"] | map({key: ., value: $s}) | from_entries),
     bar: $s, dock: $s, popupMenu: $s, osd: $s, banner: $s, quickSettings: $s, wifiMenu: $s, dateMenu: $s, switcher: $s,
     dialog: $s, endSession: $s, spotlight: {popup: $s, toast: $s}, overview: $s, appGrid: $s}'
 
@@ -715,7 +716,7 @@ a11y_run() {
 
 test_a11y() {
     local assertions expected change what passes failures open_gaps want
-    for assertions in a11y_contrast:24 a11y_layout:25; do
+    for assertions in a11y_contrast:33 a11y_layout:34; do
         expected=${assertions#*:}
         read -r passes failures open_gaps <<<"$(a11y_run "${assertions%:*}")"
         if ((failures == 0 && open_gaps == 0 && passes == expected)); then
@@ -738,6 +739,8 @@ a11y_contrast|1|.wifiMenu.targets[0].ratio = 3|a menu row's text at 3:1
 a11y_contrast|1|.spotlight.toast.targets[0].ratio = 3|the toast's text at 3:1
 a11y_contrast|1|.quickSettingsAccents.yellow.targets[0].ratio = 4.49|a checked toggle on the yellow accent at 4.49:1
 a11y_contrast|1|del(.quickSettingsAccents.slate)|an accent left unmeasured
+a11y_contrast|1|.dateMenuAccents.orange.targets[0].ratio = 4.3|today on the orange accent at 4.3:1
+a11y_contrast|1|.dateMenu.targets[0] += {bare: true, ratio: 1.2}|a bare Clutter.Text, a day number St never styled, at 1.2:1
 a11y_contrast|1|.endSession.targets[1].ratio = 2|the end-session glyph at 2:1
 a11y_contrast|1|.banner = {error: "not shown"}|a surface that never showed
 a11y_contrast|1|.popupMenu.targets = []|a surface with nothing measured
@@ -1171,7 +1174,7 @@ test_date_menu() {
     local variant change what passes failures open_gaps
     for variant in light dark; do
         read -r passes failures open_gaps <<<"$(assert_run date_menu "$variant")"
-        if ((failures == 0 && open_gaps == 0 && passes == 12)); then
+        if ((failures == 0 && open_gaps == 0 && passes == 13)); then
             ok "calendar ($variant): drawn from the tokens it passes all $passes assertions"
         else
             not_ok "calendar ($variant): drawn from the tokens it passes (passed/failed/gaps $passes/$failures/$open_gaps): $(grep -m3 '^FAIL' "$T/top-bar.out" | paste -sd'|' -)"
@@ -1197,6 +1200,10 @@ test_date_menu() {
 .surfaces.dateMenu.heading.background = "#fafafbff"|upstream's filled headings
 .surfaces.dateMenu.day.height = 33|upstream's 3 em days
 .surfaces.dateMenu.otherMonth.foreground = "#1d1d2180"|upstream's half-opacity other months
+.surfaces.dateMenu.day.ink = "#000000ff"|day numbers left in Clutter's default black
+.surfaces.dateMenu.otherMonth.ink = "#1d1d21ff"|other months' numbers not dimmed
+.surfaces.dateMenu.otherMonth.foreground = "#1d1d2166"|other months at $apex_fg_faint, 2.4:1 on the card
+.surfaces.dateMenu.today.background = "#3584e4ff"|today on the raw accent, 3.8:1 under white
 .surfaces.dateMenu.eventsTitle.foreground = "#1d1d21ff"|an events title at full strength
 CHANGES
 }
@@ -2124,6 +2131,33 @@ test_no_dock() {
 CHANGES
 }
 
+# shellcheck disable=SC2016 # a jq program
+readonly TOGGLED_FROM_TOKENS='{toggle: {title: "Dark Style", checkedBefore: true, checkedAfter: false}, colorSchemeSetting: "default",
+    stylesheet: $sheet, sheet: {markers: ["light"]}, variant: "light", markerColor: "#16161aff",
+    calendar: {day: {foreground: ($t.apex_fg | hex), ink: ($t.apex_fg | hex)},
+        otherMonth: {foreground: ($t.apex_calendar_other_month | hex), ink: ($t.apex_calendar_other_month | hex)},
+        today: {foreground: "#ffffffff", ink: "#ffffffff"}}}'
+
+test_dark_style_off() {
+    local change what passes failures all
+    toggled_log() {
+        jq -nc --argjson t "$(tokens_for light)" --arg sheet resource:///org/gnome/shell/theme/gnome-shell-light.css \
+            "$JQ_DEFS $HEX_DEF $TOGGLED_FROM_TOKENS | $1" | sed 's/^/APEXG2-TOGGLED /' >"$T/toggled.log"
+    }
+    toggled_log .
+    read -r all failures <<<"$(assertion_counts dark_style_off dark-style "$T/toggled.log")"
+    expect_eq "dark style off: the toggle, the light sheet and the restyled calendar pass all four assertions" "4/0" "$all/$failures"
+    while IFS='|' read -r change what; do
+        toggled_log "$change"
+        read -r passes failures <<<"$(assertion_counts dark_style_off dark-style "$T/toggled.log")"
+        expect_eq "dark style off: $what fails one assertion" "3/1" "$passes/$failures"
+    done <<'CHANGES'
+.calendar.day.ink = "#f4f4f6ff"|day numbers still in the dark colour
+.calendar.otherMonth.ink = "#000000ff"|other months' numbers left black
+.calendar.today.ink = "#000000ff"|today's number left black on the accent
+CHANGES
+}
+
 test_fixtures() {
     local passes failures address missing=()
     mkdir -p "$T/fixtures"
@@ -2428,6 +2462,7 @@ test_glass_stress
 test_spotlight_key
 test_one_gpu
 test_no_dock
+test_dark_style_off
 test_fixtures
 test_glass
 test_shadows_under_glass

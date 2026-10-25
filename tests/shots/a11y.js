@@ -61,7 +61,29 @@ function symbolic(icon) {
     return names.some(n => n?.endsWith('-symbolic'));
 }
 
-// What a target draws in its foreground colour: the text of a label or an entry, or a glyph.
+// St draws text in the colour of its Pango attributes, which gjs reads only as the list's text;
+// a Clutter.Text St never styled has none and draws in its own colour.
+export function textColour(text) {
+    const attributes = text.get_attributes()?.to_string() ?? '';
+    const colour = attributes.match(/ foreground #([0-9a-f]{4})([0-9a-f]{4})([0-9a-f]{4})/);
+    if (!colour) {
+        const {red, green, blue, alpha} = text.get_color();
+        return {red, green, blue, alpha};
+    }
+    // St writes each 8-bit channel times 255, not 257, into Pango's 16 bits.
+    const byte = v => Math.round(v / 255);
+    const [red, green, blue] = colour.slice(1).map(c => byte(parseInt(c, 16)));
+    const alpha = byte(Number(attributes.match(/ foreground-alpha (\d+)/)?.[1] ?? 255 * 255));
+    return {red, green, blue, alpha};
+}
+
+// A Clutter.Text St does not wrap, as an St.Button's own label, which St styles from the button.
+function bareText(actor) {
+    const parent = actor.get_parent();
+    return actor instanceof Clutter.Text && actor.text?.trim() && !(parent instanceof St.Label || parent instanceof St.Entry);
+}
+
+// What a target draws in its foreground colour: the text of a label, an entry or a bare text, or a glyph.
 function targetsOf(root) {
     const found = [];
     const walk = actor => {
@@ -71,6 +93,8 @@ function targetsOf(root) {
             found.push({actor, kind: 'text', ink: actor.clutter_text, name: actor.get_text()});
         else if (actor instanceof St.Label && actor.get_text().trim())
             found.push({actor, kind: 'text', ink: actor.clutter_text, name: actor.get_text()});
+        else if (bareText(actor))
+            found.push({actor, kind: 'text', ink: actor, name: actor.text});
         else if (actor instanceof St.Icon && symbolic(actor))
             found.push({actor, kind: 'icon', ink: actor, name: actor.gicon?.get_names?.()[0] ?? actor.icon_name});
         actor.get_children().forEach(walk);
@@ -116,22 +140,24 @@ function card(actor, root, cards) {
 // What measure() needs of a target, read while the target still exists.
 function snapshot(target, root, cards, unit) {
     const {actor} = target;
-    const node = actor.get_theme_node();
-    const color = node.get_foreground_color();
+    const bare = actor instanceof Clutter.Text;
+    const color = bare ? textColour(actor) : actor.get_theme_node().get_foreground_color();
     // Hiding an icon hides its own fill too: it goes back over the captured pixels.
-    const fill = target.kind === 'icon' ? node.get_background_color() : null;
+    const fill = target.kind === 'icon' ? actor.get_theme_node().get_background_color() : null;
     const label = actor instanceof St.Label ? actor : null;
+    const layout = bare ? actor.get_layout() : label?.clutter_text?.get_layout();
     return {
         kind: target.kind,
         name: target.name.slice(0, 40),
-        styleClass: actor.get_style_class_name() ?? actor.get_parent()?.get_style_class_name() ?? null,
+        styleClass: (bare ? null : actor.get_style_class_name()) ?? actor.get_parent()?.get_style_class_name?.() ?? null,
+        bare,
         inactive: insensitive(actor, root),
         fill: fill?.alpha ? [fill.red, fill.green, fill.blue, fill.alpha / 255] : null,
         rgb: [color.red, color.green, color.blue],
         alpha: color.alpha / 255 * actor.get_paint_opacity() / 255,
         extents: extents(actor),
         box: roundedBox(extents(actor), unit),
-        ellipsized: label?.clutter_text?.get_layout().is_ellipsized() ?? false,
+        ellipsized: layout?.is_ellipsized() ?? false,
         // A collapsed notification's body, whole once the notification expands.
         expandable: !!label?.has_style_class_name('message-body') && !!ancestor(actor, root, a => a.has_style_class_name?.('message')),
         card: card(actor, root, cards),
@@ -290,6 +316,17 @@ export async function a11yReport(h) {
         dateMenu.close(BoxPointer.PopupAnimation.NONE);
         source.destroy();
     }, () => report(dateMenu.box));
+    // Today's fill is each accent shaded, as a checked toggle's is.
+    if (iface.settings_schema.has_key('accent-color')) {
+        out.dateMenuAccents = {};
+        for (const accent of ACCENTS) {
+            iface.set_string('accent-color', accent);
+            // eslint-disable-next-line no-await-in-loop
+            out.dateMenuAccents[accent] = await withOpen(() => dateMenu.open(BoxPointer.PopupAnimation.NONE),
+                () => dateMenu.close(BoxPointer.PopupAnimation.NONE), () => report(dateMenu.box));
+        }
+        iface.reset('accent-color');
+    }
     out.switcher = await withOpen(switcher, list => list.destroy(), list => report(list));
     out.dialog = await withOpen(() => h.openModalDialog(), d => d.close(), d => report(d.root));
     out.endSession = await withOpen(() => h.openEndSessionDialog(), d => d?.cancel(), d => report(d?.dialogLayout._dialog));
