@@ -4,6 +4,7 @@
 // registered surface, its pause rules, damage forwarding, and the solid fallbacks.
 
 import Gio from 'gi://Gio';
+import Mtk from 'gi://Mtk';
 import Shell from 'gi://Shell';
 import St from 'gi://St';
 
@@ -145,6 +146,11 @@ function _overlaps(a, b) {
     return a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
 }
 
+// The box alone: the paint volume's box-shadow would reach the glass beside it and re-blur that too.
+function _queueBox(actor) {
+    actor.queue_redraw_with_clip(new Mtk.Rectangle({x: 0, y: 0, width: Math.ceil(actor.width), height: Math.ceil(actor.height)}));
+}
+
 // For latency only: the redraw-clip rule of patch 0003 keeps a missed source one frame late.
 export function forwardDamage(...boxes) {
     for (const surface of _watched.keys()) {
@@ -153,7 +159,7 @@ export function forwardDamage(...boxes) {
             continue;
         const glassBox = _boxOf(surface.actor);
         if (boxes.length === 0 || boxes.some(box => _overlaps(box, glassBox)))
-            surface.actor.queue_redraw();
+            _queueBox(surface.actor);
     }
 }
 
