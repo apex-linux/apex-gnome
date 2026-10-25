@@ -558,6 +558,12 @@ function captureBox(actor, scale) {
     };
 }
 
+// A banner over a scene that did not open it is a race; signoff.sh fails the board that caught one.
+function bannerShown() {
+    const tray = Main.messageTray;
+    return tray._banner?.mapped ? {source: tray._notification?.source?.title ?? null, title: tray._notification?.title ?? null} : null;
+}
+
 async function capture(scene) {
     const dir = GLib.getenv('G2_CAPTURES');
     const name = `${GLib.getenv('G2_CASE')}-${scene}.png`;
@@ -572,6 +578,7 @@ async function capture(scene) {
     const [, bytes] = GLib.file_get_contents(path);
     const {width, height} = Png.size(bytes);
     const scale = width / global.stage.width;
+    console.log(`APEXG2-CAPTURE ${JSON.stringify({file: name, banner: bannerShown()})}`);
     return {
         file: name, width, height, bytes,
         boxes: {
@@ -2633,19 +2640,26 @@ async function signoffWindows() {
     launcher.setenv('GDK_BACKEND', 'wayland', true);
     const scopeless = Gio.File.new_for_uri(import.meta.url).get_parent().get_child('scopeless').get_path();
     launcher.setenv('PATH', `${scopeless}:${GLib.getenv('PATH')}`, true);
+    const sourcesBefore = new Set(Main.messageTray.getSources());
     for (const argv of SIGNOFF_APPS)
         launcher.spawnv(argv);
     const tracker = Shell.WindowTracker.get_default();
     const appsShown = () => [...new Set(global.get_window_actors().map(a => tracker.get_window_app(a.meta_window)?.get_id()))]
         .filter(Boolean);
     const shown = await until(() => appsShown().length >= SIGNOFF_APPS.length, SIGNOFF_WINDOWS_MS);
-    // The last window to map takes the focus: the switcher's order and the bar's app name follow a fixed one instead.
+    // Calendar presents itself once it has loaded; unfocused, that posts "Calendar is ready". So the apps settle
+    // first, and each window then gets the focus in a fixed order, which also fixes the switcher's order and the bar.
+    const loaded = await windowsQuiet(SIGNOFF_QUIET_MS, SIGNOFF_WINDOWS_MS);
     for (const id of SIGNOFF_FOCUS_ORDER) {
         const window = global.get_window_actors().map(a => a.meta_window).find(w => tracker.get_window_app(w)?.get_id() === id);
         if (window)
-            Main.activateWindow(window);
+            Main.activateWindow(window, global.display.get_current_time_roundtrip());
     }
     const quiet = await windowsQuiet(SIGNOFF_QUIET_MS, SIGNOFF_WINDOWS_MS);
+    const notified = Main.messageTray.getSources().filter(source => !sourcesBefore.has(source))
+        .map(source => source.title);
+    if (notified.length > 0)
+        throw new Error(`the sign-off windows brought notifications from ${notified.join(', ')}`);
     // Off every window preview and the bar's pills; a new device can drop one axis of its first motion.
     const monitor = Main.layoutManager.primaryMonitor;
     const pointer = global.stage.context.get_backend().get_default_seat()
@@ -2682,7 +2696,7 @@ async function signoffWindows() {
     await settle();
     return {
         shown, previews, apps: appsShown(), overview: overview.file, altTab: altTab.file,
-        quiet, pointerPlaced,
+        loaded, quiet, pointerPlaced, notified,
         atOverview: {pointer: [pointerX, pointerY], panelStates: Object.fromEntries(panelStates)},
     };
 }

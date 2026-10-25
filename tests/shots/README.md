@@ -571,9 +571,19 @@ probe opens a folder. `tests/shell/shoot.sh` shoots the greeter, the lock screen
 dialog and the power-off dialog with an update staged. Each board's scene is copied to
 `board-NN-SLUG-light.png` and `-dark.png`, and `signoff.json` records its title, its scene
 and fixture state, the apex-gnome and apex-desktop pins, the layer's features enabled, the
-scale and the monitor. `signoff.sh` itself compares nothing: only a scene without a capture,
-or a probe whose three windows never all reached the overview, fails the run, named. The
-`signoff` workflow uploads the set as `signoff-SHA`, then checks it against the approved
+scale and the monitor. `signoff.sh` itself compares nothing. It fails the run, naming the
+board, when:
+
+- a scene has no capture;
+- the probe's three windows never all reached the overview, or brought a notification (a
+  focus mutter refused posts "X is ready", so the probe activates them with a fresh server
+  timestamp);
+- a capture caught a banner. Every capture logs the banner it caught, if any:
+  `APEXG2-CAPTURE` in G2, a `banner.NAME` fact in `tests/shell`. Board 16 shows one on
+  purpose, and a board without that record fails too, so a stray banner never reaches a
+  golden.
+
+The `signoff` workflow uploads the set as `signoff-SHA`, then checks it against the approved
 goldens (below).
 
 ## Approved goldens
