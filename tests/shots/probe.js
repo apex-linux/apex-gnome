@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+import {graphEvaluated} from './import-clock.js';
+
 import Atk from 'gi://Atk';
 import Clutter from 'gi://Clutter';
 import Gio from 'gi://Gio';
@@ -26,6 +28,10 @@ import {textColour} from './a11y.js';
 import * as Png from './png.js';
 
 export const METRICS = {};
+
+const probeEvaluated = {at: GLib.get_monotonic_time() / 1000, startingUp: Main.layoutManager._startingUp};
+let probeInitAt = null;
+let startupCompletedAt = null;
 
 const APEX_SCHEMA = 'io.github.apex_linux.Apex.Desktop';
 const APEX_KEYBINDINGS_SCHEMA = 'io.github.apex_linux.Apex.Desktop.Keybindings';
@@ -176,12 +182,31 @@ function clock() {
     };
 }
 
+// /proc/self/stat's starttime is in USER_HZ ticks since boot, 100 a second, as CLOCK_MONOTONIC counts.
+function processStartMs() {
+    const stat = new TextDecoder().decode(GLib.file_get_contents('/proc/self/stat')[1]);
+    return Number(stat.slice(stat.lastIndexOf(')') + 2).split(' ')[19]) * 10;
+}
+
+// When main.js's import of this module began to evaluate and ended, init ran and startup
+// completed, in ms after the shell's process started: main.js connects startup-complete after.
+function startupTimes() {
+    const start = processStartMs();
+    const since = at => at === null ? null : Math.round(at - start);
+    return {
+        graphEvaluatedMs: since(graphEvaluated.at), startingUpAtGraph: graphEvaluated.startingUp,
+        probeEvaluatedMs: since(probeEvaluated.at), startingUpAtProbe: probeEvaluated.startingUp,
+        initMs: since(probeInitAt), startupCompleteMs: since(startupCompletedAt),
+    };
+}
+
 async function report() {
     const hooks = await apexHooks();
     const context = St.ThemeContext.get_for_stage(global.stage);
     const uri = context.get_theme().default_stylesheet?.get_uri() ?? null;
     const primary = Main.layoutManager.primaryMonitor;
     return {
+        startup: startupTimes(),
         mode: Main.sessionMode.currentMode,
         stylesheet: uri,
         sheet: uri ? sheetInfo(uri) : null,
@@ -2622,9 +2647,14 @@ async function motion() {
 }
 
 export function init() {
-    if (Main.layoutManager._startingUp)
+    probeInitAt = GLib.get_monotonic_time() / 1000;
+    if (Main.layoutManager._startingUp) {
+        Main.layoutManager.connect('startup-complete', () => {
+            startupCompletedAt = GLib.get_monotonic_time() / 1000;
+        });
         return;
-    console.log('APEXG2-LATE startup completed while main.js imported the probe');
+    }
+    console.log(`APEXG2-LATE startup completed while main.js imported the probe ${JSON.stringify(startupTimes())}`);
     import(import.meta.url).then(self => Scripting.runPerfScript(self, GLib.getenv('SHELL_PERF_OUTPUT')));
 }
 

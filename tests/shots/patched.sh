@@ -193,5 +193,11 @@ if ((rc == DIRECT_HUNG)); then
     exit
 fi
 patched_assertions "$run" "$part"
+# Each attempt's import and startup times (probe.js), late ones too, to see what loses the race.
+for f in "$run"/*.log; do
+    times=$(sed -n 's/.*APEXG2-LATE startup completed while main.js imported the probe //p' "$f" | head -n 1)
+    [[ -n $times ]] || times=$(report_of "$f" | jq -c '.startup // empty' 2>/dev/null)
+    [[ -z $times ]] || echo "# startup ${f##*/} $times"
+done
 echo "# logs and captures: $run"
 summary

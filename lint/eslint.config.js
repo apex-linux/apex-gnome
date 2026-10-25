@@ -37,6 +37,7 @@ export default defineConfig([
             'desktop/shell/js/**',
             'tests/layer/probe.js',
             'tests/shots/probe.js',
+            'tests/shots/import-clock.js',
             'tests/shots/glass.js',
             'tests/shots/a11y.js',
             'tests/shots/backdrop.js',
