@@ -41,6 +41,8 @@ REPOS=(--repo=fedora --repo=updates)
 readonly LOCAL_RELEASE=.apex0.local
 readonly SOURCE1=apex-shell-local.tar
 readonly PATCH_BASE=1001
+# direct.sh's exit when a case hangs.
+readonly DIRECT_HUNG=3
 
 die() { echo "patched.sh: $*" >&2; exit 1; }
 step() { echo "## $* ($((SECONDS))s)"; }
@@ -179,6 +181,14 @@ echo "# direct.sh main: exit $rc"
 set +e
 # shellcheck source=tests/shots/assert.sh
 . "$HERE/assert.sh"
+# A hung case stops direct.sh's part, as run.sh stops G2: the cases after it never ran, so one
+# failure names it rather than a "no report" for each of them.
+if ((rc == DIRECT_HUNG)); then
+    fail "direct.sh main: $(sed -n 's/^\([^ ]*\) exit=124 secs=\([0-9]*\) .*/\1 had no report within \2 s/p' "$run/results-main.txt" |
+        tail -n 1); G2 stops at a hung case, so the cases after it did not run"
+    summary
+    exit
+fi
 for c in default default-scale1 dark-style stock-light stock-dark safe-env layer-disabled layer-cycles motion idle dock-pin glass-load glass-stress no-dock; do
     no_js_error "$c" "$run/$c.log"
     fixed_clock "$c" "$run/$c.log"
