@@ -18,6 +18,7 @@ import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 import * as Scripting from 'resource:///org/gnome/shell/ui/scripting.js';
 import * as Slider from 'resource:///org/gnome/shell/ui/slider.js';
 import * as SwitcherPopup from 'resource:///org/gnome/shell/ui/switcherPopup.js';
+import * as UserWidget from 'resource:///org/gnome/shell/ui/userWidget.js';
 import * as WindowManager from 'resource:///org/gnome/shell/ui/windowManager.js';
 import * as WorkspaceThumbnail from 'resource:///org/gnome/shell/ui/workspaceThumbnail.js';
 
@@ -63,6 +64,7 @@ const SWITCHER_ICON_SIZE = 96;
 // Nautilus refuses to run as root, as G2 does: Calendar, from the dock, stands in.
 const SIGNOFF_APPS = [['gnome-text-editor', '--new-window'], ['gnome-calendar'], ['ptyxis', '--new-window']];
 const SIGNOFF_WINDOWS_MS = 30000;
+const AVATAR_SIZE = 32;
 const OVERVIEW_WINDOWS = 3;
 const FIXTURE_WALLPAPER = {width: 160, height: 100};
 
@@ -1286,8 +1288,19 @@ function promptDialog() {
     return {dialog, content, entry, buttons};
 }
 
-function openPromptDialog() {
+// With polkit's user row too: the avatar of a user without a picture, which draws the initial.
+function openPromptDialog({avatar = false} = {}) {
     const {dialog} = promptDialog();
+    if (avatar) {
+        const row = new St.BoxLayout({style_class: 'polkit-dialog-user-layout apex-polkit-user'});
+        const user = {get_icon_file: () => null, get_real_name: () => 'Apex', get_user_name: () => 'apex'};
+        const picture = new UserWidget.Avatar(user, {iconSize: AVATAR_SIZE});
+        picture.update();
+        row.add_child(picture);
+        const scope = new St.BoxLayout({style_class: 'apex-polkit'});
+        scope.add_child(row);
+        dialog.contentLayout.add_child(scope);
+    }
     dialog.open();
     return {
         root: dialog.dialogLayout._dialog,
@@ -2843,7 +2856,7 @@ async function runProbe() {
             const A11y = await import('./a11y.js');
             result = await A11y.a11yReport({
                 settle, unit: cssUnit(), apexDock, findDescendant, openPopupMenu, openOsd, openBanner,
-                openModalDialog: openPromptDialog, openEndSessionDialog: openShellEndSession, withSpotlight,
+                openModalDialog: () => openPromptDialog({avatar: true}), openEndSessionDialog: openShellEndSession, withSpotlight,
             });
         } catch (e) {
             result = {error: `${e.message}\n${e.stack}`};

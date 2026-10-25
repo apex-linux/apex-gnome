@@ -49,7 +49,8 @@ readonly A11Y_TEXT_RATIO=4.5
 readonly A11Y_ICON_RATIO=3
 readonly A11Y_ACCENTS=(blue teal green yellow orange red pink purple slate)
 readonly A11Y_SURFACES=(bar dock popupMenu osd banner quickSettings "${A11Y_ACCENTS[@]/#/quickSettingsAccents.}" wifiMenu dateMenu
-    "${A11Y_ACCENTS[@]/#/dateMenuAccents.}" switcher dialog endSession spotlight.popup spotlight.toast overview appGrid)
+    "${A11Y_ACCENTS[@]/#/dateMenuAccents.}" switcher dialog "${A11Y_ACCENTS[@]/#/dialogAccents.}" endSession screenshot
+    spotlight.popup spotlight.toast overview appGrid)
 # The failures still open: upstream's high-contrast sheet, which safe mode keeps as Fedora's.
 readonly A11Y_HC_TOGGLE="upstream HC sheet: Quick Settings' checked toggle, white on its accent (3.15:1), and its menu arrow (2.31:1)"
 declare -A A11Y_GAPS=([high-contrast:quickSettings]=$A11Y_HC_TOGGLE)
@@ -61,14 +62,12 @@ A11Y_GAPS[high-contrast:dateMenu]=$A11Y_HC_TODAY
 for a11y_accent in blue teal green yellow orange red pink slate; do
     A11Y_GAPS[high-contrast:dateMenuAccents.$a11y_accent]=$A11Y_HC_TODAY
 done
-# A Clutter.Text outside an St.Label, measured since board 34's day numbers: a button's own label.
-readonly A11Y_DEFAULT_BUTTON="the modal dialog's default button, white on the raw accent (3.77:1), measured once bare text was"
-A11Y_GAPS[default:dialog]=$A11Y_DEFAULT_BUTTON
-A11Y_GAPS[dark-style:dialog]=$A11Y_DEFAULT_BUTTON
-# Each gap is the sheet's own colours, so its case over the #013b88 backdrop has it too.
 unset a11y_accent
+# The high-contrast gaps are the sheet's own colours, the same over the #013b88 backdrop.
 for a11y_gap in "${!A11Y_GAPS[@]}"; do
-    A11Y_GAPS[${a11y_gap%%:*}-solid:${a11y_gap#*:}]=${A11Y_GAPS[$a11y_gap]}
+    if [[ $a11y_gap == high-contrast:* ]]; then
+        A11Y_GAPS[high-contrast-solid:${a11y_gap#*:}]=${A11Y_GAPS[$a11y_gap]}
+    fi
 done
 unset a11y_gap
 readonly A11Y_GAPS
@@ -842,9 +841,11 @@ modal_dialog() {
     "${metric[@]}" 'its buttons are $apex_dialog_button_height high, fully round, $apex_font_dialog_button_size at $apex_font_label_weight' \
         "$d.buttons" 'length == 2 and all((.height | px_is($t.apex_dialog_button_height)) and .radius >= ($t.apex_dialog_button_height | px) / 2
             and (.font.size | px_is($t.apex_font_dialog_button_size)) and .font.weight == ($t.apex_font_label_weight | tonumber))'
-    "${metric[@]}" 'a button is $apex_button ($apex_button_hover hovered); the default one the accent with its foreground' \
-        "{b: $d.buttons, accent: .topBar.accent}" '.accent as $a | (.b | map(select(.default | not)) | length == 1 and all((.background | colour_is($t.apex_button)) and (.foreground | colour_is($t.apex_fg)) and (.hover.background | colour_is($t.apex_button_hover))))
-            and (.b | map(select(.default)) | length == 1 and all((.background | colour_is($a)) and (.foreground | colour_is("#ffffff"))))'
+    "${metric[@]}" 'a button is $apex_button ($apex_button_hover hovered); the default one the accent shaded $apex_quick_toggle_checked_shade with black, in white' \
+        "{b: $d.buttons, accent: .topBar.accent}" '(.accent | rgba) as $a | ($t.apex_quick_toggle_checked_shade | rtrimstr("%") | tonumber / 100) as $k
+            | (.b | map(select(.default | not)) | length == 1 and all((.background | colour_is($t.apex_button)) and (.foreground | colour_is($t.apex_fg)) and (.hover.background | colour_is($t.apex_button_hover))))
+            and (.b | map(select(.default)) | length == 1 and all((.background | rgba) as $f | ([range(3)] | all(($f[.] - $a[.] * (1 - $k)) | fabs <= 1))
+                and (.foreground | colour_is("#ffffff"))))'
     "${metric[@]}" 'the end-session dialog has $apex_end_session_gap between its parts, its title tracked $apex_dialog_title_tracking, its countdown in tabular figures' \
         "$d.endSession" '(.box.spacing | px_is($t.apex_end_session_gap)) and (.contentSpacing | px_is($t.apex_end_session_gap))
             and (.title.tracking - ($t.apex_dialog_title_tracking | px) | fabs < 0.05) and (.description.font.features | test("tnum"))'
