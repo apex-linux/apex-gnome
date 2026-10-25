@@ -34,6 +34,7 @@ esac
 [[ -e /run/.containerenv || -e /.dockerenv ]] || { echo "direct.sh: only inside run.sh's or smoke.sh's container" >&2; exit 2; }
 
 readonly SHELL_TIMEOUT=150
+readonly GLASS_STRESS_SECONDS=${G2_GLASS_STRESS_SECONDS:-60}
 readonly EXIT_HUNG=3
 readonly CLOCK_LIB=/run/g2-clock.so
 readonly FRAME_DIR=/run/g2-frame
@@ -85,8 +86,11 @@ if ! gcc -O2 -Wall -Werror -shared -fPIC $(pkg-config --cflags glib-2.0) -o "$FR
 fi
 
 run_case() {
-    local name=$1 gsettings_triples=$2
+    local name=$1 gsettings_triples=$2 limit=$SHELL_TIMEOUT arg
     shift 2
+    for arg in "$@"; do
+        [[ $arg == G2_TIMEOUT=* ]] && limit=${arg#G2_TIMEOUT=}
+    done
     local home=/tmp/g2/$name/home run=/tmp/g2/$name/run start=$SECONDS rc left=no
     rm -rf "/tmp/g2/$name"
     mkdir -p "$home" "$run"
@@ -97,7 +101,7 @@ run_case() {
         G2_CASE="$name" G2_CAPTURES=/out/captures G2_SETTINGS="$gsettings_triples" \
         G2_SCALE=2 G2_MONITOR=2880x1800 TZ=UTC G2_CLOCK_LIB="$CLOCK_LIB" G2_CLOCK_EPOCH="$G2_CLOCK_EPOCH" \
         G2_SURFACE_SCENES="${G2_SURFACE_SCENES:-0}" G2_WAYLAND_DISPLAY=apex-g2 "$@" \
-        timeout "$SHELL_TIMEOUT" dbus-run-session -- bash -c '
+        timeout "$limit" dbus-run-session -- bash -c '
             set -u
             gsettings set org.gnome.desktop.interface scaling-factor "$G2_SCALE"
             gsettings set org.gnome.shell welcome-dialog-last-shown-version "\"999\""
@@ -178,6 +182,9 @@ run_and_record_case layer-disabled 'io.github.apex_linux.Apex.Desktop layer-enab
 run_and_record_case layer-cycles "$CAPTURE_SETTINGS" G2_CYCLES=3
 run_and_record_case motion "$MOTION_SETTINGS" G2_MOTION=1
 run_and_record_case idle "$CAPTURE_SETTINGS;$NO_HOT_CORNER" G2_IDLE=1
+run_and_record_case glass-load "$CAPTURE_SETTINGS;$NO_HOT_CORNER" G2_GLASS_LOAD=1
+run_and_record_case glass-stress "$CAPTURE_SETTINGS;$NO_HOT_CORNER" G2_GLASS=1 G2_GLASS_STRESS="$GLASS_STRESS_SECONDS" \
+    G2_GLASS_LOAD_STRESS="$GLASS_STRESS_SECONDS" GI_TYPELIB_PATH="$FRAME_DIR" G2_TIMEOUT=$((2 * GLASS_STRESS_SECONDS + SHELL_TIMEOUT))
 run_and_record_case dock-pin "$CAPTURE_SETTINGS;$NO_HOT_CORNER" G2_DOCK_PIN=1
 run_and_record_case fault-configure '' APEX_SHELL_TEST_FAULT=configure
 run_and_record_case fault-enable '' APEX_SHELL_TEST_FAULT=enable PROBE_WAIT=10
