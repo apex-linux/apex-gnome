@@ -322,6 +322,9 @@ $apex_events_gap: 6px;
 $apex_font_events_title_size: 12.5px;
 $apex_radius_date_menu_button: 14px;
 $apex_date_menu_button_height: 40px;
+$apex_date_menu_button_padding: 14px;
+$apex_date_menu_button_padding_y: 10px;
+$apex_date_menu_button_gap: 8px;
 
 $apex_scrim: if($variant == 'light', rgba(236, 238, 243, .62), rgba(14, 14, 18, .58));
 $apex_pill: if($variant == 'light', rgba(255, 255, 255, .72), rgba(255, 255, 255, .1));

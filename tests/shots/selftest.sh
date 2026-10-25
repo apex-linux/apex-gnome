@@ -343,6 +343,10 @@ REPORT_OF_A_DATE_MENU_DRAWN_FROM_TOKENS='
 ($t.apex_quick_settings_padding | px) as $qp | ($t.apex_calendar_padding | px) as $cp
 | ($t.apex_message_padding | px) as $mp | ($t.apex_events_padding | px) as $ep
 | {size: ($t.apex_font_size | px), weight: ($t.apex_font_heading_weight | tonumber)} as $heading
+| {x: 0, y: 0, height: ($t.apex_date_menu_button_height | px), background: ($t.apex_glass_card | hex), borderColor: ($t.apex_glass_card_border | hex),
+    border: $border, radius: ($t.apex_radius_date_menu_button | px)} as $row
+| {x: ($t.apex_date_menu_button_padding | px), y: 12, foreground: ($t.apex_fg_dim | hex),
+    font: {size: ($t.apex_font_events_title_size | px), weight: ($t.apex_font_label_weight | tonumber)}} as $rowHeader
 | {topBar: {accent: "#3584e4ff"}, surfaces: {dateMenu: {
     box: {background: ($t.apex_panel | hex), radius: ($t.apex_radius_quick_settings | px), border: $border, padding: inset($qp; $qp; $qp; $qp)},
     area: {spacing: ($t.apex_date_menu_gap | px)},
@@ -371,9 +375,12 @@ REPORT_OF_A_DATE_MENU_DRAWN_FROM_TOKENS='
     weekend: {foreground: ($t.apex_fg | hex), ink: ($t.apex_fg | hex)},
     otherMonth: {foreground: ($t.apex_calendar_other_month | hex), ink: ($t.apex_calendar_other_month | hex)},
     today: {background: "#2863abff", foreground: "#ffffffff", ink: "#ffffffff", font: {weight: ($t.apex_font_heading_weight | tonumber)}},
-    events: {background: ($t.apex_glass_card | hex), radius: ($t.apex_radius_calendar | px), border: $border,
+    events: {y: 0, height: 62, background: ($t.apex_glass_card | hex), radius: ($t.apex_radius_calendar | px), border: $border,
         padding: inset(($t.apex_events_padding_top | px); $ep; ($t.apex_events_padding_bottom | px); $ep)},
-    eventsTitle: {font: {size: ($t.apex_font_events_title_size | px), weight: ($t.apex_font_heading_weight | tonumber)}, foreground: ($t.apex_fg_dim | hex)}}}}'
+    eventsTitle: {font: {size: ($t.apex_font_events_title_size | px), weight: ($t.apex_font_heading_weight | tonumber)}, foreground: ($t.apex_fg_dim | hex)},
+    clocks: ($row + {y: (62 + ($t.apex_date_menu_column_gap | px))}),
+    weather: ($row + {y: (62 + ($t.apex_date_menu_column_gap | px) + ($t.apex_date_menu_button_height | px) + ($t.apex_date_menu_button_gap | px))}),
+    clocksHeader: $rowHeader, weatherHeader: $rowHeader}}}'
 # shellcheck disable=SC2016 # a jq program
 REPORT_OF_AN_OVERVIEW_DRAWN_FROM_TOKENS='
 ($t.apex_surface_border | px) as $b | {top: $b, right: $b, bottom: $b, left: $b} as $border
@@ -893,6 +900,14 @@ test_signoff_banners() {
         not_ok "signoff: a banner a scene did not open fails its board, named; board 16's own banner does not: $(tail -n 3 "$T/signoff.out")"
     fi
     rm -rf "$dir" && cp -r "$1" "$dir"
+    sed -i 's/"file":"dark-style-quick-settings.png","banner":null/&,"live":["wifi-scan-spinner"]/' "$dir/g2/dark-style.log"
+    if ! "$HERE/signoff.sh" --collect "$dir/g2" "$dir/shots" "$dir/out" >"$T/signoff.out" 2>&1 &&
+        grep -q 'board 17 (Quick Settings: Wi-Fi submenu), dark: still live in dark-style-quick-settings: wifi-scan-spinner' "$T/signoff.out"; then
+        ok "signoff: a capture with live content left fails its board, named"
+    else
+        not_ok "signoff: a capture with live content left fails its board, named: $(tail -n 3 "$T/signoff.out")"
+    fi
+    rm -rf "$dir" && cp -r "$1" "$dir"
     : >"$dir/shots/lock-dark.log"
     if ! "$HERE/signoff.sh" --collect "$dir/g2" "$dir/shots" "$dir/out" >"$T/signoff.out" 2>&1 &&
         grep -q 'board 20 (Lock screen), dark: no banner record for lock-dark-open' "$T/signoff.out"; then
@@ -1351,7 +1366,7 @@ test_date_menu() {
     local variant change what passes failures open_gaps
     for variant in light dark; do
         read -r passes failures open_gaps <<<"$(assert_run date_menu "$variant")"
-        if ((failures == 0 && open_gaps == 0 && passes == 13)); then
+        if ((failures == 0 && open_gaps == 0 && passes == 16)); then
             ok "calendar ($variant): drawn from the tokens it passes all $passes assertions"
         else
             not_ok "calendar ($variant): drawn from the tokens it passes (passed/failed/gaps $passes/$failures/$open_gaps): $(grep -m3 '^FAIL' "$T/top-bar.out" | paste -sd'|' -)"
@@ -1382,6 +1397,12 @@ test_date_menu() {
 .surfaces.dateMenu.otherMonth.foreground = "#1d1d2166"|other months at $apex_fg_faint, 2.4:1 on the card
 .surfaces.dateMenu.today.background = "#3584e4ff"|today on the raw accent, 3.8:1 under white
 .surfaces.dateMenu.eventsTitle.foreground = "#1d1d21ff"|an events title at full strength
+.surfaces.dateMenu.weather.height = 66|upstream's padded card around a 40 px minimum
+.surfaces.dateMenu.weatherHeader.x = 12|upstream's 12 px card padding
+.surfaces.dateMenu.weather.radius = 18|a row at the calendar's 18 px radius
+.surfaces.dateMenu.weather.y -= 2|upstream's 6 px between the rows
+.surfaces.dateMenu.clocksHeader.font.weight = 700|upstream's bold heading
+.surfaces.dateMenu.weatherHeader.foreground = "#1d1d21ff"|upstream's full-strength header with no location
 CHANGES
 }
 
@@ -2270,6 +2291,11 @@ const upower = Gio.DBusProxy.new_for_bus_sync(Gio.BusType.SYSTEM, Gio.DBusProxyF
     'org.freedesktop.UPower', '/org/freedesktop/UPower/devices/DisplayDevice', 'org.freedesktop.UPower.Device', null);
 const switcheroo = Gio.DBusProxy.new_for_bus_sync(Gio.BusType.SYSTEM, Gio.DBusProxyFlags.NONE, null,
     'net.hadess.SwitcherooControl', '/net/hadess/SwitcherooControl', 'net.hadess.SwitcherooControl', null);
+// network.js's scan: request one, then wait for LastScan to move, its spinner turning meanwhile.
+const lastScan = device?.last_scan;
+let scanFinishes = false;
+device?.connect('notify::last-scan', () => (scanFinishes = device.last_scan !== lastScan));
+device?.request_scan_async(null, (d, result) => d.request_scan_finish(result));
 const bluetooth = new GnomeBluetooth.Client();
 const loop = new GLib.MainLoop(null, false);
 GLib.timeout_add(GLib.PRIORITY_DEFAULT, 1000, () => {
@@ -2281,7 +2307,7 @@ GLib.timeout_add(GLib.PRIORITY_DEFAULT, 1000, () => {
     }
     print(JSON.stringify({
         wifi: {id: primary?.get_id() ?? null, strength: ap?.get_strength() ?? null, listed,
-            full: nm.connectivity === NM.ConnectivityState.FULL, wireless: nm.wireless_enabled},
+            full: nm.connectivity === NM.ConnectivityState.FULL, wireless: nm.wireless_enabled, scanFinishes},
         battery: {present: upower.get_cached_property('IsPresent')?.unpack() ?? null,
             percentage: upower.get_cached_property('Percentage')?.unpack() ?? null},
         connectedBluetooth: connected,
@@ -2332,6 +2358,23 @@ test_part_ran() {
     expect_eq "parts: a hung case in the pr part fails once" "0/1" "$passes/$failures"
     expect_eq "parts: and the failure names the part, the case and its limit" 1 \
         "$(grep -c '^FAIL direct.sh pr: indicators had no report within 150 s; G2 stops at a hung case' "$T/assertions.out")"
+}
+
+test_no_nan_allocation() {
+    local run=$T/nan-run critical passes failures
+    critical="Clutter-CRITICAL **: clutter_actor_allocate: assertion '!isnan (real_allocation.x1) && !isnan (real_allocation.x2)' failed"
+    mkdir -p "$run"
+    echo 'APEXG2 {"probe": true}' >"$run/glass-load.log"
+    read -r passes failures <<<"$(assertion_counts no_nan_allocation glass-load "$run/glass-load.log")"
+    expect_eq "NaN allocations: a clean log passes" "1/0" "$passes/$failures"
+    printf '%s\n' "$critical" "$critical" >>"$run/glass-load.log"
+    read -r passes failures <<<"$(assertion_counts no_nan_allocation glass-load "$run/glass-load.log")"
+    expect_eq "NaN allocations: a case that survives two fails once" "0/1" "$passes/$failures"
+    expect_eq "NaN allocations: and the failure counts them" 1 "$(grep -c 'per log: glass-load.log:2$' "$T/assertions.out")"
+    echo 'APEXG2 {"probe": true}' >"$run/glass-load.log"
+    echo "$critical" >"$run/glass-load.late.log"
+    read -r passes failures <<<"$(assertion_counts no_nan_allocation glass-load "$run/glass-load.log")"
+    expect_eq "NaN allocations: one in the late first start fails too" "0/1" "$passes/$failures"
 }
 
 test_pr_assertions() {
@@ -2455,7 +2498,7 @@ test_fixtures() {
     expect_eq "fixtures: fixtures.py on a private bus passes the fixture assertions" "18/0" "$passes/$failures"
     write_fixture_reader
     expect_eq "fixtures: libnm, gnome-bluetooth, UPower's display device and switcheroo-control read them as the shell does" \
-        '{"wifi":{"id":"Apex-5G","strength":90,"listed":["Apex-5G","Apex-2.4G","Library Guest"],"full":true,"wireless":true},"battery":{"present":true,"percentage":87},"connectedBluetooth":["Keychron K3"],"hasDualGpu":true}' \
+        '{"wifi":{"id":"Apex-5G","strength":90,"listed":["Apex-5G","Apex-2.4G","Library Guest"],"full":true,"wireless":true,"scanFinishes":true},"battery":{"present":true,"percentage":87},"connectedBluetooth":["Keychron K3"],"hasDualGpu":true}' \
         "$(DBUS_SYSTEM_BUS_ADDRESS=$address gjs -m "$T/read-fixtures.js" 2>"$T/read-fixtures.err")"
     local -a pids
     mapfile -t pids < <(cat "$T/bus.pid" "$T"/fixtures/fixture-*.pid 2>/dev/null)
@@ -2728,6 +2771,7 @@ test_glass_stress
 test_spotlight_key
 test_one_gpu
 test_part_ran
+test_no_nan_allocation
 test_pr_assertions
 test_no_dock
 test_dark_style_off

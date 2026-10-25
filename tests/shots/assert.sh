@@ -144,6 +144,18 @@ no_js_error() {
     fi
 }
 
+# Clutter refuses a NaN box with a CRITICAL and leaves the actor unallocated: a case can survive
+# that, so the CRITICAL is the failure, in the case's log and the log of its late first start.
+no_nan_allocation() {
+    local label=$1 log=$2 found
+    found=$(grep -c "clutter_actor_allocate: assertion '!isnan" "$log" "${log%.log}.late.log" 2>/dev/null | grep -v ':0$' | sed 's|.*/||' | paste -sd' ' -)
+    if [[ -z $found ]]; then
+        pass "$label: no NaN allocation (Clutter-CRITICAL '!isnan') in the log"
+    else
+        fail "$label: NaN allocations, Clutter-CRITICAL '!isnan' per log: $found"
+    fi
+}
+
 no_late_start() {
     local label=$1 log=$2
     if grep -q 'APEXG2-LATE' "$log"; then
@@ -938,6 +950,15 @@ date_menu() {
         "$d" "(.events | (.background | colour_is(\$t.apex_glass_card)) and (.radius | px_is(\$t.apex_radius_calendar))
             and ($inset | (.[0] | px_is(\$t.apex_events_padding_top)) and (.[1] | px_is(\$t.apex_events_padding)) and (.[2] | px_is(\$t.apex_events_padding_bottom))))
             and (.eventsTitle | (.font.size | px_is(\$t.apex_font_events_title_size)) and .font.weight == (\$t.apex_font_heading_weight | tonumber) and (.foreground | colour_is(\$t.apex_fg_dim)))"
+    "${metric[@]}" 'Clocks and Weather are $apex_date_menu_button_height rows of $apex_glass_card ringed in $apex_glass_card_border, radius $apex_radius_date_menu_button, their text $apex_date_menu_button_padding in' \
+        "$d" "[[.clocks, .clocksHeader], [.weather, .weatherHeader]] | all(.[0] != null and .[1] != null and (.[1].x - .[0].x | px_is(\$t.apex_date_menu_button_padding))
+            and (.[0] | (.height | px_is(\$t.apex_date_menu_button_height)) and (.background | colour_is(\$t.apex_glass_card)) and (.borderColor | colour_is(\$t.apex_glass_card_border))
+            and (.border.top | px_is(\$t.apex_surface_border)) and (.radius | px_is(\$t.apex_radius_date_menu_button))))"
+    "${metric[@]}" 'Clocks sit $apex_date_menu_column_gap under the events card and Weather $apex_date_menu_button_gap under Clocks' \
+        "$d" '(.clocks.y - .events.y - .events.height | px_is($t.apex_date_menu_column_gap)) and (.weather.y - .clocks.y - .clocks.height | px_is($t.apex_date_menu_button_gap))'
+    "${metric[@]}" 'their headers are $apex_font_events_title_size $apex_font_label_weight in $apex_fg_dim, set up or not' \
+        "$d" "[.clocksHeader, .weatherHeader] | all(. != null and (.font.size | px_is(\$t.apex_font_events_title_size)) and .font.weight == (\$t.apex_font_label_weight | tonumber)
+            and (.foreground | colour_is(\$t.apex_fg_dim)))"
 }
 
 # shellcheck disable=SC2016 # jq programs and token names, not shell expansions
@@ -1718,6 +1739,7 @@ direct_cases() {
         fi
         no_js_error "$c" "$f"
         no_late_start "$c" "$f"
+        no_nan_allocation "$c" "$f"
         # fault-abort may abort before its report; its exit status says the shell ran.
         [[ $c == fault-abort ]] && continue
         expect_report "$c" "$f" '.mode == "user"' "the probe ran: the static import graph loaded"
@@ -1951,6 +1973,7 @@ patched_assertions() {
     for c in "${DIRECT_CASES[@]}"; do
         asserted "$c" || continue
         [[ $c == kernel-safe || $c == fault-abort ]] || backdrop_painted "$c" "$run/$c.log"
+        [[ -e $run/$c.log ]] && no_nan_allocation "$c" "$run/$c.log"
     done
     for c in default default-scale1 dark-style; do
         asserted "${c%:*}" || continue
