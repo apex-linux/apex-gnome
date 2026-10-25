@@ -123,6 +123,32 @@ active and none, nor an Apex D-Bus service, started (the ROADMAP's "no agent run
 the trip again with dconf already running. `direct.sh` and `guard.sh` refuse to run
 outside run.sh's container (`/run/.containerenv`).
 
+## The backdrop
+
+Every case runs over a pinned backdrop, never whatever the session would load: a shell
+without one draws GNOME's solid fallback, and contrast measured over glass would pass or
+fail with the wallpaper. `direct.sh` sets `org.gnome.desktop.background` itself, before the
+case's own settings: apex-desktop's Facets (`picture-uri` and
+`picture-uri-dark` at `/usr/share/backgrounds/apex/apex-facets-{light,dark}.png`, `zoom`),
+so a case shows the light or dark one with its style and looks like the product. An Apex
+image carries them, and `run.sh` stops before G2 when its image has none; `patched.sh` and
+`smoke.sh` first run `backdrops.sh`, which renders the apex-desktop of `tests/lib/pins.sh`
+(or `APEX_DESKTOP_SRC`) there as apex-desktop's spec does, unless they are already in place.
+`direct.sh` refuses to start without them.
+
+The setting is not trusted alone. After its first report the probe (`backdrop.js`) compares
+12 patches of 24 px across the middle of the empty desktop with the expected image, scaled
+to the screen as `zoom` draws it, and waits up to 10 s for the shell's asynchronous load:
+each patch's mean within 12/255. `backdrop_painted` fails a case whose backdrop never
+painted, naming the colour the desktop showed instead, or that painted another backdrop
+than its style's.
+
+The contrast cases run once more over a stress backdrop, GNOME's solid fallback `#013b88`,
+which the overview's scrim saturates by 1.5: `default-solid`, `dark-style-solid`,
+`high-contrast-solid` and `large-text-solid` (`G2_BACKDROP=solid`), with the same
+assertions as their Facets twins, so a contrast regression cannot hide behind a friendly
+wallpaper.
+
 ## Captures
 
 The capture cases (`default`, `default-scale1`, `dark-style`, `stock-light`,
@@ -449,7 +475,8 @@ default: `glass-unlock.png` against `fedora-glass-unlock.png` differs by 0 pixel
 
 ## Accessibility
 
-`G2_A11Y=1` (the `default`, `dark-style`, `high-contrast` and `large-text` cases) runs
+`G2_A11Y=1` (the `default`, `dark-style`, `high-contrast` and `large-text` cases, and their
+`-solid` twins over the stress backdrop) runs
 `a11y.js`, which opens each Apex surface in turn: the bar, the dock, a popup menu, the OSD,
 a banner, Quick Settings and its Wi-Fi menu, the date menu with two notifications, the
 window switcher, a polkit-shaped dialog, the shell's own power-off dialog, Spotlight with
@@ -668,6 +695,7 @@ it is at least 4.8:1), and what the goldens judge: the Apex Symbolic glyphs (S1b
 | `signoff.sh` | a throwaway Fedora 45 container; `.github/workflows/signoff.yml` | the owner's sign-off captures (above) |
 | `goldens.sh`, `goldens.lock`, `golden-masks.json` | the lead's host; `signoff.yml` | the approved goldens: the import, the pin, the check's masks (above) |
 | `a11y.js` | the shell | the accessibility cases: contrast against what is drawn, and the Large Text layout |
+| `backdrop.js`, `backdrops.sh` | the shell; a throwaway container | whether the pinned backdrop painted, and the Facets it pins rendered where an image has them |
 | `indicators.js`, `sni-items.js` | the shell; gjs | the app-indicator part of `default`, `default-scale1` and `dark-style`, and the StatusNotifierItems it starts |
 | `idle.js` | the `idle` case's shell | the settled desktop, its paints and relayouts over 10 s, and the counter's control |
 | `glass-load.js`, `load-window.js` | the `glass-load` and `glass-stress` cases' shells; gjs, GTK 4 | ADR 0014's scenarios as work counts, and the client that stands in for a video; `tests/laptop` runs both on the laptop, the client with `measure=` |
