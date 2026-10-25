@@ -45,14 +45,23 @@ readonly A11Y_TEXT_RATIO=4.5
 readonly A11Y_ICON_RATIO=3
 readonly A11Y_ACCENTS=(blue teal green yellow orange red pink purple slate)
 readonly A11Y_SURFACES=(bar dock popupMenu osd banner quickSettings "${A11Y_ACCENTS[@]/#/quickSettingsAccents.}" wifiMenu dateMenu
-    switcher dialog endSession spotlight.popup spotlight.toast overview appGrid)
+    "${A11Y_ACCENTS[@]/#/dateMenuAccents.}" switcher dialog endSession spotlight.popup spotlight.toast overview appGrid)
 # The failures still open: upstream's high-contrast sheet, which safe mode keeps as Fedora's.
 readonly A11Y_HC_TOGGLE="upstream HC sheet: Quick Settings' checked toggle, white on its accent (3.15:1), and its menu arrow (2.31:1)"
 declare -A A11Y_GAPS=([high-contrast:quickSettings]=$A11Y_HC_TOGGLE)
 for a11y_accent in "${A11Y_ACCENTS[@]}"; do
     A11Y_GAPS[high-contrast:quickSettingsAccents.$a11y_accent]=$A11Y_HC_TOGGLE
 done
+readonly A11Y_HC_TODAY="upstream HC sheet: the calendar's today, white on its accent (2.59:1 to 3.79:1)"
+A11Y_GAPS[high-contrast:dateMenu]=$A11Y_HC_TODAY
+for a11y_accent in blue teal green yellow orange red pink slate; do
+    A11Y_GAPS[high-contrast:dateMenuAccents.$a11y_accent]=$A11Y_HC_TODAY
+done
 unset a11y_accent
+# A Clutter.Text outside an St.Label, measured since board 34's day numbers: a button's own label.
+readonly A11Y_DEFAULT_BUTTON="the modal dialog's default button, white on the raw accent (3.77:1), measured once bare text was"
+A11Y_GAPS[default:dialog]=$A11Y_DEFAULT_BUTTON
+A11Y_GAPS[dark-style:dialog]=$A11Y_DEFAULT_BUTTON
 readonly A11Y_GAPS
 # overviewControls.js: spacing is 2 % of the work area, the stock .search-entry keeps 6 px below it.
 readonly OVERVIEW_SPACING_RATIO=0.02
@@ -906,9 +915,13 @@ date_menu() {
         "$d" "((.day.width * 7 + 7 * (\$t.apex_calendar_day_gap | px) + 2 * (\$t.apex_calendar_padding | px)) - (\$t.apex_date_menu_column_width | px) | fabs < 7)
             and (.day | (.height | px_is(\$t.apex_calendar_day_height)) and .radius >= (\$t.apex_calendar_day_height | px) / 2 and (.font.size | px_is(\$t.apex_font_calendar_day_size))
             and (.foreground | colour_is(\$t.apex_fg)) and (.background | rgba | .[3] == 0)) and (.weekend.foreground | colour_is(\$t.apex_fg))"
-    "${metric[@]}" 'days of other months are $apex_fg_faint; today is the accent at $apex_font_heading_weight' \
-        "{d: $d, accent: .topBar.accent}" '.accent as $a | (.d.otherMonth.foreground | colour_is($t.apex_fg_faint))
-            and (.d.today | (.background | colour_is($a)) and (.foreground | colour_is("#ffffff")) and .font.weight == ($t.apex_font_heading_weight | tonumber))'
+    "${metric[@]}" 'days of other months are $apex_calendar_other_month; today is the accent shaded $apex_quick_toggle_checked_shade with black, white at $apex_font_heading_weight' \
+        "{d: $d, accent: .topBar.accent}" '(.accent | rgba) as $a | (.d.today.background | rgba) as $f | ($t.apex_quick_toggle_checked_shade | rtrimstr("%") | tonumber / 100) as $k
+            | (.d.otherMonth.foreground | colour_is($t.apex_calendar_other_month)) and ([range(3)] | all(($f[.] - $a[.] * (1 - $k)) | fabs <= 1))
+            and (.d.today | (.foreground | colour_is("#ffffff")) and .font.weight == ($t.apex_font_heading_weight | tonumber))'
+    "${metric[@]}" 'every day number is drawn in its day'"'"'s colour: $apex_fg, weekends too, $apex_calendar_other_month in other months, white on today' \
+        "$d" '(.day.ink | colour_is($t.apex_fg)) and (.weekend.ink | colour_is($t.apex_fg)) and (.otherMonth.ink | colour_is($t.apex_calendar_other_month))
+            and (.today.ink | colour_is("#ffffff"))'
     "${metric[@]}" 'the events card is inset $apex_events_padding_top $apex_events_padding $apex_events_padding_bottom, its title $apex_font_events_title_size $apex_font_heading_weight in $apex_fg_dim' \
         "$d" "(.events | (.background | colour_is(\$t.apex_glass_card)) and (.radius | px_is(\$t.apex_radius_calendar))
             and ($inset | (.[0] | px_is(\$t.apex_events_padding_top)) and (.[1] | px_is(\$t.apex_events_padding)) and (.[2] | px_is(\$t.apex_events_padding_bottom))))
@@ -1322,6 +1335,9 @@ dark_style_off() {
     expect "$label" "$toggled" '.colorSchemeSetting == "default"' "the toggle writes color-scheme 'default'"
     expect "$label" "$toggled" ".stylesheet == \"$APEX_LIGHT_SHEET\" and .sheet.markers == [\"light\"] and .variant == \"light\" and (.markerColor | colour_is(\"#16161a\"))" \
         "the running shell turns light: the Apex light sheet, the light variant, the light bar token (#16161a)"
+    # shellcheck disable=SC2016 # jq programs and token names, not shell expansions
+    top_bar_metric "$label" "$toggled" "$(tokens_for light)" 'the calendar built in the dark restyles: its day numbers draw in the light $apex_fg, $apex_calendar_other_month in other months, white on today' \
+        '.calendar' '(.day.ink | colour_is($t.apex_fg)) and (.otherMonth.ink | colour_is($t.apex_calendar_other_month)) and (.today.ink | colour_is("#ffffff"))'
 }
 
 same_stock_sheet() {

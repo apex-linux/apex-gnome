@@ -206,12 +206,13 @@ $_calendar_day_width: ($apex_date_menu_column_width - 2 * $apex_calendar_padding
     font-feature-settings: "tnum";
 
     &.calendar-weekend { color: $apex_fg; }
-    &.calendar-other-month, &.calendar-other-month.calendar-weekend { color: $apex_fg_faint; }
+    &.calendar-other-month, &.calendar-other-month.calendar-weekend { color: $apex_calendar_other_month; }
     &:hover, &:focus { background-color: $apex_button_hover; }
 
+    // A checked Quick Settings toggle's shade: white on every raw accent is not 4.5:1.
     &.calendar-today, &.calendar-today:hover, &.calendar-today:focus {
       color: -st-accent-fg-color !important;
-      background-color: $apex_accent;
+      background-color: st-mix(black, $apex_accent, $apex_quick_toggle_checked_shade);
       font-weight: $apex_font_heading_weight;
     }
 

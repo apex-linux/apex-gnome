@@ -116,6 +116,13 @@ export function newCalendarMessageList() {
     return {footer, clear, placeholder};
 }
 
+// St.Button's label, a Clutter.Text, which St colours only while it is the button's own child.
+class ButtonText {
+    constructor(text) {
+        this.text = text;
+    }
+}
+
 // calendar.js's Calendar: the month header between its chevrons, and a week of day buttons.
 export function newCalendar() {
     const calendar = new St.Widget({name: 'calendar'});
@@ -123,11 +130,11 @@ export function newCalendar() {
     const label = new St.Label({name: 'month', text: 'September', x_align: 2});
     [new St.Button({name: 'back'}), label, new St.Button({name: 'forward'})].forEach(c => topBox.add_child(c));
     Hooks.run('calendar-header', calendar, topBox, label);
-    const days = [27, 28, 29].map(day => {
-        const button = new St.Button({style_class: `calendar-day${day === 28 ? ' calendar-day-with-events' : ''}`,
-            child: new St.Label({text: `${day}`})});
+    const texts = [27, 28, 29].map(day => new ButtonText(`${day}`));
+    const days = texts.map((text, i) => {
+        const button = new St.Button({style_class: `calendar-day${i === 1 ? ' calendar-day-with-events' : ''}`, child: text});
         Hooks.run('calendar-day', button);
         return button;
     });
-    return {calendar, topBox, days};
+    return {calendar, topBox, days, texts};
 }
