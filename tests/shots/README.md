@@ -542,10 +542,88 @@ probe opens a folder. `tests/shell/shoot.sh` shoots the greeter, the lock screen
 dialog and the power-off dialog with an update staged. Each board's scene is copied to
 `board-NN-SLUG-light.png` and `-dark.png`, and `signoff.json` records its title, its scene
 and fixture state, the apex-gnome and apex-desktop pins, the layer's features enabled, the
-scale and the monitor. These are review captures: nothing is compared, and only a scene
-without a capture, or a probe whose three windows never all reached the overview, fails the
-run, named. The `signoff` workflow (`workflow_dispatch` only)
-uploads the set as `signoff-SHA`.
+scale and the monitor. `signoff.sh` itself compares nothing: only a scene without a capture,
+or a probe whose three windows never all reached the overview, fails the run, named. The
+`signoff` workflow uploads the set as `signoff-SHA`, then checks it against the approved
+goldens (below).
+
+## Approved goldens
+
+The boards the owner approved on the sign-off page are G2's goldens (ADR 0014, the ROADMAP).
+They live on the orphan branch `goldens`, so a re-approval never adds images to main's
+history. `tests/shots/goldens.lock` pins the commit G2 compares with. That commit holds:
+
+- `boards/board-NN-light.png` and `-dark.png`, at capture resolution;
+- `manifest.json`, with, per board: its title, slug, scene ids and fixture state, the shots
+  hash, `signoff.json`'s pins, scale and monitor, and the approval record (`status`,
+  `approvedAt`, the decision's `shots`, and its `note`, if any).
+
+The shots hash is the page's: sha256 over the light PNG's bytes, then the dark PNG's, first
+12 hex digits.
+
+### Importing after a sign-off
+
+CI never talks to the sign-off page. After the owner decides, the lead:
+
+1. exports the page's decisions as `DECISIONS.json`:
+   `{"boards": {"36": {"status": "approved", "shots": "…", "approvedAt": "…", "note": "…"}}}`;
+2. downloads the run's `signoff-SHA` artifact;
+3. runs `tests/shots/goldens.sh import SIGNOFF_DIR DECISIONS.json`;
+4. pushes the new commit (`git -C _build/goldens push origin HEAD:refs/heads/goldens`), then
+   opens a pull request with the `goldens.lock` it moved.
+
+The import takes only the boards whose decision is `approved` with a `shots` hash equal to
+their capture's. It refuses the whole import, naming each board and why, when an approval
+names other captures (a stale approval), a field is unknown or of the wrong type, or no board
+is approved. A board that isn't approved keeps the golden it had, if any. The new commit sits
+on the pinned one, or is the branch's first.
+
+### The check
+
+`tests/shots/goldens.sh check SIGNOFF_DIR` (or `signoff.sh --goldens`) compares each board
+that has a golden with its capture, light and dark, through `compare.js`. The comparison is
+pixel for pixel outside the masks, as G2's other captures are.
+
+- A board without a golden is reported `AWAIT`: awaiting sign-off, not failed.
+- A board that differs fails, naming the board, the variant, the number of pixels and their
+  box, with a difference image in `SIGNOFF_DIR/goldens-diff/`.
+- A golden for a board the run no longer has fails, and so does a golden whose files don't
+  hash to its manifest.
+
+It runs in `signoff.yml`, after the capture:
+
+- on a push to main that changes the shell, its recipe, `tests/shots`, `tests/shell` or
+  `tests/lib` (apex-desktop's pin);
+- daily;
+- on dispatch;
+- on a pull request labelled `goldens`, so a visual change can see which boards it moves
+  before it lands.
+
+The goldens come from `signoff.sh`'s container, with its RPM and desktop-entry stand-ins
+and `shoot.sh`'s mocks. The builder VM's image draws the launcher and the dock from real
+Flatpaks, so the check runs where the goldens were made, not in G2's VM run.
+
+`golden-masks.json` lists the masks, per board, in capture pixels: `{"boards": {"NN":
+[{"name", "x", "y", "width", "height", "why"}]}}`. A mask may cover at most 5 % of a
+capture. G2's wall clock is fixed, so the only live region is board 17's: the Wi-Fi menu's
+scan spinner, which turns in real time (36 × 38 px). Two sign-off runs on the same RPMs agree
+on every other board, byte for byte. A race in a scene is fixed in the scene, never masked:
+
+- the indicators case drops the startup notifications, so the search hint's banner never
+  covers board 39;
+- boards 15 and 35 focus Calendar, Text Editor and Terminal in that order, whichever maps
+  last;
+- they wait until no window has repainted for 1.5 s, since Text Editor retitles its new
+  document a draft after it maps;
+- they re-send the pointer's move until it reads back at the right edge: a new virtual device
+  can drop one axis of its first motion and leave the pointer on Quick Settings' pill.
+
+### A visual change
+
+A failing check on main means the shell's look changed. Either the change reverts, or it
+goes to the owner: the next `signoff` dispatch captures the changed boards with new hashes,
+so the page reopens exactly those boards, keyed to the hash, and the owner's re-approval is
+imported as above. Until then the check stays red on those boards.
 
 ## Known gaps
 
@@ -587,7 +665,8 @@ it is at least 4.8:1), and what the goldens judge: the Apex Symbolic glyphs (S1b
 | `assert.sh`, `stable.sh`, `lib.sh` | the builder VM | the assertions |
 | `png.js`, `compare.js` | gjs | PNG with GLib's zlib only, and the masked comparison |
 | `glass.js`, `blur-ref.js` | the shell; gjs | the glass cases, and their CPU reference |
-| `signoff.sh` | a throwaway Fedora 45 container; `.github/workflows/signoff.yml` on demand | the owner's sign-off captures (below) |
+| `signoff.sh` | a throwaway Fedora 45 container; `.github/workflows/signoff.yml` | the owner's sign-off captures (above) |
+| `goldens.sh`, `goldens.lock`, `golden-masks.json` | the lead's host; `signoff.yml` | the approved goldens: the import, the pin, the check's masks (above) |
 | `a11y.js` | the shell | the accessibility cases: contrast against what is drawn, and the Large Text layout |
 | `indicators.js`, `sni-items.js` | the shell; gjs | the app-indicator part of `default`, `default-scale1` and `dark-style`, and the StatusNotifierItems it starts |
 | `idle.js` | the `idle` case's shell | the settled desktop, its paints and relayouts over 10 s, and the counter's control |
@@ -628,5 +707,5 @@ action. The real `pkexec` path is G4's.
 ## Not yet
 
 - A bar-text contrast check over the fixture wallpapers.
-- The metrics of the other surfaces (launcher, overview, notifications, windows, keys),
-  and approved goldens.
+- The metrics of the other surfaces (launcher, overview, notifications, windows, keys).
+- The first approved goldens: the first import follows the next sign-off.

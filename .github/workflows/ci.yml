@@ -59,11 +59,11 @@ jobs:
     env:
       APEX_SHOTS_TESTS_NO_SKIP: "1"
     steps:
-      - name: gjs, GdkPixbuf, jq, the fixtures' dbus-daemon, python3-dbusmock and client libraries, and frame.c's glib2-devel
+      - name: gjs, GdkPixbuf, jq, the fixtures' dbus-daemon, python3-dbusmock and client libraries, frame.c's glib2-devel, and goldens.sh's git
         run: >-
           dnf5 -y --setopt=install_weak_deps=False --repo=fedora --repo=updates install
           gjs gdk-pixbuf2 jq bash coreutils gawk grep sed
-          dbus-daemon python3-dbusmock NetworkManager-libnm gnome-bluetooth-libs gcc glib2-devel
+          dbus-daemon python3-dbusmock NetworkManager-libnm gnome-bluetooth-libs gcc glib2-devel git-core
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
