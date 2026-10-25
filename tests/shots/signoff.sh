@@ -36,13 +36,15 @@ REPO=$(cd -- "$HERE/../.." && pwd)
 readonly APPS=(nautilus epiphany gnome-calendar gnome-music gnome-text-editor ptyxis gnome-control-center
     adwaita-sans-fonts jetbrains-mono-fonts-all)
 # The image's other apps (apex-image's image/packages/gnome.txt) fill the launcher: GNOME keeps the dock's favourites out of it.
-readonly GRID_APPS=(gnome-tour gnome-extensions-app loupe papers showtime decibels snapshot gnome-system-monitor baobab
+readonly GRID_APPS=(gnome-extensions-app loupe papers showtime decibels snapshot gnome-system-monitor baobab
     gnome-calculator gnome-characters gnome-clocks gnome-contacts gnome-weather gnome-font-viewer gnome-logs yelp
-    gnome-disk-utility gnome-firmware firefox gnome-maps)
+    gnome-disk-utility gnome-firmware gnome-maps)
+# Apps the image lacks that Fedora's packages bring in, kept out of the launcher.
+readonly NOT_IN_IMAGE=(inkscape gnome-tour firefox)
 # ARCHITECTURE's core apps the image's gnome.txt still lacks, installed here as the image will have them.
 readonly IMAGE_PENDING=()
 # The image's Flatpaks (apex-image's apex.preinstall), each with the RPM that stands in for it, if any.
-readonly FLATPAK_STAND_INS='[{"flatpak": "org.mozilla.firefox", "rpm": "firefox"}, {"flatpak": "org.gnome.Music", "rpm": "gnome-music"},
+readonly FLATPAK_STAND_INS='[{"flatpak": "org.gnome.Music", "rpm": "gnome-music"},
     {"flatpak": "io.github.kolunmi.Bazaar", "rpm": null, "standIn": "desktop entry"}]'
 readonly SCALE=2
 readonly MONITOR=2880x1800
@@ -61,12 +63,19 @@ readonly BOARDS="12|greeter|GDM greeter|$SHOOT|greeter-light-list|greeter-dark-l
 22|tiling|Edge tiling|$G2|default-tile-preview|dark-style-tile-preview|the tile preview of the left half
 34|date-menu|Calendar and notifications|$G2|default-datemenu|dark-style-datemenu|Monday 28 September 2026, two low-urgency notifications
 35|overview|Overview|$G2|default-signoff-overview|dark-style-signoff-overview|the overview with Text Editor, Calendar and Terminal open, two workspaces
-36|launcher|Launcher|$G2|default-launcher|dark-style-launcher|the app grid's first page, no folder open: the image's apps outside the dock, Firefox's RPM standing in for its Flatpak
+36|launcher|Launcher|$G2|default-launcher|dark-style-launcher|the app grid's first page, no folder open: the image's apps outside the dock
 37|desktop|Desktop: dock and top bar|$G2|default-desktop|dark-style-desktop|the desktop with the dock and the bar, no window open
 38|spotlight|Spotlight|$G2|default-spotlight-search|dark-style-spotlight-search|Spotlight with \"disk\" typed
 39|indicators|Top bar: indicators|$G2|indicators-indicators-everything|indicators-dark-indicators-everything|everything: two input sources and the StatusNotifierItems sni-items.js starts"
 
 die() { echo "signoff.sh: $*" >&2; exit 1; }
+
+not_in_image() {
+    local app
+    for app in "${NOT_IN_IMAGE[@]}"; do
+        ! rpm -q "$app" >/dev/null || die "$app is installed, and the image has no $app for the launcher to show"
+    done
+}
 
 png() {
     [[ -s $1 && $(head -c 8 "$1" | od -An -tx1 | tr -d ' \n') == 89504e470d0a1a0a ]]
@@ -152,7 +161,11 @@ make -C "$desktop" rpm BUILD_DIR="$work/apex-desktop-build" >"$work/apex-desktop
 mapfile -t apps < <(rpm -qa --qf '%{NAME}\n' | sort | comm -13 "$work/before-builddep.txt" - |
     while read -r p; do rpm -ql "$p" | grep '^/usr/share/applications/.*\.desktop$' >/dev/null && echo "$p"; done)
 ((${#apps[@]} == 0)) || dnf5 -y -q remove "${apps[@]}" || die "cannot remove apex-desktop's build dependencies ${apps[*]}"
-! rpm -q inkscape >/dev/null || die "inkscape is still installed, and would show in the launcher"
+not_in_image
+# gnome-shell recommends Tour, and patched.sh installs the shell with its weak dependencies.
+mkdir -p /etc/dnf/libdnf5.conf.d || die "cannot create /etc/dnf/libdnf5.conf.d"
+printf '[main]\nexcludepkgs=%s\n' "$(IFS=,; echo "${NOT_IN_IMAGE[*]}")" >/etc/dnf/libdnf5.conf.d/90-signoff.conf ||
+    die "cannot keep dnf5 from installing ${NOT_IN_IMAGE[*]}"
 dnf5 -y -q --setopt=install_weak_deps=False --repo=fedora --repo=updates install "$work"/apex-desktop-build/rpm/RPMS/noarch/apex-desktop-*.rpm ||
     die "cannot install apex-desktop"
 # Bazaar, a dock favourite, is a Flatpak Fedora has no RPM of: an entry with its name and the Apex theme's icon stands in.
@@ -168,4 +181,5 @@ pkill -x dbus-daemon
 rm -f /run/dbus/pid /run/dbus/system_bus_socket
 # Its own assertions are G2's business; a scene that did not open shows below.
 bash "$REPO/$SHOOT" "$rpms" || echo "signoff.sh: shoot.sh exited $?; the boards it shoots are checked below"
+not_in_image
 collect "$work/g2/run" "$REPO/_build/gnome-shell/shots" "$out"

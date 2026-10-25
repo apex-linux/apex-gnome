@@ -34,6 +34,7 @@ esac
 [[ -e /run/.containerenv || -e /.dockerenv ]] || { echo "direct.sh: only inside run.sh's or smoke.sh's container" >&2; exit 2; }
 
 readonly SHELL_TIMEOUT=150
+readonly A11Y_SCENES_TIMEOUT=240
 readonly GLASS_STRESS_SECONDS=${G2_GLASS_STRESS_SECONDS:-60}
 readonly EXIT_HUNG=3
 readonly CLOCK_LIB=/run/g2-clock.so
@@ -160,9 +161,10 @@ case $part in
         exit 0 ;;
 esac
 
-run_and_record_case default "$CAPTURE_SETTINGS" G2_SCENES=1 G2_A11Y=1
+# The scenes and the a11y pass, its accent loops included, outlast the usual limit.
+run_and_record_case default "$CAPTURE_SETTINGS" G2_SCENES=1 G2_A11Y=1 G2_TIMEOUT=$A11Y_SCENES_TIMEOUT
 run_and_record_case default-scale1 "$CAPTURE_SETTINGS" G2_SCENES=1 G2_SCALE=1 G2_MONITOR=1440x900
-run_and_record_case dark-style "$CAPTURE_SETTINGS;org.gnome.desktop.interface color-scheme prefer-dark" G2_SCENES=1 G2_A11Y=1 G2_TURN_DARK_OFF=1
+run_and_record_case dark-style "$CAPTURE_SETTINGS;org.gnome.desktop.interface color-scheme prefer-dark" G2_SCENES=1 G2_A11Y=1 G2_TURN_DARK_OFF=1 G2_TIMEOUT=$A11Y_SCENES_TIMEOUT
 run_and_record_case high-contrast "$CAPTURE_SETTINGS;org.gnome.desktop.a11y.interface high-contrast true" G2_A11Y=1
 run_and_record_case large-text "$CAPTURE_SETTINGS;org.gnome.desktop.interface text-scaling-factor 1.25" G2_A11Y=1
 # The headless pointer starts at 0,0, in the hot corner, which its first motion would trip.

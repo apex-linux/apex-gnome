@@ -329,6 +329,21 @@ export async function a11yReport(h) {
     }
     out.switcher = await withOpen(switcher, list => list.destroy(), list => report(list));
     out.dialog = await withOpen(() => h.openModalDialog(), d => d.close(), d => report(d.root));
+    // A dialog's default button takes its fill from the accent; the screenshot UI is measured once.
+    const screenshot = () => withOpen(async () => {
+        await Main.screenshotUI.open();
+        global.stage.set_key_focus(null);
+    }, () => Main.screenshotUI.close(true), () => report(Main.screenshotUI._panel));
+    out.screenshot = await screenshot();
+    if (iface.settings_schema.has_key('accent-color')) {
+        out.dialogAccents = {};
+        for (const accent of ACCENTS) {
+            iface.set_string('accent-color', accent);
+            // eslint-disable-next-line no-await-in-loop
+            out.dialogAccents[accent] = await withOpen(() => h.openModalDialog(), d => d.close(), d => report(d.root));
+        }
+        iface.reset('accent-color');
+    }
     out.endSession = await withOpen(() => h.openEndSessionDialog(), d => d?.cancel(), d => report(d?.dialogLayout._dialog));
     out.spotlight = await h.withSpotlight(async (popup, toast) => {
         popup.panel.get_children()[0].get_children()[1].set_text('disk');
