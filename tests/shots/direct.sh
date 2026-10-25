@@ -13,7 +13,10 @@ HOME and XDG_RUNTIME_DIR, a 2880x1800 virtual monitor at scale 2 (default-scale1
 1440x900 at scale 1, as the desktop VM runs) and probe.js as its automation script;
 /out/CASE.log gets its output, /out/results-PART.txt its exit status. Every shell sees
 fixtures.py's python-dbusmock services on the system bus (/out/fixtures-PART.txt) and a
-wall clock that clock.c holds at G2_CLOCK. A case that times out stops the part (exit 3).
+wall clock that clock.c holds at G2_CLOCK, and over a pinned backdrop: apex-desktop's Facets,
+light or dark with the case's style (backdrops.sh puts them where an Apex image has them),
+or the solid #013b88 stress backdrop of the *-solid contrast cases. A case that times out
+stops the part (exit 3).
 G2_SURFACE_SCENES=1 in direct.sh's environment also captures the shell surfaces' scenes.
 The glass cases read frames through frame.c, built with glib2-devel's headers and
 gi-compile-repository.
@@ -49,9 +52,17 @@ readonly TWO_SOURCES="org.gnome.desktop.input-sources sources [('xkb', 'us'), ('
 readonly DARK='org.gnome.desktop.interface color-scheme prefer-dark'
 readonly CAPTURE_SETTINGS='org.gnome.desktop.interface enable-animations false;org.gnome.desktop.interface cursor-blink false;org.gnome.mutter dynamic-workspaces false;org.gnome.desktop.wm.preferences num-workspaces 2;org.gnome.desktop.interface clock-format 24h;org.gnome.desktop.interface show-battery-percentage true'
 
+readonly FACETS_DIR=/usr/share/backgrounds/apex
+# GNOME's own fallback colour, saturated under the overview's scrim: the contrast cases' worst case.
+readonly SOLID_BACKDROP='#013b88'
+
 # The motion case needs animations, which the captures turn off.
 readonly MOTION_SETTINGS=${CAPTURE_SETTINGS/enable-animations false/enable-animations true}
 
+for variant in light dark; do
+    [[ -s $FACETS_DIR/apex-facets-$variant.png ]] ||
+        { echo "direct.sh: no Facets backdrop at $FACETS_DIR/apex-facets-$variant.png (tests/shots/backdrops.sh puts it there)" >&2; exit 1; }
+done
 cat /proc/cmdline >"/out/cmdline-$part.txt"
 # gnome-shell's loginManager.js takes its dummy manager only when /run/systemd/seats is
 # missing, and timeLimitsManager.js needs a system bus.
@@ -96,11 +107,23 @@ run_case() {
         DBUS_SYSTEM_BUS_ADDRESS=unix:path=/run/dbus/system_bus_socket \
         G2_CASE="$name" G2_CAPTURES=/out/captures G2_SETTINGS="$gsettings_triples" \
         G2_SCALE=2 G2_MONITOR=2880x1800 TZ=UTC G2_CLOCK_LIB="$CLOCK_LIB" G2_CLOCK_EPOCH="$G2_CLOCK_EPOCH" \
-        G2_SURFACE_SCENES="${G2_SURFACE_SCENES:-0}" G2_WAYLAND_DISPLAY=apex-g2 "$@" \
+        G2_SURFACE_SCENES="${G2_SURFACE_SCENES:-0}" G2_WAYLAND_DISPLAY=apex-g2 G2_FACETS_DIR="$FACETS_DIR" \
+        G2_BACKDROP=facets G2_SOLID_BACKDROP="$SOLID_BACKDROP" "$@" \
         timeout "$SHELL_TIMEOUT" dbus-run-session -- bash -c '
             set -u
             gsettings set org.gnome.desktop.interface scaling-factor "$G2_SCALE"
             gsettings set org.gnome.shell welcome-dialog-last-shown-version "\"999\""
+            if [ "$G2_BACKDROP" = solid ]; then
+                gsettings set org.gnome.desktop.background picture-uri "\"\""
+                gsettings set org.gnome.desktop.background picture-uri-dark "\"\""
+                gsettings set org.gnome.desktop.background picture-options none
+                gsettings set org.gnome.desktop.background color-shading-type solid
+                gsettings set org.gnome.desktop.background primary-color "\"$G2_SOLID_BACKDROP\""
+            else
+                gsettings set org.gnome.desktop.background picture-uri "\"file://$G2_FACETS_DIR/apex-facets-light.png\""
+                gsettings set org.gnome.desktop.background picture-uri-dark "\"file://$G2_FACETS_DIR/apex-facets-dark.png\""
+                gsettings set org.gnome.desktop.background picture-options zoom
+            fi
             IFS=";" read -ra triples <<<"$G2_SETTINGS"
             for t in "${triples[@]}"; do
                 [ -n "$t" ] || continue
@@ -109,7 +132,8 @@ run_case() {
             done
             echo "G2-SETTINGS scaling-factor=$(gsettings get org.gnome.desktop.interface scaling-factor)" \
                 "color-scheme=$(gsettings get org.gnome.desktop.interface color-scheme)" \
-                "layer-enabled=$(gsettings get io.github.apex_linux.Apex.Desktop layer-enabled)"
+                "layer-enabled=$(gsettings get io.github.apex_linux.Apex.Desktop layer-enabled)" \
+                "backdrop=$G2_BACKDROP picture-uri=$(gsettings get org.gnome.desktop.background picture-uri)"
             # Only reads of the wall clock stand still: timers and frames keep the real clocks.
             exec env LD_PRELOAD="$G2_CLOCK_LIB" \
                 gnome-shell --headless --virtual-monitor "$G2_MONITOR" \
@@ -161,6 +185,11 @@ run_and_record_case default-scale1 "$CAPTURE_SETTINGS" G2_SCENES=1 G2_SCALE=1 G2
 run_and_record_case dark-style "$CAPTURE_SETTINGS;org.gnome.desktop.interface color-scheme prefer-dark" G2_SCENES=1 G2_A11Y=1 G2_TURN_DARK_OFF=1
 run_and_record_case high-contrast "$CAPTURE_SETTINGS;org.gnome.desktop.a11y.interface high-contrast true" G2_A11Y=1
 run_and_record_case large-text "$CAPTURE_SETTINGS;org.gnome.desktop.interface text-scaling-factor 1.25" G2_A11Y=1
+# The contrast cases again over the stress backdrop, so a friendly wallpaper hides no regression.
+run_and_record_case default-solid "$CAPTURE_SETTINGS" G2_A11Y=1 G2_BACKDROP=solid
+run_and_record_case dark-style-solid "$CAPTURE_SETTINGS;org.gnome.desktop.interface color-scheme prefer-dark" G2_A11Y=1 G2_BACKDROP=solid
+run_and_record_case high-contrast-solid "$CAPTURE_SETTINGS;org.gnome.desktop.a11y.interface high-contrast true" G2_A11Y=1 G2_BACKDROP=solid
+run_and_record_case large-text-solid "$CAPTURE_SETTINGS;org.gnome.desktop.interface text-scaling-factor 1.25" G2_A11Y=1 G2_BACKDROP=solid
 # The headless pointer starts at 0,0, in the hot corner, which its first motion would trip.
 run_and_record_case dock-intellihide "$CAPTURE_SETTINGS;$NO_HOT_CORNER" G2_DOCK=1
 run_and_record_case dock-intellihide-dark "$CAPTURE_SETTINGS;$NO_HOT_CORNER;org.gnome.desktop.interface color-scheme prefer-dark" G2_DOCK=1

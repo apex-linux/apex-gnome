@@ -2655,6 +2655,13 @@ export async function run() {
 async function runProbe() {
     await Scripting.sleep(REPORT_AFTER_MS);
     console.log(`APEXG2 ${JSON.stringify(await report())}`);
+    let backdrop;
+    try {
+        backdrop = await (await import('./backdrop.js')).backdropReport({settle});
+    } catch (e) {
+        backdrop = {error: `${e.message}\n${e.stack}`};
+    }
+    console.log(`APEXG2-BACKDROP ${JSON.stringify(backdrop)}`);
 
     if (GLib.getenv('G2_SCENES') === '1') {
         let result;

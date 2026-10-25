@@ -1666,6 +1666,34 @@ assertion_counts() {
     bash -c '. "$1/assert.sh"; "${@:3}" >"$2" 2>&1; echo "$npass $nfail"' _ "$HERE" "$T/assertions.out" "$@"
 }
 
+test_backdrop_painted() {
+    local solid want_pass label what report passes failures
+    # shellcheck disable=SC2016 # expanded by the inner bash
+    solid=$(bash -c '. "$1/assert.sh"; echo "$SOLID_BACKDROP"' _ "$HERE")
+    expect_eq "backdrop: assert.sh expects the stress backdrop direct.sh paints" "$solid" \
+        "$(sed -n "s/^readonly SOLID_BACKDROP='\(#[0-9a-f]*\)'\$/\1/p" "$HERE/direct.sh")"
+    while IFS='|' read -r want_pass label what report; do
+        if [[ -n $report ]]; then printf 'APEXG2-BACKDROP %s\n' "$report" >"$T/backdrop.log"; else : >"$T/backdrop.log"; fi
+        read -r passes failures <<<"$(assertion_counts backdrop_painted "$label" "$T/backdrop.log")"
+        expect_eq "backdrop: $what" "$want_pass/$((1 - want_pass))" "$passes/$failures"
+    done <<'CASES'
+1|default|the light Facets, painted, passes|{"expected":"facets-light","patches":12,"delta":2.1,"waitedMs":0}
+1|dark-style|the dark Facets in a dark case passes|{"expected":"facets-dark","patches":12,"delta":1,"waitedMs":250}
+1|high-contrast-solid|the stress backdrop in a -solid case passes|{"expected":"#013b88","patches":12,"delta":0,"waitedMs":0}
+0|default|a backdrop that never painted fails|{"expected":"facets-light","error":"the backdrop did not paint: after 10000 ms the desktop at 384,270 shows #013b88 where facets-light has #e9ecf3 (off by 233)"}
+0|dark-style|the light Facets in a dark case fails|{"expected":"facets-light","patches":12,"delta":1,"waitedMs":0}
+0|default-solid|the Facets in a -solid case fails|{"expected":"facets-light","patches":12,"delta":1,"waitedMs":0}
+0|default|a case without a backdrop report fails|
+CASES
+    printf 'APEXG2-BACKDROP %s\n' '{"expected":"facets-light","error":"the backdrop did not paint: after 10000 ms the desktop at 384,270 shows #013b88"}' >"$T/backdrop.log"
+    assertion_counts backdrop_painted default "$T/backdrop.log" >/dev/null
+    if grep -q '^FAIL default: the facets-light backdrop painted (the backdrop did not paint: after 10000 ms' "$T/assertions.out"; then
+        ok "backdrop: a backdrop that never painted fails by name, with what the desktop showed"
+    else
+        not_ok "backdrop: a backdrop that never painted fails by name (got: $(cat "$T/assertions.out"))"
+    fi
+}
+
 test_fixed_clock() {
     local clock passes failures
     # shellcheck disable=SC2016 # expanded by the inner bash
@@ -2283,6 +2311,7 @@ test_screenshot_ui
 test_today_pins
 test_known_gaps
 test_fixed_clock
+test_backdrop_painted
 test_clock_c
 test_overview_below_bar
 test_layer_cycles

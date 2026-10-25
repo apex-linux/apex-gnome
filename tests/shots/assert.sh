@@ -19,7 +19,8 @@ readonly APEX_LIGHT_SHEET=resource:///org/gnome/shell/theme/gnome-shell-light.cs
 readonly APEX_DARK_SHEET=resource:///org/gnome/shell/theme/gnome-shell-dark.css
 readonly STOCK_SHEETS=resource:///org/gnome/shell/theme/stock
 readonly FEDORA_SHEETS=resource:///org/gnome/shell/theme
-readonly DIRECT_CASES=(default default-scale1 dark-style high-contrast large-text dock-intellihide dock-intellihide-dark dock-one-gpu stock-light stock-dark safe-env
+readonly DIRECT_CASES=(default default-scale1 dark-style high-contrast large-text default-solid dark-style-solid high-contrast-solid
+    large-text-solid dock-intellihide dock-intellihide-dark dock-one-gpu stock-light stock-dark safe-env
     layer-disabled layer-cycles motion idle dock-pin fault-configure fault-enable fault-abort kernel-safe fedora-light fedora-dark glass fedora-glass
     indicators indicators-scale1 indicators-dark)
 readonly DIRECT_PARTS=(main kernel fedora)
@@ -38,6 +39,8 @@ readonly CARD_COLUMNS='box[apex-message-row[message-icon,box[message-header,mess
 readonly CARD_UPSTREAM='box[message-header,message-box[message-icon,message-content,box],message-action-bin]'
 readonly LAUNCHER_GRID_TOP=132
 # WCAG 2.2 AA: 1.4.3 for text, 1.4.11 for the glyphs a control is known by.
+# direct.sh's stress backdrop.
+readonly SOLID_BACKDROP='#013b88'
 readonly A11Y_TEXT_RATIO=4.5
 readonly A11Y_ICON_RATIO=3
 readonly A11Y_ACCENTS=(blue teal green yellow orange red pink purple slate)
@@ -45,9 +48,10 @@ readonly A11Y_SURFACES=(bar dock popupMenu osd banner quickSettings "${A11Y_ACCE
     switcher dialog endSession spotlight.popup spotlight.toast overview appGrid)
 # The failures still open: upstream's high-contrast sheet, which safe mode keeps as Fedora's.
 readonly A11Y_HC_TOGGLE="upstream HC sheet: Quick Settings' checked toggle, white on its accent (3.15:1), and its menu arrow (2.31:1)"
-declare -A A11Y_GAPS=([high-contrast:quickSettings]=$A11Y_HC_TOGGLE)
+declare -A A11Y_GAPS=([high-contrast:quickSettings]=$A11Y_HC_TOGGLE [high-contrast-solid:quickSettings]=$A11Y_HC_TOGGLE)
 for a11y_accent in "${A11Y_ACCENTS[@]}"; do
     A11Y_GAPS[high-contrast:quickSettingsAccents.$a11y_accent]=$A11Y_HC_TOGGLE
+    A11Y_GAPS[high-contrast-solid:quickSettingsAccents.$a11y_accent]=$A11Y_HC_TOGGLE
 done
 unset a11y_accent
 readonly A11Y_GAPS
@@ -1466,18 +1470,39 @@ a11y_layout() {
     done
 }
 
-# The light and dark captures, high contrast and Large Text, each with its own shell.
+# The light and dark captures, high contrast and Large Text, each with its own shell, over the
+# Facets and again over the solid stress backdrop.
 a11y_cases() {
-    local run=$1 c
-    for c in high-contrast large-text; do
+    local run=$1 c backdrop
+    for c in high-contrast large-text default-solid dark-style-solid high-contrast-solid large-text-solid; do
         exits "$run" "$c" 0
         no_js_error "$c" "$run/$c.log"
         no_apex_failure "$c" "$run/$c.log"
     done
-    a11y_contrast default "$run/default.log"
-    a11y_contrast dark-style "$run/dark-style.log"
-    a11y_contrast high-contrast "$run/high-contrast.log"
-    a11y_layout large-text "$run/large-text.log"
+    for backdrop in '' -solid; do
+        a11y_contrast "default$backdrop" "$run/default$backdrop.log"
+        a11y_contrast "dark-style$backdrop" "$run/dark-style$backdrop.log"
+        a11y_contrast "high-contrast$backdrop" "$run/high-contrast$backdrop.log"
+        a11y_layout "large-text$backdrop" "$run/large-text$backdrop.log"
+    done
+}
+
+# The backdrop direct.sh pinned, as the probe found it painted: a case over another one, or
+# over none, measures its contrast against chance.
+backdrop_painted() {
+    local label=$1 log=$2 want=facets-light report
+    case $label in
+        *-solid) want=$SOLID_BACKDROP ;;
+        *dark*) want=facets-dark ;;
+    esac
+    report=$(report_of "$log" APEXG2-BACKDROP)
+    if [[ -z $report ]]; then
+        fail "$label: the $want backdrop painted (no APEXG2-BACKDROP report)"
+    elif jq -e --arg want "$want" '.error == null and .expected == $want' <<<"$report" >/dev/null 2>&1; then
+        pass "$label: the $want backdrop painted"
+    else
+        fail "$label: the $want backdrop painted ($(jq -r '.error // "the probe expected \(.expected)"' <<<"$report" 2>&1 | head -c 400))"
+    fi
 }
 
 # The layer's features, in layer.js's own list, so a new feature is idle-tested at once.
@@ -1582,6 +1607,7 @@ direct_cases() {
         [[ $c == fault-abort ]] && continue
         expect_report "$c" "$f" '.mode == "user"' "the probe ran: the static import graph loaded"
         fixed_clock "$c" "$f"
+        backdrop_painted "$c" "$f"
     done
     fixtures_on_the_bus "$run"
 

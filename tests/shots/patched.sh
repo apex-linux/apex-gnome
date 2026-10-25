@@ -159,6 +159,8 @@ rm -rf "$run"
 mkdir -p "$run/captures"
 ln -sfn "$HERE" /w
 ln -sfn "$run" /out
+step "the Facets backdrops"
+bash "$HERE/backdrops.sh" >>"$OUT/dnf.log" 2>&1 || { tail -n 5 "$OUT/dnf.log"; die "backdrops.sh failed; the log is $OUT/dnf.log"; }
 if [[ ${PATCHED_PART:-} == signoff ]]; then
     install_shell
     step "direct.sh signoff"
