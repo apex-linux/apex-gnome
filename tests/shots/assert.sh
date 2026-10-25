@@ -20,7 +20,7 @@ readonly APEX_DARK_SHEET=resource:///org/gnome/shell/theme/gnome-shell-dark.css
 readonly STOCK_SHEETS=resource:///org/gnome/shell/theme/stock
 readonly FEDORA_SHEETS=resource:///org/gnome/shell/theme
 readonly DIRECT_CASES=(default default-scale1 dark-style high-contrast large-text dock-intellihide dock-intellihide-dark dock-one-gpu stock-light stock-dark safe-env
-    layer-disabled layer-cycles motion idle fault-configure fault-enable fault-abort kernel-safe fedora-light fedora-dark glass fedora-glass
+    layer-disabled layer-cycles motion idle dock-pin fault-configure fault-enable fault-abort kernel-safe fedora-light fedora-dark glass fedora-glass
     indicators indicators-scale1 indicators-dark)
 readonly DIRECT_PARTS=(main kernel fedora)
 readonly CAPTURE_CASES=(default default-scale1 dark-style stock-light stock-dark fedora-light fedora-dark)
@@ -76,6 +76,7 @@ readonly LOCATE_POINTER_RIPPLE_MS=830
 # ROADMAP S3c: an idle desktop shows no extra repaints, with every feature of the layer on.
 readonly APEX_JS_DIR=${G2_APEX_JS_DIR:-$SHOTS_DIR/../../desktop/shell/js/ui/apex}
 readonly IDLE_WINDOW_MS=10000
+readonly DOCK_PIN_FALLBACK_MS=20000
 # direct.sh's G2_CLOCK, in UTC; the clock shows it as weekday, date, EN SPACE, 24-hour time.
 readonly FIXED_CLOCK=2026-09-28T09:41:00Z
 readonly FIXED_CLOCK_TEXT='Mon Sep 28\u200209:41'
@@ -1535,6 +1536,35 @@ idle_desktop() {
         "and each of its frames names its damage and the actors under it, as a failure would"
 }
 
+# shellcheck disable=SC2016 # jq programs
+dock_pin() {
+    local run=$1 f=$1/dock-pin.log r error offenders sources
+    exits "$run" dock-pin 0
+    no_apex_failure dock-pin "$f"
+    r=$(report_of "$f" APEXG2-DOCK-PIN)
+    error=$(jq -r '.error // empty' <<<"$r" 2>/dev/null)
+    if [[ -n $error ]]; then
+        fail "dock-pin: ${error%%$'\n'*}"
+        return
+    fi
+    expect dock-pin "$r" '.settled | (.startingUp | not) and (.overview | not) and .dock.visible' \
+        "the session settled: startup over, no overview, the dock shown"
+    expect dock-pin "$r" '.pinned as $p | ($p != null) and (.dockApps | index($p) != null) and .dockUpdate.afterPaints > 0' \
+        "a pinned favourite ($(jq -r '.pinned // "none"' <<<"$r" 2>/dev/null)) shows in the dock at once"
+    expect dock-pin "$r" ".windowMs.dockUpdate + .windowMs.fallback > $DOCK_PIN_FALLBACK_MS" \
+        "the windows run past main.js's ${DOCK_PIN_FALLBACK_MS} ms fallback for deferred work after the pin"
+    echo "# dock-pin: main.js's fallback fired at $(jq -r '.fallbackFiredMs | if length > 0 then map("\(.) ms") | join(", ") else "no time" end' <<<"$r" 2>/dev/null) after the pin (report only)"
+    offenders=$(jq -r '[.fallback.frames[] | "at \(.atMs) ms, \(.damage.rectangles) rectangle(s) in \(.damage.extents | "\(.x),\(.y) \(.width)x\(.height)") under \(.damage.under | map(join(" < ")) | join(" | "))"] | join("; ")' <<<"$r" 2>/dev/null)
+    sources=$(jq -r '[.fallback.frames[].damage.under[][]] | join(" < ")' <<<"$r" 2>/dev/null | apex_sources)
+    if jq -e '.fallback.afterPaints == 0 and .fallback.frames == []' <<<"$r" >/dev/null 2>&1; then
+        pass "dock-pin: after the dock's own update the stage paints no frame, through the fallback"
+    else
+        fail "dock-pin: after the dock's own update the stage paints no frame, through the fallback ($(jq -r '.fallback.afterPaints' <<<"$r" 2>/dev/null) painted: ${offenders:-none recorded}${sources:+; from $sources})"
+    fi
+    expect dock-pin "$r" '.stock.shown and (.stock.dashApps | length > 0) and (.stock.dashApps - .stock.favorites == [])' \
+        "with the dock in disabled-features, the overview's own dash holds the favourites ($(jq -r '.stock.dashApps | join(", ")' <<<"$r" 2>/dev/null))"
+}
+
 direct_cases() {
     local run=$1 c f
     echo "# the direct cases: $(grep -m1 -E '^gnome-shell-[0-9]' "$run/rpm.txt" 2>/dev/null)"
@@ -1684,6 +1714,7 @@ direct_cases() {
     layer_cycles "$run"
     motion_curve "$run"
     idle_desktop "$run"
+    dock_pin "$run"
 
     f=$run/kernel-safe.log
     check "kernel-safe: /proc/cmdline carries apex.safe=1" grep -qw 'apex.safe=1' "$run/cmdline-kernel.txt"
