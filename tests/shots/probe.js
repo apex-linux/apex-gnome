@@ -23,9 +23,14 @@ import * as WindowManager from 'resource:///org/gnome/shell/ui/windowManager.js'
 import * as WorkspaceThumbnail from 'resource:///org/gnome/shell/ui/workspaceThumbnail.js';
 
 import {textColour} from './a11y.js';
+import {actionModeName} from './idle.js';
 import * as Png from './png.js';
 
 export const METRICS = {};
+
+// Main.actionMode as run() found it, and whether init() had to start the probe itself.
+let actionModeAtRun = null;
+let startedLate = false;
 
 const APEX_SCHEMA = 'io.github.apex_linux.Apex.Desktop';
 const APEX_KEYBINDINGS_SCHEMA = 'io.github.apex_linux.Apex.Desktop.Keybindings';
@@ -2634,6 +2639,7 @@ async function motion() {
 export function init() {
     if (Main.layoutManager._startingUp)
         return;
+    startedLate = true;
     console.log('APEXG2-LATE startup completed while main.js imported the probe');
     import(import.meta.url).then(self => Scripting.runPerfScript(self, GLib.getenv('SHELL_PERF_OUTPUT')));
 }
@@ -2857,6 +2863,7 @@ function keepPerfHelperAwake() {
 }
 
 export async function run() {
+    actionModeAtRun = actionModeName();
     const pingId = keepPerfHelperAwake();
     try {
         await runProbe();
@@ -3040,6 +3047,10 @@ async function runProbe() {
         }
         console.log(`APEXG2-DOCK ${JSON.stringify(result)}`);
     }
+
+    console.log(`APEXG2-MODES ${JSON.stringify({
+        late: startedLate, atRun: actionModeAtRun, atEnd: actionModeName(), modals: Main.modalCount, overview: Main.overview.visible,
+    })}`);
 
     const wait = Number(GLib.getenv('PROBE_WAIT') ?? '0');
     if (wait > 0) {

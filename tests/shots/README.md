@@ -111,9 +111,16 @@ imported it, so a startup that completes during the import never runs the script
 leaves the shell up: 8 of 24 starts in a reproduction of the guard's `systemd --user`
 sequence. `probe.js`'s `init()` then runs the script itself and prints `APEXG2-LATE`.
 In such a shell `main.js`'s `startup-complete` handler (the "GNOME Shell started" line,
-the action mode, the GDM registration) has not run, so `direct.sh` runs that case once
-more (keeping the first log as `CASE.late.log`), and a second late start fails it. A late
-guard phase is listed in `assert.txt`.
+the action mode, the GDM registration, the "Screen Lock disabled" notification) has not
+run. None of it reaches a check: the startup overview's grab sets the `OVERVIEW` action
+mode before `startup-complete` on either path, and the probe drops startup notifications.
+Every case asserts it from `APEXG2-MODES`: `OVERVIEW` when `run()` starts, and at its end
+`NORMAL` with no modal left (`OVERVIEW` with the overview open); idle and dock-pin assert
+`NORMAL` after `settleDesktop`. So CI (`patched.sh`, `G2_LATE=report`) takes a late start
+as a normal one and lists it in `late-PART.txt`, the log and the job summary. The image
+run (`run.sh`) checks the harness on the real image: there `direct.sh` runs a late case
+once more (keeping the first log as `CASE.late.log`), and a second late start fails it.
+A late guard phase is listed in `assert.txt`.
 
 The crash-guard phases (`guard.sh`): an abort 65 s after start does not trip the guard;
 `abort-after-enable` trips it (the unit fails, `apex-shell-safe.service` runs,

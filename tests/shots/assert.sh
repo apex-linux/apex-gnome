@@ -144,8 +144,8 @@ no_js_error() {
     fi
 }
 
-# Clutter refuses a NaN box with a CRITICAL and leaves the actor unallocated: a case can survive
-# that, so the CRITICAL is the failure, in the case's log and the log of its late first start.
+# Clutter refuses a NaN box with a CRITICAL and leaves the actor unallocated, which a case can survive:
+# the CRITICAL fails it, in the case's log and in a late first start's log where the image run reran it.
 no_nan_allocation() {
     local label=$1 log=$2 found
     found=$(grep -c "clutter_actor_allocate: assertion '!isnan" "$log" "${log%.log}.late.log" 2>/dev/null | grep -v ':0$' | sed 's|.*/||' | paste -sd' ' -)
@@ -163,6 +163,17 @@ no_late_start() {
     else
         pass "$label: the probe ran from startup-complete"
     fi
+}
+
+# The startup overview's grab sets OVERVIEW before startup-complete, so a late probe (main.js's handler
+# skipped) finds what an on-time one does; once no modal is left, popModal sets NORMAL.
+action_modes() {
+    local label=$1 log=$2 r
+    r=$(report_of "$log" APEXG2-MODES)
+    expect "$label" "$r" '.atRun == "OVERVIEW"' \
+        "the probe started under the startup overview's OVERVIEW action mode ($(jq -r 'if .late then "late" else "on time" end' <<<"$r" 2>/dev/null))"
+    expect "$label" "$r" '.atEnd == (if .overview then "OVERVIEW" elif .modals == 0 then "NORMAL" else .atEnd end) and .atEnd != "NONE"' \
+        "and it ended in NORMAL with no modal left, OVERVIEW with the overview open"
 }
 
 no_apex_failure() {
@@ -1620,6 +1631,7 @@ idle_desktop() {
     fi
     expect idle "$r" ".windowMs == $IDLE_WINDOW_MS and (.settled | (.startingUp | not) and (.overview | not) and .dock.visible and .dock.rested and .barGlass and .dockGlass and .easing == [])" \
         "the session settled: startup over, no overview, the dock at rest, the bar's and the dock's glass on, nothing easing"
+    expect idle "$r" '.settled.actionMode == "NORMAL"' "and settleDesktop left the NORMAL action mode"
     idle_window "$r" .idle "an idle desktop"
     idle_window "$r" .quickSettings "the desktop with Quick Settings open"
     idle_window "$r" .reduceTransparency.idle "an idle desktop with Reduce Transparency"
@@ -1710,6 +1722,7 @@ dock_pin() {
     fi
     expect dock-pin "$r" '.settled | (.startingUp | not) and (.overview | not) and .dock.visible' \
         "the session settled: startup over, no overview, the dock shown"
+    expect dock-pin "$r" '.settled.actionMode == "NORMAL"' "and settleDesktop left the NORMAL action mode"
     expect dock-pin "$r" '.pinned as $p | ($p != null) and (.dockApps | index($p) != null) and .dockUpdate.afterPaints > 0' \
         "a pinned favourite ($(jq -r '.pinned // "none"' <<<"$r" 2>/dev/null)) shows in the dock at once"
     expect dock-pin "$r" ".windowMs.dockUpdate + .windowMs.fallback > $DOCK_PIN_FALLBACK_MS" \
@@ -1742,6 +1755,7 @@ direct_cases() {
         no_nan_allocation "$c" "$f"
         # fault-abort may abort before its report; its exit status says the shell ran.
         [[ $c == fault-abort ]] && continue
+        action_modes "$c" "$f"
         expect_report "$c" "$f" '.mode == "user"' "the probe ran: the static import graph loaded"
         fixed_clock "$c" "$f"
         backdrop_painted "$c" "$f"
@@ -1973,6 +1987,7 @@ patched_assertions() {
     for c in "${DIRECT_CASES[@]}"; do
         asserted "$c" || continue
         [[ $c == kernel-safe || $c == fault-abort ]] || backdrop_painted "$c" "$run/$c.log"
+        [[ $c == kernel-safe || $c == fault-abort ]] || action_modes "$c" "$run/$c.log"
         [[ -e $run/$c.log ]] && no_nan_allocation "$c" "$run/$c.log"
     done
     for c in default default-scale1 dark-style; do

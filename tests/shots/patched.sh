@@ -14,7 +14,8 @@ the top bar's metrics, today's pins and the known gaps of default, default-scale
 dark-style, their shell surfaces, every Apex surface's contrast and Large Text layout,
 and the glass case. Before that, Fedora's gnome-shell of
 the same version runs direct.sh's fedora part, the baseline of the glass case's unlock
-blur. The lane's own checks, signing and the mutter pin's mirror are apex-image's. -e G2_SURFACE_SCENES=1 also captures the surfaces' scenes.
+blur. Both parts run with G2_LATE=report: a late probe is a normal start, counted in the log
+and the job summary. The lane's own checks, signing and the mutter pin's mirror are apex-image's. -e G2_SURFACE_SCENES=1 also captures the surfaces' scenes.
 
   PATCHED_RPMS=DIR   install the gnome-shell RPMs in DIR instead of building them
   PATCHED_OUT=DIR    keep the RPMs and the run's logs in DIR (default: a temporary one)
@@ -173,6 +174,8 @@ if [[ ${PATCHED_PART:-} == signoff ]]; then
     bash /w/direct.sh signoff
     exit
 fi
+# CI's parts take a probe that started itself after startup as normal (direct.sh), and count it.
+export G2_LATE=report
 [[ ${PATCHED_PART:-} == pr ]] || fedora_part
 install_shell
 
@@ -182,6 +185,12 @@ step "direct.sh $part"
 rc=0
 bash /w/direct.sh "$part" || rc=$?
 echo "# direct.sh $part: exit $rc"
+for p in fedora "$part"; do
+    [[ -f $run/late-$p.txt ]] || continue
+    late="direct.sh $p: $(wc -l <"$run/late-$p.txt") of $(wc -l <"$run/results-$p.txt") cases started late, a normal start here: $(paste -sd' ' "$run/late-$p.txt")"
+    echo "# $late"
+    [[ -z ${GITHUB_STEP_SUMMARY:-} ]] || printf -- '- %s\n' "$late" >>"$GITHUB_STEP_SUMMARY"
+done
 
 # The assertions count their own failures; summary's status is the script's.
 set +e
