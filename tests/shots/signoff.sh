@@ -4,13 +4,13 @@ set -uo pipefail
 
 usage() {
     cat <<'EOF'
-usage: tests/shots/signoff.sh RPM_DIR [OUT]
+usage: tests/shots/signoff.sh [--goldens] RPM_DIR [OUT]
        tests/shots/signoff.sh --collect G2_RUN SHELL_SHOTS OUT
 
 The owner's sign-off set: each shell board's scene from the gnome-shell RPMs in RPM_DIR (the
 lane's _build/gnome-shell/out), headless at scale 2, light and dark, as root in a throwaway
-Fedora 45 container. Review captures, not tests: no golden and no assertion beyond the scene
-having opened and the sign-off windows having shown. It first installs the apex-desktop of
+Fedora 45 container. No assertion beyond the scene having opened and the sign-off windows
+having shown. It first installs the apex-desktop of
 tests/lib/pins.sh (built with its make rpm, or from APEX_DESKTOP_SRC), whose vendor defaults
 bring the Facets wallpapers, the Apex icon theme and the fonts, and the apps its dock lists,
 then the image's other apps for the launcher (RPMs standing in for its Flatpaks), and takes
@@ -24,7 +24,8 @@ and apex-desktop pins, the layer's features enabled, the scale, the monitor and 
 with the Flatpaks they stand in for; the runs'
 logs stay in _build/signoff-work. A board whose scene has no capture, or a probe whose
 windows never all reached the overview, fails the run, named. --collect does only that last
-step, from a G2 run directory and shoot.sh's captures.
+step, from a G2 run directory and shoot.sh's captures. --goldens then compares the boards with
+the approved goldens (goldens.sh check OUT).
 EOF
 }
 
@@ -134,6 +135,12 @@ case ${1:-} in
         exit ;;
     '') usage >&2; exit 2 ;;
 esac
+goldens=0
+if [[ $1 == --goldens ]]; then
+    goldens=1
+    shift
+    (($#)) || { usage >&2; exit 2; }
+fi
 [[ -e /run/.containerenv || -e /.dockerenv ]] || die "only inside a throwaway container"
 rpms=$(cd -- "$1" && pwd) || die "no RPM directory $1"
 out=${2:-$REPO/_build/signoff}
@@ -183,3 +190,4 @@ rm -f /run/dbus/pid /run/dbus/system_bus_socket
 bash "$REPO/$SHOOT" "$rpms" || echo "signoff.sh: shoot.sh exited $?; the boards it shoots are checked below"
 not_in_image
 collect "$work/g2/run" "$REPO/_build/gnome-shell/shots" "$out"
+((goldens == 0)) || exec bash "$HERE/goldens.sh" check "$out"

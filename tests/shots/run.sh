@@ -103,6 +103,10 @@ prepare_bus_image() {
         { tail -n 20 "$root/bus-image.txt" >&2; die "cannot install dbus-daemon into a container of $IMAGE"; }
     sudo podman commit -q "$ctr" "$BUS_IMAGE" >/dev/null
     sudo podman rm "$ctr" >/dev/null
+    # direct.sh pins every case to apex-desktop's Facets, which the image carries.
+    sudo podman run --rm --net=none --entrypoint /bin/sh "$BUS_IMAGE" -c \
+        'test -s /usr/share/backgrounds/apex/apex-facets-light.png && test -s /usr/share/backgrounds/apex/apex-facets-dark.png' ||
+        die "$IMAGE has no Facets backdrops in /usr/share/backgrounds/apex (apex-desktop's wallpapers), which direct.sh pins"
 }
 
 prepare_fedora_image() {

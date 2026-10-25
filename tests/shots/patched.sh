@@ -159,6 +159,8 @@ rm -rf "$run"
 mkdir -p "$run/captures"
 ln -sfn "$HERE" /w
 ln -sfn "$run" /out
+step "the Facets backdrops"
+bash "$HERE/backdrops.sh" >>"$OUT/dnf.log" 2>&1 || { tail -n 5 "$OUT/dnf.log"; die "backdrops.sh failed; the log is $OUT/dnf.log"; }
 if [[ ${PATCHED_PART:-} == signoff ]]; then
     install_shell
     step "direct.sh signoff"
@@ -180,6 +182,10 @@ set +e
 for c in default default-scale1 dark-style stock-light stock-dark safe-env layer-disabled layer-cycles motion idle dock-pin glass-load glass-stress no-dock; do
     no_js_error "$c" "$run/$c.log"
     fixed_clock "$c" "$run/$c.log"
+done
+# Every case the fedora and main parts run sets the backdrop; fault-abort may abort before it reports.
+for c in "${DIRECT_CASES[@]}"; do
+    [[ $c == kernel-safe || $c == fault-abort ]] || backdrop_painted "$c" "$run/$c.log"
 done
 for c in default default-scale1 dark-style; do
     exits "$run" "$c" 0
