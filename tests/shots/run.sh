@@ -34,6 +34,8 @@ readonly REPOS_BASE=${G2_REPOS_BASE:-}
 readonly OUT_DIR=${G2_OUT_DIR:-$REPO/_build/g2}
 readonly IMAGE=${1:-localhost/apex:build}
 readonly RUNS=${G2_RUNS:-2}
+# ROADMAP S2b's 5 minutes of glass stress; patched.sh's runs take direct.sh's 60 s.
+readonly VM_GLASS_STRESS_SECONDS=300
 # The image has no dbus-daemon, which dbus-run-session and the direct cases' system bus
 # need, nor the fixtures' python3-dbusmock and the gcc that builds clock.c.
 readonly BUS_IMAGE=localhost/apex-g2-bus
@@ -179,6 +181,7 @@ one_run() {
 
     log "${out##*/}: the direct cases"
     sudo podman run --rm --name "$name-direct" "$NO_SELINUX_LABELS" -v "$HERE:/w:ro,z" -v "$out:/out:z" \
+        --env G2_GLASS_STRESS_SECONDS="${G2_GLASS_STRESS_SECONDS:-$VM_GLASS_STRESS_SECONDS}" \
         --entrypoint /bin/bash "$BUS_IMAGE" /w/direct.sh main 2>&1 | tee "$out/direct-main.txt" ||
         direct_failed main "$out" $?
 

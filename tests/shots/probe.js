@@ -2886,6 +2886,40 @@ async function runProbe() {
         console.log(`APEXG2-IDLE ${JSON.stringify(result)}`);
     }
 
+    if (GLib.getenv('G2_GLASS_LOAD') === '1') {
+        let result;
+        try {
+            const GlassLoad = await import('./glass-load.js');
+            result = await GlassLoad.glassLoadReport({dropStartupNotifications});
+        } catch (e) {
+            result = {error: `${e.message}\n${e.stack}`};
+        }
+        console.log(`APEXG2-GLASS-LOAD ${JSON.stringify(result)}`);
+    }
+
+    const loadStress = Number(GLib.getenv('G2_GLASS_LOAD_STRESS') ?? '0');
+    if (loadStress > 0) {
+        let result;
+        try {
+            const GlassLoad = await import('./glass-load.js');
+            result = await GlassLoad.realBoxStress(loadStress, {dropStartupNotifications});
+        } catch (e) {
+            result = {error: `${e.message}\n${e.stack}`};
+        }
+        console.log(`APEXG2-GLASS-LOAD-STRESS ${JSON.stringify(result)}`);
+    }
+
+    if (GLib.getenv('G2_DOCK_PIN') === '1') {
+        let result;
+        try {
+            const DockPin = await import('./dock-pin.js');
+            result = await DockPin.dockPinReport({settle, dropStartupNotifications, apexDock});
+        } catch (e) {
+            result = {error: `${e.message}\n${e.stack}`};
+        }
+        console.log(`APEXG2-DOCK-PIN ${JSON.stringify(result)}`);
+    }
+
     if (GLib.getenv('G2_DOCK') === '1') {
         let result;
         try {

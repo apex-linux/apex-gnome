@@ -1871,7 +1871,14 @@ async function exerciseDock() {
         return;
     const Main = await import(`file://${shellDir}/js/ui/main.js`);
     const report = label => fact(`dock.${label}`, dockState(Main));
+    const {dash} = Main.overview;
+    const redisplays = label => fact(`dock.overview-dash-${label}`, `redisplays=${dash.redisplays} queued=${dash.queued}`);
     report('enabled');
+    await spin(50);
+    dash._queueRedisplay();
+    dash._queueRedisplay();
+    await spin(50);
+    redisplays('enabled');
     for (const [key, value] of [['dock-icon-size', 'small'], ['dock-icon-size', 'large'], ['dock-show-trash', false],
         ['dock-running-indicators', false]]) {
         if (typeof value === 'string')
@@ -1905,12 +1912,16 @@ async function exerciseDock() {
             `stock-separator=${Hooks.value('dash-favorites-separator', true, {})} ` +
             `show-apps=${Hooks.value('show-apps-icon-name', 'view-app-grid-symbolic', dock.tailItems.showApps)}`);
     }
+    dash._queueRedisplay();
     settings.set_boolean('layer-enabled', false);
     await spin(200);
     report('off');
+    redisplays('off');
     settings.set_boolean('layer-enabled', true);
     await spin(200);
     report('on');
+    await spin(50);
+    redisplays('on');
 }
 
 async function exerciseIntellihide() {
