@@ -12,7 +12,7 @@ assertions that need no Apex build. A harness change that keeps the shell from s
 reporting fails here in minutes, before a builder VM spends a G2 run on it.
 
 It needs gnome-shell, mesa-dri-drivers, dbus-daemon, python3-dbusmock, gcc, glib2-devel, gjs
-and jq.
+and jq; backdrops.sh adds librsvg2-tools and git-core to render the Facets backdrops.
 EOF
 }
 
@@ -34,6 +34,7 @@ ln -sfn "$out" /out
 printf '[org.gnome.desktop.interface]\nclock-show-weekday=true\n' >/usr/share/glib-2.0/schemas/90_g2-smoke.gschema.override
 glib-compile-schemas /usr/share/glib-2.0/schemas
 
+bash "$HERE/backdrops.sh" || { echo "smoke.sh: backdrops.sh failed" >&2; exit 1; }
 start=$SECONDS
 bash /w/direct.sh fedora
 rc=$?
@@ -46,6 +47,7 @@ for variant in light dark; do
     exits "$out" "$c" 0
     no_js_error "$c" "$out/$c.log"
     fixed_clock "$c" "$out/$c.log"
+    backdrop_painted "$c" "$out/$c.log"
     scenes_captured "$out" "$c"
     overview_below_bar "$c" "$out/$c.log"
 done
