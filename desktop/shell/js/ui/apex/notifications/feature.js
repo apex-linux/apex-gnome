@@ -172,24 +172,25 @@ function _plainCalendar(calendar, parts) {
     parts.topBox.set_child_at_index(parts.label, 1);
 }
 
-// The number over a dot every day keeps, so the numbers stay put; the sheet colours it on event days.
+// The number over a dot every day keeps, so the numbers stay put. St.Button colours only its own
+// Clutter.Text child, so the number is an St.Label, which takes the day's colour in every state.
 function _furnishDay(button, parts) {
-    parts.label = button.get_child();
+    parts.text = button.get_child();
     button.set_child(null);
     parts.box = new St.BoxLayout({
         orientation: Clutter.Orientation.VERTICAL,
         x_align: Clutter.ActorAlign.CENTER,
         y_align: Clutter.ActorAlign.CENTER,
     });
-    parts.box.add_child(parts.label);
+    parts.box.add_child(new St.Label({text: parts.text.text, x_align: Clutter.ActorAlign.CENTER}));
     parts.box.add_child(new St.Widget({style_class: EVENT_DOT_STYLE_CLASS, x_align: Clutter.ActorAlign.CENTER}));
     button.set_child(parts.box);
 }
 
 function _plainDay(button, parts) {
-    parts.box.remove_child(parts.label);
-    button.set_child(parts.label);
-    parts.box.destroy();
+    const {box} = parts;
+    button.set_child(parts.text);
+    box.destroy();
     parts.box = null;
 }
 

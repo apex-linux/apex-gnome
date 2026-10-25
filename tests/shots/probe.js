@@ -21,6 +21,7 @@ import * as SwitcherPopup from 'resource:///org/gnome/shell/ui/switcherPopup.js'
 import * as WindowManager from 'resource:///org/gnome/shell/ui/windowManager.js';
 import * as WorkspaceThumbnail from 'resource:///org/gnome/shell/ui/workspaceThumbnail.js';
 
+import {textColour} from './a11y.js';
 import * as Png from './png.js';
 
 export const METRICS = {};
@@ -1331,6 +1332,21 @@ async function modalDialog(unit) {
     }
 }
 
+// The calendar's day buttons, and the colour each one's number is drawn in, which St gives a
+// Clutter.Text only as the button's own child.
+function calendarDays(calendar, unit) {
+    const days = calendar.get_children().filter(a => a.has_style_class_name?.('calendar-day'));
+    const day = classes => days.find(d => classes.every(c => d.has_style_class_name(c)) &&
+        !d.has_style_class_name('calendar-today') && (classes.includes('calendar-other-month') || !d.has_style_class_name('calendar-other-month')));
+    const ink = dayButton => {
+        const label = findDescendant(dayButton, a => a instanceof St.Label);
+        const text = label?.clutter_text ?? findDescendant(dayButton, a => a instanceof Clutter.Text);
+        return text ? hex(textColour(text)) : null;
+    };
+    const dayStyle = dayButton => dayButton ? {...styleOf(dayButton, unit), ink: ink(dayButton)} : null;
+    return {days, day, dayStyle};
+}
+
 // Two low-urgency notifications fill the list without banners; the menu shows the fixed date.
 async function calendarMenu(unit) {
     const source = new MessageTray.Source({title: 'G2 Updates', iconName: 'software-update-available-symbolic'});
@@ -1351,9 +1367,7 @@ async function calendarMenu(unit) {
         const box = menu.box;
         const message = findDescendant(box, a => a.constructor.name === 'NotificationMessage');
         const calendar = find(box, 'calendar');
-        const days = calendar.get_children().filter(a => a.has_style_class_name?.('calendar-day'));
-        const day = classes => days.find(d => classes.every(c => d.has_style_class_name(c)) &&
-            !d.has_style_class_name('calendar-today') && (classes.includes('calendar-other-month') || !d.has_style_class_name('calendar-other-month')));
+        const {days, day, dayStyle} = calendarDays(calendar, unit);
         const events = find(box, 'events-button');
         return {
             scene,
@@ -1378,10 +1392,10 @@ async function calendarMenu(unit) {
             monthLabel: styleOf(find(calendar, 'calendar-month-label'), unit),
             pager: styleOf(find(calendar, 'pager-button'), unit),
             heading: styleOf(find(calendar, 'calendar-day-heading'), unit),
-            day: styleOf(day(['calendar-weekday']), unit),
-            weekend: styleOf(day(['calendar-weekend']), unit),
-            otherMonth: styleOf(day(['calendar-other-month']), unit),
-            today: styleOf(days.find(d => d.has_style_class_name('calendar-today')), unit),
+            day: dayStyle(day(['calendar-weekday'])),
+            weekend: dayStyle(day(['calendar-weekend'])),
+            otherMonth: dayStyle(day(['calendar-other-month'])),
+            today: dayStyle(days.find(d => d.has_style_class_name('calendar-today'))),
             events: styleOf(events, unit),
             eventsTitle: styleOf(find(events, 'events-title'), unit),
         };
@@ -2308,9 +2322,27 @@ async function withDarkStyleOffInQuickSettings() {
     toggle.emit('clicked', Clutter.BUTTON_PRIMARY);
     await settle();
     const {stylesheet, sheet, markerColor, sessionColorScheme, variant, colorSchemeSetting} = await report();
+    // The calendar built in the dark: its day numbers must take the light colours too.
+    const {menu} = Main.panel.statusArea.dateMenu;
+    menu.open(BoxPointer.PopupAnimation.NONE);
+    let calendar;
+    try {
+        await settle();
+        const unit = cssUnit();
+        const {days, day, dayStyle} = calendarDays(findDescendant(menu.box, a => a.has_style_class_name?.('calendar')), unit);
+        const colours = dayButton => (({foreground, ink}) => ({foreground, ink}))(dayStyle(dayButton));
+        calendar = {
+            day: colours(day(['calendar-weekday'])),
+            otherMonth: colours(day(['calendar-other-month'])),
+            today: colours(days.find(d => d.has_style_class_name('calendar-today'))),
+        };
+    } finally {
+        menu.close(BoxPointer.PopupAnimation.NONE);
+        await settle();
+    }
     return {
         toggle: {title: toggle.title, checkedBefore, checkedAfter: toggle.checked},
-        stylesheet, sheet, markerColor, sessionColorScheme, variant, colorSchemeSetting,
+        stylesheet, sheet, markerColor, sessionColorScheme, variant, colorSchemeSetting, calendar,
     };
 }
 

@@ -355,6 +355,9 @@ def check_end_session(shots, case):
     def detail(*names):
         return json.dumps({n: f.get(n) for n in names})
 
+    check(f"{case}: the power-off dialog lists no other user logged in: the greeter's session is of class greeter",
+          step("up-to-date").get("otherSessions", 1) == 0 and step("staged").get("otherSessions", 1) == 0,
+          detail("up-to-date", "staged"))
     check(f"{case}: Update1 up to date: no card, the power-off dialog's own buttons",
           step("up-to-date").get("card", 1) is None and step("up-to-date").get("buttons") == ["Cancel", "Restart", "Power Off"],
           detail("up-to-date"))
