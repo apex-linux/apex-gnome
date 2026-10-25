@@ -52,6 +52,7 @@ The direct cases:
 | `large-text` | the capture settings with `text-scaling-factor` 1.25 | every Apex surface's text whole, on the screen, inside its surface and clear of the rest (see "Accessibility") |
 | `dock-intellihide`, `dock-intellihide-dark` | the capture settings, light or dark, without hot corners (the headless pointer starts at 0,0, in the corner); the probe starts `maximised-window.js`, one maximised GTK window | the dock shows, then hides behind the maximised window as the bar turns solid; a virtual pointer pushing against the bottom edge under it reveals it, under the pointer; moving away hides it; the overview shows it; with `dock-intellihide` off it stays, and while it does, `show-focused-app-name`, `dock-icon-size` (small, then large), `dock-running-indicators` and `dock-show-trash` each change the running shell (the name hidden; every icon 46, then 62; the running dot cleared; Trash gone), and each reset changes it back (the name; `$apex_dock_icon_size`; the dot in `$apex_dock_dot`; Trash last); the key back on, it hides again; the window gone, it shows. The maximised and revealed scenes are captured beside board 37's |
 | `dock-one-gpu` | the capture settings, after `fixtures.py --gpus 1` (put back to two after it) | switcheroo-control reports one GPU, and the dock's first app's menu offers no "Launch Using Discrete Graphics Card" |
+| `no-dock` | the capture settings with `disabled-features` `['dock']`; the probe opens three `window.js` windows and the overview (`G2_OVERVIEW_WINDOWS=1`) | the overview's own dash is back, so the `workspace-bottom` hook gives stock's edge, the monitor's bottom; every caption shows, none over another window's preview or caption |
 | `stock-light`, `stock-dark` | `APEX_SHELL_SAFE=1` with `prefer-light` or `prefer-dark` | upstream's sheet of that variant from `theme/stock/`; the overview's thumbnails at upstream's maximum scale 0.05 and at the effective scale of Fedora's build; the rebuilt high-contrast sheet, which safe mode keeps, is Fedora's up to the structure marker (Apex only appends); no Super+Space binding |
 | `safe-env`, `layer-disabled`, `kernel-safe` | the three kill switches | upstream's dark sheet from `theme/stock/`, the stock colour scheme, every hook stock, no Super+Space binding, the reason logged; the same sheet in all three; `safe-env`: no search hint |
 | `layer-cycles` | the capture settings; the probe sets `layer-enabled` false, then true, three times | while off: upstream's dark sheet from `theme/stock/`, the stock colour scheme, every hook stock, no Super+Space binding; while on: the Apex light sheet, `prefer-light` and Super+Space; each time it is on the stage holds the same actors, type by type, as at startup, and each time it is off the same as the first time (the first count waits out main.js's 20 s timeout for deferred work, which fills the overview's hidden dash; an `St.Icon` counts, not the texture child St gives it once it is first styled, which a dash hidden since startup decides); the layer logs each switch |
@@ -323,8 +324,17 @@ overview the scene captured: no background card behind the active workspace, "No
 windows" centred on it in `$apex_fg_dim` at `$apex_font_workspace_empty_size`, the
 thumbnails at scale .081 (one drawn at .081 of the work area, 117 × 70 on 1440 × 900)
 and the threshold of one workspace, and the launcher's grid at 7 columns, 4 rows and
-88 px icons. G2 opens no windows, so the `window-title-visible` hook's answer stands in for
-a title shown without hover.
+88 px icons. In that overview there is no window, so the `window-title-visible` hook's answer
+stands in for a title shown without hover. Then the probe opens three `window.js` windows
+(portals off, so the sign-off part's apps cannot delay them), opens the overview, sets a
+fixture gradient wallpaper while it shows, and captures `overview-windows`. Every caption is shown, and none overlaps another
+window's preview, another caption or the dock. The last row's captions end
+`$apex_dock_bottom_gap` or more above the dock. Each workspace thumbnail draws the wallpaper:
+its centre's luminance spreads 0.1 or more, where stock's flat fill gives 0, so the
+thumbnails also followed the live wallpaper change. The windows and the wallpaper go again
+before the next scene. The `no-dock` case (`disabled-features=['dock']`) opens the same
+three windows (`G2_OVERVIEW_WINDOWS=1`): there the `workspace-bottom` hook gives the monitor's
+bottom edge, stock's, and the captions still clear each other.
 
 `tile_preview` runs in the same cases. G2 opens no window to drag, so a stand-in actor in
 the window group plays the window and the stock `TilePreview` opens over the left half of the
@@ -501,7 +511,9 @@ startup notifications dropped, the dock at rest (no transition on its box), the 
 the dock's glass on, no actor easing, and the pointer left at 0,0 (hot corners off). Then it
 counts the stage's `after-paint` over 10 s, on the fixed clock, and expects none. It does so
 four times: on the desktop, with Quick Settings open (its glass sits right under the bar's),
-and both again with Reduce Transparency, which S2b's exit asks of the glass.
+and both again with Reduce Transparency, which S2b's exit asks of the glass. After the
+control, it opens the overview, its thumbnails drawing the wallpaper, takes the search entry's
+key focus away so no cursor blinks, and counts another 10 s: no frame and no relayout either.
 
 A failure names what repainted. Each frame's `paint-view` hands over its redraw clip, an
 `MtkRegion`: the probe takes its extents by bisecting it with `intersect_rectangle`, since
@@ -601,7 +613,7 @@ it is at least 4.8:1), and what the goldens judge: the Apex Symbolic glyphs (S1b
 | `backdrop.js`, `backdrops.sh` | the shell; a throwaway container | whether the pinned backdrop painted, and the Facets it pins rendered where an image has them |
 | `indicators.js`, `sni-items.js` | the shell; gjs | the app-indicator part of `default`, `default-scale1` and `dark-style`, and the StatusNotifierItems it starts |
 | `idle.js` | the `idle` case's shell | the settled desktop, its paints and relayouts over 10 s, and the counter's control |
-| `glass-load.js`, `load-window.js` | the `glass-load` and `glass-stress` cases' shells; gjs, GTK 4 | ADR 0014's scenarios as work counts, and the client that stands in for a video |
+| `glass-load.js`, `load-window.js` | the `glass-load` and `glass-stress` cases' shells; gjs, GTK 4 | ADR 0014's scenarios as work counts, and the client that stands in for a video; `tests/laptop` runs both on the laptop, the client with `measure=` |
 | `frame.c`, `G2Frame-1.gir` | the glass cases' shells | `G2Frame.read()`, a region of the frame the shell drew |
 | `selftest.sh`, `png-test.js`, `blur-ref-test.js` | CI and the host | the tests of the above |
 

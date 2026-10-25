@@ -62,6 +62,8 @@ const SWITCHER_ICON_SIZE = 96;
 // Nautilus refuses to run as root, as G2 does: Calendar, from the dock, stands in.
 const SIGNOFF_APPS = [['gnome-text-editor', '--new-window'], ['gnome-calendar'], ['ptyxis', '--new-window']];
 const SIGNOFF_WINDOWS_MS = 30000;
+const OVERVIEW_WINDOWS = 3;
+const FIXTURE_WALLPAPER = {width: 160, height: 100};
 
 Gio._promisify(Shell.Screenshot.prototype, 'screenshot');
 Gio._promisify(Gio.Subprocess.prototype, 'communicate_utf8_async');
@@ -1888,6 +1890,112 @@ async function overviewLayer(unit) {
     };
 }
 
+// A diagonal gradient, so a thumbnail that draws the wallpaper is never one flat colour.
+function fixtureWallpaper() {
+    const {width, height} = FIXTURE_WALLPAPER;
+    const rgba = new Uint8Array(width * height * 4);
+    for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+            const t = (x / width + y / height) / 2;
+            rgba.set([40 + 180 * t, 80 + 150 * t, 160 + 80 * t, 255], (y * width + x) * 4);
+        }
+    }
+    const path = GLib.build_filenamev([GLib.get_user_runtime_dir(), 'g2-wallpaper.png']);
+    GLib.file_set_contents(path, Png.encode({width, height, rgba}));
+    return Gio.File.new_for_path(path).get_uri();
+}
+
+// The 5th to 95th percentile of luminance over the box's central half, from 0 to 1.
+function luminanceSpread(image, box, scale) {
+    const values = [];
+    for (let y = Math.round((box.y + box.height / 4) * scale); y < (box.y + box.height * 3 / 4) * scale; y++) {
+        for (let x = Math.round((box.x + box.width / 4) * scale); x < (box.x + box.width * 3 / 4) * scale; x++) {
+            const at = (y * image.width + x) * 4;
+            values.push((0.2126 * image.rgba[at] + 0.7152 * image.rgba[at + 1] + 0.0722 * image.rgba[at + 2]) / 255);
+        }
+    }
+    values.sort((a, b) => a - b);
+    return round(values[Math.floor(values.length * 0.95)] - values[Math.floor(values.length * 0.05)]);
+}
+
+// Board 35 with windows: three test windows' previews, their captions and the thumbnails,
+// then a fixture wallpaper set while they show; the windows and the wallpaper go afterwards.
+async function overviewWithWindows(unit) {
+    const background = new Gio.Settings({schema_id: 'org.gnome.desktop.background'});
+    const keys = ['picture-uri', 'picture-uri-dark', 'picture-options'];
+    const saved = keys.map(key => background.get_value(key));
+    const client = Gio.File.new_for_uri(import.meta.url).get_parent().get_child('window.js').get_path();
+    const launcher = new Gio.SubprocessLauncher({flags: Gio.SubprocessFlags.NONE});
+    launcher.setenv('WAYLAND_DISPLAY', GLib.getenv('G2_WAYLAND_DISPLAY') ?? 'apex-g2', true);
+    launcher.setenv('GDK_BACKEND', 'wayland', true);
+    // The sign-off's apps bring xdg-desktop-portal, whose first answers can outlast the wait.
+    launcher.setenv('GDK_DEBUG', 'no-portals', true);
+    launcher.setenv('GTK_A11Y', 'none', true);
+    const windows = () => global.get_window_actors().filter(a => a.meta_window.get_gtk_application_id() === MOTION_WINDOW_ID);
+    // The first client stays as the application; each later one asks it for another window.
+    const primary = launcher.spawnv(['gjs', '-m', client]);
+    try {
+        for (let n = 1; n <= OVERVIEW_WINDOWS; n++) {
+            if (n > 1)
+                launcher.spawnv(['gjs', '-m', client]);
+            // eslint-disable-next-line no-await-in-loop
+            if (!await until(() => windows().length >= n, MOTION_WAIT_MS))
+                return {error: `${windows().length} of ${OVERVIEW_WINDOWS} test windows mapped`};
+        }
+        Main.overview.show();
+        const previews = () => {
+            const found = [];
+            const walk = actor => actor.get_children().forEach(child => {
+                if (child.constructor.name === 'WindowPreview' && child.mapped)
+                    found.push(child);
+                walk(child);
+            });
+            walk(Main.layoutManager.overviewGroup);
+            return found;
+        };
+        await until(() => previews().length >= OVERVIEW_WINDOWS, MOTION_WAIT_MS);
+        await settle();
+        // Changed with the thumbnails already up: their background managers must follow it.
+        const uri = fixtureWallpaper();
+        background.set_string('picture-uri', uri);
+        background.set_string('picture-uri-dark', uri);
+        background.set_string('picture-options', 'zoom');
+        await settle();
+        global.stage.set_key_focus(null);
+        await settle();
+        const captured = await capture('overview-windows');
+        const image = Png.decode(captured.bytes);
+        const scale = image.width / global.stage.width;
+        const workspaceThumbnails = Main.overview._overview._controls._thumbnailsBox._thumbnails ?? [];
+        const monitor = Main.layoutManager.primaryMonitor;
+        const stockBottom = monitor.y + monitor.height;
+        const hooks = await apexHooks();
+        return {
+            previews: previews().map(preview => ({
+                window: boxOf(preview.windowContainer, unit),
+                caption: {...boxOf(preview._title, unit), visible: preview._title.visible && preview._title.opacity > 0},
+            })),
+            dock: apexDock() ? boxOf(apexDock()._background, unit) : null,
+            dockBox: apexDock() ? boxOf(apexDock().get_parent(), unit) : null,
+            bottom: {
+                stock: round(stockBottom / unit.length),
+                hook: hooks ? round(hooks.value('workspace-bottom', stockBottom, monitor) / unit.length) : null,
+            },
+            thumbnails: workspaceThumbnails.map(t => {
+                const [x, y] = t.get_transformed_position();
+                const [width, height] = t.get_transformed_size();
+                return {...boxOf(t, unit), spread: luminanceSpread(image, {x, y, width, height}, scale)};
+            }),
+        };
+    } finally {
+        Main.overview.hide();
+        primary.force_exit();
+        await until(() => windows().length === 0, MOTION_WAIT_MS);
+        keys.forEach((key, i) => background.set_value(key, saved[i]));
+        await settle();
+    }
+}
+
 function standInStyle(styleClass, parentClass, unit) {
     const parent = new St.BoxLayout({style_class: parentClass ?? ''});
     const actor = new St.Widget({style_class: styleClass});
@@ -2158,6 +2266,7 @@ async function scenes() {
     surfaces.appGrid = await appGrid(unit);
     delete overview.bytes;
     Main.overview.hide();
+    surfaces.overviewWindows = await overviewWithWindows(unit);
 
     const primary = Main.layoutManager.primaryMonitor;
     return {
@@ -2673,9 +2782,22 @@ async function runProbe() {
         console.log(`APEXG2-SCENES ${JSON.stringify(result)}`);
     }
 
+    if (GLib.getenv('G2_OVERVIEW_WINDOWS') === '1') {
+        let result;
+        try {
+            dropStartupNotifications();
+            result = await overviewWithWindows(cssUnit());
+        } catch (e) {
+            result = {error: `${e.message}\n${e.stack}`};
+        }
+        console.log(`APEXG2-OVERVIEW-WINDOWS ${JSON.stringify(result)}`);
+    }
+
     if (GLib.getenv('G2_ONE_GPU') === '1') {
         let result;
         try {
+            // A startup banner's timeout could otherwise fire as the shell exits, after dateMenu.js went.
+            dropStartupNotifications();
             result = await dockAppMenu();
         } catch (e) {
             result = {error: `${e.message}\n${e.stack}`};

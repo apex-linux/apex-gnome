@@ -385,17 +385,21 @@ own search pill or the glass). Its parts provide the hooks of patch 0013-overvie
 the kill switches and `disabled-features=['overview']` as a whole:
 
 - `overview/window-titles.js`: every window preview shows its title; hovering fades in only
-  the close button.
+  the close button. The rows leave room for the caption, and the last row's captions end
+  `-apex-dock-clearance` (`$apex_dock_bottom_gap`) above the overview's dash, the dock's height.
 - `overview/workspaces.js`: no wallpaper card behind a workspace's windows, which sit on the
   scrim, and "No open windows" (`.apex-workspace-empty`) centred on a workspace without
   any, fading in with the overview.
 - `overview/thumbnails.js`: workspace thumbnails at scale .081 of the work area, board 35's 70 px
   tall (117 × 70 on a 1440 × 900 screen), shown from two workspaces, where stock shows them from three at .05.
+  Each one draws the wallpaper behind its window clones, clipped inside its border at its radius,
+  where stock has a flat fill.
 - `overview/launcher.js`: the launcher's grid at 7 columns of 88 px icons, 4 rows a page, with
   no workspace strip above it (board 36), so it starts right under the search field.
 
-The overview builds its window previews and workspaces each time it opens, so the first
-two take effect from the next opening; the thumbnails and the launcher change at once.
+The overview builds its window previews, workspaces and thumbnails each time it opens, so
+titles, workspaces and the thumbnails' wallpaper take effect from the next opening; the
+thumbnails' scale and the launcher change at once.
 
 The layer also does what every feature relies on:
 

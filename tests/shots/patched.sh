@@ -179,7 +179,7 @@ echo "# direct.sh main: exit $rc"
 set +e
 # shellcheck source=tests/shots/assert.sh
 . "$HERE/assert.sh"
-for c in default default-scale1 dark-style stock-light stock-dark safe-env layer-disabled layer-cycles motion idle dock-pin glass-load glass-stress; do
+for c in default default-scale1 dark-style stock-light stock-dark safe-env layer-disabled layer-cycles motion idle dock-pin glass-load glass-stress no-dock; do
     no_js_error "$c" "$run/$c.log"
     fixed_clock "$c" "$run/$c.log"
 done
@@ -250,5 +250,6 @@ glass_manager glass "$run/glass.log" light
 glass_unlock_vs_fedora "$run"
 indicator_cases "$run"
 one_gpu_case "$run"
+no_dock_case "$run"
 echo "# logs and captures: $run"
 summary
