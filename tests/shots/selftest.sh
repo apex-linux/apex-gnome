@@ -2049,7 +2049,8 @@ CHANGES
 
 # shellcheck disable=SC2016 # a jq program
 readonly IDLE_REPORT='{windowMs: 10000,
-  settled: {startingUp: false, overview: false, dock: {visible: true, rested: true}, barGlass: true, dockGlass: true, easing: []},
+  settled: {startingUp: false, overview: false, actionMode: "NORMAL", dock: {visible: true, rested: true}, barGlass: true, dockGlass: true,
+    easing: []},
   idle: {afterPaints: 0, frames: [], relayouts: {}},
   quickSettings: {afterPaints: 0, frames: [], relayouts: {}},
   reduceTransparency: {idle: {afterPaints: 0, frames: [], relayouts: {}}, quickSettings: {afterPaints: 0, frames: [], relayouts: {}}},
@@ -2061,7 +2062,7 @@ readonly IDLE_FRAME='{atMs: 4210, damage: {rectangles: 1, extents: {x: 600, y: 8
   under: [["StIcon.apex-dock-trash", "ApexDock#apexDock"]]}}'
 
 # shellcheck disable=SC2016 # a jq program
-readonly DOCK_PIN_REPORT='{settled: {startingUp: false, overview: false, dock: {visible: true, rested: true}},
+readonly DOCK_PIN_REPORT='{settled: {startingUp: false, overview: false, actionMode: "NORMAL", dock: {visible: true, rested: true}},
   pinned: "org.gnome.Calculator.desktop", dockApps: ["org.gnome.Nautilus.desktop", "org.gnome.Calculator.desktop"],
   dockUpdate: {afterPaints: 4}, windowMs: {dockUpdate: 3000, fallback: 21000}, fallbackFiredMs: [20004],
   fallback: {afterPaints: 0, frames: [], relayouts: {}},
@@ -2096,6 +2097,7 @@ test_dock_pin() {
 .stock.dashApps = []|an overview dash left empty with the dock off
 .stock.shown = false|an overview that never showed
 .settled.overview = true|an overview left open before the pin
+.settled.actionMode = "NONE"|main.js's NONE action mode left after settleDesktop
 CHANGES
     write_dock_pin_run '{error: "no installed app outside the favourites to pin\ndock-pin.js:64"}'
     read -r passes failures <<<"$(assertion_counts dock_pin "$T/dock-pin")"
@@ -2138,6 +2140,7 @@ test_idle() {
 .settled.dock.rested = false|a dock that never came to rest
 .settled.overview = true|an overview left open
 .settled.barGlass = false|a bar without its glass
+.settled.actionMode = "OVERVIEW"|an action mode settleDesktop did not bring back to NORMAL
 .windowMs = 2000|a window shorter than 10 s
 .control.afterPaints = 0|a counter that counts nothing
 .control.frames[0].damage.under = []|a control frame whose actors went unnamed
@@ -2161,7 +2164,7 @@ CHANGES
     write_idle_run '{error: "idle.js: settle never returned\nidle.js:150"}'
     read -r passes failures <<<"$(assertion_counts idle_desktop "$T/idle")"
     expect_eq "idle: a probe error fails once, with its message, not every assertion after it" \
-        "$((all - 9))/1 idle.js: settle never returned" \
+        "$((all - 10))/1 idle.js: settle never returned" \
         "$passes/$failures $(sed -n 's/^FAIL idle: //p' "$T/assertions.out")"
 }
 
@@ -2375,6 +2378,11 @@ test_no_nan_allocation() {
     echo "$critical" >"$run/glass-load.late.log"
     read -r passes failures <<<"$(assertion_counts no_nan_allocation glass-load "$run/glass-load.log")"
     expect_eq "NaN allocations: one in the late first start fails too" "0/1" "$passes/$failures"
+    rm "$run/glass-load.late.log"
+    printf '%s\n' 'APEXG2-LATE startup completed while main.js imported the probe' "$critical" >"$run/glass-load.log"
+    read -r passes failures <<<"$(assertion_counts no_nan_allocation glass-load "$run/glass-load.log")"
+    expect_eq "NaN allocations: a late start CI kept as its only log fails too (G2_LATE=report)" "0/1 1" \
+        "$passes/$failures $(grep -c 'per log: glass-load.log:1$' "$T/assertions.out")"
 }
 
 test_pr_assertions() {
@@ -2416,6 +2424,23 @@ readonly NO_DOCK_REPORT='{dock: null, bottom: {stock: 900, hook: 900}, previews:
     {window: {x: 561, y: 198, width: 317, height: 236}, caption: {x: 602, y: 459, width: 235, height: 29, visible: true}},
     {window: {x: 414, y: 520, width: 290, height: 250}, caption: {x: 520, y: 795, width: 78, height: 29, visible: true}},
     {window: {x: 736, y: 520, width: 290, height: 250}, caption: {x: 842, y: 795, width: 78, height: 29, visible: true}}]}'
+
+test_action_modes() {
+    local failures what modes passes
+    while IFS='|' read -r failures what modes; do
+        if [[ -n $modes ]]; then printf 'APEXG2-MODES %s\n' "$modes" >"$T/modes.log"; else : >"$T/modes.log"; fi
+        read -r passes _ <<<"$(assertion_counts action_modes default "$T/modes.log")"
+        expect_eq "action modes: $what fails $failures of 2" "$failures" $((2 - passes))
+    done <<'MODES'
+0|an on-time probe, back on the desktop|{"late": false, "atRun": "OVERVIEW", "atEnd": "NORMAL", "modals": 0, "overview": false}
+0|a late one, the same|{"late": true, "atRun": "OVERVIEW", "atEnd": "NORMAL", "modals": 0, "overview": false}
+0|a case that ends in the overview|{"late": true, "atRun": "OVERVIEW", "atEnd": "OVERVIEW", "modals": 1, "overview": true}
+1|a late probe under main.js's NONE, as a startup overview without its grab leaves it|{"late": true, "atRun": "NONE", "atEnd": "NORMAL", "modals": 0, "overview": false}
+1|an OVERVIEW mode left with no modal and the overview closed|{"late": false, "atRun": "OVERVIEW", "atEnd": "OVERVIEW", "modals": 0, "overview": false}
+1|a NONE mode under a modal|{"late": true, "atRun": "OVERVIEW", "atEnd": "NONE", "modals": 1, "overview": false}
+2|no modes reported|
+MODES
+}
 
 test_no_dock() {
     local failures what change passes
@@ -2773,6 +2798,7 @@ test_one_gpu
 test_part_ran
 test_no_nan_allocation
 test_pr_assertions
+test_action_modes
 test_no_dock
 test_dark_style_off
 test_fixtures

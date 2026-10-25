@@ -7,6 +7,7 @@ import Clutter from 'gi://Clutter';
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import Mtk from 'gi://Mtk';
+import Shell from 'gi://Shell';
 
 import * as BoxPointer from 'resource:///org/gnome/shell/ui/boxpointer.js';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
@@ -26,6 +27,10 @@ const DAMAGE_SAMPLES = 4;
 // The properties the shell and the layer ease; an actor easing one is not at rest.
 const EASED = ['opacity', 'translation-x', 'translation-y', 'scale-x', 'scale-y', 'x', 'y', 'width', 'height',
     'background-color', 'rotation-angle-z'];
+
+export function actionModeName() {
+    return Object.keys(Shell.ActionMode).find(name => Shell.ActionMode[name] === Main.actionMode) ?? Main.actionMode;
+}
 
 function actorName(actor) {
     const styleClass = actor.style_class ? `.${actor.style_class.trim().split(/\s+/).join('.')}` : '';
@@ -163,6 +168,7 @@ export async function settleDesktop({settle, dropStartupNotifications, apexDock}
     return {
         startingUp: Main.layoutManager._startingUp,
         overview: Main.overview.visible,
+        actionMode: actionModeName(),
         dock: dock ? {visible: dock.visible && dock.get_parent().visible, rested: restedDock} : null,
         barGlass: Boolean(Main.panel.get_effect(GLASS_EFFECT)),
         dockGlass: Boolean(dock?._background?.get_effect(GLASS_EFFECT)),
