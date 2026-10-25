@@ -2636,6 +2636,10 @@ async function signoffWindows() {
         a => a.constructor.name === 'WindowPreview' && a.mapped) >= SIGNOFF_APPS.length, SIGNOFF_WINDOWS_MS);
     await settle();
     global.stage.set_key_focus(null);
+    const [pointerX, pointerY] = global.get_pointer();
+    const panelStates = Object.entries(Main.panel.statusArea)
+        .map(([name, button]) => [name, button.get_style_pseudo_class?.()])
+        .filter(([, states]) => states);
     const overview = withoutBytes(await capture('signoff-overview'));
     Main.overview.hide();
     await settle();
@@ -2647,7 +2651,10 @@ async function signoffWindows() {
     const altTab = withoutBytes(await capture('signoff-alt-tab'));
     popup.destroy();
     await settle();
-    return {shown, previews, apps: appsShown(), overview: overview.file, altTab: altTab.file};
+    return {
+        shown, previews, apps: appsShown(), overview: overview.file, altTab: altTab.file,
+        atOverview: {pointer: [pointerX, pointerY], panelStates: Object.fromEntries(panelStates)},
+    };
 }
 
 async function until(condition, timeoutMs = 10000) {
@@ -2848,7 +2855,7 @@ async function runProbe() {
         let result;
         try {
             const Indicators = await import('./indicators.js');
-            result = await Indicators.indicatorsReport({cssUnit, settle, capture});
+            result = await Indicators.indicatorsReport({cssUnit, settle, capture, dropStartupNotifications});
         } catch (e) {
             result = {error: `${e.message}\n${e.stack}`};
         }

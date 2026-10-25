@@ -12,7 +12,7 @@ for them, and fixtures.py on a private bus, read back through libnm, gnome-bluet
 UPower's D-Bus API as the shell reads them. Needs gjs and jq (without them it skips, or
 fails with APEX_SHOTS_TESTS_NO_SKIP=1), GdkPixbuf for png.js's cross-check against
 libpng, for the fixtures dbus-daemon, python3-dbusmock and the NM and GnomeBluetooth
-typelibs, and for frame.c gcc and glib2-devel. Output is TAP.
+typelibs, for frame.c gcc and glib2-devel, and for goldens.sh git. Output is TAP.
 EOF
 }
 
@@ -757,6 +757,122 @@ CHANGES
 }
 
 # signoff.sh's last step on stand-in captures: each board's two scenes, then one gone.
+write_golden_fixtures() {
+    local dir=$1
+    mkdir -p "$dir"
+    cat >"$T/golden-make.js" <<EOF
+import GLib from 'gi://GLib';
+import * as Png from 'file://$HERE/png.js';
+
+function image(shade, moved = false) {
+    const rgba = new Uint8Array(40 * 30 * 4).fill(shade);
+    if (moved) {
+        for (let y = 10; y < 14; y++)
+            rgba.fill(7, (y * 40 + 20) * 4, (y * 40 + 26) * 4);
+    }
+    return {width: 40, height: 30, rgba};
+}
+const write = (name, img) => GLib.file_set_contents('$dir/' + name, Png.encode(img));
+write('board-14-end-session-light.png', image(230));
+write('board-14-end-session-dark.png', image(30));
+write('board-36-launcher-light.png', image(220));
+write('board-36-launcher-dark.png', image(40));
+write('moved-dark.png', image(40, true));
+EOF
+    gjs -m "$T/golden-make.js"
+    jq -n '{commit: "c0ffee", pins: {apexGnome: "c0ffee", apexDesktop: "acde"}, scale: 2, monitor: "2880x1800",
+            boards: [{board: 14, title: "End session", slug: "end-session", source: "s", fixture: "f",
+                      scene: {light: "l14", dark: "d14"}, files: {light: "board-14-end-session-light.png", dark: "board-14-end-session-dark.png"}},
+                     {board: 36, title: "Launcher", slug: "launcher", source: "s", fixture: "f",
+                      scene: {light: "l36", dark: "d36"}, files: {light: "board-36-launcher-light.png", dark: "board-36-launcher-dark.png"}}]}' \
+        >"$dir/signoff.json"
+}
+
+goldens() {
+    GOLDENS_LOCK=$T/goldens.lock GOLDENS_WORK=$T/goldens-work GOLDENS_URL=$T/goldens-work GOLDENS_MASKS=${masks:-$T/no-masks.json} \
+        GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t "$HERE/goldens.sh" "$@" >"$T/goldens.out" 2>&1
+}
+
+test_goldens() {
+    local dir=$T/goldens-signoff hash first masks='' rc
+    write_golden_fixtures "$dir"
+    printf '# test\nGOLDENS_REV=\n' >"$T/goldens.lock"
+    echo '{"boards": {}}' >"$T/no-masks.json"
+    hash=$(cat "$dir/board-36-launcher-light.png" "$dir/board-36-launcher-dark.png" | sha256sum | cut -c 1-12)
+    jq -n --arg h "$hash" '{boards: {"36": {status: "approved", shots: $h, approvedAt: "2026-10-25T09:41:00Z", note: "ok"},
+                                     "14": {status: "changes-requested", shots: "0123456789ab"}}}' >"$T/decisions.json"
+
+    jq '.boards["36"].shots = "0123456789ab"' "$T/decisions.json" >"$T/stale.json"
+    if ! goldens import "$dir" "$T/stale.json" && grep -q "board 36 (Launcher): approved shots 0123456789ab, but its captures hash to $hash: a stale approval" "$T/goldens.out" &&
+        grep -qx 'GOLDENS_REV=' "$T/goldens.lock" && [[ ! -e $T/goldens-work ]]; then
+        ok "goldens import: an approval of other captures refuses the import, named, and pins nothing"
+    else
+        not_ok "goldens import: an approval of other captures refuses the import, named, and pins nothing: $(tail -n 3 "$T/goldens.out")"
+    fi
+    jq '.boards["36"].reviewer = "x"' "$T/decisions.json" >"$T/shape.json"
+    if ! goldens import "$dir" "$T/shape.json" && grep -q 'board 36: unknown field(s) reviewer' "$T/goldens.out"; then
+        ok "goldens import: a decision of another shape is refused"
+    else
+        not_ok "goldens import: a decision of another shape is refused: $(tail -n 3 "$T/goldens.out")"
+    fi
+
+    if goldens import "$dir" "$T/decisions.json"; then
+        first=$(git -C "$T/goldens-work" rev-parse HEAD)
+        if grep -qx "GOLDENS_REV=$first" "$T/goldens.lock" && [[ -z $(git -C "$T/goldens-work" rev-list --parents -n 1 HEAD | cut -d' ' -f2) ]] &&
+            [[ $(git -C "$T/goldens-work" ls-files | paste -sd' ') == 'boards/board-36-dark.png boards/board-36-light.png manifest.json' ]] &&
+            jq -e --arg h "$hash" '.boards | keys == ["36"] and .["36"].shots == $h and .["36"].pins.apexDesktop == "acde"
+                and .["36"].scene.dark == "d36" and .["36"].approval == {status: "approved", approvedAt: "2026-10-25T09:41:00Z", shots: $h, note: "ok"}' \
+                "$T/goldens-work/manifest.json" >/dev/null; then
+            ok "goldens import: the approved board with its captures' hash becomes the branch's first commit, pinned"
+        else
+            not_ok "goldens import: the approved board with its captures' hash becomes the branch's first commit, pinned: $(cat "$T/goldens.lock")"
+        fi
+    else
+        not_ok "goldens import: the approved board with its captures' hash becomes the branch's first commit, pinned: $(tail -n 3 "$T/goldens.out")"
+    fi
+
+    if goldens check "$dir" && grep -q '^PASS captures board 36 (Launcher), light: equal' "$T/goldens.out" &&
+        grep -q '^PASS captures board 36 (Launcher), dark: equal' "$T/goldens.out" &&
+        grep -q '^AWAIT board 14 (End session): no approved golden, awaiting sign-off' "$T/goldens.out"; then
+        ok "goldens check: the pinned golden, fetched, equals its board; a board without one awaits sign-off"
+    else
+        not_ok "goldens check: the pinned golden, fetched, equals its board; a board without one awaits sign-off: $(tail -n 3 "$T/goldens.out")"
+    fi
+    cp "$dir/board-36-launcher-dark.png" "$T/dark.png"
+    cp "$dir/moved-dark.png" "$dir/board-36-launcher-dark.png"
+    rc=0
+    goldens check "$dir" || rc=$?
+    if ((rc == 1)) && grep -q '^FAIL captures board 36 (Launcher), dark: 24 pixel(s) differ outside the masks \[\], within {"x":20,"y":10,"width":6,"height":4}' "$T/goldens.out" &&
+        [[ -s $dir/goldens-diff/board-36-dark.png ]]; then
+        ok "goldens check: a region that changed fails, naming the board and the region"
+    else
+        not_ok "goldens check: a region that changed fails, naming the board and the region (exit $rc): $(grep -m 2 FAIL "$T/goldens.out")"
+    fi
+    echo '{"boards": {"36": [{"name": "live", "x": 18, "y": 8, "width": 10, "height": 8, "why": "test"}]}}' >"$T/masks.json"
+    if masks=$T/masks.json goldens check "$dir" && grep -q '^PASS captures board 36 (Launcher), dark: equal outside the masks \["live"\]' "$T/goldens.out"; then
+        ok "goldens check: a change inside a mask passes"
+    else
+        not_ok "goldens check: a change inside a mask passes: $(grep -m 2 FAIL "$T/goldens.out")"
+    fi
+    echo '{"boards": {"36": [{"name": "most", "x": 0, "y": 0, "width": 40, "height": 20}]}}' >"$T/masks.json"
+    if ! masks=$T/masks.json goldens check "$dir" && grep -q 'the masks \["most"\] cover 800 of 1200 pixels, more than 5 %' "$T/goldens.out"; then
+        ok "goldens check: a mask over 5 % of a capture fails"
+    else
+        not_ok "goldens check: a mask over 5 % of a capture fails: $(tail -n 3 "$T/goldens.out")"
+    fi
+    cp "$T/dark.png" "$dir/board-36-launcher-dark.png"
+
+    hash=$(cat "$dir/board-14-end-session-light.png" "$dir/board-14-end-session-dark.png" | sha256sum | cut -c 1-12)
+    jq -n --arg h "$hash" '{boards: {"14": {status: "approved", shots: $h, approvedAt: "2026-10-26T10:00:00Z"}}}' >"$T/decisions2.json"
+    if goldens import "$dir" "$T/decisions2.json" && [[ $(git -C "$T/goldens-work" rev-parse HEAD~1) == "$first" ]] &&
+        jq -e '.boards | keys == ["14", "36"]' "$T/goldens-work/manifest.json" >/dev/null && goldens check "$dir" &&
+        ! grep -q AWAIT "$T/goldens.out"; then
+        ok "goldens import: a later approval adds to the pinned commit, and both boards pass"
+    else
+        not_ok "goldens import: a later approval adds to the pinned commit, and both boards pass: $(tail -n 3 "$T/goldens.out")"
+    fi
+}
+
 test_signoff() {
     local dir=$T/signoff scene
     rm -rf "$dir"
@@ -2440,6 +2556,7 @@ test_window_switcher
 test_modal_dialog
 test_a11y
 test_signoff
+test_goldens
 test_date_menu
 test_overview_style
 test_app_grid

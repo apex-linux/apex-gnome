@@ -1,0 +1,11 @@
+{
+  "boards": {
+    "17": [
+      {
+        "name": "wifi-scan-spinner",
+        "x": 2354, "y": 357, "width": 36, "height": 38,
+        "why": "The Wi-Fi menu's scan spinner turns in real time, so its angle differs between runs; the board is the menu, not the angle."
+      }
+    ]
+  }
+}

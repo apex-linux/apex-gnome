@@ -259,8 +259,10 @@ async function until(condition, timeoutMs = 10000) {
 }
 
 // helpers: the probe's cssUnit, settle and capture.
-export async function indicatorsReport({cssUnit, settle, capture}) {
+export async function indicatorsReport({cssUnit, settle, capture, dropStartupNotifications}) {
     const unit = cssUnit();
+    // The search hint's banner times out on its own clock; left up, it covers board 39 in some runs.
+    dropStartupNotifications();
     Main.overview.hide();
     await settle();
     const [accent] = St.ThemeContext.get_for_stage(global.stage).get_accent_color();
