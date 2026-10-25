@@ -306,6 +306,8 @@ $apex_calendar_pager_size: 32px;
 $apex_calendar_day_height: 36px;
 $apex_calendar_day_gap: 2px;
 $apex_calendar_heading_height: 24px;
+// The smallest alpha of $apex_fg at 4.7:1 on the calendar card: .64 light, .55 dark.
+$apex_calendar_other_month: if($variant == 'light', rgba(29, 29, 33, .64), rgba(244, 244, 246, .55));
 $apex_font_calendar_month_size: 14px;
 $apex_font_calendar_heading_size: 11px;
 $apex_font_calendar_day_size: 13px;
