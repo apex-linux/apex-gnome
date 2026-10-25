@@ -19,6 +19,8 @@ blur. The lane's own checks, signing and the mutter pin's mirror are apex-image'
   PATCHED_RPMS=DIR   install the gnome-shell RPMs in DIR instead of building them
   PATCHED_OUT=DIR    keep the RPMs and the run's logs in DIR (default: a temporary one)
   PATCHED_PART=signoff  only direct.sh's signoff part, for signoff.sh: no Fedora baseline, no assertions
+  PATCHED_PART=pr       direct.sh's pr part (CI's cases for a pull request), no Fedora baseline;
+                        only those cases' assertions, and each of them must have run and reported
 
   docker run --rm --network=host -v "$PWD:/src:ro" registry.fedoraproject.org/fedora:45 \
       /src/tests/shots/patched.sh
@@ -169,13 +171,15 @@ if [[ ${PATCHED_PART:-} == signoff ]]; then
     bash /w/direct.sh signoff
     exit
 fi
-fedora_part
+[[ ${PATCHED_PART:-} == pr ]] || fedora_part
 install_shell
 
-step "direct.sh main"
+part=${PATCHED_PART:-main}
+[[ $part == main || $part == pr ]] || die "PATCHED_PART is signoff, pr or unset, not $part"
+step "direct.sh $part"
 rc=0
-bash /w/direct.sh main || rc=$?
-echo "# direct.sh main: exit $rc"
+bash /w/direct.sh "$part" || rc=$?
+echo "# direct.sh $part: exit $rc"
 
 # The assertions count their own failures; summary's status is the script's.
 set +e
@@ -184,82 +188,10 @@ set +e
 # A hung case stops direct.sh's part, as run.sh stops G2: the cases after it never ran, so one
 # failure names it rather than a "no report" for each of them.
 if ((rc == DIRECT_HUNG)); then
-    fail "direct.sh main: $(sed -n 's/^\([^ ]*\) exit=124 secs=\([0-9]*\) .*/\1 had no report within \2 s/p' "$run/results-main.txt" |
-        tail -n 1); G2 stops at a hung case, so the cases after it did not run"
+    hung_part "$run" "$part"
     summary
     exit
 fi
-for c in default default-scale1 dark-style stock-light stock-dark safe-env layer-disabled layer-cycles motion idle dock-pin glass-load glass-stress no-dock; do
-    no_js_error "$c" "$run/$c.log"
-    fixed_clock "$c" "$run/$c.log"
-done
-# Every case the fedora and main parts run sets the backdrop; fault-abort may abort before it reports.
-for c in "${DIRECT_CASES[@]}"; do
-    [[ $c == kernel-safe || $c == fault-abort ]] || backdrop_painted "$c" "$run/$c.log"
-done
-for c in default default-scale1 dark-style; do
-    exits "$run" "$c" 0
-    no_apex_failure "$c" "$run/$c.log"
-done
-search_hint default "$run/default.log" true
-search_hint safe-env "$run/safe-env.log" false
-top_bar default "$run/default.log" light
-top_bar_today default "$run/default.log" light
-top_bar_gaps default "$run/default.log" light
-top_bar default-scale1 "$run/default-scale1.log" light
-top_bar_today default-scale1 "$run/default-scale1.log" light
-top_bar dark-style "$run/dark-style.log" dark
-top_bar_today dark-style "$run/dark-style.log" dark
-top_bar_gaps dark-style "$run/dark-style.log" dark
-dock_metrics default "$run/default.log" light
-dock_metrics default-scale1 "$run/default-scale1.log" light
-dock_metrics dark-style "$run/dark-style.log" dark
-for c in dock-intellihide:light dock-intellihide-dark:dark; do
-    exits "$run" "${c%:*}" 0
-    no_js_error "${c%:*}" "$run/${c%:*}.log"
-    no_apex_failure "${c%:*}" "$run/${c%:*}.log"
-    dock_intellihide "${c%:*}" "$run/${c%:*}.log" "$run" "${c#*:}"
-done
-no_dock stock-light "$run/stock-light.log"
-no_dock stock-dark "$run/stock-dark.log"
-for c in default:light default-scale1:light dark-style:dark; do
-    shell_surfaces "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
-    quick_settings "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
-    quick_settings_layer "${c%:*}" "$run/${c%:*}.log" apex
-    notifications_layer "${c%:*}" "$run/${c%:*}.log" apex
-    shadow_layers "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
-    window_switcher "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
-    modal_dialog "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
-    date_menu "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
-    overview_style "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
-    app_grid "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
-    overview_layer "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
-    derived_surfaces "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
-    tile_preview "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
-    spotlight_style "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
-    launcher_search "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
-    spotlight_glass "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
-    spotlight_keys "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
-    screenshot_ui "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
-done
-for c in stock-light stock-dark; do
-    quick_settings_layer "$c" "$run/$c.log" stock
-    notifications_layer "$c" "$run/$c.log" stock
-done
-a11y_cases "$run"
-layer_cycles "$run"
-motion_curve "$run"
-idle_desktop "$run"
-glass_load "$run"
-glass_stress "$run"
-dock_pin "$run"
-no_js_error glass "$run/glass.log"
-glass_frames glass "$run/glass.log"
-shadows_under_glass glass "$run/glass.log"
-glass_manager glass "$run/glass.log" light
-glass_unlock_vs_fedora "$run"
-indicator_cases "$run"
-one_gpu_case "$run"
-no_dock_case "$run"
+patched_assertions "$run" "$part"
 echo "# logs and captures: $run"
 summary

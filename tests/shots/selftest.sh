@@ -2302,6 +2302,54 @@ EOF
     dbus-daemon --config-file="$T/bus.conf" --fork --print-address=3 --print-pid=4 3>"$T/bus.address" 4>"$T/bus.pid"
 }
 
+test_part_ran() {
+    local run=$T/part-run c passes failures
+    local -a cases
+    mkdir -p "$run"
+    # shellcheck disable=SC2016 # expanded by the inner bash
+    read -ra cases <<<"$(bash -c '. "$1/parts.sh"; echo "${PR_CASES[*]}"' _ "$HERE")"
+    : >"$run/results-pr.txt"
+    for c in "${cases[@]}"; do
+        echo "$c exit=0 secs=1 marker-after-exit=no" >>"$run/results-pr.txt"
+        [[ $c == fault-abort ]] || echo 'APEXG2 {"probe": true}' >"$run/$c.log"
+    done
+    read -r passes failures <<<"$(assertion_counts part_ran "$run" pr "${cases[@]}")"
+    expect_eq "parts: every case of the pr part ran and reported (fault-abort may abort first)" "${#cases[@]}/0" "$passes/$failures"
+    sed -i '/^indicators-dark /d' "$run/results-pr.txt"
+    read -r passes failures <<<"$(assertion_counts part_ran "$run" pr "${cases[@]}")"
+    expect_eq "parts: a case the part skipped fails, never passes unasserted" "$((${#cases[@]} - 1))/1" "$passes/$failures"
+    echo "indicators-dark exit=0 secs=1 marker-after-exit=no" >>"$run/results-pr.txt"
+    : >"$run/large-text.log"
+    read -r passes failures <<<"$(assertion_counts part_ran "$run" pr "${cases[@]}")"
+    expect_eq "parts: a case that ran but reported nothing fails" "$((${#cases[@]} - 1))/1" "$passes/$failures"
+    printf '%s\n' 'default exit=0 secs=91 marker-after-exit=no' 'indicators exit=124 secs=150 marker-after-exit=yes' \
+        >"$run/results-pr.txt"
+    read -r passes failures <<<"$(assertion_counts hung_part "$run" pr)"
+    expect_eq "parts: a hung case in the pr part fails once" "0/1" "$passes/$failures"
+    expect_eq "parts: and the failure names the part, the case and its limit" 1 \
+        "$(grep -c '^FAIL direct.sh pr: indicators had no report within 150 s; G2 stops at a hung case' "$T/assertions.out")"
+}
+
+test_pr_assertions() {
+    local run=$T/pr-run label rest stray="" missing
+    local -a cases
+    # shellcheck disable=SC2016 # expanded by the inner bash
+    read -ra cases <<<"$(bash -c '. "$1/parts.sh"; echo "${PR_CASES[*]}"' _ "$HERE")"
+    mkdir -p "$run"
+    : >"$run/results-pr.txt"
+    assertion_counts patched_assertions "$run" pr >/dev/null
+    while read -r _ label rest; do
+        label=${label%:}
+        [[ " ${cases[*]} " == *" $label "* ]] || stray+=" $label"
+    done < <(grep -E '^(PASS|FAIL) ' "$T/assertions.out")
+    expect_eq "parts: the pr part asserts no case it does not run" "" "$stray"
+    missing=$(grep -c ': direct.sh pr did not run it$' "$T/assertions.out")
+    expect_eq "parts: and with none of its cases run, part_ran fails each one" "${#cases[@]}" "$missing"
+    # shellcheck disable=SC2016 # expanded by the inner bash
+    expect_eq "parts: main asserts every case, pr only its own" "0 1 0" \
+        "$(bash -c '. "$1/assert.sh"; part=main; asserted glass; a=$?; part=pr; asserted glass; b=$?; asserted default; echo "$a $b $?"' _ "$HERE")"
+}
+
 test_one_gpu() {
     local failures what menu passes
     while IFS='|' read -r failures what menu; do
@@ -2668,6 +2716,8 @@ test_glass_load
 test_glass_stress
 test_spotlight_key
 test_one_gpu
+test_part_ran
+test_pr_assertions
 test_no_dock
 test_dark_style_off
 test_fixtures
