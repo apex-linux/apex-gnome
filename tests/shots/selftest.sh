@@ -420,6 +420,13 @@ REPORT_OF_AN_OVERVIEW_LAYER_FROM_TOKENS='
         workspace: {x: 250, y: 205, width: 939, height: 566, background: false,
             empty: {x: 644, y: 477, width: 150, height: 22, visible: true, text: "No open windows", foreground: ($t.apex_fg_dim | hex),
                 font: {size: ($t.apex_font_workspace_empty_size | px), weight: ($t.apex_font_heading_weight | tonumber)}}}},
+    overviewWindows: {dock: {x: 540, y: (804 + ($t.apex_dock_bottom_gap | px)), width: 361, height: 70},
+        dockBox: {x: 540, y: 820, width: 361, height: 80}, bottom: {stock: 900, hook: (900 - 80 - ($t.apex_dock_bottom_gap | px))},
+        previews: [
+            {window: {x: 561, y: 198, width: 317, height: 236}, caption: {x: 602, y: 459, width: 235, height: 29, visible: true}},
+            {window: {x: 414, y: 500, width: 290, height: 250}, caption: {x: 520, y: 775, width: 78, height: 29, visible: true}},
+            {window: {x: 736, y: 500, width: 290, height: 250}, caption: {x: 842, y: 775, width: 78, height: 29, visible: true}}],
+        thumbnails: [{x: 597, y: 108, width: 117, height: 70, spread: 0.42}, {x: 724, y: 108, width: 117, height: 70, spread: 0.31}]},
     appGrid: {grid: {columns: 7, rows: 4, iconSize: 88}, strip: 0, box: {y: 132}}}}'
 # shellcheck disable=SC2016 # a jq program
 REPORT_OF_SHADOW_LAYERS_FROM_TOKENS='
@@ -1310,7 +1317,7 @@ test_overview_layer() {
     local variant change what passes failures open_gaps
     for variant in light dark; do
         read -r passes failures open_gaps <<<"$(assert_run overview_layer "$variant")"
-        if ((failures == 0 && open_gaps == 0 && passes == 7)); then
+        if ((failures == 0 && open_gaps == 0 && passes == 11)); then
             ok "overview feature ($variant): the layer's overview passes all $passes assertions"
         else
             not_ok "overview feature ($variant): the layer's overview passes (passed/failed/gaps $passes/$failures/$open_gaps): $(grep -m3 '^FAIL' "$T/top-bar.out" | paste -sd'|' -)"
@@ -1331,6 +1338,11 @@ test_overview_layer() {
 .surfaces.overviewLayer.workspace.background = true|the workspace background card
 .surfaces.overviewLayer.workspace.empty.y = 300|the empty label off centre
 .surfaces.overviewLayer.workspace.empty.foreground = "#1d1d21ff"|the empty label in full $apex_fg
+.surfaces.overviewWindows.previews[0].caption.y = 480|a caption over the next row's preview
+.surfaces.overviewWindows.previews[1].caption.visible = false|a caption shown only on hover
+.surfaces.overviewWindows.previews[2].caption.y = 780|the last row's captions nearer the dock than $apex_dock_bottom_gap
+.surfaces.overviewWindows.thumbnails[1].spread = 0|stock's flat thumbnail fill
+.surfaces.overviewWindows.bottom.hook = 820|a bottom edge without the dock's gap
 .surfaces.appGrid.grid.iconSize = 96|upstream's 96 px launcher icons
 .surfaces.appGrid.box.y = 262|upstream's workspace strip above the grid
 .surfaces.appGrid.box.y = 128|the grid at board 36's old 128, which assumed an 18 px spacing
@@ -1814,7 +1826,8 @@ readonly IDLE_REPORT='{windowMs: 10000,
   quickSettings: {afterPaints: 0, frames: [], relayouts: {}},
   reduceTransparency: {idle: {afterPaints: 0, frames: [], relayouts: {}}, quickSettings: {afterPaints: 0, frames: [], relayouts: {}}},
   control: {afterPaints: 3, frames: [{atMs: 512, damage: {rectangles: 2, extents: {x: 1050, y: 36, width: 376, height: 418},
-    under: [["StBoxLayout.quick-settings", "StBoxLayout.popup-menu-content"]]}}]}}'
+    under: [["StBoxLayout.quick-settings", "StBoxLayout.popup-menu-content"]]}}]},
+  overview: {shown: true, wallpapers: 2, idle: {afterPaints: 0, frames: [], relayouts: {}}}}'
 # shellcheck disable=SC2016 # a jq program
 readonly IDLE_FRAME='{atMs: 4210, damage: {rectangles: 1, extents: {x: 600, y: 838, width: 240, height: 62},
   under: [["StIcon.apex-dock-trash", "ApexDock#apexDock"]]}}'
@@ -1903,6 +1916,9 @@ test_idle() {
 .quickSettings += {afterPaints: 146, frames: [$frame]}|Quick Settings and the bar redrawing each other while idle
 .reduceTransparency.idle.afterPaints = 1|a paint while idle with Reduce Transparency
 .reduceTransparency.quickSettings.afterPaints = 1|a paint with Quick Settings open and Reduce Transparency
+.overview.idle += {afterPaints: 1, frames: [$frame]}|a frame painted in the idle overview
+.overview.idle.relayouts = {"MetaBackgroundActor < ClutterActor": 3}|a relayout queued in the idle overview
+.overview.wallpapers = 0|an idle overview whose thumbnails draw no wallpaper
 CHANGES
     # shellcheck disable=SC2016 # a jq variable
     write_idle_run '.idle += {afterPaints: 1, frames: [$frame]}'
@@ -1917,7 +1933,7 @@ CHANGES
     write_idle_run '{error: "idle.js: settle never returned\nidle.js:150"}'
     read -r passes failures <<<"$(assertion_counts idle_desktop "$T/idle")"
     expect_eq "idle: a probe error fails once, with its message, not every assertion after it" \
-        "$((all - 8))/1 idle.js: settle never returned" \
+        "$((all - 9))/1 idle.js: settle never returned" \
         "$passes/$failures $(sed -n 's/^FAIL idle: //p' "$T/assertions.out")"
 }
 
@@ -2091,6 +2107,26 @@ test_one_gpu() {
 1|a switcheroo-control still reporting two GPUs|{"app": "Files", "hasDualGpu": true, "items": ["New Window", "Unpin"]}
 2|no menu at all|null
 MENUS
+}
+
+# shellcheck disable=SC2016 # a jq program
+readonly NO_DOCK_REPORT='{dock: null, bottom: {stock: 900, hook: 900}, previews: [
+    {window: {x: 561, y: 198, width: 317, height: 236}, caption: {x: 602, y: 459, width: 235, height: 29, visible: true}},
+    {window: {x: 414, y: 520, width: 290, height: 250}, caption: {x: 520, y: 795, width: 78, height: 29, visible: true}},
+    {window: {x: 736, y: 520, width: 290, height: 250}, caption: {x: 842, y: 795, width: 78, height: 29, visible: true}}]}'
+
+test_no_dock() {
+    local failures what change passes
+    while IFS='|' read -r failures what change; do
+        printf 'APEXG2-OVERVIEW-WINDOWS %s\n' "$(jq -nc "$NO_DOCK_REPORT | $change")" >"$T/no-dock.log"
+        read -r passes _ <<<"$(assertion_counts overview_without_dock no-dock "$T/no-dock.log")"
+        expect_eq "no dock: $what fails $failures of 2" "$failures" $((2 - passes))
+    done <<'CHANGES'
+0|stock's bottom edge, three captions clear of each other|.
+1|the dock's edge kept without the dock|.bottom.hook = 810
+1|a caption over the next row|.previews[0].caption.y = 500
+2|a probe error|{error: "overviewWithWindows: 0 of 3 test windows mapped"}
+CHANGES
 }
 
 test_fixtures() {
@@ -2396,6 +2432,7 @@ test_glass_load
 test_glass_stress
 test_spotlight_key
 test_one_gpu
+test_no_dock
 test_fixtures
 test_glass
 test_shadows_under_glass
