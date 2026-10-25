@@ -642,6 +642,9 @@ jobs:
       - name: tests/s7/selftest.sh
         run: tests/s7/selftest.sh
 
+      - name: tests/laptop/selftest.sh
+        run: tests/laptop/selftest.sh
+
   privacy:
     name: No biometric files
     runs-on: ubuntu-24.04

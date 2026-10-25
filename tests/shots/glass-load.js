@@ -32,7 +32,7 @@ const OVER_DOCK_AND_POPOVERS = {x: 760, y: 300, width: 600, height: 590};
 const DRAG_SIZE = {width: 360, height: 240};
 const B_LEGS = [
     {popover: null, from: [300, 640], to: [1080, 640]},
-    {popover: 'quickSettings', from: [700, 120], to: [1300, 120]},
+    {popover: 'quickSettings', from: [700, 120], to: [1080, 120]},
     {popover: 'dateMenu', from: [300, 120], to: [900, 120]},
 ];
 // 0014-blurcost.py's model: half the Vega 7's bandwidth and texture rate.
@@ -138,12 +138,12 @@ function record(Registry, windowActor) {
     };
 }
 
-async function startClient(still) {
+async function startClient(still, {display, clientArgs = []} = {}) {
     const client = Gio.File.new_for_uri(import.meta.url).get_parent().get_child('load-window.js').get_path();
     const launcher = new Gio.SubprocessLauncher({flags: Gio.SubprocessFlags.STDERR_PIPE});
-    launcher.setenv('WAYLAND_DISPLAY', GLib.getenv('G2_WAYLAND_DISPLAY') ?? 'apex-g2', true);
+    launcher.setenv('WAYLAND_DISPLAY', display ?? GLib.getenv('G2_WAYLAND_DISPLAY') ?? 'apex-g2', true);
     launcher.setenv('GDK_BACKEND', 'wayland', true);
-    const process = launcher.spawnv(['gjs', '-m', client, ...still ? ['still'] : []]);
+    const process = launcher.spawnv(['gjs', '-m', client, ...still ? ['still'] : [], ...clientArgs]);
     const find = () => global.get_window_actors().find(a => a.meta_window.get_gtk_application_id() === LOAD_APP_ID);
     let actor;
     for (let waited = 0; !(actor = find())?.mapped && waited < CLIENT_WAIT_MS; waited += 100)
@@ -160,38 +160,41 @@ function place(window, {x, y, width, height}) {
     window.move_resize_frame(false, x, y, width, height);
 }
 
-async function measure(Registry, actor, run) {
+async function measure(Registry, actor, run, onStart = () => {}) {
     const stop = record(Registry, actor);
+    onStart();
     await run();
     return stop();
 }
 
-async function scenarioA(Registry) {
-    const {process, actor, window} = await startClient(false);
+async function scenarioA(Registry, {ms = SCENARIO_MS, onStart, ...client} = {}) {
+    const {process, actor, window} = await startClient(false, client);
     const menu = Main.panel.statusArea.quickSettings.menu;
     try {
         place(window, OVER_DOCK_AND_POPOVERS);
         menu.open(BoxPointer.PopupAnimation.NONE);
         await Scripting.sleep(SETTLE_MS);
-        return await measure(Registry, actor, () => Scripting.sleep(SCENARIO_MS));
+        return await measure(Registry, actor, () => Scripting.sleep(ms), onStart);
     } finally {
         menu.close(BoxPointer.PopupAnimation.NONE);
         process.force_exit();
     }
 }
 
-async function drag(window, from, to) {
-    const steps = Math.round(SCENARIO_MS / B_LEGS.length / STEP_MS);
+async function drag(window, from, to, ms, onStep) {
+    const steps = Math.round(ms / B_LEGS.length / STEP_MS);
     for (let i = 0; i <= steps; i++) {
         const t = i / steps;
         window.move_frame(false, Math.round(from[0] + (to[0] - from[0]) * t), Math.round(from[1] + (to[1] - from[1]) * t));
+        if (i > 0)
+            onStep(window);
         // eslint-disable-next-line no-await-in-loop
         await Scripting.sleep(STEP_MS);
     }
 }
 
-async function scenarioB(Registry) {
-    const {process, actor, window} = await startClient(true);
+async function scenarioB(Registry, {ms = SCENARIO_MS, onStart, onStep = () => {}, ...client} = {}) {
+    const {process, actor, window} = await startClient(true, client);
     try {
         place(window, {x: B_LEGS[0].from[0], y: B_LEGS[0].from[1], ...DRAG_SIZE});
         await Scripting.sleep(SETTLE_MS);
@@ -203,10 +206,10 @@ async function scenarioB(Registry) {
                 // eslint-disable-next-line no-await-in-loop
                 await Scripting.sleep(SETTLE_MS);
                 // eslint-disable-next-line no-await-in-loop
-                await drag(window, leg.from, leg.to);
+                await drag(window, leg.from, leg.to, ms, onStep);
                 menu?.close(BoxPointer.PopupAnimation.NONE);
             }
-        });
+        }, onStart);
     } finally {
         process.force_exit();
     }
@@ -214,8 +217,8 @@ async function scenarioB(Registry) {
 
 // C as far as S3a's scrims allow: the overview and the launcher over the playing window, then
 // Spotlight over it. The scrims join the registry with them.
-async function scenarioC(Registry) {
-    const {process, actor, window} = await startClient(false);
+async function scenarioC(Registry, {ms = SCENARIO_MS, onStart, onStep = () => {}, ...client} = {}) {
+    const {process, actor, window} = await startClient(false, client);
     const spotlight = (await import(SPOTLIGHT_FEATURE).catch(() => null))?.popup();
     try {
         place(window, OVER_DOCK_AND_POPOVERS);
@@ -226,21 +229,27 @@ async function scenarioC(Registry) {
                     Main.overview.showApps();
                 else
                     Main.overview.show();
+                onStep();
                 // eslint-disable-next-line no-await-in-loop
-                await Scripting.sleep(SCENARIO_MS / TOGGLES / 2);
+                await Scripting.sleep(ms / TOGGLES / 2);
                 Main.overview.hide();
+                onStep();
                 // eslint-disable-next-line no-await-in-loop
-                await Scripting.sleep(SCENARIO_MS / TOGGLES / 2);
+                await Scripting.sleep(ms / TOGGLES / 2);
             }
             spotlight?.open();
-            await Scripting.sleep(SCENARIO_MS / 2);
+            onStep();
+            await Scripting.sleep(ms / 2);
             spotlight?.close();
-        });
+        }, onStart);
     } finally {
         Main.overview.hide();
         process.force_exit();
     }
 }
+
+// tests/laptop/scenarios.js runs these on the laptop: for MS each, on its display, with a callback per step.
+export const SCENARIOS = {A: scenarioA, B: scenarioB, C: scenarioC};
 
 async function withReduceTransparency(apex, on, run) {
     apex.set_boolean(REDUCE_TRANSPARENCY_KEY, on);

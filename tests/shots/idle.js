@@ -206,6 +206,25 @@ async function withReduceTransparency(read) {
     }
 }
 
+// The open overview at rest, its thumbnails drawing the wallpaper, without the search entry's
+// blinking cursor.
+async function overviewAtRest({settle}) {
+    Main.overview.show();
+    await settle();
+    global.stage.set_key_focus(null);
+    await Scripting.sleep(SETTLE_REST_MS);
+    const thumbnails = Main.overview._overview._controls._thumbnailsBox._thumbnails ?? [];
+    const idle = await paintsOver(IDLE_WINDOW_MS);
+    const report = {
+        shown: Main.overview.visible,
+        wallpapers: thumbnails.filter(t => t.has_style_class_name('apex-thumbnail-wallpaper')).length,
+        idle,
+    };
+    Main.overview.hide();
+    await settle();
+    return report;
+}
+
 export async function idleReport(helpers) {
     const settled = await settleDesktop(helpers);
     const idle = await paintsOver(IDLE_WINDOW_MS);
@@ -214,5 +233,8 @@ export async function idleReport(helpers) {
         idle: await paintsOver(IDLE_WINDOW_MS),
         quickSettings: await withQuickSettingsOpen(),
     }));
-    return {windowMs: IDLE_WINDOW_MS, settled, idle, quickSettings, reduceTransparency, control: await control()};
+    return {
+        windowMs: IDLE_WINDOW_MS, settled, idle, quickSettings, reduceTransparency, control: await control(),
+        overview: await overviewAtRest(helpers),
+    };
 }
