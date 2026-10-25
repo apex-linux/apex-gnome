@@ -5,6 +5,8 @@
 
 import Clutter from 'gi://Clutter';
 import Gio from 'gi://Gio';
+import GLib from 'gi://GLib';
+import Meta from 'gi://Meta';
 import St from 'gi://St';
 
 import * as Glass from '../glass/registry.js';
@@ -26,6 +28,7 @@ let _box = null;
 let _dock = null;
 let _intellihide = null;
 let _connections = [];
+let _dashLater = 0;
 
 function _iconSize() {
     return ICON_SIZES[_settings.get_string(ICON_SIZE_KEY)] ?? ICON_SIZES.medium;
@@ -68,6 +71,31 @@ function _overviewShowAppsToggled() {
     _dock.showAppsButton.checked = Main.overview.dash.showAppsButton.checked;
 }
 
+// Hidden, the overview's dash is never mapped: main.js would run what it queues on a 20 s fallback
+// and repaint the whole stage then. It redisplays before the next redraw instead, as when mapped.
+function _keepOverviewDashCurrent() {
+    const dash = Main.overview.dash;
+    dash._queueRedisplay = () => {
+        if (_dashLater)
+            return;
+        _dashLater = global.compositor.get_laters().add(Meta.LaterType.BEFORE_REDRAW, () => {
+            _dashLater = 0;
+            dash._redisplay();
+            return GLib.SOURCE_REMOVE;
+        });
+    };
+    dash._queueRedisplay();
+}
+
+function _restoreOverviewDash() {
+    const dash = Main.overview.dash;
+    if (_dashLater)
+        global.compositor.get_laters().remove(_dashLater);
+    _dashLater = 0;
+    delete dash._queueRedisplay;
+    dash._queueRedisplay();
+}
+
 function _inDock(actor) {
     return actor.get_parent()?.get_parent() instanceof ApexDock;
 }
@@ -92,6 +120,7 @@ export function enable() {
     Glass.register(_dock._background, {name: 'dock'});
     Main.layoutManager.addChrome(_box, {trackFullscreen: true});
     Main.overview.dash.hide();
+    _keepOverviewDashCurrent();
 
     _connections = [
         [_settings, `changed::${ICON_SIZE_KEY}`, _syncSettings],
@@ -121,6 +150,7 @@ export function disable() {
     if (Main.overview.dash) {
         Main.overview.dash.height = -1;
         Main.overview.dash.show();
+        _restoreOverviewDash();
     }
     _box?.destroy();
     _box = null;

@@ -2787,6 +2787,17 @@ async function runProbe() {
         console.log(`APEXG2-GLASS-LOAD-STRESS ${JSON.stringify(result)}`);
     }
 
+    if (GLib.getenv('G2_DOCK_PIN') === '1') {
+        let result;
+        try {
+            const DockPin = await import('./dock-pin.js');
+            result = await DockPin.dockPinReport({settle, dropStartupNotifications, apexDock});
+        } catch (e) {
+            result = {error: `${e.message}\n${e.stack}`};
+        }
+        console.log(`APEXG2-DOCK-PIN ${JSON.stringify(result)}`);
+    }
+
     if (GLib.getenv('G2_DOCK') === '1') {
         let result;
         try {

@@ -115,7 +115,7 @@ function damageOf(region) {
 
 // Every stage frame in the window: its damage, the actors under it, and the actors that queued
 // a relayout (queue-relayout runs up the tree, so the innermost is the one that asked).
-async function paintsOver(ms) {
+export async function paintsOver(ms) {
     const result = {afterPaints: 0, frames: [], relayouts: {}};
     const start = GLib.get_monotonic_time();
     const relayoutIds = [];
@@ -141,7 +141,7 @@ async function paintsOver(ms) {
     return result;
 }
 
-async function until(condition, timeoutMs) {
+export async function until(condition, timeoutMs) {
     for (let waited = 0; waited < timeoutMs; waited += 100) {
         if (condition())
             return true;
@@ -153,7 +153,7 @@ async function until(condition, timeoutMs) {
 
 // The desktop at rest: startup over, no overview, no banner, the dock and the bar's glass and
 // shadows in place, nothing easing, and the pointer left where it started.
-async function settleDesktop({settle, dropStartupNotifications, apexDock}) {
+export async function settleDesktop({settle, dropStartupNotifications, apexDock}) {
     dropStartupNotifications();
     Main.overview.hide();
     await settle();

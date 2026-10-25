@@ -1814,6 +1814,49 @@ readonly IDLE_REPORT='{windowMs: 10000,
 readonly IDLE_FRAME='{atMs: 4210, damage: {rectangles: 1, extents: {x: 600, y: 838, width: 240, height: 62},
   under: [["StIcon.apex-dock-trash", "ApexDock#apexDock"]]}}'
 
+# shellcheck disable=SC2016 # a jq program
+readonly DOCK_PIN_REPORT='{settled: {startingUp: false, overview: false, dock: {visible: true, rested: true}},
+  pinned: "org.gnome.Calculator.desktop", dockApps: ["org.gnome.Nautilus.desktop", "org.gnome.Calculator.desktop"],
+  dockUpdate: {afterPaints: 4}, windowMs: {dockUpdate: 3000, fallback: 21000}, fallbackFiredMs: [20004],
+  fallback: {afterPaints: 0, frames: [], relayouts: {}},
+  stock: {shown: true, dashApps: ["org.gnome.Nautilus.desktop"], favorites: ["org.mozilla.firefox.desktop", "org.gnome.Nautilus.desktop"]}}'
+
+write_dock_pin_run() {
+    local change=$1 dir=$T/dock-pin
+    rm -rf "$dir" && mkdir -p "$dir"
+    printf 'APEXG2-DOCK-PIN %s\n' "$(jq -nc --argjson frame "$(jq -nc "$IDLE_FRAME")" "$DOCK_PIN_REPORT | $change")" >"$dir/dock-pin.log"
+    echo 'dock-pin exit=0 secs=58 marker-after-exit=no' >"$dir/results-main.txt"
+}
+
+test_dock_pin() {
+    local change what passes failures all
+    write_dock_pin_run .
+    read -r all failures <<<"$(assertion_counts dock_pin "$T/dock-pin")"
+    if ((failures == 0 && all > 5)); then
+        ok "dock-pin: the pin shows at once, no frame through the fallback, stock's dash full, pass all $all assertions"
+    else
+        not_ok "dock-pin: a clean run passes (passed/failed $all/$failures): $(grep -m3 '^FAIL' "$T/assertions.out" | paste -sd'|' -)"
+    fi
+    while IFS='|' read -r change what; do
+        write_dock_pin_run "$change"
+        read -r passes failures <<<"$(assertion_counts dock_pin "$T/dock-pin")"
+        expect_eq "dock-pin: $what fails one assertion" "$((all - 1))/1" "$passes/$failures"
+    done <<'CHANGES'
+.fallback += {afterPaints: 1, frames: [$frame]}|a frame when the fallback comes round
+.fallback.afterPaints = 1|a paint the counter saw but did not keep
+.dockApps = ["org.gnome.Nautilus.desktop"]|a dock that never showed the pin
+.dockUpdate.afterPaints = 0|a pin the dock did not paint at once
+.windowMs.fallback = 10000|windows that end before the fallback
+.stock.dashApps = []|an overview dash left empty with the dock off
+.stock.shown = false|an overview that never showed
+.settled.overview = true|an overview left open before the pin
+CHANGES
+    write_dock_pin_run '{error: "no installed app outside the favourites to pin\ndock-pin.js:64"}'
+    read -r passes failures <<<"$(assertion_counts dock_pin "$T/dock-pin")"
+    expect_eq "dock-pin: a probe error fails once" "2/1 no installed app outside the favourites to pin" \
+        "$passes/$failures $(sed -n 's/^FAIL dock-pin: //p' "$T/assertions.out")"
+}
+
 write_idle_run() {
     local change=$1 dir=$T/idle feature
     rm -rf "$dir" && mkdir -p "$dir"
@@ -2343,6 +2386,7 @@ test_overview_below_bar
 test_layer_cycles
 test_motion
 test_idle
+test_dock_pin
 test_glass_load
 test_glass_stress
 test_spotlight_key
