@@ -64,6 +64,8 @@ const SWITCHER_ICON_SIZE = 96;
 // Nautilus refuses to run as root, as G2 does: Calendar, from the dock, stands in.
 const SIGNOFF_APPS = [['gnome-text-editor', '--new-window'], ['gnome-calendar'], ['ptyxis', '--new-window']];
 const SIGNOFF_WINDOWS_MS = 30000;
+const SIGNOFF_FOCUS_ORDER = ['org.gnome.Calendar.desktop', 'org.gnome.TextEditor.desktop', 'org.gnome.Ptyxis.desktop'];
+const SIGNOFF_QUIET_MS = 1500;
 const AVATAR_SIZE = 32;
 const OVERVIEW_WINDOWS = 3;
 const FIXTURE_WALLPAPER = {width: 160, height: 100};
@@ -2637,11 +2639,25 @@ async function signoffWindows() {
     const appsShown = () => [...new Set(global.get_window_actors().map(a => tracker.get_window_app(a.meta_window)?.get_id()))]
         .filter(Boolean);
     const shown = await until(() => appsShown().length >= SIGNOFF_APPS.length, SIGNOFF_WINDOWS_MS);
-    // Off every window preview, so none of them shows its hover caption.
+    // The last window to map takes the focus: the switcher's order and the bar's app name follow a fixed one instead.
+    for (const id of SIGNOFF_FOCUS_ORDER) {
+        const window = global.get_window_actors().map(a => a.meta_window).find(w => tracker.get_window_app(w)?.get_id() === id);
+        if (window)
+            Main.activateWindow(window);
+    }
+    const quiet = await windowsQuiet(SIGNOFF_QUIET_MS, SIGNOFF_WINDOWS_MS);
+    // Off every window preview and the bar's pills; a new device can drop one axis of its first motion.
     const monitor = Main.layoutManager.primaryMonitor;
     const pointer = global.stage.context.get_backend().get_default_seat()
         .create_virtual_device(Clutter.InputDeviceType.POINTER_DEVICE);
-    pointer.notify_absolute_motion(GLib.get_monotonic_time(), monitor.x + monitor.width - 1, monitor.y + monitor.height / 4);
+    const target = [monitor.x + monitor.width - 1, monitor.y + monitor.height / 4];
+    const pointerPlaced = await until(() => {
+        const [x, y] = global.get_pointer();
+        if (x === target[0] && y === target[1])
+            return true;
+        pointer.notify_absolute_motion(GLib.get_monotonic_time(), ...target);
+        return false;
+    }, 3000);
     await settle();
     Main.overview.show();
     // A window still mapping joins the overview's workspace late: wait for its preview.
@@ -2649,6 +2665,10 @@ async function signoffWindows() {
         a => a.constructor.name === 'WindowPreview' && a.mapped) >= SIGNOFF_APPS.length, SIGNOFF_WINDOWS_MS);
     await settle();
     global.stage.set_key_focus(null);
+    const [pointerX, pointerY] = global.get_pointer();
+    const panelStates = Object.entries(Main.panel.statusArea)
+        .map(([name, item]) => [name, item.get_style_pseudo_class?.()])
+        .filter(([, states]) => states);
     const overview = withoutBytes(await capture('signoff-overview'));
     Main.overview.hide();
     await settle();
@@ -2660,7 +2680,22 @@ async function signoffWindows() {
     const altTab = withoutBytes(await capture('signoff-alt-tab'));
     popup.destroy();
     await settle();
-    return {shown, previews, apps: appsShown(), overview: overview.file, altTab: altTab.file};
+    return {
+        shown, previews, apps: appsShown(), overview: overview.file, altTab: altTab.file,
+        quiet, pointerPlaced,
+        atOverview: {pointer: [pointerX, pointerY], panelStates: Object.fromEntries(panelStates)},
+    };
+}
+
+// Text Editor retitles its new document a draft after it maps; a preview shows whatever frame came last.
+async function windowsQuiet(quietMs, timeoutMs) {
+    let last = GLib.get_monotonic_time();
+    const handlers = global.get_window_actors().map(a => [a, a.connect('damaged', () => (last = GLib.get_monotonic_time()))]);
+    try {
+        return await until(() => GLib.get_monotonic_time() - last > quietMs * 1000, timeoutMs);
+    } finally {
+        handlers.forEach(([actor, id]) => actor.disconnect(id));
+    }
 }
 
 async function until(condition, timeoutMs = 10000) {
@@ -2809,6 +2844,13 @@ export async function run() {
 async function runProbe() {
     await Scripting.sleep(REPORT_AFTER_MS);
     console.log(`APEXG2 ${JSON.stringify(await report())}`);
+    let backdrop;
+    try {
+        backdrop = await (await import('./backdrop.js')).backdropReport({settle});
+    } catch (e) {
+        backdrop = {error: `${e.message}\n${e.stack}`};
+    }
+    console.log(`APEXG2-BACKDROP ${JSON.stringify(backdrop)}`);
 
     if (GLib.getenv('G2_SCENES') === '1') {
         let result;
@@ -2861,7 +2903,7 @@ async function runProbe() {
         let result;
         try {
             const Indicators = await import('./indicators.js');
-            result = await Indicators.indicatorsReport({cssUnit, settle, capture});
+            result = await Indicators.indicatorsReport({cssUnit, settle, capture, dropStartupNotifications});
         } catch (e) {
             result = {error: `${e.message}\n${e.stack}`};
         }

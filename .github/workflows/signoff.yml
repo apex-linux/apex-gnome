@@ -1,10 +1,27 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 name: signoff
 
-# The owner's sign-off captures (tests/shots/signoff.sh), on demand only: review captures,
-# not a test, so no pull request waits for them.
+# The owner's sign-off captures (tests/shots/signoff.sh), checked against the approved goldens.
+# A sign-off run takes about 20 minutes, so a pull request runs it only when labelled goldens.
 on:
   workflow_dispatch: {}
+  push:
+    branches: [main]
+    paths:
+      - desktop/shell/**
+      - packaging/pkgs/gnome-shell/**
+      - tests/shots/**
+      - tests/shell/**
+      - tests/lib/**
+      - .github/workflows/signoff.yml
+  pull_request:
+    types: [opened, synchronize, reopened, labeled]
+  schedule:
+    - cron: '41 5 * * *'
+
+concurrency:
+  group: signoff-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 permissions: {}
 
@@ -14,7 +31,8 @@ defaults:
 
 jobs:
   signoff:
-    name: tests/shots/signoff.sh (Fedora 45, every shell board, light and dark)
+    name: tests/shots/signoff.sh (Fedora 45, every shell board, light and dark, against the goldens)
+    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'goldens')
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     permissions:
@@ -49,9 +67,14 @@ jobs:
           openssl git-core adwaita-sans-fonts jetbrains-mono-fonts-all procps-ng jq
 
       - name: tests/shots/signoff.sh
+        id: capture
         run: tests/shots/signoff.sh _build/gnome-shell/out _build/signoff
 
+      - name: tests/shots/goldens.sh check
+        run: tests/shots/goldens.sh check _build/signoff
+
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: ${{ !cancelled() && steps.capture.outcome == 'success' }}
         with:
           name: signoff-${{ github.sha }}
           path: _build/signoff/
