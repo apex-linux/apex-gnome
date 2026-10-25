@@ -880,8 +880,38 @@ test_goldens() {
     fi
 }
 
+test_signoff_banners() {
+    local dir=$T/signoff-banners
+    rm -rf "$dir" && cp -r "$1" "$dir"
+    sed -i 's/"file":"default-signoff-overview.png","banner":null/"file":"default-signoff-overview.png","banner":{"source":"Calendar","title":"Calendar is ready"}/' \
+        "$dir/g2/default.log"
+    if ! "$HERE/signoff.sh" --collect "$dir/g2" "$dir/shots" "$dir/out" >"$T/signoff.out" 2>&1 &&
+        grep -q 'board 35 (Overview), light: a banner over default-signoff-overview: {"source":"Calendar","title":"Calendar is ready"}' "$T/signoff.out" &&
+        ! grep -q 'board 16' "$T/signoff.out"; then
+        ok "signoff: a banner a scene did not open fails its board, named; board 16's own banner does not"
+    else
+        not_ok "signoff: a banner a scene did not open fails its board, named; board 16's own banner does not: $(tail -n 3 "$T/signoff.out")"
+    fi
+    rm -rf "$dir" && cp -r "$1" "$dir"
+    : >"$dir/shots/lock-dark.log"
+    if ! "$HERE/signoff.sh" --collect "$dir/g2" "$dir/shots" "$dir/out" >"$T/signoff.out" 2>&1 &&
+        grep -q 'board 20 (Lock screen), dark: no banner record for lock-dark-open' "$T/signoff.out"; then
+        ok "signoff: a capture without a banner record fails its board"
+    else
+        not_ok "signoff: a capture without a banner record fails its board: $(tail -n 3 "$T/signoff.out")"
+    fi
+    rm -rf "$dir" && cp -r "$1" "$dir"
+    echo 'APEXG2-SIGNOFF {"error":"the sign-off windows brought notifications from Calendar"}' >>"$dir/g2/dark-style.log"
+    if ! "$HERE/signoff.sh" --collect "$dir/g2" "$dir/shots" "$dir/out" >"$T/signoff.out" 2>&1 &&
+        grep -q 'boards 15 and 35, dark-style: the sign-off windows brought notifications from Calendar' "$T/signoff.out"; then
+        ok "signoff: the sign-off scene's own error fails boards 15 and 35, named"
+    else
+        not_ok "signoff: the sign-off scene's own error fails boards 15 and 35, named: $(tail -n 3 "$T/signoff.out")"
+    fi
+}
+
 test_signoff() {
-    local dir=$T/signoff scene
+    local dir=$T/signoff scene log variant
     rm -rf "$dir"
     mkdir -p "$dir/g2/captures" "$dir/shots"
     for scene in signoff-alt-tab surfaces quick-settings screenshot tile-preview datemenu signoff-overview launcher desktop spotlight-search; do
@@ -898,6 +928,23 @@ test_signoff() {
     printf 'Apex: feature panel enabled\nApex: feature dock enabled\nAPEXG2-SIGNOFF {"previews":true}\n%s\n' \
         'APEXG2 {"dock":{"items":[{"kind":"app","name":"Files"},{"kind":"separator"},{"kind":"app","name":"Bazaar"}]}}' >"$dir/g2/default.log"
     echo 'APEXG2-SIGNOFF {"previews":true}' >"$dir/g2/dark-style.late.log"
+    for scene in "$dir"/g2/captures/*.png; do
+        scene=$(basename "$scene")
+        case $scene in
+            indicators-dark-*) log=indicators-dark ;;
+            indicators-*) log=indicators ;;
+            dark-style-*) log=dark-style ;;
+            *) log=default ;;
+        esac
+        jq -nc --arg f "$scene" '{file: $f, banner: (if $f | test("surfaces") then {source: "Apex", title: "A banner"} else null end)}' |
+            sed 's/^/APEXG2-CAPTURE /' >>"$dir/g2/$log.log"
+    done
+    for scene in greeter-%s:list polkit-%s:open end-session-%s:power-off lock-%s:open; do
+        for variant in light dark; do
+            # shellcheck disable=SC2059 # the scene names carry the variant's %s
+            printf 'APEXLOCK {"banner.%s":null}\n' "${scene#*:}" >>"$dir/shots/$(printf "${scene%%:*}" "$variant").log"
+        done
+    done
     if "$HERE/signoff.sh" --collect "$dir/g2" "$dir/shots" "$dir/out" >"$T/signoff.out" 2>&1 &&
         [[ $(find "$dir/out" -name 'board-*.png' | wc -l) == 30 ]] &&
         jq -e '(.boards | length) == 15 and .scale == 2 and .features == ["dock", "panel"] and (.pins.apexDesktop | length) == 40
@@ -910,6 +957,7 @@ test_signoff() {
     else
         not_ok "signoff: fifteen boards, light and dark, and signoff.json from their captures: $(tail -n 3 "$T/signoff.out")"
     fi
+    test_signoff_banners "$dir"
     rm "$dir/g2/captures/dark-style-tile-preview.png"
     if ! "$HERE/signoff.sh" --collect "$dir/g2" "$dir/shots" "$dir/out2" >"$T/signoff.out" 2>&1 &&
         grep -q 'board 22 (Edge tiling), dark: no capture of dark-style-tile-preview' "$T/signoff.out"; then
@@ -2258,6 +2306,54 @@ EOF
     dbus-daemon --config-file="$T/bus.conf" --fork --print-address=3 --print-pid=4 3>"$T/bus.address" 4>"$T/bus.pid"
 }
 
+test_part_ran() {
+    local run=$T/part-run c passes failures
+    local -a cases
+    mkdir -p "$run"
+    # shellcheck disable=SC2016 # expanded by the inner bash
+    read -ra cases <<<"$(bash -c '. "$1/parts.sh"; echo "${PR_CASES[*]}"' _ "$HERE")"
+    : >"$run/results-pr.txt"
+    for c in "${cases[@]}"; do
+        echo "$c exit=0 secs=1 marker-after-exit=no" >>"$run/results-pr.txt"
+        [[ $c == fault-abort ]] || echo 'APEXG2 {"probe": true}' >"$run/$c.log"
+    done
+    read -r passes failures <<<"$(assertion_counts part_ran "$run" pr "${cases[@]}")"
+    expect_eq "parts: every case of the pr part ran and reported (fault-abort may abort first)" "${#cases[@]}/0" "$passes/$failures"
+    sed -i '/^indicators-dark /d' "$run/results-pr.txt"
+    read -r passes failures <<<"$(assertion_counts part_ran "$run" pr "${cases[@]}")"
+    expect_eq "parts: a case the part skipped fails, never passes unasserted" "$((${#cases[@]} - 1))/1" "$passes/$failures"
+    echo "indicators-dark exit=0 secs=1 marker-after-exit=no" >>"$run/results-pr.txt"
+    : >"$run/large-text.log"
+    read -r passes failures <<<"$(assertion_counts part_ran "$run" pr "${cases[@]}")"
+    expect_eq "parts: a case that ran but reported nothing fails" "$((${#cases[@]} - 1))/1" "$passes/$failures"
+    printf '%s\n' 'default exit=0 secs=91 marker-after-exit=no' 'indicators exit=124 secs=150 marker-after-exit=yes' \
+        >"$run/results-pr.txt"
+    read -r passes failures <<<"$(assertion_counts hung_part "$run" pr)"
+    expect_eq "parts: a hung case in the pr part fails once" "0/1" "$passes/$failures"
+    expect_eq "parts: and the failure names the part, the case and its limit" 1 \
+        "$(grep -c '^FAIL direct.sh pr: indicators had no report within 150 s; G2 stops at a hung case' "$T/assertions.out")"
+}
+
+test_pr_assertions() {
+    local run=$T/pr-run label rest stray="" missing
+    local -a cases
+    # shellcheck disable=SC2016 # expanded by the inner bash
+    read -ra cases <<<"$(bash -c '. "$1/parts.sh"; echo "${PR_CASES[*]}"' _ "$HERE")"
+    mkdir -p "$run"
+    : >"$run/results-pr.txt"
+    assertion_counts patched_assertions "$run" pr >/dev/null
+    while read -r _ label rest; do
+        label=${label%:}
+        [[ " ${cases[*]} " == *" $label "* ]] || stray+=" $label"
+    done < <(grep -E '^(PASS|FAIL) ' "$T/assertions.out")
+    expect_eq "parts: the pr part asserts no case it does not run" "" "$stray"
+    missing=$(grep -c ': direct.sh pr did not run it$' "$T/assertions.out")
+    expect_eq "parts: and with none of its cases run, part_ran fails each one" "${#cases[@]}" "$missing"
+    # shellcheck disable=SC2016 # expanded by the inner bash
+    expect_eq "parts: main asserts every case, pr only its own" "0 1 0" \
+        "$(bash -c '. "$1/assert.sh"; part=main; asserted glass; a=$?; part=pr; asserted glass; b=$?; asserted default; echo "$a $b $?"' _ "$HERE")"
+}
+
 test_one_gpu() {
     local failures what menu passes
     while IFS='|' read -r failures what menu; do
@@ -2631,6 +2727,8 @@ test_glass_load
 test_glass_stress
 test_spotlight_key
 test_one_gpu
+test_part_ran
+test_pr_assertions
 test_no_dock
 test_dark_style_off
 test_fixtures
