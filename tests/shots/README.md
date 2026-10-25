@@ -496,7 +496,7 @@ again with `reduce-transparency`, the same script:
 | Scenario | Stand-in | Asserts |
 |---|---|---|
 | A | `load-window.js`, a GTK 4 window repainting in a new colour every 33 ms from a timer, over the dock and under Quick Settings, which is open | every change under a glass box re-blurs it in the same frame; the dock re-blurs exactly as often as the window changes, Quick Settings and the bar never; glass draws at most 1 % more frames per change than Reduce Transparency |
-| B | the same window, still, moved under the dock, then under Quick Settings, then under the calendar, a step every 33 ms | the same, the bar, which it never passes under, never re-blurring |
+| B | the same window, still, moved under the dock, then under Quick Settings, then under the calendar, a step every 33 ms | the same; the bar, which it never passes under, re-blurs at most once per open or close of a bar menu (4), since its own buttons repaint there: a patch 0003 effect cannot tell its own content from its backdrop |
 | C | 20 overview and app-grid toggles over the repainting window, then Spotlight over it | every change under a glass box re-blurs it in the same frame; the frame counts are reported. The overview's and the launcher's scrims join with S3a's glass |
 
 Each scenario prints the modelled glass cost per frame: the re-blurs it saw, each costed by

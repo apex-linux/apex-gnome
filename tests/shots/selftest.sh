@@ -1872,7 +1872,7 @@ readonly GLASS_LOAD_REPORT='def run($frames; $content; $surfaces): {frames: $fra
     A: {glass: run(151; 150; {dock: {reblurs: 150, partial: 0, contentUnder: 150}, "quick-settings": {reblurs: 0, partial: 0, contentUnder: 0}}),
         reduceTransparency: run(151; 150; {})},
     B: {glass: run(142; 137; {dock: {reblurs: 40, partial: 0, contentUnder: 38}, "quick-settings": {reblurs: 36, partial: 0, contentUnder: 34},
-                              calendar: {reblurs: 53, partial: 0, contentUnder: 52}}),
+                              calendar: {reblurs: 53, partial: 0, contentUnder: 52}, panel: {reblurs: 3, partial: 1, contentUnder: 0}}),
         reduceTransparency: run(142; 137; {})},
     C: {glass: run(241; 210; {panel: {reblurs: 57, partial: 0, contentUnder: 0}, dock: {reblurs: 240, partial: 0, contentUnder: 210}}),
         reduceTransparency: run(211; 191; {})}}}'
@@ -1906,8 +1906,12 @@ test_glass_load() {
 .scenarios.B.glass.missed = [{atMs: 3100, surface: "calendar", overlap: "out"}]|a window moved under the calendar without a re-blur
 .scenarios.B.glass.frames = 160|extra frames while a window is dragged
 .scenarios.B.glass.surfaces.calendar.contentUnder = 0|a drag that never reached the calendar
+.scenarios.B.glass.surfaces.panel.reblurs = 5|the bar re-blurring more than once per open or close of a bar menu
 .scenarios.C.glass.missed = [{atMs: 400, surface: "spotlight", overlap: "part"}]|a missed re-blur under Spotlight
 CHANGES
+    write_glass_load_run '.scenarios.B.glass.surfaces.panel.reblurs = 4'
+    read -r passes failures <<<"$(assertion_counts glass_load "$T/glass-load")"
+    expect_eq "glass-load: one bar re-blur per menu open or close in B passes" "$all/0" "$passes/$failures"
     write_glass_load_run '.scenarios.C.glass.frames = 400'
     read -r passes failures <<<"$(assertion_counts glass_load "$T/glass-load")"
     expect_eq "glass-load: C's frame count is reported, not asserted" "$all/0" "$passes/$failures"
