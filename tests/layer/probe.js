@@ -926,6 +926,18 @@ async function exerciseShadows() {
     surface.emit('notify::mapped');
     await spin(50);
     layers('mapped-again');
+    const [kept] = Registry.layersOf(surface);
+    surface.emit('style-changed');
+    await spin(50);
+    fact('shadows.restyled-alike', Registry.layersOf(surface)[0] === kept ? 'the same layer' : 'rebuilt');
+    const sheet = surface._themeNode;
+    surface._themeNode = {...sheet, get_shadow: p => p === '-apex-shadow-layer' ? {...sheet.get_shadow(p), blur: 12} : null};
+    surface.emit('style-changed');
+    await spin(50);
+    layers('restyled');
+    surface._themeNode = sheet;
+    surface.emit('style-changed');
+    await spin(50);
     settings.set_boolean('layer-enabled', false);
     await spin(200);
     layers('off');
@@ -1498,6 +1510,7 @@ async function exerciseGlass() {
     window.emit('notify::allocation');
     window.emit('damaged');
     fact('glass.damage-under-the-dock', redraws());
+    fact('glass.forwarded-clip', `${dock.clip.x},${dock.clip.y} ${dock.clip.width}x${dock.clip.height} of ${dock.width}x${dock.height}`);
     global.display.emit('restacked');
     fact('glass.restacked', redraws());
 

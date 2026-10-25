@@ -99,6 +99,19 @@ export class StubActor {
         this.redraws++;
     }
 
+    get width() {
+        return this.box[2];
+    }
+
+    get height() {
+        return this.box[3];
+    }
+
+    queue_redraw_with_clip(clip) {
+        this.redraws++;
+        this.clip = clip;
+    }
+
     has_style_class_name(name) {
         return this._classes.has(name);
     }

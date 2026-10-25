@@ -31,16 +31,23 @@ export const UpdateCard = GObject.registerClass({
         this._subtitle = new St.Label({style_class: 'apex-update-card-subtitle', text: update.version});
         this._subtitle.clutter_text.line_wrap = true;
         labels.add_child(this._subtitle);
+        const sensitive = update.state === Update.STAGED;
         this.switch = new PopupMenu.Switch(true);
+        this.switch.reactive = sensitive;
         this._button = new St.Button({
-            style_class: 'apex-update-card-switch', child: this.switch, can_focus: true,
-            reactive: update.state === Update.STAGED, accessible_name: TITLE, y_align: Clutter.ActorAlign.CENTER,
+            style_class: 'apex-update-card-switch', child: this.switch, can_focus: sensitive,
+            reactive: sensitive, accessible_name: TITLE, y_align: Clutter.ActorAlign.CENTER,
         });
         this._button.connect('clicked', () => this.setOn(!this.switch.state));
+        this._button.connect('style-changed', () => this._followOpacity());
         this.add_child(this._button);
         this.switch.connect('notify::state', () => this.emit('switched'));
-        if (update.state === Update.READY_FOR_REBOOT)
-            this._button.add_style_pseudo_class('insensitive');
+    }
+
+    // St has no opacity in CSS: an insensitive switch takes the sheet's -apex-opacity.
+    _followOpacity() {
+        const [found, opacity] = this._button.get_theme_node().lookup_double('-apex-opacity', false);
+        this._button.opacity = Math.round((found ? opacity : 1) * 255);
     }
 
     get on() {

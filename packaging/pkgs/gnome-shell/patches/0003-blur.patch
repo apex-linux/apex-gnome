@@ -16,15 +16,17 @@ output is byte-identical to the unpatched effect's.
 - fine (false): the smallest power-of-two downscale with sigma / ds <= 4
   and a side of at least 4 px, without the 256 px floor, reduced by a
   box filter in one pass. In background mode, a frame whose redraw clip
-  does not cover the actor draws the last result and queues a redraw,
-  so a blit never reads pixels the frame did not repaint; the last
-  result is kept per stage view.
+  does not cover the actor draws the last result, so a blit never reads
+  pixels the frame did not repaint, and queues a redraw only when the
+  clip reaches into the actor's box: a clip that only meets its paint
+  volume (a box-shadow) changed nothing behind it. The last result is
+  kept per stage view.
 ---
- src/shell-blur-effect.c | 299 ++++++++++++++++++++++++++++++++++++++--
- 1 file changed, 289 insertions(+), 10 deletions(-)
+ src/shell-blur-effect.c | 300 ++++++++++++++++++++++++++++++++++++++--
+ 1 file changed, 290 insertions(+), 10 deletions(-)
 
 diff --git a/src/shell-blur-effect.c b/src/shell-blur-effect.c
-index d362b0a..b268ec8 100644
+index d362b0a..a497dfc 100644
 --- a/src/shell-blur-effect.c
 +++ b/src/shell-blur-effect.c
 @@ -50,8 +50,41 @@ static const gchar *brightness_glsl_declarations =
@@ -296,21 +298,21 @@ index d362b0a..b268ec8 100644
            break;
  
          default:
-@@ -701,6 +841,89 @@ fail:
+@@ -701,6 +841,90 @@ fail:
    add_actor_node (self, node, -1);
  }
  
-+static gboolean
-+redraw_clip_covers_actor (ShellBlurEffect     *self,
-+                          ClutterPaintContext *paint_context,
-+                          ClutterStageView    *stage_view)
++static MtkRegionOverlap
++redraw_clip_overlap (ShellBlurEffect     *self,
++                     ClutterPaintContext *paint_context,
++                     ClutterStageView    *stage_view)
 +{
 +  const MtkRegion *redraw_clip = clutter_paint_context_get_redraw_clip (paint_context);
 +  MtkRectangle layout, box;
 +  float x, y, width, height;
 +
 +  if (!redraw_clip)
-+    return TRUE;
++    return MTK_REGION_OVERLAP_IN;
 +
 +  clutter_actor_get_transformed_position (self->actor, &x, &y);
 +  clutter_actor_get_transformed_size (self->actor, &width, &height);
@@ -320,8 +322,8 @@ index d362b0a..b268ec8 100644
 +  };
 +  clutter_stage_view_get_layout (stage_view, &layout);
 +
-+  return !mtk_rectangle_intersect (&box, &layout, &box) ||
-+         mtk_region_contains_rectangle (redraw_clip, &box) == MTK_REGION_OVERLAP_IN;
++  return mtk_rectangle_intersect (&box, &layout, &box) ?
++         mtk_region_contains_rectangle (redraw_clip, &box) : MTK_REGION_OVERLAP_IN;
 +}
 +
 +static void
@@ -339,7 +341,7 @@ index d362b0a..b268ec8 100644
 +  g_hash_table_remove_all (self->view_effects);
 +}
 +
-+/* A blit outside the frame's redraw clip would read pixels it did not repaint */
++/* Outside the redraw clip a blit reads stale pixels; a clip missing the box changed nothing behind it */
 +static void
 +shell_blur_effect_paint_node (ClutterEffect           *effect,
 +                              ClutterPaintNode        *node,
@@ -371,12 +373,13 @@ index d362b0a..b268ec8 100644
 +  view_effect->corner_radius = self->corner_radius;
 +  view_effect->follow_opacity = self->follow_opacity;
 +
-+  if (self->radius > 0 && !redraw_clip_covers_actor (self, paint_context, stage_view))
++  if (self->radius > 0 && redraw_clip_overlap (self, paint_context, stage_view) != MTK_REGION_OVERLAP_IN)
 +    {
 +      if (view_effect->cache_flags & BLUR_APPLIED)
 +        add_blurred_pipeline (view_effect, node, background_opacity (self));
 +      add_actor_node (self, node, -1);
-+      clutter_actor_queue_redraw (self->actor);
++      if (redraw_clip_overlap (self, paint_context, stage_view) == MTK_REGION_OVERLAP_PART)
++        clutter_actor_queue_redraw (self->actor);
 +      return;
 +    }
 +
@@ -386,7 +389,7 @@ index d362b0a..b268ec8 100644
  static void
  shell_blur_effect_finalize (GObject *object)
  {
-@@ -713,6 +936,7 @@ shell_blur_effect_finalize (GObject *object)
+@@ -713,6 +937,7 @@ shell_blur_effect_finalize (GObject *object)
    g_clear_object (&self->actor_fb.pipeline);
    g_clear_object (&self->background_fb.pipeline);
    g_clear_object (&self->brightness_fb.pipeline);
@@ -394,7 +397,7 @@ index d362b0a..b268ec8 100644
  
    G_OBJECT_CLASS (shell_blur_effect_parent_class)->finalize (object);
  }
-@@ -739,6 +963,22 @@ shell_blur_effect_get_property (GObject    *object,
+@@ -739,6 +964,22 @@ shell_blur_effect_get_property (GObject    *object,
        g_value_set_enum (value, self->mode);
        break;
  
@@ -417,7 +420,7 @@ index d362b0a..b268ec8 100644
      default:
        G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
      }
-@@ -766,9 +1006,30 @@ shell_blur_effect_set_property (GObject      *object,
+@@ -766,9 +1007,30 @@ shell_blur_effect_set_property (GObject      *object,
        shell_blur_effect_set_mode (self, g_value_get_enum (value));
        break;
  
@@ -448,7 +451,7 @@ index d362b0a..b268ec8 100644
  }
  
  static void
-@@ -802,6 +1063,22 @@ shell_blur_effect_class_init (ShellBlurEffectClass *klass)
+@@ -802,6 +1064,22 @@ shell_blur_effect_class_init (ShellBlurEffectClass *klass)
                         SHELL_BLUR_MODE_ACTOR,
                         G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_EXPLICIT_NOTIFY);
  
@@ -471,7 +474,7 @@ index d362b0a..b268ec8 100644
    g_object_class_install_properties (object_class, N_PROPS, properties);
  }
  
-@@ -811,6 +1088,8 @@ shell_blur_effect_init (ShellBlurEffect *self)
+@@ -811,6 +1089,8 @@ shell_blur_effect_init (ShellBlurEffect *self)
    self->mode = SHELL_BLUR_MODE_ACTOR;
    self->radius = 0;
    self->brightness = 1.f;
