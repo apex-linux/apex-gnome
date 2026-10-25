@@ -1963,18 +1963,24 @@ test_one_gpu() {
 MENUS
 }
 
+# shellcheck disable=SC2016 # a jq program
+readonly NO_DOCK_REPORT='{dock: null, bottom: {stock: 900, hook: 900}, previews: [
+    {window: {x: 561, y: 198, width: 317, height: 236}, caption: {x: 602, y: 459, width: 235, height: 29, visible: true}},
+    {window: {x: 414, y: 520, width: 290, height: 250}, caption: {x: 520, y: 795, width: 78, height: 29, visible: true}},
+    {window: {x: 736, y: 520, width: 290, height: 250}, caption: {x: 842, y: 795, width: 78, height: 29, visible: true}}]}'
+
 test_no_dock() {
-    local failures what report passes
-    while IFS='|' read -r failures what report; do
-        printf 'APEXG2-OVERVIEW-WINDOWS %s\n' "$report" >"$T/no-dock.log"
+    local failures what change passes
+    while IFS='|' read -r failures what change; do
+        printf 'APEXG2-OVERVIEW-WINDOWS %s\n' "$(jq -nc "$NO_DOCK_REPORT | $change")" >"$T/no-dock.log"
         read -r passes _ <<<"$(assertion_counts overview_without_dock no-dock "$T/no-dock.log")"
         expect_eq "no dock: $what fails $failures of 2" "$failures" $((2 - passes))
-    done <<'REPORTS'
-0|stock's bottom edge, three captions clear of each other|{"dock": null, "bottom": {"stock": 900, "hook": 900}, "previews": [{"window": {"x": 561, "y": 198, "width": 317, "height": 236}, "caption": {"x": 602, "y": 459, "width": 235, "height": 29, "visible": true}}, {"window": {"x": 414, "y": 520, "width": 290, "height": 250}, "caption": {"x": 520, "y": 795, "width": 78, "height": 29, "visible": true}}, {"window": {"x": 736, "y": 520, "width": 290, "height": 250}, "caption": {"x": 842, "y": 795, "width": 78, "height": 29, "visible": true}}]}
-1|the dock's edge kept without the dock|{"dock": null, "bottom": {"stock": 900, "hook": 810}, "previews": [{"window": {"x": 561, "y": 198, "width": 317, "height": 236}, "caption": {"x": 602, "y": 459, "width": 235, "height": 29, "visible": true}}, {"window": {"x": 414, "y": 520, "width": 290, "height": 250}, "caption": {"x": 520, "y": 795, "width": 78, "height": 29, "visible": true}}, {"window": {"x": 736, "y": 520, "width": 290, "height": 250}, "caption": {"x": 842, "y": 795, "width": 78, "height": 29, "visible": true}}]}
-1|a caption over the next row|{"dock": null, "bottom": {"stock": 900, "hook": 900}, "previews": [{"window": {"x": 561, "y": 198, "width": 317, "height": 236}, "caption": {"x": 602, "y": 500, "width": 235, "height": 29, "visible": true}}, {"window": {"x": 414, "y": 520, "width": 290, "height": 250}, "caption": {"x": 520, "y": 795, "width": 78, "height": 29, "visible": true}}, {"window": {"x": 736, "y": 520, "width": 290, "height": 250}, "caption": {"x": 842, "y": 795, "width": 78, "height": 29, "visible": true}}]}
-2|a probe error|{"error": "overviewWithWindows: 0 of 3 test windows mapped"}
-REPORTS
+    done <<'CHANGES'
+0|stock's bottom edge, three captions clear of each other|.
+1|the dock's edge kept without the dock|.bottom.hook = 810
+1|a caption over the next row|.previews[0].caption.y = 500
+2|a probe error|{error: "overviewWithWindows: 0 of 3 test windows mapped"}
+CHANGES
 }
 
 test_fixtures() {
