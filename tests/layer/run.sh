@@ -478,10 +478,12 @@ fact "notifications: the switch follows show-banners; Clear stays shown with not
     'nf\.dnd-from-settings=checked=true switch=true clear=true'
 fact "notifications: a click turns Do Not Disturb off" 'nf\.dnd-click=show-banners=true checked=false'
 fact "notifications: the month on the left, both chevrons on the right" 'nf\.calendar=header=month,back,forward align=1 class=true'
-fact "notifications: every day keeps a dot under its number" 'nf\.days=27/apex-event-dot 28/apex-event-dot 29/apex-event-dot'
+fact "notifications: every day keeps a dot under its number, in an St.Label that takes the day's colour" \
+    'nf\.days=Label:27/apex-event-dot Label:28/apex-event-dot Label:29/apex-event-dot own-text=false'
 fact "notifications: layer off: stock's header" 'nf\.off\.calendar=header=back,month,forward align=2 class=false'
-fact "notifications: layer off: stock's day buttons" 'nf\.off\.days=27 28 29'
+fact "notifications: layer off: stock's day buttons, each with its own text again" 'nf\.off\.days=ButtonText:27 ButtonText:28 ButtonText:29 own-text=true'
 fact "notifications: layer back on: the header and dots again" 'nf\.on\.calendar=header=month,back,forward align=1 class=true'
+fact "notifications: layer back on: the days' labels and dots again" 'nf\.on\.days=Label:27/apex-event-dot Label:28/apex-event-dot Label:29/apex-event-dot own-text=false'
 fact "notifications: layer off: stock's groups, a new one too" "nf\.off\.groups=Mail:$STACKED stacked=true \| Chat:$STACKED stacked=true"
 fact "notifications: layer off: stock's header" 'nf\.off\.header=icon=true line=Mail now'
 fact "notifications: layer off: upstream's tree, exactly, on every card" \

@@ -388,6 +388,7 @@ function describeEndSession(dialog) {
     return {
         open: dialog?.state === 0,
         buttons: dialog?.buttonLayout.get_children().filter(b => b.visible).map(b => b.label) ?? [],
+        otherSessions: dialog?._sessionSection.visible ? dialog._sessionSection.list.get_n_children() : 0,
         card: card ? {
             title: labels[0].text, subtitle: labels[1].text, on: card.switch.state,
             sensitive: card.get_children()[2].reactive, icon: card.get_children()[0].icon_name,
