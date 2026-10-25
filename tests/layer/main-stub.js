@@ -435,9 +435,17 @@ export function popModal() {
 
 export const layoutManager = {
     modalDialogGroup: emptyContainer(),
-    overviewGroup: emptyContainer(),
+    overviewGroup: {
+        ...emptyContainer(),
+        get_theme_node: () => ({lookup_length: p => p === '-apex-dock-clearance' ? [true, 10] : [false, 0]}),
+    },
     ...emitter({}),
     primaryMonitor: {x: 0, y: 0, width: 1440, height: 900},
+    primaryIndex: 0,
+    get monitors() {
+        return [this.primaryMonitor];
+    },
+    getWorkAreaForMonitor: () => ({x: 0, y: 32, width: 1440, height: 868}),
     chrome: [],
     _bgManagers: [new StubActor('background')],
     _updateHotCorners: () => fact('hot-corners', 'rebuilt'),

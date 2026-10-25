@@ -12,8 +12,14 @@ layer provides (apex-fedora ROADMAP S3a):
 - Workspace: a behaviour hook once the workspace is built, given its
   layout, through which the layer hides the background card and adds the
   empty-workspace label;
+- WorkspaceLayout: value hooks over the row spacing's chrome, given the
+  preview, and over the bottom edge the last row's captions may reach,
+  given the monitor, through which the layer counts always-visible
+  captions and keeps them off the dock;
 - ThumbnailsBox: value hooks over the maximum thumbnail scale and over
   the number of dynamic workspaces above which the thumbnails show;
+- WorkspaceThumbnail: a behaviour hook once the thumbnail is built,
+  through which the layer gives it the wallpaper;
 - SearchController: a behaviour hook when text arrives in the search
   entry or the entry takes the key focus, given which of the two, the
   text and a reset, through which Spotlight takes over the overview's
@@ -24,9 +30,9 @@ layer provides (apex-fedora ROADMAP S3a):
  js/ui/overviewControls.js   | 3 ++-
  js/ui/searchController.js   | 6 ++++++
  js/ui/windowPreview.js      | 9 +++++----
- js/ui/workspace.js          | 2 ++
- js/ui/workspaceThumbnail.js | 5 +++--
- 5 files changed, 18 insertions(+), 7 deletions(-)
+ js/ui/workspace.js          | 7 +++++--
+ js/ui/workspaceThumbnail.js | 6 ++++--
+ 5 files changed, 22 insertions(+), 9 deletions(-)
 
 diff --git a/js/ui/overviewControls.js b/js/ui/overviewControls.js
 index d7ef077..43d2bec 100644
@@ -123,7 +129,7 @@ index a9b9bdd..0d9f541 100644
              a.ease({
                  opacity: 0,
 diff --git a/js/ui/workspace.js b/js/ui/workspace.js
-index 3c8ed9f..f72c26c 100644
+index 3c8ed9f..b8e897a 100644
 --- a/js/ui/workspace.js
 +++ b/js/ui/workspace.js
 @@ -14,6 +14,7 @@ import * as Params from '../misc/params.js';
@@ -134,7 +140,26 @@ index 3c8ed9f..f72c26c 100644
  
  const WINDOW_PREVIEW_MAXIMUM_SCALE = 0.95;
  
-@@ -1107,6 +1108,7 @@ class Workspace extends St.Widget {
+@@ -490,7 +491,7 @@ export const WorkspaceLayout = GObject.registerClass({
+             Math.max(topOversize, bottomOversize, leftOversize, rightOversize);
+ 
+         if (rowSpacing !== null)
+-            rowSpacing += oversize;
++            rowSpacing += ApexHooks.value('window-row-oversize', oversize, window);
+         if (colSpacing !== null)
+             colSpacing += oversize;
+ 
+@@ -501,7 +502,8 @@ export const WorkspaceLayout = GObject.registerClass({
+             const transformedBottomPoint =
+                 this._container.apply_transform_to_point(bottomPoint);
+             const bottomFreeSpace =
+-                (monitor.y + monitor.height) - transformedBottomPoint.y;
++                ApexHooks.value('workspace-bottom', monitor.y + monitor.height, monitor) -
++                transformedBottomPoint.y;
+ 
+             const [, bottomOverlap] = window.overlapHeights();
+ 
+@@ -1107,6 +1109,7 @@ class Workspace extends St.Widget {
          // Create clones for windows that should be
          // visible in the Overview
          global.get_window_actors().map(a => this._doAddWindow(a.meta_window));
@@ -143,7 +168,7 @@ index 3c8ed9f..f72c26c 100644
  
      _shouldLeaveOverview() {
 diff --git a/js/ui/workspaceThumbnail.js b/js/ui/workspaceThumbnail.js
-index 79892f0..edf7a3f 100644
+index 79892f0..c5a7304 100644
 --- a/js/ui/workspaceThumbnail.js
 +++ b/js/ui/workspaceThumbnail.js
 @@ -12,6 +12,7 @@ import * as Main from './main.js';
@@ -154,7 +179,15 @@ index 79892f0..edf7a3f 100644
  
  const NUM_WORKSPACES_THRESHOLD = 2;
  
-@@ -614,7 +615,7 @@ export const ThumbnailsBox = GObject.registerClass({
+@@ -291,6 +292,7 @@ export const WorkspaceThumbnail = GObject.registerClass({
+         this.state = ThumbnailState.NORMAL;
+         this._slidePosition = 0; // Fully slid in
+         this._collapseFraction = 0; // Not collapsed
++        ApexHooks.run('workspace-thumbnail', this);
+     }
+ 
+     setPorthole(x, y, width, height) {
+@@ -614,7 +616,7 @@ export const ThumbnailsBox = GObject.registerClass({
          this.add_child(this._dropPlaceholder);
          this._spliceIndex = -1;
  
@@ -163,7 +196,7 @@ index 79892f0..edf7a3f 100644
          this._targetScale = 0;
          this._scale = 0;
          this._expandFraction = 1;
-@@ -697,7 +698,7 @@ export const ThumbnailsBox = GObject.registerClass({
+@@ -697,7 +699,7 @@ export const ThumbnailsBox = GObject.registerClass({
      _updateShouldShow() {
          const {nWorkspaces} = global.workspace_manager;
          const shouldShow = this._settings.get_boolean('dynamic-workspaces')

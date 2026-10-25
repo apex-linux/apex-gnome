@@ -1582,6 +1582,36 @@ function buildWorkspaces(label) {
     workspaceFacts(`${label}.with-windows`, busy);
 }
 
+// A thumbnail as WorkspaceThumbnail builds it, scaled to a tenth once its box allocates it.
+async function thumbnailFacts(label) {
+    const {managers} = await import(`file://${shellDir}/js/ui/background.js`);
+    const before = managers.length;
+    let scaled = () => {}, destroyed = () => {};
+    const contents = [];
+    const thumbnail = {
+        monitorIndex: 0,
+        styleClasses: [],
+        _viewport: {scale_x: 1, connectObject: (_signal, fn) => (scaled = fn)},
+        _contents: {insert_child_at_index: (child, index) => contents.splice(index, 0, child)},
+        add_style_class_name: name => thumbnail.styleClasses.push(name),
+        peek_theme_node: () => ({get_border_width: () => 1, get_border_radius: () => 8}),
+        connectObject: () => {},
+        connect: (signal, fn) => (destroyed = fn),
+    };
+    Hooks.run('workspace-thumbnail', thumbnail);
+    thumbnail._viewport.scale_x = 0.1;
+    scaled();
+    destroyed();
+    const manager = managers.length > before ? managers.at(-1) : null;
+    const {rounded_clip_radius: radius, bounds} = manager?.backgroundActor.content ?? {};
+    const background = manager
+        ? `background=monitor${manager.monitorIndex} below-windows=${contents[0] === manager.container} ` +
+          `radius=${Math.round(radius)} bounds=${[bounds.x, bounds.y, bounds.width, bounds.height].join(',')} ` +
+          `destroyed=${manager.destroyed}`
+        : 'background=none';
+    fact(`overview.${label}.thumbnail`, `classes=${thumbnail.styleClasses.join('+') || 'none'} ${background}`);
+}
+
 async function overviewFacts(label) {
     const Main = await import(`file://${shellDir}/js/ui/main.js`);
     const {_thumbnailsBox: box, _appDisplay: {_grid: grid}} = Main.overview._overview._controls;
@@ -1592,6 +1622,10 @@ async function overviewFacts(label) {
         `box=${box._maxThumbnailScale} grid=${JSON.stringify(grid._gridModes)} ` +
         `icon=${grid.layout_manager.fixed_icon_size} strip=${Hooks.value('app-grid-workspaces-height', 130)}`);
     fact(`overview.${label}.relayout`, `mode=${grid._currentMode} page-width=${grid.layout_manager._pageWidth}`);
+    fact(`overview.${label}.layout`, `row=${Hooks.value('window-row-oversize', 19, {overlapHeights: () => [0, 35]})} ` +
+        `bottom=${Hooks.value('workspace-bottom', 900, {index: 0})} secondary-bottom=${Hooks.value('workspace-bottom', 900, {index: 1})} ` +
+        `dash-height=${Main.overview.dash.height}`);
+    await thumbnailFacts(label);
     buildWorkspaces(label);
 }
 
