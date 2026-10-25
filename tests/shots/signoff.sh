@@ -44,6 +44,8 @@ readonly GRID_APPS=(gnome-extensions-app loupe papers showtime decibels snapshot
 readonly NOT_IN_IMAGE=(inkscape gnome-tour firefox)
 # ARCHITECTURE's core apps the image's gnome.txt still lacks, installed here as the image will have them.
 readonly IMAGE_PENDING=()
+# Board 16 shows a banner on purpose; on any other board a banner is a race the scene lost.
+readonly BANNER_BOARDS=(16)
 # The image's Flatpaks (apex-image's apex.preinstall), each with the RPM that stands in for it, if any.
 readonly FLATPAK_STAND_INS='[{"flatpak": "org.gnome.Music", "rpm": "gnome-music"},
     {"flatpak": "io.github.kolunmi.Bazaar", "rpm": null, "standIn": "desktop entry"}]'
@@ -82,10 +84,24 @@ png() {
     [[ -s $1 && $(head -c 8 "$1" | od -An -tx1 | tr -d ' \n') == 89504e470d0a1a0a ]]
 }
 
+banners_of() {
+    local g2=$1 shots=$2 log
+    {
+        for log in "$g2"/*.log; do
+            [[ $log == *.late.log ]] || sed -n 's/.*APEXG2-CAPTURE //p' "$log"
+        done
+        for log in "$shots"/*.log; do
+            sed -n 's/.*APEXLOCK //p' "$log" | jq -c --arg shot "$(basename "$log" .log)" \
+                'to_entries[] | select(.key | startswith("banner.")) | {file: "\($shot)-\(.key[7:]).png", banner: .value}'
+        done
+    } 2>/dev/null | jq -sc 'map({(.file): .banner}) | add // {}'
+}
+
 collect() {
     local g2=$1 shots=$2 out=$3 number slug title source light dark fixture variant scene from missing=() boards=()
-    local commit features dock
+    local commit features dock banners banner
     mkdir -p "$out" || die "cannot create $out"
+    banners=$(banners_of "$g2" "$shots")
     while IFS='|' read -r number slug title source light dark fixture; do
         for variant in light dark; do
             scene=$light
@@ -96,6 +112,13 @@ collect() {
                 cp "$from" "$out/board-$number-$slug-$variant.png"
             else
                 missing+=("board $number ($title), $variant: no capture of $scene ($source)")
+                continue
+            fi
+            banner=$(jq -c --arg f "$scene.png" 'if has($f) then .[$f] else "unrecorded" end' <<<"$banners")
+            if [[ $banner == '"unrecorded"' ]]; then
+                missing+=("board $number ($title), $variant: no banner record for $scene")
+            elif [[ $banner != null && " ${BANNER_BOARDS[*]} " != *" $number "* ]]; then
+                missing+=("board $number ($title), $variant: a banner over $scene: $banner")
             fi
         done
         boards+=("$(jq -nc --argjson board "$((10#$number))" --arg title "$title" --arg slug "$slug" --arg source "$source" \
@@ -107,10 +130,12 @@ collect() {
         { cat "$g2/$variant.log" "$g2/$variant.late.log" 2>/dev/null || :; } | sed -n 's/.*APEXG2-SIGNOFF //p' |
             jq -se 'any(.previews == true)' >/dev/null ||
             missing+=("boards 15 and 35, $variant: the sign-off windows never all showed in the overview")
+        scene=$(sed -n 's/.*APEXG2-SIGNOFF //p' "$g2/$variant.log" 2>/dev/null | jq -r '.error // empty' 2>/dev/null | head -n 1)
+        [[ -z $scene ]] || missing+=("boards 15 and 35, $variant: $scene")
     done
     if ((${#missing[@]})); then
         printf 'signoff.sh: %s\n' "${missing[@]}" >&2
-        die "${#missing[@]} scene(s) did not open"
+        die "${#missing[@]} scene(s) did not open as their boards need"
     fi
     commit=$(git -c safe.directory='*' -C "$REPO" rev-parse HEAD 2>/dev/null || echo "${GITHUB_SHA:-unknown}")
     features=$(sed -n 's/.*Apex: feature \([a-z-]*\) enabled.*/\1/p' "$g2/default.log" 2>/dev/null | sort -u | jq -Rsc 'split("\n") | map(select(. != ""))')

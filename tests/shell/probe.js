@@ -55,6 +55,12 @@ async function type(text) {
     tap(Clutter.KEY_Return);
 }
 
+// A banner over a scene is a race; signoff.sh fails the board that caught one.
+function bannerShown() {
+    const tray = Main.messageTray;
+    return tray._banner?.mapped ? {source: tray._notification?.source?.title ?? null, title: tray._notification?.title ?? null} : null;
+}
+
 async function capture(name) {
     const path = GLib.build_filenamev([GLib.getenv('APEX_SHOTS'), `${GLib.getenv('APEX_SHOT')}-${name}.png`]);
     const stream = Gio.File.new_for_path(path).replace(null, false, Gio.FileCreateFlags.NONE, null);
@@ -64,6 +70,7 @@ async function capture(name) {
         stream.close(null);
     }
     fact(`capture.${name}`, path);
+    fact(`banner.${name}`, bannerShown());
 }
 
 // What gnome-settings-daemon's power plugin sets on idle. Not call_sync: the shell is DisplayConfig.
