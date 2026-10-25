@@ -145,7 +145,9 @@ install_shell() {
     rpms=("$PATCHED_RPMS"/gnome-shell-[0-9]*.x86_64.rpm "$PATCHED_RPMS"/gnome-shell-common-*.noarch.rpm)
     [[ -f ${rpms[0]} && -f ${rpms[1]} ]] || die "no gnome-shell and gnome-shell-common RPMs in $PATCHED_RPMS"
     step "the patched shell, the fixtures' services, gjs and jq"
-    quietly dnf5 -y "${REPOS[@]}" install "${rpms[@]}" mesa-dri-drivers dbus-daemon python3-dbusmock gcc glib2-devel gjs jq nautilus
+    # Clocks and Weather, as in the image: the calendar shows their rows only when they are installed.
+    quietly dnf5 -y "${REPOS[@]}" install "${rpms[@]}" mesa-dri-drivers dbus-daemon python3-dbusmock gcc glib2-devel gjs jq nautilus \
+        gnome-clocks gnome-weather
     rpm -q gnome-shell | grep -q "\.apex" ||
         die "the installed gnome-shell is not an Apex build: $(rpm -q gnome-shell)"
     # What apex-desktop ships: the schema (the layer's fixture) and the weekday override.

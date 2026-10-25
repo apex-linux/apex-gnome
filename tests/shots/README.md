@@ -653,9 +653,11 @@ Flatpaks, so the check runs where the goldens were made, not in G2's VM run.
 
 `golden-masks.json` lists the masks, per board, in capture pixels: `{"boards": {"NN":
 [{"name", "x", "y", "width", "height", "why"}]}}`. A mask may cover at most 5 % of a
-capture. G2's wall clock is fixed, so the only live region is board 17's: the Wi-Fi menu's
-scan spinner, which turns in real time (36 × 38 px). Two sign-off runs on the same RPMs agree
-on every other board, byte for byte. A race in a scene is fixed in the scene, never masked:
+capture. It has none. G2's wall clock is fixed, and nothing live is left in a board: the
+fixtures' Wi-Fi scan finishes as a real one does (`RequestScan` moves `LastScan`), so board
+17's menu is captured after the scan, without its spinner. A capture that still holds live
+content records it, and `signoff.sh` fails that board. Two sign-off runs on the same RPMs agree
+on every board, byte for byte. A race in a scene is fixed in the scene, never masked:
 
 - the indicators case drops the startup notifications, so the search hint's banner never
   covers board 39;
