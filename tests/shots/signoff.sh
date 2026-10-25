@@ -40,9 +40,9 @@ readonly GRID_APPS=(gnome-tour gnome-extensions-app loupe papers showtime decibe
     gnome-calculator gnome-characters gnome-clocks gnome-contacts gnome-weather gnome-font-viewer gnome-logs yelp
     gnome-disk-utility gnome-firmware firefox gnome-maps)
 # ARCHITECTURE's core apps the image's gnome.txt still lacks, installed here as the image will have them.
-readonly IMAGE_PENDING=(gnome-music gnome-maps)
-# The image's Flatpaks (apex-image's apex.preinstall), each with the RPM that stands in for it, if Fedora has one.
-readonly FLATPAK_STAND_INS='[{"flatpak": "org.mozilla.firefox", "rpm": "firefox"},
+readonly IMAGE_PENDING=(gnome-maps)
+# The image's Flatpaks (apex-image's apex.preinstall, which Music joins), each with the RPM that stands in for it, if any.
+readonly FLATPAK_STAND_INS='[{"flatpak": "org.mozilla.firefox", "rpm": "firefox"}, {"flatpak": "org.gnome.Music", "rpm": "gnome-music"},
     {"flatpak": "io.github.kolunmi.Bazaar", "rpm": null, "standIn": "desktop entry"}]'
 readonly SCALE=2
 readonly MONITOR=2880x1800

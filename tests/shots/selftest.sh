@@ -776,8 +776,8 @@ test_signoff() {
         [[ $(find "$dir/out" -name 'board-*.png' | wc -l) == 30 ]] &&
         jq -e '(.boards | length) == 15 and .scale == 2 and .features == ["dock", "panel"] and (.pins.apexDesktop | length) == 40
             and .boards[0].files.dark == "board-12-greeter-dark.png" and (.apps.grid | index("firefox") != null) and .apps.dock == ["Files", "Bazaar"]
-            and .apps.notYetInImage == ["gnome-music", "gnome-maps"]
-            and .apps.flatpakStandIns == [{flatpak: "org.mozilla.firefox", rpm: "firefox"},
+            and .apps.notYetInImage == ["gnome-maps"]
+            and .apps.flatpakStandIns == [{flatpak: "org.mozilla.firefox", rpm: "firefox"}, {flatpak: "org.gnome.Music", rpm: "gnome-music"},
                 {flatpak: "io.github.kolunmi.Bazaar", rpm: null, standIn: "desktop entry"}]' \
             "$dir/out/signoff.json" >/dev/null; then
         ok "signoff: fifteen boards, light and dark, and signoff.json from their captures"
