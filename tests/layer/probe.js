@@ -682,8 +682,10 @@ async function exerciseNotifications() {
         fact(`${label}.calendar`, `header=${month.topBox.get_children().map(c => c.name).join(',')} ` +
             `align=${month.topBox.get_children().find(c => c.name === 'month').x_align} ` +
             `class=${month.calendar.has_style_class_name('apex-calendar')}`);
-        const day = child => child.get_children().map(c => c.text ?? c.style_class).join('/') || child.text;
-        fact(`${label}.days`, month.days.map(b => day(b.get_child())).join(' '));
+        const text = t => `${t.constructor.name}:${t.text}`;
+        const day = child => child.get_children?.().map(c => c.text === undefined ? c.style_class : text(c)).join('/') ?? text(child);
+        fact(`${label}.days`, `${month.days.map(b => day(b.get_child())).join(' ')} ` +
+            `own-text=${month.days.every((b, i) => b.get_child() === month.texts[i])}`);
     };
     calendarState('nf');
     settings.set_boolean('layer-enabled', false);
