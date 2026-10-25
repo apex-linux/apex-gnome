@@ -748,6 +748,7 @@ function openPopupMenu() {
                 rows: [...rows, iconRow].map(row => ({
                     ...styleOf(row, unit),
                     hover: underPseudoClass(row, 'hover', () => paint(row.get_theme_node(), unit)),
+                    checked: underPseudoClass(row, 'checked', () => paint(row.get_theme_node(), unit)),
                 })),
                 separator: {...boxOf(line, unit), background: hex(line.get_theme_node().get_background_color())},
                 icon: lengthOrNull(iconRow._icon.get_theme_node(), 'icon-size', unit),
@@ -918,6 +919,27 @@ function quickToggle(toggle, unit) {
     };
 }
 
+// The connected network's row and another, at rest: the menu opens with the first row, the
+// connected one, under key focus.
+function networkRows(wifi, unit) {
+    const rows = findAll(wifi.menu.box, a => a.constructor.name === 'NMWirelessNetworkItem' && a.visible);
+    const connected = rows.find(r => r.network.is_active);
+    const other = rows.find(r => !r.network.is_active);
+    const focus = global.stage.key_focus;
+    global.stage.set_key_focus(wifi.menu.box);
+    try {
+        return {
+            connected: connected ? {
+                ...styleOf(connected, unit),
+                hover: underPseudoClass(connected, 'hover', () => paint(connected.get_theme_node(), unit)),
+            } : null,
+            other: styleOf(other, unit),
+        };
+    } finally {
+        global.stage.set_key_focus(focus);
+    }
+}
+
 // The fixtures' Wi-Fi makes the network toggle checked, with a menu: board 17 opens it.
 async function quickSettings(unit) {
     const {quickSettings: indicator} = Main.panel.statusArea;
@@ -980,6 +1002,7 @@ async function quickSettings(unit) {
                 rowHover: (row => row && underPseudoClass(row, 'hover', () => paint(row.get_theme_node(), unit)))(
                     wifi.menu._getMenuItems().find(i => i.visible && i.label?.text)),
                 separator: styleOf(wifi.menu._getMenuItems().find(i => i instanceof PopupMenu.PopupSeparatorMenuItem), unit),
+                ...networkRows(wifi, unit),
             } : null,
         };
     } finally {

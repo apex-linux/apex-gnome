@@ -359,6 +359,18 @@ export async function a11yReport(h) {
         wifi.menu.close(BoxPointer.PopupAnimation.NONE);
         menu.close(BoxPointer.PopupAnimation.NONE);
     }, () => report(wifi.menu.box)) : {error: 'no Wi-Fi toggle'};
+    // The connected network's row at rest, its fill drawn rather than the key focus's.
+    out.wifiMenuConnected = wifi ? await withOpen(() => {
+        menu.open(BoxPointer.PopupAnimation.NONE);
+        wifi.menu.open(BoxPointer.PopupAnimation.NONE);
+        global.stage.set_key_focus(wifi.menu.box);
+    }, () => {
+        wifi.menu.close(BoxPointer.PopupAnimation.NONE);
+        menu.close(BoxPointer.PopupAnimation.NONE);
+    }, () => {
+        const row = h.findDescendant(wifi.menu.box, a => a.constructor.name === 'NMWirelessNetworkItem' && a.network.is_active);
+        return row ? report(row) : {error: 'no connected network'};
+    }) : {error: 'no Wi-Fi toggle'};
     lap('wifiMenu');
     const dateMenu = Main.panel.statusArea.dateMenu.menu;
     out.dateMenu = await withOpen(() => {
