@@ -762,12 +762,17 @@ test_signoff() {
         # shellcheck disable=SC2059 # the scene names carry the variant's %s
         printf '\x89PNG\r\n\x1a\n' | tee "$dir/shots/$(printf "$scene" light).png" >"$dir/shots/$(printf "$scene" dark).png"
     done
-    printf 'Apex: feature panel enabled\nApex: feature dock enabled\nAPEXG2-SIGNOFF {"previews":true}\n' >"$dir/g2/default.log"
+    printf 'Apex: feature panel enabled\nApex: feature dock enabled\nAPEXG2-SIGNOFF {"previews":true}\n%s\n' \
+        'APEXG2 {"dock":{"items":[{"kind":"app","name":"Files"},{"kind":"separator"},{"kind":"app","name":"Bazaar"}]}}' >"$dir/g2/default.log"
     echo 'APEXG2-SIGNOFF {"previews":true}' >"$dir/g2/dark-style.late.log"
     if "$HERE/signoff.sh" --collect "$dir/g2" "$dir/shots" "$dir/out" >"$T/signoff.out" 2>&1 &&
         [[ $(find "$dir/out" -name 'board-*.png' | wc -l) == 30 ]] &&
         jq -e '(.boards | length) == 15 and .scale == 2 and .features == ["dock", "panel"] and (.pins.apexDesktop | length) == 40
-            and .boards[0].files.dark == "board-12-greeter-dark.png"' "$dir/out/signoff.json" >/dev/null; then
+            and .boards[0].files.dark == "board-12-greeter-dark.png" and (.apps.grid | index("firefox") != null) and .apps.dock == ["Files", "Bazaar"]
+            and .apps.notYetInImage == ["gnome-music", "gnome-maps"]
+            and .apps.flatpakStandIns == [{flatpak: "org.mozilla.firefox", rpm: "firefox"},
+                {flatpak: "io.github.kolunmi.Bazaar", rpm: null, standIn: "desktop entry"}]' \
+            "$dir/out/signoff.json" >/dev/null; then
         ok "signoff: fifteen boards, light and dark, and signoff.json from their captures"
     else
         not_ok "signoff: fifteen boards, light and dark, and signoff.json from their captures: $(tail -n 3 "$T/signoff.out")"

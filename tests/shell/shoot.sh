@@ -159,6 +159,10 @@ for user in "$USER_NAME" "$GREETER_USER"; do
     gdbus call --system -d "$LOGIND_NAME" -o /org/freedesktop/login1 -m org.freedesktop.DBus.Mock.AddSession \
         "$(session_of "$user")" seat0 "$(id -u "$user")" "$user" true >/dev/null || die "cannot add $user's logind session"
 done
+# GDM's sessions are of class greeter, so the end-session dialog lists no other user (board 14).
+gdbus call --system -d "$LOGIND_NAME" -o "/org/freedesktop/login1/session/$(session_of "$GREETER_USER")" \
+    -m org.freedesktop.DBus.Mock.UpdateProperties org.freedesktop.login1.Session "{'Class': <'greeter'>}" >/dev/null ||
+    die "cannot make $GREETER_USER's logind session a greeter's"
 gcc -O2 -Wall -Werror -shared -fPIC -o "$CLOCK_LIB" "$SHOTS/clock.c" || die "cannot build tests/shots/clock.c"
 clock_epoch=$(date -u -d "$CLOCK" +%s)
 held=$(env LD_PRELOAD="$CLOCK_LIB" G2_CLOCK_EPOCH="$clock_epoch" date -u '+%F %T' 2>&1)

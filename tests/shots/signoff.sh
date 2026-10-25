@@ -12,13 +12,16 @@ lane's _build/gnome-shell/out), headless at scale 2, light and dark, as root in 
 Fedora 45 container. Review captures, not tests: no golden and no assertion beyond the scene
 having opened and the sign-off windows having shown. It first installs the apex-desktop of
 tests/lib/pins.sh (built with its make rpm, or from APEX_DESKTOP_SRC), whose vendor defaults
-bring the Facets wallpapers, the Apex icon theme and the fonts, and the apps its dock lists.
+bring the Facets wallpapers, the Apex icon theme and the fonts, and the apps its dock lists,
+then the image's other apps for the launcher (RPMs standing in for its Flatpaks), and takes
+away the apps apex-desktop's build dependencies brought.
 patched.sh then runs direct.sh's signoff part (main's capture and indicator cases, every
 scene saved, and G2_SIGNOFF's real windows for the switcher and the overview);
 tests/shell/shoot.sh shoots the greeter, the lock screen, polkit's dialog and the power-off
 dialog. OUT (default _build/signoff) gets board-NN-SLUG-light.png and -dark.png for each
 board, and signoff.json: each board's number, title, scene and fixture state, the apex-gnome
-and apex-desktop pins, the layer's features enabled, the scale and the monitor; the runs'
+and apex-desktop pins, the layer's features enabled, the scale, the monitor and the launcher's apps
+with the Flatpaks they stand in for; the runs'
 logs stay in _build/signoff-work. A board whose scene has no capture, or a probe whose
 windows never all reached the overview, fails the run, named. --collect does only that last
 step, from a G2 run directory and shoot.sh's captures.
@@ -32,6 +35,15 @@ REPO=$(cd -- "$HERE/../.." && pwd)
 # The favourites apex-desktop's override lists that Fedora ships, for the dock, and the fonts.
 readonly APPS=(nautilus epiphany gnome-calendar gnome-music gnome-text-editor ptyxis gnome-control-center
     adwaita-sans-fonts jetbrains-mono-fonts-all)
+# The image's other apps (apex-image's image/packages/gnome.txt) fill the launcher: GNOME keeps the dock's favourites out of it.
+readonly GRID_APPS=(gnome-tour gnome-extensions-app loupe papers showtime decibels snapshot gnome-system-monitor baobab
+    gnome-calculator gnome-characters gnome-clocks gnome-contacts gnome-weather gnome-font-viewer gnome-logs yelp
+    gnome-disk-utility gnome-firmware firefox gnome-maps)
+# ARCHITECTURE's core apps the image's gnome.txt still lacks, installed here as the image will have them.
+readonly IMAGE_PENDING=(gnome-music gnome-maps)
+# The image's Flatpaks (apex-image's apex.preinstall), each with the RPM that stands in for it, if Fedora has one.
+readonly FLATPAK_STAND_INS='[{"flatpak": "org.mozilla.firefox", "rpm": "firefox"},
+    {"flatpak": "io.github.kolunmi.Bazaar", "rpm": null, "standIn": "desktop entry"}]'
 readonly SCALE=2
 readonly MONITOR=2880x1800
 readonly SHOOT=tests/shell/shoot.sh
@@ -40,7 +52,7 @@ readonly G2='tests/shots/direct.sh signoff'
 # number|slug|title|source|light capture|dark capture|fixture state
 readonly BOARDS="12|greeter|GDM greeter|$SHOOT|greeter-light-list|greeter-dark-list|the user list, apex and guest, on apex-desktop's greeter background
 13|polkit|Authentication dialog|$SHOOT|polkit-light-open|polkit-dark-open|the shell's own dialog for an administrator, its PAM session never answering
-14|power-off|Power off dialog|$SHOOT|end-session-light-power-off|end-session-dark-power-off|power off with an update staged (update1-mock.py), the update card on; shoot.sh's logind mock also holds the greeter's session, so stock lists it under Other users are logged in
+14|power-off|Power off dialog|$SHOOT|end-session-light-power-off|end-session-dark-power-off|power off with an update staged (update1-mock.py), the update card on; no other user logged in, the greeter's session being of class greeter
 15|alt-tab|Window switcher|$G2|default-signoff-alt-tab|dark-style-signoff-alt-tab|Text Editor, Calendar and Terminal open, the app switcher up
 16|transients|OSD, banner and popup menu|$G2|default-surfaces|dark-style-surfaces|the volume OSD at 62 %, a banner with an action, a three-row popup menu
 17|wifi-menu|Quick Settings: Wi-Fi submenu|$G2|default-quick-settings|dark-style-quick-settings|Quick Settings with the Wi-Fi menu open: Apex-5G connected, three networks in range, battery at 87 %
@@ -49,7 +61,7 @@ readonly BOARDS="12|greeter|GDM greeter|$SHOOT|greeter-light-list|greeter-dark-l
 22|tiling|Edge tiling|$G2|default-tile-preview|dark-style-tile-preview|the tile preview of the left half
 34|date-menu|Calendar and notifications|$G2|default-datemenu|dark-style-datemenu|Monday 28 September 2026, two low-urgency notifications
 35|overview|Overview|$G2|default-signoff-overview|dark-style-signoff-overview|the overview with Text Editor, Calendar and Terminal open, two workspaces
-36|launcher|Launcher|$G2|default-launcher|dark-style-launcher|the app grid's first page, no folder open
+36|launcher|Launcher|$G2|default-launcher|dark-style-launcher|the app grid's first page, no folder open: the image's apps outside the dock, Firefox's RPM standing in for its Flatpak
 37|desktop|Desktop: dock and top bar|$G2|default-desktop|dark-style-desktop|the desktop with the dock and the bar, no window open
 38|spotlight|Spotlight|$G2|default-spotlight-search|dark-style-spotlight-search|Spotlight with \"disk\" typed
 39|indicators|Top bar: indicators|$G2|indicators-indicators-everything|indicators-dark-indicators-everything|everything: two input sources and the StatusNotifierItems sni-items.js starts"
@@ -62,7 +74,7 @@ png() {
 
 collect() {
     local g2=$1 shots=$2 out=$3 number slug title source light dark fixture variant scene from missing=() boards=()
-    local commit features
+    local commit features dock
     mkdir -p "$out" || die "cannot create $out"
     while IFS='|' read -r number slug title source light dark fixture; do
         for variant in light dark; do
@@ -92,10 +104,15 @@ collect() {
     fi
     commit=$(git -c safe.directory='*' -C "$REPO" rev-parse HEAD 2>/dev/null || echo "${GITHUB_SHA:-unknown}")
     features=$(sed -n 's/.*Apex: feature \([a-z-]*\) enabled.*/\1/p' "$g2/default.log" 2>/dev/null | sort -u | jq -Rsc 'split("\n") | map(select(. != ""))')
+    dock=$({ cat "$g2/default.log" "$g2/default.late.log" 2>/dev/null || :; } | sed -n 's/.*APEXG2[A-Z-]* \({.*\)/\1/p' |
+        jq -sc 'map(.dock?.items? // empty) | first // [] | map(select(.kind == "app") | .name)' 2>/dev/null)
     printf '%s\n' "${boards[@]}" | jq -s --arg commit "$commit" --arg desktop "$APEX_DESKTOP_REV" \
         --argjson features "${features:-[]}" --argjson scale "$SCALE" --arg monitor "$MONITOR" \
+        --arg grid "${GRID_APPS[*]}" --argjson standIns "$FLATPAK_STAND_INS" --argjson dock "${dock:-[]}" \
+        --arg pending "${IMAGE_PENDING[*]}" \
         '{commit: $commit, pins: {apexGnome: $commit, apexDesktop: $desktop}, scale: $scale, monitor: $monitor,
-          features: $features, boards: .}' >"$out/signoff.json" ||
+          features: $features, apps: {dock: $dock, grid: ($grid | split(" ")), flatpakStandIns: $standIns,
+          notYetInImage: ($pending | split(" "))}, boards: .}' >"$out/signoff.json" ||
         die "cannot write $out/signoff.json"
     echo "signoff.sh: $(jq '.boards | length' "$out/signoff.json") boards, light and dark, in $out"
 }
@@ -124,14 +141,24 @@ if [[ -z ${APEX_DESKTOP_SRC:-} ]]; then
         die "cannot fetch apex-desktop $APEX_DESKTOP_REV"
     git -c safe.directory='*' -C "$desktop" checkout -q --detach FETCH_HEAD
 fi
-dnf5 -y -q --setopt=install_weak_deps=False --repo=fedora --repo=updates install dnf5-plugins rpm-build make git-core "${APPS[@]}" ||
-    die "cannot install the apps, the fonts and rpm-build"
+dnf5 -y -q --setopt=install_weak_deps=False --repo=fedora --repo=updates install dnf5-plugins rpm-build make git-core \
+    "${APPS[@]}" "${GRID_APPS[@]}" || die "cannot install the apps, the fonts and rpm-build"
+rpm -qa --qf '%{NAME}\n' | sort >"$work/before-builddep.txt"
 dnf5 -y -q --repo=fedora --repo=updates builddep "$desktop/packaging/apex-desktop.spec" || die "cannot install apex-desktop's build dependencies"
 git config --global --add safe.directory '*'
 make -C "$desktop" rpm BUILD_DIR="$work/apex-desktop-build" >"$work/apex-desktop-rpm.log" 2>&1 ||
     die "apex-desktop's make rpm failed; see $work/apex-desktop-rpm.log"
+# Its build dependencies that bring an app go again, so the launcher holds none the image lacks (Inkscape).
+mapfile -t apps < <(rpm -qa --qf '%{NAME}\n' | sort | comm -13 "$work/before-builddep.txt" - |
+    while read -r p; do rpm -ql "$p" | grep '^/usr/share/applications/.*\.desktop$' >/dev/null && echo "$p"; done)
+((${#apps[@]} == 0)) || dnf5 -y -q remove "${apps[@]}" || die "cannot remove apex-desktop's build dependencies ${apps[*]}"
+! rpm -q inkscape >/dev/null || die "inkscape is still installed, and would show in the launcher"
 dnf5 -y -q --setopt=install_weak_deps=False --repo=fedora --repo=updates install "$work"/apex-desktop-build/rpm/RPMS/noarch/apex-desktop-*.rpm ||
     die "cannot install apex-desktop"
+# Bazaar, a dock favourite, is a Flatpak Fedora has no RPM of: an entry with its name and the Apex theme's icon stands in.
+[[ -e /usr/share/icons/Apex/scalable/apps/io.github.kolunmi.Bazaar.svg ]] || die "the Apex icon theme has no Bazaar icon"
+printf '[Desktop Entry]\nType=Application\nName=Bazaar\nIcon=io.github.kolunmi.Bazaar\nExec=true\n' \
+    >/usr/share/applications/io.github.kolunmi.Bazaar.desktop || die "cannot write Bazaar's stand-in entry"
 
 PATCHED_RPMS=$rpms PATCHED_OUT=$work/g2 PATCHED_PART=signoff bash "$HERE/patched.sh" ||
     echo "signoff.sh: patched.sh exited $?; the boards it shoots are checked below"
