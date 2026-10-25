@@ -163,8 +163,8 @@ mapfile -t apps < <(rpm -qa --qf '%{NAME}\n' | sort | comm -13 "$work/before-bui
 ((${#apps[@]} == 0)) || dnf5 -y -q remove "${apps[@]}" || die "cannot remove apex-desktop's build dependencies ${apps[*]}"
 not_in_image
 # gnome-shell recommends Tour, and patched.sh installs the shell with its weak dependencies.
-mkdir -p /etc/dnf/libdnf5.conf.d && printf '[main]\nexcludepkgs=%s\n' "$(IFS=,; echo "${NOT_IN_IMAGE[*]}")" \
-    >/etc/dnf/libdnf5.conf.d/90-signoff.conf ||
+mkdir -p /etc/dnf/libdnf5.conf.d || die "cannot create /etc/dnf/libdnf5.conf.d"
+printf '[main]\nexcludepkgs=%s\n' "$(IFS=,; echo "${NOT_IN_IMAGE[*]}")" >/etc/dnf/libdnf5.conf.d/90-signoff.conf ||
     die "cannot keep dnf5 from installing ${NOT_IN_IMAGE[*]}"
 dnf5 -y -q --setopt=install_weak_deps=False --repo=fedora --repo=updates install "$work"/apex-desktop-build/rpm/RPMS/noarch/apex-desktop-*.rpm ||
     die "cannot install apex-desktop"
