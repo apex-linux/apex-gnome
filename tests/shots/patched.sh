@@ -263,7 +263,8 @@ for c in stock-light stock-dark; do
     quick_settings_layer "$c" "$run/$c.log" stock
     notifications_layer "$c" "$run/$c.log" stock
 done
-asserted default dark-style high-contrast large-text && a11y_cases "$run"
+asserted default dark-style high-contrast large-text default-solid dark-style-solid high-contrast-solid large-text-solid \
+    && a11y_cases "$run"
 asserted layer-cycles && layer_cycles "$run"
 asserted motion && motion_curve "$run"
 asserted idle && idle_desktop "$run"
