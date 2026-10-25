@@ -120,6 +120,12 @@ s7-accent:
 selftest:
     .github/scripts/selftest.sh
     tests/s7/selftest.sh
+    tests/laptop/selftest.sh
+
+# ADR 0014's glass acceptance on the laptop, run by its owner: `run`, `power [idle|A]` or `score DIR` (tests/laptop/README.md).
+[positional-arguments]
+glass-protocol *args:
+    tests/laptop/glass-protocol.sh "$@"
 
 # The comment guard on every tracked file, or on the given ones (cargo install --git https://github.com/apex-linux/apex-ci apex-lint).
 [positional-arguments]
