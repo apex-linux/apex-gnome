@@ -56,7 +56,9 @@ The direct cases:
 | `safe-env`, `layer-disabled`, `kernel-safe` | the three kill switches | upstream's dark sheet from `theme/stock/`, the stock colour scheme, every hook stock, no Super+Space binding, the reason logged; the same sheet in all three; `safe-env`: no search hint |
 | `layer-cycles` | the capture settings; the probe sets `layer-enabled` false, then true, three times | while off: upstream's dark sheet from `theme/stock/`, the stock colour scheme, every hook stock, no Super+Space binding; while on: the Apex light sheet, `prefer-light` and Super+Space; each time it is on the stage holds the same actors, type by type, as at startup, and each time it is off the same as the first time (the first count waits out main.js's 20 s timeout for deferred work, which fills the overview's hidden dash; an `St.Icon` counts, not the texture child St gives it once it is first styled, which a dash hidden since startup decides); the layer logs each switch |
 | `motion` | the capture settings with `enable-animations` true; the probe lifts the inhibit `main.js` puts on animations without hardware-accelerated rendering, starts `window.js`, a plain GTK 4 window, maximises and restores it once (mutter gives a first size change a 0 × 0 old frame, which stock never animates), maximises it and opens the overview, then sets `enable-animations` false, does both again and plays Locate Pointer | DESIGN's motion (ROADMAP S3c): the window actor's size-change transition and the overview's state transition are `CUBIC_BEZIER` with the control points (.2, .8) and (.2, 1), over 300 and 200 ms; with animations off, neither creates a transition, while Locate Pointer's ripple (`animationRequired`, an a11y aid) still takes stock's 830 ms |
-| `idle` | the capture settings without hot corners, every feature of `layer.js`'s `FEATURES_IN_ENABLE_ORDER` on; `idle.js` lets the session settle, then watches the stage for 10 s | ROADMAP S3c's exit: an idle desktop paints no frame and queues no relayout (below, "The idle desktop") |
+| `idle` | the capture settings without hot corners, every feature of `layer.js`'s `FEATURES_IN_ENABLE_ORDER` on; `idle.js` lets the session settle, then watches the stage for 10 s, four times: the desktop, Quick Settings open, and both with Reduce Transparency | ROADMAP S3c's and S2b's exits: an idle desktop paints no frame and queues no relayout, glass or not (below, "The idle desktop") |
+| `glass-load` | the capture settings without hot corners, `dock-intellihide` off while it runs; `glass-load.js` runs ADR 0014's scenarios A, B and C with `load-window.js`, once with the glass and once with Reduce Transparency | forwarded damage re-blurs each glass box in the frame its content changes; the bar and idle popovers do not re-blur; glass adds at most 1 % frames over Reduce Transparency in A and B (below, "Glass under load") |
+| `glass-stress` | as `glass-load`, `G2_GLASS_STRESS_SECONDS` long (60 s; 300 s in the VM's G2) | `glass.js`'s stress on its synthetic box, and the real boxes under `load-window.js` for as long (below) |
 | `fault-configure`, `fault-enable` | `APEX_SHELL_TEST_FAULT` | only the fault feature is off; the `witness` feature after it still enables; the rest of the layer runs, Super+Space included, and the shell survives |
 | `fault-abort` | `abort-after-enable` | SIGABRT (exit 134) with the crash guard's marker left behind |
 | `fedora-light`, `fedora-dark` | Fedora's build, `prefer-light` or `prefer-dark` | no Apex module; upstream's sheet at its own path, byte for byte the one safe mode loads from `theme/stock/` |
@@ -497,7 +499,9 @@ patched shell with every feature `layer.js` lists in `FEATURES_IN_ENABLE_ORDER`,
 joins it. `idle.js` lets the session settle first: startup over, the overview hidden, the
 startup notifications dropped, the dock at rest (no transition on its box), the bar's and
 the dock's glass on, no actor easing, and the pointer left at 0,0 (hot corners off). Then it
-counts the stage's `after-paint` over 10 s, on the fixed clock, and expects none.
+counts the stage's `after-paint` over 10 s, on the fixed clock, and expects none. It does so
+four times: on the desktop, with Quick Settings open (its glass sits right under the bar's),
+and both again with Reduce Transparency, which S2b's exit asks of the glass.
 
 A failure names what repainted. Each frame's `paint-view` hands over its redraw clip, an
 `MtkRegion`: the probe takes its extents by bisecting it with `intersect_rectangle`, since
@@ -506,6 +510,29 @@ actors a pick finds inside it, innermost first. `queue-relayout`, which runs up 
 counted on every actor, so the innermost entry is the one that asked. `assert.sh` adds the
 `ui/apex/` file of each JS class and `apex-` style class among them. The control opens Quick
 Settings inside a window of the same counter: it must count frames and name their damage.
+
+## Glass under load
+
+ADR 0014's acceptance runs on the laptop: Sysprof's frame times, `gpu_busy_percent` and the
+energy rate are the laptop's, and G2 records none of them, since llvmpipe's times are the
+CPU's. What G2 measures is the work, frame by frame, from `paint-view`'s redraw clip: a glass
+box the clip covers fully re-blurs (patch 0003's rule e), one it only touches draws its last
+result and queues another frame. `glass-load.js` runs each scenario for 5 s with the glass and
+again with `reduce-transparency`, the same script:
+
+| Scenario | Stand-in | Asserts |
+|---|---|---|
+| A | `load-window.js`, a GTK 4 window repainting in a new colour every 33 ms from a timer, over the dock and under Quick Settings, which is open | every change under a glass box re-blurs it in the same frame; the dock re-blurs exactly as often as the window changes, Quick Settings and the bar never; glass draws at most 1 % more frames per change than Reduce Transparency |
+| B | the same window, still, moved under the dock, then under Quick Settings, then under the calendar, a step every 33 ms | the same; the bar, which it never passes under, re-blurs at most once per open or close of a bar menu (4), since its own buttons repaint there: a patch 0003 effect cannot tell its own content from its backdrop |
+| C | 20 overview and app-grid toggles over the repainting window, then Spotlight over it | every change under a glass box re-blurs it in the same frame; the frame counts are reported. The overview's and the launcher's scrims join with S3a's glass |
+
+Each scenario prints the modelled glass cost per frame: the re-blurs it saw, each costed by
+`0014-blurcost.py`'s model at the box's device size and sigma. It is for the laptop run to
+compare with, never asserted. A failure names the counts per surface and the first frames'
+clips. The black and stale frames of ROADMAP S2b's exit are `glass.js`'s stress, on its
+synthetic box: on a real surface, its own content may be black. `glass-stress` runs that
+stress for `G2_GLASS_STRESS_SECONDS` (60 s; `run.sh` sets 300 s in the VM, ROADMAP S2b's five
+minutes) and then scenario A for as long, every change under a glass box re-blurring it.
 
 ## Sign-off captures
 
@@ -574,6 +601,7 @@ it is at least 4.8:1), and what the goldens judge: the Apex Symbolic glyphs (S1b
 | `backdrop.js`, `backdrops.sh` | the shell; a throwaway container | whether the pinned backdrop painted, and the Facets it pins rendered where an image has them |
 | `indicators.js`, `sni-items.js` | the shell; gjs | the app-indicator part of `default`, `default-scale1` and `dark-style`, and the StatusNotifierItems it starts |
 | `idle.js` | the `idle` case's shell | the settled desktop, its paints and relayouts over 10 s, and the counter's control |
+| `glass-load.js`, `load-window.js` | the `glass-load` and `glass-stress` cases' shells; gjs, GTK 4 | ADR 0014's scenarios as work counts, and the client that stands in for a video |
 | `frame.c`, `G2Frame-1.gir` | the glass cases' shells | `G2Frame.read()`, a region of the frame the shell drew |
 | `selftest.sh`, `png-test.js`, `blur-ref-test.js` | CI and the host | the tests of the above |
 
