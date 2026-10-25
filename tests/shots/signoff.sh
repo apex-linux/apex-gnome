@@ -94,12 +94,12 @@ banners_of() {
             sed -n 's/.*APEXLOCK //p' "$log" | jq -c --arg shot "$(basename "$log" .log)" \
                 'to_entries[] | select(.key | startswith("banner.")) | {file: "\($shot)-\(.key[7:]).png", banner: .value}'
         done
-    } 2>/dev/null | jq -sc 'map({(.file): .banner}) | add // {}'
+    } 2>/dev/null | jq -sc 'map({(.file): {banner, live: (.live // [])}}) | add // {}'
 }
 
 collect() {
     local g2=$1 shots=$2 out=$3 number slug title source light dark fixture variant scene from missing=() boards=()
-    local commit features dock banners banner
+    local commit features dock banners banner live
     mkdir -p "$out" || die "cannot create $out"
     banners=$(banners_of "$g2" "$shots")
     while IFS='|' read -r number slug title source light dark fixture; do
@@ -114,12 +114,14 @@ collect() {
                 missing+=("board $number ($title), $variant: no capture of $scene ($source)")
                 continue
             fi
-            banner=$(jq -c --arg f "$scene.png" 'if has($f) then .[$f] else "unrecorded" end' <<<"$banners")
+            banner=$(jq -c --arg f "$scene.png" 'if has($f) then .[$f].banner else "unrecorded" end' <<<"$banners")
+            live=$(jq -r --arg f "$scene.png" '.[$f].live // [] | join(", ")' <<<"$banners")
             if [[ $banner == '"unrecorded"' ]]; then
                 missing+=("board $number ($title), $variant: no banner record for $scene")
             elif [[ $banner != null && " ${BANNER_BOARDS[*]} " != *" $number "* ]]; then
                 missing+=("board $number ($title), $variant: a banner over $scene: $banner")
             fi
+            [[ -z $live ]] || missing+=("board $number ($title), $variant: still live in $scene: $live")
         done
         boards+=("$(jq -nc --argjson board "$((10#$number))" --arg title "$title" --arg slug "$slug" --arg source "$source" \
             --arg light "$light" --arg dark "$dark" --arg fixture "$fixture" \

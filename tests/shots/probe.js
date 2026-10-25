@@ -66,6 +66,7 @@ const SIGNOFF_APPS = [['gnome-text-editor', '--new-window'], ['gnome-calendar'],
 const SIGNOFF_WINDOWS_MS = 30000;
 const SIGNOFF_FOCUS_ORDER = ['org.gnome.Calendar.desktop', 'org.gnome.TextEditor.desktop', 'org.gnome.Ptyxis.desktop'];
 const SIGNOFF_QUIET_MS = 1500;
+const WIFI_SCAN_MS = 5000;
 const AVATAR_SIZE = 32;
 const OVERVIEW_WINDOWS = 3;
 const FIXTURE_WALLPAPER = {width: 160, height: 100};
@@ -564,7 +565,7 @@ function bannerShown() {
     return tray._banner?.mapped ? {source: tray._notification?.source?.title ?? null, title: tray._notification?.title ?? null} : null;
 }
 
-async function capture(scene) {
+async function capture(scene, live = []) {
     const dir = GLib.getenv('G2_CAPTURES');
     const name = `${GLib.getenv('G2_CASE')}-${scene}.png`;
     GLib.mkdir_with_parents(dir, 0o755);
@@ -578,7 +579,7 @@ async function capture(scene) {
     const [, bytes] = GLib.file_get_contents(path);
     const {width, height} = Png.size(bytes);
     const scale = width / global.stage.width;
-    console.log(`APEXG2-CAPTURE ${JSON.stringify({file: name, banner: bannerShown()})}`);
+    console.log(`APEXG2-CAPTURE ${JSON.stringify({file: name, banner: bannerShown(), live})}`);
     return {
         file: name, width, height, bytes,
         boxes: {
@@ -928,8 +929,13 @@ async function quickSettings(unit) {
     try {
         await settle();
         wifi?.menu.open(BoxPointer.PopupAnimation.NONE);
+        // The menu scans as it opens, and again every 15 s: board 17 is the menu after a scan, without its spinner.
+        const scanning = () => Boolean(wifi?._scanningSpinner?.content);
+        const scanned = await until(() => !scanning(), WIFI_SCAN_MS);
         await settle();
-        const scene = GLib.getenv('G2_SURFACE_SCENES') === '1' ? await capture('quick-settings') : null;
+        const scene = GLib.getenv('G2_SURFACE_SCENES') === '1'
+            ? await capture('quick-settings', scanning() ? ['wifi-scan-spinner'] : [])
+            : null;
         if (scene)
             delete scene.bytes;
         const system = byType('SystemItem');
@@ -938,7 +944,7 @@ async function quickSettings(unit) {
         const header = wifi && findDescendant(wifi.menu.box, a => a.has_style_class_name?.('header'));
         const find = (root, styleClass) => findDescendant(root, a => a.has_style_class_name?.(styleClass));
         return {
-            scene,
+            scene, scanned,
             box: styleOf(menu.box, unit),
             grid: {
                 rows: lengthOrNull(grid.get_theme_node(), 'spacing-rows', unit),

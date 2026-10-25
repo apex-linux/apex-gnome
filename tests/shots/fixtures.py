@@ -39,6 +39,7 @@ WIFI_SSID = "Apex-5G"
 WIFI_STRENGTH = 90
 WIFI_FREQUENCY_MHZ = 5180
 WIFI_RATE_KBPS = 866700
+WIFI_LAST_SCAN_MS = 60000
 NM_80211_MODE_INFRA = 2
 NM_80211_AP_SEC_NONE = 0
 NM_80211_AP_SEC_KEY_MGMT_PSK = 0x100
@@ -158,7 +159,12 @@ def wifi(bus):
     # The template's connection knows plain PSK only: the ciphers come after it.
     wpa2 = dbus.UInt32(NM_80211_AP_SEC_WPA2_PSK)
     nm.put(access_point, f"{NM}.AccessPoint", {"WpaFlags": wpa2, "RsnFlags": wpa2})
-    nm.put(device, f"{NM}.Device.Wireless", {"ActiveAccessPoint": dbus.ObjectPath(access_point)})
+    nm.put(device, f"{NM}.Device.Wireless", {"ActiveAccessPoint": dbus.ObjectPath(access_point),
+                                             "LastScan": dbus.Int64(WIFI_LAST_SCAN_MS)})
+    # A scan that finishes at once, as a real one does: the Wi-Fi menu's spinner turns until LastScan moves.
+    nm.mock(device).AddMethod(f"{NM}.Device.Wireless", "RequestScan", "a{sv}", "",
+                              f"self.Set('{NM}.Device.Wireless', 'LastScan', "
+                              f"dbus.Int64(self.Get('{NM}.Device.Wireless', 'LastScan') + 1))")
     nm.put(NM_PATH, NM, {"PrimaryConnection": dbus.ObjectPath(active),
                          "PrimaryConnectionType": "802-11-wireless"})
     manager = nm.props(NM_PATH)

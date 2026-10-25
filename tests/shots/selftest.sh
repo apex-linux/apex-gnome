@@ -900,6 +900,14 @@ test_signoff_banners() {
         not_ok "signoff: a banner a scene did not open fails its board, named; board 16's own banner does not: $(tail -n 3 "$T/signoff.out")"
     fi
     rm -rf "$dir" && cp -r "$1" "$dir"
+    sed -i 's/"file":"dark-style-quick-settings.png","banner":null/&,"live":["wifi-scan-spinner"]/' "$dir/g2/dark-style.log"
+    if ! "$HERE/signoff.sh" --collect "$dir/g2" "$dir/shots" "$dir/out" >"$T/signoff.out" 2>&1 &&
+        grep -q 'board 17 (Quick Settings: Wi-Fi submenu), dark: still live in dark-style-quick-settings: wifi-scan-spinner' "$T/signoff.out"; then
+        ok "signoff: a capture with live content left fails its board, named"
+    else
+        not_ok "signoff: a capture with live content left fails its board, named: $(tail -n 3 "$T/signoff.out")"
+    fi
+    rm -rf "$dir" && cp -r "$1" "$dir"
     : >"$dir/shots/lock-dark.log"
     if ! "$HERE/signoff.sh" --collect "$dir/g2" "$dir/shots" "$dir/out" >"$T/signoff.out" 2>&1 &&
         grep -q 'board 20 (Lock screen), dark: no banner record for lock-dark-open' "$T/signoff.out"; then
@@ -2279,6 +2287,11 @@ const upower = Gio.DBusProxy.new_for_bus_sync(Gio.BusType.SYSTEM, Gio.DBusProxyF
     'org.freedesktop.UPower', '/org/freedesktop/UPower/devices/DisplayDevice', 'org.freedesktop.UPower.Device', null);
 const switcheroo = Gio.DBusProxy.new_for_bus_sync(Gio.BusType.SYSTEM, Gio.DBusProxyFlags.NONE, null,
     'net.hadess.SwitcherooControl', '/net/hadess/SwitcherooControl', 'net.hadess.SwitcherooControl', null);
+// network.js's scan: request one, then wait for LastScan to move, its spinner turning meanwhile.
+const lastScan = device?.last_scan;
+let scanFinishes = false;
+device?.connect('notify::last-scan', () => (scanFinishes = device.last_scan !== lastScan));
+device?.request_scan_async(null, (d, result) => d.request_scan_finish(result));
 const bluetooth = new GnomeBluetooth.Client();
 const loop = new GLib.MainLoop(null, false);
 GLib.timeout_add(GLib.PRIORITY_DEFAULT, 1000, () => {
@@ -2290,7 +2303,7 @@ GLib.timeout_add(GLib.PRIORITY_DEFAULT, 1000, () => {
     }
     print(JSON.stringify({
         wifi: {id: primary?.get_id() ?? null, strength: ap?.get_strength() ?? null, listed,
-            full: nm.connectivity === NM.ConnectivityState.FULL, wireless: nm.wireless_enabled},
+            full: nm.connectivity === NM.ConnectivityState.FULL, wireless: nm.wireless_enabled, scanFinishes},
         battery: {present: upower.get_cached_property('IsPresent')?.unpack() ?? null,
             percentage: upower.get_cached_property('Percentage')?.unpack() ?? null},
         connectedBluetooth: connected,
@@ -2464,7 +2477,7 @@ test_fixtures() {
     expect_eq "fixtures: fixtures.py on a private bus passes the fixture assertions" "18/0" "$passes/$failures"
     write_fixture_reader
     expect_eq "fixtures: libnm, gnome-bluetooth, UPower's display device and switcheroo-control read them as the shell does" \
-        '{"wifi":{"id":"Apex-5G","strength":90,"listed":["Apex-5G","Apex-2.4G","Library Guest"],"full":true,"wireless":true},"battery":{"present":true,"percentage":87},"connectedBluetooth":["Keychron K3"],"hasDualGpu":true}' \
+        '{"wifi":{"id":"Apex-5G","strength":90,"listed":["Apex-5G","Apex-2.4G","Library Guest"],"full":true,"wireless":true,"scanFinishes":true},"battery":{"present":true,"percentage":87},"connectedBluetooth":["Keychron K3"],"hasDualGpu":true}' \
         "$(DBUS_SYSTEM_BUS_ADDRESS=$address gjs -m "$T/read-fixtures.js" 2>"$T/read-fixtures.err")"
     local -a pids
     mapfile -t pids < <(cat "$T/bus.pid" "$T"/fixtures/fixture-*.pid 2>/dev/null)
