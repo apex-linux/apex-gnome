@@ -55,7 +55,7 @@ done
 cp "$HERE"/stubs/appDisplay.js "$HERE"/stubs/remoteSearch.js "$HERE"/stubs/searchProviders.js "$T/shell/js/ui/"
 mkdir -p "$T/shell/js/misc"
 cp "$HERE/stubs/systemActions.js" "$T/shell/js/misc/"
-cp "$HERE"/stubs/St.js "$HERE"/stubs/Clutter.js "$HERE"/stubs/Shell.js "$HERE"/stubs/Meta.js "$HERE"/stubs/Graphene.js \
+cp "$HERE"/stubs/St.js "$HERE"/stubs/Clutter.js "$HERE"/stubs/Shell.js "$HERE"/stubs/Meta.js "$HERE"/stubs/Graphene.js "$HERE"/stubs/Mtk.js \
     "$HERE"/stubs/GdkPixbuf.js "$HERE"/stubs/Polkit.js "$HERE"/stubs/AccountsService.js "$T/"
 # The shadow cutout and the indicators' mask are GObject subclasses of Clutter.ShaderEffect, which the stubs cannot be.
 cp "$HERE/stubs/cutout.js" "$T/shell/js/ui/apex/shadows/cutout.js"
@@ -67,7 +67,7 @@ cp "$HERE/stubs/indicator-mask.js" "$T/shell/js/ui/apex/indicators/mask.js"
 # Shell and Meta no WindowTracker or Barrier: the features get stubs instead.
 find "$T/shell/js/ui/apex" -name '*.js' -exec sed -i -e "s|'gi://St'|'file://$T/St.js'|" \
     -e "s|'gi://Clutter'|'file://$T/Clutter.js'|" -e "s|'gi://Shell'|'file://$T/Shell.js'|" \
-    -e "s|'gi://Meta'|'file://$T/Meta.js'|" -e "s|'gi://Graphene'|'file://$T/Graphene.js'|" \
+    -e "s|'gi://Meta'|'file://$T/Meta.js'|" -e "s|'gi://Graphene'|'file://$T/Graphene.js'|" -e "s|'gi://Mtk'|'file://$T/Mtk.js'|" \
     -e "s|'gi://GdkPixbuf'|'file://$T/GdkPixbuf.js'|" -e "s|'gi://Polkit'|'file://$T/Polkit.js'|" \
     -e "s|'gi://AccountsService'|'file://$T/AccountsService.js'|" {} +
 for gir in "$HERE"/fixtures/*.gir; do
@@ -509,6 +509,9 @@ fact "shadows: registering again keeps one layer" 'shadows\.registered-twice=1'
 fact "shadows: an unmapped surface keeps no layer" 'shadows\.unmapped=none'
 fact "shadows: mapped again, it draws again" \
     'shadows\.mapped-again=box-shadow: 0px 2px 8px 0px rgba\(20, 30, 60, 0\.2\); border-radius: 14px; at 106,46 300x200 above=true cutout=14'
+fact "shadows: a style change that leaves the layer's CSS as it was rebuilds nothing" 'shadows\.restyled-alike=the same layer'
+fact "shadows: one that changes it rebuilds the layer" \
+    'shadows\.restyled=box-shadow: 0px 2px 12px 0px rgba\(20, 30, 60, 0\.2\); border-radius: 14px; at 106,46 300x200 above=true cutout=14'
 fact "shadows: layer off: no layer drawn" 'shadows\.off=none'
 fact "shadows: layer back on: the registration draws again" \
     'shadows\.on=box-shadow: 0px 2px 8px 0px rgba\(20, 30, 60, 0\.2\); border-radius: 14px; at 106,46 300x200 above=true cutout=14'
@@ -802,6 +805,7 @@ fact "glass: another feature registers its actor, the dock's sigma 28 at 1.8, wi
 fact "glass: a damaged window that touches no glass box redraws none" 'glass\.damage-elsewhere=panel=0 quick-settings=0 dock=0 -> panel=0 quick-settings=0 dock=0'
 fact "glass: a window moved under the bar redraws the bar's box" 'glass\.moved-under-the-bar=panel=1 quick-settings=0 dock=0'
 fact "glass: moved out from under the bar and damaged under the dock, it redraws the bar once more and the dock" 'glass\.damage-under-the-dock=panel=2 quick-settings=0 dock=2'
+fact "glass: a forwarded redraw is clipped to the glass box, not its paint volume (box-shadow included)" 'glass\.forwarded-clip=0,0 600x62 of 600x62'
 fact "glass: a restack redraws every glass box" 'glass\.restacked=panel=3 quick-settings=1 dock=3'
 fact "glass: Reduce Transparency removes every blur and roots apex-solid; the redirects come back" \
     "glass\.reduce-transparency=$GLASS_OFF banner:none solid=true redirects=2,2"

@@ -18,6 +18,7 @@ blur. The lane's own checks, signing and the mutter pin's mirror are apex-image'
 
   PATCHED_RPMS=DIR   install the gnome-shell RPMs in DIR instead of building them
   PATCHED_OUT=DIR    keep the RPMs and the run's logs in DIR (default: a temporary one)
+  PATCHED_PART=signoff  only direct.sh's signoff part, for signoff.sh: no Fedora baseline, no assertions
 
   docker run --rm --network=host -v "$PWD:/src:ro" registry.fedoraproject.org/fedora:45 \
       /src/tests/shots/patched.sh
@@ -158,6 +159,12 @@ rm -rf "$run"
 mkdir -p "$run/captures"
 ln -sfn "$HERE" /w
 ln -sfn "$run" /out
+if [[ ${PATCHED_PART:-} == signoff ]]; then
+    install_shell
+    step "direct.sh signoff"
+    bash /w/direct.sh signoff
+    exit
+fi
 fedora_part
 install_shell
 
@@ -191,11 +198,11 @@ top_bar_gaps dark-style "$run/dark-style.log" dark
 dock_metrics default "$run/default.log" light
 dock_metrics default-scale1 "$run/default-scale1.log" light
 dock_metrics dark-style "$run/dark-style.log" dark
-for c in dock-intellihide dock-intellihide-dark; do
-    exits "$run" "$c" 0
-    no_js_error "$c" "$run/$c.log"
-    no_apex_failure "$c" "$run/$c.log"
-    dock_intellihide "$c" "$run/$c.log" "$run"
+for c in dock-intellihide:light dock-intellihide-dark:dark; do
+    exits "$run" "${c%:*}" 0
+    no_js_error "${c%:*}" "$run/${c%:*}.log"
+    no_apex_failure "${c%:*}" "$run/${c%:*}.log"
+    dock_intellihide "${c%:*}" "$run/${c%:*}.log" "$run" "${c#*:}"
 done
 no_dock stock-light "$run/stock-light.log"
 no_dock stock-dark "$run/stock-dark.log"

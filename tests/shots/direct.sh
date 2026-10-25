@@ -4,7 +4,7 @@ set -uo pipefail
 
 usage() {
     cat <<'EOF'
-usage: direct.sh main|kernel|fedora
+usage: direct.sh main|kernel|fedora|signoff
 
 G2's direct cases, run by run.sh as root in a throwaway container of its bus image (the
 built image plus dbus-daemon), with tests/shots at /w (read-only) and the run's results
@@ -21,11 +21,12 @@ gi-compile-repository.
   main     every case, with the VM's real /proc/cmdline
   kernel   the apex.safe=1 case (run.sh binds a fixture over /proc/cmdline)
   fedora   the captures of Fedora's own gnome-shell build (run.sh's baseline image)
+  signoff  main's capture and indicator cases with every scene saved (signoff.sh)
 EOF
 }
 
 case ${1:-} in
-    main | kernel | fedora) part=$1 ;;
+    main | kernel | fedora | signoff) part=$1 ;;
     -h | --help) usage; exit 0 ;;
     *) usage >&2; exit 2 ;;
 esac
@@ -45,6 +46,7 @@ readonly FIXTURE_NAMES=(org.freedesktop.UPower org.freedesktop.NetworkManager or
 # the count. A 24-hour clock: in 12 hours a one-digit hour adds a figure space.
 readonly NO_HOT_CORNER='org.gnome.desktop.interface enable-hot-corners false'
 readonly TWO_SOURCES="org.gnome.desktop.input-sources sources [('xkb', 'us'), ('xkb', 'fr')]"
+readonly DARK='org.gnome.desktop.interface color-scheme prefer-dark'
 readonly CAPTURE_SETTINGS='org.gnome.desktop.interface enable-animations false;org.gnome.desktop.interface cursor-blink false;org.gnome.mutter dynamic-workspaces false;org.gnome.desktop.wm.preferences num-workspaces 2;org.gnome.desktop.interface clock-format 24h;org.gnome.desktop.interface show-battery-percentage true'
 
 # The motion case needs animations, which the captures turn off.
@@ -144,6 +146,13 @@ case $part in
         run_and_record_case fedora-light "$CAPTURE_SETTINGS;org.gnome.desktop.interface color-scheme prefer-light" G2_SCENES=1
         run_and_record_case fedora-dark "$CAPTURE_SETTINGS;org.gnome.desktop.interface color-scheme prefer-dark" G2_SCENES=1
         run_and_record_case fedora-glass "$CAPTURE_SETTINGS" G2_GLASS=1
+        exit 0 ;;
+    signoff)
+        G2_SURFACE_SCENES=1
+        run_and_record_case default "$CAPTURE_SETTINGS" G2_SCENES=1 G2_SIGNOFF=1
+        run_and_record_case dark-style "$CAPTURE_SETTINGS;$DARK" G2_SCENES=1 G2_SIGNOFF=1
+        run_and_record_case indicators "$CAPTURE_SETTINGS;$NO_HOT_CORNER;$TWO_SOURCES" G2_INDICATORS=1
+        run_and_record_case indicators-dark "$CAPTURE_SETTINGS;$NO_HOT_CORNER;$TWO_SOURCES;$DARK" G2_INDICATORS=1
         exit 0 ;;
 esac
 
