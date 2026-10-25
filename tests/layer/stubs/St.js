@@ -234,6 +234,11 @@ class Widget {
         this.redraws++;
     }
 
+    queue_redraw_with_clip(clip) {
+        this.redraws++;
+        this.clip = clip;
+    }
+
     has_style_class_name(name) {
         return this._styleClasses.has(name);
     }
