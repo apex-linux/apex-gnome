@@ -533,7 +533,7 @@ jobs:
 
       - name: tests/shots/patched.sh on the lane's RPMs, direct.sh pr on a pull request and main otherwise
         env:
-          PATCHED_PART: ${{ github.event_name == 'pull_request' && 'pr' || '' }}
+          PATCHED_PART: ''
         run: PATCHED_RPMS="$PWD/_build/shots-patched/rpms" PATCHED_OUT="$PWD/_build/shots-patched/out" tests/shots/patched.sh
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
