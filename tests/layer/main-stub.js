@@ -539,20 +539,35 @@ function emitter(props) {
     };
 }
 
+// dash.js's own redisplay methods live on its class, so an instance override can be taken back.
+class DashStub {
+    visible = true;
+    height = -1;
+    showAppsButton = emitter({checked: false});
+    redisplays = 0;
+    queued = 0;
+
+    show() {
+        this.visible = true;
+    }
+
+    hide() {
+        this.visible = false;
+    }
+
+    _redisplay() {
+        this.redisplays++;
+    }
+
+    _queueRedisplay() {
+        this.queued++;
+    }
+}
+
 export const overview = {
     visible: false,
     _overview: {_controls: controls},
-    dash: {
-        visible: true,
-        height: -1,
-        showAppsButton: emitter({checked: false}),
-        show() {
-            this.visible = true;
-        },
-        hide() {
-            this.visible = false;
-        },
-    },
+    dash: new DashStub(),
     showApps() {
         this.visible = true;
         fact('overview', 'shown, app grid');
