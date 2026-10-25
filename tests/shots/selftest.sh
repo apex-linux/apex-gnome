@@ -751,7 +751,7 @@ test_signoff() {
     local dir=$T/signoff scene
     rm -rf "$dir"
     mkdir -p "$dir/g2/captures" "$dir/shots"
-    for scene in switcher surfaces quick-settings screenshot tile-preview datemenu overview appgrid desktop spotlight-search; do
+    for scene in signoff-alt-tab surfaces quick-settings screenshot tile-preview datemenu signoff-overview launcher desktop spotlight-search; do
         printf '\x89PNG\r\n\x1a\n' >"$dir/g2/captures/default-$scene.png"
         printf '\x89PNG\r\n\x1a\n' >"$dir/g2/captures/dark-style-$scene.png"
     done
@@ -762,10 +762,11 @@ test_signoff() {
         # shellcheck disable=SC2059 # the scene names carry the variant's %s
         printf '\x89PNG\r\n\x1a\n' | tee "$dir/shots/$(printf "$scene" light).png" >"$dir/shots/$(printf "$scene" dark).png"
     done
-    printf 'Apex: feature panel enabled\nApex: feature dock enabled\n' >"$dir/g2/default.log"
+    printf 'Apex: feature panel enabled\nApex: feature dock enabled\nAPEXG2-SIGNOFF {"previews":true}\n' >"$dir/g2/default.log"
+    echo 'APEXG2-SIGNOFF {"previews":true}' >"$dir/g2/dark-style.late.log"
     if "$HERE/signoff.sh" --collect "$dir/g2" "$dir/shots" "$dir/out" >"$T/signoff.out" 2>&1 &&
         [[ $(find "$dir/out" -name 'board-*.png' | wc -l) == 30 ]] &&
-        jq -e '(.boards | length) == 15 and .scale == 2 and .features == ["dock", "panel"]
+        jq -e '(.boards | length) == 15 and .scale == 2 and .features == ["dock", "panel"] and (.pins.apexDesktop | length) == 40
             and .boards[0].files.dark == "board-12-greeter-dark.png"' "$dir/out/signoff.json" >/dev/null; then
         ok "signoff: fifteen boards, light and dark, and signoff.json from their captures"
     else
@@ -777,6 +778,13 @@ test_signoff() {
         ok "signoff: a scene that did not open fails the run with its board's name"
     else
         not_ok "signoff: a scene that did not open fails the run with its board's name: $(tail -n 3 "$T/signoff.out")"
+    fi
+    echo 'APEXG2-SIGNOFF {"previews":false}' >"$dir/g2/dark-style.late.log"
+    if ! "$HERE/signoff.sh" --collect "$dir/g2" "$dir/shots" "$dir/out3" >"$T/signoff.out" 2>&1 &&
+        grep -q 'boards 15 and 35, dark-style: the sign-off windows never all showed' "$T/signoff.out"; then
+        ok "signoff: sign-off windows missing from the overview fail the run"
+    else
+        not_ok "signoff: sign-off windows missing from the overview fail the run: $(tail -n 3 "$T/signoff.out")"
     fi
 }
 
@@ -1872,7 +1880,7 @@ readonly GLASS_LOAD_REPORT='def run($frames; $content; $surfaces): {frames: $fra
     A: {glass: run(151; 150; {dock: {reblurs: 150, partial: 0, contentUnder: 150}, "quick-settings": {reblurs: 0, partial: 0, contentUnder: 0}}),
         reduceTransparency: run(151; 150; {})},
     B: {glass: run(142; 137; {dock: {reblurs: 40, partial: 0, contentUnder: 38}, "quick-settings": {reblurs: 36, partial: 0, contentUnder: 34},
-                              calendar: {reblurs: 53, partial: 0, contentUnder: 52}}),
+                              calendar: {reblurs: 53, partial: 0, contentUnder: 52}, panel: {reblurs: 3, partial: 1, contentUnder: 0}}),
         reduceTransparency: run(142; 137; {})},
     C: {glass: run(241; 210; {panel: {reblurs: 57, partial: 0, contentUnder: 0}, dock: {reblurs: 240, partial: 0, contentUnder: 210}}),
         reduceTransparency: run(211; 191; {})}}}'
@@ -1906,8 +1914,12 @@ test_glass_load() {
 .scenarios.B.glass.missed = [{atMs: 3100, surface: "calendar", overlap: "out"}]|a window moved under the calendar without a re-blur
 .scenarios.B.glass.frames = 160|extra frames while a window is dragged
 .scenarios.B.glass.surfaces.calendar.contentUnder = 0|a drag that never reached the calendar
+.scenarios.B.glass.surfaces.panel.reblurs = 5|the bar re-blurring more than once per open or close of a bar menu
 .scenarios.C.glass.missed = [{atMs: 400, surface: "spotlight", overlap: "part"}]|a missed re-blur under Spotlight
 CHANGES
+    write_glass_load_run '.scenarios.B.glass.surfaces.panel.reblurs = 4'
+    read -r passes failures <<<"$(assertion_counts glass_load "$T/glass-load")"
+    expect_eq "glass-load: one bar re-blur per menu open or close in B passes" "$all/0" "$passes/$failures"
     write_glass_load_run '.scenarios.C.glass.frames = 400'
     read -r passes failures <<<"$(assertion_counts glass_load "$T/glass-load")"
     expect_eq "glass-load: C's frame count is reported, not asserted" "$all/0" "$passes/$failures"

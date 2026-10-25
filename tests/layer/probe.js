@@ -1495,6 +1495,7 @@ async function exerciseGlass() {
     window.emit('notify::allocation');
     window.emit('damaged');
     fact('glass.damage-under-the-dock', redraws());
+    fact('glass.forwarded-clip', `${dock.clip.x},${dock.clip.y} ${dock.clip.width}x${dock.clip.height} of ${dock.width}x${dock.height}`);
     global.display.emit('restacked');
     fact('glass.restacked', redraws());
 

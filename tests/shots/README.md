@@ -496,7 +496,7 @@ again with `reduce-transparency`, the same script:
 | Scenario | Stand-in | Asserts |
 |---|---|---|
 | A | `load-window.js`, a GTK 4 window repainting in a new colour every 33 ms from a timer, over the dock and under Quick Settings, which is open | every change under a glass box re-blurs it in the same frame; the dock re-blurs exactly as often as the window changes, Quick Settings and the bar never; glass draws at most 1 % more frames per change than Reduce Transparency |
-| B | the same window, still, moved under the dock, then under Quick Settings, then under the calendar, a step every 33 ms | the same, the bar, which it never passes under, never re-blurring |
+| B | the same window, still, moved under the dock, then under Quick Settings, then under the calendar, a step every 33 ms | the same; the bar, which it never passes under, re-blurs at most once per open or close of a bar menu (4), since its own buttons repaint there: a patch 0003 effect cannot tell its own content from its backdrop |
 | C | 20 overview and app-grid toggles over the repainting window, then Spotlight over it | every change under a glass box re-blurs it in the same frame; the frame counts are reported. The overview's and the launcher's scrims join with S3a's glass |
 
 Each scenario prints the modelled glass cost per frame: the re-blurs it saw, each costed by
@@ -510,15 +510,24 @@ minutes) and then scenario A for as long, every change under a glass box re-blur
 ## Sign-off captures
 
 Every slice ends with the owner signing off its boards, light and dark, which then become
-approved goldens. `signoff.sh RPM_DIR` shoots them in one place: `patched.sh` with
-`PATCHED_PART=signoff` runs `direct.sh signoff`, the `default`, `dark-style`, `indicators`
-and `indicators-dark` cases with `G2_SURFACE_SCENES=1`, and `tests/shell/shoot.sh` shoots
-the greeter, the lock screen, polkit's dialog and the power-off dialog with an update
-staged. Each board's scene is copied to `board-NN-SLUG-light.png` and `-dark.png`, and
-`signoff.json` records its title, its scene and fixture state, the commit, the layer's
-features enabled, the scale and the monitor. These are review captures: nothing is
-compared, and only a scene without a capture fails the run, named. The `signoff` workflow
-(`workflow_dispatch` only) uploads the set as `signoff-SHA`.
+approved goldens. `signoff.sh RPM_DIR` shoots them in one place, on what an Apex image
+draws with: it first builds and installs the apex-desktop of `tests/lib/pins.sh` (its own
+`make rpm`), whose vendor defaults bring the Facets wallpapers, the Apex icon theme (Colloid
+app icons, Apex Symbolic, the folders and the trash) and Adwaita Sans with ss03 and JetBrains
+Mono, and installs the apps its dock lists. `patched.sh` with `PATCHED_PART=signoff` then runs
+`direct.sh signoff`: the `default`, `dark-style`, `indicators` and `indicators-dark` cases
+with `G2_SURFACE_SCENES=1`, the first two with `G2_SIGNOFF=1`, which opens Text Editor, Calendar
+(Nautilus refuses root) and Terminal (through `scopeless/systemd-run`, as G2 has no user
+manager) and captures the overview and the real app switcher over them, after the
+scenes that want an empty desktop. The launcher's board is its grid, captured before the
+probe opens a folder. `tests/shell/shoot.sh` shoots the greeter, the lock screen, polkit's
+dialog and the power-off dialog with an update staged. Each board's scene is copied to
+`board-NN-SLUG-light.png` and `-dark.png`, and `signoff.json` records its title, its scene
+and fixture state, the apex-gnome and apex-desktop pins, the layer's features enabled, the
+scale and the monitor. These are review captures: nothing is compared, and only a scene
+without a capture, or a probe whose three windows never all reached the overview, fails the
+run, named. The `signoff` workflow (`workflow_dispatch` only)
+uploads the set as `signoff-SHA`.
 
 ## Known gaps
 
