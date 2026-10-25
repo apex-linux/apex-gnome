@@ -2282,6 +2282,26 @@ test_part_ran() {
         "$(grep -c '^FAIL direct.sh pr: indicators had no report within 150 s; G2 stops at a hung case' "$T/assertions.out")"
 }
 
+test_pr_assertions() {
+    local run=$T/pr-run label rest stray="" missing
+    local -a cases
+    # shellcheck disable=SC2016 # expanded by the inner bash
+    read -ra cases <<<"$(bash -c '. "$1/parts.sh"; echo "${PR_CASES[*]}"' _ "$HERE")"
+    mkdir -p "$run"
+    : >"$run/results-pr.txt"
+    assertion_counts patched_assertions "$run" pr >/dev/null
+    while read -r _ label rest; do
+        label=${label%:}
+        [[ " ${cases[*]} " == *" $label "* ]] || stray+=" $label"
+    done < <(grep -E '^(PASS|FAIL) ' "$T/assertions.out")
+    expect_eq "parts: the pr part asserts no case it does not run" "" "$stray"
+    missing=$(grep -c ': direct.sh pr did not run it$' "$T/assertions.out")
+    expect_eq "parts: and with none of its cases run, part_ran fails each one" "${#cases[@]}" "$missing"
+    # shellcheck disable=SC2016 # expanded by the inner bash
+    expect_eq "parts: main asserts every case, pr only its own" "0 1 0" \
+        "$(bash -c '. "$1/assert.sh"; part=main; asserted glass; a=$?; part=pr; asserted glass; b=$?; asserted default; echo "$a $b $?"' _ "$HERE")"
+}
+
 test_one_gpu() {
     local failures what menu passes
     while IFS='|' read -r failures what menu; do
@@ -2649,6 +2669,7 @@ test_glass_stress
 test_spotlight_key
 test_one_gpu
 test_part_ran
+test_pr_assertions
 test_no_dock
 test_dark_style_off
 test_fixtures
