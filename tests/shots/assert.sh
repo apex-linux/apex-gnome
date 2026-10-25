@@ -14,6 +14,8 @@ EOF
 
 # shellcheck source=tests/shots/lib.sh
 . "$(dirname -- "${BASH_SOURCE[0]}")/lib.sh"
+# shellcheck source=tests/shots/parts.sh
+. "$(dirname -- "${BASH_SOURCE[0]}")/parts.sh"
 
 readonly APEX_LIGHT_SHEET=resource:///org/gnome/shell/theme/gnome-shell-light.css
 readonly APEX_DARK_SHEET=resource:///org/gnome/shell/theme/gnome-shell-dark.css
@@ -1925,6 +1927,125 @@ overview_without_dock() {
             | (.previews | to_entries[] | select(.key != \$i) | .value.window, .value.caption)
             | select(\$c.x < .x + .width and .x < \$c.x + \$c.width and \$c.y < .y + .height and .y < \$c.y + \$c.height)] | length == 0)" \
         "and every caption is shown, none over another window's preview or caption" APEXG2-OVERVIEW-WINDOWS
+}
+
+# Whether the part ran every case an assertion reads; patched_assertions sets part.
+asserted() {
+    local c
+    [[ $part == main ]] && return 0
+    for c in "$@"; do
+        [[ " ${PR_CASES[*]} " == *" $c "* ]] || return 1
+    done
+}
+
+# patched.sh's assertions after direct.sh's PART: main asserts every case, pr only the cases
+# PR_CASES lists, and each of those must have run and reported.
+patched_assertions() {
+    local run=$1 part=$2 c
+    for c in default default-scale1 dark-style stock-light stock-dark safe-env layer-disabled layer-cycles motion idle dock-pin glass-load glass-stress no-dock; do
+        asserted "${c%:*}" || continue
+        no_js_error "$c" "$run/$c.log"
+        fixed_clock "$c" "$run/$c.log"
+    done
+    # Every case the fedora and main parts run sets the backdrop; fault-abort may abort before it reports.
+    for c in "${DIRECT_CASES[@]}"; do
+        asserted "$c" || continue
+        [[ $c == kernel-safe || $c == fault-abort ]] || backdrop_painted "$c" "$run/$c.log"
+    done
+    for c in default default-scale1 dark-style; do
+        asserted "${c%:*}" || continue
+        exits "$run" "$c" 0
+        no_apex_failure "$c" "$run/$c.log"
+    done
+    asserted default && search_hint default "$run/default.log" true
+    asserted safe-env && search_hint safe-env "$run/safe-env.log" false
+    asserted default && top_bar default "$run/default.log" light
+    asserted default && top_bar_today default "$run/default.log" light
+    asserted default && top_bar_gaps default "$run/default.log" light
+    asserted default-scale1 && top_bar default-scale1 "$run/default-scale1.log" light
+    asserted default-scale1 && top_bar_today default-scale1 "$run/default-scale1.log" light
+    asserted dark-style && top_bar dark-style "$run/dark-style.log" dark
+    asserted dark-style && top_bar_today dark-style "$run/dark-style.log" dark
+    asserted dark-style && top_bar_gaps dark-style "$run/dark-style.log" dark
+    asserted default && dock_metrics default "$run/default.log" light
+    asserted default-scale1 && dock_metrics default-scale1 "$run/default-scale1.log" light
+    asserted dark-style && dock_metrics dark-style "$run/dark-style.log" dark
+    for c in dock-intellihide:light dock-intellihide-dark:dark; do
+        asserted "${c%:*}" || continue
+        exits "$run" "${c%:*}" 0
+        no_js_error "${c%:*}" "$run/${c%:*}.log"
+        no_apex_failure "${c%:*}" "$run/${c%:*}.log"
+        dock_intellihide "${c%:*}" "$run/${c%:*}.log" "$run" "${c#*:}"
+    done
+    asserted stock-light && no_dock stock-light "$run/stock-light.log"
+    asserted stock-dark && no_dock stock-dark "$run/stock-dark.log"
+    for c in default:light default-scale1:light dark-style:dark; do
+        asserted "${c%:*}" || continue
+        shell_surfaces "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
+        quick_settings "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
+        quick_settings_layer "${c%:*}" "$run/${c%:*}.log" apex
+        notifications_layer "${c%:*}" "$run/${c%:*}.log" apex
+        shadow_layers "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
+        window_switcher "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
+        modal_dialog "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
+        date_menu "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
+        overview_style "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
+        app_grid "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
+        overview_layer "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
+        derived_surfaces "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
+        tile_preview "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
+        spotlight_style "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
+        launcher_search "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
+        spotlight_glass "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
+        spotlight_keys "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
+        screenshot_ui "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
+    done
+    for c in stock-light stock-dark; do
+        asserted "${c%:*}" || continue
+        quick_settings_layer "$c" "$run/$c.log" stock
+        notifications_layer "$c" "$run/$c.log" stock
+    done
+    asserted default dark-style high-contrast large-text default-solid dark-style-solid high-contrast-solid \
+        large-text-solid && a11y_cases "$run"
+    asserted layer-cycles && layer_cycles "$run"
+    asserted motion && motion_curve "$run"
+    asserted idle && idle_desktop "$run"
+    asserted glass-load && glass_load "$run"
+    asserted glass-stress && glass_stress "$run"
+    asserted dock-pin && dock_pin "$run"
+    asserted glass && no_js_error glass "$run/glass.log"
+    asserted glass && glass_frames glass "$run/glass.log"
+    asserted glass && shadows_under_glass glass "$run/glass.log"
+    asserted glass && glass_manager glass "$run/glass.log" light
+    asserted glass fedora-glass && glass_unlock_vs_fedora "$run"
+    asserted indicators indicators-scale1 indicators-dark && indicator_cases "$run"
+    asserted dock-one-gpu && one_gpu_case "$run"
+    asserted no-dock && no_dock_case "$run"
+    if [[ $part == pr ]]; then
+        part_ran "$run" pr "${PR_CASES[@]}"
+    fi
+}
+
+hung_part() {
+    local run=$1 part=$2
+    fail "direct.sh $part: $(sed -n 's/^\([^ ]*\) exit=124 secs=\([0-9]*\) .*/\1 had no report within \2 s/p' "$run/results-$part.txt" |
+        tail -n 1); G2 stops at a hung case, so the cases after it did not run"
+}
+
+# A part that runs some of main's cases asserts only those: each must have run and reported,
+# so a case dropped from direct.sh fails here instead of passing unasserted.
+part_ran() {
+    local run=$1 part=$2 c
+    shift 2
+    for c in "$@"; do
+        if ! grep -q "^$c exit=" "$run/results-$part.txt" 2>/dev/null; then
+            fail "$c: direct.sh $part did not run it"
+        elif [[ $c != fault-abort && -z $(report_of "$run/$c.log") ]]; then
+            fail "$c: direct.sh $part ran it, but it reported nothing"
+        else
+            pass "$c: direct.sh $part ran it and it reported"
+        fi
+    done
 }
 
 # The dock-one-gpu case: fixtures.py --gpus 1, as switcheroo-control reports a laptop

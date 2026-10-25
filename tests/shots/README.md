@@ -37,6 +37,7 @@ A case that gets no report within `direct.sh`'s timeout stops G2 at once.
 | G1's `image/checks/desktop.sh` | a container of the image | it passes on the image under test, so no text file under `/usr` or `/etc` names `APEX_SHELL_TEST_FAULT` |
 | `direct.sh main` | a container of the image plus `dbus-daemon` (the image has no `dbus-run-session`), `python3-dbusmock` and `gcc` for `clock.c`; `rpm -V` shows the shell's packages unmodified | each case below: one headless shell with a fresh home, dconf and runtime directory, the fixtures on the system bus and the fixed clock (see "Fixtures and the clock") |
 | `direct.sh kernel` | the same, with `apex.safe=1` bound over `/proc/cmdline` | the kernel switch |
+| `direct.sh pr` | CI's `shots-patched` job on a pull request, through `patched.sh` with `PATCHED_PART=pr` on the gnome-shell lane's RPMs | the cases `parts.sh`'s `PR_CASES` names, in `main`'s order (the scenes and every a11y check with their solid-backdrop twins, then the quick dock, indicator, safe-mode and fault cases), with their assertions; each listed case must have run and reported (`part_ran`). A push to `main` and the daily run take `main` with the Fedora baseline |
 | `direct.sh fedora` | the same image with Fedora's own gnome-shell and gnome-shell-common of the tested NVR in place of the Apex build, downloaded from Fedora's repositories; each RPM must report `digests signatures OK` against a keyring that holds Fedora's key alone, so an unsigned RPM fails | the baseline of the captures |
 | `guard.sh` | a container of the image booted with its own systemd; a test user's `systemd --user` with the image's unmodified units | the crash guard, and that neither the user manager nor the shell's unit sets `APEX_SHELL_TEST_FAULT` |
 | `assert.sh` | the builder VM; `compare.js` in a container of the image | everything below |
@@ -502,7 +503,9 @@ none partly off the screen or outside its surface, and none overlapping text in 
 filled box (a notification stack's cards overlap by design). The screenshot UI is measured
 too. Quick Settings, the date menu and the polkit-shaped dialog are measured once more under
 each of the nine `accent-color` values, since a checked toggle, today and a default button
-take their fill from the accent; the `default` and `dark-style` cases get 240 s for it. The failures left are known gaps (`A11Y_GAPS`), all in
+take their fill from the accent; the surface stays open while the accent changes under it, and
+each measurement waits for the shell's idle and one painted frame, not a fixed delay. The pass
+records `timingsMs` per step in its report. The failures left are known gaps (`A11Y_GAPS`), all in
 upstream's high-contrast sheet, and they stay gaps: restyling an upstream actor there would
 need a stock copy of the sheet for safe mode. A report for upstream, which is the owner's to
 file:
@@ -577,9 +580,19 @@ probe opens a folder. `tests/shell/shoot.sh` shoots the greeter, the lock screen
 dialog and the power-off dialog with an update staged. Each board's scene is copied to
 `board-NN-SLUG-light.png` and `-dark.png`, and `signoff.json` records its title, its scene
 and fixture state, the apex-gnome and apex-desktop pins, the layer's features enabled, the
-scale and the monitor. `signoff.sh` itself compares nothing: only a scene without a capture,
-or a probe whose three windows never all reached the overview, fails the run, named. The
-`signoff` workflow uploads the set as `signoff-SHA`, then checks it against the approved
+scale and the monitor. `signoff.sh` itself compares nothing. It fails the run, naming the
+board, when:
+
+- a scene has no capture;
+- the probe's three windows never all reached the overview, or brought a notification (a
+  focus mutter refused posts "X is ready", so the probe activates them with a fresh server
+  timestamp);
+- a capture caught a banner. Every capture logs the banner it caught, if any:
+  `APEXG2-CAPTURE` in G2, a `banner.NAME` fact in `tests/shell`. Board 16 shows one on
+  purpose, and a board without that record fails too, so a stray banner never reaches a
+  golden.
+
+The `signoff` workflow uploads the set as `signoff-SHA`, then checks it against the approved
 goldens (below).
 
 ## Approved goldens
