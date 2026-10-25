@@ -1426,6 +1426,10 @@ async function calendarMenu(unit) {
             today: dayStyle(days.find(d => d.has_style_class_name('calendar-today'))),
             events: styleOf(events, unit),
             eventsTitle: styleOf(find(events, 'events-title'), unit),
+            clocks: styleOf(find(box, 'world-clocks-button'), unit),
+            clocksHeader: styleOf(find(box, 'world-clocks-header'), unit),
+            weather: styleOf(find(box, 'weather-button'), unit),
+            weatherHeader: styleOf(find(box, 'weather-header'), unit),
         };
     } finally {
         menu.close(BoxPointer.PopupAnimation.NONE);

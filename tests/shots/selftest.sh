@@ -343,6 +343,10 @@ REPORT_OF_A_DATE_MENU_DRAWN_FROM_TOKENS='
 ($t.apex_quick_settings_padding | px) as $qp | ($t.apex_calendar_padding | px) as $cp
 | ($t.apex_message_padding | px) as $mp | ($t.apex_events_padding | px) as $ep
 | {size: ($t.apex_font_size | px), weight: ($t.apex_font_heading_weight | tonumber)} as $heading
+| {x: 0, y: 0, height: ($t.apex_date_menu_button_height | px), background: ($t.apex_glass_card | hex), borderColor: ($t.apex_glass_card_border | hex),
+    border: $border, radius: ($t.apex_radius_date_menu_button | px)} as $row
+| {x: ($t.apex_date_menu_button_padding | px), y: 12, foreground: ($t.apex_fg_dim | hex),
+    font: {size: ($t.apex_font_events_title_size | px), weight: ($t.apex_font_label_weight | tonumber)}} as $rowHeader
 | {topBar: {accent: "#3584e4ff"}, surfaces: {dateMenu: {
     box: {background: ($t.apex_panel | hex), radius: ($t.apex_radius_quick_settings | px), border: $border, padding: inset($qp; $qp; $qp; $qp)},
     area: {spacing: ($t.apex_date_menu_gap | px)},
@@ -371,9 +375,12 @@ REPORT_OF_A_DATE_MENU_DRAWN_FROM_TOKENS='
     weekend: {foreground: ($t.apex_fg | hex), ink: ($t.apex_fg | hex)},
     otherMonth: {foreground: ($t.apex_calendar_other_month | hex), ink: ($t.apex_calendar_other_month | hex)},
     today: {background: "#2863abff", foreground: "#ffffffff", ink: "#ffffffff", font: {weight: ($t.apex_font_heading_weight | tonumber)}},
-    events: {background: ($t.apex_glass_card | hex), radius: ($t.apex_radius_calendar | px), border: $border,
+    events: {y: 0, height: 62, background: ($t.apex_glass_card | hex), radius: ($t.apex_radius_calendar | px), border: $border,
         padding: inset(($t.apex_events_padding_top | px); $ep; ($t.apex_events_padding_bottom | px); $ep)},
-    eventsTitle: {font: {size: ($t.apex_font_events_title_size | px), weight: ($t.apex_font_heading_weight | tonumber)}, foreground: ($t.apex_fg_dim | hex)}}}}'
+    eventsTitle: {font: {size: ($t.apex_font_events_title_size | px), weight: ($t.apex_font_heading_weight | tonumber)}, foreground: ($t.apex_fg_dim | hex)},
+    clocks: ($row + {y: (62 + ($t.apex_date_menu_column_gap | px))}),
+    weather: ($row + {y: (62 + ($t.apex_date_menu_column_gap | px) + ($t.apex_date_menu_button_height | px) + ($t.apex_date_menu_button_gap | px))}),
+    clocksHeader: $rowHeader, weatherHeader: $rowHeader}}}'
 # shellcheck disable=SC2016 # a jq program
 REPORT_OF_AN_OVERVIEW_DRAWN_FROM_TOKENS='
 ($t.apex_surface_border | px) as $b | {top: $b, right: $b, bottom: $b, left: $b} as $border
@@ -1359,7 +1366,7 @@ test_date_menu() {
     local variant change what passes failures open_gaps
     for variant in light dark; do
         read -r passes failures open_gaps <<<"$(assert_run date_menu "$variant")"
-        if ((failures == 0 && open_gaps == 0 && passes == 13)); then
+        if ((failures == 0 && open_gaps == 0 && passes == 16)); then
             ok "calendar ($variant): drawn from the tokens it passes all $passes assertions"
         else
             not_ok "calendar ($variant): drawn from the tokens it passes (passed/failed/gaps $passes/$failures/$open_gaps): $(grep -m3 '^FAIL' "$T/top-bar.out" | paste -sd'|' -)"
@@ -1390,6 +1397,12 @@ test_date_menu() {
 .surfaces.dateMenu.otherMonth.foreground = "#1d1d2166"|other months at $apex_fg_faint, 2.4:1 on the card
 .surfaces.dateMenu.today.background = "#3584e4ff"|today on the raw accent, 3.8:1 under white
 .surfaces.dateMenu.eventsTitle.foreground = "#1d1d21ff"|an events title at full strength
+.surfaces.dateMenu.weather.height = 66|upstream's padded card around a 40 px minimum
+.surfaces.dateMenu.weatherHeader.x = 12|upstream's 12 px card padding
+.surfaces.dateMenu.weather.radius = 18|a row at the calendar's 18 px radius
+.surfaces.dateMenu.weather.y -= 2|upstream's 6 px between the rows
+.surfaces.dateMenu.clocksHeader.font.weight = 700|upstream's bold heading
+.surfaces.dateMenu.weatherHeader.foreground = "#1d1d21ff"|upstream's full-strength header with no location
 CHANGES
 }
 

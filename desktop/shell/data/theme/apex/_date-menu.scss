@@ -139,6 +139,8 @@ $_calendar_day_width: ($apex_date_menu_column_width - 2 * $apex_calendar_padding
     margin: 0;
     spacing: $apex_date_menu_column_gap;
   }
+
+  .datemenu-displays-box { spacing: $apex_date_menu_button_gap; }
 }
 
 .datemenu-today-button {
@@ -239,9 +241,10 @@ $_calendar_day_width: ($apex_date_menu_column_width - 2 * $apex_calendar_padding
   }
 }
 
+// The column's gap above Clocks and Weather, which sit closer to each other.
 .events-button {
   @include glass-card($apex_radius_calendar);
-  margin: 0;
+  margin: 0 0 ($apex_date_menu_column_gap - $apex_date_menu_button_gap);
   padding: ($apex_events_padding_top - $apex_surface_border) ($apex_events_padding - $apex_surface_border)
     ($apex_events_padding_bottom - $apex_surface_border);
 
@@ -262,9 +265,20 @@ $_calendar_day_width: ($apex_date_menu_column_width - 2 * $apex_calendar_padding
 
 .world-clocks-button, .weather-button {
   @include glass-card($apex_radius_date_menu_button);
-  min-height: $apex_date_menu_button_height;
   margin: 0;
+  // St can't centre the header; the minimum holds the row at its height whether the line hints to 16 or 17 px.
+  min-height: $apex_date_menu_button_height - 2 * ($apex_date_menu_button_padding_y + $apex_surface_border);
+  padding: ($apex_date_menu_button_padding_y) ($apex_date_menu_button_padding - $apex_surface_border);
   color: $apex_fg_dim;
   font-size: apex-text-size($apex_font_events_title_size);
   font-weight: $apex_font_label_weight;
+}
+
+// Stock's headings are 11 pt bold, and full strength while nothing is set up: as deep as its selectors.
+.world-clocks-button .world-clocks-header, .weather-button .weather-box .weather-header-box .weather-header {
+  &, &.no-world-clocks, &.no-location {
+    color: $apex_fg_dim;
+    font-size: apex-text-size($apex_font_events_title_size);
+    font-weight: $apex_font_label_weight;
+  }
 }
