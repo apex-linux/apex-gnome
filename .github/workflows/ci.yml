@@ -474,6 +474,15 @@ jobs:
           path: _build/lane-cache
           key: lane-gnome-shell-${{ github.run_id }}-${{ github.run_attempt }}
 
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: gnome-shell-rpms
+          path: |
+            _build/gnome-shell/out/gnome-shell-[0-9]*.x86_64.rpm
+            _build/gnome-shell/out/gnome-shell-common-[0-9]*.noarch.rpm
+          if-no-files-found: error
+          retention-days: 3
+
       - name: tests/shell/shoot.sh on the built RPMs
         run: |
           dnf5 -y -q --setopt=install_weak_deps=False --repo=fedora --repo=updates install \
@@ -492,6 +501,42 @@ jobs:
         with:
           name: shell-lane
           path: _build/gnome-shell/out/
+          if-no-files-found: ignore
+
+  shots-patched:
+    # G2 on the patched shell, the lane's RPMs from its artifact: direct.sh's cases and
+    # their assertions, which no other job runs before a builder VM.
+    name: tests/shots/patched.sh (Fedora 45, the lane's gnome-shell)
+    needs: [shell-lane]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    container:
+      image: registry.fedoraproject.org/fedora:45@sha256:1e13e11f63e147a40a935c9046c79d53a30b861a3cf05ebb023bb53c562382cb
+    steps:
+      - name: git for the checkout
+        run: >-
+          dnf5 -y --setopt=install_weak_deps=False --repo=fedora --repo=updates install
+          git-core bash coreutils findutils sed grep tar
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: gnome-shell-rpms
+          path: _build/shots-patched/rpms
+
+      - name: tests/shots/patched.sh on the lane's RPMs
+        run: PATCHED_RPMS="$PWD/_build/shots-patched/rpms" PATCHED_OUT="$PWD/_build/shots-patched/out" tests/shots/patched.sh
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: failure()
+        with:
+          name: shots-patched
+          path: _build/shots-patched/out/
           if-no-files-found: ignore
 
   s2c-radius:
