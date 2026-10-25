@@ -1987,6 +1987,7 @@ test_glass_load() {
 .scenarios.A.glass.frames = 300|the bar and Quick Settings keeping each other drawing
 .scenarios.A.glass.surfaces.panel = {reblurs: 1, partial: 0, contentUnder: 0}|the bar re-blurring with nothing under it
 .scenarios.A.glass.surfaces.dock.reblurs = 100|a dock that re-blurred less often than the video changed
+.scenarios.A.glass.surfaces.dock.reblurs = 151|a dock that re-blurred once more than the video changed
 .scenarios.A.reduceTransparency.surfaces = {dock: {reblurs: 1, partial: 0, contentUnder: 1}}|glass left on with Reduce Transparency
 .scenarios.B.glass.missed = [{atMs: 3100, surface: "calendar", overlap: "out"}]|a window moved under the calendar without a re-blur
 .scenarios.B.glass.frames = 160|extra frames while a window is dragged
@@ -1994,6 +1995,9 @@ test_glass_load() {
 .scenarios.B.glass.surfaces.panel.reblurs = 5|the bar re-blurring more than once per open or close of a bar menu
 .scenarios.C.glass.missed = [{atMs: 400, surface: "spotlight", overlap: "part"}]|a missed re-blur under Spotlight
 CHANGES
+    write_glass_load_run '.scenarios.A.glass.tail = {dock: "in", "quick-settings": "in"}'
+    read -r passes failures <<<"$(assertion_counts glass_load "$T/glass-load")"
+    expect_eq "glass-load: the frame before counting, repainting the window's earlier damage, is not a re-blur" "$all/0" "$passes/$failures"
     write_glass_load_run '.scenarios.B.glass.surfaces.panel.reblurs = 4'
     read -r passes failures <<<"$(assertion_counts glass_load "$T/glass-load")"
     expect_eq "glass-load: one bar re-blur per menu open or close in B passes" "$all/0" "$passes/$failures"

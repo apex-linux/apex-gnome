@@ -514,7 +514,8 @@ energy rate are the laptop's, and G2 records none of them, since llvmpipe's time
 CPU's. What G2 measures is the work, frame by frame, from `paint-view`'s redraw clip: a glass
 box the clip covers fully re-blurs (patch 0003's rule e), one it only touches draws its last
 result and queues another frame. `glass-load.js` runs each scenario for 5 s with the glass and
-again with `reduce-transparency`, the same script:
+again with `reduce-transparency`, the same script. Counting starts after the first frame, which
+can repaint the window's damage from before recording: it is reported as `tail`, not counted:
 
 | Scenario | Stand-in | Asserts |
 |---|---|---|
