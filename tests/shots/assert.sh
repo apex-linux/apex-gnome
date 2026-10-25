@@ -1929,6 +1929,12 @@ overview_without_dock() {
         "and every caption is shown, none over another window's preview or caption" APEXG2-OVERVIEW-WINDOWS
 }
 
+hung_part() {
+    local run=$1 part=$2
+    fail "direct.sh $part: $(sed -n 's/^\([^ ]*\) exit=124 secs=\([0-9]*\) .*/\1 had no report within \2 s/p' "$run/results-$part.txt" |
+        tail -n 1); G2 stops at a hung case, so the cases after it did not run"
+}
+
 # A part that runs some of main's cases asserts only those: each must have run and reported,
 # so a case dropped from direct.sh fails here instead of passing unasserted.
 part_ran() {

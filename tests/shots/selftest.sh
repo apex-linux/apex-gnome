@@ -2274,6 +2274,12 @@ test_part_ran() {
     : >"$run/large-text.log"
     read -r passes failures <<<"$(assertion_counts part_ran "$run" pr "${cases[@]}")"
     expect_eq "parts: a case that ran but reported nothing fails" "$((${#cases[@]} - 1))/1" "$passes/$failures"
+    printf '%s\n' 'default exit=0 secs=91 marker-after-exit=no' 'indicators exit=124 secs=150 marker-after-exit=yes' \
+        >"$run/results-pr.txt"
+    read -r passes failures <<<"$(assertion_counts hung_part "$run" pr)"
+    expect_eq "parts: a hung case in the pr part fails once" "0/1" "$passes/$failures"
+    expect_eq "parts: and the failure names the part, the case and its limit" 1 \
+        "$(grep -c '^FAIL direct.sh pr: indicators had no report within 150 s; G2 stops at a hung case' "$T/assertions.out")"
 }
 
 test_one_gpu() {

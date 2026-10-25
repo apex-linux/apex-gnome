@@ -496,7 +496,9 @@ none partly off the screen or outside its surface, and none overlapping text in 
 filled box (a notification stack's cards overlap by design). The screenshot UI is measured
 too. Quick Settings, the date menu and the polkit-shaped dialog are measured once more under
 each of the nine `accent-color` values, since a checked toggle, today and a default button
-take their fill from the accent; the `default` and `dark-style` cases get 240 s for it. The failures left are known gaps (`A11Y_GAPS`), all in
+take their fill from the accent; the surface stays open while the accent changes under it, and
+each measurement waits for the shell's idle and one painted frame, not a fixed delay. The pass
+records `timingsMs` per step in its report. The failures left are known gaps (`A11Y_GAPS`), all in
 upstream's high-contrast sheet, and they stay gaps: restyling an upstream actor there would
 need a stock copy of the sheet for safe mode. A report for upstream, which is the owner's to
 file:

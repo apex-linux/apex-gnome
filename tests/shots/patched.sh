@@ -43,6 +43,8 @@ REPOS=(--repo=fedora --repo=updates)
 readonly LOCAL_RELEASE=.apex0.local
 readonly SOURCE1=apex-shell-local.tar
 readonly PATCH_BASE=1001
+# direct.sh's exit when a case hangs.
+readonly DIRECT_HUNG=3
 
 die() { echo "patched.sh: $*" >&2; exit 1; }
 step() { echo "## $* ($((SECONDS))s)"; }
@@ -183,6 +185,13 @@ echo "# direct.sh $part: exit $rc"
 set +e
 # shellcheck source=tests/shots/assert.sh
 . "$HERE/assert.sh"
+# A hung case stops direct.sh's part, as run.sh stops G2: the cases after it never ran, so one
+# failure names it rather than a "no report" for each of them.
+if ((rc == DIRECT_HUNG)); then
+    hung_part "$run" "$part"
+    summary
+    exit
+fi
 # Whether the part ran every case an assertion reads.
 asserted() {
     local c
