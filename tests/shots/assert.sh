@@ -52,21 +52,25 @@ readonly A11Y_SURFACES=(bar dock popupMenu osd banner quickSettings "${A11Y_ACCE
     "${A11Y_ACCENTS[@]/#/dateMenuAccents.}" switcher dialog endSession spotlight.popup spotlight.toast overview appGrid)
 # The failures still open: upstream's high-contrast sheet, which safe mode keeps as Fedora's.
 readonly A11Y_HC_TOGGLE="upstream HC sheet: Quick Settings' checked toggle, white on its accent (3.15:1), and its menu arrow (2.31:1)"
-declare -A A11Y_GAPS=([high-contrast:quickSettings]=$A11Y_HC_TOGGLE [high-contrast-solid:quickSettings]=$A11Y_HC_TOGGLE)
+declare -A A11Y_GAPS=([high-contrast:quickSettings]=$A11Y_HC_TOGGLE)
 for a11y_accent in "${A11Y_ACCENTS[@]}"; do
     A11Y_GAPS[high-contrast:quickSettingsAccents.$a11y_accent]=$A11Y_HC_TOGGLE
-    A11Y_GAPS[high-contrast-solid:quickSettingsAccents.$a11y_accent]=$A11Y_HC_TOGGLE
 done
 readonly A11Y_HC_TODAY="upstream HC sheet: the calendar's today, white on its accent (2.59:1 to 3.79:1)"
 A11Y_GAPS[high-contrast:dateMenu]=$A11Y_HC_TODAY
 for a11y_accent in blue teal green yellow orange red pink slate; do
     A11Y_GAPS[high-contrast:dateMenuAccents.$a11y_accent]=$A11Y_HC_TODAY
 done
-unset a11y_accent
 # A Clutter.Text outside an St.Label, measured since board 34's day numbers: a button's own label.
 readonly A11Y_DEFAULT_BUTTON="the modal dialog's default button, white on the raw accent (3.77:1), measured once bare text was"
 A11Y_GAPS[default:dialog]=$A11Y_DEFAULT_BUTTON
 A11Y_GAPS[dark-style:dialog]=$A11Y_DEFAULT_BUTTON
+# Each gap is the sheet's own colours, so its case over the #013b88 backdrop has it too.
+unset a11y_accent
+for a11y_gap in "${!A11Y_GAPS[@]}"; do
+    A11Y_GAPS[${a11y_gap%%:*}-solid:${a11y_gap#*:}]=${A11Y_GAPS[$a11y_gap]}
+done
+unset a11y_gap
 readonly A11Y_GAPS
 # overviewControls.js: spacing is 2 % of the work area, the stock .search-entry keeps 6 px below it.
 readonly OVERVIEW_SPACING_RATIO=0.02
