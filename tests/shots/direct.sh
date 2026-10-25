@@ -185,6 +185,7 @@ run_and_record_case idle "$CAPTURE_SETTINGS;$NO_HOT_CORNER" G2_IDLE=1
 run_and_record_case glass-load "$CAPTURE_SETTINGS;$NO_HOT_CORNER" G2_GLASS_LOAD=1
 run_and_record_case glass-stress "$CAPTURE_SETTINGS;$NO_HOT_CORNER" G2_GLASS=1 G2_GLASS_STRESS="$GLASS_STRESS_SECONDS" \
     G2_GLASS_LOAD_STRESS="$GLASS_STRESS_SECONDS" GI_TYPELIB_PATH="$FRAME_DIR" G2_TIMEOUT=$((2 * GLASS_STRESS_SECONDS + SHELL_TIMEOUT))
+run_and_record_case dock-pin "$CAPTURE_SETTINGS;$NO_HOT_CORNER" G2_DOCK_PIN=1
 run_and_record_case fault-configure '' APEX_SHELL_TEST_FAULT=configure
 run_and_record_case fault-enable '' APEX_SHELL_TEST_FAULT=enable PROBE_WAIT=10
 run_and_record_case fault-abort '' APEX_SHELL_TEST_FAULT=abort-after-enable PROBE_WAIT=20
