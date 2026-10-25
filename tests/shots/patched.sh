@@ -183,6 +183,10 @@ for c in default default-scale1 dark-style stock-light stock-dark safe-env layer
     no_js_error "$c" "$run/$c.log"
     fixed_clock "$c" "$run/$c.log"
 done
+# Every case the fedora and main parts run sets the backdrop; fault-abort may abort before it reports.
+for c in "${DIRECT_CASES[@]}"; do
+    [[ $c == kernel-safe || $c == fault-abort ]] || backdrop_painted "$c" "$run/$c.log"
+done
 for c in default default-scale1 dark-style; do
     exits "$run" "$c" 0
     no_apex_failure "$c" "$run/$c.log"
