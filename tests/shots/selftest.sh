@@ -418,7 +418,7 @@ REPORT_OF_AN_OVERVIEW_LAYER_FROM_TOKENS='
 {topBar: {panel: {width: 1440}}, scenes: {overview: {workArea: {y: 32, height: 868}}}, surfaces: {
     overviewLayer: {titleVisible: true, thumbnailsThreshold: 1, thumbnails: {maxScale: 0.081, first: {width: 117, height: 70}},
         workspace: {x: 250, y: 205, width: 939, height: 566, background: false,
-            empty: {x: 644, y: 477, width: 150, height: 22, visible: true, text: "No open windows", foreground: ($t.apex_fg_dim | hex),
+            empty: {x: 644, y: 477, width: 150, height: 22, visible: true, text: "No open windows", foreground: ($t.apex_overview_fg_dim | hex),
                 font: {size: ($t.apex_font_workspace_empty_size | px), weight: ($t.apex_font_heading_weight | tonumber)}}}},
     appGrid: {grid: {columns: 7, rows: 4, iconSize: 88}, strip: 0, box: {y: 132}}}}'
 # shellcheck disable=SC2016 # a jq program
