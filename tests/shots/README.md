@@ -472,13 +472,13 @@ and paint opacity, is composited over every sampled pixel of its box, and the pi
 and so is a target wholly outside the capture, another workspace's label. `a11y_layout`
 wants, at 1.25, no text cut short (a collapsed notification's body expands, so it may),
 none partly off the screen or outside its surface, and none overlapping text in the same
-filled box (a notification stack's cards overlap by design). Quick Settings and the date
-menu are measured once more under each of the nine `accent-color` values, since a checked
-toggle and today take their fill from the accent. The failures left are known gaps
-(`A11Y_GAPS`). Those in upstream's high-contrast sheet stay gaps: restyling an upstream actor
-there would need a stock copy of the sheet for safe mode. The modal dialog's default button,
-white on the raw accent, is a gap until it gets a fix of its own. A report for upstream,
-which is the owner's to file:
+filled box (a notification stack's cards overlap by design). The screenshot UI is measured
+too. Quick Settings, the date menu and the polkit-shaped dialog are measured once more under
+each of the nine `accent-color` values, since a checked toggle, today and a default button
+take their fill from the accent; the `default` and `dark-style` cases get 240 s for it. The failures left are known gaps (`A11Y_GAPS`), all in
+upstream's high-contrast sheet, and they stay gaps: restyling an upstream actor there would
+need a stock copy of the sheet for safe mode. A report for upstream, which is the owner's to
+file:
 
 > **High contrast: checked quick toggles fall below WCAG AA.** In gnome-shell 51.0's
 > high-contrast sheet, a checked quick toggle draws white text on the accent: 3.15:1 for the

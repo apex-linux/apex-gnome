@@ -335,7 +335,7 @@ REPORT_OF_A_DIALOG_DRAWN_FROM_TOKENS='
         font: {size: ($t.apex_font_entry_size | px), weight: ($t.apex_font_entry_weight | tonumber)},
         focus: {boxShadow: {inset: true, spread: ($t.apex_entry_focus_ring | px), color: "#3584e4ff"}}},
     buttons: [$button + {default: false, background: ($t.apex_button | hex), foreground: ($t.apex_fg | hex), hover: {background: ($t.apex_button_hover | hex)}},
-        $button + {default: true, background: "#3584e4ff", foreground: "#ffffffff"}]}}}'
+        $button + {default: true, background: "#2863abff", foreground: "#ffffffff"}]}}}'
 # shellcheck disable=SC2016 # a jq program
 REPORT_OF_A_DATE_MENU_DRAWN_FROM_TOKENS='
 ($t.apex_surface_border | px) as $b | {top: $b, right: $b, bottom: $b, left: $b} as $border
@@ -703,6 +703,9 @@ REPORT_OF_LEGIBLE_SURFACES='
 | {textScalingFactor: 1.25, monitor: {x: 0, y: 0, width: 1440, height: 900},
     quickSettingsAccents: (["blue", "teal", "green", "yellow", "orange", "red", "pink", "purple", "slate"] | map({key: ., value: $s}) | from_entries),
     dateMenuAccents: (["blue", "teal", "green", "yellow", "orange", "red", "pink", "purple", "slate"] | map({key: ., value: $s}) | from_entries),
+    dialogAccents: (["blue", "teal", "green", "yellow", "orange", "red", "pink", "purple", "slate"] | map({key: ., value: $s}) | from_entries),
+    screenshot: $s,
+
     bar: $s, dock: $s, popupMenu: $s, osd: $s, banner: $s, quickSettings: $s, wifiMenu: $s, dateMenu: $s, switcher: $s,
     dialog: $s, endSession: $s, spotlight: {popup: $s, toast: $s}, overview: $s, appGrid: $s}'
 
@@ -716,7 +719,7 @@ a11y_run() {
 
 test_a11y() {
     local assertions expected change what passes failures open_gaps want
-    for assertions in a11y_contrast:33 a11y_layout:34; do
+    for assertions in a11y_contrast:43 a11y_layout:44; do
         expected=${assertions#*:}
         read -r passes failures open_gaps <<<"$(a11y_run "${assertions%:*}")"
         if ((failures == 0 && open_gaps == 0 && passes == expected)); then
@@ -740,6 +743,8 @@ a11y_contrast|1|.spotlight.toast.targets[0].ratio = 3|the toast's text at 3:1
 a11y_contrast|1|.quickSettingsAccents.yellow.targets[0].ratio = 4.49|a checked toggle on the yellow accent at 4.49:1
 a11y_contrast|1|del(.quickSettingsAccents.slate)|an accent left unmeasured
 a11y_contrast|1|.dateMenuAccents.orange.targets[0].ratio = 4.3|today on the orange accent at 4.3:1
+a11y_contrast|1|.dialogAccents.yellow.targets[0].ratio = 3.01|a default button on the raw yellow accent at 3.01:1
+a11y_contrast|1|.screenshot.targets[0].ratio = 2.5|a screenshot type label at 2.5:1
 a11y_contrast|1|.dateMenu.targets[0] += {bare: true, ratio: 1.2}|a bare Clutter.Text, a day number St never styled, at 1.2:1
 a11y_contrast|1|.endSession.targets[1].ratio = 2|the end-session glyph at 2:1
 a11y_contrast|1|.banner = {error: "not shown"}|a surface that never showed
@@ -778,9 +783,9 @@ test_signoff() {
     if "$HERE/signoff.sh" --collect "$dir/g2" "$dir/shots" "$dir/out" >"$T/signoff.out" 2>&1 &&
         [[ $(find "$dir/out" -name 'board-*.png' | wc -l) == 30 ]] &&
         jq -e '(.boards | length) == 15 and .scale == 2 and .features == ["dock", "panel"] and (.pins.apexDesktop | length) == 40
-            and .boards[0].files.dark == "board-12-greeter-dark.png" and (.apps.grid | index("firefox") != null) and .apps.dock == ["Files", "Bazaar"]
+            and .boards[0].files.dark == "board-12-greeter-dark.png" and (.apps.grid | index("gnome-maps") != null) and (.apps.grid | index("firefox") == null) and .apps.dock == ["Files", "Bazaar"]
             and .apps.notYetInImage == []
-            and .apps.flatpakStandIns == [{flatpak: "org.mozilla.firefox", rpm: "firefox"}, {flatpak: "org.gnome.Music", rpm: "gnome-music"},
+            and .apps.flatpakStandIns == [{flatpak: "org.gnome.Music", rpm: "gnome-music"},
                 {flatpak: "io.github.kolunmi.Bazaar", rpm: null, standIn: "desktop entry"}]' \
             "$dir/out/signoff.json" >/dev/null; then
         ok "signoff: fifteen boards, light and dark, and signoff.json from their captures"
@@ -1161,6 +1166,7 @@ del(.surfaces.dialog.endSession.buttons[1])|stock's row, without Restart
 .surfaces.dialog.entry.focus.boxShadow.color = "#3584e4cc"|upstream's 80 % focus ring
 .surfaces.dialog.buttons[0].radius = 12|upstream's square-ish buttons
 .surfaces.dialog.buttons[1].background = "#00000a10"|a default button without the accent
+.surfaces.dialog.buttons[1].background = "#3584e4ff"|a default button on the raw accent, 3.8:1 under white
 .surfaces.dialog.updateCard.staged.icon.size = 16|a symbolic-sized update icon
 .surfaces.dialog.updateCard.staged.below = false|the card above the dialog's text
 .surfaces.dialog.updateCard.staged.radius = 18|a card at the menus' radius

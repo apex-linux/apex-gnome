@@ -29,9 +29,10 @@
 
       &:hover, &:active, &:focus { color: $apex_fg; background-color: $apex_button_hover; }
 
+      // A checked Quick Settings toggle's shade: white on most raw accents is not 4.5:1.
       &:default, &:default:hover, &:default:active, &:default:focus {
         color: -st-accent-fg-color;
-        background-color: $apex_accent;
+        background-color: st-mix(black, $apex_accent, $apex_quick_toggle_checked_shade);
       }
     }
   }
@@ -171,10 +172,11 @@ $_end_session_share: $_end_session_row /
     spacing: $apex_polkit_user_gap;
     text-align: left;
 
+    // The initial is small white text: the fill takes the default button's shade.
     .user-icon {
       icon-size: $apex_polkit_avatar_size;
       border-radius: $apex_polkit_avatar_size / 2;
-      background-color: $apex_accent;
+      background-color: st-mix(black, $apex_accent, $apex_quick_toggle_checked_shade);
     }
 
     .apex-avatar-initial { color: -st-accent-fg-color; font-weight: $apex_font_heading_weight; }
