@@ -53,6 +53,10 @@
   border-radius: $apex_radius_thumbnail;
 }
 
+// The launcher's workspace strip is 0 high (board 36), which leaves a workspace 0 wide: upstream's
+// WorkspaceLayout.vfunc_allocate then divides by that width, and every preview gets a NaN box.
+.window-picker { min-width: 1px; }
+
 .apex-window-preview {
   border-radius: $apex_radius_window_preview;
   -apex-shadow-layer: 0 $apex_preview_shadow_y $apex_preview_shadow_blur 0 $apex_preview_shadow;

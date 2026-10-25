@@ -2356,6 +2356,23 @@ test_part_ran() {
         "$(grep -c '^FAIL direct.sh pr: indicators had no report within 150 s; G2 stops at a hung case' "$T/assertions.out")"
 }
 
+test_no_nan_allocation() {
+    local run=$T/nan-run critical passes failures
+    critical="Clutter-CRITICAL **: clutter_actor_allocate: assertion '!isnan (real_allocation.x1) && !isnan (real_allocation.x2)' failed"
+    mkdir -p "$run"
+    echo 'APEXG2 {"probe": true}' >"$run/glass-load.log"
+    read -r passes failures <<<"$(assertion_counts no_nan_allocation glass-load "$run/glass-load.log")"
+    expect_eq "NaN allocations: a clean log passes" "1/0" "$passes/$failures"
+    printf '%s\n' "$critical" "$critical" >>"$run/glass-load.log"
+    read -r passes failures <<<"$(assertion_counts no_nan_allocation glass-load "$run/glass-load.log")"
+    expect_eq "NaN allocations: a case that survives two fails once" "0/1" "$passes/$failures"
+    expect_eq "NaN allocations: and the failure counts them" 1 "$(grep -c 'per log: glass-load.log:2$' "$T/assertions.out")"
+    echo 'APEXG2 {"probe": true}' >"$run/glass-load.log"
+    echo "$critical" >"$run/glass-load.late.log"
+    read -r passes failures <<<"$(assertion_counts no_nan_allocation glass-load "$run/glass-load.log")"
+    expect_eq "NaN allocations: one in the late first start fails too" "0/1" "$passes/$failures"
+}
+
 test_pr_assertions() {
     local run=$T/pr-run label rest stray="" missing
     local -a cases
@@ -2743,6 +2760,7 @@ test_glass_stress
 test_spotlight_key
 test_one_gpu
 test_part_ran
+test_no_nan_allocation
 test_pr_assertions
 test_no_dock
 test_dark_style_off

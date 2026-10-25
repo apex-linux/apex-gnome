@@ -144,6 +144,18 @@ no_js_error() {
     fi
 }
 
+# Clutter refuses a NaN box with a CRITICAL and leaves the actor unallocated: a case can survive
+# that, so the CRITICAL is the failure, in the case's log and the log of its late first start.
+no_nan_allocation() {
+    local label=$1 log=$2 found
+    found=$(grep -c "clutter_actor_allocate: assertion '!isnan" "$log" "${log%.log}.late.log" 2>/dev/null | grep -v ':0$' | sed 's|.*/||' | paste -sd' ' -)
+    if [[ -z $found ]]; then
+        pass "$label: no NaN allocation (Clutter-CRITICAL '!isnan') in the log"
+    else
+        fail "$label: NaN allocations, Clutter-CRITICAL '!isnan' per log: $found"
+    fi
+}
+
 no_late_start() {
     local label=$1 log=$2
     if grep -q 'APEXG2-LATE' "$log"; then
@@ -1727,6 +1739,7 @@ direct_cases() {
         fi
         no_js_error "$c" "$f"
         no_late_start "$c" "$f"
+        no_nan_allocation "$c" "$f"
         # fault-abort may abort before its report; its exit status says the shell ran.
         [[ $c == fault-abort ]] && continue
         expect_report "$c" "$f" '.mode == "user"' "the probe ran: the static import graph loaded"
@@ -1960,6 +1973,7 @@ patched_assertions() {
     for c in "${DIRECT_CASES[@]}"; do
         asserted "$c" || continue
         [[ $c == kernel-safe || $c == fault-abort ]] || backdrop_painted "$c" "$run/$c.log"
+        [[ -e $run/$c.log ]] && no_nan_allocation "$c" "$run/$c.log"
     done
     for c in default default-scale1 dark-style; do
         asserted "${c%:*}" || continue
