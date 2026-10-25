@@ -7,8 +7,10 @@ on:
   push:
     branches: [main]
   # Weekly, every lane rebuilt without the lane cache: reuse skips buildroot drift, this catches it.
+  # Daily, with the cache, so G2's full set runs at least once a day (pull requests run its pr part).
   schedule:
     - cron: '17 4 * * 1'
+    - cron: '43 3 * * *'
 
 permissions: {}
 
@@ -165,7 +167,7 @@ jobs:
         run: tests/ptyxis/selftest.sh
 
       - uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
-        if: github.event_name != 'schedule'
+        if: github.event.schedule != '17 4 * * 1'
         with:
           path: _build/lane-cache
           key: lane-ptyxis-${{ github.run_id }}-${{ github.run_attempt }}
@@ -174,7 +176,7 @@ jobs:
       - name: tests/lib/lane.sh ptyxis
         id: lane
         env:
-          APEX_LANE_CACHE: ${{ github.event_name != 'schedule' && '_build/lane-cache' || '' }}
+          APEX_LANE_CACHE: ${{ github.event.schedule != '17 4 * * 1' && '_build/lane-cache' || '' }}
         run: tests/lib/lane.sh ptyxis
 
       # Only a build changes the cache; a reused key leaves it as it was.
@@ -228,7 +230,7 @@ jobs:
           persist-credentials: false
 
       - uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
-        if: github.event_name != 'schedule'
+        if: github.event.schedule != '17 4 * * 1'
         with:
           path: _build/lane-cache
           key: lane-libadwaita-${{ github.run_id }}-${{ github.run_attempt }}
@@ -237,7 +239,7 @@ jobs:
       - name: tests/lib/lane.sh libadwaita
         id: lane
         env:
-          APEX_LANE_CACHE: ${{ github.event_name != 'schedule' && '_build/lane-cache' || '' }}
+          APEX_LANE_CACHE: ${{ github.event.schedule != '17 4 * * 1' && '_build/lane-cache' || '' }}
         run: tests/lib/lane.sh libadwaita
 
       # Only a build changes the cache; a reused key leaves it as it was.
@@ -306,7 +308,7 @@ jobs:
           tests/control-center/state-test.sh
 
       - uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
-        if: github.event_name != 'schedule'
+        if: github.event.schedule != '17 4 * * 1'
         with:
           path: _build/lane-cache
           key: lane-gnome-control-center-${{ github.run_id }}-${{ github.run_attempt }}
@@ -315,7 +317,7 @@ jobs:
       - name: tests/lib/lane.sh gnome-control-center
         id: lane
         env:
-          APEX_LANE_CACHE: ${{ github.event_name != 'schedule' && '_build/lane-cache' || '' }}
+          APEX_LANE_CACHE: ${{ github.event.schedule != '17 4 * * 1' && '_build/lane-cache' || '' }}
         run: tests/lib/lane.sh gnome-control-center
 
       # Only a build changes the cache; a reused key leaves it as it was.
@@ -378,7 +380,7 @@ jobs:
         run: tests/nautilus/selftest.sh
 
       - uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
-        if: github.event_name != 'schedule'
+        if: github.event.schedule != '17 4 * * 1'
         with:
           path: _build/lane-cache
           key: lane-nautilus-${{ github.run_id }}-${{ github.run_attempt }}
@@ -387,7 +389,7 @@ jobs:
       - name: tests/lib/lane.sh nautilus
         id: lane
         env:
-          APEX_LANE_CACHE: ${{ github.event_name != 'schedule' && '_build/lane-cache' || '' }}
+          APEX_LANE_CACHE: ${{ github.event.schedule != '17 4 * * 1' && '_build/lane-cache' || '' }}
         run: tests/lib/lane.sh nautilus
 
       # Only a build changes the cache; a reused key leaves it as it was.
@@ -455,7 +457,7 @@ jobs:
           persist-credentials: false
 
       - uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
-        if: github.event_name != 'schedule'
+        if: github.event.schedule != '17 4 * * 1'
         with:
           path: _build/lane-cache
           key: lane-gnome-shell-${{ github.run_id }}-${{ github.run_attempt }}
@@ -464,7 +466,7 @@ jobs:
       - name: tests/lib/lane.sh gnome-shell
         id: lane
         env:
-          APEX_LANE_CACHE: ${{ github.event_name != 'schedule' && '_build/lane-cache' || '' }}
+          APEX_LANE_CACHE: ${{ github.event.schedule != '17 4 * * 1' && '_build/lane-cache' || '' }}
         run: tests/lib/lane.sh gnome-shell
 
       # Only a build changes the cache; a reused key leaves it as it was.
@@ -529,7 +531,9 @@ jobs:
           name: gnome-shell-rpms
           path: _build/shots-patched/rpms
 
-      - name: tests/shots/patched.sh on the lane's RPMs
+      - name: tests/shots/patched.sh on the lane's RPMs, direct.sh pr on a pull request and main otherwise
+        env:
+          PATCHED_PART: ${{ github.event_name == 'pull_request' && 'pr' || '' }}
         run: PATCHED_RPMS="$PWD/_build/shots-patched/rpms" PATCHED_OUT="$PWD/_build/shots-patched/out" tests/shots/patched.sh
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -569,14 +573,14 @@ jobs:
           path: _build/s2c/rpms
 
       - uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
-        if: github.event_name != 'schedule'
+        if: github.event.schedule != '17 4 * * 1'
         with:
           path: _build/lane-cache
           key: lane-gnome-control-center-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: lane-gnome-control-center-
 
       - uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
-        if: github.event_name != 'schedule'
+        if: github.event.schedule != '17 4 * * 1'
         with:
           path: _build/lane-cache
           key: lane-nautilus-${{ github.run_id }}-${{ github.run_attempt }}
@@ -584,7 +588,7 @@ jobs:
 
       - name: tests/lib/lane.sh gnome-control-center and nautilus, reused by key or built
         env:
-          APEX_LANE_CACHE: ${{ github.event_name != 'schedule' && '_build/lane-cache' || '' }}
+          APEX_LANE_CACHE: ${{ github.event.schedule != '17 4 * * 1' && '_build/lane-cache' || '' }}
         run: |
           tests/lib/lane.sh gnome-control-center
           tests/lib/lane.sh nautilus
@@ -632,7 +636,7 @@ jobs:
         run: tests/s2c/agent.sh
 
       - uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
-        if: github.event_name != 'schedule'
+        if: github.event.schedule != '17 4 * * 1'
         with:
           path: _build/lane-cache
           key: lane-gnome-shell-${{ github.run_id }}-${{ github.run_attempt }}
@@ -640,7 +644,7 @@ jobs:
 
       - name: tests/lib/lane.sh gnome-shell, reused by key or built
         env:
-          APEX_LANE_CACHE: ${{ github.event_name != 'schedule' && '_build/lane-cache' || '' }}
+          APEX_LANE_CACHE: ${{ github.event.schedule != '17 4 * * 1' && '_build/lane-cache' || '' }}
         run: tests/lib/lane.sh gnome-shell
 
       - name: tests/s7/accent-test.sh on the lane's RPMs

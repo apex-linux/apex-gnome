@@ -14,6 +14,8 @@ EOF
 
 # shellcheck source=tests/shots/lib.sh
 . "$(dirname -- "${BASH_SOURCE[0]}")/lib.sh"
+# shellcheck source=tests/shots/parts.sh
+. "$(dirname -- "${BASH_SOURCE[0]}")/parts.sh"
 
 readonly APEX_LIGHT_SHEET=resource:///org/gnome/shell/theme/gnome-shell-light.css
 readonly APEX_DARK_SHEET=resource:///org/gnome/shell/theme/gnome-shell-dark.css
@@ -1892,6 +1894,22 @@ overview_without_dock() {
             | (.previews | to_entries[] | select(.key != \$i) | .value.window, .value.caption)
             | select(\$c.x < .x + .width and .x < \$c.x + \$c.width and \$c.y < .y + .height and .y < \$c.y + \$c.height)] | length == 0)" \
         "and every caption is shown, none over another window's preview or caption" APEXG2-OVERVIEW-WINDOWS
+}
+
+# A part that runs some of main's cases asserts only those: each must have run and reported,
+# so a case dropped from direct.sh fails here instead of passing unasserted.
+part_ran() {
+    local run=$1 part=$2 c
+    shift 2
+    for c in "$@"; do
+        if ! grep -q "^$c exit=" "$run/results-$part.txt" 2>/dev/null; then
+            fail "$c: direct.sh $part did not run it"
+        elif [[ $c != fault-abort && -z $(report_of "$run/$c.log") ]]; then
+            fail "$c: direct.sh $part ran it, but it reported nothing"
+        else
+            pass "$c: direct.sh $part ran it and it reported"
+        fi
+    done
 }
 
 # The dock-one-gpu case: fixtures.py --gpus 1, as switcheroo-control reports a laptop

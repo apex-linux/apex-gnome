@@ -4,7 +4,7 @@ set -uo pipefail
 
 usage() {
     cat <<'EOF'
-usage: direct.sh main|kernel|fedora|signoff
+usage: direct.sh main|pr|kernel|fedora|signoff
 
 G2's direct cases, run by run.sh as root in a throwaway container of its bus image (the
 built image plus dbus-daemon), with tests/shots at /w (read-only) and the run's results
@@ -19,6 +19,7 @@ The glass cases read frames through frame.c, built with glib2-devel's headers an
 gi-compile-repository.
 
   main     every case, with the VM's real /proc/cmdline
+  pr       main's cases that parts.sh's PR_CASES lists, for CI on every pull request
   kernel   the apex.safe=1 case (run.sh binds a fixture over /proc/cmdline)
   fedora   the captures of Fedora's own gnome-shell build (run.sh's baseline image)
   signoff  main's capture and indicator cases with every scene saved (signoff.sh)
@@ -26,13 +27,15 @@ EOF
 }
 
 case ${1:-} in
-    main | kernel | fedora | signoff) part=$1 ;;
+    main | pr | kernel | fedora | signoff) part=$1 ;;
     -h | --help) usage; exit 0 ;;
     *) usage >&2; exit 2 ;;
 esac
 # It stops logind's seats and changes /run as root: never outside a throwaway container.
 [[ -e /run/.containerenv || -e /.dockerenv ]] || { echo "direct.sh: only inside run.sh's or smoke.sh's container" >&2; exit 2; }
 
+# shellcheck source=tests/shots/parts.sh
+. "$(dirname -- "${BASH_SOURCE[0]}")/parts.sh"
 readonly SHELL_TIMEOUT=150
 readonly A11Y_SCENES_TIMEOUT=240
 readonly GLASS_STRESS_SECONDS=${G2_GLASS_STRESS_SECONDS:-60}
@@ -129,6 +132,7 @@ run_case() {
 # A late probe means main.js's startup-complete handler never ran in that shell.
 run_and_record_case() {
     local name=$1
+    [[ $part == pr && " ${PR_CASES[*]} " != *" $name "* ]] && return
     run_case "$@"
     if grep -q 'APEXG2-LATE' "/out/$name.log"; then
         mv "/out/$name.log" "/out/$name.late.log"

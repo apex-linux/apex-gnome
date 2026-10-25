@@ -2226,6 +2226,28 @@ EOF
     dbus-daemon --config-file="$T/bus.conf" --fork --print-address=3 --print-pid=4 3>"$T/bus.address" 4>"$T/bus.pid"
 }
 
+test_part_ran() {
+    local run=$T/part-run c passes failures
+    local -a cases
+    mkdir -p "$run"
+    # shellcheck disable=SC2016 # expanded by the inner bash
+    read -ra cases <<<"$(bash -c '. "$1/parts.sh"; echo "${PR_CASES[*]}"' _ "$HERE")"
+    : >"$run/results-pr.txt"
+    for c in "${cases[@]}"; do
+        echo "$c exit=0 secs=1 marker-after-exit=no" >>"$run/results-pr.txt"
+        [[ $c == fault-abort ]] || echo 'APEXG2 {"probe": true}' >"$run/$c.log"
+    done
+    read -r passes failures <<<"$(assertion_counts part_ran "$run" pr "${cases[@]}")"
+    expect_eq "parts: every case of the pr part ran and reported (fault-abort may abort first)" "${#cases[@]}/0" "$passes/$failures"
+    sed -i '/^indicators-dark /d' "$run/results-pr.txt"
+    read -r passes failures <<<"$(assertion_counts part_ran "$run" pr "${cases[@]}")"
+    expect_eq "parts: a case the part skipped fails, never passes unasserted" "$((${#cases[@]} - 1))/1" "$passes/$failures"
+    echo "indicators-dark exit=0 secs=1 marker-after-exit=no" >>"$run/results-pr.txt"
+    : >"$run/large-text.log"
+    read -r passes failures <<<"$(assertion_counts part_ran "$run" pr "${cases[@]}")"
+    expect_eq "parts: a case that ran but reported nothing fails" "$((${#cases[@]} - 1))/1" "$passes/$failures"
+}
+
 test_one_gpu() {
     local failures what menu passes
     while IFS='|' read -r failures what menu; do
@@ -2591,6 +2613,7 @@ test_glass_load
 test_glass_stress
 test_spotlight_key
 test_one_gpu
+test_part_ran
 test_no_dock
 test_dark_style_off
 test_fixtures
