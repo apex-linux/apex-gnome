@@ -789,7 +789,7 @@ EOF
 }
 
 goldens() {
-    GOLDENS_LOCK=$T/goldens.lock GOLDENS_WORK=$T/goldens-work GOLDENS_URL=$T/goldens-work GOLDENS_MASKS=${masks:-$T/no-masks.json} \
+    GOLDENS_LOCK=$T/goldens.lock GOLDENS_WORK=$T/goldens-work GOLDENS_URL=$T/goldens-remote GOLDENS_MASKS=${masks:-$T/no-masks.json} \
         GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t "$HERE/goldens.sh" "$@" >"$T/goldens.out" 2>&1
 }
 
@@ -818,12 +818,13 @@ test_goldens() {
 
     if goldens import "$dir" "$T/decisions.json"; then
         first=$(git -C "$T/goldens-work" rev-parse HEAD)
-        if grep -qx "GOLDENS_REV=$first" "$T/goldens.lock" && [[ -z $(git -C "$T/goldens-work" rev-list --parents -n 1 HEAD | cut -d' ' -f2) ]] &&
+        if grep -qx "GOLDENS_REV=$first" "$T/goldens.lock" && [[ -z $(git -C "$T/goldens-work" rev-list --parents -n 1 HEAD | cut -s -d' ' -f2) ]] &&
             [[ $(git -C "$T/goldens-work" ls-files | paste -sd' ') == 'boards/board-36-dark.png boards/board-36-light.png manifest.json' ]] &&
             jq -e --arg h "$hash" '.boards | keys == ["36"] and .["36"].shots == $h and .["36"].pins.apexDesktop == "acde"
                 and .["36"].scene.dark == "d36" and .["36"].approval == {status: "approved", approvedAt: "2026-10-25T09:41:00Z", shots: $h, note: "ok"}' \
                 "$T/goldens-work/manifest.json" >/dev/null; then
             ok "goldens import: the approved board with its captures' hash becomes the branch's first commit, pinned"
+            git init -q --bare "$T/goldens-remote" && git -C "$T/goldens-work" push -q "$T/goldens-remote" HEAD:refs/heads/goldens
         else
             not_ok "goldens import: the approved board with its captures' hash becomes the branch's first commit, pinned: $(cat "$T/goldens.lock")"
         fi
@@ -848,7 +849,7 @@ test_goldens() {
     else
         not_ok "goldens check: a region that changed fails, naming the board and the region (exit $rc): $(grep -m 2 FAIL "$T/goldens.out")"
     fi
-    echo '{"boards": {"36": [{"name": "live", "x": 18, "y": 8, "width": 10, "height": 8, "why": "test"}]}}' >"$T/masks.json"
+    echo '{"boards": {"36": [{"name": "live", "x": 20, "y": 10, "width": 6, "height": 4, "why": "test"}]}}' >"$T/masks.json"
     if masks=$T/masks.json goldens check "$dir" && grep -q '^PASS captures board 36 (Launcher), dark: equal outside the masks \["live"\]' "$T/goldens.out"; then
         ok "goldens check: a change inside a mask passes"
     else
@@ -865,7 +866,8 @@ test_goldens() {
     hash=$(cat "$dir/board-14-end-session-light.png" "$dir/board-14-end-session-dark.png" | sha256sum | cut -c 1-12)
     jq -n --arg h "$hash" '{boards: {"14": {status: "approved", shots: $h, approvedAt: "2026-10-26T10:00:00Z"}}}' >"$T/decisions2.json"
     if goldens import "$dir" "$T/decisions2.json" && [[ $(git -C "$T/goldens-work" rev-parse HEAD~1) == "$first" ]] &&
-        jq -e '.boards | keys == ["14", "36"]' "$T/goldens-work/manifest.json" >/dev/null && goldens check "$dir" &&
+        jq -e '.boards | keys == ["14", "36"]' "$T/goldens-work/manifest.json" >/dev/null &&
+        git -C "$T/goldens-work" push -q "$T/goldens-remote" HEAD:refs/heads/goldens && goldens check "$dir" &&
         ! grep -q AWAIT "$T/goldens.out"; then
         ok "goldens import: a later approval adds to the pinned commit, and both boards pass"
     else

@@ -605,8 +605,18 @@ Flatpaks, so the check runs where the goldens were made, not in G2's VM run.
 
 `golden-masks.json` lists the masks, per board, in capture pixels: `{"boards": {"NN":
 [{"name", "x", "y", "width", "height", "why"}]}}`. A mask may cover at most 5 % of a
-capture. It has none: G2's wall clock is fixed, and two sign-off runs on the same RPMs gave
-byte-identical boards.
+capture. G2's wall clock is fixed, so the only live region is board 17's: the Wi-Fi menu's
+scan spinner, which turns in real time (36 × 38 px). Two sign-off runs on the same RPMs agree
+on every other board, byte for byte. A race in a scene is fixed in the scene, never masked:
+
+- the indicators case drops the startup notifications, so the search hint's banner never
+  covers board 39;
+- boards 15 and 35 focus Calendar, Text Editor and Terminal in that order, whichever maps
+  last;
+- they wait until no window has repainted for 1.5 s, since Text Editor retitles its new
+  document a draft after it maps;
+- they re-send the pointer's move until it reads back at the right edge: a new virtual device
+  can drop one axis of its first motion and leave the pointer on Quick Settings' pill.
 
 ### A visual change
 

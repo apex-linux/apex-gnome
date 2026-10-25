@@ -4,7 +4,7 @@
       {
         "name": "wifi-scan-spinner",
         "x": 2354, "y": 357, "width": 36, "height": 38,
-        "why": "The Wi-Fi menu's scan spinner turns in real time, so its angle differs between runs; the board is the menu, not the angle."
+        "why": "NMWirelessToggle._scanningSpinner (network.js, an animation.js Spinner of 16 px) in the Wi-Fi menu's header turns in real time while the menu scans, so its angle differs between runs; the board is the menu, not the angle."
       }
     ]
   }
