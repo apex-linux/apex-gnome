@@ -84,7 +84,7 @@ function liveGlass(Registry) {
 // Per frame: the glass the clip covered (re-blurred, patch 0003's rule e) or only touched, and
 // whether a change under a box re-blurred it at once. The first frames keep their clip.
 function record(Registry, windowActor) {
-    const stats = {frames: 0, contentFrames: 0, surfaces: {}, missed: [], modelledMs: 0, boxes: {}, trace: []};
+    const stats = {frames: 0, contentFrames: 0, surfaces: {}, missed: [], modelledMs: 0, boxes: {}, trace: [], tail: null};
     const start = GLib.get_monotonic_time();
     let damaged = false;
     let lastRect = rectOf(windowActor);
@@ -92,9 +92,20 @@ function record(Registry, windowActor) {
         damaged = true;
     });
     const surface = name => (stats.surfaces[name] ??= {reblurs: 0, partial: 0, contentUnder: 0});
+    const overlapOf = (clip, glass) => clip ? clip.contains_rectangle(new Mtk.Rectangle(glass.rect)) : Mtk.RegionOverlap.IN;
+    const overlapName = overlap => ['out', 'in', 'part'][overlap] ?? overlap;
+    let tail = true;
     const paintId = global.stage.connect('paint-view', (_stage, _view, clip) => {
-        stats.frames++;
         const rect = rectOf(windowActor);
+        if (tail) {
+            // The first frame can repaint damage from before 'damaged' was connected: reported, not counted.
+            stats.tail = Object.fromEntries(liveGlass(Registry).map(glass => [glass.name, overlapName(overlapOf(clip, glass))]));
+            tail = false;
+            damaged = false;
+            lastRect = rect;
+            return;
+        }
+        stats.frames++;
         const moved = rect.x !== lastRect.x || rect.y !== lastRect.y;
         const changed = moved || damaged ? union(lastRect, rect) : null;
         if (changed)
@@ -107,9 +118,9 @@ function record(Registry, windowActor) {
             stats.boxes[glass.name] = glass.rect;
             if (changed && intersects(changed, glass.rect))
                 surface(glass.name).contentUnder++;
-            const overlap = clip ? clip.contains_rectangle(new Mtk.Rectangle(glass.rect)) : Mtk.RegionOverlap.IN;
+            const overlap = overlapOf(clip, glass);
             if (traced)
-                traced.overlap[glass.name] = ['out', 'in', 'part'][overlap] ?? overlap;
+                traced.overlap[glass.name] = overlapName(overlap);
             if (overlap === Mtk.RegionOverlap.IN) {
                 surface(glass.name).reblurs++;
                 const scale = glass.actor.get_resource_scale();
