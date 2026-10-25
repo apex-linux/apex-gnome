@@ -1068,7 +1068,7 @@ fact "dock: and follows the overview's own button" 'dock\.overview-show-apps-off
 fact "dock: no separator between the dock's favourites and running apps, upstream's elsewhere; a full-colour Show Apps" \
     'dock\.hooks=separator=false stock-separator=true show-apps=view-app-grid'
 fact "dock: layer-enabled=false takes it away and gives the overview its dash back, at its own height" 'dock\.off=none dash=true dash-height=-1'
-fact "dock: and the overview's dash queues its redisplay as stock's does again, to fill when it is next mapped" \
+fact "dock: a redisplay still pending when the dock goes away never runs, and the overview's dash queues as stock's does again" \
     'dock\.overview-dash-off=redisplays=2 queued=1'
 fact "dock: layer-enabled=true brings it back" "dock\.on=Files:54 Web:54 $DOCK_TAIL indicators=true visible=true dash=false dash-height=0"
 fact "dock: back on, the hidden dash redisplays once more on its own" 'dock\.overview-dash-on=redisplays=3 queued=1'

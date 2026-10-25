@@ -1878,6 +1878,7 @@ async function exerciseDock() {
             `stock-separator=${Hooks.value('dash-favorites-separator', true, {})} ` +
             `show-apps=${Hooks.value('show-apps-icon-name', 'view-app-grid-symbolic', dock.tailItems.showApps)}`);
     }
+    dash._queueRedisplay();
     settings.set_boolean('layer-enabled', false);
     await spin(200);
     report('off');

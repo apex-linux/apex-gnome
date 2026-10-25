@@ -28,6 +28,7 @@ let _box = null;
 let _dock = null;
 let _intellihide = null;
 let _connections = [];
+let _dashLater = 0;
 
 function _iconSize() {
     return ICON_SIZES[_settings.get_string(ICON_SIZE_KEY)] ?? ICON_SIZES.medium;
@@ -74,13 +75,11 @@ function _overviewShowAppsToggled() {
 // and repaint the whole stage then. It redisplays before the next redraw instead, as when mapped.
 function _keepOverviewDashCurrent() {
     const dash = Main.overview.dash;
-    let queued = false;
     dash._queueRedisplay = () => {
-        if (queued)
+        if (_dashLater)
             return;
-        queued = true;
-        global.compositor.get_laters().add(Meta.LaterType.BEFORE_REDRAW, () => {
-            queued = false;
+        _dashLater = global.compositor.get_laters().add(Meta.LaterType.BEFORE_REDRAW, () => {
+            _dashLater = 0;
             dash._redisplay();
             return GLib.SOURCE_REMOVE;
         });
@@ -90,6 +89,9 @@ function _keepOverviewDashCurrent() {
 
 function _restoreOverviewDash() {
     const dash = Main.overview.dash;
+    if (_dashLater)
+        global.compositor.get_laters().remove(_dashLater);
+    _dashLater = 0;
     delete dash._queueRedisplay;
     dash._queueRedisplay();
 }
