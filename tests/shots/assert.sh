@@ -118,6 +118,9 @@ readonly ALWAYS_LOADED_USER_UNIT=default.target
 readonly GLASS_INTERIOR_MAX=4
 readonly GLASS_EDGE_MAX=12
 readonly GLASS_MEAN_ERROR=1
+# Board 22's ring width from its coverage (glass.js ringWidths): 8-bit rounding moves it under 0.05
+# device px; St's inset-shadow ring inside a clear border measures 8 px at its corners against 4.
+readonly TILE_RING_ALLOWANCE=0.25
 readonly APEX_UNIT_STARTED='(Starting|Started) [^ ]*[Aa]pex|Activating service name=.[^ ]*[Aa]pex'
 
 result_of() {
@@ -1099,10 +1102,11 @@ tile_preview() {
         "$tp" '.tile as $tile | .preview | (.styleClass | split(" ") | index("tile-preview-left") != null)
             and .x == $tile.x and .y == $tile.y and .width == $tile.width and .height == $tile.height
             and (.border | [.top, .right, .bottom, .left] | all(px_is($t.apex_tile_preview_inset))) and (.borderColor | rgba | .[3] == 0)'
-    "${metric[@]}" 'it is rounded $apex_radius_tile_preview inside that border, filled with the accent at $apex_tile_preview_fill_opacity and ringed $apex_tile_preview_ring in the accent at $apex_tile_preview_ring_opacity' \
-        "{p: $tp.preview, accent: .topBar.accent}" "$tinted"' .accent as $a | .p | (.radius - .border.top | px_is($t.apex_radius_tile_preview))
-            and (.background | tinted($a; $t.apex_tile_preview_fill_opacity))
-            and (.boxShadow | .inset and (.spread | px_is($t.apex_tile_preview_ring)) and .blur == 0 and (.color | tinted($a; $t.apex_tile_preview_ring_opacity)))'
+    "${metric[@]}" 'inside that border the glass actor is rounded $apex_radius_tile_preview, filled with the accent at $apex_tile_preview_fill_opacity and ringed by a $apex_tile_preview_ring border in the accent at $apex_tile_preview_ring_opacity; the classed preview draws neither' \
+        "{p: $tp.preview, g: $tp.glass, accent: .topBar.accent}" "$tinted"' .accent as $a | (.p | (.radius - .border.top | px_is($t.apex_radius_tile_preview))
+            and (.styleClass | split(" ") | index("apex-tile-preview-glassed") != null) and (.background | rgba | .[3] == 0) and .boxShadow == null)
+            and (.g | (.radius | px_is($t.apex_radius_tile_preview)) and (.background | tinted($a; $t.apex_tile_preview_fill_opacity))
+            and (.border | [.top, .right, .bottom, .left] | all(px_is($t.apex_tile_preview_ring))) and (.borderColor | tinted($a; $t.apex_tile_preview_ring_opacity)))'
 }
 
 # shellcheck disable=SC2016 # jq programs and token names, not shell expansions
@@ -2361,6 +2365,21 @@ glass_manager() {
         "with its fill and ring held off, the pixels there are blur-ref.js's blur of the pattern, within $GLASS_INTERIOR_MAX/255 inside, $GLASS_EDGE_MAX/255 in the ds/2 band, $GLASS_MEAN_ERROR/255 on average"
     "${expect_glass[@]}" '.manager.tile.shown.bandDiffering == 0' \
         'and the clear border around them shows the pattern itself, pixel for pixel: no blur'
+    local ring='def ringed($t): (.borderColor | rgba) as $b | (.background | rgba) as $f
+        | .mapped and .glassed and (.borders | length == 4 and all(px_is($t.apex_tile_preview_ring)))
+        and (.radius | px_is($t.apex_radius_tile_preview)) and (.previewBackground | rgba | .[3] == 0) and (.previewShadow | not)
+        and $b[0:3] == $f[0:3] and ($b[3] - ($t.apex_tile_preview_ring_opacity | num) * 255 | fabs <= 1)
+        and ($f[3] - ($t.apex_tile_preview_fill_opacity | num) * 255 | fabs <= 1);'
+    "${expect_glass[@]}" "$ring"' .t as $t | .manager.tile.ring | ringed($t)' \
+        'the glass actor draws the fill and a $apex_tile_preview_ring border ring in one hue, at $apex_tile_preview_fill_opacity and $apex_tile_preview_ring_opacity, rounded $apex_radius_tile_preview; the classed preview draws neither'
+    "${expect_glass[@]}" ".t as \$t | .manager.tile | (.ring.expected - (\$t.apex_tile_preview_ring | px) * .shown.scale | fabs < 0.01)
+        and (.ring as \$r | [\$r.corners[], \$r.edges[]] | length == 8 and all(. - \$r.expected | fabs <= $TILE_RING_ALLOWANCE))" \
+        "drawn, the ring is \$apex_tile_preview_ring times the scale wide in each corner and along each edge, from its coverage, within $TILE_RING_ALLOWANCE device px"
+    "${expect_glass[@]}" "$ring"' .t as $t | .manager.tile.reduceTransparency | ringed($t) and .glass == null' \
+        'with Reduce Transparency the blur goes, the glass actor stays: its fill and ring, even round the corners'
+    "${expect_glass[@]}" '.manager.tile.highContrast | .glass == null and .glassed and (.borders | all(. == 0)) and (.background | rgba | .[3] == 0)
+        and (.previewBackground | rgba | .[3] > 0)' \
+        'with high contrast, whose sheet keeps upstream'"'"'s tile preview, the blur goes and the glass actor paints nothing: the preview draws upstream'"'"'s alone'
     "${expect_glass[@]}" '.manager.tile.hidden | .glass == null and (.visible | not) and .differing == 0' \
         'closed, the preview leaves no blur behind: no effect, and the pattern itself where it was'
     "${expect_glass[@]}" '.manager.scrims | .forwarded.changed > 0 and .forwarded.differingFromFull == 0 and .unforwarded.differingFromFull > 0' \

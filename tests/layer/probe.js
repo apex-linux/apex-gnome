@@ -1542,8 +1542,9 @@ async function exerciseGlass() {
     const tileFact = label => {
         const glass = tileGroup.get_children().find(actor => actor.name === 'apexTilePreviewGlass');
         fact(`glass.tile.${label}`, glass ? `${glassOf(glass)} registered=${Registry.surfaces().some(s => s.actor === glass)} ` +
-            `below=${glass.get_next_sibling() === preview} offsets=${glass.constraints.map(c => c.offset).join(',')} opacity=${glass.opacity}`
-            : `none registered=${Registry.surfaces().some(s => s.name === 'tilePreview')}`);
+            `below=${glass.get_next_sibling() === preview} offsets=${glass.constraints.map(c => c.offset).join(',')} opacity=${glass.opacity} ` +
+            `glassed=${preview.has_style_class_name('apex-tile-preview-glassed')}`
+            : `none registered=${Registry.surfaces().some(s => s.name === 'tilePreview')} glassed=${preview.has_style_class_name('apex-tile-preview-glassed')}`);
     };
     const showTile = visible => {
         preview.visible = visible;
@@ -1552,6 +1553,10 @@ async function exerciseGlass() {
     tileFact('created');
     showTile(true);
     tileFact('shown');
+    // TilePreview._updateStyle() replaces the whole style class on each open().
+    preview._styleClasses = new Set(['tile-preview', 'tile-preview-left']);
+    preview.emit('notify::style-class');
+    tileFact('restyled');
     showTile(false);
     tileFact('hidden');
     showTile(true);
@@ -1622,12 +1627,15 @@ async function exerciseGlass() {
         await spin(200);
         report(label);
         fact(`glass.${label}.dock`, glassOf(dock));
+        if (label === 'reduce-transparency')
+            tileFact(label);
         set(off);
         // eslint-disable-next-line no-await-in-loop
         await spin(200);
     }
     St.Settings.get().setHighContrast(true);
     report('high-contrast');
+    tileFact('high-contrast');
     St.Settings.get().setHighContrast(false);
 
     settings.set_strv('disabled-features', ['glass']);

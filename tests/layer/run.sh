@@ -809,18 +809,24 @@ fact "glass: and blurs at the overview's sigma 36 and 1.5, in actor mode, while 
 fact "glass: at the launcher's 40 and 1.6 once the app grid shows" 'glass\.scrim\.launcher=apexGlassScrim:r160/s1\.6/c0/on/actor visible=true'
 fact "glass: the derived glass: the OSD, an Alt+Tab list once its popup adds it, and the screenshot panel (closed) take the popovers' glass" \
     'glass\.derived=osd:r120/s1\.8/c40/on/background switcher:r120/s1\.8/c52/on/background screenshot:r120/s1\.8/c32/paused/background'
-fact "glass: the tile preview, as windowManager.js builds it hidden, gets a glass actor below it, unregistered" \
-    'glass\.tile\.created=apexTilePreviewGlass:none registered=false below=true offsets=12,12,-24,-24 opacity=255'
+fact "glass: the tile preview, as windowManager.js builds it hidden, gets a glass actor below it, unregistered, and the class that hands it the fill and ring" \
+    'glass\.tile\.created=apexTilePreviewGlass:none registered=false below=true offsets=12,12,-24,-24 opacity=255 glassed=true'
 fact "glass: shown, it registers as tilePreview at board 22's sigma 20 and 1.6, inset by the preview's clear border" \
-    'glass\.tile\.shown=apexTilePreviewGlass:r80/s1\.6/c28/on/background registered=true below=true offsets=12,12,-24,-24 opacity=255'
+    'glass\.tile\.shown=apexTilePreviewGlass:r80/s1\.6/c28/on/background registered=true below=true offsets=12,12,-24,-24 opacity=255 glassed=true'
+fact "glass: restyled by TilePreview._updateStyle(), the preview gets its class back" \
+    'glass\.tile\.restyled=apexTilePreviewGlass:r80/s1\.6/c28/on/background registered=true below=true offsets=12,12,-24,-24 opacity=255 glassed=true'
 fact "glass: hidden, it unregisters and loses its blur" \
-    'glass\.tile\.hidden=apexTilePreviewGlass:none registered=false below=true offsets=12,12,-24,-24 opacity=255'
-fact "glass: disabled-features=['glass'] removes the glass actor and its registration" 'glass\.tile\.disabled=none registered=false'
+    'glass\.tile\.hidden=apexTilePreviewGlass:none registered=false below=true offsets=12,12,-24,-24 opacity=255 glassed=true'
+fact "glass: Reduce Transparency drops the tile glass's blur only: the actor, its registration and the class stay, to draw the fill and ring" \
+    'glass\.tile\.reduce-transparency=apexTilePreviewGlass:none registered=true below=true offsets=12,12,-24,-24 opacity=255 glassed=true'
+fact "glass: and so does high contrast" \
+    'glass\.tile\.high-contrast=apexTilePreviewGlass:none registered=true below=true offsets=12,12,-24,-24 opacity=255 glassed=true'
+fact "glass: disabled-features=['glass'] removes the glass actor, its registration and the preview's class" 'glass\.tile\.disabled=none registered=false glassed=false'
 fact "glass: glass back on, the shown preview registers again" \
-    'glass\.tile\.enabled=apexTilePreviewGlass:r80/s1\.6/c28/on/background registered=true below=true offsets=12,12,-24,-24 opacity=255'
-fact "glass: layer-enabled=false leaves no tile preview glass behind" 'glass\.tile\.off=none registered=false'
+    'glass\.tile\.enabled=apexTilePreviewGlass:r80/s1\.6/c28/on/background registered=true below=true offsets=12,12,-24,-24 opacity=255 glassed=true'
+fact "glass: layer-enabled=false leaves no tile preview glass behind" 'glass\.tile\.off=none registered=false glassed=false'
 fact "glass: layer-enabled=true brings it back" \
-    'glass\.tile\.on=apexTilePreviewGlass:r80/s1\.6/c28/on/background registered=true below=true offsets=12,12,-24,-24 opacity=255'
+    'glass\.tile\.on=apexTilePreviewGlass:r80/s1\.6/c28/on/background registered=true below=true offsets=12,12,-24,-24 opacity=255 glassed=true'
 fact "glass: a banner blurs from the moment it is shown" "glass\.banner=$GLASS_ON $BANNER_ON solid=false redirects=0,0"
 fact "glass: the bar's glass pauses while the bar is solid" \
     "glass\.solid-bar=panel:r96/s1\.6/c0/paused/background quick-settings:r120/s1\.8/c52/on/background calendar:r120/s1\.8/c52/on/background $BANNER_ON solid=false redirects=0,0"

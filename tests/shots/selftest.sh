@@ -475,10 +475,11 @@ REPORT_OF_A_TILE_PREVIEW_DRAWN_FROM_TOKENS='
 | def tint($o): "rgba(53, 132, 228, \($o))" | hex;
 {topBar: {accent: "#3584e4ff"}, surfaces: {tilePreview: {
     tile: {x: 0, y: 32, width: 720, height: 868},
-    preview: {styleClass: "tile-preview on-primary tile-preview-left", x: 0, y: 32, width: 720, height: 868,
+    preview: {styleClass: "tile-preview on-primary tile-preview-left apex-tile-preview-glassed", x: 0, y: 32, width: 720, height: 868,
         border: {top: $i, right: $i, bottom: $i, left: $i}, borderColor: "#00000000",
-        radius: (($t.apex_radius_tile_preview | px) + $i), background: tint($t.apex_tile_preview_fill_opacity),
-        boxShadow: {inset: true, x: 0, y: 0, blur: 0, spread: ($t.apex_tile_preview_ring | px), color: tint($t.apex_tile_preview_ring_opacity)}}}}}'
+        radius: (($t.apex_radius_tile_preview | px) + $i), background: "#00000000", boxShadow: null},
+    glass: {radius: ($t.apex_radius_tile_preview | px), background: tint($t.apex_tile_preview_fill_opacity),
+        border: ($t.apex_tile_preview_ring | px | {top: ., right: ., bottom: ., left: .}), borderColor: tint($t.apex_tile_preview_ring_opacity)}}}}'
 # shellcheck disable=SC2016 # a jq program
 REPORT_OF_A_SCREENSHOT_UI_DRAWN_FROM_TOKENS='
 ($t.apex_surface_border | px) as $b | ($t.apex_screenshot_padding | px) as $pad | ($t.apex_screenshot_close_size | px) as $close
@@ -1675,7 +1676,11 @@ test_tile_preview() {
 .surfaces.tilePreview.preview.x = 6|a preview moved instead of inset
 .surfaces.tilePreview.preview.radius = 0|upstream's square corners
 .surfaces.tilePreview.preview.background = "#3584e480"|upstream's half-accent fill
-.surfaces.tilePreview.preview.boxShadow = null|no ring
+.surfaces.tilePreview.preview.boxShadow = {inset: true, x: 0, y: 0, blur: 0, spread: 2, color: "#3584e4b3"}|the inset ring, thick at the corners, left on the classed preview
+.surfaces.tilePreview.preview.styleClass = "tile-preview on-primary tile-preview-left"|a preview that lost its class to _updateStyle()
+.surfaces.tilePreview.glass = null|no glass actor to draw the fill and ring
+.surfaces.tilePreview.glass.border.top = 1|a ring a pixel thinner along the top
+.surfaces.tilePreview.glass.background = "#00000000"|a glass actor without the fill
 CHANGES
 }
 
@@ -2944,7 +2949,9 @@ CHANGES
     local dock
     dock=$(jq -c '. + {radius: 112, saturation: 1.8, enabled: true, fine: true, followOpacity: true, background: true}' <<<"$fit")
     local manager
-    manager=$(jq -nc --argjson on "$on" --argjson p "$popover" --argjson dock "$dock" '{panel: $on, dock: $dock, quickSettings: $p, calendar: $p, banner: $p, blurEffects: ["panel"], solidClass: false} as $g
+    manager=$(jq -nc --argjson on "$on" --argjson p "$popover" --argjson dock "$dock" '{mapped: true, glass: null, borders: [2, 2, 2, 2], radius: 14,
+            borderColor: "#3584e4b3", background: "#3584e429", glassed: true, previewBackground: "#3584e400", previewShadow: false} as $ring
+        | {panel: $on, dock: $dock, quickSettings: $p, calendar: $p, banner: $p, blurEffects: ["panel"], solidClass: false} as $g
         | {panel: null, dock: null, quickSettings: null, calendar: null, banner: null, blurEffects: []} as $none
         | {radius: 144, saturation: 1.5, enabled: true, fine: true, followOpacity: true, background: false} as $scrim
         | {manager: {monitorScale: 2, glass: $g, reduceTransparency: ($none + {solidClass: true}), highContrast: ($none + {solidClass: true}),
@@ -2961,11 +2968,14 @@ CHANGES
                     allocation: [372, 180], painted: {box: [0, 0, 372, 180], radii: [28, 28, 28, 28]}},
                 downscale: 8, box: {mean: [0.4, 0.4, 0.4]}, interior: {max: [2, 2, 2]}, edge: {max: [6, 6, 6]},
                 bandDiffering: 0, innerDiffering: 267840},
-                hidden: {glass: null, visible: false, differing: 0}}}}')
+                hidden: {glass: null, visible: false, differing: 0},
+                ring: ($ring + {expected: 4, corners: [4.02, 3.98, 4, 4.01], edges: [4, 4, 4, 4]}),
+                reduceTransparency: $ring,
+                highContrast: ($ring + {borders: [0, 0, 0, 0], radius: 0, borderColor: "#00000000", background: "#00000000", previewBackground: "#3584e47f"})}}}')
     while IFS='|' read -r failures what change; do
         jq -c "$change" <<<"$manager" | sed 's/^/APEXG2-GLASS /' >"$T/glass.log"
         read -r passes _ <<<"$(assertion_counts glass_manager glass "$T/glass.log" light)"
-        expect_eq "glass manager: $what fails $failures of 17" "$failures" $((17 - passes))
+        expect_eq "glass manager: $what fails $failures of 21" "$failures" $((21 - passes))
     done <<'CHANGES'
 0|the bar, the dock and the popovers at their tokens, every switch honoured|.
 1|the bar at the popovers' sigma|.manager.glass.panel.radius = 120
@@ -3002,7 +3012,16 @@ CHANGES
 1|a corner whose blur reaches past the border's arc|.manager.derived.switcher.corner.blurredOutside = 120
 1|a corner left unblurred inside the arc|.manager.derived.switcher.corner.blurredInside = 1960
 1|a screenshot whose corner is not the screen's|.manager.derived.switcher.corner.capturedDiffering = 640
-17|no manager|.manager = null
+1|the inset-shadow ring St thickens at the corners|.manager.tile.ring.corners = [8, 8, 8, 8]
+1|one corner 0.3 px wider|.manager.tile.ring.corners[3] = 4.3
+1|a ring left on the preview, under the class|.manager.tile.ring.previewShadow = true
+1|the fill left on the preview|.manager.tile.ring.previewBackground = "#3584e429"
+1|a ring at 1 px|.manager.tile.ring.borders = [1, 1, 1, 1]
+1|a ring in another hue than the fill|.manager.tile.ring.borderColor = "#e01b24b3"
+1|Reduce Transparency that drops the glass actor, ring and all|.manager.tile.reduceTransparency.mapped = false
+1|high contrast that drops the class|.manager.tile.highContrast.glassed = false
+1|a glass actor that paints a ring over upstream's high-contrast preview|.manager.tile.highContrast.borders = [2, 2, 2, 2]
+21|no manager|.manager = null
 CHANGES
 }
 
