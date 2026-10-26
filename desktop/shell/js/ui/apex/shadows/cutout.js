@@ -4,6 +4,8 @@ import Clutter from 'gi://Clutter';
 import Cogl from 'gi://Cogl';
 import GObject from 'gi://GObject';
 
+import * as Uniforms from './uniforms.js';
+
 export const EFFECT_NAME = 'apex-shadow-cutout';
 
 const DECLARATIONS = `
@@ -38,21 +40,18 @@ class CutoutEffect extends Clutter.ShaderEffect {
     vfunc_paint_target(node, paintContext) {
         const [hasBox, box] = this.actor.get_paint_box();
         const [hasSize, width, height] = this.get_target_size();
-        if (hasBox && hasSize)
-            this._setUniforms(box, width, height);
+        if (hasBox && hasSize) {
+            const uniforms = Uniforms.cutoutUniforms(box, this.actor.get_transformed_extents(), width, height, this._radius);
+            // A layer with no area has nothing to draw, and NaN uniforms would last into its next frame.
+            if (!uniforms)
+                return;
+            this._setUniforms(uniforms);
+        }
         super.vfunc_paint_target(node, paintContext);
     }
 
     // Uniforms queue a repaint, so they change only with the geometry.
-    _setUniforms(box, width, height) {
-        const extents = this.actor.get_transformed_extents();
-        const [boxWidth, boxHeight] = [box.x2 - box.x1, box.y2 - box.y1];
-        const rect = [
-            (extents.origin.x - box.x1) / boxWidth, (extents.origin.y - box.y1) / boxHeight,
-            (extents.origin.x + extents.size.width - box.x1) / boxWidth,
-            (extents.origin.y + extents.size.height - box.y1) / boxHeight,
-        ];
-        const radius = this._radius * width / boxWidth;
+    _setUniforms({rect, size: [width, height], radius}) {
         const key = [...rect, width, height, radius].join();
         if (key === this._uniforms)
             return;
