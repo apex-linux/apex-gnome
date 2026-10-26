@@ -1141,9 +1141,18 @@ async function shadowLayers(unit) {
     const popup = new PopupMenu.PopupMenu(source, 0.5, St.Side.TOP);
     ['Open', 'Pin'].forEach(label => popup.addAction(label, () => {}));
     Main.uiGroup.add_child(popup.actor);
-    popup.open(BoxPointer.PopupAnimation.NONE);
-    await settle();
-    result.popupMenu = layerReport(Registry, popup.box, unit);
+    // Opened again, as the dock's menu is, it keeps its allocation: no notify::allocation follows its relayout.
+    for (let opening = 0; opening < 2; opening++) {
+        popup.open(BoxPointer.PopupAnimation.NONE);
+        // eslint-disable-next-line no-await-in-loop
+        await settle();
+        result.popupMenu = layerReport(Registry, popup.box, unit);
+        if (opening === 0) {
+            popup.close(BoxPointer.PopupAnimation.NONE);
+            // eslint-disable-next-line no-await-in-loop
+            await settle();
+        }
+    }
     popup.destroy();
     source.destroy();
     await settle();
