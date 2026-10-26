@@ -19,6 +19,7 @@ import * as ModalDialog from 'resource:///org/gnome/shell/ui/modalDialog.js';
 import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 import * as Scripting from 'resource:///org/gnome/shell/ui/scripting.js';
 import * as SwitcherPopup from 'resource:///org/gnome/shell/ui/switcherPopup.js';
+import * as WindowManager from 'resource:///org/gnome/shell/ui/windowManager.js';
 
 import * as BlurRef from './blur-ref.js';
 import * as Png from './png.js';
@@ -53,6 +54,13 @@ const SOLID_STYLE_CLASS = 'apex-solid';
 const SHADOW_RIM = 2;
 const SHADOW_CROP = 20;
 const SHADOW_ZOOM = 4;
+// Board 22's glass, and a tile whose inside, past the 6 px clear border, starts and ends on the
+// pattern's tiles as BOX does: the effect's downscale cells then line up with the tiles' edges.
+const TILE_SIGMA = 20;
+const TILE_SATURATION = 1.6;
+const TILE_RADIUS = 14;
+const TILE_RECT = {x: 162, y: 242, width: 372, height: 180};
+const TILE_GLASS = 'apexTilePreviewGlass';
 
 function colourOf(column, row, generation = 0) {
     return PALETTE[(column * 7 + row * 5 + generation) % PALETTE.length];
@@ -80,14 +88,14 @@ function buildPattern(parent) {
     return tiles;
 }
 
-// The pattern as the box sees it, in device pixels.
-function patternUnder(tiles, scale) {
-    const width = BOX.width * scale, height = BOX.height * scale;
+// The pattern as a box sees it, in device pixels.
+function patternUnder(tiles, scale, box = BOX) {
+    const width = box.width * scale, height = box.height * scale;
     const rgba = new Uint8Array(width * height * 4);
     for (let y = 0; y < height; y++) {
         for (let x = 0; x < width; x++) {
-            const column = Math.floor((BOX.x - PATTERN.x + x / scale) / TILE);
-            const row = Math.floor((BOX.y - PATTERN.y + y / scale) / TILE);
+            const column = Math.floor((box.x - PATTERN.x + x / scale) / TILE);
+            const row = Math.floor((box.y - PATTERN.y + y / scale) / TILE);
             const [r, g, b] = rgbOf(tiles.get(`${column},${row}`).colour);
             rgba.set([r, g, b, 255], 4 * (y * width + x));
         }
@@ -656,6 +664,75 @@ async function shadowsOverSurfaces() {
     }
 }
 
+// The pixels of a box inside a frame of a larger one, both in device pixels.
+function cropOf(rgba, frameWidth, inner) {
+    const out = new Uint8Array(inner.width * inner.height * 4);
+    for (let y = 0; y < inner.height; y++)
+        out.set(rgba.subarray(4 * ((inner.y + y) * frameWidth + inner.x), 4 * ((inner.y + y) * frameWidth + inner.x + inner.width)), 4 * y * inner.width);
+    return out;
+}
+
+// Board 22: the stock preview tiled over the pattern, as probe.js's tile preview opens it, its
+// own fill and ring held off so the frame shows the blur alone, inside the clear border only.
+async function tilePreviewTests() {
+    G2Frame ??= (await import('gi://G2Frame')).default;
+    const group = new St.Widget();
+    global.window_group.insert_child_above(group, Main.layoutManager._backgroundGroup);
+    const tiles = buildPattern(group);
+    const stand = new Clutter.Actor({...TILE_RECT});
+    global.window_group.add_child(stand);
+    const window = {
+        get_compositor_private: () => stand,
+        get_frame_rect: () => new Mtk.Rectangle({...TILE_RECT}),
+    };
+    const preview = new WindowManager.TilePreview();
+    const glassActor = () => global.window_group.get_children().find(actor => actor.name === TILE_GLASS && actor.get_next_sibling() === preview);
+    try {
+        preview.open(window, new Mtk.Rectangle({...TILE_RECT}), Main.layoutManager.primaryIndex);
+        preview.set_style('background-color: transparent; box-shadow: none;');
+        await Scripting.waitLeisure();
+        const glass = glassActor();
+        const scale = preview.get_resource_scale();
+        const deviceCss = scale * St.ThemeContext.get_for_stage(global.stage).scale_factor;
+        const inset = preview.get_theme_node().get_border_width(St.Side.TOP);
+        const [px, py] = preview.get_transformed_position();
+        const [pw, ph] = preview.get_transformed_size();
+        const [gx, gy] = glass?.get_transformed_position() ?? [NaN, NaN];
+        const [gw, gh] = glass?.get_transformed_size() ?? [NaN, NaN];
+        const inner = {x: px + inset, y: py + inset, width: pw - 2 * inset, height: ph - 2 * inset};
+        group.queue_redraw();
+        const frame = await nextFrame(scale, 'tile preview', {x: px, y: py, width: pw, height: ph});
+        const [fw, fh] = [pw * scale, ph * scale];
+        const innerDevice = {x: inset * scale, y: inset * scale, width: inner.width * scale, height: inner.height * scale};
+        const options = {sigma: TILE_SIGMA * deviceCss, saturation: TILE_SATURATION, cornerRadius: TILE_RADIUS * deviceCss};
+        const expected = BlurRef.glass(patternUnder(tiles, scale, inner), innerDevice.width, innerDevice.height, options);
+        const downscale = BlurRef.fineDownscale(innerDevice.width, innerDevice.height, options.sigma);
+        const band = new Uint8Array(fw * fh);
+        for (let y = 0; y < fh; y++) {
+            for (let x = 0; x < fw; x++)
+                band[y * fw + x] = Math.min(x, y, fw - 1 - x, fh - 1 - y) < inset * scale ? 1 : 0;
+        }
+        const bare = patternUnder(tiles, scale, {x: px, y: py, width: pw, height: ph});
+        const shown = {
+            scale: deviceCss, inset: inset / deviceCss * scale, preview: {x: px, y: py, width: pw, height: ph},
+            glassBox: {x: gx, y: gy, width: gw, height: gh}, inner, glass: glassOf(glass), downscale,
+            ...BlurRef.errors(cropOf(frame.rgba, fw, innerDevice), expected, innerDevice.width, innerDevice.height, downscale / 2),
+            bandDiffering: BlurRef.differing(frame.rgba, bare, band),
+            innerDiffering: BlurRef.differing(cropOf(frame.rgba, fw, innerDevice), cropOf(bare, fw, innerDevice)),
+        };
+        preview.close();
+        await Scripting.waitLeisure();
+        group.queue_redraw();
+        const left = await nextFrame(scale, 'tile preview hidden', {x: px, y: py, width: pw, height: ph});
+        return {shown, hidden: {glass: glassOf(glass), visible: preview.visible, differing: BlurRef.differing(left.rgba, bare)}};
+    } finally {
+        preview.destroy();
+        stand.destroy();
+        group.destroy();
+        await Scripting.waitLeisure();
+    }
+}
+
 // The glass manager's surfaces, then Reduce Transparency, high contrast and the kill switch.
 async function managerTests() {
     const apex = new Gio.Settings({schema_id: APEX_SCHEMA});
@@ -666,6 +743,7 @@ async function managerTests() {
         glass: await surfacesState(),
         scrims: await scrimTests(),
         derived: await derivedState(),
+        tile: await tilePreviewTests(),
         reduceTransparency: await withSetting(apex, 'reduce-transparency', new GLib.Variant('b', true), surfacesState),
         highContrast: await withSetting(a11y, 'high-contrast', new GLib.Variant('b', true), surfacesState),
         disabled: await withSetting(apex, 'disabled-features', new GLib.Variant('as', ['glass']), surfacesState),
