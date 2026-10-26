@@ -1721,8 +1721,10 @@ async function spotlightStyle(unit) {
 // S3a's exit items in the real shell: a provider past the budget holds back no section, and
 // real key presses move one selection across the sections, open a row and close the popup.
 const SLOW_SETTINGS_MS = 1600;
+const ASK_WAIT_MS = 1000;
 const SECTIONS_EARLY_MS = 300;
-const SECTIONS_LATE_MS = 1200;
+const CANCEL_GRACE_MS = 400;
+const CANCEL_SETTLE_MS = 50;
 const NO_KEYBINDING_ACTION = -1;
 
 function slowSpotlightProviders(started, settings) {
@@ -1795,9 +1797,13 @@ async function spotlightKeys() {
         keys.modalOpen = Main.modalCount;
         started.at = GLib.get_monotonic_time();
         popup.panel.get_children()[0].get_children()[1].set_text('disk');
-        await Scripting.sleep(SECTIONS_EARLY_MS);
+        // The budget runs from the slow provider's ask, which can come a few frames late; both reads follow it.
+        await until(() => settings.askedMs !== null, ASK_WAIT_MS);
+        await Scripting.sleep(Math.max(0, (settings.askedMs ?? 0) + SECTIONS_EARLY_MS - msSince(started.at)));
         keys.early = {ms: msSince(started.at), ...spotlightSections(popup)};
-        await Scripting.sleep(Math.max(0, SECTIONS_LATE_MS - msSince(started.at)));
+        await until(() => settings.cancelledMs !== null,
+            Math.max(0, (settings.askedMs ?? 0) + BUDGET_MS + CANCEL_GRACE_MS - msSince(started.at)));
+        await Scripting.sleep(CANCEL_SETTLE_MS);
         keys.late = {ms: msSince(started.at), ...spotlightSections(popup)};
         keys.settings = {askedMs: settings.askedMs, cancelledMs: settings.cancelledMs};
         await pressKeys(keyboard, Clutter.KEY_Down, 4);
