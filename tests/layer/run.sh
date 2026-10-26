@@ -800,7 +800,9 @@ has "glass: the feature enables" 'Apex: feature glass enabled'
 fact "glass: the bar, Quick Settings and the calendar blur behind them: radius 2 x their sheet's sigma x the scale, its saturation and corners, fine, following opacity; the offscreen redirects they sit in are held off" \
     "glass\.enabled=$GLASS_ON solid=false redirects=0,0"
 fact "glass: the scrim, a clone of the desktop below #overviewGroup, waits while the overview is closed" 'glass\.scrim\.closed=apexGlassScrim:r144/s1\.5/c0/paused/actor visible=false'
-fact "glass: the scrim binds to the stage, which follows each monitor change, not to uiGroup, which keeps its first size" 'glass\.scrim\.bound=stage'
+fact "glass: a scrim per monitor, its box the monitor's from the first frame, its desktop clone moved by the monitor's origin, clipped to the box" 'glass\.scrim\.monitors\.one=scrim-0@0,0,1440x900/clone0,0/clip=true'
+fact "glass: a second monitor gets its own scrim on monitors-changed, styled for the launcher as the first is" 'glass\.scrim\.monitors\.two=scrim-0@0,0,1440x900/clone0,0/clip=true scrim-1@1440,0,1920x1080/clone-1440,0/clip=true launcher=true,true'
+fact "glass: and loses it when the monitor goes, unregistered" 'glass\.scrim\.monitors\.back=scrim-0@0,0,1440x900/clone0,0/clip=true registered=1'
 fact "glass: and blurs at the overview's sigma 36 and 1.5, in actor mode, while it shows" 'glass\.scrim\.overview=apexGlassScrim:r144/s1\.5/c0/on/actor visible=true'
 fact "glass: at the launcher's 40 and 1.6 once the app grid shows" 'glass\.scrim\.launcher=apexGlassScrim:r160/s1\.6/c0/on/actor visible=true'
 fact "glass: the derived glass: the OSD, an Alt+Tab list once its popup adds it, and the screenshot panel (closed) take the popovers' glass" \

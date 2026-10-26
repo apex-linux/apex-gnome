@@ -1490,13 +1490,23 @@ async function exerciseGlass() {
     const adjustment = Main.overview._overview._controls._stateAdjustment;
     const scrimFact = label => fact(`glass.scrim.${label}`, scrim ? `${glassOf(scrim)} visible=${scrim.visible}` : 'none');
     scrimFact('closed');
-    fact('glass.scrim.bound', [scrim?.constraints].flat().map(c => c?.source === global.stage ? 'stage' : c?.source?.name).join(','));
+    const scrims = () => Main.uiGroup.get_children().filter(actor => actor.name === 'apexGlassScrim' && !actor.destroyed)
+        .map(s => `${Registry.surfaces().find(r => r.actor === s)?.name}@${s.x},${s.y},${s.width}x${s.height}` +
+            `/clone${s.get_children()[0]?.x},${s.get_children()[0]?.y}/clip=${s.clip_to_allocation}`).join(' ');
+    fact('glass.scrim.monitors.one', scrims());
     overviewGroup.visible = true;
     overviewGroup.emit('notify::visible');
     scrimFact('overview');
     adjustment.value = 2;
     adjustment.emit('notify::value');
     scrimFact('launcher');
+    Main.layoutManager.testMonitors = [Main.layoutManager.primaryMonitor, {x: 1440, y: 0, width: 1920, height: 1080}];
+    Main.layoutManager.emit('monitors-changed');
+    fact('glass.scrim.monitors.two', `${scrims()} launcher=${Main.uiGroup.get_children().filter(a => a.name === 'apexGlassScrim' && !a.destroyed)
+        .map(a => a.has_style_class_name('apex-launcher') && a.visible).join(',')}`);
+    Main.layoutManager.testMonitors = null;
+    Main.layoutManager.emit('monitors-changed');
+    fact('glass.scrim.monitors.back', `${scrims()} registered=${Registry.surfaces().filter(r => r.name.startsWith('scrim')).length}`);
     adjustment.value = 1;
     adjustment.emit('notify::value');
     overviewGroup.visible = false;

@@ -156,6 +156,7 @@ export const uiGroup = Object.assign(new StubActor('uiGroup', {extents: [0, 0, 1
     },
     insert_child_below(child) {
         this.children.push(child);
+        child._parent = this;
     },
     get_children() {
         return [...this.children];
@@ -467,7 +468,7 @@ export const layoutManager = {
     primaryMonitor: {x: 0, y: 0, width: 1440, height: 900},
     primaryIndex: 0,
     get monitors() {
-        return [this.primaryMonitor];
+        return this.testMonitors ?? [this.primaryMonitor];
     },
     getWorkAreaForMonitor: () => ({x: 0, y: 32, width: 1440, height: 868}),
     chrome: [],

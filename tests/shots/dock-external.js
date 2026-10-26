@@ -9,6 +9,7 @@ import GLib from 'gi://GLib';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import * as Scripting from 'resource:///org/gnome/shell/ui/scripting.js';
 
+import {modelledMs} from './glass-load.js';
 import {settleDesktop, until} from './idle.js';
 
 const WINDOW_TITLE = 'G2 maximised window';
@@ -57,14 +58,18 @@ async function placeWindow(monitor, apexDock) {
     return layout(apexDock);
 }
 
-// The scrim, and the overview's view of each monitor: stock shows one per monitor.
+function scrimActors() {
+    return Main.uiGroup.get_children().filter(actor => actor.name === SCRIM_NAME);
+}
+
+// The scrims, one per monitor, and the overview's view of each monitor: stock shows one per monitor.
 function overviewState() {
-    const scrim = Main.uiGroup.get_children().find(actor => actor.name === SCRIM_NAME) ?? null;
     const views = Main.overview._overview.controls._workspacesDisplay._workspacesViews ?? [];
     return {
         shown: Main.overview.visible,
         controlsState: Main.overview._overview.controls._stateAdjustment.value,
-        scrim: scrim ? {visible: scrim.visible, box: transformedRect(scrim), launcher: scrim.has_style_class_name(LAUNCHER_STYLE_CLASS)} : null,
+        scrims: scrimActors().map(scrim => ({visible: scrim.visible, box: transformedRect(scrim), launcher: scrim.has_style_class_name(LAUNCHER_STYLE_CLASS)})),
+        monitors: Main.layoutManager.monitors.map(rect),
         views: views.map(view => transformedRect(view)),
         stage: {x: 0, y: 0, width: global.stage.width, height: global.stage.height},
     };
@@ -134,14 +139,24 @@ function glass(actor) {
     return effect ? {radius: effect.radius, enabled: effect.enabled, resourceScale: actor.get_resource_scale(), box: transformedRect(actor)} : null;
 }
 
-function glassState(apexDock) {
-    const scrim = Main.uiGroup.get_children().find(actor => actor.name === SCRIM_NAME) ?? null;
-    const clone = scrim?.get_first_child() ?? null;
+// 0014-blurcost.py's ms per re-blur: each scrim at its own scale, against one stage-wide scrim
+// at the views' highest scale, as before a scrim per monitor.
+function scrimCost(scrims) {
+    const blurred = scrims.filter(s => s.radius > 0);
+    const scale = Math.max(...blurred.map(s => s.resourceScale));
+    const sigma = Math.max(...blurred.map(s => s.radius / 2 / s.resourceScale));
     return {
-        dock: glass(apexDock()._background), bar: glass(Main.panel),
-        // The clone paints window_group as it is, at its own size and place: an unscaled copy.
-        scrim: scrim ? {...glass(scrim), clone: clone ? transformedRect(clone) : null, source: transformedRect(global.window_group)} : null,
+        perMonitor: blurred.reduce((ms, s) => ms + modelledMs(s.box.width * s.resourceScale, s.box.height * s.resourceScale, s.radius / 2), 0),
+        wholeStage: modelledMs(global.stage.width * scale, global.stage.height * scale, sigma * scale),
     };
+}
+
+function glassState(apexDock) {
+    // Each clone paints window_group as it is, at its own size and place: an unscaled copy.
+    const scrims = scrimActors().map(scrim => ({
+        ...glass(scrim), clone: transformedRect(scrim.get_first_child()), source: transformedRect(global.window_group),
+    }));
+    return {dock: glass(apexDock()._background), bar: glass(Main.panel), scrims, cost: scrimCost(scrims)};
 }
 
 export async function dockExternalReport(helpers) {
@@ -165,7 +180,7 @@ export async function dockExternalReport(helpers) {
 
         Main.overview.show();
         await helpers.settle();
-        steps.overview = overviewState();
+        steps.overview = {...overviewState(), glass: glassState(apexDock)};
         Main.overview.hide();
         await helpers.settle();
         Main.overview.showApps();
