@@ -1100,9 +1100,8 @@ async function quickSettingsLayer(unit) {
     return state;
 }
 
-// The shadows feature's layers under a registered surface: each layer's shadow and box.
-// Each layer's allocation in its parent, and the box the surface's own allocation gives there,
-// rounded as registry.js rounds it; natural is the surface's preferred size, which a min-width outgrows.
+// Each layer under a registered surface: its shadow, its allocation and the box the surface's own allocation
+// gives, rounded as registry.js rounds it; natural is the surface's preferred size, which a min-width outgrows.
 function layerReport(Registry, surface, unit) {
     const natural = [surface.get_preferred_width(-1)[1], surface.get_preferred_height(-1)[1]].map(Math.round);
     return Registry.layersOf(surface).map(layer => {
