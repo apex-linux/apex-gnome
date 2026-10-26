@@ -669,7 +669,10 @@ on every board, byte for byte. A race in a scene is fixed in the scene, never ma
 - the indicators case drops the startup notifications, so the search hint's banner never
   covers board 39;
 - boards 15 and 35 focus Calendar, Text Editor and Terminal in that order, whichever maps
-  last;
+  last. Calendar's own late present can land between two of those, so the probe reads the
+  order back (`get_tab_list`), refocuses until it is Terminal, Text Editor, Calendar (at most
+  three times), and checks it again before the overview's and the switcher's captures, failing
+  by name otherwise;
 - they wait until no window has repainted for 1.5 s, since Text Editor retitles its new
   document a draft after it maps;
 - they re-send the pointer's move until it reads back at the right edge: a new virtual device
