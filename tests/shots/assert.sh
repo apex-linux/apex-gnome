@@ -666,6 +666,16 @@ shadow_layers() {
         "an idle desktop repaints no more with the shadow layers than with shadows in disabled-features"
 }
 
+# Board 17's network rows: each name, its signal glyph and its lock centred on the row, as the
+# canvas draws them; network.js's name fills the row, its text at the top of a taller one.
+# shellcheck disable=SC2016 # a jq program
+network_rows_centred() {
+    local label=$1 scenes=$2 rows=$3
+    expect "$label Quick Settings" "$scenes" "$rows"' | def mid: .y + .height / 2; length > 1
+        and all(.box as $r | [.label, .signal, .lockBox | select(. != null)] | all((mid - ($r | mid)) | fabs <= 1))' \
+        "every network's name, signal glyph and lock are centred on its row, within 1 px (board 17)"
+}
+
 # shellcheck disable=SC2016 # jq programs
 quick_settings_layer() {
     local label=$1 log=$2 mode=$3 scenes q=.surfaces.quickSettingsLayer variant=light
@@ -687,6 +697,7 @@ quick_settings_layer() {
             "the Wi-Fi menu's header subtitle ends the title's row, at its end (board 17)"
         expect "$label Quick Settings" "$scenes" "$q.wifiMenu.rows | length > 1 and any(.active) and all(.checked == .active)" \
             "the active network's row, and only it, is :checked"
+        network_rows_centred "$label" "$scenes" "$q.wifiMenu.rows"
         top_bar_metric "$label Quick Settings" "$scenes" "$(tokens_for "$variant")" \
             'a secure network'"'"'s lock follows its name, $apex_quick_menu_lock_size in $apex_fg at $apex_quick_menu_lock_opacity' \
             "$q.wifiMenu.rows" '[.[] | select(.secure)] | length > 0 and all(.lockAfterName and (.lockSize | px_is($t.apex_quick_menu_lock_size))
