@@ -2714,6 +2714,8 @@ test_pr_assertions() {
     expect_eq "parts: the pr part asserts no case it does not run" "" "$stray"
     missing=$(grep -c ': direct.sh pr did not run it$' "$T/assertions.out")
     expect_eq "parts: and with none of its cases run, part_ran fails each one" "${#cases[@]}" "$missing"
+    expect_eq "parts: CI's pr assertions check main.js's startup-complete handler ran" 1 \
+        "$(grep -c "^FAIL default: main.js's startup-complete handler ran 0 times, not once" "$T/assertions.out")"
     # shellcheck disable=SC2016 # expanded by the inner bash
     expect_eq "parts: main asserts every case, pr only its own" "0 1 0" \
         "$(bash -c '. "$1/assert.sh"; part=main; asserted glass; a=$?; part=pr; asserted glass; b=$?; asserted default; echo "$a $b $?"' _ "$HERE")"
