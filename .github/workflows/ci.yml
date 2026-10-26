@@ -88,7 +88,7 @@ jobs:
       - name: Fedora's gnome-shell, the fixtures' services, gcc and glib2-devel for clock.c and frame.c, gjs and jq
         run: >-
           dnf5 -y --setopt=install_weak_deps=False --repo=fedora --repo=updates install
-          gnome-shell mesa-dri-drivers dbus-daemon python3-dbusmock gcc glib2-devel gjs jq bash coreutils gawk grep sed
+          gnome-shell mesa-dri-drivers dbus-daemon python3-dbusmock gcc glib2-devel gjs jq bash coreutils gawk grep sed malcontent-libs
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

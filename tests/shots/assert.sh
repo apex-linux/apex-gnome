@@ -149,6 +149,18 @@ no_js_error() {
 
 # Clutter refuses a NaN box with a CRITICAL and leaves the actor unallocated, which a case can survive:
 # the CRITICAL fails it, in the case's log and in a late first start's log where the image run reran it.
+# With malcontent's typelib (the image's flatpak-libs brings it), a failed read of the user's parental
+# controls leaves gnome-shell hiding every app: no favourite, dash or app grid.
+parental_controls_ready() {
+    local label=$1 log=$2 failed
+    failed=$(grep -hm1 'Failed to get parental controls settings' "$log" "${log%.log}.late.log" 2>/dev/null | head -n 1)
+    if [[ -z $failed ]]; then
+        pass "$label: the shell read the user's parental controls"
+    else
+        fail "$label: the shell could not read the user's parental controls, so it hides every app: ${failed#*settings: }"
+    fi
+}
+
 no_nan_allocation() {
     local label=$1 log=$2 found
     found=$(grep -c "clutter_actor_allocate: assertion '!isnan" "$log" "${log%.log}.late.log" 2>/dev/null | grep -v ':0$' | sed 's|.*/||' | paste -sd' ' -)
@@ -1435,6 +1447,8 @@ fixtures_on_the_bus() {
             "power-profiles-daemon: Balanced, with Performance to switch to"
         expect "fixtures ($part)" "$fixtures" '.gpus | .hasDualGpu and .names == ["AMD Radeon Graphics", "NVIDIA GeForce RTX 3050 Laptop GPU"]' \
             "switcheroo-control: an integrated and a discrete GPU"
+        expect "fixtures ($part)" "$fixtures" '.accounts | .appsFiltered == [false, []] and .sessionLimit == 0' \
+            "accountsservice: the user's parental controls filter no app and limit no session"
     done
 }
 
@@ -1781,6 +1795,7 @@ direct_cases() {
         no_js_error "$c" "$f"
         no_late_start "$c" "$f"
         no_nan_allocation "$c" "$f"
+        parental_controls_ready "$c" "$f"
         # fault-abort may abort before its report; its exit status says the shell ran.
         [[ $c == fault-abort ]] && continue
         action_modes "$c" "$f"
@@ -2147,6 +2162,7 @@ patched_assertions() {
         [[ $c == kernel-safe || $c == fault-abort ]] || backdrop_painted "$c" "$run/$c.log"
         [[ $c == kernel-safe || $c == fault-abort ]] || action_modes "$c" "$run/$c.log"
         [[ -e $run/$c.log ]] && no_nan_allocation "$c" "$run/$c.log"
+        [[ -e $run/$c.log ]] && parental_controls_ready "$c" "$run/$c.log"
     done
     for c in default default-scale1 dark-style; do
         asserted "${c%:*}" || continue

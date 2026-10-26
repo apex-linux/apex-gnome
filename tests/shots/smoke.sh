@@ -11,8 +11,9 @@ shots-smoke job): direct.sh's fedora part with clock.c, fixtures.py and probe.js
 assertions that need no Apex build. A harness change that keeps the shell from starting or
 reporting fails here in minutes, before a builder VM spends a G2 run on it.
 
-It needs gnome-shell, mesa-dri-drivers, dbus-daemon, python3-dbusmock, gcc, glib2-devel, gjs
-and jq; backdrops.sh adds librsvg2-tools and git-core to render the Facets backdrops.
+It needs gnome-shell, mesa-dri-drivers, dbus-daemon, python3-dbusmock, gcc, glib2-devel, gjs,
+jq and malcontent-libs (the image has it through flatpak-libs, so the shell reads parental
+controls); backdrops.sh adds librsvg2-tools and git-core to render the Facets backdrops.
 EOF
 }
 

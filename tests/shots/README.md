@@ -80,8 +80,8 @@ shell with exit 1.
 Before the first case, `direct.sh` lets root own and call the fixtures' names on the
 container's system bus (`/etc/dbus-1/system-local.conf`) and runs `fixtures.py`, which
 starts python-dbusmock's `upower`, `networkmanager` and `bluez5` templates there, a bare
-mock of switcheroo-control, which has no template, and (`G2_POWER_PROFILES=1`)
-`upower_power_profiles_daemon`:
+mock of switcheroo-control and one of accountsservice, which have no template, and
+(`G2_POWER_PROFILES=1`) `upower_power_profiles_daemon`:
 
 | Service | Fixture | The shell shows |
 |---|---|---|
@@ -89,6 +89,7 @@ mock of switcheroo-control, which has no template, and (`G2_POWER_PROFILES=1`)
 | NetworkManager | the primary connection: Wi-Fi "Apex-5G" at signal 90, connected globally, with "Apex-2.4G" (72) and the open "Library Guest" (48) in range, each with WPA2's ciphers or none, as libnm needs to list a network | `network-wireless-signal-excellent-symbolic`, and three networks in the Wi-Fi menu |
 | BlueZ | the Bluetooth keyboard "Keychron K3", paired and connected | no glyph: the status pill shows network, volume and battery only (the `panel` feature) |
 | switcheroo-control | the laptop's two GPUs, "AMD Radeon Graphics" the default and "NVIDIA GeForce RTX 3050 Laptop GPU" (`HasDualGpu`); `fixtures.py --gpus 1` leaves the iGPU alone | "Launch Using Discrete Graphics Card" in an app's menu, the dock's included |
+| accountsservice | the user (`FindUserById`) with malcontent's parental controls: no app filtered, no session limit | every app: with malcontent's typelib (the image's `flatpak-libs` brings it), the shell hides all apps until it has read these, and for good if the read fails, which `parental_controls_ready` names in every case |
 | power-profiles-daemon | the Balanced profile, with Power Saver and Performance | the Power Mode toggle, lit at Balanced (the `quick-settings` feature); no glyph in the status pill |
 
 `fixtures-PART.txt` holds what the bus reports afterwards, and `assert.sh` checks it for
