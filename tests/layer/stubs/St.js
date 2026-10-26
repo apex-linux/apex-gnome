@@ -242,8 +242,13 @@ class Widget {
         return [this.width, this.height];
     }
 
+    has_allocation() {
+        return !this.pendingLayout;
+    }
+
     queue_redraw() {
         this.redraws++;
+        this.clip = null;
     }
 
     queue_redraw_with_clip(clip) {

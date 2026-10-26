@@ -1657,12 +1657,18 @@ idle_desktop() {
 
 # shellcheck disable=SC2016 # jq programs
 glass_load_scenario() {
-    local r=$1 s=$2 at=".scenarios.$2" missed surfaces trace
+    local r=$1 s=$2 at=".scenarios.$2" missed empty surfaces trace
     missed=$(jq -r "[$at.glass.missed[] | \"\\(.surface) at \\(.atMs) ms (\\(.overlap))\"] | join(\"; \")" <<<"$r" 2>/dev/null)
     if jq -e "$at.glass.contentFrames > 0 and $at.glass.missed == []" <<<"$r" >/dev/null 2>&1; then
         pass "glass-load $s: every change under a glass box re-blurs that box in the same frame (forwarded damage)"
     else
         fail "glass-load $s: every change under a glass box re-blurs that box in the same frame (forwarded damage) (missed: ${missed:-no content frame})"
+    fi
+    empty=$(jq -r "[$at.glass.surfaces | to_entries[] | select((.value.empty // 0) > 0) | \"\\(.key) in \\(.value.empty)\"] | join(\", \")" <<<"$r" 2>/dev/null)
+    if jq -e "[$at.glass.surfaces[] | .empty // 0] | add // 0 | . == 0" <<<"$r" >/dev/null 2>&1; then
+        pass "glass-load $s: every glass box draws at its size, in its first frame too"
+    else
+        fail "glass-load $s: every glass box draws at its size, in its first frame too (empty: $empty frames)"
     fi
     expect "glass-load $s" "$r" "$at.reduceTransparency.surfaces == {} and $at.reduceTransparency.contentFrames > 0" \
         "with Reduce Transparency the same scenario runs and no glass is live"

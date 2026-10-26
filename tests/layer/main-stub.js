@@ -95,8 +95,13 @@ export class StubActor {
         return this.box.slice(2);
     }
 
+    has_allocation() {
+        return !this.pendingLayout;
+    }
+
     queue_redraw() {
         this.redraws++;
+        this.clip = null;
     }
 
     get width() {
