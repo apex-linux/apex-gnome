@@ -25,7 +25,6 @@ const RUNNING_DESKTOP_FILE = `[Desktop Entry]
 Type=Application
 Name=G2 Window
 Exec=gjs -m window.js
-NoDisplay=true
 `;
 
 const now = () => GLib.get_monotonic_time();
@@ -120,7 +119,7 @@ function across(item, fraction) {
     return [x + width * fraction, y + height / 2];
 }
 
-function state(dock, uiChildren) {
+function state(dock, before) {
     const items = appItems(dock);
     const xs = items.map(item => item.get_transformed_position()[0]);
     return {
@@ -134,10 +133,16 @@ function state(dock, uiChildren) {
             modals: Main.modalCount,
             actionMode: actionModeName(),
             grab: global.stage.get_grab_actor() !== null,
-            showAppsLabel: dock._showAppsIcon.label.text,
+            showAppsLabel: dock._showAppsIcon._labelText,
+            showAppsName: dock._showAppsIcon.child.accessible_name,
             faded: items.filter(item => item.child.opacity < 255 || !item.child.visible)
                 .map(item => item.child._delegate.app.get_id()),
-            strays: Main.uiGroup.get_n_children() - uiChildren,
+            // Dash items add their hover labels to the chrome; anything else new is a drag's leftover.
+            strays: Main.uiGroup.get_children().filter(actor => !before.has(actor) && !actor.has_style_class_name?.('dash-label'))
+                .map(actor => ({
+                    type: actor.constructor.name, name: actor.name, width: actor.width, height: actor.height,
+                    children: actor.get_n_children(),
+                })),
         },
     };
 }
@@ -161,9 +166,9 @@ async function runningApp() {
 export async function dockDndReport(helpers) {
     const settled = await settleDesktop(helpers);
     const dock = helpers.apexDock();
-    const uiChildren = Main.uiGroup.get_n_children();
+    const before = new Set(Main.uiGroup.get_children());
     const pointer = new Pointer();
-    const read = () => state(dock, uiChildren);
+    const read = () => state(dock, before);
     const steps = {initial: read()};
     const [first, second] = steps.initial.apps;
     if (!first || !second)

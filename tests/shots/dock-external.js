@@ -62,6 +62,7 @@ function overviewState() {
     const views = Main.overview._overview.controls._workspacesDisplay._workspacesViews ?? [];
     return {
         shown: Main.overview.visible,
+        controlsState: Main.overview._overview.controls._stateAdjustment.value,
         scrim: scrim ? {visible: scrim.visible, box: transformedRect(scrim), launcher: scrim.has_style_class_name(LAUNCHER_STYLE_CLASS)} : null,
         views: views.map(view => transformedRect(view)),
     };
@@ -110,6 +111,8 @@ export async function dockExternalReport(helpers) {
         Main.overview.show();
         await helpers.settle();
         steps.overview = overviewState();
+        Main.overview.hide();
+        await helpers.settle();
         Main.overview.showApps();
         await helpers.settle();
         steps.launcher = overviewState();

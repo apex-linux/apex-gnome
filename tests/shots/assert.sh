@@ -23,7 +23,7 @@ readonly STOCK_SHEETS=resource:///org/gnome/shell/theme/stock
 readonly FEDORA_SHEETS=resource:///org/gnome/shell/theme
 readonly DIRECT_CASES=(default default-scale1 dark-style high-contrast large-text default-solid dark-style-solid high-contrast-solid
     large-text-solid dock-intellihide dock-intellihide-dark dock-one-gpu no-dock stock-light stock-dark safe-env
-    layer-disabled layer-cycles motion idle dock-pin glass-load glass-stress fault-configure fault-enable fault-abort kernel-safe
+    layer-disabled layer-cycles motion idle dock-pin dock-dnd dock-external glass-load glass-stress fault-configure fault-enable fault-abort kernel-safe
     fedora-light fedora-dark glass fedora-glass
     indicators indicators-scale1 indicators-dark)
 readonly DIRECT_PARTS=(main kernel fedora)
@@ -1954,6 +1954,105 @@ direct_cases() {
     indicator_cases "$run"
     one_gpu_case "$run"
     no_dock_case "$run"
+    dock_dnd_case "$run"
+    dock_external_case "$run"
+}
+
+# shellcheck disable=SC2016 # jq programs
+readonly DOCK_DND_FILES='org.gnome.Nautilus.desktop' DOCK_DND_CLOCKS='org.gnome.clocks.desktop'
+readonly DOCK_DND_WEATHER='org.gnome.Weather.desktop' DOCK_DND_RUNNING='io.github.apex_linux.G2Window.desktop'
+
+# The dock-dnd case: real drags, each read back from favorite-apps and the dock's drawn order.
+dock_dnd_case() {
+    local run=$1 f=$1/dock-dnd.log r error files=$DOCK_DND_FILES clocks=$DOCK_DND_CLOCKS
+    local weather=$DOCK_DND_WEATHER running=$DOCK_DND_RUNNING
+    exits "$run" dock-dnd 0
+    no_js_error dock-dnd "$f"
+    no_apex_failure dock-dnd "$f"
+    r=$(report_of "$f" APEXG2-DOCK-DND)
+    error=$(jq -r '.error // empty' <<<"$r" 2>/dev/null)
+    if [[ -n $error ]]; then
+        fail "dock-dnd: ${error%%$'\n'*}"
+        return
+    fi
+    expect dock-dnd "$r" '.settled | (.startingUp | not) and (.overview | not) and .dock.visible and .actionMode == "NORMAL"' \
+        "the session settled: startup over, no overview, the dock shown, the NORMAL action mode"
+    expect dock-dnd "$r" "def shows(\$f): .favorites == \$f and .apps == \$f and .drawnInOrder;
+        .steps.initial | shows([\"$files\", \"$clocks\"])" "the dock draws the case's favourites, Files then Clocks"
+    expect dock-dnd "$r" ".steps.reorder | .favorites == [\"$clocks\", \"$files\"] and .apps == .favorites and .drawnInOrder" \
+        "Clocks dragged onto Files' leading quarter comes first, in favorite-apps and in the dock's drawn order"
+    expect dock-dnd "$r" ".steps.fromGrid | .favorites == [\"$clocks\", \"$weather\", \"$files\"] and .apps == .favorites and .drawnInOrder" \
+        "Weather dragged from the app grid onto Clocks' trailing quarter is pinned between Clocks and Files"
+    expect dock-dnd "$r" '.steps.unpin.label == "Unpin"' "a favourite dragged over Show Apps labels it Unpin"
+    expect dock-dnd "$r" ".steps.unpin | .favorites == [\"$clocks\", \"$files\"] and .apps == .favorites and .drawnInOrder" \
+        "and dropped there it is unpinned, from favorite-apps and the dock"
+    expect dock-dnd "$r" ".steps.dropOff | .favorites == [\"$clocks\", \"$files\"] and .apps == .favorites and .drawnInOrder" \
+        "a favourite dropped off the dock stays pinned where it was: stock's dash unpins only on Show Apps"
+    expect dock-dnd "$r" ".steps.onTrash | .favorites == [\"$clocks\", \"$files\"] and .apps == .favorites and .drawnInOrder" \
+        "Trash refuses an app: a favourite dropped on it stays pinned where it was"
+    expect dock-dnd "$r" ".steps.running | .installed and .running and .shown and .before.favorites == [\"$clocks\", \"$files\"] and
+        .before.apps == [\"$clocks\", \"$files\", \"$running\"]" "a running app outside the favourites shows after them"
+    expect dock-dnd "$r" ".steps.running.after | .favorites == [\"$clocks\", \"$running\", \"$files\"] and .apps == .favorites and .drawnInOrder" \
+        "and dropped onto Clocks' trailing quarter it is pinned between Clocks and Files"
+    expect dock-dnd "$r" ".steps.cancelled | .favorites == [\"$clocks\", \"$files\"] and .apps == .favorites and .drawnInOrder" \
+        "a drag cancelled with Esc changes nothing"
+    expect dock-dnd "$r" '[.steps[] | if .after then .before, .after else . end] | length == 9 and
+        all(.tail == ["separator", "show-apps", "trash"])' "after every drop and the cancel, the separator, Show Apps and Trash stay last"
+    expect dock-dnd "$r" '[.steps[] | if .after then .before, .after else . end | .drag] | length == 9 and all(
+        (.placeholder | not) and (.emptyTarget | not) and .modals == 0 and .actionMode == "NORMAL" and (.grab | not) and
+        .showAppsLabel == "Show Apps" and .showAppsName == "Show Apps" and .faded == [] and
+        (.strays | length <= 1 and all(.type == "Clutter_Actor" and .width == 0 and .height == 0 and .children == 0)))' \
+        "and nothing is left in a drag state: no placeholder, grab or modal, NORMAL, every icon opaque, Show Apps named so, and no actor but DND's 0x0 event actor"
+}
+
+# shellcheck disable=SC2016 # a jq program
+readonly DOCK_INSIDE='def inside($m): .x >= $m.x and .x + .width <= $m.x + $m.width and .y >= $m.y and .y + .height <= $m.y + $m.height;'
+
+# The dock-external case: the primary's windows alone hide the dock and turn the bar solid,
+# and the dock and the bar follow the primary that DisplayConfig sets.
+# shellcheck disable=SC2016 # token names in descriptions, jq programs
+dock_external_case() {
+    local run=$1 f=$1/dock-external.log r error tokens
+    exits "$run" dock-external 0
+    no_js_error dock-external "$f"
+    no_apex_failure dock-external "$f"
+    r=$(report_of "$f" APEXG2-DOCK-EXTERNAL)
+    error=$(jq -r '.error // empty' <<<"$r" 2>/dev/null)
+    if [[ -n $error ]]; then
+        fail "dock-external: ${error%%$'\n'*}"
+        return
+    fi
+    tokens=$(tokens_for light)
+    local -a metric=(top_bar_metric dock-external "$r" "$tokens")
+    expect dock-external "$r" '.settled | (.startingUp | not) and (.overview | not) and .dock.visible and .actionMode == "NORMAL"' \
+        "the session settled: startup over, no overview, the dock shown, the NORMAL action mode"
+    expect dock-external "$r" '.steps.initial | .primary == 0 and .monitors == [{x: 0, y: 0, width: 1440, height: 900, index: 0},
+        {x: 1440, y: 0, width: 960, height: 540, index: 1}]' \
+        "the 2880x1800 panel is the primary and the 1920x1080 display sits right of it, both at scale 2"
+    "${metric[@]}" 'the dock is on the primary only, $apex_dock_bottom_gap above its bottom edge and centred' \
+        '.steps.initial' "$DOCK_INSIDE . as \$s | (.dockBox | inside(\$s.monitors[0])) and (.dockHidden | not) and
+        (.dock.bottomGap | px_is(\$t.apex_dock_bottom_gap)) and (.dock.centreOffset | fabs <= 0.5)"
+    expect dock-external "$r" '.steps.initial.panelBox | .x == 0 and .y == 0 and .width == 1440' "and so is the bar, the primary's width"
+    expect dock-external "$r" '.steps.onSecondary | .window == {monitor: 1, maximised: true} and (.dockHidden | not) and (.barSolid | not)' \
+        "a window maximised on the external display neither hides the dock nor turns the bar solid"
+    expect dock-external "$r" '.steps.onPrimary | .window == {monitor: 0, maximised: true} and .dockHidden and .barSolid' \
+        "moved to the primary, still maximised, it hides the dock and turns the bar solid"
+    expect dock-external "$r" '.steps.backOnSecondary | .window == {monitor: 1, maximised: true} and (.dockHidden | not) and (.barSolid | not)' \
+        "and moved back, the dock shows and the bar is translucent again"
+    expect dock-external "$r" '.steps.overview | .shown and .controlsState == 1 and .scrim.visible and (.scrim.launcher | not) and
+        .scrim.box == {x: 0, y: 0, width: 2400, height: 900} and (.views | length == 2)' \
+        "the overview shows a view on each monitor over the scrim, which covers both"
+    expect dock-external "$r" '.steps.launcher | .shown and .controlsState == 2 and .scrim.visible and .scrim.launcher and
+        .scrim.box == {x: 0, y: 0, width: 2400, height: 900}' "and so does the launcher, its scrim styled apex-launcher"
+    expect dock-external "$r" '.steps.swapped | .changed and .primary == 1' \
+        "DisplayConfig's ApplyMonitorsConfig makes the external display the primary (monitors-changed)"
+    "${metric[@]}" 'the dock follows it, $apex_dock_bottom_gap above its bottom edge and centred' \
+        '.steps.swapped' "$DOCK_INSIDE . as \$s | (.dockBox | inside(\$s.monitors[1])) and
+        (.dock.bottomGap | px_is(\$t.apex_dock_bottom_gap)) and (.dock.centreOffset | fabs <= 0.5)"
+    expect dock-external "$r" '.steps.swapped.panelBox | .x == 1440 and .y == 0 and .width == 960' "and so does the bar"
+    expect dock-external "$r" '.steps.swapped | .window.maximised and (.window.monitor == .primary) == .dockHidden and
+        (.window.monitor == .primary) == .barSolid' \
+        "and the dock hides and the bar turns solid exactly when the maximised window is on the new primary"
 }
 
 # The no-dock case: disabled-features=['dock'], so the overview's own dash is back and the
@@ -2070,6 +2169,8 @@ patched_assertions() {
     asserted indicators indicators-scale1 indicators-dark && indicator_cases "$run"
     asserted dock-one-gpu && one_gpu_case "$run"
     asserted no-dock && no_dock_case "$run"
+    asserted dock-dnd && dock_dnd_case "$run"
+    asserted dock-external && dock_external_case "$run"
     if [[ $part == pr ]]; then
         part_ran "$run" pr "${PR_CASES[@]}"
     fi
