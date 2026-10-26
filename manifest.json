@@ -36,21 +36,21 @@
         "light": "polkit-light-open",
         "dark": "polkit-dark-open"
       },
-      "shots": "2848f54166e4",
+      "shots": "8860d5d94dca",
       "files": {
         "light": "boards/board-13-light.png",
         "dark": "boards/board-13-dark.png"
       },
       "pins": {
-        "apexGnome": "07d15805e98a7bf3a8d3267c6f88b410fa08142b",
+        "apexGnome": "0f1d211fe841fd526f8baeb09fbec02f3f80a635",
         "apexDesktop": "8f064873e18b4ffd6a7399c2ab9d040fd7e797ee"
       },
       "scale": 2,
       "monitor": "2880x1800",
       "approval": {
         "status": "approved",
-        "approvedAt": "2026-10-26T12:06:48.874Z",
-        "shots": "2848f54166e4"
+        "approvedAt": "2026-10-26T14:40:08.500Z",
+        "shots": "8860d5d94dca"
       }
     },
     "14": {
@@ -62,21 +62,21 @@
         "light": "end-session-light-power-off",
         "dark": "end-session-dark-power-off"
       },
-      "shots": "d2f78a285440",
+      "shots": "be11476639b5",
       "files": {
         "light": "boards/board-14-light.png",
         "dark": "boards/board-14-dark.png"
       },
       "pins": {
-        "apexGnome": "07d15805e98a7bf3a8d3267c6f88b410fa08142b",
+        "apexGnome": "0f1d211fe841fd526f8baeb09fbec02f3f80a635",
         "apexDesktop": "8f064873e18b4ffd6a7399c2ab9d040fd7e797ee"
       },
       "scale": 2,
       "monitor": "2880x1800",
       "approval": {
         "status": "approved",
-        "approvedAt": "2026-10-26T12:06:55.487Z",
-        "shots": "d2f78a285440"
+        "approvedAt": "2026-10-26T14:40:10.197Z",
+        "shots": "be11476639b5"
       }
     },
     "19": {
@@ -88,21 +88,21 @@
         "light": "default-screenshot",
         "dark": "dark-style-screenshot"
       },
-      "shots": "e8069badce09",
+      "shots": "370c457419e5",
       "files": {
         "light": "boards/board-19-light.png",
         "dark": "boards/board-19-dark.png"
       },
       "pins": {
-        "apexGnome": "07d15805e98a7bf3a8d3267c6f88b410fa08142b",
+        "apexGnome": "0f1d211fe841fd526f8baeb09fbec02f3f80a635",
         "apexDesktop": "8f064873e18b4ffd6a7399c2ab9d040fd7e797ee"
       },
       "scale": 2,
       "monitor": "2880x1800",
       "approval": {
         "status": "approved",
-        "approvedAt": "2026-10-26T12:09:35.317Z",
-        "shots": "e8069badce09"
+        "approvedAt": "2026-10-26T14:40:27.965Z",
+        "shots": "370c457419e5"
       }
     },
     "34": {
@@ -114,21 +114,21 @@
         "light": "default-datemenu",
         "dark": "dark-style-datemenu"
       },
-      "shots": "43686e40698d",
+      "shots": "3a4a557fdb11",
       "files": {
         "light": "boards/board-34-light.png",
         "dark": "boards/board-34-dark.png"
       },
       "pins": {
-        "apexGnome": "07d15805e98a7bf3a8d3267c6f88b410fa08142b",
+        "apexGnome": "0f1d211fe841fd526f8baeb09fbec02f3f80a635",
         "apexDesktop": "8f064873e18b4ffd6a7399c2ab9d040fd7e797ee"
       },
       "scale": 2,
       "monitor": "2880x1800",
       "approval": {
         "status": "approved",
-        "approvedAt": "2026-10-26T12:13:00.815Z",
-        "shots": "43686e40698d"
+        "approvedAt": "2026-10-26T14:40:52.727Z",
+        "shots": "3a4a557fdb11"
       }
     },
     "35": {
@@ -140,21 +140,21 @@
         "light": "default-signoff-overview",
         "dark": "dark-style-signoff-overview"
       },
-      "shots": "4e09a329a05b",
+      "shots": "2eba994b1702",
       "files": {
         "light": "boards/board-35-light.png",
         "dark": "boards/board-35-dark.png"
       },
       "pins": {
-        "apexGnome": "07d15805e98a7bf3a8d3267c6f88b410fa08142b",
+        "apexGnome": "0f1d211fe841fd526f8baeb09fbec02f3f80a635",
         "apexDesktop": "8f064873e18b4ffd6a7399c2ab9d040fd7e797ee"
       },
       "scale": 2,
       "monitor": "2880x1800",
       "approval": {
         "status": "approved",
-        "approvedAt": "2026-10-26T12:13:07.933Z",
-        "shots": "4e09a329a05b"
+        "approvedAt": "2026-10-26T14:40:56.625Z",
+        "shots": "2eba994b1702"
       }
     },
     "36": {
@@ -166,21 +166,21 @@
         "light": "default-launcher",
         "dark": "dark-style-launcher"
       },
-      "shots": "d7eb6b9b23c1",
+      "shots": "e2fc4eebc0ff",
       "files": {
         "light": "boards/board-36-light.png",
         "dark": "boards/board-36-dark.png"
       },
       "pins": {
-        "apexGnome": "07d15805e98a7bf3a8d3267c6f88b410fa08142b",
+        "apexGnome": "0f1d211fe841fd526f8baeb09fbec02f3f80a635",
         "apexDesktop": "8f064873e18b4ffd6a7399c2ab9d040fd7e797ee"
       },
       "scale": 2,
       "monitor": "2880x1800",
       "approval": {
         "status": "approved",
-        "approvedAt": "2026-10-26T12:13:14.521Z",
-        "shots": "d7eb6b9b23c1"
+        "approvedAt": "2026-10-26T14:41:00.368Z",
+        "shots": "e2fc4eebc0ff"
       }
     },
     "37": {
@@ -192,21 +192,21 @@
         "light": "default-desktop",
         "dark": "dark-style-desktop"
       },
-      "shots": "854e45e2a113",
+      "shots": "5389e6f551a3",
       "files": {
         "light": "boards/board-37-light.png",
         "dark": "boards/board-37-dark.png"
       },
       "pins": {
-        "apexGnome": "07d15805e98a7bf3a8d3267c6f88b410fa08142b",
+        "apexGnome": "0f1d211fe841fd526f8baeb09fbec02f3f80a635",
         "apexDesktop": "8f064873e18b4ffd6a7399c2ab9d040fd7e797ee"
       },
       "scale": 2,
       "monitor": "2880x1800",
       "approval": {
         "status": "approved",
-        "approvedAt": "2026-10-26T12:13:30.968Z",
-        "shots": "854e45e2a113"
+        "approvedAt": "2026-10-26T14:41:06.705Z",
+        "shots": "5389e6f551a3"
       }
     },
     "38": {
@@ -218,21 +218,21 @@
         "light": "default-spotlight-search",
         "dark": "dark-style-spotlight-search"
       },
-      "shots": "27c816f550eb",
+      "shots": "b576f91201aa",
       "files": {
         "light": "boards/board-38-light.png",
         "dark": "boards/board-38-dark.png"
       },
       "pins": {
-        "apexGnome": "07d15805e98a7bf3a8d3267c6f88b410fa08142b",
+        "apexGnome": "0f1d211fe841fd526f8baeb09fbec02f3f80a635",
         "apexDesktop": "8f064873e18b4ffd6a7399c2ab9d040fd7e797ee"
       },
       "scale": 2,
       "monitor": "2880x1800",
       "approval": {
         "status": "approved",
-        "approvedAt": "2026-10-26T12:13:33.027Z",
-        "shots": "27c816f550eb"
+        "approvedAt": "2026-10-26T14:41:10.988Z",
+        "shots": "b576f91201aa"
       }
     },
     "39": {
@@ -244,21 +244,156 @@
         "light": "indicators-indicators-everything",
         "dark": "indicators-dark-indicators-everything"
       },
-      "shots": "d7656477582e",
+      "shots": "c05a782f5ca2",
       "files": {
         "light": "boards/board-39-light.png",
         "dark": "boards/board-39-dark.png"
       },
       "pins": {
-        "apexGnome": "07d15805e98a7bf3a8d3267c6f88b410fa08142b",
+        "apexGnome": "0f1d211fe841fd526f8baeb09fbec02f3f80a635",
         "apexDesktop": "8f064873e18b4ffd6a7399c2ab9d040fd7e797ee"
       },
       "scale": 2,
       "monitor": "2880x1800",
       "approval": {
         "status": "approved",
-        "approvedAt": "2026-10-26T12:13:43.127Z",
-        "shots": "d7656477582e"
+        "approvedAt": "2026-10-26T14:41:15.497Z",
+        "shots": "c05a782f5ca2"
+      }
+    },
+    "15": {
+      "title": "Window switcher",
+      "slug": "alt-tab",
+      "source": "tests/shots/direct.sh signoff",
+      "fixture": "Text Editor, Calendar and Terminal open, the app switcher up",
+      "scene": {
+        "light": "default-signoff-alt-tab",
+        "dark": "dark-style-signoff-alt-tab"
+      },
+      "shots": "5fdac7cc4c67",
+      "files": {
+        "light": "boards/board-15-light.png",
+        "dark": "boards/board-15-dark.png"
+      },
+      "pins": {
+        "apexGnome": "0f1d211fe841fd526f8baeb09fbec02f3f80a635",
+        "apexDesktop": "8f064873e18b4ffd6a7399c2ab9d040fd7e797ee"
+      },
+      "scale": 2,
+      "monitor": "2880x1800",
+      "approval": {
+        "status": "approved",
+        "approvedAt": "2026-10-26T14:40:12.970Z",
+        "shots": "5fdac7cc4c67",
+        "note": "please check the 4 corner color of light theme"
+      }
+    },
+    "16": {
+      "title": "OSD, banner and popup menu",
+      "slug": "transients",
+      "source": "tests/shots/direct.sh signoff",
+      "fixture": "the volume OSD at 62 %, a banner with an action, a three-row popup menu",
+      "scene": {
+        "light": "default-surfaces",
+        "dark": "dark-style-surfaces"
+      },
+      "shots": "84d2e49ad098",
+      "files": {
+        "light": "boards/board-16-light.png",
+        "dark": "boards/board-16-dark.png"
+      },
+      "pins": {
+        "apexGnome": "0f1d211fe841fd526f8baeb09fbec02f3f80a635",
+        "apexDesktop": "8f064873e18b4ffd6a7399c2ab9d040fd7e797ee"
+      },
+      "scale": 2,
+      "monitor": "2880x1800",
+      "approval": {
+        "status": "approved",
+        "approvedAt": "2026-10-26T14:40:19.618Z",
+        "shots": "84d2e49ad098",
+        "note": "what happens with the context menu? why it has 2 difference shapes?"
+      }
+    },
+    "17": {
+      "title": "Quick Settings: Wi-Fi submenu",
+      "slug": "wifi-menu",
+      "source": "tests/shots/direct.sh signoff",
+      "fixture": "Quick Settings with the Wi-Fi menu open: Apex-5G connected, three networks in range, battery at 87 %",
+      "scene": {
+        "light": "default-quick-settings",
+        "dark": "dark-style-quick-settings"
+      },
+      "shots": "fdd8c9e781be",
+      "files": {
+        "light": "boards/board-17-light.png",
+        "dark": "boards/board-17-dark.png"
+      },
+      "pins": {
+        "apexGnome": "0f1d211fe841fd526f8baeb09fbec02f3f80a635",
+        "apexDesktop": "8f064873e18b4ffd6a7399c2ab9d040fd7e797ee"
+      },
+      "scale": 2,
+      "monitor": "2880x1800",
+      "approval": {
+        "status": "approved",
+        "approvedAt": "2026-10-26T14:40:23.869Z",
+        "shots": "fdd8c9e781be",
+        "note": "please check the text alignment"
+      }
+    },
+    "20": {
+      "title": "Lock screen",
+      "slug": "lock",
+      "source": "tests/shell/shoot.sh",
+      "fixture": "locked, the prompt asking for a password",
+      "scene": {
+        "light": "lock-light-open",
+        "dark": "lock-dark-open"
+      },
+      "shots": "6e21c086f33d",
+      "files": {
+        "light": "boards/board-20-light.png",
+        "dark": "boards/board-20-dark.png"
+      },
+      "pins": {
+        "apexGnome": "0f1d211fe841fd526f8baeb09fbec02f3f80a635",
+        "apexDesktop": "8f064873e18b4ffd6a7399c2ab9d040fd7e797ee"
+      },
+      "scale": 2,
+      "monitor": "2880x1800",
+      "approval": {
+        "status": "approved",
+        "approvedAt": "2026-10-26T14:40:33.993Z",
+        "shots": "6e21c086f33d",
+        "note": "please check the eye icon \"show password\" position, it not place at the end of password box"
+      }
+    },
+    "22": {
+      "title": "Edge tiling",
+      "slug": "tiling",
+      "source": "tests/shots/direct.sh signoff",
+      "fixture": "the tile preview of the left half",
+      "scene": {
+        "light": "default-tile-preview",
+        "dark": "dark-style-tile-preview"
+      },
+      "shots": "fb150ba803d6",
+      "files": {
+        "light": "boards/board-22-light.png",
+        "dark": "boards/board-22-dark.png"
+      },
+      "pins": {
+        "apexGnome": "0f1d211fe841fd526f8baeb09fbec02f3f80a635",
+        "apexDesktop": "8f064873e18b4ffd6a7399c2ab9d040fd7e797ee"
+      },
+      "scale": 2,
+      "monitor": "2880x1800",
+      "approval": {
+        "status": "approved",
+        "approvedAt": "2026-10-26T17:24:52.083Z",
+        "shots": "fb150ba803d6",
+        "note": "check the corner border, it has bolder than actual border"
       }
     }
   }
