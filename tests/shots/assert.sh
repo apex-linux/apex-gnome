@@ -1295,7 +1295,7 @@ spotlight_keys() {
         "$k" ".settings.askedMs < .early.ms and .early.ms < .settings.askedMs + .budgetMs and (.early | $shown)
             and .early.selected == \"Applications/org.gnome.DiskUtility.desktop\""
     "${metric[@]}" 'past the budget, Settings is cancelled and left out; after the cancel, Applications and Files still show' \
-        "$k" ".settings.cancelledMs >= .budgetMs and .settings.cancelledMs < .late.ms and .late.ms < .settings.askedMs + .slowMs and (.late | $shown)"
+        "$k" ".settings.cancelledMs >= .settings.askedMs + .budgetMs and .settings.cancelledMs < .late.ms and .late.ms < .settings.askedMs + .slowMs and (.late | $shown)"
     "${metric[@]}" 'Down x4, Up x1 and Down x20, pressed for real, move one selection across the sections and stop at the last row' \
         "$k" '.down4 == "Files/images" and .up1 == "Files/png" and .down20 == "Files/md"'
     "${metric[@]}" 'Enter opens the selected file through its provider, with the terms, and closes Spotlight and its modal' \
