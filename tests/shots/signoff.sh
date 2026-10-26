@@ -91,10 +91,14 @@ banners_of() {
             [[ $log == *.late.log ]] || sed -n 's/.*APEXG2-CAPTURE //p' "$log"
         done
         for log in "$shots"/*.log; do
-            sed -n 's/.*APEXLOCK //p' "$log" | jq -c --arg shot "$(basename "$log" .log)" \
-                'to_entries[] | select(.key | startswith("banner.")) | {file: "\($shot)-\(.key[7:]).png", banner: .value}'
+            sed -n 's/.*APEXLOCK //p' "$log" | jq -sc --arg shot "$(basename "$log" .log)" '
+                add // {} | to_entries | map(select(.key | test("^(banner|bluetooth)[.]")))
+                | group_by(.key | sub("^[a-z]+[.]"; ""))[] | select(any(.key | startswith("banner.")))
+                | {file: "\($shot)-\(.[0].key | sub("^[a-z]+[.]"; "")).png",
+                   banner: (map(select(.key | startswith("banner.")))[0].value),
+                   bluetooth: (map(select(.key | startswith("bluetooth.")))[0].value // false)}'
         done
-    } 2>/dev/null | jq -sc 'map({(.file): {banner, live: (.live // [])}}) | add // {}'
+    } 2>/dev/null | jq -sc 'map({(.file): {banner, live: (.live // []), bluetooth: (.bluetooth // false)}}) | add // {}'
 }
 
 collect() {
@@ -122,6 +126,8 @@ collect() {
                 missing+=("board $number ($title), $variant: a banner over $scene: $banner")
             fi
             [[ -z $live ]] || missing+=("board $number ($title), $variant: still live in $scene: $live")
+            [[ $(jq -r --arg f "$scene.png" '.[$f].bluetooth // false' <<<"$banners") != true ]] ||
+                missing+=("board $number ($title), $variant: the Bluetooth indicator shows in $scene")
         done
         boards+=("$(jq -nc --argjson board "$((10#$number))" --arg title "$title" --arg slug "$slug" --arg source "$source" \
             --arg light "$light" --arg dark "$dark" --arg fixture "$fixture" \

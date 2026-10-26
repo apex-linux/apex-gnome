@@ -48,6 +48,8 @@ readonly GREETER_USER=gdm-greeter
 readonly SHELL_TIMEOUT=120
 readonly CLOCK_LIB=/run/apex-lock-clock.so
 readonly FIXTURE_NAMES=(org.freedesktop.UPower org.freedesktop.NetworkManager org.bluez)
+# fixtures.py's keyboard, at its KEYBOARD_ADDRESS.
+readonly KEYBOARD_PATH=/org/bluez/hci0/dev_DC_2C_26_4B_33_01
 readonly GDM_NAME=org.gnome.DisplayManager
 readonly LOGIND_NAME=org.freedesktop.login1
 readonly FPRINT_NAME=net.reactivated.Fprint
@@ -143,6 +145,10 @@ mkdir -p /run/dbus /etc/dbus-1 /tmp/.X11-unix && chmod 1777 /tmp/.X11-unix
 } >/etc/dbus-1/system-local.conf
 [[ -S /run/dbus/system_bus_socket ]] || dbus-daemon --system --fork || die "no system bus"
 python3 "$SHOTS/fixtures.py" "$out" >"$out/fixtures.txt" 2>&1 || log "fixtures.py: exit $?"
+# The boards draw no Bluetooth indicator. With the keyboard connected, the greeter's showed whenever gnome-bluetooth
+# reported it before the shot; with no device before any shell starts, nothing can arrive late (board 12).
+gdbus call --system -d org.bluez -o /org/bluez/hci0 -m org.bluez.Adapter1.RemoveDevice "$KEYBOARD_PATH" >/dev/null ||
+    die "cannot remove the fixtures' Bluetooth keyboard"
 /usr/libexec/accounts-daemon >"$out/accounts-daemon.log" 2>&1 &
 python3 -m dbusmock --system --template logind >"$out/fixture-logind.log" 2>&1 &
 # polkitd only for its action descriptions: the probe drives the dialog itself.
