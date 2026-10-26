@@ -12,11 +12,13 @@ export function maximisedOnPrimary() {
         w.get_window_type() !== Meta.WindowType.DESKTOP);
 }
 
-// The changes that can make maximisedOnPrimary() or the overview change; disconnect with
-// disconnectAll().
+// The changes that can make maximisedOnPrimary() or the overview change, a window moving to
+// another monitor among them; disconnect with disconnectAll().
 export function connectWindowChanges(fn) {
     return [
         [global.display, 'restacked'],
+        [global.display, 'window-entered-monitor'],
+        [global.display, 'window-left-monitor'],
         [global.window_manager, 'size-changed'],
         [global.window_manager, 'minimize'],
         [global.window_manager, 'unminimize'],
