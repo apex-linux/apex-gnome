@@ -10,6 +10,7 @@ const scaleFactor = Number(GLib.getenv('PROBE_SCALE') ?? '1');
 const GLASS = [
     ['apex-launcher', {blur: 40, saturation: 1.6}],
     ['apex-glass-scrim', {blur: 36, saturation: 1.5}],
+    ['apex-tile-preview-glass', {blur: 20, saturation: 1.6, radius: 14}],
 ];
 
 class Widget {
@@ -206,8 +207,19 @@ class Widget {
         return {
             lookup_length: p => glass && p === '-apex-glass-blur' ? [true, glass.blur] : [false, 0],
             lookup_double: p => glass && p === '-apex-glass-saturation' ? [true, glass.saturation] : [false, 0],
-            get_border_radius: () => 0,
+            get_border_radius: () => glass?.radius ?? 0,
+            get_border_width: () => this.border_width ?? 0,
         };
+    }
+
+    get_next_sibling() {
+        const siblings = this._parent?._children ?? [];
+        return siblings[siblings.indexOf(this) + 1] ?? null;
+    }
+
+    // SYNC_CREATE only: the probe reads the value bound at that moment.
+    bind_property(source, target, property) {
+        target[property] = this[source];
     }
 
     get_resource_scale() {

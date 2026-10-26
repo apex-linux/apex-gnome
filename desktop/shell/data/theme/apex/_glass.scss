@@ -24,6 +24,9 @@
 .apex-spotlight { @include apex-glass($apex_spotlight_blur, $apex_spotlight_saturation); }
 .apex-toast { @include apex-glass($apex_toast_blur, $apex_toast_saturation); }
 
+// Board 22: the tile preview's blur, inside its clear inset border.
+.apex-tile-preview-glass { @include apex-glass($apex_tile_preview_blur, $apex_tile_preview_saturation); }
+
 .apex-glass-scrim { @include apex-glass($apex_overview_scrim_blur, $apex_overview_scrim_saturation); }
 .apex-glass-scrim.apex-launcher { @include apex-glass($apex_launcher_scrim_blur, $apex_launcher_scrim_saturation); }
 

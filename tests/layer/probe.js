@@ -1500,6 +1500,30 @@ async function exerciseGlass() {
     popup.emit('child-added', list);
     fact('glass.derived', [Main.osdWindowManager._osdWindows[0]._hbox, list, Main.screenshotUI._panel].map(glassOf).join(' '));
 
+    // windowManager.js's TilePreview adds itself to the window group, hidden until a tiling shows it.
+    class TilePreview extends St.Widget {}
+    const tileGroup = new St.Widget();
+    const preview = new TilePreview({style_class: 'tile-preview', visible: false, border_width: 12, opacity: 255});
+    tileGroup.add_child(preview);
+    Main.wm._tilePreview = preview;
+    global.window_group.emit('child-added', preview);
+    const tileFact = label => {
+        const glass = tileGroup.get_children().find(actor => actor.name === 'apexTilePreviewGlass');
+        fact(`glass.tile.${label}`, glass ? `${glassOf(glass)} registered=${Registry.surfaces().some(s => s.actor === glass)} ` +
+            `below=${glass.get_next_sibling() === preview} offsets=${glass.constraints.map(c => c.offset).join(',')} opacity=${glass.opacity}`
+            : `none registered=${Registry.surfaces().some(s => s.name === 'tilePreview')}`);
+    };
+    const showTile = visible => {
+        preview.visible = visible;
+        preview.emit('notify::visible');
+    };
+    tileFact('created');
+    showTile(true);
+    tileFact('shown');
+    showTile(false);
+    tileFact('hidden');
+    showTile(true);
+
     panel.add_style_class_name('apex-solid-bar');
     report('solid-bar');
     panel.remove_style_class_name('apex-solid-bar');
@@ -1564,15 +1588,24 @@ async function exerciseGlass() {
     await spin(200);
     fact('glass.registered-while-disabled.enabled', glassOf(later));
 
+    settings.set_strv('disabled-features', ['glass']);
+    await spin(200);
+    tileFact('disabled');
+    settings.set_strv('disabled-features', []);
+    await spin(200);
+    tileFact('enabled');
+
     Registry.unregister(dock);
     Registry.unregister(dock);
     fact('glass.unregistered', glassOf(dock));
     settings.set_boolean('layer-enabled', false);
     await spin(200);
     report('off');
+    tileFact('off');
     settings.set_boolean('layer-enabled', true);
     await spin(200);
     report('on');
+    tileFact('on');
 }
 
 function newWorkspace(nWindows) {
