@@ -1999,7 +1999,7 @@ dock_dnd_case() {
     expect dock-dnd "$r" ".steps.reorder | .favorites == [\"$clocks\", \"$files\"] and .apps == .favorites and .drawnInOrder" \
         "Clocks dragged onto Files' leading quarter comes first, in favorite-apps and in the dock's drawn order"
     expect dock-dnd "$r" ".steps.fromGrid | .favorites == [\"$clocks\", \"$weather\", \"$files\"] and .apps == .favorites and .drawnInOrder" \
-        "Weather dragged from the app grid onto Clocks' trailing quarter is pinned between Clocks and Files"
+        "Weather dragged from the app grid onto Files' leading quarter is pinned between Clocks and Files"
     expect dock-dnd "$r" '.steps.unpin.label == "Unpin"' "a favourite dragged over Show Apps labels it Unpin"
     expect dock-dnd "$r" ".steps.unpin | .favorites == [\"$clocks\", \"$files\"] and .apps == .favorites and .drawnInOrder" \
         "and dropped there it is unpinned, from favorite-apps and the dock"
@@ -2010,7 +2010,7 @@ dock_dnd_case() {
     expect dock-dnd "$r" ".steps.running | .installed and .running and .shown and .before.favorites == [\"$clocks\", \"$files\"] and
         .before.apps == [\"$clocks\", \"$files\", \"$running\"]" "a running app outside the favourites shows after them"
     expect dock-dnd "$r" ".steps.running.after | .favorites == [\"$clocks\", \"$running\", \"$files\"] and .apps == .favorites and .drawnInOrder" \
-        "and dropped onto Clocks' trailing quarter it is pinned between Clocks and Files"
+        "and dropped onto Files' leading quarter it is pinned between Clocks and Files"
     expect dock-dnd "$r" ".steps.cancelled | .favorites == [\"$clocks\", \"$files\"] and .apps == .favorites and .drawnInOrder" \
         "a drag cancelled with Esc changes nothing"
     expect dock-dnd "$r" '[.steps[] | if .after then .before, .after else . end] | length == 9 and

@@ -183,8 +183,10 @@ export async function dockDndReport(helpers) {
     const tile = Main.overview._overview.controls._appDisplay._orderedItems?.find(icon => icon.id === WEATHER);
     if (!tile)
         throw new Error(`the app grid has no ${WEATHER} to drag`);
-    const firstNow = steps.reorder.apps[0];
-    await pointer.drag(centre(tile), across(itemOf(dock, firstNow), 0.75));
+    const [firstNow, secondNow] = steps.reorder.apps;
+    // Slot 1 is under Files' leading quarter both before the placeholder appears and after the centred
+    // dock grows by it; Clocks' trailing quarter is slot 0 before and slot 1 after, so it can land either.
+    await pointer.drag(centre(tile), across(itemOf(dock, secondNow), 0.25));
     Main.overview.hide();
     await helpers.settle();
     steps.fromGrid = read();
@@ -209,7 +211,7 @@ export async function dockDndReport(helpers) {
     try {
         steps.running = {installed, running, shown: await until(() => itemOf(dock, RUNNING) !== null, APP_TIMEOUT_MS)};
         Object.assign(steps.running, {before: read()});
-        await pointer.drag(centre(itemOf(dock, RUNNING)), across(itemOf(dock, firstNow), 0.75));
+        await pointer.drag(centre(itemOf(dock, RUNNING)), across(itemOf(dock, secondNow), 0.25));
         await helpers.settle();
         steps.running.after = read();
     } finally {
