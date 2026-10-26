@@ -955,6 +955,23 @@ test_signoff_banners() {
         not_ok "signoff: a capture without a banner record fails its board: $(tail -n 3 "$T/signoff.out")"
     fi
     rm -rf "$dir" && cp -r "$1" "$dir"
+    sed -i '/default-signoff-alt-tab/s/"org.gnome.TextEditor.desktop","org.gnome.Calendar.desktop"/"org.gnome.Calendar.desktop","org.gnome.TextEditor.desktop"/' "$dir/g2/default.log"
+    if ! "$HERE/signoff.sh" --collect "$dir/g2" "$dir/shots" "$dir/out" >"$T/signoff.out" 2>&1 &&
+        grep -q 'board 15 (Window switcher), light: the switcher in default-signoff-alt-tab lists \["org.gnome.Ptyxis.desktop","org.gnome.Calendar.desktop","org.gnome.TextEditor.desktop"\], not' "$T/signoff.out" &&
+        ! grep -q 'board 15 (Window switcher), dark' "$T/signoff.out"; then
+        ok "signoff: a switcher in another order fails board 15, named"
+    else
+        not_ok "signoff: a switcher in another order fails board 15, named: $(tail -n 3 "$T/signoff.out")"
+    fi
+    rm -rf "$dir" && cp -r "$1" "$dir"
+    sed -i '/default-signoff-alt-tab/s/,"switcher":[^]]*]//' "$dir/g2/default.log"
+    if ! "$HERE/signoff.sh" --collect "$dir/g2" "$dir/shots" "$dir/out" >"$T/signoff.out" 2>&1 &&
+        grep -q 'board 15 (Window switcher), light: the switcher in default-signoff-alt-tab lists null' "$T/signoff.out"; then
+        ok "signoff: a switcher capture without its list fails board 15"
+    else
+        not_ok "signoff: a switcher capture without its list fails board 15: $(tail -n 3 "$T/signoff.out")"
+    fi
+    rm -rf "$dir" && cp -r "$1" "$dir"
     echo 'APEXG2-SIGNOFF {"error":"the sign-off windows brought notifications from Calendar"}' >>"$dir/g2/dark-style.log"
     if ! "$HERE/signoff.sh" --collect "$dir/g2" "$dir/shots" "$dir/out" >"$T/signoff.out" 2>&1 &&
         grep -q 'boards 15 and 35, dark-style: the sign-off windows brought notifications from Calendar' "$T/signoff.out"; then
@@ -990,7 +1007,8 @@ test_signoff() {
             dark-style-*) log=dark-style ;;
             *) log=default ;;
         esac
-        jq -nc --arg f "$scene" '{file: $f, banner: (if $f | test("surfaces") then {source: "Apex", title: "A banner"} else null end)}' |
+        jq -nc --arg f "$scene" '{file: $f, banner: (if $f | test("surfaces") then {source: "Apex", title: "A banner"} else null end)}
+            + if $f | test("alt-tab") then {switcher: ["org.gnome.Ptyxis.desktop", "org.gnome.TextEditor.desktop", "org.gnome.Calendar.desktop"]} else {} end' |
             sed 's/^/APEXG2-CAPTURE /' >>"$dir/g2/$log.log"
     done
     for scene in greeter-%s:list polkit-%s:open end-session-%s:power-off lock-%s:open; do

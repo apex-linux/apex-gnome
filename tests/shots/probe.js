@@ -573,7 +573,7 @@ function bannerShown() {
     return tray._banner?.mapped ? {source: tray._notification?.source?.title ?? null, title: tray._notification?.title ?? null} : null;
 }
 
-async function capture(scene, live = []) {
+async function capture(scene, live = [], record = {}) {
     const dir = GLib.getenv('G2_CAPTURES');
     const name = `${GLib.getenv('G2_CASE')}-${scene}.png`;
     GLib.mkdir_with_parents(dir, 0o755);
@@ -587,7 +587,7 @@ async function capture(scene, live = []) {
     const [, bytes] = GLib.file_get_contents(path);
     const {width, height} = Png.size(bytes);
     const scale = width / global.stage.width;
-    console.log(`APEXG2-CAPTURE ${JSON.stringify({file: name, banner: bannerShown(), live})}`);
+    console.log(`APEXG2-CAPTURE ${JSON.stringify({file: name, banner: bannerShown(), live, ...record})}`);
     return {
         file: name, width, height, bytes,
         boxes: {
@@ -2727,20 +2727,28 @@ async function signoffWindows() {
     // first, and each window then gets the focus in a fixed order, which also fixes the switcher's order and the bar.
     const loaded = await windowsQuiet(SIGNOFF_QUIET_MS, SIGNOFF_WINDOWS_MS);
     // Calendar's own present can still land between two of these, so the order is read back, and redone until it holds.
+    // The switcher sorts apps by their windows' user time, not the tab list: equal timestamps leave a tie in hash order.
     const expectedOrder = [...SIGNOFF_FOCUS_ORDER].reverse();
     const order = () => global.display.get_tab_list(Meta.TabList.NORMAL, null).map(w => tracker.get_window_app(w)?.get_id());
-    const ordered = () => JSON.stringify(order()) === JSON.stringify(expectedOrder);
+    const byUserTime = () => Shell.AppSystem.get_default().get_running().map(app => app.get_id())
+        .filter(id => expectedOrder.includes(id));
+    const ordered = () => [order(), byUserTime()].every(ids => JSON.stringify(ids) === JSON.stringify(expectedOrder));
     const keepOrder = what => {
-        if (!ordered())
-            throw new Error(`${what} focus order is ${order().join(', ')}, not ${expectedOrder.join(', ')}`);
+        if (!ordered()) {
+            throw new Error(`${what} focus order is ${order().join(', ')}, by user time ${byUserTime().join(', ')}, ` +
+                `not ${expectedOrder.join(', ')}`);
+        }
     };
     let quiet = loaded, focusAttempts = 0;
     while (!ordered() && focusAttempts < SIGNOFF_FOCUS_ATTEMPTS) {
         focusAttempts++;
+        let time = 0;
         for (const id of SIGNOFF_FOCUS_ORDER) {
             const window = global.get_window_actors().map(a => a.meta_window).find(w => tracker.get_window_app(w)?.get_id() === id);
+            // eslint-disable-next-line no-await-in-loop
+            time = await timeAfter(time);
             if (window)
-                Main.activateWindow(window, global.display.get_current_time_roundtrip());
+                Main.activateWindow(window, time);
         }
         // eslint-disable-next-line no-await-in-loop
         quiet = await windowsQuiet(SIGNOFF_QUIET_MS, SIGNOFF_WINDOWS_MS);
@@ -2783,7 +2791,7 @@ async function signoffWindows() {
     popup.show(false, 'switch-applications', 0);
     await settle();
     keepOrder("the switcher's");
-    const altTab = withoutBytes(await capture('signoff-alt-tab'));
+    const altTab = withoutBytes(await capture('signoff-alt-tab', [], {switcher: popup._items.map(item => item.app.get_id())}));
     popup.destroy();
     await settle();
     return {
@@ -2791,6 +2799,11 @@ async function signoffWindows() {
         loaded, quiet, focusAttempts, pointerPlaced, notified,
         atOverview: {pointer: [pointerX, pointerY], panelStates: Object.fromEntries(panelStates)},
     };
+}
+
+async function timeAfter(previous) {
+    await until(() => global.display.get_current_time_roundtrip() > previous, 1000);
+    return global.display.get_current_time_roundtrip();
 }
 
 // Text Editor retitles its new document a draft after it maps; a preview shows whatever frame came last.

@@ -46,6 +46,8 @@ readonly NOT_IN_IMAGE=(inkscape gnome-tour firefox)
 readonly IMAGE_PENDING=()
 # Board 16 shows a banner on purpose; on any other board a banner is a race the scene lost.
 readonly BANNER_BOARDS=(16)
+# Board 15's switcher, most recent first: the sign-off scene focuses Calendar, Text Editor, then Terminal.
+readonly SWITCHER_ORDER='["org.gnome.Ptyxis.desktop","org.gnome.TextEditor.desktop","org.gnome.Calendar.desktop"]'
 # The image's Flatpaks (apex-image's apex.preinstall), each with the RPM that stands in for it, if any.
 readonly FLATPAK_STAND_INS='[{"flatpak": "org.gnome.Music", "rpm": "gnome-music"},
     {"flatpak": "io.github.kolunmi.Bazaar", "rpm": null, "standIn": "desktop entry"}]'
@@ -98,7 +100,7 @@ banners_of() {
                    banner: (map(select(.key | startswith("banner.")))[0].value),
                    bluetooth: (map(select(.key | startswith("bluetooth.")))[0].value // false)}'
         done
-    } 2>/dev/null | jq -sc 'map({(.file): {banner, live: (.live // []), bluetooth: (.bluetooth // false)}}) | add // {}'
+    } 2>/dev/null | jq -sc 'map({(.file): {banner, live: (.live // []), bluetooth: (.bluetooth // false), switcher}}) | add // {}'
 }
 
 collect() {
@@ -128,6 +130,8 @@ collect() {
             [[ -z $live ]] || missing+=("board $number ($title), $variant: still live in $scene: $live")
             [[ $(jq -r --arg f "$scene.png" '.[$f].bluetooth // false' <<<"$banners") != true ]] ||
                 missing+=("board $number ($title), $variant: the Bluetooth indicator shows in $scene")
+            [[ $slug != alt-tab ]] || jq -e --arg f "$scene.png" --argjson want "$SWITCHER_ORDER" '.[$f].switcher == $want' <<<"$banners" >/dev/null ||
+                missing+=("board $number ($title), $variant: the switcher in $scene lists $(jq -c --arg f "$scene.png" '.[$f].switcher' <<<"$banners"), not $SWITCHER_ORDER")
         done
         boards+=("$(jq -nc --argjson board "$((10#$number))" --arg title "$title" --arg slug "$slug" --arg source "$source" \
             --arg light "$light" --arg dark "$dark" --arg fixture "$fixture" \
