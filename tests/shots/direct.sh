@@ -10,7 +10,8 @@ G2's direct cases, run by run.sh as root in a throwaway container of its bus ima
 built image plus dbus-daemon), with tests/shots at /w (read-only) and the run's results
 at /out. Each case is one headless shell under its own dbus-run-session, with a fresh
 HOME and XDG_RUNTIME_DIR, a 2880x1800 virtual monitor at scale 2 (default-scale1:
-1440x900 at scale 1, as the desktop VM runs) and probe.js as its automation script;
+1440x900 at scale 1, as the desktop VM runs; dock-external adds G2_MONITOR2, 1920x1080) and
+probe.js as its automation script;
 /out/CASE.log gets its output, /out/results-PART.txt its exit status. Every shell sees
 fixtures.py's python-dbusmock services on the system bus (/out/fixtures-PART.txt) and a
 wall clock that clock.c holds at G2_CLOCK, and over a pinned backdrop: apex-desktop's Facets,
@@ -58,6 +59,8 @@ readonly FIXTURE_NAMES=(org.freedesktop.UPower org.freedesktop.NetworkManager or
 readonly NO_HOT_CORNER='org.gnome.desktop.interface enable-hot-corners false'
 readonly TWO_SOURCES="org.gnome.desktop.input-sources sources [('xkb', 'us'), ('xkb', 'fr')]"
 readonly DARK='org.gnome.desktop.interface color-scheme prefer-dark'
+# Two installed favourites for dock-dnd to reorder: Files and Clocks, which the image ships.
+readonly TWO_FAVOURITES="org.gnome.shell favorite-apps ['org.gnome.Nautilus.desktop', 'org.gnome.clocks.desktop']"
 readonly CAPTURE_SETTINGS='org.gnome.desktop.interface enable-animations false;org.gnome.desktop.interface cursor-blink false;org.gnome.mutter dynamic-workspaces false;org.gnome.desktop.wm.preferences num-workspaces 2;org.gnome.desktop.interface clock-format 24h;org.gnome.desktop.interface show-battery-percentage true'
 
 readonly FACETS_DIR=/usr/share/backgrounds/apex
@@ -147,7 +150,7 @@ run_case() {
                 "backdrop=$G2_BACKDROP picture-uri=$(gsettings get org.gnome.desktop.background picture-uri)"
             # Only reads of the wall clock stand still: timers and frames keep the real clocks.
             exec env LD_PRELOAD="$G2_CLOCK_LIB" \
-                gnome-shell --headless --virtual-monitor "$G2_MONITOR" \
+                gnome-shell --headless --virtual-monitor "$G2_MONITOR" ${G2_MONITOR2:+--virtual-monitor "$G2_MONITOR2"} \
                 --wayland-display="$G2_WAYLAND_DISPLAY" --automation-script /w/probe.js
         ' >"/out/$name.log" 2>&1
     rc=$?
@@ -233,6 +236,9 @@ run_and_record_case glass-load "$CAPTURE_SETTINGS;$NO_HOT_CORNER" G2_GLASS_LOAD=
 run_and_record_case glass-stress "$CAPTURE_SETTINGS;$NO_HOT_CORNER" G2_GLASS=1 G2_GLASS_STRESS="$GLASS_STRESS_SECONDS" \
     G2_GLASS_LOAD_STRESS="$GLASS_STRESS_SECONDS" GI_TYPELIB_PATH="$FRAME_DIR" G2_TIMEOUT=$((2 * GLASS_STRESS_SECONDS + SHELL_TIMEOUT))
 run_and_record_case dock-pin "$CAPTURE_SETTINGS;$NO_HOT_CORNER" G2_DOCK_PIN=1
+run_and_record_case dock-dnd "$CAPTURE_SETTINGS;$NO_HOT_CORNER;$TWO_FAVOURITES" G2_DOCK_DND=1
+# A 1920x1080 external display right of the 2880x1800 panel, as a laptop on a desk has.
+run_and_record_case dock-external "$CAPTURE_SETTINGS;$NO_HOT_CORNER" G2_DOCK_EXTERNAL=1 G2_MONITOR2=1920x1080
 run_and_record_case fault-configure '' APEX_SHELL_TEST_FAULT=configure
 run_and_record_case fault-enable '' APEX_SHELL_TEST_FAULT=enable PROBE_WAIT=10
 run_and_record_case fault-abort '' APEX_SHELL_TEST_FAULT=abort-after-enable PROBE_WAIT=20

@@ -42,6 +42,8 @@ export default defineConfig([
             'tests/shots/backdrop.js',
             'tests/shots/indicators.js',
             'tests/shots/idle.js',
+            'tests/shots/dock-dnd.js',
+            'tests/shots/dock-external.js',
             'tests/shots/glass-load.js',
             'tests/shots/load-window.js',
             'tests/laptop/scenarios.js',
