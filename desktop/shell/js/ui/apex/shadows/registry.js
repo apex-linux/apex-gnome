@@ -57,7 +57,9 @@ function _sync(entry) {
     }
     const box = entry.opts.box ?? actor;
     const corner = (x, y) => box.apply_relative_transform_to_point(host.parent, new Graphene.Point3D({x, y, z: 0}));
-    const [from, to] = [corner(0, 0), corner(box.width, box.height)];
+    // The stored allocation: width and height give the natural size while a relayout is pending,
+    // which a menu held wider by its min-width then outgrows.
+    const [from, to] = [corner(0, 0), corner(box.allocation.get_width(), box.allocation.get_height())];
     if (![from.x, from.y, to.x, to.y].every(Number.isFinite)) {
         layers.forEach(l => l.hide());
         return;
