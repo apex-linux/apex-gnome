@@ -157,6 +157,20 @@ def check_layout(case, layout, overlay_alpha=None):
               got[:7] == "#000000" and len(got) == 9 and int(got[7:], 16) >= overlay_alpha, got)
 
 
+def check_reveal(case, reveal):
+    """Board 20: the show-password eye ends where the entry's end padding begins, centred on the field."""
+    if not reveal:
+        check(f"{case}: the field shows its show-password eye", False, "no mapped secondary icon")
+        return
+    entry, icon = reveal["entry"], reveal["icon"]
+    end = entry["x"] + entry["width"] - reveal["border"] - reveal["padding"]
+    centre = entry["y"] + entry["height"] / 2
+    check(f"{case}: the show-password eye sits at the field's end, inside its padding",
+          abs(icon["x"] + icon["width"] - reveal["iconPadding"] - end) <= 1, json.dumps(reveal))
+    check(f"{case}: the show-password eye is centred on the field",
+          abs(icon["y"] + icon["height"] / 2 - centre) <= 1, json.dumps(reveal))
+
+
 def check_lock(shots, case, want):
     log = read(shots, f"{case}.log")
     gdm = read(shots, f"{case}.gdm.log")
@@ -194,6 +208,8 @@ def check_lock(shots, case, want):
               json.dumps(opened["prompt"]))
         check(f"{case}: the user's name", (opened["prompt"] or {}).get("name") == "Apex")
         check_layout(case, opened.get("layout") or {}, want.get("overlay_alpha"))
+        if want["question"] == "Enter Password":
+            check_reveal(case, (opened.get("layout") or {}).get("reveal"))
         check(f"{case}: blanking takes the prompt down", blank["prompt"] is None, json.dumps(blank["prompt"]))
         if answered:
             check(f"{case}: and cancels its conversation", "Cancel" in calls[answered[0]])

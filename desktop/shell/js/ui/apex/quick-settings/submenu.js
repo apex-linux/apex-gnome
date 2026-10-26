@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 // Board 17's submenus: the header's subtitle at the end of the title's row, the active
-// network's row :checked and its lock after the name.
+// network's row :checked, its name centred on the row and its lock after the name.
 
 import Clutter from 'gi://Clutter';
 
@@ -23,7 +23,7 @@ export function addRow(item) {
     const icons = lock?.get_parent();
     if (_rows.has(item) || !icons || !item._label)
         return;
-    const entry = {lock, icons, yAlign: lock.y_align};
+    const entry = {lock, icons, yAlign: lock.y_align, labelYAlign: item._label.y_align};
     entry.ids = [[item.network, item.network.connect('notify::is-active', () => _followActive(item))],
         [item, item.connect('destroy', () => _forgetRow(item))]];
     _rows.set(item, entry);
@@ -31,6 +31,8 @@ export function addRow(item) {
     item.insert_child_above(lock, item._label);
     lock.y_align = Clutter.ActorAlign.CENTER;
     lock.add_style_class_name(LOCK_STYLE_CLASS);
+    // network.js leaves the name filling the row, its text at the top of board 17's taller rows.
+    item._label.y_align = Clutter.ActorAlign.CENTER;
     _followActive(item);
 }
 
@@ -40,8 +42,9 @@ function _forgetRow(item) {
 }
 
 function _restoreRow(item) {
-    const {lock, icons, yAlign} = _rows.get(item);
+    const {lock, icons, yAlign, labelYAlign} = _rows.get(item);
     _forgetRow(item);
+    item._label.y_align = labelYAlign;
     item.remove_style_pseudo_class(CHECKED);
     lock.remove_style_class_name(LOCK_STYLE_CLASS);
     lock.y_align = yAlign;
