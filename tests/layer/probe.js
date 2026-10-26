@@ -1514,7 +1514,7 @@ async function exerciseGlass() {
     // windowManager.js's TilePreview adds itself to the window group, hidden until a tiling shows it.
     class TilePreview extends St.Widget {}
     const tileGroup = new St.Widget();
-    const preview = new TilePreview({style_class: 'tile-preview', visible: false, border_width: 12, opacity: 255});
+    const preview = new TilePreview({style_class: 'tile-preview', visible: false, border_width: 12, opacity: 255, width: 720, height: 900});
     tileGroup.add_child(preview);
     Main.wm._tilePreview = preview;
     global.window_group.emit('child-added', preview);
@@ -1578,6 +1578,18 @@ async function exerciseGlass() {
     window.emit('damaged');
     fact('glass.pending-layout', `${dock.redraws - pending} ${dock.clip ? 'clipped' : 'whole'}`);
     dock.pendingLayout = false;
+    const empty = new Main.StubActor('empty', {glass: {blur: 36, saturation: 1.5, radius: 0}, extents: [0, 0, 0, 0]});
+    Registry.register(empty, {name: 'empty', mode: 'actor'});
+    const emptyStates = [glassOf(empty)];
+    for (const box of [[0, 0, 1440, 900], [0, 0, 1440, 0]]) {
+        empty.box = box;
+        empty.emit('notify::allocation');
+        emptyStates.push(glassOf(empty));
+    }
+    const emptyRedraws = empty.redraws;
+    window.emit('damaged');
+    fact('glass.empty-box', `${emptyStates.join(' ')} forwarded=${empty.redraws - emptyRedraws}`);
+    Registry.unregister(empty);
 
     for (const [label, key, on, off] of [
         ['reduce-transparency', 'reduce-transparency', true, false],

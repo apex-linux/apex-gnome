@@ -2292,6 +2292,8 @@ glass_manager() {
         and (.launcher | scrim($t.apex_launcher_scrim_blur; $t.apex_launcher_scrim_saturation) and .enabled)
         and (.hidden.enabled | not) and .barOverScrim.enabled and .barOverScrim.background' \
         'the overview scrim blurs a clone of the desktop at $apex_overview_scrim_blur and $apex_overview_scrim_saturation in actor mode, the launcher at $apex_launcher_scrim_blur and $apex_launcher_scrim_saturation, off once the overview hides; the bar blurs the scrim beneath it'
+    "${expect_glass[@]}" '.manager.emptyBox | ([.shown, .hidden, .shownAgain] | all(.enabled | not)) and .emptyFrames > 0 and .laidOut.enabled and (.zeroHeight.enabled | not)' \
+        'an actor-mode surface with an empty box draws frames shown, hidden and shown again without blurring, blurs once laid out, and pauses at zero height'
     "${expect_glass[@]}" "$glass"' .t as $t | .manager.monitorScale as $s | .manager.derived
         | (.osd | glass($t.apex_panel_blur; $t.apex_panel_saturation; $s)) and (.switcher | glass($t.apex_panel_blur; $t.apex_panel_saturation; $s))
         and (.screenshot | .radius == 2 * ($t.apex_panel_blur | px) * $s and .fine and (.enabled | not))' \

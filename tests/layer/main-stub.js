@@ -99,6 +99,11 @@ export class StubActor {
         return !this.pendingLayout;
     }
 
+    get allocation() {
+        const [, , width, height] = this.box;
+        return {get_width: () => width, get_height: () => height};
+    }
+
     queue_redraw() {
         this.redraws++;
         this.clip = null;
