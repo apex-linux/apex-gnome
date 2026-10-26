@@ -87,6 +87,30 @@ EOF
     gjs -m "$T/make.js"
 }
 
+# glass.js's frame reads: a rect with no area or past the framebuffer fails by the step's name.
+test_frame_rect() {
+    cat >"$T/frame-rect-test.js" <<JS
+import {deviceRect} from 'file://$HERE/frame-rect.js';
+const fb = {width: 2880, height: 1800};
+const attempt = (rect, scale) => {
+    try {
+        return JSON.stringify(deviceRect(rect, scale, fb, 'step'));
+    } catch (e) {
+        return e.message;
+    }
+};
+print(attempt({x: 10, y: 20, width: 320, height: 80}, 2));
+print(attempt({x: 0, y: 0, width: 0, height: 80}, 2));
+print(attempt({x: 1400, y: 0, width: 80, height: 80}, 2));
+print(attempt({x: NaN, y: 0, width: 80, height: 80}, 2));
+JS
+    local out
+    out=$(gjs -m "$T/frame-rect-test.js" 2>&1 | paste -sd'|' -)
+    expect_eq "frame reads: a stage rect becomes device pixels; no area, past the framebuffer or NaN fails by the step's name" \
+        '{"x":20,"y":40,"width":640,"height":160}|step: no frame read for 0,0 0x160 in a 2880x1800 framebuffer|step: no frame read for 2800,0 160x160 in a 2880x1800 framebuffer|step: no frame read for NaN,0 160x160 in a 2880x1800 framebuffer' \
+        "$out"
+}
+
 compare_status() {
     local plan=$1
     printf '%s\n' "$plan" >"$T/plan.json"
@@ -2936,6 +2960,7 @@ CHANGES
 
 test_png_js
 test_compare_js
+test_frame_rect
 test_incomplete_compare
 test_token_file
 test_top_bar

@@ -22,6 +22,7 @@ import * as SwitcherPopup from 'resource:///org/gnome/shell/ui/switcherPopup.js'
 import * as WindowManager from 'resource:///org/gnome/shell/ui/windowManager.js';
 
 import * as BlurRef from './blur-ref.js';
+import {deviceRect} from './frame-rect.js';
 import * as Png from './png.js';
 
 Gio._promisify(Shell.Screenshot.prototype, 'screenshot_area');
@@ -125,9 +126,14 @@ function nextFrame(scale, label = '', rect = BOX) {
             global.stage.disconnect(paintId);
             global.stage.disconnect(afterId);
             GLib.source_remove(timeoutId);
-            const bytes = G2Frame.read(view.get_framebuffer(), rect.x * scale, rect.y * scale,
-                rect.width * scale, rect.height * scale);
-            resolve({covered, rgba: bytes.toArray()});
+            const framebuffer = view.get_framebuffer();
+            try {
+                const device = deviceRect(rect, scale, {width: framebuffer.get_width(), height: framebuffer.get_height()}, step);
+                const bytes = G2Frame.read(framebuffer, device.x, device.y, device.width, device.height);
+                resolve({covered, rgba: bytes.toArray()});
+            } catch (e) {
+                reject(e);
+            }
         });
     });
 }
