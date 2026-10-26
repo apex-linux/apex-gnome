@@ -536,16 +536,25 @@ async function writeCorners(box, name) {
     const scale = box.get_resource_scale();
     const c = SHADOW_CROP;
     const rect = {x: x - c, y: y - c, width: width + 2 * c, height: height + 2 * c};
+    // A surface at the stage's edge has its shadow margin past it: read what the stage has, the rest stays clear.
+    const [rx, ry] = [Math.max(0, rect.x), Math.max(0, rect.y)];
+    const [rw0, rh0] = [Math.min(global.stage.width, rect.x + rect.width) - rx, Math.min(global.stage.height, rect.y + rect.height) - ry];
+    const read = {x: rx, y: ry, width: rw0, height: rh0};
     global.stage.queue_redraw();
-    const frame = await nextFrame(scale, `corners ${name}`, rect);
-    const [fw, side] = [rect.width * scale, 2 * c * scale];
+    const frame = await nextFrame(scale, `corners ${name}`, read);
+    const [rw, rh, side] = [read.width * scale, read.height * scale, 2 * c * scale];
+    const [dx, dy] = [(read.x - rect.x) * scale, (read.y - rect.y) * scale];
     const out = 2 * side * SHADOW_ZOOM;
     const rgba = new Uint8Array(out * out * 4);
-    const origins = [[0, 0], [fw - side, 0], [0, rect.height * scale - side], [fw - side, rect.height * scale - side]];
+    const [fw, fh] = [rect.width * scale, rect.height * scale];
+    const origins = [[0, 0], [fw - side, 0], [0, fh - side], [fw - side, fh - side]];
     origins.forEach(([ox, oy], i) => {
         for (let py = 0; py < side * SHADOW_ZOOM; py++) {
             for (let px = 0; px < side * SHADOW_ZOOM; px++) {
-                const from = 4 * ((oy + Math.floor(py / SHADOW_ZOOM)) * fw + ox + Math.floor(px / SHADOW_ZOOM));
+                const [fx, fy] = [ox + Math.floor(px / SHADOW_ZOOM) - dx, oy + Math.floor(py / SHADOW_ZOOM) - dy];
+                if (fx < 0 || fy < 0 || fx >= rw || fy >= rh)
+                    continue;
+                const from = 4 * (fy * rw + fx);
                 const to = 4 * (((i >> 1) * side * SHADOW_ZOOM + py) * out + (i & 1) * side * SHADOW_ZOOM + px);
                 rgba.set(frame.rgba.subarray(from, from + 4), to);
             }
