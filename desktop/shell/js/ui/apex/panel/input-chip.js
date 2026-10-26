@@ -3,6 +3,8 @@
 // DESIGN: the input source is a text chip before the status pill, "EN" or "VI" (board 39).
 // keyboard.js writes each source's short name, in lower case, from several places.
 
+import Pango from 'gi://Pango';
+
 import * as Main from '../../main.js';
 
 const ROLE = 'keyboard';
@@ -21,11 +23,14 @@ function _raise(label) {
     label.text = upper;
 }
 
+// The chip is sized to its label, yet with Large Text the bold, tracked short name can ellipsize
+// at exactly its own natural width: a short name is never meant to be cut, so it is drawn whole.
 function _track(label) {
     if (_labels.has(label))
         return;
-    const entry = {stockText: label.text, textId: 0, destroyId: 0};
+    const entry = {stockText: label.text, stockEllipsize: label.clutter_text.ellipsize, textId: 0, destroyId: 0};
     _labels.set(label, entry);
+    label.clutter_text.ellipsize = Pango.EllipsizeMode.NONE;
     entry.textId = label.connect('notify::text', () => _raise(label));
     entry.destroyId = label.connect('destroy', () => _labels.delete(label));
     _raise(label);
@@ -45,10 +50,11 @@ function _detach() {
     if (!_indicator)
         return;
     _indicator._container.disconnect(_childAddedId);
-    for (const [label, {stockText, textId, destroyId}] of _labels) {
+    for (const [label, {stockText, stockEllipsize, textId, destroyId}] of _labels) {
         label.disconnect(textId);
         label.disconnect(destroyId);
         label.text = stockText;
+        label.clutter_text.ellipsize = stockEllipsize;
     }
     _labels.clear();
     _indicator = null;

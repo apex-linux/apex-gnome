@@ -451,6 +451,10 @@ function inputChipTexts({_container: container}) {
     return container.get_children().map(label => label.text).join(',');
 }
 
+function inputChipEllipsize({_container: container}) {
+    return container.get_children().map(label => ['none', 'start', 'middle', 'end'][label.clutter_text.ellipsize]).join(',');
+}
+
 function newHotCorner() {
     const signalHandlers = {};
     let triggers = 0;
@@ -1017,6 +1021,7 @@ async function exerciseTopBar() {
     keyboard._container.add_child(french);
     keyboard._container.emit('child-added', french);
     fact('input-chip.changed', inputChipTexts(keyboard));
+    fact('input-chip.ellipsize', inputChipEllipsize(keyboard));
 
     const corner = newHotCorner();
     Hooks.run('hot-corner', corner, Main.layoutManager);
@@ -1042,6 +1047,7 @@ async function exerciseTopBar() {
     fact('sharing.off', screenParts(screenSharing));
     fact('right-box.off', rightBoxOrder(Main));
     fact('input-chip.off', inputChipTexts(keyboard));
+    fact('input-chip.off.ellipsize', inputChipEllipsize(keyboard));
     settings.set_boolean('layer-enabled', true);
     await spin(200);
     fact('pill.on', pillNames(quickSettings));
