@@ -4,6 +4,7 @@ import Atk from 'gi://Atk';
 import Clutter from 'gi://Clutter';
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
+import Meta from 'gi://Meta';
 import Mtk from 'gi://Mtk';
 import Shell from 'gi://Shell';
 import St from 'gi://St';
@@ -71,6 +72,7 @@ const SIGNOFF_APPS = [['gnome-text-editor', '--new-window'], ['gnome-calendar'],
 const SIGNOFF_WINDOWS_MS = 30000;
 const SIGNOFF_FOCUS_ORDER = ['org.gnome.Calendar.desktop', 'org.gnome.TextEditor.desktop', 'org.gnome.Ptyxis.desktop'];
 const SIGNOFF_QUIET_MS = 1500;
+const SIGNOFF_FOCUS_ATTEMPTS = 3;
 const WIFI_SCAN_MS = 5000;
 const AVATAR_SIZE = 32;
 const OVERVIEW_WINDOWS = 3;
@@ -2689,12 +2691,26 @@ async function signoffWindows() {
     // Calendar presents itself once it has loaded; unfocused, that posts "Calendar is ready". So the apps settle
     // first, and each window then gets the focus in a fixed order, which also fixes the switcher's order and the bar.
     const loaded = await windowsQuiet(SIGNOFF_QUIET_MS, SIGNOFF_WINDOWS_MS);
-    for (const id of SIGNOFF_FOCUS_ORDER) {
-        const window = global.get_window_actors().map(a => a.meta_window).find(w => tracker.get_window_app(w)?.get_id() === id);
-        if (window)
-            Main.activateWindow(window, global.display.get_current_time_roundtrip());
+    // Calendar's own present can still land between two of these, so the order is read back, and redone until it holds.
+    const expectedOrder = [...SIGNOFF_FOCUS_ORDER].reverse();
+    const order = () => global.display.get_tab_list(Meta.TabList.NORMAL, null).map(w => tracker.get_window_app(w)?.get_id());
+    const ordered = () => JSON.stringify(order()) === JSON.stringify(expectedOrder);
+    const keepOrder = what => {
+        if (!ordered())
+            throw new Error(`${what} focus order is ${order().join(', ')}, not ${expectedOrder.join(', ')}`);
+    };
+    let quiet = loaded, focusAttempts = 0;
+    while (!ordered() && focusAttempts < SIGNOFF_FOCUS_ATTEMPTS) {
+        focusAttempts++;
+        for (const id of SIGNOFF_FOCUS_ORDER) {
+            const window = global.get_window_actors().map(a => a.meta_window).find(w => tracker.get_window_app(w)?.get_id() === id);
+            if (window)
+                Main.activateWindow(window, global.display.get_current_time_roundtrip());
+        }
+        // eslint-disable-next-line no-await-in-loop
+        quiet = await windowsQuiet(SIGNOFF_QUIET_MS, SIGNOFF_WINDOWS_MS);
     }
-    const quiet = await windowsQuiet(SIGNOFF_QUIET_MS, SIGNOFF_WINDOWS_MS);
+    keepOrder("the sign-off windows'");
     const notified = Main.messageTray.getSources().filter(source => !sourcesBefore.has(source))
         .map(source => source.title);
     if (notified.length > 0)
@@ -2722,6 +2738,7 @@ async function signoffWindows() {
     const panelStates = Object.entries(Main.panel.statusArea)
         .map(([name, item]) => [name, item.get_style_pseudo_class?.()])
         .filter(([, states]) => states);
+    keepOrder("the overview's");
     const overview = withoutBytes(await capture('signoff-overview'));
     Main.overview.hide();
     await settle();
@@ -2730,12 +2747,13 @@ async function signoffWindows() {
     // No modifier mask: nothing held down, so the popup stays until it is destroyed.
     popup.show(false, 'switch-applications', 0);
     await settle();
+    keepOrder("the switcher's");
     const altTab = withoutBytes(await capture('signoff-alt-tab'));
     popup.destroy();
     await settle();
     return {
         shown, previews, apps: appsShown(), overview: overview.file, altTab: altTab.file,
-        loaded, quiet, pointerPlaced, notified,
+        loaded, quiet, focusAttempts, pointerPlaced, notified,
         atOverview: {pointer: [pointerX, pointerY], panelStates: Object.fromEntries(panelStates)},
     };
 }
