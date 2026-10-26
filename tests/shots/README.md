@@ -776,4 +776,4 @@ action. The real `pkexec` path is G4's.
 
 - A bar-text contrast check over the fixture wallpapers.
 - The metrics of the other surfaces (launcher, overview, notifications, windows, keys).
-- The first approved goldens: the first import follows the next sign-off.
+- Goldens for boards 15, 16, 17, 20 and 22: they await the owner's approval.
