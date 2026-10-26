@@ -159,6 +159,21 @@ no_nan_allocation() {
     fi
 }
 
+# GJS logs a disposed object that JS still touches with the stack that touched it; an Apex frame there
+# acts on a destroyed actor, as the dock's dash redisplay did at logout before the shell crashed.
+no_disposed_apex() {
+    local label=$1 log=$2 found
+    found=$(cat "$log" "${log%.log}.late.log" 2>/dev/null | awk '/has been already disposed/ { object = $0; sub(/.*Object /, "", object); sub(/ \(0x.*/, "", object); block = 1; counted = 0; next }
+        block && /^(== Stack trace|#[0-9])/ { if (/\/ui\/apex\// && !counted) { n++; counted = 1; if (!first) { first = $0; sub(/^#[0-9]+ +[^ ]+ +[a-z] +/, "", first); first = object " at " first } }; next }
+        { block = 0; counted = 0 }
+        END { if (n) print n " with an Apex frame, first " first }')
+    if [[ -z $found ]]; then
+        pass "$label: no disposed object touched from an Apex frame"
+    else
+        fail "$label: disposed objects touched: $found"
+    fi
+}
+
 # A probe imported after startup completed emits startup-complete again (probe.js's init), so main.js's
 # handler, whose "GNOME Shell started" line says it ran, runs the probe either way.
 startup_handler_ran() {
@@ -1785,6 +1800,7 @@ direct_cases() {
         no_js_error "$c" "$f"
         startup_handler_ran "$c" "$f"
         no_nan_allocation "$c" "$f"
+        no_disposed_apex "$c" "$f"
         # fault-abort may abort before its report; its exit status says the shell ran.
         [[ $c == fault-abort ]] && continue
         action_modes "$c" "$f"
@@ -2152,6 +2168,7 @@ patched_assertions() {
         [[ $c == kernel-safe || $c == fault-abort ]] || action_modes "$c" "$run/$c.log"
         [[ $c == kernel-safe ]] || startup_handler_ran "$c" "$run/$c.log"
         [[ -e $run/$c.log ]] && no_nan_allocation "$c" "$run/$c.log"
+        [[ -e $run/$c.log ]] && no_disposed_apex "$c" "$run/$c.log"
     done
     for c in default default-scale1 dark-style; do
         asserted "${c%:*}" || continue

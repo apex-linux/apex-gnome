@@ -2628,7 +2628,8 @@ async function surfaceEases(window) {
             // eslint-disable-next-line no-await-in-loop
             await step(name, () => menu.open(BoxPointer.PopupAnimation.FULL), () => menu.close(BoxPointer.PopupAnimation.FULL));
         }
-        const dialog = new ModalDialog.ModalDialog();
+        // Closed, a stock dialog destroys itself, before the recorder reads its transitions.
+        const dialog = new ModalDialog.ModalDialog({destroyOnClose: false});
         await step('dialog', () => dialog.open(), () => dialog.close());
         dialog.destroy();
     } finally {

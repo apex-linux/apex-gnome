@@ -29,6 +29,8 @@ let _dock = null;
 let _intellihide = null;
 let _connections = [];
 let _dashLater = 0;
+let _laters = null;
+let _dashDestroyId = 0;
 
 function _iconSize() {
     return ICON_SIZES[_settings.get_string(ICON_SIZE_KEY)] ?? ICON_SIZES.medium;
@@ -71,27 +73,42 @@ function _overviewShowAppsToggled() {
     _dock.showAppsButton.checked = Main.overview.dash.showAppsButton.checked;
 }
 
+function _cancelDashLater() {
+    if (_dashLater)
+        _laters.remove(_dashLater);
+    _dashLater = 0;
+}
+
 // Hidden, the overview's dash is never mapped: main.js would run what it queues on a 20 s fallback
 // and repaint the whole stage then. It redisplays before the next redraw instead, as when mapped.
 function _keepOverviewDashCurrent() {
     const dash = Main.overview.dash;
+    _laters = global.compositor.get_laters();
     dash._queueRedisplay = () => {
         if (_dashLater)
             return;
-        _dashLater = global.compositor.get_laters().add(Meta.LaterType.BEFORE_REDRAW, () => {
+        _dashLater = _laters.add(Meta.LaterType.BEFORE_REDRAW, () => {
             _dashLater = 0;
             dash._redisplay();
             return GLib.SOURCE_REMOVE;
         });
     };
+    // At logout the stage's actors are destroyed, then main.js's shutdown handler spins a loop
+    // that still runs laters: a redisplay there touches a disposed dash and crashes the shell.
+    _dashDestroyId = dash.connect('destroy', () => {
+        _dashDestroyId = 0;
+        _cancelDashLater();
+        dash._queueRedisplay = () => {};
+    });
     dash._queueRedisplay();
 }
 
 function _restoreOverviewDash() {
     const dash = Main.overview.dash;
-    if (_dashLater)
-        global.compositor.get_laters().remove(_dashLater);
-    _dashLater = 0;
+    _cancelDashLater();
+    if (_dashDestroyId)
+        dash.disconnect(_dashDestroyId);
+    _dashDestroyId = 0;
     delete dash._queueRedisplay;
     dash._queueRedisplay();
 }

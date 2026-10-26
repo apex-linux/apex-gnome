@@ -2058,6 +2058,11 @@ async function exerciseDock() {
     report('on');
     await spin(50);
     redisplays('on');
+    dash._queueRedisplay();
+    dash.destroy();
+    dash._queueRedisplay();
+    await spin(50);
+    redisplays('destroyed');
 }
 
 async function exerciseIntellihide() {
