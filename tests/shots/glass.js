@@ -734,6 +734,24 @@ async function tilePreviewTests() {
 }
 
 // The glass manager's surfaces, then Reduce Transparency, high contrast and the kill switch.
+// Leisure can come before the frame clock's next frame, so each step waits for a painted one.
+function paintedFrame() {
+    return new Promise(resolve => {
+        let id = 0;
+        const timeout = GLib.timeout_add(GLib.PRIORITY_DEFAULT, FRAME_TIMEOUT_MS, () => {
+            global.stage.disconnect(id);
+            resolve(false);
+            return GLib.SOURCE_REMOVE;
+        });
+        id = global.stage.connect('after-paint', () => {
+            global.stage.disconnect(id);
+            GLib.source_remove(timeout);
+            resolve(true);
+        });
+        global.stage.queue_redraw();
+    });
+}
+
 // 0003's actor mode sizes its offscreen to the box: an empty one must not blur, over real frames.
 async function emptyBoxTests() {
     const Registry = await import('resource:///org/gnome/shell/ui/apex/glass/registry.js');
@@ -741,12 +759,20 @@ async function emptyBoxTests() {
     actor.add_child(new Clutter.Clone({source: global.window_group}));
     Main.uiGroup.add_child(actor);
     Registry.register(actor, {name: 'emptyTest', mode: 'actor'});
-    let frames = 0;
-    const paintId = global.stage.connect('after-paint', () => frames++);
+    let emptyFrames = 0;
     const state = async () => {
-        actor.queue_redraw();
-        await Scripting.waitLeisure();
+        if (await paintedFrame())
+            emptyFrames++;
         return glassOf(actor);
+    };
+    // Laid out, the blur comes on from notify::allocation: allow it the frames a layout takes.
+    const settled = async wanted => {
+        let frames = 0;
+        // eslint-disable-next-line no-await-in-loop
+        while (actor.get_effect(GLASS_EFFECT)?.enabled !== wanted && frames < 10 && await paintedFrame())
+            frames++;
+        const box = actor.allocation;
+        return {...glassOf(actor), frames, allocation: [box.get_width(), box.get_height()]};
     };
     try {
         const shown = await state();
@@ -754,13 +780,11 @@ async function emptyBoxTests() {
         const hidden = await state();
         actor.show();
         const shownAgain = await state();
-        const emptyFrames = frames;
         actor.set_size(320, 200);
-        const laidOut = await state();
+        const laidOut = await settled(true);
         actor.set_size(320, 0);
-        return {shown, hidden, shownAgain, emptyFrames, laidOut, zeroHeight: await state()};
+        return {shown, hidden, shownAgain, emptyFrames, laidOut, zeroHeight: await settled(false)};
     } finally {
-        global.stage.disconnect(paintId);
         Registry.unregister(actor);
         actor.destroy();
     }
