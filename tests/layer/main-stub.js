@@ -144,6 +144,16 @@ export const uiGroup = Object.assign(new StubActor('uiGroup', {extents: [0, 0, 1
     remove_child(actor) {
         this.children = this.children.filter(a => a !== actor);
     },
+    insert_child_below(child) {
+        this.children.push(child);
+    },
+    get_children() {
+        return [...this.children];
+    },
+});
+const overviewGroup = Object.assign(new StubActor('overviewGroup', {extents: [0, 0, 1440, 900]}), {
+    visible: false,
+    get_theme_node: () => ({lookup_length: p => p === '-apex-dock-clearance' ? [true, 10] : [false, 0]}),
 });
 const boxPointer = new StubActor('boxpointer', {parent: uiGroup, redirect: 2});
 
@@ -435,10 +445,6 @@ export function popModal() {
 
 export const layoutManager = {
     modalDialogGroup: emptyContainer(),
-    overviewGroup: {
-        ...emptyContainer(),
-        get_theme_node: () => ({lookup_length: p => p === '-apex-dock-clearance' ? [true, 10] : [false, 0]}),
-    },
     ...emitter({}),
     primaryMonitor: {x: 0, y: 0, width: 1440, height: 900},
     primaryIndex: 0,
@@ -447,6 +453,7 @@ export const layoutManager = {
     },
     getWorkAreaForMonitor: () => ({x: 0, y: 32, width: 1440, height: 868}),
     chrome: [],
+    overviewGroup,
     _bgManagers: [new StubActor('background')],
     _updateHotCorners: () => fact('hot-corners', 'rebuilt'),
     addChrome(actor, params = {}) {
@@ -482,6 +489,7 @@ function searchEntry() {
 
 // The parts of the overview's controls the overview feature changes, as stock leaves them.
 const controls = {
+    _stateAdjustment: emitter({value: 1}),
     _thumbnailsBox: {
         _maxThumbnailScale: 0.05,
         _updateShouldShow: () => {},

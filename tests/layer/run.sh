@@ -789,6 +789,9 @@ probe glass "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_GLASS=1
 has "glass: the feature enables" 'Apex: feature glass enabled'
 fact "glass: the bar, Quick Settings and the calendar blur behind them: radius 2 x their sheet's sigma x the scale, its saturation and corners, fine, following opacity; the offscreen redirects they sit in are held off" \
     "glass\.enabled=$GLASS_ON solid=false redirects=0,0"
+fact "glass: the scrim, a clone of the desktop below #overviewGroup, waits while the overview is closed" 'glass\.scrim\.closed=apexGlassScrim:r144/s1\.5/c0/paused/actor visible=false'
+fact "glass: and blurs at the overview's sigma 36 and 1.5, in actor mode, while it shows" 'glass\.scrim\.overview=apexGlassScrim:r144/s1\.5/c0/on/actor visible=true'
+fact "glass: at the launcher's 40 and 1.6 once the app grid shows" 'glass\.scrim\.launcher=apexGlassScrim:r160/s1\.6/c0/on/actor visible=true'
 fact "glass: a banner blurs from the moment it is shown" "glass\.banner=$GLASS_ON $BANNER_ON solid=false redirects=0,0"
 fact "glass: the bar's glass pauses while the bar is solid" \
     "glass\.solid-bar=panel:r96/s1\.6/c0/paused/background quick-settings:r120/s1\.8/c52/on/background calendar:r120/s1\.8/c52/on/background $BANNER_ON solid=false redirects=0,0"

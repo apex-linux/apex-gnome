@@ -43,6 +43,7 @@
     <file alias="glass/feature.js">js/ui/apex/glass/feature.js</file>
     <file alias="glass/registry.js">js/ui/apex/glass/registry.js</file>
     <file alias="glass/surfaces.js">js/ui/apex/glass/surfaces.js</file>
+    <file alias="glass/scrims.js">js/ui/apex/glass/scrims.js</file>
     <file alias="lock/feature.js">js/ui/apex/lock/feature.js</file>
     <file alias="lock/stage.js">js/ui/apex/lock/stage.js</file>
     <file alias="lock/fingerprint.js">js/ui/apex/lock/fingerprint.js</file>

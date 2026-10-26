@@ -457,7 +457,12 @@ and Quick Settings', the calendar's (each opened) and a banner's `$apex_panel_bl
 2 × sigma × the monitor scale; that with `reduce-transparency`, and with high contrast, no
 actor on the stage carries a `Shell.BlurEffect` and the root carries `apex-solid`; that
 with `disabled-features=['glass']` no actor carries one and the tints stay; and that the
-glass comes back after each.
+glass comes back after each. In the overview the scrim blurs a clone of the desktop in actor
+mode at `$apex_overview_scrim_blur` and `$apex_overview_scrim_saturation`, and at the
+`$apex_launcher_scrim_*` tokens while the app grid shows, with the bar's glass on over it.
+A stand-in window in `window_group` (a `Clutter.Actor`: St restyles no unmapped actor)
+changes colour under the scrim: with the damage forwarded as the manager forwards a
+window's, the frame equals a full redraw; without, the blur's halo stays stale (the control).
 
 `shadows_under_glass` checks the `shadows` feature against the glass in the same case, light
 and dark: `glass.js` lays the tile grid under Quick Settings, a popup menu and a dialog and
@@ -546,7 +551,8 @@ energy rate are the laptop's, and G2 records none of them, since llvmpipe's time
 CPU's. What G2 measures is the work, frame by frame, from `paint-view`'s redraw clip: a glass
 box the clip covers fully re-blurs (patch 0003's rule e), one it only touches draws its last
 result and queues another frame. `glass-load.js` runs each scenario for 5 s with the glass and
-again with `reduce-transparency`, the same script:
+again with `reduce-transparency`, the same script. Counting starts after the first frame, which
+can repaint the window's damage from before recording: it is reported as `tail`, not counted:
 
 | Scenario | Stand-in | Asserts |
 |---|---|---|

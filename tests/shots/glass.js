@@ -4,6 +4,7 @@
 // in every shell, a capture of the stock unlock blur. tests/shots/README.md, "Glass".
 
 import Clutter from 'gi://Clutter';
+import Cogl from 'gi://Cogl';
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import Mtk from 'gi://Mtk';
@@ -39,6 +40,9 @@ const UNLOCK_BRIGHTNESS = 0.65;
 const BACKGROUND_RADIUS = 40;
 const BACKGROUND_BRIGHTNESS = 0.8;
 const FRAME_TIMEOUT_MS = 2000;
+// Left of the overview's workspace, which leaves the scrim bare there.
+const SCRIM_BOX = {x: 24, y: 280, width: 160, height: 160};
+const SCRIM_WINDOW = {x: 60, y: 320, width: 200, height: 120};
 const APEX_SCHEMA = 'io.github.apex_linux.Apex.Desktop';
 const GLASS_EFFECT = 'apex-glass';
 const CLIP_TRIES = 5;
@@ -128,9 +132,9 @@ export async function framePixels(actor) {
     return {...frame, width: width * scale, height: height * scale};
 }
 
-async function fullFrame(group, scale) {
+async function fullFrame(group, scale, area = BOX) {
     group.queue_redraw();
-    return (await nextFrame(scale, 'full')).rgba;
+    return (await nextFrame(scale, 'full', area)).rgba;
 }
 
 // Damage under the box that does not reach its edges: the redraw clip is the tile alone.
@@ -401,6 +405,46 @@ async function withSetting(settings, key, value, read) {
     }
 }
 
+function scrimActor() {
+    return Main.uiGroup.get_children().find(actor => actor.name === 'apexGlassScrim') ?? null;
+}
+
+// The scrims blur a clone of the hidden window_group: St restyles no unmapped actor, so the stand-in
+// window is a Clutter.Actor. Actor mode grows no paint volume, so only forwarded damage re-blurs whole.
+async function scrimTests() {
+    const scale = Main.panel.get_resource_scale();
+    const colour = hex => Cogl.Color.from_string(hex)[1];
+    const window = new Clutter.Actor({...SCRIM_WINDOW, background_color: colour('#e01b24')});
+    global.window_group.add_child(window);
+    try {
+        Main.overview.show();
+        await Scripting.waitLeisure();
+        const overview = glassOf(scrimActor());
+        const Glass = await import('resource:///org/gnome/shell/ui/apex/glass/feature.js');
+        const before = await fullFrame(Main.uiGroup, scale, SCRIM_BOX);
+        window.background_color = colour('#33d17a');
+        const unforwarded = await nextFrame(scale, 'scrim damaged', SCRIM_BOX);
+        const unforwardedFull = await fullFrame(Main.uiGroup, scale, SCRIM_BOX);
+        window.background_color = colour('#3584e4');
+        Glass.forwardDamage(SCRIM_WINDOW);
+        const forwarded = await nextFrame(scale, 'scrim damage forwarded', SCRIM_BOX);
+        const forwardedFull = await fullFrame(Main.uiGroup, scale, SCRIM_BOX);
+        const bar = glassOf(Main.panel);
+        Main.overview.dash.showAppsButton.checked = true;
+        await Scripting.waitLeisure();
+        const launcher = glassOf(scrimActor());
+        Main.overview.hide();
+        await Scripting.waitLeisure();
+        return {
+            overview, launcher, barOverScrim: bar, hidden: glassOf(scrimActor()),
+            unforwarded: {changed: BlurRef.differing(before, unforwarded.rgba), differingFromFull: BlurRef.differing(unforwarded.rgba, unforwardedFull)},
+            forwarded: {changed: BlurRef.differing(unforwardedFull, forwarded.rgba), differingFromFull: BlurRef.differing(forwarded.rgba, forwardedFull)},
+        };
+    } finally {
+        window.destroy();
+    }
+}
+
 // The pixels the rounded box covers fully, a band in from its edges: no shadow layer reaches them.
 function interiorMask(width, height, radius, band) {
     const mask = BlurRef.fullyCovered(width, height, radius);
@@ -579,6 +623,7 @@ async function managerTests() {
     return {
         monitorScale: global.display.get_monitor_scale(primary.index),
         glass: await surfacesState(),
+        scrims: await scrimTests(),
         reduceTransparency: await withSetting(apex, 'reduce-transparency', new GLib.Variant('b', true), surfacesState),
         highContrast: await withSetting(a11y, 'high-contrast', new GLib.Variant('b', true), surfacesState),
         disabled: await withSetting(apex, 'disabled-features', new GLib.Variant('as', ['glass']), surfacesState),

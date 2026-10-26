@@ -330,11 +330,15 @@ $apex_scrim: if($variant == 'light', rgba(236, 238, 243, .62), rgba(14, 14, 18, 
 $apex_pill: if($variant == 'light', rgba(255, 255, 255, .72), rgba(255, 255, 255, .1));
 $apex_pill_border: if($variant == 'light', rgba(0, 0, 10, .06), rgba(255, 255, 255, .08));
 $apex_pill_icon_opacity: .7;
-$apex_hint_opacity: .62;
+// Over the scrim's glass, whatever the wallpaper: AA (4.5:1) with margin, not the boards' .62 and .72.
+$apex_hint_opacity: .68;
+$apex_overview_fg_dim: if($variant == 'light', rgba(29, 29, 33, .8), rgba(244, 244, 246, .64));
 
-// St draws no backdrop filter: the glass manager of S2b reads these.
-$apex_scrim_blur: 40px;
-$apex_scrim_saturation: 140%;
+// ADR 0014's scrims: the overview's and the launcher's glass over a clone of the desktop.
+$apex_overview_scrim_blur: 36px;
+$apex_overview_scrim_saturation: 150%;
+$apex_launcher_scrim_blur: 40px;
+$apex_launcher_scrim_saturation: 160%;
 
 $apex_search_width: 440px;
 $apex_search_height: 40px;

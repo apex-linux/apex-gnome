@@ -272,8 +272,9 @@ while the feature is off and draw once it is on. Disabled, the feature removes e
 and the preview class.
 
 `glass` is ADR 0014's glass manager, on patch 0003's `ShellBlurEffect`. A surface is any
-actor in `glass/registry.js`: the top bar, Quick Settings, the calendar and each banner
-(`glass/surfaces.js`), and whatever another feature registers, for example the dock:
+actor in `glass/registry.js`: the top bar, Quick Settings, the calendar, each banner and the
+scrim (`glass/surfaces.js`, `glass/scrims.js`), and whatever another feature registers, for
+example the dock:
 
 ```js
 import * as Glass from '../glass/registry.js';
@@ -308,6 +309,16 @@ An actor without `-apex-glass-blur` gets no blur. The manager then:
   `$apex_panel_solid` (the high-contrast sheet keeps upstream's colours, and gives the Apex-only
   actors that palette, solid, through `_apex-structure.scss`). With
   `disabled-features=['glass']` the effects go and the tints stay.
+
+GNOME hides `window_group`, the wallpaper and the windows, while the overview shows, so the
+scrim (`glass/scrims.js`) is a non-reactive `Clutter.Clone` of it in an `.apex-glass-scrim`
+widget just below `#overviewGroup`, shown with it, blurred in actor mode under the group's
+own `$apex_scrim` tint: `$apex_overview_scrim_blur` at `$apex_overview_scrim_saturation`,
+and `$apex_launcher_scrim_*` (`.apex-launcher`) while the app grid shows. Actor mode keeps
+its result until the clone is damaged, so a still desktop costs one blur per opening. The
+bar and the dock over it blur the scrim as drawn. Actor mode does not grow the actor's
+paint volume by the blur, so a window's own damage would re-blur only its rectangle and
+leave the halo stale: here the damage forwarding above is what keeps the scrim right.
 
 A schema without `reduce-transparency` turns off the `glass` feature, logged.
 

@@ -427,7 +427,7 @@ REPORT_OF_AN_OVERVIEW_LAYER_FROM_TOKENS='
 {topBar: {panel: {width: 1440}}, scenes: {overview: {workArea: {y: 32, height: 868}}}, surfaces: {
     overviewLayer: {titleVisible: true, thumbnailsThreshold: 1, thumbnails: {maxScale: 0.081, first: {width: 117, height: 70}},
         workspace: {x: 250, y: 205, width: 939, height: 566, background: false,
-            empty: {x: 644, y: 477, width: 150, height: 22, visible: true, text: "No open windows", foreground: ($t.apex_fg_dim | hex),
+            empty: {x: 644, y: 477, width: 150, height: 22, visible: true, text: "No open windows", foreground: ($t.apex_overview_fg_dim | hex),
                 font: {size: ($t.apex_font_workspace_empty_size | px), weight: ($t.apex_font_heading_weight | tonumber)}}}},
     overviewWindows: {dock: {x: 540, y: (804 + ($t.apex_dock_bottom_gap | px)), width: 361, height: 70},
         dockBox: {x: 540, y: 820, width: 361, height: 80}, bottom: {stock: 900, hook: (900 - 80 - ($t.apex_dock_bottom_gap | px))},
@@ -2214,6 +2214,7 @@ test_glass_load() {
 .scenarios.A.glass.frames = 300|the bar and Quick Settings keeping each other drawing
 .scenarios.A.glass.surfaces.panel = {reblurs: 1, partial: 0, contentUnder: 0}|the bar re-blurring with nothing under it
 .scenarios.A.glass.surfaces.dock.reblurs = 100|a dock that re-blurred less often than the video changed
+.scenarios.A.glass.surfaces.dock.reblurs = 151|a dock that re-blurred once more than the video changed
 .scenarios.A.reduceTransparency.surfaces = {dock: {reblurs: 1, partial: 0, contentUnder: 1}}|glass left on with Reduce Transparency
 .scenarios.B.glass.missed = [{atMs: 3100, surface: "calendar", overlap: "out"}]|a window moved under the calendar without a re-blur
 .scenarios.B.glass.frames = 160|extra frames while a window is dragged
@@ -2221,6 +2222,9 @@ test_glass_load() {
 .scenarios.B.glass.surfaces.panel.reblurs = 5|the bar re-blurring more than once per open or close of a bar menu
 .scenarios.C.glass.missed = [{atMs: 400, surface: "spotlight", overlap: "part"}]|a missed re-blur under Spotlight
 CHANGES
+    write_glass_load_run '.scenarios.A.glass.tail = {dock: "in", "quick-settings": "in"}'
+    read -r passes failures <<<"$(assertion_counts glass_load "$T/glass-load")"
+    expect_eq "glass-load: the frame before counting, repainting the window's earlier damage, is not a re-blur" "$all/0" "$passes/$failures"
     write_glass_load_run '.scenarios.B.glass.surfaces.panel.reblurs = 4'
     read -r passes failures <<<"$(assertion_counts glass_load "$T/glass-load")"
     expect_eq "glass-load: one bar re-blur per menu open or close in B passes" "$all/0" "$passes/$failures"
@@ -2729,12 +2733,15 @@ CHANGES
     local manager
     manager=$(jq -nc --argjson on "$on" --argjson p "$popover" --argjson dock "$dock" '{panel: $on, dock: $dock, quickSettings: $p, calendar: $p, banner: $p, blurEffects: ["panel"], solidClass: false} as $g
         | {panel: null, dock: null, quickSettings: null, calendar: null, banner: null, blurEffects: []} as $none
+        | {radius: 144, saturation: 1.5, enabled: true, fine: true, followOpacity: true, background: false} as $scrim
         | {manager: {monitorScale: 2, glass: $g, reduceTransparency: ($none + {solidClass: true}), highContrast: ($none + {solidClass: true}),
-            disabled: ($none + {solidClass: false}), restored: $g}}')
+            disabled: ($none + {solidClass: false}), restored: $g,
+            scrims: {overview: $scrim, launcher: ($scrim + {radius: 160, saturation: 1.6}), hidden: ($scrim + {enabled: false}), barOverScrim: $on,
+                unforwarded: {changed: 59520, differingFromFull: 42880}, forwarded: {changed: 102400, differingFromFull: 0}}}}')
     while IFS='|' read -r failures what change; do
         jq -c "$change" <<<"$manager" | sed 's/^/APEXG2-GLASS /' >"$T/glass.log"
         read -r passes _ <<<"$(assertion_counts glass_manager glass "$T/glass.log" light)"
-        expect_eq "glass manager: $what fails $failures of 5" "$failures" $((5 - passes))
+        expect_eq "glass manager: $what fails $failures of 7" "$failures" $((7 - passes))
     done <<'CHANGES'
 0|the bar, the dock and the popovers at their tokens, every switch honoured|.
 1|the bar at the popovers' sigma|.manager.glass.panel.radius = 120
@@ -2747,7 +2754,11 @@ CHANGES
 1|high contrast that keeps the bar's glass|.manager.highContrast.panel = .manager.glass.panel
 1|the kill switch that turns the tints solid|.manager.disabled.solidClass = true
 1|glass that does not come back|.manager.restored.panel = null
-5|no manager|.manager = null
+1|the launcher at the overview's sigma|.manager.scrims.launcher.radius = 144
+1|a scrim in background mode|.manager.scrims.overview.background = true
+1|a scrim left on after the overview|.manager.scrims.hidden.enabled = true
+1|a forwarded damage that leaves a stale halo|.manager.scrims.forwarded.differingFromFull = 120
+7|no manager|.manager = null
 CHANGES
 }
 

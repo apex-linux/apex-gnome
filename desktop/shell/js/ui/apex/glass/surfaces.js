@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 //
-// The glass the layer itself draws: the top bar, Quick Settings, the calendar and banners.
+// The glass the layer itself draws: the top bar, Quick Settings, the calendar, banners and the
+// overview's and the launcher's scrims.
 
 import * as Main from '../../main.js';
 import * as Registry from './registry.js';
+import * as Scrims from './scrims.js';
 
 const SOLID_BAR_STYLE_CLASS = 'apex-solid-bar';
 const BANNER_STYLE_CLASS = 'notification-banner';
@@ -33,7 +35,9 @@ export function register() {
     Registry.register(quickSettings.menu.box, {name: 'quick-settings'});
     Registry.register(dateMenu.menu.box, {name: 'calendar'});
     const unregisterBanners = _banners();
+    const removeScrim = Scrims.register();
     return () => {
+        removeScrim();
         unregisterBanners();
         [Main.panel, quickSettings.menu.box, dateMenu.menu.box].forEach(actor => Registry.unregister(actor));
     };

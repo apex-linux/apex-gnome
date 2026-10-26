@@ -18,6 +18,14 @@ class BoxLayout {
     }
 }
 
+class Clone {
+    constructor(params) {
+        Object.assign(this, params);
+    }
+
+    destroy() {}
+}
+
 class Stage {}
 
 // The probe sets the key a press reports, as Clutter does before emitting key-press.
@@ -89,6 +97,7 @@ export default {
     BoxLayout,
     Stage,
     ClickGesture,
+    Clone,
     KeyController,
     EventPhase: {BUBBLE: 0, CAPTURE: 1},
     Orientation: {HORIZONTAL: 0, VERTICAL: 1},
