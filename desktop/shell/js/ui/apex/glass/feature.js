@@ -157,6 +157,11 @@ export function forwardDamage(...boxes) {
         const effect = surface.actor.get_effect(EFFECT_NAME);
         if (!effect?.enabled)
             continue;
+        // Shown since the last layout, it has no box to test: the whole redraw resolves after layout.
+        if (!surface.actor.has_allocation()) {
+            surface.actor.queue_redraw();
+            continue;
+        }
         const glassBox = _boxOf(surface.actor);
         if (boxes.length === 0 || boxes.some(box => _overlaps(box, glassBox)))
             _queueBox(surface.actor);

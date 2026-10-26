@@ -795,6 +795,7 @@ has "glass: the feature enables" 'Apex: feature glass enabled'
 fact "glass: the bar, Quick Settings and the calendar blur behind them: radius 2 x their sheet's sigma x the scale, its saturation and corners, fine, following opacity; the offscreen redirects they sit in are held off" \
     "glass\.enabled=$GLASS_ON solid=false redirects=0,0"
 fact "glass: the scrim, a clone of the desktop below #overviewGroup, waits while the overview is closed" 'glass\.scrim\.closed=apexGlassScrim:r144/s1\.5/c0/paused/actor visible=false'
+fact "glass: the scrim binds to uiGroup, as #overviewGroup does, not to the group, which is sized after it" 'glass\.scrim\.bound=uiGroup'
 fact "glass: and blurs at the overview's sigma 36 and 1.5, in actor mode, while it shows" 'glass\.scrim\.overview=apexGlassScrim:r144/s1\.5/c0/on/actor visible=true'
 fact "glass: at the launcher's 40 and 1.6 once the app grid shows" 'glass\.scrim\.launcher=apexGlassScrim:r160/s1\.6/c0/on/actor visible=true'
 fact "glass: the derived glass: the OSD, an Alt+Tab list once its popup adds it, and the screenshot panel (closed) take the popovers' glass" \
@@ -813,6 +814,7 @@ fact "glass: a damaged window that touches no glass box redraws none" 'glass\.da
 fact "glass: a window moved under the bar redraws the bar's box" 'glass\.moved-under-the-bar=panel=1 quick-settings=0 dock=0'
 fact "glass: moved out from under the bar and damaged under the dock, it redraws the bar once more and the dock" 'glass\.damage-under-the-dock=panel=2 quick-settings=0 dock=2'
 fact "glass: a forwarded redraw is clipped to the glass box, not its paint volume (box-shadow included)" 'glass\.forwarded-clip=0,0 600x62 of 600x62'
+fact "glass: glass shown since the last layout has no box to test, so any window's damage redraws it whole" 'glass\.pending-layout=1 whole'
 fact "glass: a restack redraws every glass box" 'glass\.restacked=panel=3 quick-settings=1 dock=3'
 fact "glass: Reduce Transparency removes every blur and roots apex-solid; the redirects come back" \
     "glass\.reduce-transparency=$GLASS_OFF banner:none solid=true redirects=2,2"

@@ -2221,6 +2221,7 @@ test_glass_load() {
 .scenarios.B.glass.surfaces.calendar.contentUnder = 0|a drag that never reached the calendar
 .scenarios.B.glass.surfaces.panel.reblurs = 5|the bar re-blurring more than once per open or close of a bar menu
 .scenarios.C.glass.missed = [{atMs: 400, surface: "spotlight", overlap: "part"}]|a missed re-blur under Spotlight
+.scenarios.C.glass.surfaces.scrim = {reblurs: 10, partial: 0, contentUnder: 6, empty: 1}|a scrim drawn before it has its box
 CHANGES
     write_glass_load_run '.scenarios.A.glass.tail = {dock: "in", "quick-settings": "in"}'
     read -r passes failures <<<"$(assertion_counts glass_load "$T/glass-load")"

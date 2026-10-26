@@ -91,7 +91,7 @@ function record(Registry, windowActor) {
     const damagedId = windowActor.connect('damaged', () => {
         damaged = true;
     });
-    const surface = name => (stats.surfaces[name] ??= {reblurs: 0, partial: 0, contentUnder: 0});
+    const surface = name => (stats.surfaces[name] ??= {reblurs: 0, partial: 0, contentUnder: 0, empty: 0});
     const overlapOf = (clip, glass) => clip ? clip.contains_rectangle(new Mtk.Rectangle(glass.rect)) : Mtk.RegionOverlap.IN;
     const overlapName = overlap => ['out', 'in', 'part'][overlap] ?? overlap;
     let tail = true;
@@ -116,6 +116,8 @@ function record(Registry, windowActor) {
             stats.trace.push(traced);
         for (const glass of liveGlass(Registry)) {
             stats.boxes[glass.name] = glass.rect;
+            if (glass.rect.width === 0 || glass.rect.height === 0)
+                surface(glass.name).empty++;
             if (changed && intersects(changed, glass.rect))
                 surface(glass.name).contentUnder++;
             const overlap = overlapOf(clip, glass);

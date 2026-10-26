@@ -1480,6 +1480,7 @@ async function exerciseGlass() {
     const adjustment = Main.overview._overview._controls._stateAdjustment;
     const scrimFact = label => fact(`glass.scrim.${label}`, scrim ? `${glassOf(scrim)} visible=${scrim.visible}` : 'none');
     scrimFact('closed');
+    fact('glass.scrim.bound', [scrim?.constraints].flat().map(c => c?.source?.name).join(','));
     overviewGroup.visible = true;
     overviewGroup.emit('notify::visible');
     scrimFact('overview');
@@ -1536,6 +1537,13 @@ async function exerciseGlass() {
     fact('glass.forwarded-clip', `${dock.clip.x},${dock.clip.y} ${dock.clip.width}x${dock.clip.height} of ${dock.width}x${dock.height}`);
     global.display.emit('restacked');
     fact('glass.restacked', redraws());
+    window.box = [100, 100, 400, 300];
+    window.emit('notify::allocation');
+    dock.pendingLayout = true;
+    const pending = dock.redraws;
+    window.emit('damaged');
+    fact('glass.pending-layout', `${dock.redraws - pending} ${dock.clip ? 'clipped' : 'whole'}`);
+    dock.pendingLayout = false;
 
     for (const [label, key, on, off] of [
         ['reduce-transparency', 'reduce-transparency', true, false],
