@@ -2848,7 +2848,7 @@ test_fixtures() {
     start_private_system_bus
     address=$(head -n 1 "$T/bus.address")
     rm -rf "$T/fixtures" && mkdir -p "$T/fixtures"
-    DBUS_SYSTEM_BUS_ADDRESS=$address G2_POWER_PROFILES=1 python3 "$HERE/fixtures.py" "$T/fixtures" >"$T/fixtures/fixtures-main.txt" 2>&1 || true
+    DBUS_SYSTEM_BUS_ADDRESS=$address G2_POWER_PROFILES=1 G2_ACCOUNTS=1 python3 "$HERE/fixtures.py" "$T/fixtures" >"$T/fixtures/fixtures-main.txt" 2>&1 || true
     cp "$T/fixtures/fixtures-main.txt" "$T/fixtures/fixtures-kernel.txt"
     cp "$T/fixtures/fixtures-main.txt" "$T/fixtures/fixtures-fedora.txt"
     read -r passes failures <<<"$(assertion_counts fixtures_on_the_bus "$T/fixtures")"

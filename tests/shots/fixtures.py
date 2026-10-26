@@ -7,9 +7,9 @@ G2's python-dbusmock fixtures on the system bus (DBUS_SYSTEM_BUS_ADDRESS, or the
 default): UPower with a battery at 87 %, NetworkManager on the Wi-Fi network
 "Apex-5G" with "Apex-2.4G" and the open "Library Guest" in range, and BlueZ with the
 Bluetooth keyboard "Keychron K3" connected, switcheroo-control with an integrated and a
-discrete GPU, accountsservice with the user's parental controls filtering nothing (as on the
-image, where flatpak-libs brings malcontent's gnome-shell support), and with
-G2_POWER_PROFILES=1 power-profiles-daemon at Balanced. The mocks
+discrete GPU, with G2_ACCOUNTS=1 accountsservice with the user's parental controls filtering
+nothing (as on the image, where flatpak-libs brings malcontent's gnome-shell support), and
+with G2_POWER_PROFILES=1 power-profiles-daemon at Balanced. The mocks
 keep running after this exits; each logs to LOG_DIR/fixture-NAME.log and leaves
 its pid in LOG_DIR/fixture-NAME.pid.
 Prints one line, G2-FIXTURES and what the bus then reports, as JSON.
@@ -78,16 +78,22 @@ SERVICES = {
     **{template: (name, ["--template", template, "--parameters", json.dumps(TEMPLATE_PARAMETERS.get(template, {}))])
        for template, name in (("upower", UPOWER), ("networkmanager", NM), ("bluez5", BLUEZ))},
     "switcheroo": (SWITCHEROO, [SWITCHEROO, SWITCHEROO_PATH, SWITCHEROO]),
-    "accounts": (ACCOUNTS, [ACCOUNTS, ACCOUNTS_PATH, ACCOUNTS]),
 }
 # Opt-in, so the app tests that share these fixtures keep Quick Settings without Power Mode.
 OPTIONAL_SERVICES = {"upower_power_profiles_daemon": (POWER_PROFILES, ["--template", "upower_power_profiles_daemon"])}
 
 
+# tests/shell's greeter and lock screen list users from the real accounts-daemon: G2's cases opt in.
+ACCOUNTS_SERVICE = {"accounts": (ACCOUNTS, [ACCOUNTS, ACCOUNTS_PATH, ACCOUNTS])}
+
+
 def services():
+    chosen = dict(SERVICES)
     if os.environ.get("G2_POWER_PROFILES") == "1":
-        return {**SERVICES, **OPTIONAL_SERVICES}
-    return SERVICES
+        chosen.update(OPTIONAL_SERVICES)
+    if os.environ.get("G2_ACCOUNTS") == "1":
+        chosen.update(ACCOUNTS_SERVICE)
+    return chosen
 
 
 def spawn(log_dir):
@@ -226,6 +232,8 @@ def gpus(bus, listed=GPUS, update=False):
 # The shell hides every app until malcontent has read both from accountsservice, and for good
 # when the read fails; the image's own accounts-daemon need not start in a G2 container.
 def accounts(bus):
+    if "accounts" not in services():
+        return None
     service = Service(bus, ACCOUNTS)
     user = f"{ACCOUNTS_PATH}/User{os.getuid()}"
     service.mock(ACCOUNTS_PATH).AddMethod(ACCOUNTS, "FindUserById", "x", "o", f"ret = dbus.ObjectPath('{user}')")

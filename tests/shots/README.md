@@ -80,8 +80,9 @@ shell with exit 1.
 Before the first case, `direct.sh` lets root own and call the fixtures' names on the
 container's system bus (`/etc/dbus-1/system-local.conf`) and runs `fixtures.py`, which
 starts python-dbusmock's `upower`, `networkmanager` and `bluez5` templates there, a bare
-mock of switcheroo-control and one of accountsservice, which have no template, and
-(`G2_POWER_PROFILES=1`) `upower_power_profiles_daemon`:
+mock of switcheroo-control and (`G2_ACCOUNTS=1`) one of accountsservice, which have no
+template, and (`G2_POWER_PROFILES=1`) `upower_power_profiles_daemon`. tests/shell's
+greeter and lock screen run without `G2_ACCOUNTS`, on the real accounts-daemon's users:
 
 | Service | Fixture | The shell shows |
 |---|---|---|
