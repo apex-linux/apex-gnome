@@ -462,7 +462,9 @@ mode at `$apex_overview_scrim_blur` and `$apex_overview_scrim_saturation`, and a
 `$apex_launcher_scrim_*` tokens while the app grid shows, with the bar's glass on over it.
 A stand-in window in `window_group` (a `Clutter.Actor`: St restyles no unmapped actor)
 changes colour under the scrim: with the damage forwarded as the manager forwards a
-window's, the frame equals a full redraw; without, the blur's halo stays stale (the control).
+window's, the frame equals a full redraw; without, the blur's halo stays stale (the control). The derived glass: an
+OSD shown, an Alt+Tab list in a stand-in popup and the screenshot panel (styled while closed)
+each carry the popovers' `$apex_panel_blur` and `$apex_panel_saturation`.
 
 `shadows_under_glass` checks the `shadows` feature against the glass in the same case, light
 and dark: `glass.js` lays the tile grid under Quick Settings, a popup menu and a dialog and

@@ -6,6 +6,7 @@
 import Clutter from 'gi://Clutter';
 import Cogl from 'gi://Cogl';
 import Gio from 'gi://Gio';
+import GObject from 'gi://GObject';
 import GLib from 'gi://GLib';
 import Mtk from 'gi://Mtk';
 import Shell from 'gi://Shell';
@@ -17,6 +18,7 @@ import * as MessageTray from 'resource:///org/gnome/shell/ui/messageTray.js';
 import * as ModalDialog from 'resource:///org/gnome/shell/ui/modalDialog.js';
 import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 import * as Scripting from 'resource:///org/gnome/shell/ui/scripting.js';
+import * as SwitcherPopup from 'resource:///org/gnome/shell/ui/switcherPopup.js';
 
 import * as BlurRef from './blur-ref.js';
 import * as Png from './png.js';
@@ -445,6 +447,32 @@ async function scrimTests() {
     }
 }
 
+// switcherPopup.js's popups join uiGroup, then add their list: a stand-in popup of that name does.
+const StandInSwitcherPopup = GObject.registerClass(class GlassTestSwitcherPopup extends St.Widget {});
+
+async function derivedState() {
+    const {primaryIndex} = Main.layoutManager;
+    Main.osdWindowManager.showOne(primaryIndex, Gio.ThemedIcon.new('audio-volume-medium-symbolic'), null, 0.5);
+    const popup = new StandInSwitcherPopup();
+    Main.uiGroup.add_child(popup);
+    const list = new SwitcherPopup.SwitcherList(true);
+    list.addItem(new St.Icon({icon_name: 'application-x-executable', icon_size: 96}), null);
+    popup.add_child(list);
+    // The closed screenshot UI is unstyled; it would be styled, and blurred, on opening.
+    Main.screenshotUI._panel.ensure_style();
+    try {
+        await Scripting.waitLeisure();
+        return {
+            osd: glassOf(Main.osdWindowManager._osdWindows[primaryIndex]._hbox),
+            switcher: glassOf(list),
+            screenshot: glassOf(Main.screenshotUI._panel),
+        };
+    } finally {
+        Main.osdWindowManager._osdWindows[primaryIndex].cancel();
+        popup.destroy();
+    }
+}
+
 // The pixels the rounded box covers fully, a band in from its edges: no shadow layer reaches them.
 function interiorMask(width, height, radius, band) {
     const mask = BlurRef.fullyCovered(width, height, radius);
@@ -624,6 +652,7 @@ async function managerTests() {
         monitorScale: global.display.get_monitor_scale(primary.index),
         glass: await surfacesState(),
         scrims: await scrimTests(),
+        derived: await derivedState(),
         reduceTransparency: await withSetting(apex, 'reduce-transparency', new GLib.Variant('b', true), surfacesState),
         highContrast: await withSetting(a11y, 'high-contrast', new GLib.Variant('b', true), surfacesState),
         disabled: await withSetting(apex, 'disabled-features', new GLib.Variant('as', ['glass']), surfacesState),

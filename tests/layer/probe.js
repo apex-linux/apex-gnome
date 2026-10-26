@@ -1449,6 +1449,8 @@ function glassOf(actor) {
         `${effect.fine && effect.follow_opacity ? '' : '/stock'}/${mode}`;
 }
 
+const POPOVER_GLASS_IN_TEST = {blur: 30, saturation: 1.8, radius: 26};
+
 async function exerciseGlass() {
     if (GLib.getenv('PROBE_GLASS') !== '1')
         return;
@@ -1478,6 +1480,13 @@ async function exerciseGlass() {
     overviewGroup.emit('notify::visible');
     Main.messageTray.showBanner();
     report('banner');
+    class TestSwitcherPopup extends Main.StubActor {}
+    const popup = new TestSwitcherPopup('popup', {parent: Main.uiGroup});
+    Main.uiGroup.emit('child-added', popup);
+    const list = new Main.StubActor('switcher', {glass: {...POPOVER_GLASS_IN_TEST}, parent: popup});
+    list.add_style_class_name('switcher-list');
+    popup.emit('child-added', list);
+    fact('glass.derived', [Main.osdWindowManager._osdWindows[0]._hbox, list, Main.screenshotUI._panel].map(glassOf).join(' '));
 
     panel.add_style_class_name('apex-solid-bar');
     report('solid-bar');

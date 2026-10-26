@@ -273,8 +273,9 @@ and the preview class.
 
 `glass` is ADR 0014's glass manager, on patch 0003's `ShellBlurEffect`. A surface is any
 actor in `glass/registry.js`: the top bar, Quick Settings, the calendar, each banner and the
-scrim (`glass/surfaces.js`, `glass/scrims.js`), and whatever another feature registers, for
-example the dock:
+scrim (`glass/surfaces.js`, `glass/scrims.js`); DESIGN's derived glass, the OSDs, each Alt+Tab
+list and the screenshot panel, which copy the popovers' glass (`glass/derived.js`, from JS,
+with no hook); and whatever another feature registers, for example the dock:
 
 ```js
 import * as Glass from '../glass/registry.js';

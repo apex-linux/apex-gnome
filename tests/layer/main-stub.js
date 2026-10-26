@@ -157,6 +157,14 @@ const overviewGroup = Object.assign(new StubActor('overviewGroup', {extents: [0,
 });
 const boxPointer = new StubActor('boxpointer', {parent: uiGroup, redirect: 2});
 
+export const osdWindowManager = {
+    _osdWindows: [{_hbox: new StubActor('osd', {glass: {...POPOVER_GLASS, radius: 20}, extents: [595, 756, 250, 40], parent: uiGroup})}],
+};
+
+export const screenshotUI = {
+    _panel: Object.assign(new StubActor('screenshot', {glass: {...POPOVER_GLASS, radius: 16}, parent: uiGroup}), {mapped: false}),
+};
+
 export const messageTray = {
     _bannerBin: Object.assign(new StubActor('banner-bin', {parent: uiGroup}), {children: []}),
     showBanner() {
