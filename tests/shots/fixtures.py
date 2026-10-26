@@ -7,7 +7,9 @@ G2's python-dbusmock fixtures on the system bus (DBUS_SYSTEM_BUS_ADDRESS, or the
 default): UPower with a battery at 87 %, NetworkManager on the Wi-Fi network
 "Apex-5G" with "Apex-2.4G" and the open "Library Guest" in range, and BlueZ with the
 Bluetooth keyboard "Keychron K3" connected, switcheroo-control with an integrated and a
-discrete GPU, and with G2_POWER_PROFILES=1 power-profiles-daemon at Balanced. The mocks
+discrete GPU, with G2_ACCOUNTS=1 accountsservice with the user's parental controls filtering
+nothing (as on the image, where flatpak-libs brings malcontent's gnome-shell support), and
+with G2_POWER_PROFILES=1 power-profiles-daemon at Balanced. The mocks
 keep running after this exits; each logs to LOG_DIR/fixture-NAME.log and leaves
 its pid in LOG_DIR/fixture-NAME.pid.
 Prints one line, G2-FIXTURES and what the bus then reports, as JSON.
@@ -66,6 +68,10 @@ BLUEZ = "org.bluez"
 SWITCHEROO = "net.hadess.SwitcherooControl"
 SWITCHEROO_PATH = "/net/hadess/SwitcherooControl"
 POWER_PROFILES = "org.freedesktop.UPower.PowerProfiles"
+ACCOUNTS = "org.freedesktop.Accounts"
+ACCOUNTS_PATH = "/org/freedesktop/Accounts"
+APP_FILTER = "com.endlessm.ParentalControls.AppFilter"
+SESSION_LIMITS = "com.endlessm.ParentalControls.SessionLimits"
 TEMPLATE_PARAMETERS = {"upower": {"DaemonVersion": "1.90", "OnBattery": True}}
 # python-dbusmock has no switcheroo-control template: that mock is a bare object.
 SERVICES = {
@@ -77,10 +83,17 @@ SERVICES = {
 OPTIONAL_SERVICES = {"upower_power_profiles_daemon": (POWER_PROFILES, ["--template", "upower_power_profiles_daemon"])}
 
 
+# tests/shell's greeter and lock screen list users from the real accounts-daemon: G2's cases opt in.
+ACCOUNTS_SERVICE = {"accounts": (ACCOUNTS, [ACCOUNTS, ACCOUNTS_PATH, ACCOUNTS])}
+
+
 def services():
+    chosen = dict(SERVICES)
     if os.environ.get("G2_POWER_PROFILES") == "1":
-        return {**SERVICES, **OPTIONAL_SERVICES}
-    return SERVICES
+        chosen.update(OPTIONAL_SERVICES)
+    if os.environ.get("G2_ACCOUNTS") == "1":
+        chosen.update(ACCOUNTS_SERVICE)
+    return chosen
 
 
 def spawn(log_dir):
@@ -216,6 +229,25 @@ def gpus(bus, listed=GPUS, update=False):
             "names": [str(gpu["Name"]) for gpu in props.Get(SWITCHEROO, "GPUs")]}
 
 
+# The shell hides every app until malcontent has read both from accountsservice, and for good
+# when the read fails; the image's own accounts-daemon need not start in a G2 container.
+def accounts(bus):
+    if "accounts" not in services():
+        return None
+    service = Service(bus, ACCOUNTS)
+    user = f"{ACCOUNTS_PATH}/User{os.getuid()}"
+    service.mock(ACCOUNTS_PATH).AddMethod(ACCOUNTS, "FindUserById", "x", "o", f"ret = dbus.ObjectPath('{user}')")
+    service.mock(ACCOUNTS_PATH).AddObject(user, APP_FILTER, {
+        "AppFilter": dbus.Struct((False, dbus.Array([], signature="s"))),
+        "OarsFilter": dbus.Struct(("oars-1.1", dbus.Dictionary({}, signature="ss"))),
+        "AllowUserInstallation": True, "AllowSystemInstallation": False}, [])
+    service.mock(user).AddProperties(SESSION_LIMITS, {
+        "LimitType": dbus.UInt32(0), "DailySchedule": dbus.Struct((dbus.UInt32(0), dbus.UInt32(86400)))})
+    allow_list, apps = service.props(user).Get(APP_FILTER, "AppFilter")
+    return {"user": user, "appsFiltered": [bool(allow_list), [str(app) for app in apps]],
+            "sessionLimit": int(service.props(user).Get(SESSION_LIMITS, "LimitType"))}
+
+
 def power_profiles(bus):
     if "upower_power_profiles_daemon" not in services():
         return None
@@ -233,7 +265,8 @@ def main():
         return 2
     bus = spawn(sys.argv[1])
     print("G2-FIXTURES " + json.dumps({"battery": battery(bus), "wifi": wifi(bus), "keyboard": keyboard(bus),
-                                         "gpus": gpus(bus), "powerProfiles": power_profiles(bus)}))
+                                         "gpus": gpus(bus), "powerProfiles": power_profiles(bus),
+                                         "accounts": accounts(bus)}))
     return 0
 
 

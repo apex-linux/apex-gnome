@@ -167,9 +167,20 @@ function startingMarker() {
         GLib.FileTest.EXISTS);
 }
 
+// Fedora's own shell has no Apex modules, and gjs at times logs a JS ERROR for a failed
+// import the probe catches: so an absent one is never imported.
+function apexModule(uri) {
+    try {
+        Gio.resources_get_info(uri.replace('resource://', ''), Gio.ResourceLookupFlags.NONE);
+    } catch {
+        return Promise.resolve(null);
+    }
+    return import(uri);
+}
+
 async function apexHooks() {
     try {
-        return await import('resource:///org/gnome/shell/ui/apex/hooks.js');
+        return await apexModule('resource:///org/gnome/shell/ui/apex/hooks.js');
     } catch {
         return null;
     }
@@ -1878,7 +1889,7 @@ async function withSpotlight(read) {
 
 // Text typed in the overview reaches its search entry; patch 0013 hands it to Spotlight.
 async function overviewSearch() {
-    const feature = await import(SPOTLIGHT_FEATURE).catch(() => null);
+    const feature = await apexModule(SPOTLIGHT_FEATURE).catch(() => null);
     const popup = feature?.popup();
     if (!popup)
         return null;
@@ -1897,7 +1908,7 @@ async function overviewSearch() {
 
 // Board 36: in the app grid the overview's pill is the launcher's, which filters the grid.
 async function launcherSearch(unit) {
-    const feature = await import('resource:///org/gnome/shell/ui/apex/spotlight/feature.js').catch(() => null);
+    const feature = await apexModule(SPOTLIGHT_FEATURE).catch(() => null);
     const popup = feature?.popup();
     if (!popup)
         return null;
@@ -2621,7 +2632,7 @@ async function surfaceEases(window) {
         await step('dock-lift', () => icon && (icon.hover = true), () => icon && (icon.hover = false));
         await step('intellihide', () => window.maximize(), () => window.unmaximize());
         await step('overview', () => Main.overview.show(), () => Main.overview.hide());
-        const spotlight = (await import(SPOTLIGHT_FEATURE).catch(() => null))?.popup();
+        const spotlight = (await apexModule(SPOTLIGHT_FEATURE).catch(() => null))?.popup();
         await step('spotlight', () => spotlight?.open(), () => spotlight?.close());
         for (const [name, indicator] of [['quick-settings', 'quickSettings'], ['calendar', 'dateMenu']]) {
             const {menu} = Main.panel.statusArea[indicator];

@@ -88,7 +88,7 @@ mkdir -p /etc/dbus-1
 } >/etc/dbus-1/system-local.conf
 dbus-daemon --system --fork || echo "no system bus"
 mkdir -p "/out/fixtures-$part"
-G2_POWER_PROFILES=1 python3 /w/fixtures.py "/out/fixtures-$part" >"/out/fixtures-$part.txt" 2>&1 || echo "fixtures.py: exit $?"
+G2_POWER_PROFILES=1 G2_ACCOUNTS=1 python3 /w/fixtures.py "/out/fixtures-$part" >"/out/fixtures-$part.txt" 2>&1 || echo "fixtures.py: exit $?"
 setsid python3 /w/update1-mock.py "/out/update1-$part.log" >"/out/update1-$part.out" 2>&1 </dev/null &
 mkdir -p /tmp/.X11-unix && chmod 1777 /tmp/.X11-unix
 gcc -O2 -Wall -Werror -shared -fPIC -o "$CLOCK_LIB" /w/clock.c || { echo "direct.sh: cannot build clock.c" >&2; exit 1; }
