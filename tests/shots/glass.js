@@ -63,6 +63,7 @@ const TILE_SATURATION = 1.6;
 const TILE_RADIUS = 14;
 const TILE_RECT = {x: 162, y: 242, width: 372, height: 180};
 const TILE_GLASS = 'apexTilePreviewGlass';
+const TILE_GLASSED = 'apex-tile-preview-glassed';
 
 function colourOf(column, row, generation = 0) {
     return PALETTE[(column * 7 + row * 5 + generation) % PALETTE.length];
@@ -699,8 +700,45 @@ function cropOf(rgba, frameWidth, inner) {
     return out;
 }
 
-// Board 22: the stock preview tiled over the pattern, as probe.js's tile preview opens it, its
-// own fill and ring held off so the frame shows the blur alone, inside the clear border only.
+// A rounded ring's width from its coverage, drawn white over black, in device pixels: in each
+// corner's radius-square the quarter annulus between r and r - w, along each straight run w a row.
+function ringWidths(rgba, frameWidth, inner, radius) {
+    const coverage = (x0, y0, w, h) => {
+        let sum = 0;
+        for (let y = y0; y < y0 + h; y++) {
+            for (let x = x0; x < x0 + w; x++)
+                sum += rgba[4 * ((inner.y + y) * frameWidth + inner.x + x)] / 255;
+        }
+        return sum;
+    };
+    const [r, w, h] = [radius, inner.width, inner.height];
+    const corner = area => r - Math.sqrt(Math.max(0, r * r - 4 * area / Math.PI));
+    const round2 = v => Math.round(v * 100) / 100;
+    return {
+        corners: [[0, 0], [w - r, 0], [0, h - r], [w - r, h - r]].map(([x, y]) => round2(corner(coverage(x, y, r, r)))),
+        edges: [coverage(r, 0, w - 2 * r, r) / (w - 2 * r), coverage(w - r, r, r, h - 2 * r) / (h - 2 * r),
+            coverage(r, h - r, w - 2 * r, r) / (w - 2 * r), coverage(0, r, r, h - 2 * r) / (h - 2 * r)].map(round2),
+    };
+}
+
+// The ring the glass actor's sheet gives it, in CSS pixels, and what the preview itself still paints.
+function ringStyle(glass, preview, cssPerStage) {
+    const node = glass?.get_theme_node();
+    const sides = [St.Side.TOP, St.Side.RIGHT, St.Side.BOTTOM, St.Side.LEFT];
+    return {
+        mapped: glass?.mapped ?? false, glass: glassOf(glass),
+        borders: node ? sides.map(side => node.get_border_width(side) * cssPerStage) : null,
+        radius: node ? node.get_border_radius(St.Corner.TOPLEFT) * cssPerStage : null,
+        borderColor: node?.get_border_color(St.Side.TOP).to_string() ?? null,
+        background: node?.get_background_color().to_string() ?? null,
+        glassed: preview.has_style_class_name(TILE_GLASSED),
+        previewBackground: preview.get_theme_node().get_background_color().to_string(),
+        previewShadow: preview.get_theme_node().get_box_shadow() !== null,
+    };
+}
+
+// Board 22: the stock preview tiled over the pattern, as probe.js's tile preview opens it. The
+// glass actor's fill and ring held off, the frame shows the blur alone, inside the clear border.
 async function tilePreviewTests() {
     G2Frame ??= (await import('gi://G2Frame')).default;
     const group = new St.Widget();
@@ -716,12 +754,13 @@ async function tilePreviewTests() {
     const glassActor = () => global.window_group.get_children().find(actor => actor.name === TILE_GLASS && actor.get_next_sibling() === preview);
     try {
         preview.open(window, new Mtk.Rectangle({...TILE_RECT}), Main.layoutManager.primaryIndex);
-        preview.set_style('background-color: transparent; box-shadow: none;');
         await Scripting.waitLeisure();
         await laidOut(preview);
         const glass = await laidOut(glassActor());
         const scale = preview.get_resource_scale();
         const deviceCss = scale * St.ThemeContext.get_for_stage(global.stage).scale_factor;
+        const style = ringStyle(glass, preview, scale / deviceCss);
+        glass?.set_style('background-color: transparent; border-color: transparent;');
         const inset = preview.get_theme_node().get_border_width(St.Side.TOP);
         const [px, py] = preview.get_transformed_position();
         const [pw, ph] = preview.get_transformed_size();
@@ -748,11 +787,32 @@ async function tilePreviewTests() {
             bandDiffering: BlurRef.differing(frame.rgba, bare, band),
             innerDiffering: BlurRef.differing(cropOf(frame.rgba, fw, innerDevice), cropOf(bare, fw, innerDevice)),
         };
+        // The ring alone, white over black: each pixel's red is the ring's coverage there.
+        const black = new St.Widget({x: px, y: py, width: pw, height: ph, style: 'background-color: black;'});
+        global.window_group.insert_child_above(black, group);
+        glass?.set_style('background-color: transparent; border-color: white;');
+        await Scripting.waitLeisure();
+        black.queue_redraw();
+        const ringFrame = await nextFrame(scale, 'tile ring', {x: px, y: py, width: pw, height: ph});
+        black.destroy();
+        glass?.set_style(null);
+        const ring = {
+            ...style, expected: style.borders?.[0] * deviceCss,
+            ...ringWidths(ringFrame.rgba, fw, innerDevice, Math.round(style.radius * deviceCss)),
+        };
+        const apex = new Gio.Settings({schema_id: APEX_SCHEMA});
+        const a11y = new Gio.Settings({schema_id: 'org.gnome.desktop.a11y.interface'});
+        const read = () => Promise.resolve(ringStyle(glassActor(), preview, scale / deviceCss));
+        const reduceTransparency = await withSetting(apex, 'reduce-transparency', new GLib.Variant('b', true), read);
+        const highContrast = await withSetting(a11y, 'high-contrast', new GLib.Variant('b', true), read);
         preview.close();
         await Scripting.waitLeisure();
         group.queue_redraw();
         const left = await nextFrame(scale, 'tile preview hidden', {x: px, y: py, width: pw, height: ph});
-        return {shown, hidden: {glass: glassOf(glass), visible: preview.visible, differing: BlurRef.differing(left.rgba, bare)}};
+        return {
+            shown, ring, reduceTransparency, highContrast,
+            hidden: {glass: glassOf(glass), visible: preview.visible, differing: BlurRef.differing(left.rgba, bare)},
+        };
     } finally {
         preview.destroy();
         stand.destroy();

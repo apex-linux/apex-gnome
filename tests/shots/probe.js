@@ -2176,6 +2176,7 @@ async function tilePreview(unit) {
                 width: round(area.width / 2 / unit.length), height: round(area.height / unit.length),
             },
             preview: styleOf(preview, unit),
+            glass: (sibling => sibling?.name === 'apexTilePreviewGlass' ? styleOf(sibling, unit) : null)(preview.get_previous_sibling()),
         };
     } finally {
         preview.destroy();

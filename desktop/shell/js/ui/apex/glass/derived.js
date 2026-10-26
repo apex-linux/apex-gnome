@@ -12,6 +12,7 @@ import * as Registry from './registry.js';
 
 const SWITCHER_LIST_STYLE_CLASS = 'switcher-list';
 const TILE_GLASS_STYLE_CLASS = 'apex-tile-preview-glass';
+const TILE_GLASSED_STYLE_CLASS = 'apex-tile-preview-glassed';
 
 function _osds() {
     const sync = () => {
@@ -53,7 +54,7 @@ function _switchers() {
 }
 
 // Board 22 blurs only inside the preview's clear inset border, which a blur on the preview would
-// cover too: a glass actor just below it, inside that border, takes the blur instead.
+// cover too: a glass actor just below it, inside that border, takes the blur, the fill and the ring.
 function _tileGlass(preview) {
     const glass = new St.Widget({name: 'apexTilePreviewGlass', style_class: TILE_GLASS_STYLE_CLASS, visible: false});
     const {X, Y, WIDTH, HEIGHT} = Clutter.BindCoordinate;
@@ -66,6 +67,12 @@ function _tileGlass(preview) {
     inset();
     preview.bind_property('opacity', glass, 'opacity', GObject.BindingFlags.SYNC_CREATE);
     preview.get_parent().insert_child_below(glass, preview);
+    // TilePreview._updateStyle() sets its whole style class on each open().
+    const classed = () => {
+        if (!preview.has_style_class_name(TILE_GLASSED_STYLE_CLASS))
+            preview.add_style_class_name(TILE_GLASSED_STYLE_CLASS);
+    };
+    classed();
     // TilePreview.open() restacks the preview below the dragged window before it shows.
     const follow = () => {
         if (preview.visible) {
@@ -79,10 +86,12 @@ function _tileGlass(preview) {
             glass.hide();
         }
     };
-    const ids = [preview.connect('notify::visible', follow), preview.connect('style-changed', inset)];
+    const ids = [preview.connect('notify::visible', follow), preview.connect('style-changed', inset),
+        preview.connect('notify::style-class', classed)];
     follow();
     return () => {
         ids.forEach(id => preview.disconnect(id));
+        preview.remove_style_class_name(TILE_GLASSED_STYLE_CLASS);
         Registry.unregister(glass);
         glass.destroy();
     };
