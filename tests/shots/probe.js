@@ -3079,6 +3079,30 @@ async function runProbe() {
         console.log(`APEXG2-DOCK-PIN ${JSON.stringify(result)}`);
     }
 
+    if (GLib.getenv('G2_DOCK_DND') === '1') {
+        let result;
+        try {
+            const DockDnd = await import('./dock-dnd.js');
+            result = await DockDnd.dockDndReport({settle, dropStartupNotifications, apexDock});
+        } catch (e) {
+            result = {error: `${e.message}\n${e.stack}`};
+        }
+        console.log(`APEXG2-DOCK-DND ${JSON.stringify(result)}`);
+    }
+
+    if (GLib.getenv('G2_DOCK_EXTERNAL') === '1') {
+        let result;
+        try {
+            const DockExternal = await import('./dock-external.js');
+            result = await DockExternal.dockExternalReport({
+                settle, dropStartupNotifications, apexDock, dockReport: () => dockReport(cssUnit()),
+            });
+        } catch (e) {
+            result = {error: `${e.message}\n${e.stack}`};
+        }
+        console.log(`APEXG2-DOCK-EXTERNAL ${JSON.stringify(result)}`);
+    }
+
     if (GLib.getenv('G2_DOCK') === '1') {
         let result;
         try {

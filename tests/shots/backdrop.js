@@ -48,16 +48,17 @@ async function shot(x, y, size) {
     return mean(rgba, width * 4, 0, 0, width, height);
 }
 
-// The pixbuf scaled to the screen, as picture-options zoom draws a 16:10 image on a 16:10 monitor.
-function expectedMeans(want, patches, scale) {
+// The pixbuf scaled to the primary monitor, as picture-options zoom draws a 16:10 image on a 16:10 monitor.
+function expectedMeans(want, patches, scale, monitor) {
     if (want.solid)
         return patches.map(() => want.solid);
     const pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_scale(want.file,
-        global.stage.width * scale, global.stage.height * scale, false);
+        monitor.width * scale, monitor.height * scale, false);
     const bytes = pixbuf.read_pixel_bytes().toArray();
     const channels = pixbuf.get_n_channels();
     const stride = pixbuf.get_rowstride();
-    return patches.map(({x, y}) => {
+    return patches.map(({x: stageX, y: stageY}) => {
+        const [x, y] = [stageX - monitor.x, stageY - monitor.y];
         const sum = [0, 0, 0];
         const size = PATCH * scale;
         for (let py = y * scale; py < (y + PATCH) * scale; py++) {
@@ -91,17 +92,18 @@ export async function backdropReport({settle}) {
     }
     const want = expected();
     const scale = St.ThemeContext.get_for_stage(global.stage).scale_factor;
-    const {width, height} = global.stage;
+    // dock-external's second monitor draws the backdrop zoomed to its own size.
+    const monitor = Main.layoutManager.primaryMonitor;
     const patches = [];
     for (let row = 0; row < ROWS; row++) {
         for (let column = 0; column < COLUMNS; column++) {
             patches.push({
-                x: Math.round(width * (0.2 + 0.6 * (column + 0.5) / COLUMNS) - PATCH / 2),
-                y: Math.round(height * (0.3 + 0.3 * (row + 0.5) / ROWS) - PATCH / 2),
+                x: monitor.x + Math.round(monitor.width * (0.2 + 0.6 * (column + 0.5) / COLUMNS) - PATCH / 2),
+                y: monitor.y + Math.round(monitor.height * (0.3 + 0.3 * (row + 0.5) / ROWS) - PATCH / 2),
             });
         }
     }
-    const wants = expectedMeans(want, patches, scale);
+    const wants = expectedMeans(want, patches, scale, monitor);
     const picture = new Gio.Settings({schema_id: 'org.gnome.desktop.background'}).get_string('picture-uri');
     let worst;
     for (let waited = 0; ; waited += STEP_MS) {

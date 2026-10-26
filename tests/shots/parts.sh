@@ -6,4 +6,4 @@
 readonly PR_CASES=(default default-scale1 dark-style high-contrast large-text default-solid
     dark-style-solid high-contrast-solid large-text-solid dock-intellihide dock-intellihide-dark
     dock-one-gpu no-dock indicators indicators-scale1 indicators-dark safe-env layer-disabled
-    fault-configure fault-enable fault-abort)
+    dock-dnd dock-external fault-configure fault-enable fault-abort)

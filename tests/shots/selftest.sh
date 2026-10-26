@@ -2137,6 +2137,120 @@ write_idle_run() {
     echo 'idle exit=0 secs=31 marker-after-exit=no' >"$dir/results-main.txt"
 }
 
+# shellcheck disable=SC2016 # a jq program
+readonly DOCK_DND_REPORT='def at_rest: {placeholder: false, emptyTarget: false, modals: 0, actionMode: "NORMAL", grab: false,
+    showAppsLabel: "Show Apps", showAppsName: "Show Apps", faded: [],
+    strays: [{type: "Clutter_Actor", name: null, width: 0, height: 0, children: 0}]};
+  def shows($f; $a): {favorites: $f, apps: $a, drawnInOrder: true, tail: ["separator", "show-apps", "trash"], drag: at_rest};
+  def shows($f): shows($f; $f);
+  "org.gnome.Nautilus.desktop" as $files | "org.gnome.clocks.desktop" as $clocks | "org.gnome.Weather.desktop" as $weather |
+  "io.github.apex_linux.G2Window.desktop" as $running |
+  {settled: {startingUp: false, overview: false, actionMode: "NORMAL", dock: {visible: true, rested: true}},
+   steps: {initial: shows([$files, $clocks]), reorder: shows([$clocks, $files]), fromGrid: shows([$clocks, $weather, $files]),
+     unpin: (shows([$clocks, $files]) + {label: "Unpin"}), dropOff: shows([$clocks, $files]), onTrash: shows([$clocks, $files]),
+     running: {installed: true, running: true, shown: true, before: shows([$clocks, $files]; [$clocks, $files, $running]),
+       after: shows([$clocks, $running, $files])},
+     cancelled: shows([$clocks, $files])}}'
+
+write_report_run() {
+    local name=$1 tag=$2 report=$3 change=$4 dir=$T/$1
+    rm -rf "$dir" && mkdir -p "$dir"
+    printf 'APEXG2-%s %s\n' "$tag" "$(jq -nc "$report | $change")" >"$dir/$name.log"
+    echo "$name exit=0 secs=40 marker-after-exit=no" >"$dir/results-main.txt"
+}
+
+test_dock_dnd() {
+    local change what passes failures all
+    write_report_run dock-dnd DOCK-DND "$DOCK_DND_REPORT" .
+    read -r all failures <<<"$(assertion_counts dock_dnd_case "$T/dock-dnd")"
+    if ((failures == 0 && all > 15)); then
+        ok "dock-dnd: every drag lands in favorite-apps and the drawn order, nothing left dragging, pass all $all assertions"
+    else
+        not_ok "dock-dnd: a clean run passes (passed/failed $all/$failures): $(grep -m3 '^FAIL' "$T/assertions.out" | paste -sd'|' -)"
+    fi
+    while IFS='|' read -r change what; do
+        write_report_run dock-dnd DOCK-DND "$DOCK_DND_REPORT" "$change"
+        read -r passes failures <<<"$(assertion_counts dock_dnd_case "$T/dock-dnd")"
+        expect_eq "dock-dnd: $what fails one assertion" "$((all - 1))/1" "$passes/$failures"
+    done <<'CHANGES'
+.settled.actionMode = "OVERVIEW"|a session that never left the overview's action mode
+.steps.initial.favorites = ["org.gnome.Nautilus.desktop"]|a case without its two favourites
+.steps.reorder.favorites = [.steps.reorder.favorites[1], .steps.reorder.favorites[0]]|a reorder that favorite-apps never saw
+.steps.fromGrid.apps = [.steps.fromGrid.apps[2], .steps.fromGrid.apps[1], .steps.fromGrid.apps[0]]|an app grid drop the dock draws out of order
+.steps.unpin.label = "Show Apps"|Show Apps not offering to unpin
+.steps.unpin.favorites += ["org.gnome.Weather.desktop"]|a drop on Show Apps that keeps the favourite
+.steps.dropOff.favorites = ["org.gnome.clocks.desktop"]|a drop off the dock that unpins
+.steps.onTrash.favorites = ["org.gnome.clocks.desktop"]|Trash taking a favourite
+.steps.running.shown = false|a running app the dock never shows
+.steps.running.after.favorites = ["org.gnome.clocks.desktop", "org.gnome.Nautilus.desktop"]|a running app the drop does not pin
+.steps.cancelled.drawnInOrder = false|a cancelled drag that leaves the icons out of order
+.steps.fromGrid.tail = ["separator", "trash", "show-apps"]|Trash before Show Apps after a drop
+.steps.reorder.drag.placeholder = true|a placeholder left after a drop
+.steps.running.after.drag.grab = true|a grab left after a drop
+.steps.unpin.drag.showAppsLabel = "Unpin"|Show Apps still named Unpin after the drag
+.steps.onTrash.drag.strays += [{type: "ApexDockIcon", name: null, width: 54, height: 54, children: 1}]|a drag actor left on the stage
+.steps.cancelled.drag.modals = 1|a modal left after Esc
+CHANGES
+    write_report_run dock-dnd DOCK-DND '{error: "the dock shows 1 favourites, not two to reorder\ndock-dnd.js:165"}' .
+    read -r passes failures <<<"$(assertion_counts dock_dnd_case "$T/dock-dnd")"
+    expect_eq "dock-dnd: a probe error fails once" "3/1 the dock shows 1 favourites, not two to reorder" \
+        "$passes/$failures $(sed -n 's/^FAIL dock-dnd: //p' "$T/assertions.out")"
+}
+
+# shellcheck disable=SC2016 # a jq program
+readonly DOCK_EXTERNAL_REPORT='def lay($p; $window; $hidden; $solid): {primary: $p,
+    monitors: [{x: 0, y: 0, width: 1440, height: 900, index: 0}, {x: 1440, y: 0, width: 960, height: 540, index: 1}],
+    dockBox: (if $p == 0 then {x: 596, y: 820, width: 249, height: 80} else {x: 1796, y: 460, width: 249, height: 80} end),
+    dockHidden: $hidden,
+    panelBox: (if $p == 0 then {x: 0, y: 0, width: 1440, height: 32} else {x: 1440, y: 0, width: 960, height: 32} end),
+    barSolid: $solid, window: $window};
+  def overview($state): {shown: true, controlsState: $state,
+    scrim: {visible: true, box: {x: 0, y: 0, width: 2400, height: 900}, launcher: ($state == 2)},
+    views: [{x: 0, y: 185, width: 1440, height: 618}, {x: 1440, y: 0, width: 960, height: 540}]};
+  {settled: {startingUp: false, overview: false, actionMode: "NORMAL", dock: {visible: true, rested: true}},
+   steps: {initial: (lay(0; null; false; false) + {dock: {bottomGap: 10, centreOffset: 0.5, visible: true}}),
+     onSecondary: lay(0; {monitor: 1, maximised: true}; false; false),
+     onPrimary: lay(0; {monitor: 0, maximised: true}; true; true),
+     backOnSecondary: lay(0; {monitor: 1, maximised: true}; false; false),
+     overview: overview(1), launcher: overview(2),
+     swapped: (lay(1; {monitor: 0, maximised: true}; false; false) + {changed: true, dock: {bottomGap: 10, centreOffset: 0.5}})}}'
+
+test_dock_external() {
+    local change what passes failures all
+    write_report_run dock-external DOCK-EXTERNAL "$DOCK_EXTERNAL_REPORT" .
+    read -r all failures <<<"$(assertion_counts dock_external_case "$T/dock-external")"
+    if ((failures == 0 && all > 15)); then
+        ok "dock-external: the dock and the bar keep to the primary and follow a new one, pass all $all assertions"
+    else
+        not_ok "dock-external: a clean run passes (passed/failed $all/$failures): $(grep -m3 '^FAIL' "$T/assertions.out" | paste -sd'|' -)"
+    fi
+    while IFS='|' read -r change what; do
+        write_report_run dock-external DOCK-EXTERNAL "$DOCK_EXTERNAL_REPORT" "$change"
+        read -r passes failures <<<"$(assertion_counts dock_external_case "$T/dock-external")"
+        expect_eq "dock-external: $what fails one assertion" "$((all - 1))/1" "$passes/$failures"
+    done <<'CHANGES'
+.settled.actionMode = "OVERVIEW"|a session that never left the overview's action mode
+.steps.initial.primary = 1|the external display as the first primary
+.steps.initial.dockBox.x = 1796|a dock on the external display
+.steps.initial.dock.bottomGap = 0|a dock on the primary's bottom edge
+.steps.initial.panelBox.width = 2400|a bar across both monitors
+.steps.onSecondary += {dockHidden: true, barSolid: true}|the external display's maximised window hiding the dock
+.steps.onPrimary.dockHidden = false|a primary's maximised window the dock ignores
+.steps.backOnSecondary.barSolid = true|a bar left solid after the window moved away
+.steps.overview.views = .steps.overview.views[:1]|an overview on the primary alone
+.steps.launcher.scrim.launcher = false|a launcher scrim without apex-launcher
+.steps.launcher.scrim.box.width = 1440|a scrim on the primary alone
+.steps.swapped.changed = false|a DisplayConfig change the shell never saw
+.steps.swapped.dockBox.x = 596|a dock left on the old primary
+.steps.swapped.panelBox.x = 0|a bar left on the old primary
+.steps.swapped.barSolid = true|a bar solid for a window on the new secondary
+CHANGES
+    write_report_run dock-external DOCK-EXTERNAL '{error: "G2 runs 1 monitor(s), not two\ndock-external.js:98"}' .
+    read -r passes failures <<<"$(assertion_counts dock_external_case "$T/dock-external")"
+    expect_eq "dock-external: a probe error fails once" "3/1 G2 runs 1 monitor(s), not two" \
+        "$passes/$failures $(sed -n 's/^FAIL dock-external: //p' "$T/assertions.out")"
+}
+
 test_idle() {
     local change what passes failures all
     write_idle_run .
@@ -2831,6 +2945,8 @@ test_layer_cycles
 test_motion
 test_idle
 test_dock_pin
+test_dock_dnd
+test_dock_external
 test_glass_load
 test_glass_stress
 test_spotlight_key
