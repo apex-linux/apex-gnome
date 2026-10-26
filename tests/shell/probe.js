@@ -135,7 +135,21 @@ function describeLayout(dialog, hint) {
         if (actor?.mapped && actor.opacity > 0)
             layout[name] = box(actor);
     }
+    layout.reveal = describeReveal(prompt?._entry);
     return layout;
+}
+
+// Board 20's show-password eye: the glyph, inside the icon's own padding, against the entry's border and end padding.
+function describeReveal(entry) {
+    const icon = entry?.get_secondary_icon?.();
+    if (!icon?.mapped)
+        return null;
+    const node = entry.get_theme_node();
+    const end = entry.get_text_direction() === Clutter.TextDirection.RTL ? St.Side.LEFT : St.Side.RIGHT;
+    return {
+        entry: box(entry), icon: box(icon), iconPadding: icon.get_theme_node().get_padding(end) / scale(),
+        border: node.get_border_width(end) / scale(), padding: node.get_padding(end) / scale(),
+    };
 }
 
 // gdm-mock.py's test method: pam_fprintd's "no match" in every live fingerprint conversation.

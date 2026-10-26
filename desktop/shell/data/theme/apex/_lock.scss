@@ -76,6 +76,12 @@
     }
 
     StLabel.hint-text { color: $apex_lock_placeholder; }
+
+    // Upstream's `& :ltr` padding, a stray space, also pads the entry's icons: board 20's eye sat 2.5em short.
+    StIcon {
+      &:ltr { padding-right: 0; }
+      &:rtl { padding-left: 0; }
+    }
   }
 
   .login-dialog-default-button-well {
