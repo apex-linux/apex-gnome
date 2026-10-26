@@ -1048,6 +1048,8 @@ async function wifiMenuRows(unit) {
                     checked: row.has_style_pseudo_class('checked'),
                     secure: !!lock.icon_name,
                     lockAfterName: children.indexOf(lock) === children.indexOf(row._label) + 1,
+                    box: boxOf(row, unit), label: boxOf(row._label, unit), signal: boxOf(row._signalIcon, unit),
+                    lockBox: lock.icon_name ? boxOf(lock, unit) : null,
                     lockSize: lengthOrNull(lock.get_theme_node(), 'icon-size', unit),
                     lockColor: hex(lock.get_theme_node().get_foreground_color()),
                 };

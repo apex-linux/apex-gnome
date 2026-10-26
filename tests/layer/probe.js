@@ -527,7 +527,7 @@ function networkRow(St, Clutter, active) {
     const icons = new St.BoxLayout({name: 'icons'});
     row._secureIcon = new St.Icon({name: 'lock', y_align: Clutter.ActorAlign.END});
     [new St.Icon({name: 'signal'}), row._secureIcon].forEach(i => icons.add_child(i));
-    row._label = new St.Label({name: 'label'});
+    row._label = new St.Label({name: 'label', y_align: Clutter.ActorAlign.FILL});
     [icons, row._label, new St.Icon({name: 'check'})].forEach(c => row.add_child(c));
     return row;
 }
@@ -567,7 +567,7 @@ function rowState(row) {
     const names = actor => actor.get_children().map(c => c.name).join(',');
     const lock = row._secureIcon;
     return `children=${names(row)} icons=${names(row.get_children()[0])} checked=${row.has_style_pseudo_class('checked')} ` +
-        `lock=${lock.y_align}/${lock.styleClasses.join(',') || 'none'}`;
+        `lock=${lock.y_align}/${lock.styleClasses.join(',') || 'none'} label=${row._label.y_align}`;
 }
 
 async function exerciseSubmenus(Main) {

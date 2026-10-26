@@ -2579,6 +2579,27 @@ test_no_nan_allocation() {
         "$passes/$failures $(grep -c 'per log: glass-load.log:1$' "$T/assertions.out")"
 }
 
+test_network_rows_centred() {
+    local good passes failures change what
+    good='{rows: [
+        {box: {y: 100, height: 38}, label: {y: 109, height: 20}, signal: {y: 111, height: 16}, lockBox: {y: 112, height: 14}},
+        {box: {y: 140, height: 38}, label: {y: 149, height: 20}, signal: {y: 151, height: 16}, lockBox: null}]}'
+    while IFS='|' read -r failures change what; do
+        jq -c "$good | $change" -n | sed 's/^/APEXG2-SCENES /' >"$T/rows.log"
+        # shellcheck disable=SC2016 # expanded by the inner bash
+        read -r passes failures_got <<<"$(bash -c '. "$1/assert.sh"; network_rows_centred light "$(report_of "$2" APEXG2-SCENES)" .rows \
+            >"$3" 2>&1; echo "$npass $nfail"' _ "$HERE" "$T/rows.log" "$T/rows.out")"
+        expect_eq "network rows: $what fails $failures" "$failures" "$failures_got"
+    done <<'CHANGES'
+0|.|names, glyphs and locks centred on their rows
+1|.rows[0].label.y = 100|network.js's name at the top of the connected row
+1|.rows[1].label.y = 100|another row's name at the top
+1|.rows[0].lockBox.y = 120|a lock below the row's centre
+1|.rows[1].signal.y = 140|a signal glyph at the top
+1|.rows = [.rows[0]]|a menu with one network
+CHANGES
+}
+
 test_pr_assertions() {
     local run=$T/pr-run label rest stray="" missing
     local -a cases
@@ -3016,6 +3037,7 @@ test_spotlight_key
 test_one_gpu
 test_part_ran
 test_no_nan_allocation
+test_network_rows_centred
 test_pr_assertions
 test_action_modes
 test_no_dock

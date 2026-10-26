@@ -378,14 +378,14 @@ fact "quick-settings: On or Off under a toggle without a subtitle; a toggle's ow
 fact "quick-settings: Power Mode lit at Balanced, its checked state stock" 'qs\.power=checked=false classes=apex-lit'
 fact "quick-settings: the state follows checked; a subtitle the toggle sets wins" 'qs\.live=dnd=On bluetooth=Headphones'
 fact "quick-settings: once the toggle drops its own, ours follows again" 'qs\.own-subtitle-gone=bluetooth=On'
-fact "quick-settings: the active network's row is :checked, its lock after the name" 'qs\.row\.active=children=icons,label,lock,check icons=signal checked=true lock=2/apex-network-lock'
-fact "quick-settings: another network's row is not" 'qs\.row\.other=children=icons,label,lock,check icons=signal checked=false lock=2/apex-network-lock'
+fact "quick-settings: the active network's row is :checked, its lock after the name, its name centred on the row" 'qs\.row\.active=children=icons,label,lock,check icons=signal checked=true lock=2/apex-network-lock label=2'
+fact "quick-settings: another network's row is not" 'qs\.row\.other=children=icons,label,lock,check icons=signal checked=false lock=2/apex-network-lock label=2'
 fact "quick-settings: a submenu header's subtitle ends the title's row" 'qs\.menu=3,0 x_align=3'
-fact "quick-settings: :checked follows is-active" 'qs\.row\.switched=children=icons,label,lock,check icons=signal checked=false lock=2/apex-network-lock \| children=icons,label,lock,check icons=signal checked=true lock=2/apex-network-lock'
-fact "quick-settings: layer off: the row stock again" 'qs\.off\.row=children=icons,label,check icons=signal,lock checked=false lock=3/none'
+fact "quick-settings: :checked follows is-active" 'qs\.row\.switched=children=icons,label,lock,check icons=signal checked=false lock=2/apex-network-lock label=2 \| children=icons,label,lock,check icons=signal checked=true lock=2/apex-network-lock label=2'
+fact "quick-settings: layer off: the row stock again" 'qs\.off\.row=children=icons,label,check icons=signal,lock checked=false lock=3/none label=0'
 fact "quick-settings: layer off: the subtitle under the title" 'qs\.off\.menu=1,1 x_align=0'
 fact "quick-settings: layer off: :checked no longer follows" 'qs\.off\.row-unfollowed=checked=false'
-fact "quick-settings: layer back on: rows and menus built before it change again" 'qs\.on\.row=children=icons,label,lock,check icons=signal checked=true lock=2/apex-network-lock'
+fact "quick-settings: layer back on: rows and menus built before it change again" 'qs\.on\.row=children=icons,label,lock,check icons=signal checked=true lock=2/apex-network-lock label=2'
 fact "quick-settings: layer back on: the subtitle on the title's row" 'qs\.on\.menu=3,0 x_align=3'
 fact "quick-settings: layer off: stock order" \
     'qs\.off\.order=Wi-Fi,VPN,Bluetooth,Power Mode,Night Light,Dark Style,Do Not Disturb,Airplane Mode,Auto Rotate'
@@ -454,7 +454,7 @@ has "disabled-features=['quick-settings']: skips the feature" 'Apex: feature qui
 fact "disabled-features=['quick-settings']: stock order" \
     'qs\.order=Wi-Fi,VPN,Bluetooth,Power Mode,Night Light,Dark Style,Do Not Disturb,Airplane Mode,Auto Rotate'
 fact "disabled-features=['quick-settings']: Power Mode unlit" 'qs\.power=checked=false classes=none'
-fact "disabled-features=['quick-settings']: a network row stays stock" 'qs\.row\.active=children=icons,label,check icons=signal,lock checked=false lock=3/none'
+fact "disabled-features=['quick-settings']: a network row stays stock" 'qs\.row\.active=children=icons,label,check icons=signal,lock checked=false lock=3/none label=0'
 fact "disabled-features=['quick-settings']: the subtitle stays under the title" 'qs\.menu=1,1 x_align=0'
 
 probe notifications "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_NOTIFICATIONS=1
