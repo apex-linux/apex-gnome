@@ -2330,6 +2330,15 @@ glass_manager() {
         | (.osd | glass($t.apex_panel_blur; $t.apex_panel_saturation; $s)) and (.switcher | glass($t.apex_panel_blur; $t.apex_panel_saturation; $s))
         and (.screenshot | .radius == 2 * ($t.apex_panel_blur | px) * $s and .fine and (.enabled | not))' \
         'the derived glass: the OSD and an Alt+Tab list blur at $apex_panel_blur and $apex_panel_saturation as the popovers do; the screenshot panel too, paused while closed'
+    "${expect_glass[@]}" 'def fits: .cornerRadius as $r | .painted.radii | all(. == $r); .manager
+        | ([.glass.panel, .glass.dock, .glass.quickSettings, .glass.calendar, .glass.banner, .derived.osd, .derived.switcher, .tile.shown.glass]
+            | all(fits and .painted.box == [0, 0] + .allocation))
+        and (.derived.screenshot | fits)' \
+        'every glass rounds its blur at its border radius, all four corners, over the box St paints its background in: the bar, the dock, Quick Settings, the calendar, a banner, the OSD, an Alt+Tab list and the tile preview; the screenshot panel'"'"'s corners too'
+    "${expect_glass[@]}" '.manager.derived.switcher.corner | .radius > 0 and .outside > 0 and .inside > 0 and .blurredOutside == 0 and .blurredInside == .inside' \
+        'over a checker, an Alt+Tab list'"'"'s bottom-left corner blurs no pixel past its border'"'"'s arc and every pixel inside it (board 15)'
+    "${expect_glass[@]}" '.manager.derived.switcher.corner.capturedDiffering == 0' \
+        'and a screenshot shows that corner as the screen does, pixel for pixel: off stage, the blur maps the stage through the capture'"'"'s viewport'
     "${expect_glass[@]}" "$glass"' .t as $t | .manager.monitorScale as $s | .manager.tile.shown.glass
         | glass($t.apex_tile_preview_blur; $t.apex_tile_preview_saturation; $s) and .cornerRadius == ($t.apex_radius_tile_preview | px) * $s' \
         'the shown tile preview registers its glass at board 22'"'"'s $apex_tile_preview_blur and $apex_tile_preview_saturation, rounded $apex_radius_tile_preview'
