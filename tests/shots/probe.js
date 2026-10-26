@@ -2484,8 +2484,6 @@ async function withLayerCycles(cycles) {
     return {cycles, states};
 }
 
-// main.js connects to startup-complete only after importing this module, so a startup that
-// completes during the import would never run the script and leave the shell up.
 function transitionInfo(transition) {
     if (!transition)
         return null;
@@ -2696,12 +2694,17 @@ async function motion() {
     return {uninhibited, enableAnimations, animated, still, previews};
 }
 
+// main.js connects to startup-complete only after importing this module, right after init(). A startup
+// that completed during the import gets the signal again then, so main.js's handler runs, and runs the probe.
 export function init() {
     if (Main.layoutManager._startingUp)
         return;
     startedLate = true;
-    console.log('APEXG2-LATE startup completed while main.js imported the probe');
-    import(import.meta.url).then(self => Scripting.runPerfScript(self, GLib.getenv('SHELL_PERF_OUTPUT')));
+    console.log('APEXG2-LATE startup completed while main.js imported the probe; startup-complete again');
+    GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
+        Main.layoutManager.emit('startup-complete');
+        return GLib.SOURCE_REMOVE;
+    });
 }
 
 function withoutBytes(captured) {

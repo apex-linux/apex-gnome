@@ -19,8 +19,8 @@ light or dark with the case's style (backdrops.sh puts them where an Apex image 
 or the solid #013b88 stress backdrop of the *-solid contrast cases. A case that times out
 stops the part (exit 3).
 G2_SURFACE_SCENES=1 in direct.sh's environment also captures the shell surfaces' scenes.
-G2_LATE=report (patched.sh's parts) takes a probe that started itself after startup as a
-normal start and lists it in /out/late-PART.txt; run.sh's default, rerun, runs it once more.
+A probe imported after startup completed emits startup-complete again for main.js's handler;
+/out/late-PART.txt lists those cases.
 The glass cases read frames through frame.c, built with glib2-devel's headers and
 gi-compile-repository.
 
@@ -37,8 +37,6 @@ case ${1:-} in
     -h | --help) usage; exit 0 ;;
     *) usage >&2; exit 2 ;;
 esac
-LATE=${G2_LATE:-rerun}
-[[ $LATE == rerun || $LATE == report ]] || { echo "direct.sh: G2_LATE is rerun or report, not $LATE" >&2; exit 2; }
 # It stops logind's seats and changes /run as root: never outside a throwaway container.
 [[ -e /run/.containerenv || -e /.dockerenv ]] || { echo "direct.sh: only inside run.sh's or smoke.sh's container" >&2; exit 2; }
 
@@ -160,21 +158,13 @@ run_case() {
     echo "== $name: exit $rc, marker after exit: $left"
 }
 
-# A late probe skips main.js's startup-complete handler. The image run reruns it (no_late_start);
-# patched.sh, CI's runner, sets G2_LATE=report: the probe's own start is normal, late-PART.txt counts it.
 run_and_record_case() {
     local name=$1
     [[ $part == pr && " ${PR_CASES[*]} " != *" $name "* ]] && return
     run_case "$@"
     if grep -q 'APEXG2-LATE' "/out/$name.log"; then
-        if [[ $LATE == report ]]; then
-            echo "== $name: the probe started late, a normal start for this run"
-            printf '%s\n' "$name" >>"/out/late-$part.txt"
-        else
-            mv "/out/$name.log" "/out/$name.late.log"
-            echo "== $name: the probe started late; once more"
-            run_case "$@"
-        fi
+        echo "== $name: the probe was imported after startup, and emitted startup-complete again"
+        printf '%s\n' "$name" >>"/out/late-$part.txt"
     fi
     printf '%s\n' "$RESULT" >>"/out/results-$part.txt"
     if [[ $RESULT == "$name exit=124 "* ]]; then
