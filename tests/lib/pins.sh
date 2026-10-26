@@ -8,4 +8,4 @@ readonly APEX_IMAGE_REV=3b1ba1ec31d424d9cc6d63918d60e0abf8ceebbc
 readonly APEX_SYSTEM_URL=https://github.com/apex-linux/apex-system
 readonly APEX_SYSTEM_REV=c030843c675d72ed48f70c157d912cf580e1e97a
 readonly APEX_DESKTOP_URL=https://github.com/apex-linux/apex-desktop
-readonly APEX_DESKTOP_REV=acde1635570bfd7616ea0341861283b40f731e10
+readonly APEX_DESKTOP_REV=8f064873e18b4ffd6a7399c2ab9d040fd7e797ee
