@@ -2936,9 +2936,13 @@ test_glass() {
 7|a probe that failed|{error: "no frame within 2000 ms"}
 CHANGES
 
-    local on='{"radius": 96, "saturation": 1.6, "enabled": true, "fine": true, "followOpacity": true, "background": true}'
-    local popover='{"radius": 120, "saturation": 1.8, "enabled": true, "fine": true, "followOpacity": true, "background": true}'
-    local dock='{"radius": 112, "saturation": 1.8, "enabled": true, "fine": true, "followOpacity": true, "background": true}'
+    local fit='{"cornerRadius": 52, "allocation": [360, 400], "painted": {"box": [0, 0, 360, 400], "radii": [52, 52, 52, 52]}}'
+    local on='{"radius": 96, "saturation": 1.6, "enabled": true, "fine": true, "followOpacity": true, "background": true,
+        "cornerRadius": 0, "allocation": [1440, 32], "painted": {"box": [0, 0, 1440, 32], "radii": [0, 0, 0, 0]}}'
+    local popover
+    popover=$(jq -c '. + {radius: 120, saturation: 1.8, enabled: true, fine: true, followOpacity: true, background: true}' <<<"$fit")
+    local dock
+    dock=$(jq -c '. + {radius: 112, saturation: 1.8, enabled: true, fine: true, followOpacity: true, background: true}' <<<"$fit")
     local manager
     manager=$(jq -nc --argjson on "$on" --argjson p "$popover" --argjson dock "$dock" '{panel: $on, dock: $dock, quickSettings: $p, calendar: $p, banner: $p, blurEffects: ["panel"], solidClass: false} as $g
         | {panel: null, dock: null, quickSettings: null, calendar: null, banner: null, blurEffects: []} as $none
@@ -2947,19 +2951,21 @@ CHANGES
             disabled: ($none + {solidClass: false}), restored: $g,
             scrims: {overview: $scrim, launcher: ($scrim + {radius: 160, saturation: 1.6}), hidden: ($scrim + {enabled: false}), barOverScrim: $on,
                 unforwarded: {changed: 59520, differingFromFull: 42880}, forwarded: {changed: 102400, differingFromFull: 0}},
-            derived: {osd: $p, switcher: $p, screenshot: ($p + {enabled: false})},
+            derived: {osd: $p, screenshot: ($p + {enabled: false}),
+                switcher: ($p + {corner: {radius: 52, outside: 560, inside: 2080, square: 2704, blurredOutside: 0, blurredInside: 2080, capturedDiffering: 0}})},
             emptyBox: {shown: ($scrim + {enabled: false}), hidden: ($scrim + {enabled: false}), shownAgain: ($scrim + {enabled: false}),
                 emptyFrames: 3, laidOut: ($scrim + {frames: 1, allocation: [320, 200]}), zeroHeight: ($scrim + {enabled: false})},
             tile: {shown: {scale: 2, inset: 6, preview: {x: 168, y: 224, width: 384, height: 192},
                 glassBox: {x: 174, y: 230, width: 372, height: 180}, inner: {x: 174, y: 230, width: 372, height: 180},
-                glass: {radius: 80, saturation: 1.6, cornerRadius: 28, enabled: true, fine: true, followOpacity: true, background: true},
+                glass: {radius: 80, saturation: 1.6, cornerRadius: 28, enabled: true, fine: true, followOpacity: true, background: true,
+                    allocation: [372, 180], painted: {box: [0, 0, 372, 180], radii: [28, 28, 28, 28]}},
                 downscale: 8, box: {mean: [0.4, 0.4, 0.4]}, interior: {max: [2, 2, 2]}, edge: {max: [6, 6, 6]},
                 bandDiffering: 0, innerDiffering: 267840},
                 hidden: {glass: null, visible: false, differing: 0}}}}')
     while IFS='|' read -r failures what change; do
         jq -c "$change" <<<"$manager" | sed 's/^/APEXG2-GLASS /' >"$T/glass.log"
         read -r passes _ <<<"$(assertion_counts glass_manager glass "$T/glass.log" light)"
-        expect_eq "glass manager: $what fails $failures of 14" "$failures" $((14 - passes))
+        expect_eq "glass manager: $what fails $failures of 17" "$failures" $((17 - passes))
     done <<'CHANGES'
 0|the bar, the dock and the popovers at their tokens, every switch honoured|.
 1|the bar at the popovers' sigma|.manager.glass.panel.radius = 120
@@ -2976,9 +2982,9 @@ CHANGES
 1|a scrim in background mode|.manager.scrims.overview.background = true
 1|a scrim left on after the overview|.manager.scrims.hidden.enabled = true
 1|a forwarded damage that leaves a stale halo|.manager.scrims.forwarded.differingFromFull = 120
-1|an OSD without glass|.manager.derived.osd = null
+2|an OSD without glass|.manager.derived.osd = null
 1|an Alt+Tab list at the bar's saturation|.manager.derived.switcher.saturation = 1.6
-1|a tile preview that never registers its glass|.manager.tile.shown.glass = null
+2|a tile preview that never registers its glass|.manager.tile.shown.glass = null
 1|a tile preview at the popovers' glass|.manager.tile.shown.glass.radius = 120
 1|a blurred box that includes the clear border|.manager.tile.shown.glassBox = .manager.tile.shown.preview
 1|a tile blur off the reference by 9/255 inside|.manager.tile.shown.interior.max = [9, 2, 2]
@@ -2989,7 +2995,14 @@ CHANGES
 1|an empty actor-mode box that blurs|.manager.emptyBox.shownAgain.enabled = true
 1|an empty box that never drew a frame|.manager.emptyBox.emptyFrames = 0
 1|a laid-out box whose blur never comes on|.manager.emptyBox.laidOut.enabled = false
-14|no manager|.manager = null
+1|an Alt+Tab list's blur rounded twice its border's radius|.manager.derived.switcher.cornerRadius = 104
+1|a banner rounded at one corner only|.manager.glass.banner.painted.radii = [52, 0, 0, 0]
+1|a blur over a box other than the painted background|.manager.glass.banner.painted.box = [0, 8, 360, 392]
+1|a screenshot panel rounded unlike its border|.manager.derived.screenshot.cornerRadius = 40
+1|a corner whose blur reaches past the border's arc|.manager.derived.switcher.corner.blurredOutside = 120
+1|a corner left unblurred inside the arc|.manager.derived.switcher.corner.blurredInside = 1960
+1|a screenshot whose corner is not the screen's|.manager.derived.switcher.corner.capturedDiffering = 640
+17|no manager|.manager = null
 CHANGES
 }
 

@@ -36,7 +36,7 @@ Fedora's gnome-shell SRPM, rebuilt with the Apex layer inside it
 |---|---|---|---|
 | `0001-build` | `data/theme/gnome-shell-{light,dark,high-contrast}.scss`, `data/theme/meson.build`, `js/meson.build`, `src/meson.build` | +13 | the `@import` hooks; `subdir('apex')`; `apex.gresource.xml` compiled and linked into libshell next to `js-resources` |
 | `0002-loader` | `js/ui/main.js`, `js/ui/sessionMode.js` | +16 −1 | the static import of `ui/apex/hooks.js`; the layer loaded (configure) before the session mode exists; `enable()` at `startup-prepared`; the stock sheets in safe mode; a value hook over each session mode's parameters |
-| `0003-blur` | `src/shell-blur-effect.c` | +290 −10 | ADR 0014's items a–f as four properties of `ShellBlurEffect`: `saturation` (CSS `saturate()`) and `corner-radius` (antialiased coverage) in the final pass, `follow-opacity`, and `fine` (the downscale without the 256 px floor, box-filtered in one pass; in background mode, the redraw-clip rule and the last result per stage view). At their defaults the effect is stock's, byte for byte |
+| `0003-blur` | `src/shell-blur-effect.c` | +300 −10 | ADR 0014's items a–f as four properties of `ShellBlurEffect`: `saturation` (CSS `saturate()`) and `corner-radius` (antialiased coverage) in the final pass, `follow-opacity`, and `fine` (the downscale without the 256 px floor, box-filtered in one pass; in background mode, the redraw-clip rule, the last result per stage view, and a screenshot's scale and offset off stage). At their defaults the effect is stock's, byte for byte |
 | `0010-panel` | `js/ui/panel.js`, `js/ui/layout.js` | +13 −4 | value hooks over the workspace dots' inactive opacity and scale and over a dot's width; a behaviour hook once Quick Settings has set up its indicators (the status-pill filter); a behaviour hook once a hot corner is built (the 4 × 4 zone) |
 | `0011-quick-settings` | `js/ui/panel.js`, `js/ui/quickSettings.js`, `js/ui/status/network.js` | +5 | a behaviour hook once Quick Settings has added its items (the quick-settings feature); 0010's `status-indicators` hook at the same place belongs to the panel feature, and a hook has one provider; behaviour hooks once a toggle's menu and a Wi-Fi network's row are built (board 17's submenus) |
 | `0012-message-list` | `js/ui/messageList.js`, `js/ui/calendar.js` | +11 −1 | behaviour hooks once a message header, a message and a notification group are built (the header's glyph and parts, the message's source, the group's cover and header) and once the calendar's message list has its footer (the footer, Clear and the placeholder) and once its month header and each day button are built (the month on the left, the event dot); value hooks over a message's icon and over whether a group counts as expanded, so a flat group never asks `MessageView` to expand it |
@@ -48,7 +48,7 @@ Fedora's gnome-shell SRPM, rebuilt with the Apex layer inside it
 | `0018-end-session` | `js/ui/endSessionDialog.js` | +2 | a behaviour hook once the end-session dialog has added its buttons, given the dialog and its content (the end-session feature: stock's icon, Restart in the power-off dialog, the theme's gap and widths) |
 
 Budget (ADR 0014): at most 450 changed lines of hook hunks in at most 33 upstream files.
-In use: 163 lines in 28 files. The C budget for `shell-blur-effect.{c,h}` (300 lines): 300
+In use: 163 lines in 28 files. The C budget for `shell-blur-effect.{c,h}` (310 lines): 310
 lines, all in 0003-blur.
 
 The patches are `git format-patch` output against Fedora's `%prep` tree (upstream

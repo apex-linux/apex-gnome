@@ -63,6 +63,10 @@ const TILE_SATURATION = 1.6;
 const TILE_RADIUS = 14;
 const TILE_RECT = {x: 162, y: 242, width: 372, height: 180};
 const TILE_GLASS = 'apexTilePreviewGlass';
+// Board 15's list over a checker of its own, clear of the top bar.
+const CORNER_AT = {x: 200, y: 300};
+const CHECKER = 4;
+const CHECKER_CELLS = 48;
 
 function colourOf(column, row, generation = 0) {
     return PALETTE[(column * 7 + row * 5 + generation) % PALETTE.length];
@@ -354,7 +358,20 @@ function glassOf(actor) {
     return {
         radius, saturation: Math.round(saturation * 1000) / 1000, cornerRadius, enabled, fine,
         followOpacity: effect.follow_opacity, background: mode === Shell.BlurMode.BACKGROUND,
-        mapped: actor.mapped, allocation: [box.get_width(), box.get_height()],
+        mapped: actor.mapped, allocation: [box.get_width(), box.get_height()], painted: paintedOf(actor),
+    };
+}
+
+// The box St paints the background in, from the allocation's origin, and its corners, in device pixels.
+function paintedOf(actor) {
+    const node = actor.get_theme_node();
+    const scale = actor.get_resource_scale();
+    const box = actor.allocation;
+    const paint = node.get_background_paint_box(box);
+    const corners = [St.Corner.TOPLEFT, St.Corner.TOPRIGHT, St.Corner.BOTTOMRIGHT, St.Corner.BOTTOMLEFT];
+    return {
+        box: [paint.x1 - box.x1, paint.y1 - box.y1, paint.get_width(), paint.get_height()],
+        radii: corners.map(corner => Math.round(node.get_border_radius(corner) * scale)),
     };
 }
 
@@ -480,7 +497,8 @@ const StandInSwitcherPopup = GObject.registerClass(class GlassTestSwitcherPopup 
 async function derivedState() {
     const {primaryIndex} = Main.layoutManager;
     Main.osdWindowManager.showOne(primaryIndex, Gio.ThemedIcon.new('audio-volume-medium-symbolic'), null, 0.5);
-    const popup = new StandInSwitcherPopup();
+    const checker = buildChecker();
+    const popup = new StandInSwitcherPopup({x: CORNER_AT.x, y: CORNER_AT.y});
     Main.uiGroup.add_child(popup);
     const list = new SwitcherPopup.SwitcherList(true);
     list.addItem(new St.Icon({icon_name: 'application-x-executable', icon_size: 96}), null);
@@ -491,13 +509,68 @@ async function derivedState() {
         await Scripting.waitLeisure();
         return {
             osd: glassOf(await laidOut(Main.osdWindowManager._osdWindows[primaryIndex]._hbox)),
-            switcher: glassOf(await laidOut(list)),
+            switcher: {...glassOf(await laidOut(list)), corner: await cornerOf(list)},
             screenshot: glassOf(Main.screenshotUI._panel),
         };
     } finally {
         Main.osdWindowManager._osdWindows[primaryIndex].cancel();
         popup.destroy();
+        checker.destroy();
     }
+}
+
+// Black and white squares under the list: its blur greys them wherever it reaches, and only there.
+function buildChecker() {
+    const checker = new St.Widget({x: CORNER_AT.x - CHECKER, y: CORNER_AT.y - CHECKER});
+    for (let row = 0; row < CHECKER_CELLS; row++) {
+        for (let column = 0; column < CHECKER_CELLS; column++) {
+            checker.add_child(new St.Widget({
+                x: column * CHECKER, y: row * CHECKER, width: CHECKER, height: CHECKER,
+                style: `background-color: ${(row + column) % 2 ? 'black' : 'white'};`,
+            }));
+        }
+    }
+    Main.uiGroup.insert_child_above(checker, global.window_group);
+    return checker;
+}
+
+async function capturedPixels({x, y, width, height}) {
+    const stream = Gio.MemoryOutputStream.new_resizable();
+    await new Shell.Screenshot().screenshot_area(x, y, width, height, stream);
+    stream.close(null);
+    return Png.decode(stream.steal_as_bytes().get_data()).rgba;
+}
+
+// The list's bottom-left corner square, as the screen shows it with its glass and without, and as
+// a screenshot captures it: past the border's arc nothing blurs, inside it everything does.
+async function cornerOf(list) {
+    const [x, y] = list.get_transformed_position().map(Math.round);
+    const [width, height] = list.get_transformed_size().map(Math.round);
+    const scale = list.get_resource_scale();
+    const effect = list.get_effect(GLASS_EFFECT);
+    const radius = effect.corner_radius;
+    const on = await framePixels(list);
+    effect.enabled = false;
+    const off = await framePixels(list);
+    effect.enabled = true;
+    const captured = await capturedPixels({x, y, width, height});
+    const [w, h] = [width * scale, height * scale];
+    const masks = {outside: new Uint8Array(w * h), inside: new Uint8Array(w * h), square: new Uint8Array(w * h)};
+    for (let py = h - radius; py < h; py++) {
+        for (let px = 0; px < radius; px++) {
+            const d = Math.hypot(radius - px - 0.5, py + 0.5 - (h - radius));
+            masks.square[py * w + px] = 1;
+            masks.outside[py * w + px] = d > radius + 1 ? 1 : 0;
+            masks.inside[py * w + px] = d < radius - 1 ? 1 : 0;
+        }
+    }
+    const count = mask => mask.reduce((sum, bit) => sum + bit, 0);
+    return {
+        radius, outside: count(masks.outside), inside: count(masks.inside), square: count(masks.square),
+        blurredOutside: BlurRef.differing(on.rgba, off.rgba, masks.outside),
+        blurredInside: BlurRef.differing(on.rgba, off.rgba, masks.inside),
+        capturedDiffering: BlurRef.differing(captured, on.rgba, masks.square),
+    };
 }
 
 // The pixels the rounded box covers fully, a band in from its edges: no shadow layer reaches them.

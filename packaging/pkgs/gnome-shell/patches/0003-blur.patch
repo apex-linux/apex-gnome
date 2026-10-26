@@ -20,13 +20,14 @@ output is byte-identical to the unpatched effect's.
   pixels the frame did not repaint, and queues a redraw only when the
   clip reaches into the actor's box: a clip that only meets its paint
   volume (a box-shadow) changed nothing behind it. The last result is
-  kept per stage view.
+  kept per stage view. Off stage, as a screenshot paints, the capture's
+  viewport maps the box, where stock assumes scale 1.
 ---
- src/shell-blur-effect.c | 300 ++++++++++++++++++++++++++++++++++++++--
- 1 file changed, 290 insertions(+), 10 deletions(-)
+ src/shell-blur-effect.c | 310 ++++++++++++++++++++++++++++++++++++++--
+ 1 file changed, 300 insertions(+), 10 deletions(-)
 
 diff --git a/src/shell-blur-effect.c b/src/shell-blur-effect.c
-index d362b0a..a497dfc 100644
+index d362b0a..55c1eb9 100644
 --- a/src/shell-blur-effect.c
 +++ b/src/shell-blur-effect.c
 @@ -50,8 +50,41 @@ static const gchar *brightness_glsl_declarations =
@@ -226,7 +227,24 @@ index d362b0a..a497dfc 100644
  
    /* we keep a back pointer here, to avoid going through the ActorMeta */
    self->actor = clutter_actor_meta_get_actor (meta);
-@@ -508,7 +631,9 @@ update_framebuffers (ShellBlurEffect     *self,
+@@ -365,6 +488,16 @@ update_actor_box (ShellBlurEffect     *self,
+           origin_x -= stage_view_layout.x;
+           origin_y -= stage_view_layout.y;
+         }
++      else if (self->fine)
++        {
++          float viewport[4];
++
++          /* Off stage, as a screenshot paints, the viewport maps the stage */
++          cogl_framebuffer_get_viewport4fv (clutter_paint_context_get_framebuffer (paint_context), viewport);
++          box_scale_factor = viewport[2] / clutter_actor_get_width (clutter_actor_get_stage (self->actor));
++          origin_x += viewport[0] / box_scale_factor;
++          origin_y += viewport[1] / box_scale_factor;
++        }
+       else
+         {
+           /* If we're drawing off stage, just assume scale = 1, this won't work
+@@ -508,7 +641,9 @@ update_framebuffers (ShellBlurEffect     *self,
  
    clutter_actor_box_get_size (source_actor_box, &width, &height);
  
@@ -237,7 +255,7 @@ index d362b0a..a497dfc 100644
  
    updated = update_actor_fbo (self, width, height, downscale_factor) &&
              update_brightness_fbo (self, width, height, downscale_factor);
-@@ -520,6 +645,16 @@ update_framebuffers (ShellBlurEffect     *self,
+@@ -520,6 +655,16 @@ update_framebuffers (ShellBlurEffect     *self,
    self->tex_height = height;
    self->downscale_factor = downscale_factor;
  
@@ -254,7 +272,7 @@ index d362b0a..a497dfc 100644
    return updated;
  }
  
-@@ -564,8 +699,8 @@ paint_actor_offscreen (ShellBlurEffect         *self,
+@@ -564,8 +709,8 @@ paint_actor_offscreen (ShellBlurEffect         *self,
  
        /* Transform node */
        graphene_matrix_init_scale (&transform,
@@ -265,7 +283,7 @@ index d362b0a..a497dfc 100644
                                    1.f);
        transform_node = clutter_transform_node_new (&transform);
        clutter_paint_node_set_static_name (transform_node, "ShellBlurEffect (downscale)");
-@@ -617,13 +752,18 @@ needs_repaint (ShellBlurEffect         *self,
+@@ -617,13 +762,18 @@ needs_repaint (ShellBlurEffect         *self,
    return TRUE;
  }
  
@@ -289,7 +307,7 @@ index d362b0a..a497dfc 100644
    uint8_t paint_opacity;
  
    g_assert (self->actor != NULL);
-@@ -639,7 +779,7 @@ shell_blur_effect_paint_node (ClutterEffect           *effect,
+@@ -639,7 +789,7 @@ shell_blur_effect_paint_node (ClutterEffect           *effect,
            break;
  
          case SHELL_BLUR_MODE_BACKGROUND:
@@ -298,7 +316,7 @@ index d362b0a..a497dfc 100644
            break;
  
          default:
-@@ -701,6 +841,90 @@ fail:
+@@ -701,6 +851,90 @@ fail:
    add_actor_node (self, node, -1);
  }
  
@@ -389,7 +407,7 @@ index d362b0a..a497dfc 100644
  static void
  shell_blur_effect_finalize (GObject *object)
  {
-@@ -713,6 +937,7 @@ shell_blur_effect_finalize (GObject *object)
+@@ -713,6 +947,7 @@ shell_blur_effect_finalize (GObject *object)
    g_clear_object (&self->actor_fb.pipeline);
    g_clear_object (&self->background_fb.pipeline);
    g_clear_object (&self->brightness_fb.pipeline);
@@ -397,7 +415,7 @@ index d362b0a..a497dfc 100644
  
    G_OBJECT_CLASS (shell_blur_effect_parent_class)->finalize (object);
  }
-@@ -739,6 +964,22 @@ shell_blur_effect_get_property (GObject    *object,
+@@ -739,6 +974,22 @@ shell_blur_effect_get_property (GObject    *object,
        g_value_set_enum (value, self->mode);
        break;
  
@@ -420,7 +438,7 @@ index d362b0a..a497dfc 100644
      default:
        G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
      }
-@@ -766,9 +1007,30 @@ shell_blur_effect_set_property (GObject      *object,
+@@ -766,9 +1017,30 @@ shell_blur_effect_set_property (GObject      *object,
        shell_blur_effect_set_mode (self, g_value_get_enum (value));
        break;
  
@@ -451,7 +469,7 @@ index d362b0a..a497dfc 100644
  }
  
  static void
-@@ -802,6 +1064,22 @@ shell_blur_effect_class_init (ShellBlurEffectClass *klass)
+@@ -802,6 +1074,22 @@ shell_blur_effect_class_init (ShellBlurEffectClass *klass)
                         SHELL_BLUR_MODE_ACTOR,
                         G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_EXPLICIT_NOTIFY);
  
@@ -474,7 +492,7 @@ index d362b0a..a497dfc 100644
    g_object_class_install_properties (object_class, N_PROPS, properties);
  }
  
-@@ -811,6 +1089,8 @@ shell_blur_effect_init (ShellBlurEffect *self)
+@@ -811,6 +1099,8 @@ shell_blur_effect_init (ShellBlurEffect *self)
    self->mode = SHELL_BLUR_MODE_ACTOR;
    self->radius = 0;
    self->brightness = 1.f;
