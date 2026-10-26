@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 //
 // ADR 0014's scrims: GNOME hides window_group in the overview, so a clone of it, blurred in actor
-// mode, sits below #overviewGroup, bound as the group is to uiGroup: the group sizes after it.
+// mode, sits below #overviewGroup, bound to the stage: uiGroup keeps its first size when monitors change.
 
 import Clutter from 'gi://Clutter';
 import St from 'gi://St';
@@ -23,7 +23,7 @@ export function register() {
     const scrim = new St.Widget({
         name: 'apexGlassScrim', style_class: SCRIM_STYLE_CLASS, reactive: false,
         visible: group.visible,
-        constraints: new Clutter.BindConstraint({source: Main.uiGroup, coordinate: Clutter.BindCoordinate.ALL}),
+        constraints: new Clutter.BindConstraint({source: global.stage, coordinate: Clutter.BindCoordinate.ALL}),
     });
     scrim.add_child(new Clutter.Clone({source: global.window_group, reactive: false}));
     Main.uiGroup.insert_child_below(scrim, group);

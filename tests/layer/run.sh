@@ -800,7 +800,7 @@ has "glass: the feature enables" 'Apex: feature glass enabled'
 fact "glass: the bar, Quick Settings and the calendar blur behind them: radius 2 x their sheet's sigma x the scale, its saturation and corners, fine, following opacity; the offscreen redirects they sit in are held off" \
     "glass\.enabled=$GLASS_ON solid=false redirects=0,0"
 fact "glass: the scrim, a clone of the desktop below #overviewGroup, waits while the overview is closed" 'glass\.scrim\.closed=apexGlassScrim:r144/s1\.5/c0/paused/actor visible=false'
-fact "glass: the scrim binds to uiGroup, as #overviewGroup does, not to the group, which is sized after it" 'glass\.scrim\.bound=uiGroup'
+fact "glass: the scrim binds to the stage, which follows each monitor change, not to uiGroup, which keeps its first size" 'glass\.scrim\.bound=stage'
 fact "glass: and blurs at the overview's sigma 36 and 1.5, in actor mode, while it shows" 'glass\.scrim\.overview=apexGlassScrim:r144/s1\.5/c0/on/actor visible=true'
 fact "glass: at the launcher's 40 and 1.6 once the app grid shows" 'glass\.scrim\.launcher=apexGlassScrim:r160/s1\.6/c0/on/actor visible=true'
 fact "glass: the derived glass: the OSD, an Alt+Tab list once its popup adds it, and the screenshot panel (closed) take the popovers' glass" \
