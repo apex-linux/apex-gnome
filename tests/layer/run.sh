@@ -522,6 +522,8 @@ fact "shadows: one that changes it rebuilds the layer" \
 fact "shadows: layer off: no layer drawn" 'shadows\.off=none'
 fact "shadows: layer back on: the registration draws again" \
     'shadows\.on=box-shadow: 0px 2px 8px 0px rgba\(20, 30, 60, 0\.2\); border-radius: 14px; at 106,46 300x200 above=true cutout=14'
+fact "shadows: a surface allocated wider than its natural size gets a layer on its allocation, not its natural box" \
+    'shadows\.allocated-wider=box-shadow: 0px 2px 8px 0px rgba\(20, 30, 60, 0\.2\); border-radius: 14px; at 506,46 220x126 above=true cutout=14'
 fact "shadows: a 0x0 surface, not laid out yet, gets a 0x0 layer at a finite position" \
     'shadows\.empty=box-shadow: 0px 2px 8px 0px rgba\(20, 30, 60, 0\.2\); border-radius: 14px; at 120,330 0x0 above=true cutout=14'
 fact "shadows: layer off: the 0x0 surface keeps no layer" 'shadows\.empty-off=none'

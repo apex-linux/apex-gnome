@@ -654,12 +654,14 @@ shadow_layers() {
     scenes=$(report_of "$log" APEXG2-SCENES)
     tokens=$(tokens_for "$variant")
     local -a metric=(top_bar_metric "$label shadows" "$scenes" "$tokens")
-    local layer='length == 1 and (.[0] | .shown and .sameBox and (.boxShadow | .inset == false and .x == 0
+    local layer='length == 1 and (.[0] | .shown and .box == .surfaceBox and (.boxShadow | .inset == false and .x == 0
         and (.y | px_is($t.apex_shadow_2_y)) and (.blur | px_is($t.apex_shadow_2_blur)) and (.color | colour_is($t.apex_shadow_2))))'
     "${metric[@]}" 'Quick Settings draws its second layer, 0 $apex_shadow_2_y $apex_shadow_2_blur $apex_shadow_2, on its own box' \
         '.surfaces.shadowLayers.quickSettings' "$layer and .[0].radius == (\$t.apex_radius_quick_settings | px)"
     "${metric[@]}" 'the calendar draws its second layer, 0 $apex_shadow_2_y $apex_shadow_2_blur $apex_shadow_2, on its own box' \
         '.surfaces.shadowLayers.dateMenu' "$layer"
+    "${metric[@]}" 'a popup menu held at its min-width, past its natural width, draws its second layer on its whole box' \
+        '.surfaces.shadowLayers.popupMenu' "$layer and (.[0] | .surfaceBox[2] - .surfaceBox[0] > .natural[0])"
     "${metric[@]}" "a dialog's second layer sits beside its box, above the lightbox under the dialog" \
         '.surfaces.shadowLayers.dialog' "$layer and .[0].besideBox"
     expect "$label shadows" "$scenes" '.surfaces.idleRepaints | .withShadows <= .withoutShadows' \

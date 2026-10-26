@@ -463,10 +463,11 @@ REPORT_OF_AN_OVERVIEW_LAYER_FROM_TOKENS='
     appGrid: {grid: {columns: 7, rows: 4, iconSize: 88}, strip: 0, box: {y: 132}}}}'
 # shellcheck disable=SC2016 # a jq program
 REPORT_OF_SHADOW_LAYERS_FROM_TOKENS='
-{shown: true, sameBox: true, radius: 0, boxShadow: {color: ($t.apex_shadow_2 | hex), inset: false, x: 0,
+{shown: true, box: [10, 20, 230, 146], surfaceBox: [10, 20, 230, 146], natural: [105, 126], radius: 0,
+    boxShadow: {color: ($t.apex_shadow_2 | hex), inset: false, x: 0,
     y: ($t.apex_shadow_2_y | px), blur: ($t.apex_shadow_2_blur | px), spread: 0}} as $layer
 | {surfaces: {idleRepaints: {withShadows: 3, withoutShadows: 3}, shadowLayers: {
-    quickSettings: [$layer | .radius = ($t.apex_radius_quick_settings | px)], dateMenu: [$layer],
+    quickSettings: [$layer | .radius = ($t.apex_radius_quick_settings | px)], dateMenu: [$layer], popupMenu: [$layer],
     dialog: [$layer | .besideBox = true]}}}'
 # shellcheck disable=SC2016 # a jq program
 REPORT_OF_A_TILE_PREVIEW_DRAWN_FROM_TOKENS='
@@ -1536,7 +1537,7 @@ test_shadow_layers() {
     local variant change what passes failures open_gaps
     for variant in light dark; do
         read -r passes failures open_gaps <<<"$(assert_run shadow_layers "$variant")"
-        if ((failures == 0 && passes == 4)); then
+        if ((failures == 0 && passes == 5)); then
             ok "shadows ($variant): layers drawn from the tokens pass all $passes assertions"
         else
             not_ok "shadows ($variant): layers drawn from the tokens pass (passed/failed $passes/$failures): $(grep -m3 '^FAIL' "$T/top-bar.out" | paste -sd'|' -)"
@@ -1544,12 +1545,14 @@ test_shadow_layers() {
     done
     while IFS='|' read -r change what; do
         read -r passes failures open_gaps <<<"$(assert_run shadow_layers light "$change")"
-        expect_eq "shadows: $what fails one assertion" "3/1" "$passes/$failures"
+        expect_eq "shadows: $what fails one assertion" "4/1" "$passes/$failures"
     done <<'CHANGES'
 .surfaces.shadowLayers.quickSettings[0].radius = 0|a Quick Settings layer with square corners
 .surfaces.shadowLayers.dateMenu = []|a calendar without its second layer
 .surfaces.shadowLayers.dialog[0].besideBox = false|a dialog layer under the lightbox
-.surfaces.shadowLayers.dateMenu[0].sameBox = false|a layer off its surface's box
+.surfaces.shadowLayers.dateMenu[0].box[0] += 1|a layer 1 px off its surface's box
+.surfaces.shadowLayers.popupMenu[0].box[2] = 10 + 105|a menu's layer at the surface's natural width, not its allocation
+.surfaces.shadowLayers.popupMenu[0].natural[0] = 220|a menu no wider than its natural width, which proves nothing
 .surfaces.shadowLayers.dialog[0].boxShadow.blur = 50|the first layer's blur on the second
 .surfaces.idleRepaints.withShadows = 9|an idle desktop that repaints more with shadows
 CHANGES
