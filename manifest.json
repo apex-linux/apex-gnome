@@ -1,0 +1,264 @@
+{
+  "boards": {
+    "12": {
+      "title": "GDM greeter",
+      "slug": "greeter",
+      "source": "tests/shell/shoot.sh",
+      "fixture": "the user list, apex and guest, on apex-desktop's greeter background",
+      "scene": {
+        "light": "greeter-light-list",
+        "dark": "greeter-dark-list"
+      },
+      "shots": "ae7b2615cf7d",
+      "files": {
+        "light": "boards/board-12-light.png",
+        "dark": "boards/board-12-dark.png"
+      },
+      "pins": {
+        "apexGnome": "07d15805e98a7bf3a8d3267c6f88b410fa08142b",
+        "apexDesktop": "8f064873e18b4ffd6a7399c2ab9d040fd7e797ee"
+      },
+      "scale": 2,
+      "monitor": "2880x1800",
+      "approval": {
+        "status": "approved",
+        "approvedAt": "2026-10-26T12:20:14Z",
+        "shots": "ae7b2615cf7d"
+      }
+    },
+    "13": {
+      "title": "Authentication dialog",
+      "slug": "polkit",
+      "source": "tests/shell/shoot.sh",
+      "fixture": "the shell's own dialog for an administrator, its PAM session never answering",
+      "scene": {
+        "light": "polkit-light-open",
+        "dark": "polkit-dark-open"
+      },
+      "shots": "2848f54166e4",
+      "files": {
+        "light": "boards/board-13-light.png",
+        "dark": "boards/board-13-dark.png"
+      },
+      "pins": {
+        "apexGnome": "07d15805e98a7bf3a8d3267c6f88b410fa08142b",
+        "apexDesktop": "8f064873e18b4ffd6a7399c2ab9d040fd7e797ee"
+      },
+      "scale": 2,
+      "monitor": "2880x1800",
+      "approval": {
+        "status": "approved",
+        "approvedAt": "2026-10-26T12:20:14Z",
+        "shots": "2848f54166e4"
+      }
+    },
+    "14": {
+      "title": "Power off dialog",
+      "slug": "power-off",
+      "source": "tests/shell/shoot.sh",
+      "fixture": "power off with an update staged (update1-mock.py), the update card on; no other user logged in, the greeter's session being of class greeter",
+      "scene": {
+        "light": "end-session-light-power-off",
+        "dark": "end-session-dark-power-off"
+      },
+      "shots": "d2f78a285440",
+      "files": {
+        "light": "boards/board-14-light.png",
+        "dark": "boards/board-14-dark.png"
+      },
+      "pins": {
+        "apexGnome": "07d15805e98a7bf3a8d3267c6f88b410fa08142b",
+        "apexDesktop": "8f064873e18b4ffd6a7399c2ab9d040fd7e797ee"
+      },
+      "scale": 2,
+      "monitor": "2880x1800",
+      "approval": {
+        "status": "approved",
+        "approvedAt": "2026-10-26T12:20:14Z",
+        "shots": "d2f78a285440"
+      }
+    },
+    "19": {
+      "title": "Screenshot UI",
+      "slug": "screenshot",
+      "source": "tests/shots/direct.sh signoff",
+      "fixture": "the screenshot UI over the desktop",
+      "scene": {
+        "light": "default-screenshot",
+        "dark": "dark-style-screenshot"
+      },
+      "shots": "e8069badce09",
+      "files": {
+        "light": "boards/board-19-light.png",
+        "dark": "boards/board-19-dark.png"
+      },
+      "pins": {
+        "apexGnome": "07d15805e98a7bf3a8d3267c6f88b410fa08142b",
+        "apexDesktop": "8f064873e18b4ffd6a7399c2ab9d040fd7e797ee"
+      },
+      "scale": 2,
+      "monitor": "2880x1800",
+      "approval": {
+        "status": "approved",
+        "approvedAt": "2026-10-26T12:20:14Z",
+        "shots": "e8069badce09"
+      }
+    },
+    "34": {
+      "title": "Calendar and notifications",
+      "slug": "date-menu",
+      "source": "tests/shots/direct.sh signoff",
+      "fixture": "Monday 28 September 2026, two low-urgency notifications",
+      "scene": {
+        "light": "default-datemenu",
+        "dark": "dark-style-datemenu"
+      },
+      "shots": "43686e40698d",
+      "files": {
+        "light": "boards/board-34-light.png",
+        "dark": "boards/board-34-dark.png"
+      },
+      "pins": {
+        "apexGnome": "07d15805e98a7bf3a8d3267c6f88b410fa08142b",
+        "apexDesktop": "8f064873e18b4ffd6a7399c2ab9d040fd7e797ee"
+      },
+      "scale": 2,
+      "monitor": "2880x1800",
+      "approval": {
+        "status": "approved",
+        "approvedAt": "2026-10-26T12:20:14Z",
+        "shots": "43686e40698d"
+      }
+    },
+    "35": {
+      "title": "Overview",
+      "slug": "overview",
+      "source": "tests/shots/direct.sh signoff",
+      "fixture": "the overview with Text Editor, Calendar and Terminal open, two workspaces",
+      "scene": {
+        "light": "default-signoff-overview",
+        "dark": "dark-style-signoff-overview"
+      },
+      "shots": "4e09a329a05b",
+      "files": {
+        "light": "boards/board-35-light.png",
+        "dark": "boards/board-35-dark.png"
+      },
+      "pins": {
+        "apexGnome": "07d15805e98a7bf3a8d3267c6f88b410fa08142b",
+        "apexDesktop": "8f064873e18b4ffd6a7399c2ab9d040fd7e797ee"
+      },
+      "scale": 2,
+      "monitor": "2880x1800",
+      "approval": {
+        "status": "approved",
+        "approvedAt": "2026-10-26T12:20:14Z",
+        "shots": "4e09a329a05b"
+      }
+    },
+    "36": {
+      "title": "Launcher",
+      "slug": "launcher",
+      "source": "tests/shots/direct.sh signoff",
+      "fixture": "the app grid's first page, no folder open: the image's apps outside the dock",
+      "scene": {
+        "light": "default-launcher",
+        "dark": "dark-style-launcher"
+      },
+      "shots": "d7eb6b9b23c1",
+      "files": {
+        "light": "boards/board-36-light.png",
+        "dark": "boards/board-36-dark.png"
+      },
+      "pins": {
+        "apexGnome": "07d15805e98a7bf3a8d3267c6f88b410fa08142b",
+        "apexDesktop": "8f064873e18b4ffd6a7399c2ab9d040fd7e797ee"
+      },
+      "scale": 2,
+      "monitor": "2880x1800",
+      "approval": {
+        "status": "approved",
+        "approvedAt": "2026-10-26T12:20:14Z",
+        "shots": "d7eb6b9b23c1"
+      }
+    },
+    "37": {
+      "title": "Desktop: dock and top bar",
+      "slug": "desktop",
+      "source": "tests/shots/direct.sh signoff",
+      "fixture": "the desktop with the dock and the bar, no window open",
+      "scene": {
+        "light": "default-desktop",
+        "dark": "dark-style-desktop"
+      },
+      "shots": "854e45e2a113",
+      "files": {
+        "light": "boards/board-37-light.png",
+        "dark": "boards/board-37-dark.png"
+      },
+      "pins": {
+        "apexGnome": "07d15805e98a7bf3a8d3267c6f88b410fa08142b",
+        "apexDesktop": "8f064873e18b4ffd6a7399c2ab9d040fd7e797ee"
+      },
+      "scale": 2,
+      "monitor": "2880x1800",
+      "approval": {
+        "status": "approved",
+        "approvedAt": "2026-10-26T12:20:14Z",
+        "shots": "854e45e2a113"
+      }
+    },
+    "38": {
+      "title": "Spotlight",
+      "slug": "spotlight",
+      "source": "tests/shots/direct.sh signoff",
+      "fixture": "Spotlight with \"disk\" typed",
+      "scene": {
+        "light": "default-spotlight-search",
+        "dark": "dark-style-spotlight-search"
+      },
+      "shots": "27c816f550eb",
+      "files": {
+        "light": "boards/board-38-light.png",
+        "dark": "boards/board-38-dark.png"
+      },
+      "pins": {
+        "apexGnome": "07d15805e98a7bf3a8d3267c6f88b410fa08142b",
+        "apexDesktop": "8f064873e18b4ffd6a7399c2ab9d040fd7e797ee"
+      },
+      "scale": 2,
+      "monitor": "2880x1800",
+      "approval": {
+        "status": "approved",
+        "approvedAt": "2026-10-26T12:20:14Z",
+        "shots": "27c816f550eb"
+      }
+    },
+    "39": {
+      "title": "Top bar: indicators",
+      "slug": "indicators",
+      "source": "tests/shots/direct.sh signoff",
+      "fixture": "everything: two input sources and the StatusNotifierItems sni-items.js starts",
+      "scene": {
+        "light": "indicators-indicators-everything",
+        "dark": "indicators-dark-indicators-everything"
+      },
+      "shots": "d7656477582e",
+      "files": {
+        "light": "boards/board-39-light.png",
+        "dark": "boards/board-39-dark.png"
+      },
+      "pins": {
+        "apexGnome": "07d15805e98a7bf3a8d3267c6f88b410fa08142b",
+        "apexDesktop": "8f064873e18b4ffd6a7399c2ab9d040fd7e797ee"
+      },
+      "scale": 2,
+      "monitor": "2880x1800",
+      "approval": {
+        "status": "approved",
+        "approvedAt": "2026-10-26T12:20:14Z",
+        "shots": "d7656477582e"
+      }
+    }
+  }
+}
