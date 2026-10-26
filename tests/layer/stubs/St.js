@@ -331,6 +331,12 @@ class Widget {
 
 // The polkit feature follows upstream's info label through its notify signals.
 class Label extends Widget {
+    // St.Label's ClutterText ellipsizes at the end.
+    get clutter_text() {
+        this._clutterText ??= {ellipsize: 3};
+        return this._clutterText;
+    }
+
     get visible() {
         return this._visible;
     }
