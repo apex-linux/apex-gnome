@@ -147,8 +147,6 @@ no_js_error() {
     fi
 }
 
-# Clutter refuses a NaN box with a CRITICAL and leaves the actor unallocated, which a case can survive:
-# the CRITICAL fails it, in the case's log and in a late first start's log where the image run reran it.
 # With malcontent's typelib (the image's flatpak-libs brings it), a failed read of the user's parental
 # controls leaves gnome-shell hiding every app: no favourite, dash or app grid.
 parental_controls_ready() {
@@ -161,6 +159,8 @@ parental_controls_ready() {
     fi
 }
 
+# Clutter refuses a NaN box with a CRITICAL and leaves the actor unallocated, which a case can survive:
+# the CRITICAL fails it, in the case's log and in a late first start's log where the image run reran it.
 no_nan_allocation() {
     local label=$1 log=$2 found
     found=$(grep -c "clutter_actor_allocate: assertion '!isnan" "$log" "${log%.log}.late.log" 2>/dev/null | grep -v ':0$' | sed 's|.*/||' | paste -sd' ' -)
