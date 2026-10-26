@@ -517,6 +517,11 @@ fact "shadows: one that changes it rebuilds the layer" \
 fact "shadows: layer off: no layer drawn" 'shadows\.off=none'
 fact "shadows: layer back on: the registration draws again" \
     'shadows\.on=box-shadow: 0px 2px 8px 0px rgba\(20, 30, 60, 0\.2\); border-radius: 14px; at 106,46 300x200 above=true cutout=14'
+fact "shadows: a 0x0 surface, not laid out yet, gets a 0x0 layer at a finite position" \
+    'shadows\.empty=box-shadow: 0px 2px 8px 0px rgba\(20, 30, 60, 0\.2\); border-radius: 14px; at 120,330 0x0 above=true cutout=14'
+fact "shadows: layer off: the 0x0 surface keeps no layer" 'shadows\.empty-off=none'
+fact "shadows: layer back on: the 0x0 surface draws again, 0x0 at the same finite position" \
+    'shadows\.empty-on=box-shadow: 0px 2px 8px 0px rgba\(20, 30, 60, 0\.2\); border-radius: 14px; at 120,330 0x0 above=true cutout=14'
 fact "shadows: a destroyed surface takes its layer with it" 'shadows\.destroyed=0 layers, root=bin'
 
 probe shadows-disabled "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_SHADOWS=1 PROBE_DISABLED=shadows
