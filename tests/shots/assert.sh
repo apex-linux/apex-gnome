@@ -164,7 +164,7 @@ no_nan_allocation() {
 startup_handler_ran() {
     local label=$1 log=$2 when='on time' runs
     grep -q 'APEXG2-LATE' "$log" && when='after the import, from startup-complete again'
-    runs=$(grep -c 'GNOME Shell started at ' "$log")
+    runs=$(grep -c 'GNOME Shell started at ' "$log" 2>/dev/null) || runs=0
     if ((runs == 1)); then
         pass "$label: main.js's startup-complete handler ran once, and the probe from it ($when)"
     else
@@ -2150,6 +2150,7 @@ patched_assertions() {
         asserted "$c" || continue
         [[ $c == kernel-safe || $c == fault-abort ]] || backdrop_painted "$c" "$run/$c.log"
         [[ $c == kernel-safe || $c == fault-abort ]] || action_modes "$c" "$run/$c.log"
+        [[ $c == kernel-safe ]] || startup_handler_ran "$c" "$run/$c.log"
         [[ -e $run/$c.log ]] && no_nan_allocation "$c" "$run/$c.log"
     done
     for c in default default-scale1 dark-style; do
