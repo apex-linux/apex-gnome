@@ -50,7 +50,7 @@ readonly SOLID_BACKDROP='#013b88'
 readonly A11Y_TEXT_RATIO=4.5
 readonly A11Y_ICON_RATIO=3
 readonly A11Y_ACCENTS=(blue teal green yellow orange red pink purple slate)
-readonly A11Y_SURFACES=(bar dock popupMenu osd banner quickSettings "${A11Y_ACCENTS[@]/#/quickSettingsAccents.}" wifiMenu dateMenu
+readonly A11Y_SURFACES=(bar dock popupMenu osd banner quickSettings "${A11Y_ACCENTS[@]/#/quickSettingsAccents.}" wifiMenu wifiMenuConnected dateMenu
     "${A11Y_ACCENTS[@]/#/dateMenuAccents.}" switcher dialog "${A11Y_ACCENTS[@]/#/dialogAccents.}" endSession screenshot
     spotlight.popup spotlight.toast overview appGrid)
 # The failures still open: upstream's high-contrast sheet, which safe mode keeps as Fedora's.
@@ -603,8 +603,8 @@ shell_surfaces() {
     "${metric[@]}" 'its rows are $apex_menu_row_height high, radius $apex_radius_menu_row, padded $apex_menu_row_padding, $apex_menu_row_spacing between glyph and label' \
         "$m.rows" 'length == 3 and all((.height | px_is($t.apex_menu_row_height)) and (.radius | px_is($t.apex_radius_menu_row))
             and (.padding.left | px_is($t.apex_menu_row_padding)) and (.padding.right | px_is($t.apex_menu_row_padding)) and (.spacing | px_is($t.apex_menu_row_spacing)))'
-    "${metric[@]}" 'a row has no fill until hovered, then $apex_button_hover' \
-        "$m.rows" 'all((.background | rgba | .[3] == 0) and (.hover.background | colour_is($t.apex_button_hover)))'
+    "${metric[@]}" 'a row has no fill until hovered or :checked, then $apex_button_hover, the Wi-Fi menu'"'"'s connected fill aside' \
+        "$m.rows" 'all((.background | rgba | .[3] == 0) and (.hover.background | colour_is($t.apex_button_hover)) and (.checked.background | colour_is($t.apex_button_hover)))'
     "${metric[@]}" 'adjacent rows are $apex_menu_row_gap apart' \
         "$m.rows" '.[1].y - .[0].y - .[0].height | px_is($t.apex_menu_row_gap)'
     "${metric[@]}" 'a separator is a 1 px $apex_border line, inset $apex_menu_separator_inset, with $apex_menu_separator_margin + $apex_menu_row_gap above and below' \
@@ -810,6 +810,9 @@ quick_settings() {
         "$q.wifiMenu.rows" 'length > 0 and all((.height | px_is($t.apex_quick_menu_row_height)) and (.padding.left | px_is($t.apex_menu_row_padding)) and (.radius | px_is($t.apex_radius_menu_row)))'
     "${metric[@]}" 'its rows hover in $apex_quick_menu_row_hover, lighter than popup menus' \
         "$q.wifiMenu" '.rowHover.background | colour_is($t.apex_quick_menu_row_hover)'
+    "${metric[@]}" 'the connected network'"'"'s row is filled $apex_button at $apex_font_label_weight, $apex_button_hover under the pointer; the others are unfilled' \
+        "$q.wifiMenu" '(.connected | (.background | colour_is($t.apex_button)) and .label.font.weight == ($t.apex_font_label_weight | tonumber)
+            and (.hover.background | colour_is($t.apex_button_hover))) and (.other | (.background | rgba | .[3] == 0) and .label.font.weight == 400)'
 }
 
 # shellcheck disable=SC2016 # jq programs and token names, not shell expansions
@@ -1532,6 +1535,8 @@ a11y_contrast() {
             <<<"$report" 2>&1)
         known_gap "${A11Y_GAPS[$label:$s]:-}" a11y_verdict "$label accessibility: $s: text $A11Y_TEXT_RATIO:1 and glyphs $A11Y_ICON_RATIO:1 against what is drawn behind them" "$problems"
     done
+    expect "$label accessibility" "$report" '.wifiMenuConnected.targets | any(.kind == "text" and (.inactive | not))' \
+        "the connected network's name is measured over its row's own fill"
 }
 
 # Large Text: each surface's text whole, on the screen, inside its surface and clear of the rest.

@@ -215,7 +215,7 @@ REPORT_OF_SURFACES_DRAWN_FROM_TOKENS='
 | ($t.apex_menu_padding | px) as $mp | ($t.apex_menu_row_height | px) as $row | ($t.apex_menu_row_gap | px) as $gap
 | ($t.apex_menu_row_padding | px) as $rp | ($t.apex_menu_separator_margin | px) as $sm
 | {height: $row, radius: ($t.apex_radius_menu_row | px), padding: {left: $rp, right: $rp}, spacing: ($t.apex_menu_row_spacing | px),
-   background: "#00000000", hover: {background: ($t.apex_button_hover | hex)}} as $r
+   background: "#00000000", hover: {background: ($t.apex_button_hover | hex)}, checked: {background: ($t.apex_button_hover | hex)}} as $r
 | ($t.apex_osd_padding | px) as $op | ($t.apex_banner_padding | px) as $bp | ($t.apex_banner_icon_size | px) as $icon
 | ($t.apex_banner_close_size | px) as $close
 | {topBar: {accent: "#3584e4ff"}, surfaces: {
@@ -282,7 +282,9 @@ REPORT_OF_QUICK_SETTINGS_DRAWN_FROM_TOKENS='
         headerIcon: {width: ($t.apex_quick_menu_header_icon_size | px), height: ($t.apex_quick_menu_header_icon_size | px), background: "#3584e4ff", iconSize: $icon},
         title: {font: {size: ($t.apex_font_quick_menu_title_size | px), weight: ($t.apex_font_heading_weight | tonumber)}},
         rows: [{height: ($t.apex_quick_menu_row_height | px), padding: {left: ($t.apex_menu_row_padding | px)}, radius: ($t.apex_radius_menu_row | px)}],
-        rowHover: {background: ($t.apex_quick_menu_row_hover | hex)}}}}}'
+        rowHover: {background: ($t.apex_quick_menu_row_hover | hex)},
+        connected: {background: ($t.apex_button | hex), label: {font: {weight: ($t.apex_font_label_weight | tonumber)}}, hover: {background: ($t.apex_button_hover | hex)}},
+        other: {background: "#00000000", label: {font: {weight: 400}}}}}}}'
 # shellcheck disable=SC2016 # a jq program
 REPORT_OF_A_SWITCHER_DRAWN_FROM_TOKENS='
 ($t.apex_surface_border | px) as $b | ($t.apex_switcher_padding | px) as $p
@@ -713,7 +715,7 @@ REPORT_OF_LEGIBLE_SURFACES='
     dialogAccents: (["blue", "teal", "green", "yellow", "orange", "red", "pink", "purple", "slate"] | map({key: ., value: $s}) | from_entries),
     screenshot: $s,
 
-    bar: $s, dock: $s, popupMenu: $s, osd: $s, banner: $s, quickSettings: $s, wifiMenu: $s, dateMenu: $s, switcher: $s,
+    bar: $s, dock: $s, popupMenu: $s, osd: $s, banner: $s, quickSettings: $s, wifiMenu: $s, wifiMenuConnected: $s, dateMenu: $s, switcher: $s,
     dialog: $s, endSession: $s, spotlight: {popup: $s, toast: $s}, overview: $s, appGrid: $s}'
 
 a11y_run() {
@@ -726,7 +728,7 @@ a11y_run() {
 
 test_a11y() {
     local assertions expected change what passes failures open_gaps want
-    for assertions in a11y_contrast:43 a11y_layout:44; do
+    for assertions in a11y_contrast:45 a11y_layout:45; do
         expected=${assertions#*:}
         read -r passes failures open_gaps <<<"$(a11y_run "${assertions%:*}")"
         if ((failures == 0 && open_gaps == 0 && passes == expected)); then
@@ -746,6 +748,8 @@ test_a11y() {
 a11y_contrast|1|.bar.targets[0].ratio = 4.4|text at 4.4:1
 a11y_contrast|1|.dock.targets[1].ratio = 2.9|a glyph at 2.9:1
 a11y_contrast|1|.wifiMenu.targets[0].ratio = 3|a menu row's text at 3:1
+a11y_contrast|1|.wifiMenuConnected.targets[0].ratio = 4.4|the connected network's name at 4.4:1 over its fill
+a11y_contrast|1|.wifiMenuConnected.targets |= map(. + {kind: "icon"})|a connected row with only its glyphs measured
 a11y_contrast|1|.spotlight.toast.targets[0].ratio = 3|the toast's text at 3:1
 a11y_contrast|1|.quickSettingsAccents.yellow.targets[0].ratio = 4.49|a checked toggle on the yellow accent at 4.49:1
 a11y_contrast|1|del(.quickSettingsAccents.slate)|an accent left unmeasured
@@ -1221,6 +1225,7 @@ test_shell_surfaces() {
 .surfaces.popupMenu.content.width = 200|a menu narrower than the board's
 .surfaces.popupMenu.rows[2].height = 39|upstream's row height
 .surfaces.popupMenu.rows[0].hover.background = "#d8d8e0ff"|upstream's hover fill
+.surfaces.popupMenu.rows[1].checked.background = "#00000a11"|the connected network's fill leaking into other menus
 .surfaces.popupMenu.rows[0].y -= 1|rows 2 px apart
 .surfaces.popupMenu.separator.x -= 8|a separator across the whole menu
 .surfaces.popupMenu.icon = 16.364|upstream's em-sized row glyph
@@ -1277,6 +1282,10 @@ test_quick_settings() {
 .surfaces.quickSettings.wifiMenu.headerIcon.width = 36|upstream's header glyph circle
 .surfaces.quickSettings.wifiMenu.rows[0].height = 37|upstream's menu row
 .surfaces.quickSettings.wifiMenu.rowHover.background = "#00000a1f"|board 16's stronger popup-menu hover
+.surfaces.quickSettings.wifiMenu.connected.background = "#00000000"|upstream's unfilled connected row
+.surfaces.quickSettings.wifiMenu.connected.label.font.weight = 400|a connected row at the others' weight
+.surfaces.quickSettings.wifiMenu.connected.hover.background = "#00000a09"|the plain rows' faint hover on the connected row
+.surfaces.quickSettings.wifiMenu.other.background = "#00000a11"|every row filled as if connected
 CHANGES
     assert_run quick_settings light 'del(.surfaces)' >/dev/null
     expect_eq "Quick Settings: a report without it passes none" 0 "$(grep -c '^PASS' "$T/top-bar.out")"

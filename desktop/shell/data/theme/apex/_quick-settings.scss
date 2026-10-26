@@ -208,6 +208,14 @@ $_toggle_states: hover, focus, active;
     &:hover, &:focus, &:selected, &:active { background-color: $apex_quick_menu_row_hover; }
     & > StIcon { icon-size: $apex_quick_settings_icon_size; }
 
+    // The connected network, :checked by the layer: a button's fill, a step darker under the pointer.
+    &.nm-network-item:checked {
+      font-weight: $apex_font_label_weight;
+      background-color: $apex_button;
+
+      &:hover, &:focus, &:selected, &:active { background-color: $apex_button_hover; }
+    }
+
     .apex-network-lock {
       icon-size: $apex_quick_menu_lock_size;
       color: transparentize($apex_fg, 1 - $apex_quick_menu_lock_opacity);
