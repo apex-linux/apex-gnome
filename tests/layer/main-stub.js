@@ -463,6 +463,7 @@ export function popModal() {
 }
 
 export const layoutManager = {
+    uiGroup,
     modalDialogGroup: emptyContainer(),
     ...emitter({}),
     primaryMonitor: {x: 0, y: 0, width: 1440, height: 900},
@@ -573,6 +574,20 @@ class DashStub {
     showAppsButton = emitter({checked: false});
     redisplays = 0;
     queued = 0;
+    _handlers = [];
+
+    connect(signal, fn) {
+        this._handlers.push([signal, fn]);
+        return this._handlers.length;
+    }
+
+    disconnect(id) {
+        this._handlers[id - 1] = null;
+    }
+
+    destroy() {
+        this._handlers.filter(h => h?.[0] === 'destroy').forEach(([, fn]) => fn(this));
+    }
 
     show() {
         this.visible = true;

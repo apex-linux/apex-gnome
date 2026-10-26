@@ -2674,6 +2674,23 @@ test_no_nan_allocation() {
         "$passes/$failures $(grep -c 'per log: glass-load.log:1$' "$T/assertions.out")"
 }
 
+test_no_disposed_apex() {
+    local run=$T/disposed-run disposed passes failures
+    disposed='Gjs-CRITICAL **: Object St.Widget (0x55e780c0), has been already disposed — impossible to access it.'
+    mkdir -p "$run"
+    printf '%s\n' "$disposed" '== Stack trace for context 0x55 ==' '#0   7ffd b   file:///w/probe.js:2635 (29fd @ 15)' \
+        >"$run/motion.log"
+    read -r passes failures <<<"$(assertion_counts no_disposed_apex motion "$run/motion.log")"
+    expect_eq "disposed objects: one the probe touches is the probe's own" "1/0" "$passes/$failures"
+    printf '%s\n' "$disposed" '== Stack trace for context 0x55 ==' '#0   7ffd b   resource:///org/gnome/shell/ui/dash.js:683 (29fd @ 15)' \
+        '#1   7ffd b   resource:///org/gnome/shell/ui/apex/dock/feature.js:83 (29fd @ 15)' 'GNOME Shell-Message: next' >"$run/motion.late.log"
+    read -r passes failures <<<"$(assertion_counts no_disposed_apex motion "$run/motion.log")"
+    expect_eq "disposed objects: one an Apex frame touches fails, in the late first start's log too" "0/1" "$passes/$failures"
+    expect_eq "disposed objects: and the failure names the object and the Apex frame" 1 \
+        "$(grep -c 'touched: 1 with an Apex frame, first St.Widget at resource:///org/gnome/shell/ui/apex/dock/feature.js:83' "$T/assertions.out")"
+    rm "$run/motion.late.log"
+}
+
 test_startup_handler_ran() {
     local run=$T/startup-run passes failures
     local started='GNOME Shell-Message: 09:41:00.000: GNOME Shell started at Mon Sep 28 2026 09:41:00 GMT+0000'
@@ -3186,6 +3203,7 @@ test_one_gpu
 test_part_ran
 test_no_nan_allocation
 test_parental_controls_ready
+test_no_disposed_apex
 test_startup_handler_ran
 test_network_rows_centred
 test_pr_assertions

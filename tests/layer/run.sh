@@ -762,6 +762,8 @@ fact "focused-app: show-focused-app-name=false hides it" 'focused-app\.hidden=De
 fact "focused-app: and the lock screen" 'focused-app\.locked=Desktop name=Desktop visible=false reactive=false'
 fact "focused-app: layer-enabled=false takes it out of the bar" 'focused-app\.off=none'
 fact "focused-app: layer-enabled=true brings it back" 'focused-app\.on=Desktop name=Desktop visible=true reactive=false'
+fact "focused-app: the stage's teardown at logout disables it first, before its label is destroyed" 'focused-app\.teardown=none'
+fact "focused-app: a second teardown, then layer-enabled=false, disables nothing twice" 'focused-app\.teardown-then-off=none'
 lacks "focused-app: no feature fails or disables uncleanly" 'off for this session|did not disable cleanly|cannot restyle'
 
 probe focused-app-disabled "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_FOCUSED_APP=1 PROBE_DISABLED=panel
@@ -1128,6 +1130,8 @@ fact "dock: a redisplay still pending when the dock goes away never runs, and th
     'dock\.overview-dash-off=redisplays=2 queued=1'
 fact "dock: layer-enabled=true brings it back" "dock\.on=Files:54 Web:54 $DOCK_TAIL indicators=true visible=true dash=false dash-height=0"
 fact "dock: back on, the hidden dash redisplays once more on its own" 'dock\.overview-dash-on=redisplays=3 queued=1'
+fact "dock: a destroyed dash, as at logout, never redisplays: neither the pending one nor one queued after" \
+    'dock\.overview-dash-destroyed=redisplays=3 queued=1'
 count_is "dock: the old dock is destroyed" '^probe: dock\.destroyed=apexDock$' 1
 lacks "dock: no feature fails or disables uncleanly" 'off for this session|did not disable cleanly|cannot restyle'
 
