@@ -44,6 +44,7 @@ const UNLOCK_BRIGHTNESS = 0.65;
 const BACKGROUND_RADIUS = 40;
 const BACKGROUND_BRIGHTNESS = 0.8;
 const FRAME_TIMEOUT_MS = 2000;
+const LAYOUT_FRAMES = 10;
 const LAYOUT_STEP_MS = 16;
 // Left of the overview's workspace, which leaves the scrim bare there.
 const SCRIM_BOX = {x: 24, y: 280, width: 160, height: 160};
@@ -349,9 +350,11 @@ function glassOf(actor) {
     if (!effect)
         return null;
     const {radius, saturation, corner_radius: cornerRadius, enabled, fine, mode} = effect;
+    const box = actor.allocation;
     return {
         radius, saturation: Math.round(saturation * 1000) / 1000, cornerRadius, enabled, fine,
         followOpacity: effect.follow_opacity, background: mode === Shell.BlurMode.BACKGROUND,
+        mapped: actor.mapped, allocation: [box.get_width(), box.get_height()],
     };
 }
 
@@ -368,11 +371,20 @@ function blurEffectsUnder(root) {
     return found;
 }
 
+// Glass comes on once its surface is laid out with area (#135); leisure can come before that frame.
+async function laidOut(actor) {
+    const ready = () => actor.mapped && actor.has_allocation() && actor.allocation.get_width() > 0 && actor.allocation.get_height() > 0;
+    // eslint-disable-next-line no-await-in-loop
+    for (let frames = 0; actor && !ready() && frames < LAYOUT_FRAMES && await paintedFrame(); frames++)
+        ;
+    return actor;
+}
+
 async function withMenuOpen(menu, read) {
     menu.open(BoxPointer.PopupAnimation.NONE);
     try {
         await Scripting.waitLeisure();
-        return await read(menu.box);
+        return await read(await laidOut(menu.box));
     } finally {
         menu.close(BoxPointer.PopupAnimation.NONE);
     }
@@ -386,7 +398,7 @@ async function withBanner(read) {
     }));
     try {
         await Scripting.waitLeisure();
-        return read(Main.messageTray._banner);
+        return read(await laidOut(Main.messageTray._banner));
     } finally {
         source.destroy();
     }
@@ -436,7 +448,7 @@ async function scrimTests() {
     try {
         Main.overview.show();
         await Scripting.waitLeisure();
-        const overview = glassOf(scrimActor());
+        const overview = glassOf(await laidOut(scrimActor()));
         const Glass = await import('resource:///org/gnome/shell/ui/apex/glass/feature.js');
         const before = await fullFrame(Main.uiGroup, scale, SCRIM_BOX);
         window.background_color = colour('#33d17a');
@@ -478,8 +490,8 @@ async function derivedState() {
     try {
         await Scripting.waitLeisure();
         return {
-            osd: glassOf(Main.osdWindowManager._osdWindows[primaryIndex]._hbox),
-            switcher: glassOf(list),
+            osd: glassOf(await laidOut(Main.osdWindowManager._osdWindows[primaryIndex]._hbox)),
+            switcher: glassOf(await laidOut(list)),
             screenshot: glassOf(Main.screenshotUI._panel),
         };
     } finally {
@@ -706,7 +718,8 @@ async function tilePreviewTests() {
         preview.open(window, new Mtk.Rectangle({...TILE_RECT}), Main.layoutManager.primaryIndex);
         preview.set_style('background-color: transparent; box-shadow: none;');
         await Scripting.waitLeisure();
-        const glass = glassActor();
+        await laidOut(preview);
+        const glass = await laidOut(glassActor());
         const scale = preview.get_resource_scale();
         const deviceCss = scale * St.ThemeContext.get_for_stage(global.stage).scale_factor;
         const inset = preview.get_theme_node().get_border_width(St.Side.TOP);
@@ -796,9 +809,9 @@ async function emptyBoxTests() {
         actor.show();
         const shownAgain = await state();
         actor.set_size(320, 200);
-        const laidOut = await settled(true);
+        const laidOutState = await settled(true);
         actor.set_size(320, 0);
-        return {shown, hidden, shownAgain, emptyFrames, laidOut, zeroHeight: await settled(false)};
+        return {shown, hidden, shownAgain, emptyFrames, laidOut: laidOutState, zeroHeight: await settled(false)};
     } finally {
         Registry.unregister(actor);
         actor.destroy();
