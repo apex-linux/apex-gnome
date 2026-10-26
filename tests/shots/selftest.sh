@@ -912,6 +912,15 @@ test_signoff_banners() {
         not_ok "signoff: a capture with live content left fails its board, named: $(tail -n 3 "$T/signoff.out")"
     fi
     rm -rf "$dir" && cp -r "$1" "$dir"
+    echo 'APEXLOCK {"bluetooth.list":true}' >>"$dir/shots/greeter-light.log"
+    if ! "$HERE/signoff.sh" --collect "$dir/g2" "$dir/shots" "$dir/out" >"$T/signoff.out" 2>&1 &&
+        grep -q 'board 12 (GDM greeter), light: the Bluetooth indicator shows in greeter-light-list' "$T/signoff.out" &&
+        ! grep -q 'board 12 (GDM greeter), dark' "$T/signoff.out"; then
+        ok "signoff: a shell capture whose Bluetooth indicator shows fails its board, named"
+    else
+        not_ok "signoff: a shell capture whose Bluetooth indicator shows fails its board, named: $(tail -n 3 "$T/signoff.out")"
+    fi
+    rm -rf "$dir" && cp -r "$1" "$dir"
     : >"$dir/shots/lock-dark.log"
     if ! "$HERE/signoff.sh" --collect "$dir/g2" "$dir/shots" "$dir/out" >"$T/signoff.out" 2>&1 &&
         grep -q 'board 20 (Lock screen), dark: no banner record for lock-dark-open' "$T/signoff.out"; then

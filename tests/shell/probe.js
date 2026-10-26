@@ -61,6 +61,10 @@ function bannerShown() {
     return tray._banner?.mapped ? {source: tray._notification?.source?.title ?? null, title: tray._notification?.title ?? null} : null;
 }
 
+function bluetoothShown() {
+    return Main.panel.statusArea.quickSettings?._bluetooth?._indicator?.visible ?? false;
+}
+
 async function capture(name) {
     const path = GLib.build_filenamev([GLib.getenv('APEX_SHOTS'), `${GLib.getenv('APEX_SHOT')}-${name}.png`]);
     const stream = Gio.File.new_for_path(path).replace(null, false, Gio.FileCreateFlags.NONE, null);
@@ -71,6 +75,7 @@ async function capture(name) {
     }
     fact(`capture.${name}`, path);
     fact(`banner.${name}`, bannerShown());
+    fact(`bluetooth.${name}`, bluetoothShown());
 }
 
 // What gnome-settings-daemon's power plugin sets on idle. Not call_sync: the shell is DisplayConfig.

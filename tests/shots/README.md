@@ -598,6 +598,10 @@ board, when:
   `APEXG2-CAPTURE` in G2, a `banner.NAME` fact in `tests/shell`. Board 16 shows one on
   purpose, and a board without that record fails too, so a stray banner never reaches a
   golden.
+- a `tests/shell` capture shows the Bluetooth indicator (its `bluetooth.NAME` fact). The
+  boards draw none, and the greeter runs no Apex JS to hide it, so `shoot.sh` removes the
+  fixtures' keyboard before any shell starts: with no device, nothing can reach the indicator
+  late. G2 keeps the connected keyboard, which its top-bar assertion needs.
 
 The `signoff` workflow uploads the set as `signoff-SHA`, then checks it against the approved
 goldens (below).
