@@ -40,6 +40,7 @@ const UNLOCK_BRIGHTNESS = 0.65;
 const BACKGROUND_RADIUS = 40;
 const BACKGROUND_BRIGHTNESS = 0.8;
 const FRAME_TIMEOUT_MS = 2000;
+const LAYOUT_STEP_MS = 16;
 // Left of the overview's workspace, which leaves the scrim bare there.
 const SCRIM_BOX = {x: 24, y: 280, width: 160, height: 160};
 const SCRIM_WINDOW = {x: 60, y: 320, width: 200, height: 120};
@@ -556,6 +557,18 @@ async function dialogOver(read) {
     }
 }
 
+// A surface opened since the last relayout has no allocation, and its transformed position is NaN.
+async function laidOutPosition(box) {
+    for (let waited = 0; waited < FRAME_TIMEOUT_MS; waited += LAYOUT_STEP_MS) {
+        const [x, y] = box.get_transformed_position();
+        if (box.has_allocation() && Number.isFinite(x) && Number.isFinite(y))
+            return [x, y];
+        // eslint-disable-next-line no-await-in-loop
+        await Scripting.sleep(LAYOUT_STEP_MS);
+    }
+    throw new Error(`${box} had no allocation ${FRAME_TIMEOUT_MS} ms after it opened`);
+}
+
 // The shadow layers, above their surfaces and cut out inside them, leave each surface's own
 // pixels alone: Quick Settings (glass, over the pattern), a popup menu and a dialog, light and dark.
 async function shadowsOverSurfaces() {
@@ -575,7 +588,7 @@ async function shadowsOverSurfaces() {
         for (const [name, open] of Object.entries(surfaces)) {
             // eslint-disable-next-line no-await-in-loop
             frames[name] = await open(async (box, boxPointer) => {
-                const [x, y] = box.get_transformed_position();
+                const [x, y] = await laidOutPosition(box);
                 group.set_position(Math.round(x) - PATTERN.x, Math.round(y) - PATTERN.y);
                 await Scripting.waitLeisure();
                 const radius = box.get_theme_node().get_border_radius(St.Corner.TOPLEFT) * box.get_resource_scale();
