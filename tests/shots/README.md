@@ -679,6 +679,10 @@ on every board, byte for byte. A race in a scene is fixed in the scene, never ma
   order back (`get_tab_list`), refocuses until it is Terminal, Text Editor, Calendar (at most
   three times), and checks it again before the overview's and the switcher's captures, failing
   by name otherwise;
+- the switcher sorts apps by their windows' user time (`Shell.AppSystem.get_running`), not by
+  the tab list, and two activations in one millisecond tie in hash order. So each activation
+  waits for a later timestamp, the read-back covers both orders, and the switcher's capture
+  records its own list, which `signoff.sh` checks against board 15's order;
 - they wait until no window has repainted for 1.5 s, since Text Editor retitles its new
   document a draft after it maps;
 - they re-send the pointer's move until it reads back at the right edge: a new virtual device
