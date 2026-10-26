@@ -734,6 +734,38 @@ async function tilePreviewTests() {
 }
 
 // The glass manager's surfaces, then Reduce Transparency, high contrast and the kill switch.
+// 0003's actor mode sizes its offscreen to the box: an empty one must not blur, over real frames.
+async function emptyBoxTests() {
+    const Registry = await import('resource:///org/gnome/shell/ui/apex/glass/registry.js');
+    const actor = new St.Widget({name: 'apexGlassEmptyTest', style_class: 'apex-glass-scrim', width: 0, height: 0});
+    actor.add_child(new Clutter.Clone({source: global.window_group}));
+    Main.uiGroup.add_child(actor);
+    Registry.register(actor, {name: 'emptyTest', mode: 'actor'});
+    let frames = 0;
+    const paintId = global.stage.connect('after-paint', () => frames++);
+    const state = async () => {
+        actor.queue_redraw();
+        await Scripting.waitLeisure();
+        return glassOf(actor);
+    };
+    try {
+        const shown = await state();
+        actor.hide();
+        const hidden = await state();
+        actor.show();
+        const shownAgain = await state();
+        const emptyFrames = frames;
+        actor.set_size(320, 200);
+        const laidOut = await state();
+        actor.set_size(320, 0);
+        return {shown, hidden, shownAgain, emptyFrames, laidOut, zeroHeight: await state()};
+    } finally {
+        global.stage.disconnect(paintId);
+        Registry.unregister(actor);
+        actor.destroy();
+    }
+}
+
 async function managerTests() {
     const apex = new Gio.Settings({schema_id: APEX_SCHEMA});
     const a11y = new Gio.Settings({schema_id: 'org.gnome.desktop.a11y.interface'});
@@ -744,6 +776,7 @@ async function managerTests() {
         scrims: await scrimTests(),
         derived: await derivedState(),
         tile: await tilePreviewTests(),
+        emptyBox: await emptyBoxTests(),
         reduceTransparency: await withSetting(apex, 'reduce-transparency', new GLib.Variant('b', true), surfacesState),
         highContrast: await withSetting(a11y, 'high-contrast', new GLib.Variant('b', true), surfacesState),
         disabled: await withSetting(apex, 'disabled-features', new GLib.Variant('as', ['glass']), surfacesState),

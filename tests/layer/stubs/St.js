@@ -246,6 +246,18 @@ class Widget {
         return !this.pendingLayout;
     }
 
+    // BindConstraints give the actor its source's size, plus their offsets: WIDTH 2, HEIGHT 3, SIZE 5, ALL 6.
+    get allocation() {
+        let [width, height] = [this.width, this.height];
+        for (const {source, coordinate, offset = 0} of [this.constraints ?? []].flat().filter(c => c?.source)) {
+            if ([2, 5, 6].includes(coordinate))
+                width = source.width + offset;
+            if ([3, 5, 6].includes(coordinate))
+                height = source.height + offset;
+        }
+        return {get_width: () => width, get_height: () => height};
+    }
+
     queue_redraw() {
         this.redraws++;
         this.clip = null;
