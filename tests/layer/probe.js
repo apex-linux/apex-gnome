@@ -908,10 +908,10 @@ async function exerciseShadows() {
     };
     root.add_child(bin);
     bin.add_child(surface);
-    const layers = label => {
-        const found = Registry.layersOf(surface);
+    const layers = (label, of = surface, under = bin) => {
+        const found = Registry.layersOf(of);
         fact(`shadows.${label}`, found.map(l => `${l.style} at ${l.x},${l.y} ${l.width}x${l.height} ` +
-            `above=${root.get_children().indexOf(l) === root.get_children().indexOf(bin) + 1} cutout=${l.cutout}`).join(' | ') || 'none');
+            `above=${root.get_children().indexOf(l) === root.get_children().indexOf(under) + 1} cutout=${l.cutout}`).join(' | ') || 'none');
     };
     Registry.register(surface, {name: 'probe', container: root});
     fact('shadows.before-the-frame', Registry.layersOf(surface).length);
@@ -940,12 +940,24 @@ async function exerciseShadows() {
     surface._themeNode = sheet;
     surface.emit('style-changed');
     await spin(50);
+    // A surface not laid out yet: 0x0, as a menu or dialog is in the frame it opens.
+    const emptyBin = new St.Widget({name: 'empty-bin', x: 100, y: 300});
+    const empty = new St.Widget({name: 'empty', x: 20, y: 30, width: 0, height: 0, mapped: true});
+    empty._themeNode = sheet;
+    root.add_child(emptyBin);
+    emptyBin.add_child(empty);
+    Registry.register(empty, {name: 'probe-empty', container: root});
+    await spin(50);
+    layers('empty', empty, emptyBin);
     settings.set_boolean('layer-enabled', false);
     await spin(200);
     layers('off');
+    layers('empty-off', empty, emptyBin);
     settings.set_boolean('layer-enabled', true);
     await spin(200);
     layers('on');
+    layers('empty-on', empty, emptyBin);
+    emptyBin.destroy();
     surface.destroy();
     fact('shadows.destroyed', `${Registry.layersOf(surface).length} layers, root=${root.get_children().map(c => c.name).join(',')}`);
 }
