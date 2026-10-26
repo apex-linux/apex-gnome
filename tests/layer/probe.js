@@ -897,6 +897,16 @@ async function exerciseShadows() {
         return;
     const St = (await import(`file://${shellDir}/../St.js`)).default;
     const Registry = await import(`file://${shellDir}/js/ui/apex/shadows/registry.js`);
+    const Uniforms = await import(`file://${shellDir}/js/ui/apex/shadows/uniforms.js`);
+    // The cut-out's uniforms for a paint box of each size, the surface's box inset 10 in it.
+    for (const [label, width, height] of [['box', 320, 220], ['0x0', 0, 0], ['0xN', 0, 220], ['Nx0', 320, 0]]) {
+        const box = {x1: 100, y1: 40, x2: 100 + width, y2: 40 + height};
+        const extents = {origin: {x: 110, y: 50}, size: {width: Math.max(width - 20, 0), height: Math.max(height - 20, 0)}};
+        const uniforms = Uniforms.cutoutUniforms(box, extents, width * 2, height * 2, 14);
+        const values = uniforms ? [...uniforms.rect, ...uniforms.size, uniforms.radius] : [];
+        fact(`shadows.uniforms.${label}`, uniforms ? `${values.map(v => Number(v.toFixed(4))).join(',')} ` +
+            `finite=${values.every(Number.isFinite)}` : 'none');
+    }
     const root = new St.Widget({name: 'root'});
     root._stage = {};
     const bin = new St.Widget({name: 'bin', x: 100, y: 40});
