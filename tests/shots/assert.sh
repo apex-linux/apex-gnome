@@ -2042,11 +2042,13 @@ dock_external_case() {
         "moved to the primary, still maximised, it hides the dock and turns the bar solid"
     expect dock-external "$r" '.steps.backOnSecondary | .window == {monitor: 1, maximised: true} and (.dockHidden | not) and (.barSolid | not)' \
         "and moved back, the dock shows and the bar is translucent again"
-    expect dock-external "$r" '.steps.overview | .shown and .controlsState == 1 and .scrim.visible and (.scrim.launcher | not) and
-        .scrim.box == {x: 0, y: 0, width: 2400, height: 900} and (.views | length == 2)' \
-        "the overview shows a view on each monitor over the scrim, which covers both"
-    expect dock-external "$r" '.steps.launcher | .shown and .controlsState == 2 and .scrim.visible and .scrim.launcher and
-        .scrim.box == {x: 0, y: 0, width: 2400, height: 900}' "and so does the launcher, its scrim styled apex-launcher"
+    expect dock-external "$r" '.steps.overview | .shown and .controlsState == 1 and (.scrims | length == 2) and
+        ([.scrims[] | .visible and (.launcher | not)] | all) and [.scrims[].box] == .monitors and (.views | length == 2)' \
+        "the overview shows a view on each monitor over a scrim per monitor, each covering its monitor"
+    "${metric[@]}" 'each scrim blurs at 2 x $apex_overview_scrim_blur x its monitor'"'"'s scale (2 on both)' \
+        '.steps.overview.glass' "$DOCK_BLURS (.scrims | length == 2) and (.scrims | all(blurs(\$t.apex_overview_scrim_blur; 2)))"
+    expect dock-external "$r" '.steps.launcher | .shown and .controlsState == 2 and ([.scrims[] | .visible and .launcher] | all) and
+        [.scrims[].box] == .monitors' "and so does the launcher, each scrim styled apex-launcher"
     expect dock-external "$r" '.steps.swapped | .changed and .primary == 1' \
         "DisplayConfig's ApplyMonitorsConfig makes the external display the primary (monitors-changed)"
     "${metric[@]}" 'the dock follows it, $apex_dock_bottom_gap above its bottom edge and centred' \
@@ -2064,11 +2066,15 @@ dock_external_case() {
         (.dock.bottomGap | px_is(\$t.apex_dock_bottom_gap)) and (.dock.centreOffset | fabs <= 0.5)"
     "${metric[@]}" 'their glass blurs at scale 1 there: radius 2 x $apex_dock_blur and 2 x $apex_bar_blur, each on a laid-out box' \
         '.steps.mixedOnExternal.desktopGlass' "$DOCK_BLURS (.dock | blurs(\$t.apex_dock_blur; 1)) and (.bar | blurs(\$t.apex_bar_blur; 1))"
-    "${metric[@]}" "the overview's scrim covers the whole stage over both scales, blurring at 2 x \$apex_overview_scrim_blur x 2 (its views' highest scale) an unscaled clone of the desktop" \
-        '.steps.mixedOnExternal' "$DOCK_BLURS .overview.stage as \$stage | .overview.stage == {x: 0, y: 0, width: 3360, height: 1080} and
-        .overview.scrim.visible and .overview.scrim.box == \$stage and (.overview.views | length == 2) and
-        (.glass.scrim | blurs(\$t.apex_overview_scrim_blur; 2) and .box == \$stage and .clone == .source)"
-    expect dock-external "$r" '.steps.mixedOnExternal.desktopGlass.scrim | .enabled == false' "and the hidden scrim stops blurring"
+    "${metric[@]}" "in the overview a scrim covers each monitor, blurring an unscaled clone of the desktop at 2 x \$apex_overview_scrim_blur x that monitor's own scale: 2 on the panel, 1 on the external display" \
+        '.steps.mixedOnExternal' "$DOCK_BLURS .overview.stage == {x: 0, y: 0, width: 3360, height: 1080} and (.overview.scrims | length == 2) and
+        [.overview.scrims[].box] == .overview.monitors and ([.overview.scrims[].visible] | all) and (.overview.views | length == 2) and
+        [.glass.scrims[].box] == .overview.monitors and (.glass.scrims[0] | blurs(\$t.apex_overview_scrim_blur; 2)) and
+        (.glass.scrims[1] | blurs(\$t.apex_overview_scrim_blur; 1)) and ([.glass.scrims[] | .clone == .source] | all)"
+    expect dock-external "$r" '.steps.mixedOnExternal.glass.cost | .perMonitor < .wholeStage' \
+        "a scrim per monitor models cheaper per re-blur than one stage-wide scrim at the views' highest scale ($(jq -r '.steps.mixedOnExternal.glass.cost | "\(.perMonitor * 100 | round / 100) ms against \(.wholeStage * 100 | round / 100)"' <<<"$r" 2>/dev/null))"
+    echo "# dock-external: 0014-blurcost.py's ms per scrim re-blur, per monitor against stage-wide (report only): both at scale 2 $(jq -r '.steps.overview.glass.cost | "\(.perMonitor * 100 | round / 100) against \(.wholeStage * 100 | round / 100)"' <<<"$r" 2>/dev/null); mixed $(jq -r '.steps.mixedOnExternal.glass.cost | "\(.perMonitor * 100 | round / 100) against \(.wholeStage * 100 | round / 100)"' <<<"$r" 2>/dev/null)"
+    expect dock-external "$r" '.steps.mixedOnExternal.desktopGlass.scrims | length == 2 and all(.enabled == false)' "and the hidden scrims stop blurring"
     expect dock-external "$r" '.steps.mixed | .changed and .primary == 0 and (.window.monitor == .primary) == .dockHidden and
         (.window.monitor == .primary) == .barSolid' \
         "with the panel the primary again, the dock and the bar follow it, and its maximised window hides the dock and turns the bar solid"

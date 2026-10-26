@@ -2207,26 +2207,33 @@ readonly DOCK_EXTERNAL_REPORT='def lay($p; $window; $hidden; $solid): {primary: 
     panelBox: (if $p == 0 then {x: 0, y: 0, width: 1440, height: 32} else {x: 1440, y: 0, width: 960, height: 32} end),
     barSolid: $solid, window: $window};
   def glass($radius; $scale; $box): {radius: $radius, enabled: true, resourceScale: $scale, box: $box};
+  def mon0: {x: 0, y: 0, width: 1440, height: 900};
+  def mon1: {x: 1440, y: 0, width: 960, height: 540};
+  def ext1: {x: 1440, y: 0, width: 1920, height: 1080};
+  def unscaled: {clone: {x: 0, y: 0, width: 0, height: 0}, source: {x: 0, y: 0, width: 0, height: 0}};
   def overview($state): {shown: true, controlsState: $state,
-    scrim: {visible: true, box: {x: 0, y: 0, width: 2400, height: 900}, launcher: ($state == 2)},
+    scrims: [{visible: true, box: mon0, launcher: ($state == 2)}, {visible: true, box: mon1, launcher: ($state == 2)}],
+    monitors: [mon0, mon1],
     views: [{x: 0, y: 185, width: 1440, height: 618}, {x: 1440, y: 0, width: 960, height: 540}]};
   {settled: {startingUp: false, overview: false, actionMode: "NORMAL", dock: {visible: true, rested: true}},
    steps: {initial: (lay(0; null; false; false) + {dock: {bottomGap: 10, centreOffset: 0.5, visible: true}}),
      onSecondary: lay(0; {monitor: 1, maximised: true}; false; false),
      onPrimary: lay(0; {monitor: 0, maximised: true}; true; true),
      backOnSecondary: lay(0; {monitor: 1, maximised: true}; false; false),
-     overview: overview(1), launcher: overview(2),
+     overview: (overview(1) + {glass: {scrims: [(glass(144; 2; mon0) + unscaled), (glass(144; 2; mon1) + unscaled)],
+       cost: {perMonitor: 6.29, wholeStage: 7.85}}}),
+     launcher: overview(2),
      swapped: (lay(1; {monitor: 0, maximised: true}; false; false) + {changed: true, dock: {bottomGap: 10, centreOffset: 0.5}}),
      mixedOnExternal: (lay(1; {monitor: 0, maximised: true}; false; false) + {changed: true,
        monitors: [{x: 0, y: 0, width: 1440, height: 900, index: 0}, {x: 1440, y: 0, width: 1920, height: 1080, index: 1}],
        dockBox: {x: 2276, y: 1000, width: 249, height: 80}, panelBox: {x: 1440, y: 0, width: 1920, height: 32},
        dock: {bottomGap: 10, centreOffset: 0.5},
        overview: (overview(1) + {stage: {x: 0, y: 0, width: 3360, height: 1080},
-         scrim: {visible: true, box: {x: 0, y: 0, width: 3360, height: 1080}, launcher: false}}),
+         scrims: [{visible: true, box: mon0, launcher: false}, {visible: true, box: ext1, launcher: false}], monitors: [mon0, ext1]}),
        glass: {dock: glass(56; 1; {x: 2276, y: 1010, width: 249, height: 70}), bar: glass(48; 1; {x: 1440, y: 0, width: 1920, height: 32}),
-         scrim: (glass(144; 2; {x: 0, y: 0, width: 3360, height: 1080}) + {clone: {x: 0, y: 0, width: 0, height: 0}, source: {x: 0, y: 0, width: 0, height: 0}})},
+         scrims: [(glass(144; 2; mon0) + unscaled), (glass(72; 1; ext1) + unscaled)], cost: {perMonitor: 6.6, wholeStage: 13.18}},
        desktopGlass: {dock: glass(56; 1; {x: 2276, y: 1010, width: 249, height: 70}), bar: glass(48; 1; {x: 1440, y: 0, width: 1920, height: 32}),
-         scrim: (glass(144; 2; {x: 0, y: 0, width: 0, height: 0}) + {enabled: false})}}),
+         scrims: [(glass(144; 2; mon0) + {enabled: false}), (glass(72; 1; ext1) + {enabled: false})]}}),
      mixed: (lay(0; {monitor: 0, maximised: true}; true; true) + {changed: true,
        monitors: [{x: 0, y: 0, width: 1440, height: 900, index: 0}, {x: 1440, y: 0, width: 1920, height: 1080, index: 1}],
        dockBox: {x: 596, y: 980, width: 249, height: 80},
@@ -2255,8 +2262,9 @@ test_dock_external() {
 .steps.onPrimary.dockHidden = false|a primary's maximised window the dock ignores
 .steps.backOnSecondary.barSolid = true|a bar left solid after the window moved away
 .steps.overview.views = .steps.overview.views[:1]|an overview on the primary alone
-.steps.launcher.scrim.launcher = false|a launcher scrim without apex-launcher
-.steps.launcher.scrim.box.width = 1440|a scrim on the primary alone
+.steps.launcher.scrims[1].launcher = false|a launcher scrim without apex-launcher
+.steps.launcher.scrims = .steps.launcher.scrims[:1]|a scrim on the primary alone
+.steps.overview.glass.scrims[1] += {radius: 72, resourceScale: 1}|a scale-2 monitor's scrim blurred at scale 1
 .steps.swapped.changed = false|a DisplayConfig change the shell never saw
 .steps.swapped.dockBox.x = 596|a dock left on the old primary
 .steps.swapped.panelBox.x = 0|a bar left on the old primary
@@ -2265,9 +2273,12 @@ test_dock_external() {
 .steps.mixedOnExternal.panelBox.width = 960|a bar the scale change left at the old width
 .steps.mixedOnExternal.desktopGlass.dock.radius = 112|dock glass still blurring at scale 2 on a scale-1 monitor
 .steps.mixedOnExternal.desktopGlass.bar.box.height = 0|bar glass on an empty box
-.steps.mixedOnExternal.overview.scrim.box = {x: 0, y: 0, width: 2400, height: 900}|a scrim left at the stage's old size
-.steps.mixedOnExternal.glass.scrim.clone = {x: 0, y: 0, width: 3360, height: 1080}|a scrim whose clone scales the desktop
-.steps.mixedOnExternal.desktopGlass.scrim.enabled = true|a hidden scrim still blurring
+.steps.mixedOnExternal.overview.scrims = [{visible: true, box: {x: 0, y: 0, width: 3360, height: 1080}, launcher: false}]|one stage-wide scrim, not one per monitor
+.steps.mixedOnExternal.overview.scrims[1].box = {x: 1440, y: 0, width: 960, height: 540}|a scrim left at the monitor's old size
+.steps.mixedOnExternal.glass.scrims[1].clone = {x: 1440, y: 0, width: 1920, height: 1080}|a scrim whose clone is not moved by its monitor's origin
+.steps.mixedOnExternal.glass.scrims[1] += {radius: 144, resourceScale: 2}|the scale-1 display's scrim blurred at the panel's scale
+.steps.mixedOnExternal.glass.cost.perMonitor = 14|scrims per monitor modelled no cheaper than one stage-wide scrim
+.steps.mixedOnExternal.desktopGlass.scrims[1].enabled = true|a hidden scrim still blurring
 .steps.mixed.barSolid = false|a bar translucent over the panel's maximised window
 .steps.mixed.glass.dock.resourceScale = 1|dock glass left at scale 1 back on the panel
 CHANGES
