@@ -1939,6 +1939,58 @@ EOF
     fi
 }
 
+# stable.sh on two runs' reports: Spotlight keys' times may differ, any other field may not.
+test_stable_reports() {
+    local dir=$T/stable keys scenes
+    keys='{"budgetMs": 1000, "early": {"ms": 367, "rows": 3}, "late": {"ms": 1126, "rows": 5},
+           "settings": {"askedMs": 66, "cancelledMs": 1067}}'
+    scenes=$(jq -c --argjson keys "$keys" -n '{scenes: {}, surfaces: {spotlightKeys: $keys}}')
+    report_pair() {
+        rm -rf "$dir" && mkdir -p "$dir/a" "$dir/b"
+        printf 'APEXG2-SCENES %s\n' "$scenes" >"$dir/a/default.log"
+        printf 'APEXG2-SCENES %s\n' "$(jq -c "$1" <<<"$scenes")" >"$dir/b/default.log"
+        G2_GJS=false "$HERE/stable.sh" "$dir/a" "$dir/b" 2>&1 | grep '^[A-Z]* default: .*(APEXG2-SCENES)'
+    }
+    expect_eq "stable: runs whose Spotlight keys took other times report the same" \
+        "PASS default: both runs report the same (APEXG2-SCENES)" \
+        "$(report_pair '.surfaces.spotlightKeys |= (.early.ms += 1 | .late.ms += 1 | .settings.askedMs += 4 | .settings.cancelledMs += 4)')"
+    expect_eq "stable: a run whose Spotlight keys showed other rows fails, naming the field" \
+        "FAIL default: the runs report differently (APEXG2-SCENES): 1 differ: surfaces.spotlightKeys.late.rows 5 → 4" \
+        "$(report_pair '.surfaces.spotlightKeys.late.rows = 4 | .surfaces.spotlightKeys.late.ms += 1')"
+    expect_eq "stable: a run whose Settings provider was never cancelled fails" \
+        'FAIL default: the runs report differently (APEXG2-SCENES): 1 differ: surfaces.spotlightKeys.settings.cancelledMs "measured" → null' \
+        "$(report_pair '.surfaces.spotlightKeys.settings.cancelledMs = null')"
+    expect_eq "stable: a run without a measured field fails" \
+        'FAIL default: the runs report differently (APEXG2-SCENES): 1 differ: surfaces.spotlightKeys.settings.askedMs "measured" → absent' \
+        "$(report_pair 'del(.surfaces.spotlightKeys.settings.askedMs)')"
+    expect_eq "stable: a time outside Spotlight keys is still compared" \
+        "FAIL default: the runs report differently (APEXG2-SCENES): 1 differ: surfaces.osd.ms 10 → 11" \
+        "$(scenes=$(jq -c '.surfaces.osd.ms = 10' <<<"$scenes"); report_pair '.surfaces.osd.ms = 11')"
+}
+
+# A scenes report past an argument's size still plans its pair, with its masks; one jq cannot read fails it by name.
+test_huge_plan() {
+    local dir=$T/huge-plan filler entry
+    rm -rf "$dir" && mkdir -p "$dir"
+    filler=$(head -c 300000 /dev/zero | tr '\0' x)
+    printf 'APEXG2-SCENES {"scenes": {"desktop": {"boxes": {"panel": {"x": 0, "y": 0, "width": 40, "height": 2}}}}, "filler": "%s"}\n' "$filler" |
+        tee "$dir/a.log" >"$dir/b.log"
+    # shellcheck disable=SC2016 # expanded by the inner bash
+    entry=$(bash -c '. "$1/lib.sh"; plan_entry huge "$2" a "$2" b desktop "$2" panel' _ "$HERE" "$dir" 2>&1)
+    expect_eq "captures: a scenes report of 300 kB plans its pair, with its masks" \
+        '{"name":"huge","masks":[{"name":"panel","x":0,"y":0,"width":40,"height":2}]}' \
+        "$(jq -c '{name, masks}' <<<"$entry" 2>&1)"
+    echo 'APEXG2-SCENES {"scenes": {"desktop": }}' >"$dir/b.log"
+    # shellcheck disable=SC2016 # expanded by the inner bash
+    bash -c '. "$1/lib.sh"; plan_entry huge "$2" a "$2" b desktop "$2" panel | jq -s . >"$2/plan.json"
+        G2_GJS=false compare_and_expect_equal "$2/plan.json" "$2/results.json"' _ "$HERE" "$dir" >"$dir/out" 2>&1
+    if grep -q '^FAIL captures huge: not compared (jq could not write its plan entry (exit [0-9]*))$' "$dir/out"; then
+        ok "captures: a pair jq could not plan fails by name"
+    else
+        not_ok "captures: a pair jq could not plan fails by name: $(head -n 3 "$dir/out")"
+    fi
+}
+
 skip_or_fail() {
     if [[ $NO_SKIP == 1 ]]; then
         not_ok "$* (APEX_SHOTS_TESTS_NO_SKIP=1)"
@@ -3047,6 +3099,8 @@ test_png_js
 test_compare_js
 test_frame_rect
 test_incomplete_compare
+test_stable_reports
+test_huge_plan
 test_token_file
 test_top_bar
 test_dock

@@ -141,18 +141,21 @@ plan_entry() {
     local expected_scenes actual_scenes
     expected_scenes=$(report_of "$expected_dir/$expected_case.log" APEXG2-SCENES)
     actual_scenes=$(report_of "$actual_dir/$actual_case.log" APEXG2-SCENES)
+    # A scenes report outgrows an argument; one that never reaches the plan still has its pair, failing by name.
     jq -cn --arg name "$name" --arg scene "$scene" \
-        --argjson expected_scenes "${expected_scenes:-null}" --argjson actual_scenes "${actual_scenes:-null}" \
+        --slurpfile expected_scenes <(printf '%s\n' "${expected_scenes:-null}") \
+        --slurpfile actual_scenes <(printf '%s\n' "${actual_scenes:-null}") \
         --arg expected "$expected_dir/captures/$expected_case-$scene.png" \
         --arg actual "$actual_dir/captures/$actual_case-$scene.png" \
         --arg diff "$diff_dir/$name.png" --args '
         {name: $name, expected: $expected, actual: $actual, diff: $diff,
          masks: [$ARGS.positional[] as $mask_actor
-                 | [$expected_scenes, $actual_scenes] | map(.scenes[$scene].boxes[$mask_actor] // empty)
+                 | [$expected_scenes[0], $actual_scenes[0]] | map(.scenes[$scene].boxes[$mask_actor] // empty)
                  | select(length > 0)
                  | {name: $mask_actor, x: (map(.x) | min), y: (map(.y) | min),
                     x1: (map(.x + .width) | max), y1: (map(.y + .height) | max)}
-                 | {name, x, y, width: (.x1 - .x), height: (.y1 - .y)}]}' "$@"
+                 | {name, x, y, width: (.x1 - .x), height: (.y1 - .y)}]}' "$@" ||
+        printf '{"name": "%s", "planError": "jq could not write its plan entry (exit %s)"}\n' "$name" "$?"
 }
 
 compare_captures() {
@@ -163,10 +166,18 @@ compare_captures() {
 }
 
 compare_and_expect_equal() {
-    local plan=$1 results=$2 status=0 planned compared
+    local plan=$1 results=$2 status=0 planned compared unplanned pair
     rm -f -- "$results"
-    compare_captures "$plan" "$results" || status=$?
-    planned=$(jq length "$plan" 2>/dev/null) || planned=0
+    if ! unplanned=$(jq -r '.[] | select(has("planError")) | "\(.name): \(.planError)"' "$plan") ||
+        ! jq '[.[] | select(has("planError") | not)]' "$plan" >"$plan.pairs"; then
+        fail "captures: the plan $plan is not JSON jq can read"
+        return
+    fi
+    while IFS= read -r pair; do
+        [[ -z $pair ]] || fail "captures ${pair%%: *}: not compared (${pair#*: })"
+    done <<<"$unplanned"
+    compare_captures "$plan.pairs" "$results" || status=$?
+    planned=$(jq length "$plan.pairs" 2>/dev/null) || planned=0
     compared=$(jq length "$results" 2>/dev/null) || compared=none
     if ((status > COMPARE_COULD_NOT_COMPARE || planned == 0)) || [[ $compared != "$planned" ]]; then
         fail "captures: compare.js compared $compared of $planned planned pairs (exit $status, G2_GJS=$G2_GJS)"
