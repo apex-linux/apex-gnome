@@ -2195,6 +2195,17 @@ glass_manager() {
         | (.osd | glass($t.apex_panel_blur; $t.apex_panel_saturation; $s)) and (.switcher | glass($t.apex_panel_blur; $t.apex_panel_saturation; $s))
         and (.screenshot | .radius == 2 * ($t.apex_panel_blur | px) * $s and .fine and (.enabled | not))' \
         'the derived glass: the OSD and an Alt+Tab list blur at $apex_panel_blur and $apex_panel_saturation as the popovers do; the screenshot panel too, paused while closed'
+    "${expect_glass[@]}" "$glass"' .t as $t | .manager.monitorScale as $s | .manager.tile.shown.glass
+        | glass($t.apex_tile_preview_blur; $t.apex_tile_preview_saturation; $s) and .cornerRadius == ($t.apex_radius_tile_preview | px) * $s' \
+        'the shown tile preview registers its glass at board 22'"'"'s $apex_tile_preview_blur and $apex_tile_preview_saturation, rounded $apex_radius_tile_preview'
+    "${expect_glass[@]}" '.t as $t | .manager.tile.shown | (.inset | px_is($t.apex_tile_preview_inset)) and .glassBox == .inner' \
+        'the blurred box is the preview inside its clear $apex_tile_preview_inset border, exactly'
+    "${expect_glass[@]}" ".manager.tile.shown | .downscale > 1 and .innerDiffering > 0 and (.interior.max | max) <= $GLASS_INTERIOR_MAX and (.edge.max | max) <= $GLASS_EDGE_MAX and (.box.mean | max) <= $GLASS_MEAN_ERROR" \
+        "with its fill and ring held off, the pixels there are blur-ref.js's blur of the pattern, within $GLASS_INTERIOR_MAX/255 inside, $GLASS_EDGE_MAX/255 in the ds/2 band, $GLASS_MEAN_ERROR/255 on average"
+    "${expect_glass[@]}" '.manager.tile.shown.bandDiffering == 0' \
+        'and the clear border around them shows the pattern itself, pixel for pixel: no blur'
+    "${expect_glass[@]}" '.manager.tile.hidden | .glass == null and (.visible | not) and .differing == 0' \
+        'closed, the preview leaves no blur behind: no effect, and the pattern itself where it was'
     "${expect_glass[@]}" '.manager.scrims | .forwarded.changed > 0 and .forwarded.differingFromFull == 0 and .unforwarded.differingFromFull > 0' \
         'a window damaged under the scrim, forwarded as the manager forwards a window'"'"'s damage, re-blurs it in the same frame as a full redraw would; unforwarded, the blur'"'"'s halo stays stale, which is why it is forwarded'
     "${expect_glass[@]}" "$glass"' .t as $t | .manager.monitorScale as $s | .manager.restored | (.panel | glass($t.apex_bar_blur; $t.apex_bar_saturation; $s)) and (.solidClass | not)' \

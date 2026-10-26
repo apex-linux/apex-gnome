@@ -2739,11 +2739,17 @@ CHANGES
             disabled: ($none + {solidClass: false}), restored: $g,
             scrims: {overview: $scrim, launcher: ($scrim + {radius: 160, saturation: 1.6}), hidden: ($scrim + {enabled: false}), barOverScrim: $on,
                 unforwarded: {changed: 59520, differingFromFull: 42880}, forwarded: {changed: 102400, differingFromFull: 0}},
-            derived: {osd: $p, switcher: $p, screenshot: ($p + {enabled: false})}}}')
+            derived: {osd: $p, switcher: $p, screenshot: ($p + {enabled: false})},
+            tile: {shown: {scale: 2, inset: 6, preview: {x: 168, y: 224, width: 384, height: 192},
+                glassBox: {x: 174, y: 230, width: 372, height: 180}, inner: {x: 174, y: 230, width: 372, height: 180},
+                glass: {radius: 80, saturation: 1.6, cornerRadius: 28, enabled: true, fine: true, followOpacity: true, background: true},
+                downscale: 8, box: {mean: [0.4, 0.4, 0.4]}, interior: {max: [2, 2, 2]}, edge: {max: [6, 6, 6]},
+                bandDiffering: 0, innerDiffering: 267840},
+                hidden: {glass: null, visible: false, differing: 0}}}}')
     while IFS='|' read -r failures what change; do
         jq -c "$change" <<<"$manager" | sed 's/^/APEXG2-GLASS /' >"$T/glass.log"
         read -r passes _ <<<"$(assertion_counts glass_manager glass "$T/glass.log" light)"
-        expect_eq "glass manager: $what fails $failures of 8" "$failures" $((8 - passes))
+        expect_eq "glass manager: $what fails $failures of 13" "$failures" $((13 - passes))
     done <<'CHANGES'
 0|the bar, the dock and the popovers at their tokens, every switch honoured|.
 1|the bar at the popovers' sigma|.manager.glass.panel.radius = 120
@@ -2762,7 +2768,15 @@ CHANGES
 1|a forwarded damage that leaves a stale halo|.manager.scrims.forwarded.differingFromFull = 120
 1|an OSD without glass|.manager.derived.osd = null
 1|an Alt+Tab list at the bar's saturation|.manager.derived.switcher.saturation = 1.6
-8|no manager|.manager = null
+1|a tile preview that never registers its glass|.manager.tile.shown.glass = null
+1|a tile preview at the popovers' glass|.manager.tile.shown.glass.radius = 120
+1|a blurred box that includes the clear border|.manager.tile.shown.glassBox = .manager.tile.shown.preview
+1|a tile blur off the reference by 9/255 inside|.manager.tile.shown.interior.max = [9, 2, 2]
+1|a tile that draws the pattern unblurred|.manager.tile.shown.innerDiffering = 0
+1|a blur that reaches into the clear border|.manager.tile.shown.bandDiffering = 4800
+1|a blur left after the preview hides|.manager.tile.hidden.glass = .manager.tile.shown.glass
+1|a hidden preview whose blur still shows|.manager.tile.hidden.differing = 267840
+13|no manager|.manager = null
 CHANGES
 }
 
