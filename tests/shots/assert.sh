@@ -2015,7 +2015,7 @@ readonly DOCK_INSIDE='def inside($m): .x >= $m.x and .x + .width <= $m.x + $m.wi
 # and the dock and the bar follow the primary that DisplayConfig sets.
 # shellcheck disable=SC2016 # token names in descriptions, jq programs
 dock_external_case() {
-    local run=$1 f=$1/dock-external.log r error tokens
+    local run=$1 f=$1/dock-external.log r error tokens cost
     exits "$run" dock-external 0
     no_js_error dock-external "$f"
     no_apex_failure dock-external "$f"
@@ -2071,9 +2071,12 @@ dock_external_case() {
         [.overview.scrims[].box] == .overview.monitors and ([.overview.scrims[].visible] | all) and (.overview.views | length == 2) and
         [.glass.scrims[].box] == .overview.monitors and (.glass.scrims[0] | blurs(\$t.apex_overview_scrim_blur; 2)) and
         (.glass.scrims[1] | blurs(\$t.apex_overview_scrim_blur; 1)) and ([.glass.scrims[] | .clone == .source] | all)"
+    cost=$(jq -r 'def ms: . * 100 | round / 100;
+        [.steps.overview, .steps.mixedOnExternal] | map(.glass.cost | "\(.perMonitor | ms) ms against \(.wholeStage | ms)") | join(";")' <<<"$r" 2>/dev/null)
     expect dock-external "$r" '.steps.mixedOnExternal.glass.cost | .perMonitor < .wholeStage' \
-        "a scrim per monitor models cheaper per re-blur than one stage-wide scrim at the views' highest scale ($(jq -r '.steps.mixedOnExternal.glass.cost | "\(.perMonitor * 100 | round / 100) ms against \(.wholeStage * 100 | round / 100)"' <<<"$r" 2>/dev/null))"
-    echo "# dock-external: 0014-blurcost.py's ms per scrim re-blur, per monitor against stage-wide (report only): both at scale 2 $(jq -r '.steps.overview.glass.cost | "\(.perMonitor * 100 | round / 100) against \(.wholeStage * 100 | round / 100)"' <<<"$r" 2>/dev/null); mixed $(jq -r '.steps.mixedOnExternal.glass.cost | "\(.perMonitor * 100 | round / 100) against \(.wholeStage * 100 | round / 100)"' <<<"$r" 2>/dev/null)"
+        "a scrim per monitor models cheaper per re-blur than one stage-wide scrim at the views' highest scale (${cost#*;})"
+    echo "# dock-external: 0014-blurcost.py's ms per scrim re-blur, per monitor against stage-wide (report only):" \
+        "both at scale 2 ${cost%%;*}; mixed ${cost#*;}"
     expect dock-external "$r" '.steps.mixedOnExternal.desktopGlass.scrims | length == 2 and all(.enabled == false)' "and the hidden scrims stop blurring"
     expect dock-external "$r" '.steps.mixed | .changed and .primary == 0 and (.window.monitor == .primary) == .dockHidden and
         (.window.monitor == .primary) == .barSolid' \
