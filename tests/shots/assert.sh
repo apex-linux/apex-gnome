@@ -159,12 +159,16 @@ no_nan_allocation() {
     fi
 }
 
-no_late_start() {
-    local label=$1 log=$2
-    if grep -q 'APEXG2-LATE' "$log"; then
-        fail "$label: the probe started late twice, so main.js's startup-complete handler never ran"
+# A probe imported after startup completed emits startup-complete again (probe.js's init), so main.js's
+# handler, whose "GNOME Shell started" line says it ran, runs the probe either way.
+startup_handler_ran() {
+    local label=$1 log=$2 when='on time' runs
+    grep -q 'APEXG2-LATE' "$log" && when='after the import, from startup-complete again'
+    runs=$(grep -c 'GNOME Shell started at ' "$log")
+    if ((runs == 1)); then
+        pass "$label: main.js's startup-complete handler ran once, and the probe from it ($when)"
     else
-        pass "$label: the probe ran from startup-complete"
+        fail "$label: main.js's startup-complete handler ran $runs times, not once (\"GNOME Shell started\" lines; probe $when)"
     fi
 }
 
@@ -1779,7 +1783,7 @@ direct_cases() {
             continue
         fi
         no_js_error "$c" "$f"
-        no_late_start "$c" "$f"
+        startup_handler_ran "$c" "$f"
         no_nan_allocation "$c" "$f"
         # fault-abort may abort before its report; its exit status says the shell ran.
         [[ $c == fault-abort ]] && continue
@@ -2469,7 +2473,7 @@ crash_guard() {
     check "guard: no 'JS ERROR' in the user's whole journal" grep -q '^JS ERROR lines: 0$' "$guard_log"
     local late
     late=$(grep -l 'APEXG2-LATE' "$run"/guard-*.journal 2>/dev/null | sed 's|.*/guard-||; s|\.journal$||' | paste -sd' ' -)
-    echo "# guard phases whose probe started late (main.js's startup-complete handler did not run there): ${late:-none}"
+    echo "# guard phases whose probe was imported after startup, then emitted startup-complete again: ${late:-none}"
 }
 
 main() {
