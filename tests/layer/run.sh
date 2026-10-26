@@ -506,6 +506,11 @@ probe shadows "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_SHADOWS=1
 has "shadows: the feature enables" 'Apex: feature shadows enabled'
 fact "shadows: a registered surface gets one layer from -apex-shadow-layer, its box and radius, just above its top ancestor" \
     'shadows\.registered=box-shadow: 0px 2px 8px 0px rgba\(20, 30, 60, 0\.2\); border-radius: 14px; at 106,46 300x200 above=true cutout=14'
+fact "shadows: the cut-out's uniforms place the surface's box in the layer's paint box" \
+    'shadows\.uniforms\.box=0\.0313,0\.0455,0\.9688,0\.9545,640,440,28 finite=true'
+fact "shadows: a 0x0 paint box sets no uniform, so none is NaN" 'shadows\.uniforms\.0x0=none'
+fact "shadows: neither does a 0-wide one" 'shadows\.uniforms\.0xN=none'
+fact "shadows: nor a 0-high one" 'shadows\.uniforms\.Nx0=none'
 fact "shadows: registering draws before the next frame, not inside the call" 'shadows\.before-the-frame=0'
 fact "shadows: registering again keeps one layer" 'shadows\.registered-twice=1'
 fact "shadows: an unmapped surface keeps no layer" 'shadows\.unmapped=none'
