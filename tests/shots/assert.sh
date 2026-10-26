@@ -657,16 +657,28 @@ shadow_layers() {
     scenes=$(report_of "$log" APEXG2-SCENES)
     tokens=$(tokens_for "$variant")
     local -a metric=(top_bar_metric "$label shadows" "$scenes" "$tokens")
-    local layer='length == 1 and (.[0] | .shown and .sameBox and (.boxShadow | .inset == false and .x == 0
+    local layer='length == 1 and (.[0] | .shown and .box == .surfaceBox and (.boxShadow | .inset == false and .x == 0
         and (.y | px_is($t.apex_shadow_2_y)) and (.blur | px_is($t.apex_shadow_2_blur)) and (.color | colour_is($t.apex_shadow_2))))'
     "${metric[@]}" 'Quick Settings draws its second layer, 0 $apex_shadow_2_y $apex_shadow_2_blur $apex_shadow_2, on its own box' \
         '.surfaces.shadowLayers.quickSettings' "$layer and .[0].radius == (\$t.apex_radius_quick_settings | px)"
     "${metric[@]}" 'the calendar draws its second layer, 0 $apex_shadow_2_y $apex_shadow_2_blur $apex_shadow_2, on its own box' \
         '.surfaces.shadowLayers.dateMenu' "$layer"
+    "${metric[@]}" 'a popup menu held at its min-width, past its natural width, draws its second layer on its whole box' \
+        '.surfaces.shadowLayers.popupMenu' "$layer and (.[0] | .surfaceBox[2] - .surfaceBox[0] > .natural[0])"
     "${metric[@]}" "a dialog's second layer sits beside its box, above the lightbox under the dialog" \
         '.surfaces.shadowLayers.dialog' "$layer and .[0].besideBox"
     expect "$label shadows" "$scenes" '.surfaces.idleRepaints | .withShadows <= .withoutShadows' \
         "an idle desktop repaints no more with the shadow layers than with shadows in disabled-features"
+}
+
+# Board 17's network rows: each name, its signal glyph and its lock centred on the row, as the
+# canvas draws them; network.js's name fills the row, its text at the top of a taller one.
+# shellcheck disable=SC2016 # a jq program
+network_rows_centred() {
+    local label=$1 scenes=$2 rows=$3
+    expect "$label Quick Settings" "$scenes" "$rows"' | def mid: .y + .height / 2; length > 1
+        and all(.box as $r | [.label, .signal, .lockBox | select(. != null)] | all((mid - ($r | mid)) | fabs <= 1))' \
+        "every network's name, signal glyph and lock are centred on its row, within 1 px (board 17)"
 }
 
 # shellcheck disable=SC2016 # jq programs
@@ -690,6 +702,7 @@ quick_settings_layer() {
             "the Wi-Fi menu's header subtitle ends the title's row, at its end (board 17)"
         expect "$label Quick Settings" "$scenes" "$q.wifiMenu.rows | length > 1 and any(.active) and all(.checked == .active)" \
             "the active network's row, and only it, is :checked"
+        network_rows_centred "$label" "$scenes" "$q.wifiMenu.rows"
         top_bar_metric "$label Quick Settings" "$scenes" "$(tokens_for "$variant")" \
             'a secure network'"'"'s lock follows its name, $apex_quick_menu_lock_size in $apex_fg at $apex_quick_menu_lock_opacity' \
             "$q.wifiMenu.rows" '[.[] | select(.secure)] | length > 0 and all(.lockAfterName and (.lockSize | px_is($t.apex_quick_menu_lock_size))
@@ -2334,6 +2347,15 @@ glass_manager() {
         | (.osd | glass($t.apex_panel_blur; $t.apex_panel_saturation; $s)) and (.switcher | glass($t.apex_panel_blur; $t.apex_panel_saturation; $s))
         and (.screenshot | .radius == 2 * ($t.apex_panel_blur | px) * $s and .fine and (.enabled | not))' \
         'the derived glass: the OSD and an Alt+Tab list blur at $apex_panel_blur and $apex_panel_saturation as the popovers do; the screenshot panel too, paused while closed'
+    "${expect_glass[@]}" 'def fits: .cornerRadius as $r | .painted.radii | all(. == $r); .manager
+        | ([.glass.panel, .glass.dock, .glass.quickSettings, .glass.calendar, .glass.banner, .derived.osd, .derived.switcher, .tile.shown.glass]
+            | all(fits and .painted.box == [0, 0] + .allocation))
+        and (.derived.screenshot | fits)' \
+        'every glass rounds its blur at its border radius, all four corners, over the box St paints its background in: the bar, the dock, Quick Settings, the calendar, a banner, the OSD, an Alt+Tab list and the tile preview; the screenshot panel'"'"'s corners too'
+    "${expect_glass[@]}" '.manager.derived.switcher.corner | .radius > 0 and .outside > 0 and .inside > 0 and .blurredOutside == 0 and .blurredInside == .inside' \
+        'over a checker, an Alt+Tab list'"'"'s bottom-left corner blurs no pixel past its border'"'"'s arc and every pixel inside it (board 15)'
+    "${expect_glass[@]}" '.manager.derived.switcher.corner.capturedDiffering == 0' \
+        'and a screenshot shows that corner as the screen does, pixel for pixel: off stage, the blur maps the stage through the capture'"'"'s viewport'
     "${expect_glass[@]}" "$glass"' .t as $t | .manager.monitorScale as $s | .manager.tile.shown.glass
         | glass($t.apex_tile_preview_blur; $t.apex_tile_preview_saturation; $s) and .cornerRadius == ($t.apex_radius_tile_preview | px) * $s' \
         'the shown tile preview registers its glass at board 22'"'"'s $apex_tile_preview_blur and $apex_tile_preview_saturation, rounded $apex_radius_tile_preview'

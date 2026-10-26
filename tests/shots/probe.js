@@ -4,6 +4,7 @@ import Atk from 'gi://Atk';
 import Clutter from 'gi://Clutter';
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
+import Graphene from 'gi://Graphene';
 import Meta from 'gi://Meta';
 import Mtk from 'gi://Mtk';
 import Shell from 'gi://Shell';
@@ -1048,6 +1049,8 @@ async function wifiMenuRows(unit) {
                     checked: row.has_style_pseudo_class('checked'),
                     secure: !!lock.icon_name,
                     lockAfterName: children.indexOf(lock) === children.indexOf(row._label) + 1,
+                    box: boxOf(row, unit), label: boxOf(row._label, unit), signal: boxOf(row._signalIcon, unit),
+                    lockBox: lock.icon_name ? boxOf(lock, unit) : null,
                     lockSize: lengthOrNull(lock.get_theme_node(), 'icon-size', unit),
                     lockColor: hex(lock.get_theme_node().get_foreground_color()),
                 };
@@ -1099,18 +1102,22 @@ async function quickSettingsLayer(unit) {
     return state;
 }
 
-// The shadows feature's layers under a registered surface: each layer's shadow and box.
+// Each layer under a registered surface: its shadow, its allocation and the box the surface's own allocation
+// gives, rounded as registry.js rounds it; natural is the surface's preferred size, which a min-width outgrows.
 function layerReport(Registry, surface, unit) {
-    const [sx, sy] = surface.get_transformed_position();
-    const [sw, sh] = surface.get_transformed_size();
+    const natural = [surface.get_preferred_width(-1)[1], surface.get_preferred_height(-1)[1]].map(Math.round);
     return Registry.layersOf(surface).map(layer => {
-        const [lx, ly] = layer.get_transformed_position();
-        const [lw, lh] = layer.get_transformed_size();
+        const corner = (x, y) => surface.apply_relative_transform_to_point(layer.get_parent(), new Graphene.Point3D({x, y, z: 0}));
+        const [from, to] = [corner(0, 0), corner(surface.allocation.get_width(), surface.allocation.get_height())];
+        const [x, y] = [Math.round(from.x), Math.round(from.y)];
+        const box = layer.get_allocation_box();
         return {
             shown: layer.mapped,
             boxShadow: shadow(layer.get_theme_node(), unit),
             radius: round(layer.get_theme_node().get_border_radius(St.Corner.TOPLEFT) / unit.length),
-            sameBox: [lx - sx, ly - sy, lw - sw, lh - sh].every(d => Math.abs(d) <= 1),
+            box: [box.x1, box.y1, box.x2, box.y2],
+            surfaceBox: [x, y, x + Math.round(to.x - from.x), y + Math.round(to.y - from.y)],
+            natural,
         };
     });
 }
@@ -1128,6 +1135,18 @@ async function shadowLayers(unit) {
         // eslint-disable-next-line no-await-in-loop
         await settle();
     }
+    // Short items leave the menu at $apex_menu_min_width, wider than their natural width (board 16).
+    const source = new St.Widget({x: 400, y: 300, width: 40, height: 20, reactive: true});
+    Main.uiGroup.add_child(source);
+    const popup = new PopupMenu.PopupMenu(source, 0.5, St.Side.TOP);
+    ['Open', 'Pin'].forEach(label => popup.addAction(label, () => {}));
+    Main.uiGroup.add_child(popup.actor);
+    popup.open(BoxPointer.PopupAnimation.NONE);
+    await settle();
+    result.popupMenu = layerReport(Registry, popup.box, unit);
+    popup.destroy();
+    source.destroy();
+    await settle();
     // A ModalDialog keeps its lightbox right under its box's ancestor, so the layer must sit beside the box.
     const dialog = new ModalDialog.ModalDialog();
     dialog.contentLayout.add_child(new St.Label({text: 'Shadow'}));

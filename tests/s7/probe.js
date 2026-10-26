@@ -99,6 +99,8 @@ function startAgent() {
     return agent;
 }
 
+const filesRow = popup => popup._rows.find(({row}) => row.key.startsWith('Files/'));
+
 async function spotlightFolder(name) {
     const feature = await import('resource:///org/gnome/shell/ui/apex/spotlight/feature.js');
     const popup = feature.popup();
@@ -106,9 +108,9 @@ async function spotlightFolder(name) {
         throw new Error('Spotlight is off');
     popup.open(name);
     for (let waited = 0; waited < SPOTLIGHT_WAIT_MS; waited += 100) {
-        const row = popup.rows.find(r => r.key.startsWith('Files/'));
-        if (row)
-            return {popup, title: row.title};
+        const found = filesRow(popup);
+        if (found)
+            return {popup, title: found.row.title};
         await Scripting.sleep(100);
     }
     throw new Error(`Spotlight found no Files result for "${name}" in ${SPOTLIGHT_WAIT_MS} ms`);
@@ -143,9 +145,11 @@ async function measure(result) {
     const regions = {
         files: windows.files.get_frame_rect(),
         chooser: windows.chooser.get_frame_rect(),
+        // The row, not the panel: the glass's antialiased rim over the backdrop can take the tab's colour.
         spotlight: (() => {
-            const [x, y] = spotlight.popup.panel.get_transformed_position();
-            const [width, height] = spotlight.popup.panel.get_transformed_size();
+            const {actor} = filesRow(spotlight.popup);
+            const [x, y] = actor.get_transformed_position();
+            const [width, height] = actor.get_transformed_size();
             return {x, y, width, height};
         })(),
     };

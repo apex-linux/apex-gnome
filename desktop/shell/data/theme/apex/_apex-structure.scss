@@ -34,3 +34,10 @@ $apex_dock_border: $_hc_border;
 // The lock blurs without darkening and leaves that to its overlay (lock/stage.js): without
 // this, high contrast's white text sits on the bright blurred wallpaper.
 .apex-lock-overlay { background-color: rgba(0, 0, 0, .55); }
+
+// Upstream's `& :ltr` padding, a stray space, also pads the field's icons; the Apex lock alone ends board 20's eye
+// inside the field's padding, so safe mode keeps upstream's.
+.apex-lock .login-dialog-prompt-entry StIcon {
+  &:ltr { padding-right: 0; }
+  &:rtl { padding-left: 0; }
+}

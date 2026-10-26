@@ -463,10 +463,11 @@ REPORT_OF_AN_OVERVIEW_LAYER_FROM_TOKENS='
     appGrid: {grid: {columns: 7, rows: 4, iconSize: 88}, strip: 0, box: {y: 132}}}}'
 # shellcheck disable=SC2016 # a jq program
 REPORT_OF_SHADOW_LAYERS_FROM_TOKENS='
-{shown: true, sameBox: true, radius: 0, boxShadow: {color: ($t.apex_shadow_2 | hex), inset: false, x: 0,
+{shown: true, box: [10, 20, 230, 146], surfaceBox: [10, 20, 230, 146], natural: [105, 126], radius: 0,
+    boxShadow: {color: ($t.apex_shadow_2 | hex), inset: false, x: 0,
     y: ($t.apex_shadow_2_y | px), blur: ($t.apex_shadow_2_blur | px), spread: 0}} as $layer
 | {surfaces: {idleRepaints: {withShadows: 3, withoutShadows: 3}, shadowLayers: {
-    quickSettings: [$layer | .radius = ($t.apex_radius_quick_settings | px)], dateMenu: [$layer],
+    quickSettings: [$layer | .radius = ($t.apex_radius_quick_settings | px)], dateMenu: [$layer], popupMenu: [$layer],
     dialog: [$layer | .besideBox = true]}}}'
 # shellcheck disable=SC2016 # a jq program
 REPORT_OF_A_TILE_PREVIEW_DRAWN_FROM_TOKENS='
@@ -1537,7 +1538,7 @@ test_shadow_layers() {
     local variant change what passes failures open_gaps
     for variant in light dark; do
         read -r passes failures open_gaps <<<"$(assert_run shadow_layers "$variant")"
-        if ((failures == 0 && passes == 4)); then
+        if ((failures == 0 && passes == 5)); then
             ok "shadows ($variant): layers drawn from the tokens pass all $passes assertions"
         else
             not_ok "shadows ($variant): layers drawn from the tokens pass (passed/failed $passes/$failures): $(grep -m3 '^FAIL' "$T/top-bar.out" | paste -sd'|' -)"
@@ -1545,12 +1546,14 @@ test_shadow_layers() {
     done
     while IFS='|' read -r change what; do
         read -r passes failures open_gaps <<<"$(assert_run shadow_layers light "$change")"
-        expect_eq "shadows: $what fails one assertion" "3/1" "$passes/$failures"
+        expect_eq "shadows: $what fails one assertion" "4/1" "$passes/$failures"
     done <<'CHANGES'
 .surfaces.shadowLayers.quickSettings[0].radius = 0|a Quick Settings layer with square corners
 .surfaces.shadowLayers.dateMenu = []|a calendar without its second layer
 .surfaces.shadowLayers.dialog[0].besideBox = false|a dialog layer under the lightbox
-.surfaces.shadowLayers.dateMenu[0].sameBox = false|a layer off its surface's box
+.surfaces.shadowLayers.dateMenu[0].box[0] += 1|a layer 1 px off its surface's box
+.surfaces.shadowLayers.popupMenu[0].box[2] = 10 + 105|a menu's layer at the surface's natural width, not its allocation
+.surfaces.shadowLayers.popupMenu[0].natural[0] = 220|a menu no wider than its natural width, which proves nothing
 .surfaces.shadowLayers.dialog[0].boxShadow.blur = 50|the first layer's blur on the second
 .surfaces.idleRepaints.withShadows = 9|an idle desktop that repaints more with shadows
 CHANGES
@@ -2584,6 +2587,27 @@ test_no_nan_allocation() {
         "$passes/$failures $(grep -c 'per log: glass-load.log:1$' "$T/assertions.out")"
 }
 
+test_network_rows_centred() {
+    local good passes failures change what
+    good='{rows: [
+        {box: {y: 100, height: 38}, label: {y: 109, height: 20}, signal: {y: 111, height: 16}, lockBox: {y: 112, height: 14}},
+        {box: {y: 140, height: 38}, label: {y: 149, height: 20}, signal: {y: 151, height: 16}, lockBox: null}]}'
+    while IFS='|' read -r failures change what; do
+        jq -c "$good | $change" -n | sed 's/^/APEXG2-SCENES /' >"$T/rows.log"
+        # shellcheck disable=SC2016 # expanded by the inner bash
+        read -r passes failures_got <<<"$(bash -c '. "$1/assert.sh"; network_rows_centred light "$(report_of "$2" APEXG2-SCENES)" .rows \
+            >"$3" 2>&1; echo "$npass $nfail"' _ "$HERE" "$T/rows.log" "$T/rows.out")"
+        expect_eq "network rows: $what fails $failures" "$failures" "$failures_got"
+    done <<'CHANGES'
+0|.|names, glyphs and locks centred on their rows
+1|.rows[0].label.y = 100|network.js's name at the top of the connected row
+1|.rows[1].label.y = 100|another row's name at the top
+1|.rows[0].lockBox.y = 120|a lock below the row's centre
+1|.rows[1].signal.y = 140|a signal glyph at the top
+1|.rows = [.rows[0]]|a menu with one network
+CHANGES
+}
+
 test_pr_assertions() {
     local run=$T/pr-run label rest stray="" missing
     local -a cases
@@ -2917,9 +2941,13 @@ test_glass() {
 7|a probe that failed|{error: "no frame within 2000 ms"}
 CHANGES
 
-    local on='{"radius": 96, "saturation": 1.6, "enabled": true, "fine": true, "followOpacity": true, "background": true}'
-    local popover='{"radius": 120, "saturation": 1.8, "enabled": true, "fine": true, "followOpacity": true, "background": true}'
-    local dock='{"radius": 112, "saturation": 1.8, "enabled": true, "fine": true, "followOpacity": true, "background": true}'
+    local fit='{"cornerRadius": 52, "allocation": [360, 400], "painted": {"box": [0, 0, 360, 400], "radii": [52, 52, 52, 52]}}'
+    local on='{"radius": 96, "saturation": 1.6, "enabled": true, "fine": true, "followOpacity": true, "background": true,
+        "cornerRadius": 0, "allocation": [1440, 32], "painted": {"box": [0, 0, 1440, 32], "radii": [0, 0, 0, 0]}}'
+    local popover
+    popover=$(jq -c '. + {radius: 120, saturation: 1.8, enabled: true, fine: true, followOpacity: true, background: true}' <<<"$fit")
+    local dock
+    dock=$(jq -c '. + {radius: 112, saturation: 1.8, enabled: true, fine: true, followOpacity: true, background: true}' <<<"$fit")
     local manager
     manager=$(jq -nc --argjson on "$on" --argjson p "$popover" --argjson dock "$dock" '{mapped: true, glass: null, borders: [2, 2, 2, 2], radius: 14,
             borderColor: "#3584e4b3", background: "#3584e429", glassed: true, previewBackground: "#3584e400", previewShadow: false} as $ring
@@ -2930,12 +2958,14 @@ CHANGES
             disabled: ($none + {solidClass: false}), restored: $g,
             scrims: {overview: $scrim, launcher: ($scrim + {radius: 160, saturation: 1.6}), hidden: ($scrim + {enabled: false}), barOverScrim: $on,
                 unforwarded: {changed: 59520, differingFromFull: 42880}, forwarded: {changed: 102400, differingFromFull: 0}},
-            derived: {osd: $p, switcher: $p, screenshot: ($p + {enabled: false})},
+            derived: {osd: $p, screenshot: ($p + {enabled: false}),
+                switcher: ($p + {corner: {radius: 52, outside: 560, inside: 2080, square: 2704, blurredOutside: 0, blurredInside: 2080, capturedDiffering: 0}})},
             emptyBox: {shown: ($scrim + {enabled: false}), hidden: ($scrim + {enabled: false}), shownAgain: ($scrim + {enabled: false}),
                 emptyFrames: 3, laidOut: ($scrim + {frames: 1, allocation: [320, 200]}), zeroHeight: ($scrim + {enabled: false})},
             tile: {shown: {scale: 2, inset: 6, preview: {x: 168, y: 224, width: 384, height: 192},
                 glassBox: {x: 174, y: 230, width: 372, height: 180}, inner: {x: 174, y: 230, width: 372, height: 180},
-                glass: {radius: 80, saturation: 1.6, cornerRadius: 28, enabled: true, fine: true, followOpacity: true, background: true},
+                glass: {radius: 80, saturation: 1.6, cornerRadius: 28, enabled: true, fine: true, followOpacity: true, background: true,
+                    allocation: [372, 180], painted: {box: [0, 0, 372, 180], radii: [28, 28, 28, 28]}},
                 downscale: 8, box: {mean: [0.4, 0.4, 0.4]}, interior: {max: [2, 2, 2]}, edge: {max: [6, 6, 6]},
                 bandDiffering: 0, innerDiffering: 267840},
                 hidden: {glass: null, visible: false, differing: 0},
@@ -2945,7 +2975,7 @@ CHANGES
     while IFS='|' read -r failures what change; do
         jq -c "$change" <<<"$manager" | sed 's/^/APEXG2-GLASS /' >"$T/glass.log"
         read -r passes _ <<<"$(assertion_counts glass_manager glass "$T/glass.log" light)"
-        expect_eq "glass manager: $what fails $failures of 18" "$failures" $((18 - passes))
+        expect_eq "glass manager: $what fails $failures of 21" "$failures" $((21 - passes))
     done <<'CHANGES'
 0|the bar, the dock and the popovers at their tokens, every switch honoured|.
 1|the bar at the popovers' sigma|.manager.glass.panel.radius = 120
@@ -2962,9 +2992,9 @@ CHANGES
 1|a scrim in background mode|.manager.scrims.overview.background = true
 1|a scrim left on after the overview|.manager.scrims.hidden.enabled = true
 1|a forwarded damage that leaves a stale halo|.manager.scrims.forwarded.differingFromFull = 120
-1|an OSD without glass|.manager.derived.osd = null
+2|an OSD without glass|.manager.derived.osd = null
 1|an Alt+Tab list at the bar's saturation|.manager.derived.switcher.saturation = 1.6
-1|a tile preview that never registers its glass|.manager.tile.shown.glass = null
+2|a tile preview that never registers its glass|.manager.tile.shown.glass = null
 1|a tile preview at the popovers' glass|.manager.tile.shown.glass.radius = 120
 1|a blurred box that includes the clear border|.manager.tile.shown.glassBox = .manager.tile.shown.preview
 1|a tile blur off the reference by 9/255 inside|.manager.tile.shown.interior.max = [9, 2, 2]
@@ -2975,6 +3005,13 @@ CHANGES
 1|an empty actor-mode box that blurs|.manager.emptyBox.shownAgain.enabled = true
 1|an empty box that never drew a frame|.manager.emptyBox.emptyFrames = 0
 1|a laid-out box whose blur never comes on|.manager.emptyBox.laidOut.enabled = false
+1|an Alt+Tab list's blur rounded twice its border's radius|.manager.derived.switcher.cornerRadius = 104
+1|a banner rounded at one corner only|.manager.glass.banner.painted.radii = [52, 0, 0, 0]
+1|a blur over a box other than the painted background|.manager.glass.banner.painted.box = [0, 8, 360, 392]
+1|a screenshot panel rounded unlike its border|.manager.derived.screenshot.cornerRadius = 40
+1|a corner whose blur reaches past the border's arc|.manager.derived.switcher.corner.blurredOutside = 120
+1|a corner left unblurred inside the arc|.manager.derived.switcher.corner.blurredInside = 1960
+1|a screenshot whose corner is not the screen's|.manager.derived.switcher.corner.capturedDiffering = 640
 1|the inset-shadow ring St thickens at the corners|.manager.tile.ring.corners = [8, 8, 8, 8]
 1|one corner 0.3 px wider|.manager.tile.ring.corners[3] = 4.3
 1|a ring left on the preview, under the class|.manager.tile.ring.previewShadow = true
@@ -2984,7 +3021,7 @@ CHANGES
 1|Reduce Transparency that drops the glass actor, ring and all|.manager.tile.reduceTransparency.mapped = false
 1|high contrast that drops the class|.manager.tile.highContrast.glassed = false
 1|a glass actor that paints a ring over upstream's high-contrast preview|.manager.tile.highContrast.borders = [2, 2, 2, 2]
-18|no manager|.manager = null
+21|no manager|.manager = null
 CHANGES
 }
 
@@ -3035,6 +3072,7 @@ test_spotlight_key
 test_one_gpu
 test_part_ran
 test_no_nan_allocation
+test_network_rows_centred
 test_pr_assertions
 test_action_modes
 test_no_dock

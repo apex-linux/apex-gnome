@@ -527,7 +527,7 @@ function networkRow(St, Clutter, active) {
     const icons = new St.BoxLayout({name: 'icons'});
     row._secureIcon = new St.Icon({name: 'lock', y_align: Clutter.ActorAlign.END});
     [new St.Icon({name: 'signal'}), row._secureIcon].forEach(i => icons.add_child(i));
-    row._label = new St.Label({name: 'label'});
+    row._label = new St.Label({name: 'label', y_align: Clutter.ActorAlign.FILL});
     [icons, row._label, new St.Icon({name: 'check'})].forEach(c => row.add_child(c));
     return row;
 }
@@ -567,7 +567,7 @@ function rowState(row) {
     const names = actor => actor.get_children().map(c => c.name).join(',');
     const lock = row._secureIcon;
     return `children=${names(row)} icons=${names(row.get_children()[0])} checked=${row.has_style_pseudo_class('checked')} ` +
-        `lock=${lock.y_align}/${lock.styleClasses.join(',') || 'none'}`;
+        `lock=${lock.y_align}/${lock.styleClasses.join(',') || 'none'} label=${row._label.y_align}`;
 }
 
 async function exerciseSubmenus(Main) {
@@ -950,6 +950,17 @@ async function exerciseShadows() {
     surface._themeNode = sheet;
     surface.emit('style-changed');
     await spin(50);
+    // A menu held at its min-width: 220 wide by allocation, 105 by its natural width.
+    const wideBin = new St.Widget({name: 'wide-bin', x: 500, y: 40});
+    const wide = new St.Widget({name: 'wide', x: 6, y: 6, width: 105, height: 126, mapped: true});
+    wide.allocated = [220, 126];
+    wide._themeNode = sheet;
+    root.add_child(wideBin);
+    wideBin.add_child(wide);
+    Registry.register(wide, {name: 'probe-wide', container: root});
+    await spin(50);
+    layers('allocated-wider', wide, wideBin);
+    wideBin.destroy();
     // A surface not laid out yet: 0x0, as a menu or dialog is in the frame it opens.
     const emptyBin = new St.Widget({name: 'empty-bin', x: 100, y: 300});
     const empty = new St.Widget({name: 'empty', x: 20, y: 30, width: 0, height: 0, mapped: true});
