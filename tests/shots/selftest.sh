@@ -2749,6 +2749,8 @@ CHANGES
             scrims: {overview: $scrim, launcher: ($scrim + {radius: 160, saturation: 1.6}), hidden: ($scrim + {enabled: false}), barOverScrim: $on,
                 unforwarded: {changed: 59520, differingFromFull: 42880}, forwarded: {changed: 102400, differingFromFull: 0}},
             derived: {osd: $p, switcher: $p, screenshot: ($p + {enabled: false})},
+            emptyBox: {shown: ($scrim + {enabled: false}), hidden: ($scrim + {enabled: false}), shownAgain: ($scrim + {enabled: false}),
+                emptyFrames: 3, laidOut: $scrim, zeroHeight: ($scrim + {enabled: false})},
             tile: {shown: {scale: 2, inset: 6, preview: {x: 168, y: 224, width: 384, height: 192},
                 glassBox: {x: 174, y: 230, width: 372, height: 180}, inner: {x: 174, y: 230, width: 372, height: 180},
                 glass: {radius: 80, saturation: 1.6, cornerRadius: 28, enabled: true, fine: true, followOpacity: true, background: true},
@@ -2758,7 +2760,7 @@ CHANGES
     while IFS='|' read -r failures what change; do
         jq -c "$change" <<<"$manager" | sed 's/^/APEXG2-GLASS /' >"$T/glass.log"
         read -r passes _ <<<"$(assertion_counts glass_manager glass "$T/glass.log" light)"
-        expect_eq "glass manager: $what fails $failures of 13" "$failures" $((13 - passes))
+        expect_eq "glass manager: $what fails $failures of 14" "$failures" $((14 - passes))
     done <<'CHANGES'
 0|the bar, the dock and the popovers at their tokens, every switch honoured|.
 1|the bar at the popovers' sigma|.manager.glass.panel.radius = 120
@@ -2785,7 +2787,9 @@ CHANGES
 1|a blur that reaches into the clear border|.manager.tile.shown.bandDiffering = 4800
 1|a blur left after the preview hides|.manager.tile.hidden.glass = .manager.tile.shown.glass
 1|a hidden preview whose blur still shows|.manager.tile.hidden.differing = 267840
-13|no manager|.manager = null
+1|an empty actor-mode box that blurs|.manager.emptyBox.shownAgain.enabled = true
+1|an empty box that never drew a frame|.manager.emptyBox.emptyFrames = 0
+14|no manager|.manager = null
 CHANGES
 }
 

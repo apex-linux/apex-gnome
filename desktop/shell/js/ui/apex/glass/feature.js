@@ -85,6 +85,14 @@ function _removeEffect(surface) {
     _releaseRedirects(surface);
 }
 
+// An empty box has nothing to blur, and 0003 sizes its offscreen to the box. The property, not
+// get_allocation_box(), which would force a relayout from inside a signal.
+function _wanted(surface) {
+    const {actor} = surface;
+    const box = actor.allocation;
+    return actor.mapped && !surface.paused() && box.get_width() > 0 && box.get_height() > 0;
+}
+
 // ClutterBlur's sigma is half the radius, in the device pixels of the actor's views.
 function _sync(surface) {
     const {actor} = surface;
@@ -108,7 +116,7 @@ function _sync(surface) {
         saturation: glass.saturation,
         corner_radius: Math.round(glass.cornerRadius * scale),
     });
-    effect.enabled = actor.mapped && !surface.paused();
+    effect.enabled = _wanted(surface);
 }
 
 function _syncAll() {
@@ -122,10 +130,16 @@ function _syncAll() {
 
 function _watch(surface) {
     const sync = () => _sync(surface);
+    const allocated = () => {
+        const effect = surface.actor.get_effect(EFFECT_NAME);
+        if (effect && effect.enabled !== _wanted(surface))
+            effect.enabled = !effect.enabled;
+    };
     _watched.set(surface, [
-        ...['style-changed', 'notify::mapped', 'resource-scale-changed'].map(signal => [surface.actor, signal]),
-        ...surface.pausedChanged,
-    ].map(([emitter, signal]) => [emitter, emitter.connect(signal, sync)]));
+        ...['style-changed', 'notify::mapped', 'resource-scale-changed'].map(signal => [surface.actor, signal, sync]),
+        ...surface.pausedChanged.map(([emitter, signal]) => [emitter, signal, sync]),
+        [surface.actor, 'notify::allocation', allocated],
+    ].map(([emitter, signal, fn]) => [emitter, emitter.connect(signal, fn)]));
     sync();
 }
 

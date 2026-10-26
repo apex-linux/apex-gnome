@@ -832,6 +832,7 @@ fact "glass: a window moved under the bar redraws the bar's box" 'glass\.moved-u
 fact "glass: moved out from under the bar and damaged under the dock, it redraws the bar once more and the dock" 'glass\.damage-under-the-dock=panel=2 quick-settings=0 dock=2'
 fact "glass: a forwarded redraw is clipped to the glass box, not its paint volume (box-shadow included)" 'glass\.forwarded-clip=0,0 600x62 of 600x62'
 fact "glass: glass shown since the last layout has no box to test, so any window's damage redraws it whole" 'glass\.pending-layout=1 whole'
+fact "glass: an actor-mode surface with an empty box stays paused, blurs once laid out, pauses at zero height and takes no forwarded damage" 'glass\.empty-box=empty:r144/s1\.5/c0/paused/actor empty:r144/s1\.5/c0/on/actor empty:r144/s1\.5/c0/paused/actor forwarded=0'
 fact "glass: a restack redraws every glass box" 'glass\.restacked=panel=3 quick-settings=1 dock=3'
 fact "glass: Reduce Transparency removes every blur and roots apex-solid; the redirects come back" \
     "glass\.reduce-transparency=$GLASS_OFF banner:none solid=true redirects=2,2"
