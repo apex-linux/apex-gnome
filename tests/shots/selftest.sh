@@ -2866,7 +2866,7 @@ CHANGES
                 unforwarded: {changed: 59520, differingFromFull: 42880}, forwarded: {changed: 102400, differingFromFull: 0}},
             derived: {osd: $p, switcher: $p, screenshot: ($p + {enabled: false})},
             emptyBox: {shown: ($scrim + {enabled: false}), hidden: ($scrim + {enabled: false}), shownAgain: ($scrim + {enabled: false}),
-                emptyFrames: 3, laidOut: $scrim, zeroHeight: ($scrim + {enabled: false})},
+                emptyFrames: 3, laidOut: ($scrim + {frames: 1, allocation: [320, 200]}), zeroHeight: ($scrim + {enabled: false})},
             tile: {shown: {scale: 2, inset: 6, preview: {x: 168, y: 224, width: 384, height: 192},
                 glassBox: {x: 174, y: 230, width: 372, height: 180}, inner: {x: 174, y: 230, width: 372, height: 180},
                 glass: {radius: 80, saturation: 1.6, cornerRadius: 28, enabled: true, fine: true, followOpacity: true, background: true},
@@ -2905,6 +2905,7 @@ CHANGES
 1|a hidden preview whose blur still shows|.manager.tile.hidden.differing = 267840
 1|an empty actor-mode box that blurs|.manager.emptyBox.shownAgain.enabled = true
 1|an empty box that never drew a frame|.manager.emptyBox.emptyFrames = 0
+1|a laid-out box whose blur never comes on|.manager.emptyBox.laidOut.enabled = false
 14|no manager|.manager = null
 CHANGES
 }
