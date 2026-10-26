@@ -1,2 +1,2 @@
 # The goldens branch's commit goldens.sh check compares sign-off captures with; goldens.sh import moves it.
-GOLDENS_REV=9d33ab88392ec7bd96a1ce7890b62c8b78cd32db
+GOLDENS_REV=5c531c7e07ebbf78454350e0a00228de504c275c
