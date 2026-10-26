@@ -55,7 +55,7 @@ done
 cp "$HERE"/stubs/appDisplay.js "$HERE"/stubs/remoteSearch.js "$HERE"/stubs/searchProviders.js "$T/shell/js/ui/"
 mkdir -p "$T/shell/js/misc"
 cp "$HERE/stubs/systemActions.js" "$T/shell/js/misc/"
-cp "$HERE"/stubs/St.js "$HERE"/stubs/Clutter.js "$HERE"/stubs/Shell.js "$HERE"/stubs/Meta.js "$HERE"/stubs/Graphene.js "$HERE"/stubs/Mtk.js \
+cp "$HERE"/stubs/St.js "$HERE"/stubs/Clutter.js "$HERE"/stubs/Shell.js "$HERE"/stubs/Meta.js "$HERE"/stubs/Graphene.js "$HERE"/stubs/Mtk.js "$HERE"/stubs/Pango.js \
     "$HERE"/stubs/GdkPixbuf.js "$HERE"/stubs/Polkit.js "$HERE"/stubs/AccountsService.js "$T/"
 # The shadow cutout and the indicators' mask are GObject subclasses of Clutter.ShaderEffect, which the stubs cannot be.
 cp "$HERE/stubs/cutout.js" "$T/shell/js/ui/apex/shadows/cutout.js"
@@ -69,7 +69,7 @@ find "$T/shell/js/ui/apex" -name '*.js' -exec sed -i -e "s|'gi://St'|'file://$T/
     -e "s|'gi://Clutter'|'file://$T/Clutter.js'|" -e "s|'gi://Shell'|'file://$T/Shell.js'|" \
     -e "s|'gi://Meta'|'file://$T/Meta.js'|" -e "s|'gi://Graphene'|'file://$T/Graphene.js'|" -e "s|'gi://Mtk'|'file://$T/Mtk.js'|" \
     -e "s|'gi://GdkPixbuf'|'file://$T/GdkPixbuf.js'|" -e "s|'gi://Polkit'|'file://$T/Polkit.js'|" \
-    -e "s|'gi://AccountsService'|'file://$T/AccountsService.js'|" {} +
+    -e "s|'gi://AccountsService'|'file://$T/AccountsService.js'|" -e "s|'gi://Pango'|'file://$T/Pango.js'|" {} +
 for gir in "$HERE"/fixtures/*.gir; do
     gir_name=${gir##*/}
     "$GI_COMPILER" "$gir" -o "$T/typelib/${gir_name%.gir}.typelib"
@@ -695,6 +695,7 @@ fact "screen pills: right before the status pill again after panel.js re-adds it
     'right-box\.after-session-update=screenRecording,a11y,keyboard,indicators,divider,screenSharing,quickSettings,'
 fact "input chip: the sources' short names in capitals" 'input-chip=EN,VI'
 fact "input chip: and so after keyboard.js renames one or adds a source" 'input-chip\.changed=EN,VI₂,FR'
+fact "input chip: its short names never ellipsize, whatever Large Text makes of the chip" 'input-chip\.ellipsize=none,none,none'
 fact "hot-corner: the corner becomes a reactive 4 x 4 zone at its own position, in scaled px" \
     'hot-corner\.zone=hot-corner reactive=true x=0 y=0 8x8'
 fact "hot-corner: in the chrome, hidden under fullscreen windows" 'chrome\.add=hot-corner trackFullscreen=true'
@@ -707,6 +708,7 @@ fact "layer-enabled=false: the recording button is stock's, timer then glyph" 'r
 fact "layer-enabled=false: so is sharing, named as stock names it" 'sharing\.off=screen-shared-symbolic,screencast-stop-symbolic hidden=none name=Stop Screen Sharing'
 fact "layer-enabled=false: sharing goes back after the recording" 'right-box\.off=screenRecording,screenSharing,a11y,keyboard,quickSettings,'
 fact "layer-enabled=false: the input chip has stock's names back" 'input-chip\.off=en,vi₂,fr'
+fact "layer-enabled=false: and stock's ellipsizing" 'input-chip\.off\.ellipsize=end,end,end'
 fact "layer-enabled=true: the filter again" "pill\.on=$KEPT_PILL"
 fact "layer-enabled=true: the stop squares again" 'recording\.on=square,0:42 hidden=screencast-stop-symbolic name=Stop Screencast'
 fact "layer-enabled=true: and sharing's name" 'sharing\.on=screen-shared-symbolic,square hidden=screencast-stop-symbolic name=Stop screen sharing'
