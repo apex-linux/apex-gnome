@@ -2005,6 +2005,9 @@ dock_dnd_case() {
         "and nothing is left in a drag state: no placeholder, grab or modal, NORMAL, every icon opaque, Show Apps named so, and no actor but DND's 0x0 event actor"
 }
 
+# shellcheck disable=SC2016 # jq programs
+readonly DOCK_BLURS='def blurs($blur; $scale): .radius == 2 * ($blur | px) * $scale and .resourceScale == $scale and .enabled and
+    .box.width > 0 and .box.height > 0;'
 # shellcheck disable=SC2016 # a jq program
 readonly DOCK_INSIDE='def inside($m): .x >= $m.x and .x + .width <= $m.x + $m.width and .y >= $m.y and .y + .height <= $m.y + $m.height;'
 
@@ -2053,6 +2056,25 @@ dock_external_case() {
     expect dock-external "$r" '.steps.swapped | .window.maximised and (.window.monitor == .primary) == .dockHidden and
         (.window.monitor == .primary) == .barSolid' \
         "and the dock hides and the bar turns solid exactly when the maximised window is on the new primary"
+    expect dock-external "$r" '.steps.mixedOnExternal | .changed and .primary == 1 and .monitors == [{x: 0, y: 0, width: 1440, height: 900, index: 0},
+        {x: 1440, y: 0, width: 1920, height: 1080, index: 1}]' \
+        "ApplyMonitorsConfig sets the external display at scale 1 as the primary, the panel at scale 2 beside it"
+    "${metric[@]}" 'the dock moves to it, $apex_dock_bottom_gap above its bottom edge and centred, and the bar spans it' \
+        '.steps.mixedOnExternal' "$DOCK_INSIDE . as \$s | (.dockBox | inside(\$s.monitors[1])) and .panelBox == {x: 1440, y: 0, width: 1920, height: 32} and
+        (.dock.bottomGap | px_is(\$t.apex_dock_bottom_gap)) and (.dock.centreOffset | fabs <= 0.5)"
+    "${metric[@]}" 'their glass blurs at scale 1 there: radius 2 x $apex_dock_blur and 2 x $apex_bar_blur, each on a laid-out box' \
+        '.steps.mixedOnExternal.desktopGlass' "$DOCK_BLURS (.dock | blurs(\$t.apex_dock_blur; 1)) and (.bar | blurs(\$t.apex_bar_blur; 1))"
+    "${metric[@]}" "the overview's scrim covers the whole stage over both scales, blurring at 2 x \$apex_overview_scrim_blur x 2 (its views' highest scale) an unscaled clone of the desktop" \
+        '.steps.mixedOnExternal' "$DOCK_BLURS .overview.stage as \$stage | .overview.stage == {x: 0, y: 0, width: 3360, height: 1080} and
+        .overview.scrim.visible and .overview.scrim.box == \$stage and (.overview.views | length == 2) and
+        (.glass.scrim | blurs(\$t.apex_overview_scrim_blur; 2) and .box == \$stage and .clone == .source)"
+    expect dock-external "$r" '.steps.mixedOnExternal.desktopGlass.scrim | .enabled == false' "and the hidden scrim stops blurring"
+    expect dock-external "$r" '.steps.mixed | .changed and .primary == 0 and (.window.monitor == .primary) == .dockHidden and
+        (.window.monitor == .primary) == .barSolid' \
+        "with the panel the primary again, the dock and the bar follow it, and its maximised window hides the dock and turns the bar solid"
+    "${metric[@]}" 'and the dock, under the panel (hidden there), and its glass blur at scale 2 again' \
+        '.steps.mixed' "$DOCK_BLURS .monitors[0] as \$m | .dockBox.x >= \$m.x and .dockBox.x + .dockBox.width <= \$m.x + \$m.width and
+        (.glass.dock | blurs(\$t.apex_dock_blur; 2)) and (.glass.bar | .resourceScale == 2 and .radius == 2 * (\$t.apex_bar_blur | px) * 2)"
 }
 
 # The no-dock case: disabled-features=['dock'], so the overview's own dash is back and the

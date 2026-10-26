@@ -70,7 +70,7 @@ globalThis.global = {
     }),
     window_group: newEmitter(),
     get_window_actors: () => [...windowActors],
-    stage: {width: 1440},
+    stage: {width: 1440, height: 900},
     compositor: {get_laters: () => ({add: (_type, fn) => GLib.idle_add(GLib.PRIORITY_DEFAULT, fn), remove: id => GLib.source_remove(id)})},
     pointer: [0, 0],
     get_pointer() {
@@ -1490,7 +1490,7 @@ async function exerciseGlass() {
     const adjustment = Main.overview._overview._controls._stateAdjustment;
     const scrimFact = label => fact(`glass.scrim.${label}`, scrim ? `${glassOf(scrim)} visible=${scrim.visible}` : 'none');
     scrimFact('closed');
-    fact('glass.scrim.bound', [scrim?.constraints].flat().map(c => c?.source?.name).join(','));
+    fact('glass.scrim.bound', [scrim?.constraints].flat().map(c => c?.source === global.stage ? 'stage' : c?.source?.name).join(','));
     overviewGroup.visible = true;
     overviewGroup.emit('notify::visible');
     scrimFact('overview');

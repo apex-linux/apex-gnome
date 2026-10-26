@@ -17,6 +17,7 @@ const SLIDE_MS = 3000;
 const SOLID_BAR_STYLE_CLASS = 'apex-solid-bar';
 const SCRIM_NAME = 'apexGlassScrim';
 const LAUNCHER_STYLE_CLASS = 'apex-launcher';
+const GLASS_EFFECT = 'apex-glass';
 const DISPLAY_CONFIG = ['org.gnome.Mutter.DisplayConfig', '/org/gnome/Mutter/DisplayConfig', 'org.gnome.Mutter.DisplayConfig'];
 // ApplyMonitorsConfig's method: temporary, as Settings applies before the user keeps it.
 const TEMPORARY = 1;
@@ -65,6 +66,7 @@ function overviewState() {
         controlsState: Main.overview._overview.controls._stateAdjustment.value,
         scrim: scrim ? {visible: scrim.visible, box: transformedRect(scrim), launcher: scrim.has_style_class_name(LAUNCHER_STYLE_CLASS)} : null,
         views: views.map(view => transformedRect(view)),
+        stage: {x: 0, y: 0, width: global.stage.width, height: global.stage.height},
     };
 }
 
@@ -79,14 +81,67 @@ function call(method, parameters) {
         }));
 }
 
-// The current layout with the primary flag moved to the other logical monitor.
-async function swapPrimary() {
+// Logical monitors as ApplyMonitorsConfig takes them, from GetCurrentState: each with its
+// connector's current mode and physical size.
+async function currentLayout() {
     const [serial, monitors, logical] = await call('GetCurrentState', null);
-    const currentMode = new Map(monitors.map(([[connector], modes]) =>
-        [connector, modes.find(([, , , , , , props]) => props['is-current']?.deepUnpack())?.[0]]));
-    const swapped = logical.map(([x, y, scale, transform, primary, specs]) =>
-        [x, y, scale, transform, !primary, specs.map(([connector]) => [connector, currentMode.get(connector), {}])]);
-    await call('ApplyMonitorsConfig', new GLib.Variant('(uua(iiduba(ssa{sv}))a{sv})', [serial, TEMPORARY, swapped, {}]));
+    const current = new Map(monitors.map(([[connector], modes]) => {
+        const mode = modes.find(([, , , , , , props]) => props['is-current']?.deepUnpack());
+        return [connector, {id: mode?.[0], width: mode?.[1], height: mode?.[2]}];
+    }));
+    return {
+        serial, logical: logical.map(([x, y, scale, transform, primary, specs]) =>
+            ({x, y, scale, transform, primary, connector: specs[0][0], mode: current.get(specs[0][0])})),
+    };
+}
+
+async function applyLayout(serial, logical) {
+    const config = logical.map(({x, y, scale, transform, primary, connector, mode}) =>
+        [x, y, scale, transform, primary, [[connector, mode.id, {}]]]);
+    await call('ApplyMonitorsConfig', new GLib.Variant('(uua(iiduba(ssa{sv}))a{sv})', [serial, TEMPORARY, config, {}]));
+}
+
+// Applies a layout and waits for the shell's monitors-changed, then for the dock to slide.
+async function relayout(change, helpers) {
+    const changed = new Promise(resolve => {
+        const id = Main.layoutManager.connect('monitors-changed', () => {
+            Main.layoutManager.disconnect(id);
+            resolve(true);
+        });
+    });
+    const {serial, logical} = await currentLayout();
+    await applyLayout(serial, change(logical));
+    const seen = await Promise.race([changed, Scripting.sleep(WINDOW_TIMEOUT_MS).then(() => false)]);
+    await Scripting.sleep(SLIDE_MS);
+    await helpers.settle();
+    return seen;
+}
+
+// The panel at scale 2 on the left, the external display beside it at scale 1, as a laptop
+// docked to a 1080p screen runs; the primary is the one named.
+function mixed(primaryIsPanel) {
+    return logical => {
+        const [panel, external] = [...logical].sort((a, b) => b.mode.width - a.mode.width);
+        return [
+            {...panel, x: 0, y: 0, scale: 2, primary: primaryIsPanel},
+            {...external, x: panel.mode.width / 2, y: 0, scale: 1, primary: !primaryIsPanel},
+        ];
+    };
+}
+
+function glass(actor) {
+    const effect = actor?.get_effect(GLASS_EFFECT);
+    return effect ? {radius: effect.radius, enabled: effect.enabled, resourceScale: actor.get_resource_scale(), box: transformedRect(actor)} : null;
+}
+
+function glassState(apexDock) {
+    const scrim = Main.uiGroup.get_children().find(actor => actor.name === SCRIM_NAME) ?? null;
+    const clone = scrim?.get_first_child() ?? null;
+    return {
+        dock: glass(apexDock()._background), bar: glass(Main.panel),
+        // The clone paints window_group as it is, at its own size and place: an unscaled copy.
+        scrim: scrim ? {...glass(scrim), clone: clone ? transformedRect(clone) : null, source: transformedRect(global.window_group)} : null,
+    };
 }
 
 export async function dockExternalReport(helpers) {
@@ -119,21 +174,20 @@ export async function dockExternalReport(helpers) {
         Main.overview.hide();
         await helpers.settle();
 
-        try {
-            const changed = new Promise(resolve => {
-                const id = Main.layoutManager.connect('monitors-changed', () => {
-                    Main.layoutManager.disconnect(id);
-                    resolve(true);
-                });
-            });
-            await swapPrimary();
-            steps.swapped = {changed: await Promise.race([changed, Scripting.sleep(WINDOW_TIMEOUT_MS).then(() => false)])};
-            await Scripting.sleep(SLIDE_MS);
-            await helpers.settle();
-            Object.assign(steps.swapped, layout(apexDock), {dock: helpers.dockReport()});
-        } catch (e) {
-            steps.swapped = {refused: e.message};
-        }
+        steps.swapped = {changed: await relayout(logical => logical.map(m => ({...m, primary: !m.primary})), helpers)};
+        Object.assign(steps.swapped, layout(apexDock), {dock: helpers.dockReport()});
+
+        steps.mixedOnExternal = {changed: await relayout(mixed(false), helpers)};
+        Object.assign(steps.mixedOnExternal, layout(apexDock), {dock: helpers.dockReport()});
+        Main.overview.show();
+        await helpers.settle();
+        Object.assign(steps.mixedOnExternal, {overview: overviewState(), glass: glassState(apexDock)});
+        Main.overview.hide();
+        await helpers.settle();
+        steps.mixedOnExternal.desktopGlass = glassState(apexDock);
+
+        steps.mixed = {changed: await relayout(mixed(true), helpers)};
+        Object.assign(steps.mixed, layout(apexDock), {dock: helpers.dockReport(), glass: glassState(apexDock)});
     } finally {
         client.force_exit();
     }

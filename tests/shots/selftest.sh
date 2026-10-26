@@ -2206,6 +2206,7 @@ readonly DOCK_EXTERNAL_REPORT='def lay($p; $window; $hidden; $solid): {primary: 
     dockHidden: $hidden,
     panelBox: (if $p == 0 then {x: 0, y: 0, width: 1440, height: 32} else {x: 1440, y: 0, width: 960, height: 32} end),
     barSolid: $solid, window: $window};
+  def glass($radius; $scale; $box): {radius: $radius, enabled: true, resourceScale: $scale, box: $box};
   def overview($state): {shown: true, controlsState: $state,
     scrim: {visible: true, box: {x: 0, y: 0, width: 2400, height: 900}, launcher: ($state == 2)},
     views: [{x: 0, y: 185, width: 1440, height: 618}, {x: 1440, y: 0, width: 960, height: 540}]};
@@ -2215,7 +2216,21 @@ readonly DOCK_EXTERNAL_REPORT='def lay($p; $window; $hidden; $solid): {primary: 
      onPrimary: lay(0; {monitor: 0, maximised: true}; true; true),
      backOnSecondary: lay(0; {monitor: 1, maximised: true}; false; false),
      overview: overview(1), launcher: overview(2),
-     swapped: (lay(1; {monitor: 0, maximised: true}; false; false) + {changed: true, dock: {bottomGap: 10, centreOffset: 0.5}})}}'
+     swapped: (lay(1; {monitor: 0, maximised: true}; false; false) + {changed: true, dock: {bottomGap: 10, centreOffset: 0.5}}),
+     mixedOnExternal: (lay(1; {monitor: 0, maximised: true}; false; false) + {changed: true,
+       monitors: [{x: 0, y: 0, width: 1440, height: 900, index: 0}, {x: 1440, y: 0, width: 1920, height: 1080, index: 1}],
+       dockBox: {x: 2276, y: 1000, width: 249, height: 80}, panelBox: {x: 1440, y: 0, width: 1920, height: 32},
+       dock: {bottomGap: 10, centreOffset: 0.5},
+       overview: (overview(1) + {stage: {x: 0, y: 0, width: 3360, height: 1080},
+         scrim: {visible: true, box: {x: 0, y: 0, width: 3360, height: 1080}, launcher: false}}),
+       glass: {dock: glass(56; 1; {x: 2276, y: 1010, width: 249, height: 70}), bar: glass(48; 1; {x: 1440, y: 0, width: 1920, height: 32}),
+         scrim: (glass(144; 2; {x: 0, y: 0, width: 3360, height: 1080}) + {clone: {x: 0, y: 0, width: 0, height: 0}, source: {x: 0, y: 0, width: 0, height: 0}})},
+       desktopGlass: {dock: glass(56; 1; {x: 2276, y: 1010, width: 249, height: 70}), bar: glass(48; 1; {x: 1440, y: 0, width: 1920, height: 32}),
+         scrim: (glass(144; 2; {x: 0, y: 0, width: 0, height: 0}) + {enabled: false})}}),
+     mixed: (lay(0; {monitor: 0, maximised: true}; true; true) + {changed: true,
+       monitors: [{x: 0, y: 0, width: 1440, height: 900, index: 0}, {x: 1440, y: 0, width: 1920, height: 1080, index: 1}],
+       dockBox: {x: 596, y: 980, width: 249, height: 80},
+       glass: {dock: glass(112; 2; {x: 596, y: 990, width: 249, height: 70}), bar: (glass(96; 2; {x: 0, y: 0, width: 1440, height: 32}) + {enabled: false})}})}}'
 
 test_dock_external() {
     local change what passes failures all
@@ -2246,6 +2261,15 @@ test_dock_external() {
 .steps.swapped.dockBox.x = 596|a dock left on the old primary
 .steps.swapped.panelBox.x = 0|a bar left on the old primary
 .steps.swapped.barSolid = true|a bar solid for a window on the new secondary
+.steps.mixedOnExternal.changed = false|a scale change the shell never saw
+.steps.mixedOnExternal.panelBox.width = 960|a bar the scale change left at the old width
+.steps.mixedOnExternal.desktopGlass.dock.radius = 112|dock glass still blurring at scale 2 on a scale-1 monitor
+.steps.mixedOnExternal.desktopGlass.bar.box.height = 0|bar glass on an empty box
+.steps.mixedOnExternal.overview.scrim.box = {x: 0, y: 0, width: 2400, height: 900}|a scrim left at the stage's old size
+.steps.mixedOnExternal.glass.scrim.clone = {x: 0, y: 0, width: 3360, height: 1080}|a scrim whose clone scales the desktop
+.steps.mixedOnExternal.desktopGlass.scrim.enabled = true|a hidden scrim still blurring
+.steps.mixed.barSolid = false|a bar translucent over the panel's maximised window
+.steps.mixed.glass.dock.resourceScale = 1|dock glass left at scale 1 back on the panel
 CHANGES
     write_report_run dock-external DOCK-EXTERNAL '{error: "G2 runs 1 monitor(s), not two\ndock-external.js:98"}' .
     read -r passes failures <<<"$(assertion_counts dock_external_case "$T/dock-external")"
