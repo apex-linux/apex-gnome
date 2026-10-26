@@ -112,18 +112,18 @@ next login, so the crash guard's switch holds. `tests/layer/run.sh` covers these
 gnome-shell connects the automation script to `startup-complete` only after it has
 imported it, so a startup that completes during the import never runs the script and
 leaves the shell up: 8 of 24 starts in a reproduction of the guard's `systemd --user`
-sequence. `probe.js`'s `init()` then runs the script itself and prints `APEXG2-LATE`.
-In such a shell `main.js`'s `startup-complete` handler (the "GNOME Shell started" line,
-the action mode, the GDM registration, the "Screen Lock disabled" notification) has not
-run. None of it reaches a check: the startup overview's grab sets the `OVERVIEW` action
-mode before `startup-complete` on either path, and the probe drops startup notifications.
-Every case asserts it from `APEXG2-MODES`: `OVERVIEW` when `run()` starts, and at its end
-`NORMAL` with no modal left (`OVERVIEW` with the overview open); idle and dock-pin assert
-`NORMAL` after `settleDesktop`. So CI (`patched.sh`, `G2_LATE=report`) takes a late start
-as a normal one and lists it in `late-PART.txt`, the log and the job summary. The image
-run (`run.sh`) checks the harness on the real image: there `direct.sh` runs a late case
-once more (keeping the first log as `CASE.late.log`), and a second late start fails it.
-A late guard phase is listed in `assert.txt`.
+sequence, and 14 cases of each of the builder VM's first two runs. `main.js` calls the
+script's `init()` right before it connects, so `probe.js`'s `init()`, finding startup
+done, prints `APEXG2-LATE` and emits `startup-complete` again from an idle callback, once
+`main.js` has connected. `main.js`'s handler then runs as on time (the "GNOME Shell
+started" line, the action mode, the GDM registration, the "Screen Lock disabled"
+notification) and runs the probe; only `main.js` and, in the gdm mode, the login dialog's
+idempotent user-list update listen for the signal. Every case asserts the handler ran from
+its "GNOME Shell started" line, and its action modes from `APEXG2-MODES`: `OVERVIEW` when
+`run()` starts, and at its end `NORMAL` with no modal left (`OVERVIEW` with the overview
+open); idle and dock-pin assert `NORMAL` after `settleDesktop`. No case is run twice:
+`direct.sh` lists the late ones in `late-PART.txt` (and `patched.sh` in the job summary),
+and `assert.txt` lists the late guard phases.
 
 The crash-guard phases (`guard.sh`): an abort 65 s after start does not trip the guard;
 `abort-after-enable` trips it (the unit fails, `apex-shell-safe.service` runs,

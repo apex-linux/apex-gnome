@@ -2674,6 +2674,27 @@ test_no_nan_allocation() {
         "$passes/$failures $(grep -c 'per log: glass-load.log:1$' "$T/assertions.out")"
 }
 
+test_startup_handler_ran() {
+    local run=$T/startup-run passes failures
+    local started='GNOME Shell-Message: 09:41:00.000: GNOME Shell started at Mon Sep 28 2026 09:41:00 GMT+0000'
+    local late='APEXG2-LATE startup completed while main.js imported the probe; startup-complete again'
+    mkdir -p "$run"
+    printf '%s\n' "$started" 'APEXG2 {"probe": true}' >"$run/default.log"
+    read -r passes failures <<<"$(assertion_counts startup_handler_ran default "$run/default.log")"
+    expect_eq "startup: a probe run on time from main.js's handler passes" "1/0" "$passes/$failures"
+    printf '%s\n' "$late" "$started" 'APEXG2 {"probe": true}' >"$run/default.log"
+    read -r passes failures <<<"$(assertion_counts startup_handler_ran default "$run/default.log")"
+    expect_eq "startup: a late import whose startup-complete came again passes, said so" "1/0 1" \
+        "$passes/$failures $(grep -c 'ran once, and the probe from it (after the import, from startup-complete again)' "$T/assertions.out")"
+    printf '%s\n' "$late" 'APEXG2 {"probe": true}' >"$run/default.log"
+    read -r passes failures <<<"$(assertion_counts startup_handler_ran default "$run/default.log")"
+    expect_eq "startup: a probe that ran without main.js's handler fails" "0/1" "$passes/$failures"
+    printf '%s\n' "$late" "$started" "$started" 'APEXG2 {"probe": true}' >"$run/default.log"
+    read -r passes failures <<<"$(assertion_counts startup_handler_ran default "$run/default.log")"
+    expect_eq "startup: a handler that ran twice fails" "0/1 1" \
+        "$passes/$failures $(grep -c 'ran 2 times, not once' "$T/assertions.out")"
+}
+
 test_network_rows_centred() {
     local good passes failures change what
     good='{rows: [
@@ -3163,6 +3184,7 @@ test_one_gpu
 test_part_ran
 test_no_nan_allocation
 test_parental_controls_ready
+test_startup_handler_ran
 test_network_rows_centred
 test_pr_assertions
 test_action_modes
