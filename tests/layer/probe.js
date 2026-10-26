@@ -1098,6 +1098,14 @@ async function exerciseFocusedApp() {
     settings.set_boolean('layer-enabled', true);
     await spin(200);
     report('on');
+    Main.layoutManager.uiGroup.emit('destroy');
+    report('teardown');
+    tracker.focus({get_name: () => 'Files'});
+    tracker.focus(null);
+    Main.layoutManager.uiGroup.emit('destroy');
+    settings.set_boolean('layer-enabled', false);
+    await spin(200);
+    report('teardown-then-off');
 }
 
 async function exerciseSearchButton() {

@@ -201,10 +201,18 @@ function _queueFollowSettings() {
     _queue = _queue.then(() => _followSettings()).catch(e => console.error(`Apex: ${e}`));
 }
 
+// At logout the stage's actors are destroyed, then main.js's shutdown handler spins a loop that
+// still runs window and focus signals: every feature disables first, while its actors are alive.
+async function _disableAtTeardown() {
+    const Main = await import('../main.js');
+    Main.layoutManager.uiGroup.connect('destroy', () => _disableFeatures());
+}
+
 export function enable() {
     try {
         _createCrashGuardMarker();
         _enableFeatures();
+        _disableAtTeardown().catch(e => console.error(`Apex: ${e}`));
         _settings.connect('changed::layer-enabled', () => _queueFollowSettings());
         _settings.connect('changed::disabled-features', () => _queueFollowSettings());
     } catch (e) {

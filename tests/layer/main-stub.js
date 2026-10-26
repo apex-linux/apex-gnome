@@ -463,6 +463,7 @@ export function popModal() {
 }
 
 export const layoutManager = {
+    uiGroup,
     modalDialogGroup: emptyContainer(),
     ...emitter({}),
     primaryMonitor: {x: 0, y: 0, width: 1440, height: 900},
