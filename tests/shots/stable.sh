@@ -21,16 +21,31 @@ readonly REPORTED=(default default-scale1 dark-style stock-light stock-dark safe
 readonly CAPTURED=(default default-scale1 dark-style stock-light stock-dark fedora-light fedora-dark)
 readonly GUARD_PHASES=(window next back-on dark-off)
 
+# Spotlight keys' times are measurements, which assert.sh holds to their budgets; a run compares only that each was taken.
+# shellcheck disable=SC2016 # jq programs, not shell expansions
+readonly MEASURED='reduce (paths(numbers) | select(.[0:2] == ["surfaces", "spotlightKeys"])
+    | select(.[-1] == "ms" or .[-1] == "askedMs" or .[-1] == "cancelledMs")) as $p (.; setpath($p; "measured"))' \
+    DIFFERING='def leaves: [paths(type != "object" and type != "array") as $p | {key: ($p | map(tostring) | join(".")), value: getpath($p)}] | from_entries;
+    def shown($r; $k): if $r | has($k) then $r[$k] | tojson else "absent" end;
+    ($a[0] | leaves) as $x | ($b[0] | leaves) as $y
+    | [$x + $y | keys[] | select(. as $k | ($x | has($k)) != ($y | has($k)) or $x[$k] != $y[$k])]
+    | "\(length) differ: " + (.[:6] | map(. as $k | "\($k) \(shown($x; $k)) → \(shown($y; $k))") | join("; "))'
+
 same_report() {
-    local label=$1 first_log=$2 other_log=$3 tag=$4 first_report other_report
+    local label=$1 first_log=$2 other_log=$3 tag=$4 first_report other_report first other differing
     first_report=$(report_of "$first_log" "$tag")
     other_report=$(report_of "$other_log" "$tag")
     if [[ -z $first_report || -z $other_report ]]; then
         fail "$label: a run has no $tag report"
-    elif [[ $(jq -S . <<<"$first_report") == "$(jq -S . <<<"$other_report")" ]]; then
+        return
+    fi
+    if ! first=$(jq -S "$MEASURED" <<<"$first_report") || ! other=$(jq -S "$MEASURED" <<<"$other_report"); then
+        fail "$label: a run's $tag report is not JSON jq can read"
+    elif [[ $first == "$other" ]]; then
         pass "$label: both runs report the same ($tag)"
     else
-        fail "$label: the runs report differently ($tag): $(diff <(jq -S . <<<"$first_report") <(jq -S . <<<"$other_report") | grep '^[<>]' | head -n 6 | paste -sd'|' -)"
+        differing=$(jq -rn --slurpfile a <(printf '%s' "$first") --slurpfile b <(printf '%s' "$other") "$DIFFERING")
+        fail "$label: the runs report differently ($tag): ${differing:-the reports differ in shape, not in any value}"
     fi
 }
 
