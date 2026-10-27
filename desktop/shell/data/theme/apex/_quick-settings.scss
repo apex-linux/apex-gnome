@@ -42,7 +42,6 @@ $_toggle_states: hover, focus, active;
 
   .quick-toggle.power-item {
     min-width: 0;
-    max-width: none;
     min-height: $apex_quick_settings_button_size;
     border-radius: $apex_quick_settings_button_size / 2;
 
@@ -106,7 +105,6 @@ $_toggle_states: hover, focus, active;
 .quick-toggle-has-menu {
   .quick-toggle {
     min-width: 0;
-    max-width: none;
 
     &:ltr > StBoxLayout { padding-right: $apex_quick_toggle_menu_padding; }
     &:rtl > StBoxLayout { padding-left: $apex_quick_toggle_menu_padding; }
