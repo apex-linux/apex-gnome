@@ -62,6 +62,21 @@ done
 check_false ".gitignore keeps the layer's fixtures" \
     git -C "$APEX_ROOT" check-ignore -q --no-index tests/layer/fixtures/apex-shell-safe.service
 
+# --- signoff.yml runs on a pull request that can change the captures ---------------------
+signoff_paths() { printf '%s\n' "$@" | "$APEX_ROOT/.github/scripts/signoff-paths.sh" 2>/dev/null; }
+for f in desktop/shell/data/theme/apex/_input.scss packaging/pkgs/gnome-shell/patches/0010-panel.patch \
+    tests/shots/probe.js tests/shots/direct.sh tests/shots/signoff.sh tests/shots/fixtures.py tests/shots/glass.js \
+    tests/shell/shoot.sh tests/lib/pins.sh tests/layer/fixtures/io.github.apex_linux.Apex.Desktop.gschema.xml \
+    .github/workflows/signoff.yml; do
+    check "signoff runs on a pull request changing $f" touches=true "$(signoff_paths README.md "$f")"
+done
+for f in tests/shots/README.md tests/shots/selftest.sh tests/shots/assert.sh tests/shots/stable.sh \
+    packaging/pkgs/nautilus/patches/0001-build.patch desktop/control-center/panels/apex/settings-tiles.json \
+    .github/workflows/ci.yml docs/x.md; do
+    check "signoff skips a pull request changing only $f" touches=false "$(signoff_paths "$f")"
+done
+check "signoff skips a pull request with no changed path" touches=false "$(signoff_paths)"
+
 if ((FAILS > 0)); then
     die "selftest: $FAILS failure(s)"
 fi

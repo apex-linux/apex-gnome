@@ -659,8 +659,12 @@ It runs in `signoff.yml`, after the capture:
   `tests/lib` (apex-desktop's pin);
 - daily;
 - on dispatch;
-- on a pull request labelled `goldens`, so a visual change can see which boards it moves
-  before it lands.
+- on a pull request that changes what the captures render: the shell, its recipe, the
+  scenes and fixtures (`tests/shots` but its README, selftest, `assert.sh` and `stable.sh`),
+  `tests/shell`, `tests/lib`, the schema fixture or `signoff.yml`
+  (`.github/scripts/signoff-paths.sh` decides), and on one labelled `goldens`. A board that
+  moves fails before merge, its difference image in the `signoff-SHA` artifact's
+  `goldens-diff/`.
 
 The goldens come from `signoff.sh`'s container, with its RPM and desktop-entry stand-ins
 and `shoot.sh`'s mocks. The builder VM's image draws the launcher and the dock from real

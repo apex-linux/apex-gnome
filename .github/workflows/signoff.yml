@@ -2,7 +2,7 @@
 name: signoff
 
 # The owner's sign-off captures (tests/shots/signoff.sh), checked against the approved goldens.
-# A sign-off run takes about 20 minutes, so a pull request runs it only when labelled goldens.
+# A pull request runs it when it changes what the captures render (signoff-paths.sh) or is labelled goldens.
 on:
   workflow_dispatch: {}
   push:
@@ -19,10 +19,6 @@ on:
   schedule:
     - cron: '41 5 * * *'
 
-concurrency:
-  group: signoff-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
-
 permissions: {}
 
 defaults:
@@ -30,9 +26,41 @@ defaults:
     shell: bash
 
 jobs:
+  rendered:
+    name: Does the pull request change what the captures render?
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      touches: ${{ steps.paths.outputs.touches }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: .github/scripts/signoff-paths.sh
+        id: paths
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: git diff --name-only "$BASE...$HEAD" | .github/scripts/signoff-paths.sh >>"$GITHUB_OUTPUT"
+
   signoff:
     name: tests/shots/signoff.sh (Fedora 45, every shell board, light and dark, against the goldens)
-    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'goldens')
+    needs: rendered
+    # Another label on a pull request neither starts a run nor, through the job's group, cancels one.
+    if: >-
+      !cancelled() && needs.rendered.result != 'failure'
+      && (github.event_name != 'pull_request'
+          || (github.event.action != 'labeled' && needs.rendered.outputs.touches == 'true')
+          || (contains(github.event.pull_request.labels.*.name, 'goldens')
+              && (github.event.action != 'labeled' || github.event.label.name == 'goldens')))
+    concurrency:
+      group: signoff-${{ github.event.pull_request.number || github.ref }}
+      cancel-in-progress: true
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     permissions:
