@@ -6,4 +6,8 @@
 readonly PR_CASES=(default default-scale1 dark-style high-contrast large-text default-solid
     dark-style-solid high-contrast-solid large-text-solid dock-intellihide dock-intellihide-dark
     dock-one-gpu no-dock indicators indicators-scale1 indicators-dark safe-env layer-disabled
-    dock-dnd dock-external fault-configure fault-enable fault-abort)
+    dock-dnd dock-external keys fault-configure fault-enable fault-abort)
+
+# apex-desktop's 90_apex override (tests/lib/pins.sh) moves the input source off Spotlight's Super+Space.
+readonly INPUT_SOURCE_KEYS="['<Super><Alt>space', 'XF86Keyboard']"
+readonly INPUT_SOURCE_BACKWARD_KEYS="['<Shift><Super><Alt>space', '<Shift>XF86Keyboard']"

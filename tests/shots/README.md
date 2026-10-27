@@ -37,7 +37,7 @@ A case that gets no report within `direct.sh`'s timeout stops G2 at once.
 | G1's `image/checks/desktop.sh` | a container of the image | it passes on the image under test, so no text file under `/usr` or `/etc` names `APEX_SHELL_TEST_FAULT` |
 | `direct.sh main` | a container of the image plus `dbus-daemon` (the image has no `dbus-run-session`), `python3-dbusmock` and `gcc` for `clock.c`; `rpm -V` shows the shell's packages unmodified | each case below: one headless shell with a fresh home, dconf and runtime directory, the fixtures on the system bus and the fixed clock (see "Fixtures and the clock") |
 | `direct.sh kernel` | the same, with `apex.safe=1` bound over `/proc/cmdline` | the kernel switch |
-| `direct.sh pr` | CI's `shots-patched` job on a pull request, through `patched.sh` with `PATCHED_PART=pr` on the gnome-shell lane's RPMs | the cases `parts.sh`'s `PR_CASES` names, in `main`'s order (the scenes and every a11y check with their solid-backdrop twins, then the quick dock, indicator, safe-mode and fault cases, `dock-dnd` and `dock-external` among them), with their assertions; each listed case must have run and reported (`part_ran`). A push to `main` and the daily run take `main` with the Fedora baseline |
+| `direct.sh pr` | CI's `shots-patched` job on a pull request, through `patched.sh` with `PATCHED_PART=pr` on the gnome-shell lane's RPMs | the cases `parts.sh`'s `PR_CASES` names, in `main`'s order (the scenes and every a11y check with their solid-backdrop twins, then the quick dock, indicator, safe-mode and fault cases, `dock-dnd`, `dock-external` and `keys` among them), with their assertions; each listed case must have run and reported (`part_ran`). A push to `main` and the daily run take `main` with the Fedora baseline |
 | `direct.sh fedora` | the same image with Fedora's own gnome-shell and gnome-shell-common of the tested NVR in place of the Apex build, downloaded from Fedora's repositories; each RPM must report `digests signatures OK` against a keyring that holds Fedora's key alone, so an unsigned RPM fails | the baseline of the captures |
 | `guard.sh` | a container of the image booted with its own systemd; a test user's `systemd --user` with the image's unmodified units | the crash guard, and that neither the user manager nor the shell's unit sets `APEX_SHELL_TEST_FAULT` |
 | `assert.sh` | the builder VM; `compare.js` in a container of the image | everything below |
@@ -63,12 +63,14 @@ The direct cases:
 | `idle` | the capture settings without hot corners, every feature of `layer.js`'s `FEATURES_IN_ENABLE_ORDER` on; `idle.js` lets the session settle, then watches the stage for 10 s, four times: the desktop, Quick Settings open, and both with Reduce Transparency | ROADMAP S3c's and S2b's exits: an idle desktop paints no frame and queues no relayout, glass or not (below, "The idle desktop") |
 | `glass-load` | the capture settings without hot corners, `dock-intellihide` off while it runs; `glass-load.js` runs ADR 0014's scenarios A, B and C with `load-window.js`, once with the glass and once with Reduce Transparency | forwarded damage re-blurs each glass box in the frame its content changes; the bar and idle popovers do not re-blur; glass adds at most 1 % frames over Reduce Transparency in A and B (below, "Glass under load") |
 | `glass-stress` | as `glass-load`, `G2_GLASS_STRESS_SECONDS` long (60 s; 300 s in the VM's G2) | `glass.js`'s stress on its synthetic box, and the real boxes under `load-window.js` for as long (below) |
+| `keys` | the capture settings without hot corners, and two input sources (`us`, `fr`) | every key the session relies on, as registered (accelerators from their schemas and apex-desktop's override, action modes as `windowManager.js` keeps them) and then pressed through a virtual keyboard: Super+Space opens Spotlight and leaves the input source alone; Super+Alt+Space switches to the next input source and Shift+Super+Alt+Space back, in every mode; Ctrl+Alt+Tab, in the session, overview, lock, unlock and login modes, lists the dock among its groups and moves the keyboard focus into it; a Super tap opens the overview and Super+A the launcher (the app grid), both in the session and overview modes; no grab is left behind |
 | `fault-configure`, `fault-enable` | `APEX_SHELL_TEST_FAULT` | only the fault feature is off; the `witness` feature after it still enables; the rest of the layer runs, Super+Space included, and the shell survives |
 | `fault-abort` | `abort-after-enable` | SIGABRT (exit 134) with the crash guard's marker left behind |
 | `fedora-light`, `fedora-dark` | Fedora's build, `prefer-light` or `prefer-dark` | no Apex module; upstream's sheet at its own path, byte for byte the one safe mode loads from `theme/stock/` |
 | `glass`, `fedora-glass` | the capture settings, `G2_GLASS=1` | patch 0003's glass in the frames the shell drew; the stock unlock blur captured in both shells (see "Glass") |
 
 Every case: the probe ran (so the static import graph loaded), from `startup-complete`, and no `JS ERROR`;
+no key binding overwrites another (mutter's "Overwriting existing binding" warning);
 the wall clock stands at the fixed time and the top bar's clock shows it (`Mon Sep 28`, EN SPACE, `09:41`).
 
 A probe that runs longer than 30 s keeps `gnome-shell-perf-helper` awake with a call every 10 s:
@@ -341,7 +343,15 @@ stands in for a title shown without hover. Then the probe opens three `window.js
 (portals off, so the sign-off part's apps cannot delay them), opens the overview, sets a
 fixture gradient wallpaper while it shows, and captures `overview-windows`. Every caption is shown, and none overlaps another
 window's preview, another caption or the dock. The last row's captions end
-`$apex_dock_bottom_gap` or more above the dock. Each workspace thumbnail draws the wallpaper:
+`$apex_dock_bottom_gap` or more above the dock. Each preview is board 35's: `apex-window-preview`,
+`$apex_radius_window_preview` round, with the shadows feature's two layers on its own box,
+`0 $apex_preview_shadow_y $apex_preview_shadow_blur $apex_preview_shadow` and
+`0 $apex_preview_shadow_2_y $apex_preview_shadow_2_blur $apex_preview_shadow_2`, from the
+variant's tokens (light in `default` and `default-scale1`, dark in `dark-style`). A window's own
+corners are libadwaita's, drawn from the `apex.css` that apex-session-agent writes, which G2's
+shells have neither of: `tests/s2c/radius-test.sh` checks them live (rounded, and square when
+maximised, tiled and fullscreen) and `tests/libadwaita/radius-test.sh` the lane's reload.
+Each workspace thumbnail draws the wallpaper:
 its centre's luminance spreads 0.1 or more, where stock's flat fill gives 0, so the
 thumbnails also followed the live wallpaper change. The windows and the wallpaper go again
 before the next scene. The `no-dock` case (`disabled-features=['dock']`) opens the same
@@ -763,7 +773,8 @@ docker run --rm --network=host -v "$PWD:/src:ro" registry.fedoraproject.org/fedo
 
 It applies `spec-edit` and the series as the lane does (the mutter pin is the newest
 `mutter-devel` in Fedora's repositories), so a patch that stops applying with fuzz 0 fails
-the build. Then it installs the RPMs with the layer's schema fixture, runs `direct.sh main`,
+the build. Then it installs the RPMs with the layer's schema fixture and, from apex-desktop's
+`90_apex` override, the weekday and the input source's keys (`parts.sh`), runs `direct.sh main`,
 and asserts each case's log, the top bar of `default`, `default-scale1` and `dark-style`
 (the metrics, today's pins and the known gaps) and the layer cycles. G1, the crash guard,
 the captures against Fedora's and `rpm -V` stay with G2 in the builder VM. With
@@ -785,5 +796,5 @@ action. The real `pkexec` path is G4's.
 ## Not yet
 
 - A bar-text contrast check over the fixture wallpapers.
-- The metrics of the other surfaces (launcher, overview, notifications, windows, keys).
+- The metrics of the other surfaces (launcher, overview, notifications).
 - Goldens for boards 15, 16, 17, 20 and 22: they await the owner's approval.

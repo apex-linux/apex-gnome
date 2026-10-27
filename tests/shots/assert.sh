@@ -23,7 +23,7 @@ readonly STOCK_SHEETS=resource:///org/gnome/shell/theme/stock
 readonly FEDORA_SHEETS=resource:///org/gnome/shell/theme
 readonly DIRECT_CASES=(default default-scale1 dark-style high-contrast large-text default-solid dark-style-solid high-contrast-solid
     large-text-solid dock-intellihide dock-intellihide-dark dock-one-gpu no-dock stock-light stock-dark safe-env
-    layer-disabled layer-cycles motion idle dock-pin dock-dnd dock-external glass-load glass-stress fault-configure fault-enable fault-abort kernel-safe
+    layer-disabled layer-cycles motion idle dock-pin dock-dnd dock-external keys glass-load glass-stress fault-configure fault-enable fault-abort kernel-safe
     fedora-light fedora-dark glass fedora-glass
     indicators indicators-scale1 indicators-dark)
 readonly DIRECT_PARTS=(main kernel fedora)
@@ -90,6 +90,10 @@ readonly LAYER_CYCLES=3
 readonly TILES_FILE=${G2_TILES_FILE:-$SHOTS_DIR/../../desktop/shell/js/ui/apex/spotlight/settings-tiles.json}
 readonly SPOTLIGHT_ACCELERATORS='["<Super>space"]'
 readonly SPOTLIGHT_MODES='["NORMAL", "OVERVIEW"]'
+# GNOME's own keys, as its schemas and windowManager.js, overviewControls.js and main.js register them.
+readonly PANELS_KEYS='["<Control><Alt>Tab"]'
+readonly PANELS_MODES='["NORMAL", "OVERVIEW", "LOCK_SCREEN", "UNLOCK_SCREEN", "LOGIN_SCREEN"]'
+readonly APP_VIEW_KEYS='["<Super>a"]'
 # DESIGN's motion: cubic-bezier(.2,.8,.2,1); window geometry .3 s, the overview .2 s.
 readonly MOTION_CURVE='[0.2, 0.8, 0.2, 1]'
 readonly MOTION_WINDOW_MS=300
@@ -183,6 +187,17 @@ no_disposed_apex() {
         pass "$label: no disposed object touched from an Apex frame"
     else
         fail "$label: disposed objects touched: $found"
+    fi
+}
+
+# Mutter warns when two bindings claim one key: the second silently takes it from the first.
+no_binding_overwritten() {
+    local label=$1 log=$2 found
+    found=$(cat "$log" "${log%.log}.late.log" 2>/dev/null | grep -m1 'Overwriting existing binding' | sed 's/.*WARNING \*\*: [0-9:.]* //')
+    if [[ -z $found ]]; then
+        pass "$label: no key binding overwrites another"
+    else
+        fail "$label: $found"
     fi
 }
 
@@ -1109,6 +1124,11 @@ overview_layer() {
         "overview with $OVERVIEW_WINDOWS windows: every caption shown, none over another window's preview, another caption or the dock" APEXG2-SCENES
     top_bar_metric "$label overview" "$scenes" "$tokens" 'and the last row'"'"'s captions end $apex_dock_bottom_gap or more above the dock' \
         "$w" '([.previews[].caption | .y + .height] | max) <= .dock.y - ($t.apex_dock_bottom_gap | px) + 0.5'
+    top_bar_metric "$label overview" "$scenes" "$tokens" 'board 35: each window preview is $apex_radius_window_preview round and draws two layers on its own box, 0 $apex_preview_shadow_y $apex_preview_shadow_blur $apex_preview_shadow and 0 $apex_preview_shadow_2_y $apex_preview_shadow_2_blur $apex_preview_shadow_2' \
+        "$w.previews" "length == $OVERVIEW_WINDOWS"' and all(.styled and .radius == ($t.apex_radius_window_preview | px)
+            and (.layers | length == 2 and all(.shown and .box == .surfaceBox and .radius == ($t.apex_radius_window_preview | px))
+            and (.[0].boxShadow | (.y | px_is($t.apex_preview_shadow_y)) and (.blur | px_is($t.apex_preview_shadow_blur)) and (.color | colour_is($t.apex_preview_shadow)))
+            and (.[1].boxShadow | (.y | px_is($t.apex_preview_shadow_2_y)) and (.blur | px_is($t.apex_preview_shadow_2_blur)) and (.color | colour_is($t.apex_preview_shadow_2)))))'
     top_bar_metric "$label overview" "$scenes" "$tokens" 'the workspace-bottom hook takes the dock box'"'"'s live height and $apex_dock_bottom_gap off the monitor'"'"'s bottom' \
         "$w" '.bottom.hook == .bottom.stock - .dockBox.height - ($t.apex_dock_bottom_gap | px)'
     expect_report "$label" "$log" "$w.thumbnails | length >= 2 and all(.[]; .spread >= $OVERVIEW_THUMBNAIL_MIN_SPREAD)" \
@@ -1816,6 +1836,7 @@ direct_cases() {
         no_nan_allocation "$c" "$f"
         parental_controls_ready "$c" "$f"
         no_disposed_apex "$c" "$f"
+        no_binding_overwritten "$c" "$f"
         # fault-abort may abort before its report; its exit status says the shell ran.
         [[ $c == fault-abort ]] && continue
         action_modes "$c" "$f"
@@ -2008,6 +2029,7 @@ direct_cases() {
     no_dock_case "$run"
     dock_dnd_case "$run"
     dock_external_case "$run"
+    keys_case "$run"
 }
 
 # shellcheck disable=SC2016 # jq programs
@@ -2138,6 +2160,40 @@ dock_external_case() {
         (.glass.dock | blurs(\$t.apex_dock_blur; 2)) and (.glass.bar | .resourceScale == 2 and .radius == 2 * (\$t.apex_bar_blur | px) * 2)"
 }
 
+# The keys case: each binding as registered, then pressed through a virtual keyboard.
+keys_case() {
+    local run=$1 f=$1/keys.log r error input backward
+    exits "$run" keys 0
+    no_js_error keys "$f"
+    no_apex_failure keys "$f"
+    r=$(report_of "$f" APEXG2-KEYS)
+    error=$(jq -r '.error // empty' <<<"$r" 2>/dev/null)
+    if [[ -n $error ]]; then
+        fail "keys: ${error%%$'\n'*}"
+        return
+    fi
+    input=$(tr "'" '"' <<<"$INPUT_SOURCE_KEYS")
+    backward=$(tr "'" '"' <<<"$INPUT_SOURCE_BACKWARD_KEYS")
+    expect keys "$r" ". as \$k | .bindings.inputSource == {modes: \$k.allModes, accelerators: $input}
+        and .bindings.inputSourceBackward == {modes: \$k.allModes, accelerators: $backward}" \
+        "the input source's Super+Alt+Space and Shift+Super+Alt+Space, apex-desktop's override, in every mode"
+    expect keys "$r" ".bindings.panels == {modes: $PANELS_MODES, accelerators: $PANELS_KEYS}" \
+        "Ctrl+Alt+Tab, GNOME's, in the session, overview, lock, unlock and login modes"
+    expect keys "$r" ".bindings.appView == {modes: $SPOTLIGHT_MODES, accelerators: $APP_VIEW_KEYS}
+        and .bindings.overlay == {modes: $SPOTLIGHT_MODES, key: \"Super\"}" \
+        "Super+A and the Super tap, GNOME's, in the NORMAL and OVERVIEW modes"
+    expect keys "$r" '.pressed | .sources == ["us", "fr"] and .first == "us"' "two input sources, us first"
+    expect keys "$r" '.pressed.superSpace == {spotlight: true, source: "us"}' \
+        "Super+Space opens Spotlight and leaves the input source alone"
+    expect keys "$r" '.pressed | .superAltSpace.source == "fr" and .shiftSuperAltSpace.source == "us"' \
+        "Super+Alt+Space switches to the next input source, and Shift+Super+Alt+Space back"
+    expect keys "$r" '.pressed.ctrlAltTab | ([.groups[] | select(.dock)] | length == 1) and .dockFocused' \
+        "Ctrl+Alt+Tab lists the dock among its groups, and the keyboard focus reaches it"
+    expect keys "$r" '.pressed.superTap == {overview: true, apps: false}' "a Super tap opens the overview, on its windows"
+    expect keys "$r" '.pressed.superA == {overview: true, apps: true}' "Super+A opens the launcher, the app grid"
+    expect keys "$r" '.modals == 0' "and nothing is left holding a grab"
+}
+
 # The no-dock case: disabled-features=['dock'], so the overview's own dash is back and the
 # workspace-bottom hook leaves stock's edge.
 no_dock_case() {
@@ -2185,6 +2241,7 @@ patched_assertions() {
         [[ -e $run/$c.log ]] && no_nan_allocation "$c" "$run/$c.log"
         [[ -e $run/$c.log ]] && parental_controls_ready "$c" "$run/$c.log"
         [[ -e $run/$c.log ]] && no_disposed_apex "$c" "$run/$c.log"
+        [[ -e $run/$c.log ]] && no_binding_overwritten "$c" "$run/$c.log"
     done
     for c in default default-scale1 dark-style; do
         asserted "${c%:*}" || continue
@@ -2257,6 +2314,7 @@ patched_assertions() {
     asserted no-dock && no_dock_case "$run"
     asserted dock-dnd && dock_dnd_case "$run"
     asserted dock-external && dock_external_case "$run"
+    asserted keys && keys_case "$run"
     if [[ $part == pr ]]; then
         part_ran "$run" pr "${PR_CASES[@]}"
     fi

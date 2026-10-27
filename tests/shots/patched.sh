@@ -143,7 +143,7 @@ fedora_part() {
 }
 
 install_shell() {
-    local rpms
+    local rpms keys
     rpms=("$PATCHED_RPMS"/gnome-shell-[0-9]*.x86_64.rpm "$PATCHED_RPMS"/gnome-shell-common-*.noarch.rpm)
     [[ -f ${rpms[0]} && -f ${rpms[1]} ]] || die "no gnome-shell and gnome-shell-common RPMs in $PATCHED_RPMS"
     step "the patched shell, the fixtures' services, gjs and jq"
@@ -152,9 +152,14 @@ install_shell() {
         gnome-clocks gnome-weather malcontent-libs
     rpm -q gnome-shell | grep -q "\.apex" ||
         die "the installed gnome-shell is not an Apex build: $(rpm -q gnome-shell)"
-    # What apex-desktop ships: the schema (the layer's fixture) and the weekday override.
+    # What apex-desktop ships: the schema (the layer's fixture), and from 90_apex's override the weekday
+    # and the input source's keys, which leave Super+Space to Spotlight.
     cp "$REPO/tests/layer/fixtures/io.github.apex_linux.Apex.Desktop.gschema.xml" /usr/share/glib-2.0/schemas/
-    printf '[org.gnome.desktop.interface]\nclock-show-weekday=true\n' >/usr/share/glib-2.0/schemas/90_g2-patched.gschema.override
+    # shellcheck disable=SC2016 # expanded by the inner bash
+    keys=$(bash -c '. "$1/parts.sh"; printf "switch-input-source=%s\nswitch-input-source-backward=%s\n" \
+        "$INPUT_SOURCE_KEYS" "$INPUT_SOURCE_BACKWARD_KEYS"' _ "$HERE")
+    printf '%s\n' '[org.gnome.desktop.interface]' 'clock-show-weekday=true' '[org.gnome.desktop.wm.keybindings]' "$keys" \
+        >/usr/share/glib-2.0/schemas/90_g2-patched.gschema.override
     quietly glib-compile-schemas --strict /usr/share/glib-2.0/schemas
 }
 
