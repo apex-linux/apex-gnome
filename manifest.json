@@ -244,21 +244,21 @@
         "light": "indicators-indicators-everything",
         "dark": "indicators-dark-indicators-everything"
       },
-      "shots": "c05a782f5ca2",
+      "shots": "bd78f6acfa8d",
       "files": {
         "light": "boards/board-39-light.png",
         "dark": "boards/board-39-dark.png"
       },
       "pins": {
-        "apexGnome": "0f1d211fe841fd526f8baeb09fbec02f3f80a635",
+        "apexGnome": "a4ec5be44914ac3df947c72e8e295bfcf3e2e8c6",
         "apexDesktop": "8f064873e18b4ffd6a7399c2ab9d040fd7e797ee"
       },
       "scale": 2,
       "monitor": "2880x1800",
       "approval": {
         "status": "approved",
-        "approvedAt": "2026-10-26T14:41:15.497Z",
-        "shots": "c05a782f5ca2"
+        "approvedAt": "2026-10-27T02:36:52.884Z",
+        "shots": "bd78f6acfa8d"
       }
     },
     "15": {
