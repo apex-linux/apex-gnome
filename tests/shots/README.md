@@ -430,6 +430,20 @@ pill: 400 px with "Search apps", "files" filtering the grid in its own box to ap
 first and selected and Spotlight closed, and "No Results" with its hint where board 36 puts it
 (scenes `launcher` and `launcher-none`).
 
+`surface_metrics` measures boards 34 to 36 on the allocations, in the same cases, against
+the tokens the style checks above read from the theme:
+
+- the notification card: the `$apex_message_icon_size` icon at `$apex_message_padding_start`
+  and `$apex_message_padding` from the card's corner, the header's column `$apex_banner_gap`
+  past it, and the `$apex_banner_close_size` close button `$apex_message_padding_end` in from
+  the right; the footer `$apex_date_menu_footer_height` tall, with Do Not Disturb and the
+  `$apex_clear_button_height` Clear each `$apex_date_menu_footer_padding` in from its side,
+  Clear centred down it (`date_menu` reads the opaque `$apex_message_card`);
+- the overview: the current workspace's `$apex_thumbnail_indicator` ring around its
+  thumbnail, with no shadow on either, and the thumbnails `$apex_thumbnail_gap` apart;
+- the launcher: its pill `$apex_search_height` tall, centred, `$apex_search_top` under the
+  bar, and the app grid's scrim in `$apex_scrim`.
+
 None of these surfaces is in a capture compared with Fedora, so the comparison with Fedora's build
 is unchanged: the Apex overview is compared only run to run, and safe mode's with Fedora's.
 
@@ -785,5 +799,4 @@ action. The real `pkexec` path is G4's.
 ## Not yet
 
 - A bar-text contrast check over the fixture wallpapers.
-- The metrics of the other surfaces (launcher, overview, notifications, windows, keys).
-- Goldens for boards 15, 16, 17, 20 and 22: they await the owner's approval.
+- The metrics of the other surfaces (windows, keys).

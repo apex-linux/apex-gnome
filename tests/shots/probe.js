@@ -2158,6 +2158,7 @@ async function appGrid(unit) {
                 .getWorkspacesBoxForState(OverviewControls.ControlsState.APP_GRID).get_height() / unit.length),
             box: boxOf(appDisplay, unit),
             searchBottom: (b => b.y + b.height)(boxOf(Main.overview._overview.controls._searchEntry, unit)),
+            scrim: paint(Main.layoutManager.overviewGroup.get_theme_node(), unit),
             grid: {
                 columns: appDisplay._grid.layout_manager.columns_per_page,
                 rows: appDisplay._grid.layout_manager.rows_per_page,

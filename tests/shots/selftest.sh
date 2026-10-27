@@ -462,6 +462,24 @@ REPORT_OF_AN_OVERVIEW_LAYER_FROM_TOKENS='
         thumbnails: [{x: 597, y: 108, width: 117, height: 70, spread: 0.42}, {x: 724, y: 108, width: 117, height: 70, spread: 0.31}]},
     appGrid: {grid: {columns: 7, rows: 4, iconSize: 88}, strip: 0, box: {y: 132}}}}'
 # shellcheck disable=SC2016 # a jq program
+REPORT_OF_SURFACE_METRICS_FROM_TOKENS='
+($t.apex_message_padding | px) as $pad | ($t.apex_message_icon_size | px) as $icon | ($t.apex_banner_close_size | px) as $close
+| ($t.apex_date_menu_footer_padding | px) as $fpad | ($t.apex_clear_button_height | px) as $clear | ($t.apex_thumbnail_indicator | px) as $r
+| {x: 354, y: 52, width: 400, height: 87} as $card | (354 + ($t.apex_message_padding_start | px)) as $ix
+| {x: 354, y: 537, width: 400, height: ($t.apex_date_menu_footer_height | px)} as $footer
+| {x: 599, y: 108, width: 116, height: 70, boxShadow: null} as $thumb
+| {topBar: {panel: {width: 1440, height: 32}}, surfaces: {
+    notificationsLayer: {layout: {collapsed: {card: $card, icon: {x: $ix, y: (52 + $pad), width: $icon, height: $icon},
+            header: {x: ($ix + $icon + ($t.apex_banner_gap | px)), y: 67, width: 271, height: 19},
+            close: {x: (754 - ($t.apex_message_padding_end | px) - $close), y: (52 + $pad), width: $close, height: $close}}},
+        footer: $footer, dnd: {x: (354 + $fpad), y: 537, width: 149, height: 40},
+        clear: {x: (754 - $fpad - 65), y: ($footer.y + ($footer.height - $clear) / 2), width: 65, height: $clear}},
+    overview: {thumbnail: $thumb, indicator: {x: (599 - $r), y: (108 - $r), width: (116 + 2 * $r), height: (70 + 2 * $r), boxShadow: null}},
+    overviewWindows: {thumbnails: [$thumb, ($thumb | .x += 116 + ($t.apex_thumbnail_gap | px))]},
+    launcher: {pill: {x: (720 - ($t.apex_launcher_search_width | px) / 2), y: (32 + ($t.apex_search_top | px)),
+        width: ($t.apex_launcher_search_width | px), height: ($t.apex_search_height | px)}},
+    appGrid: {scrim: {background: ($t.apex_scrim | hex), boxShadow: null}}}}'
+# shellcheck disable=SC2016 # a jq program
 REPORT_OF_SHADOW_LAYERS_FROM_TOKENS='
 {shown: true, box: [10, 20, 230, 146], surfaceBox: [10, 20, 230, 146], natural: [105, 126], radius: 0,
     boxShadow: {color: ($t.apex_shadow_2 | hex), inset: false, x: 0,
@@ -717,6 +735,7 @@ assert_run() {
     [[ $assertions == overview_layer ]] && report=$REPORT_OF_AN_OVERVIEW_LAYER_FROM_TOKENS
     [[ $assertions == spotlight_style ]] && report=$REPORT_OF_A_SPOTLIGHT_DRAWN_FROM_TOKENS
     [[ $assertions == launcher_search ]] && report=$REPORT_OF_A_LAUNCHER_SEARCH_FROM_TOKENS
+    [[ $assertions == surface_metrics ]] && report=$REPORT_OF_SURFACE_METRICS_FROM_TOKENS
     [[ $assertions == spotlight_glass ]] && report=$REPORT_OF_SPOTLIGHT_GLASS_FROM_TOKENS
     [[ $assertions == spotlight_keys ]] && report=$REPORT_OF_SPOTLIGHT_KEYS
     [[ $assertions == shadow_layers ]] && report=$REPORT_OF_SHADOW_LAYERS_FROM_TOKENS
@@ -1773,6 +1792,45 @@ test_spotlight_style() {
 .surfaces.spotlight.rows[2].tile.foreground = "#1d1d21ff"|a dark glyph on a coloured tile
 .surfaces.overviewSearch.opened = false|the overview's stock search
 .surfaces.overviewSearch.overviewText = "disk"|the typed text left in the overview's field too
+CHANGES
+}
+
+test_surface_metrics() {
+    local variant change what passes failures open_gaps
+    for variant in light dark; do
+        read -r passes failures open_gaps <<<"$(assert_run surface_metrics "$variant")"
+        if ((failures == 0 && open_gaps == 0 && passes == 5)); then
+            ok "surface metrics ($variant): boards 34 to 36 as laid out pass all $passes assertions"
+        else
+            not_ok "surface metrics ($variant): boards 34 to 36 as laid out pass (passed/failed/gaps $passes/$failures/$open_gaps): $(grep -m3 '^FAIL' "$T/top-bar.out" | paste -sd'|' -)"
+        fi
+    done
+    while IFS='|' read -r change what; do
+        read -r passes failures open_gaps <<<"$(assert_run surface_metrics light "$change")"
+        if ((failures == 1)); then
+            ok "surface metrics: $what fails one assertion"
+        else
+            not_ok "surface metrics: $what fails one assertion (passed/failed/gaps $passes/$failures/$open_gaps)"
+        fi
+    done <<'CHANGES'
+.surfaces.notificationsLayer.layout.collapsed += {icon: {x: 368, y: 64, width: 48, height: 48}, header: {x: 428, y: 67, width: 255, height: 19}}|upstream's 48 px notification icon
+.surfaces.notificationsLayer.layout.collapsed.icon.x -= 2|the icon at the card's 12 px padding, not its 14 px start
+.surfaces.notificationsLayer.layout.collapsed.header.x -= 4|the header's column 8 px past the icon
+.surfaces.notificationsLayer.layout.collapsed.close.x += 4|the close button 6 px from the card's right
+.surfaces.notificationsLayer.layout.collapsed.close.y += 6|the close button centred down the card
+.surfaces.notificationsLayer.footer.height = 48|a 48 px footer
+.surfaces.notificationsLayer.dnd.x = 354|Do Not Disturb flush with the footer's left
+.surfaces.notificationsLayer.clear.x += 4|Clear flush with the footer's right
+.surfaces.notificationsLayer.clear.y -= 4|Clear off the footer's centre
+.surfaces.notificationsLayer.clear.height = 36|a 36 px Clear
+.surfaces.overview.indicator.boxShadow = {x: 0, y: 2, blur: 6}|a shadow under the current workspace's ring
+.surfaces.overview.thumbnail.boxShadow = {x: 0, y: 2, blur: 6}|a shadow under the thumbnails
+.surfaces.overview.indicator += {x: 599, width: 116}|the ring inside the thumbnail's sides, not around them
+.surfaces.overviewWindows.thumbnails[1].x += 6|thumbnails 16 px apart
+.surfaces.launcher.pill.x = 500|the launcher's pill off centre
+.surfaces.launcher.pill.y = 60|the launcher's pill 28 px below the bar
+.surfaces.launcher.pill.height = 36|a 36 px launcher pill
+.surfaces.appGrid.scrim.background = "#00000000"|the launcher over no scrim
 CHANGES
 }
 
@@ -3181,6 +3239,7 @@ test_derived_surfaces
 test_tile_preview
 test_spotlight_style
 test_launcher_search
+test_surface_metrics
 test_spotlight_glass
 test_spotlight_keys
 test_screenshot_ui
