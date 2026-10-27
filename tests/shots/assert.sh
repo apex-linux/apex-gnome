@@ -50,7 +50,7 @@ readonly SOLID_BACKDROP='#013b88'
 readonly A11Y_TEXT_RATIO=4.5
 readonly A11Y_ICON_RATIO=3
 readonly A11Y_ACCENTS=(blue teal green yellow orange red pink purple slate)
-readonly A11Y_SURFACES=(bar dock popupMenu osd banner quickSettings "${A11Y_ACCENTS[@]/#/quickSettingsAccents.}" wifiMenu wifiMenuConnected dateMenu
+readonly A11Y_SURFACES=(bar barUnread dock popupMenu osd banner quickSettings "${A11Y_ACCENTS[@]/#/quickSettingsAccents.}" wifiMenu wifiMenuConnected dateMenu
     "${A11Y_ACCENTS[@]/#/dateMenuAccents.}" switcher dialog "${A11Y_ACCENTS[@]/#/dialogAccents.}" endSession screenshot
     spotlight.popup spotlight.toast overview appGrid)
 # The failures still open: upstream's high-contrast sheet, which safe mode keeps as Fedora's.
@@ -577,6 +577,25 @@ indicator_metrics() {
             and (.content.width >= ($t.apex_indicators_overflow_menu_width | px) - 0.01)'
     "${metric[@]}" 'when the apps quit, the indicators and the divider go' \
         '.gone' '.visible == false and .divider == null'
+}
+
+# shellcheck disable=SC2016 # a jq program and token names
+readonly SOLID_BAR_OFF='(.solid | not) and (.background | colour_is($t.apex_bar)) and .boxShadow == null and .glass.enabled == true'
+
+# A window maximised on the primary monitor turns the bar solid; un-maximised, it turns it back.
+# shellcheck disable=SC2016 # jq programs and token names, not shell expansions
+solid_bar() {
+    local label=$1 log=$2 variant=$3 report tokens
+    report=$(report_of "$log" APEXG2-SOLID-BAR)
+    tokens=$(tokens_for "$variant")
+    local -a metric=(top_bar_metric "$label solid bar" "$report" "$tokens")
+    "${metric[@]}" 'with a window open but not maximised the bar is $apex_bar glass, no line under it' \
+        '.steps.unmaximised' "$SOLID_BAR_OFF"
+    "${metric[@]}" 'maximising it turns the bar solid: $apex_bar_solid over a 0 1px 0 $apex_border line, its glass paused' \
+        '.steps.maximised' \
+        '.solid and (.background | colour_is($t.apex_bar_solid)) and .glass.enabled == false
+            and (.boxShadow | .inset == false and .x == 0 and .y == 1 and .blur == 0 and .spread == 0 and (.color | colour_is($t.apex_border)))'
+    "${metric[@]}" 'un-maximising it turns the bar back to $apex_bar glass' '.steps.restored' "$SOLID_BAR_OFF"
 }
 
 no_dock() {
@@ -1571,22 +1590,45 @@ a11y_verdict() {
     if [[ -z $problems ]]; then pass "$desc"; else fail "$desc (${problems:0:600})"; fi
 }
 
+# The text below 4.5:1 and the glyphs and dots below 3:1 in a report's surface at path.
+a11y_low_contrast() {
+    local report=$1 path=$2
+    jq -r --arg path "$path" --argjson text "$A11Y_TEXT_RATIO" --argjson icon "$A11Y_ICON_RATIO" \
+        "[$A11Y_SURFACE] as \$e | if (\$e | length) > 0 then \$e else (getpath(\$path | split(\".\")) | $A11Y_LOW_CONTRAST) end | join(\"; \")" \
+        <<<"$report" 2>&1
+}
+
 # Each surface's text at 4.5:1 and glyphs at 3:1, against the pixels the stage drew behind them.
 a11y_contrast() {
-    local label=$1 log=$2 report s problems
+    local label=$1 log=$2 report s
     report=$(report_of "$log" APEXG2-A11Y)
     if [[ -z $report ]]; then
         fail "$label accessibility: no APEXG2-A11Y report"
         return
     fi
     for s in "${A11Y_SURFACES[@]}"; do
-        problems=$(jq -r --arg path "$s" --argjson text "$A11Y_TEXT_RATIO" --argjson icon "$A11Y_ICON_RATIO" \
-            "[$A11Y_SURFACE] as \$e | if (\$e | length) > 0 then \$e else (getpath(\$path | split(\".\")) | $A11Y_LOW_CONTRAST) end | join(\"; \")" \
-            <<<"$report" 2>&1)
-        known_gap "${A11Y_GAPS[$label:$s]:-}" a11y_verdict "$label accessibility: $s: text $A11Y_TEXT_RATIO:1 and glyphs $A11Y_ICON_RATIO:1 against what is drawn behind them" "$problems"
+        known_gap "${A11Y_GAPS[$label:$s]:-}" a11y_verdict "$label accessibility: $s: text $A11Y_TEXT_RATIO:1 and glyphs $A11Y_ICON_RATIO:1 against what is drawn behind them" \
+            "$(a11y_low_contrast "$report" "$s")"
     done
     expect "$label accessibility" "$report" '.wifiMenuConnected.targets | any(.kind == "text" and (.inactive | not))' \
         "the connected network's name is measured over its row's own fill"
+    expect "$label accessibility" "$report" '(.bar.targets | map(select(.kind == "dot" and .name == "workspace-dot")) | length >= 2)
+        and (.barUnread.targets | any(.kind == "dot" and .name == "messages-indicator"))' \
+        "the bar's workspace dots and the clock's unread dot are measured as glyphs"
+}
+
+# The bar over the overview's fixture wallpaper, in the overview and on the desktop.
+bar_over_fixture() {
+    local label=$1 log=$2 report s
+    report=$(report_of "$log" APEXG2-OVERVIEW-WINDOWS)
+    if [[ -z $report ]]; then
+        fail "$label accessibility: no APEXG2-OVERVIEW-WINDOWS report"
+        return
+    fi
+    for s in bar.overview bar.desktop; do
+        a11y_verdict "$label accessibility: $s over the fixture wallpaper: text $A11Y_TEXT_RATIO:1 and glyphs $A11Y_ICON_RATIO:1 against what is drawn behind them" \
+            "$(a11y_low_contrast "$report" "$s")"
+    done
 }
 
 # Large Text: each surface's text whole, on the screen, inside its surface and clear of the rest.
@@ -1837,6 +1879,7 @@ direct_cases() {
     expect_report default "$f" '.startingMarker == true' "the layer created %t/apex-shell-starting at enable"
     check "default: the marker is removed at shutdown" grep -q '^default .*marker-after-exit=no' "$run/results-main.txt"
     top_bar default "$f" light
+    solid_bar default "$f" light
     top_bar_today default "$f" light
     top_bar_gaps default "$f" light
     dock_metrics default "$f" light
@@ -1896,6 +1939,7 @@ direct_cases() {
     no_apex_failure dark-style "$f"
     spotlight_key dark-style "$f"
     top_bar dark-style "$f" dark
+    solid_bar dark-style "$f" dark
     top_bar_today dark-style "$f" dark
     top_bar_gaps dark-style "$f" dark
     dock_metrics dark-style "$f" dark
@@ -2145,6 +2189,7 @@ no_dock_case() {
     exits "$run" no-dock 0
     no_apex_failure no-dock "$run/no-dock.log"
     overview_without_dock no-dock "$run/no-dock.log"
+    bar_over_fixture no-dock "$run/no-dock.log"
 }
 
 overview_without_dock() {
@@ -2199,6 +2244,8 @@ patched_assertions() {
     asserted default-scale1 && top_bar default-scale1 "$run/default-scale1.log" light
     asserted default-scale1 && top_bar_today default-scale1 "$run/default-scale1.log" light
     asserted dark-style && top_bar dark-style "$run/dark-style.log" dark
+    asserted default && solid_bar default "$run/default.log" light
+    asserted dark-style && solid_bar dark-style "$run/dark-style.log" dark
     asserted dark-style && top_bar_today dark-style "$run/dark-style.log" dark
     asserted dark-style && top_bar_gaps dark-style "$run/dark-style.log" dark
     asserted default && dock_metrics default "$run/default.log" light

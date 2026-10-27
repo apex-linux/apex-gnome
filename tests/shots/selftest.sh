@@ -734,6 +734,7 @@ REPORT_OF_LEGIBLE_SURFACES='
 {kind: "text", name: "Label", inactive: false, offscreen: false, ratio: 7, ellipsized: false, expandable: false, card: 0,
     box: {x: 10, y: 10, width: 60, height: 20}} as $text
 | ($text + {kind: "icon", name: "glyph-symbolic", ratio: 4, box: {x: 80, y: 10, width: 16, height: 16}}) as $icon
+| ($text + {kind: "dot", name: "workspace-dot", ratio: 3.5, box: {x: 100, y: 10, width: 6, height: 6}}) as $dot
 | {box: {x: 0, y: 0, width: 200, height: 100}, targets: [$text, $icon]} as $s
 | {textScalingFactor: 1.25, monitor: {x: 0, y: 0, width: 1440, height: 900},
     quickSettingsAccents: (["blue", "teal", "green", "yellow", "orange", "red", "pink", "purple", "slate"] | map({key: ., value: $s}) | from_entries),
@@ -741,7 +742,7 @@ REPORT_OF_LEGIBLE_SURFACES='
     dialogAccents: (["blue", "teal", "green", "yellow", "orange", "red", "pink", "purple", "slate"] | map({key: ., value: $s}) | from_entries),
     screenshot: $s,
 
-    bar: $s, dock: $s, popupMenu: $s, osd: $s, banner: $s, quickSettings: $s, wifiMenu: $s, wifiMenuConnected: $s, dateMenu: $s, switcher: $s,
+    bar: ($s | .targets += [$dot, $dot]), barUnread: ($s | .targets += [$dot + {name: "messages-indicator"}]), dock: $s, popupMenu: $s, osd: $s, banner: $s, quickSettings: $s, wifiMenu: $s, wifiMenuConnected: $s, dateMenu: $s, switcher: $s,
     dialog: $s, endSession: $s, spotlight: {popup: $s, toast: $s}, overview: $s, appGrid: $s}'
 
 a11y_run() {
@@ -754,7 +755,7 @@ a11y_run() {
 
 test_a11y() {
     local assertions expected change what passes failures open_gaps want
-    for assertions in a11y_contrast:45 a11y_layout:45; do
+    for assertions in a11y_contrast:47 a11y_layout:46; do
         expected=${assertions#*:}
         read -r passes failures open_gaps <<<"$(a11y_run "${assertions%:*}")"
         if ((failures == 0 && open_gaps == 0 && passes == expected)); then
@@ -773,6 +774,10 @@ test_a11y() {
     done <<'CHANGES'
 a11y_contrast|1|.bar.targets[0].ratio = 4.4|text at 4.4:1
 a11y_contrast|1|.dock.targets[1].ratio = 2.9|a glyph at 2.9:1
+a11y_contrast|1|.bar.targets[3].ratio = 2.9|an inactive workspace dot at 2.9:1
+a11y_contrast|1|.barUnread.targets[2].ratio = 2.9|the clock's unread dot at 2.9:1
+a11y_contrast|1|.bar.targets = .bar.targets[:3]|one workspace dot measured
+a11y_contrast|1|.barUnread.targets = .barUnread.targets[:2]|no unread dot measured
 a11y_contrast|1|.wifiMenu.targets[0].ratio = 3|a menu row's text at 3:1
 a11y_contrast|1|.wifiMenuConnected.targets[0].ratio = 4.4|the connected network's name at 4.4:1 over its fill
 a11y_contrast|1|.wifiMenuConnected.targets |= map(. + {kind: "icon"})|a connected row with only its glyphs measured
@@ -2792,6 +2797,59 @@ test_action_modes() {
 MODES
 }
 
+# shellcheck disable=SC2016 # a jq program
+readonly BAR_OVER_FIXTURE='{kind: "text", name: "Desktop", inactive: false, offscreen: false, ratio: 6.3} as $text
+| {box: {x: 0, y: 0, width: 1440, height: 32}, targets: [$text, ($text + {kind: "dot", name: "workspace-dot", ratio: 3.4})]} as $bar
+| {previews: [], bar: {overview: $bar, desktop: $bar}}'
+
+test_bar_over_fixture() {
+    local failures what change passes
+    while IFS='|' read -r failures what change; do
+        if [[ -n $change ]]; then
+            printf 'APEXG2-OVERVIEW-WINDOWS %s\n' "$(jq -nc "$BAR_OVER_FIXTURE | $change")" >"$T/no-dock.log"
+        else
+            : >"$T/no-dock.log"
+        fi
+        read -r passes _ <<<"$(assertion_counts bar_over_fixture no-dock "$T/no-dock.log")"
+        expect_eq "bar over the fixture wallpaper: $what fails $failures of 2" "$failures" $((2 - passes))
+    done <<'CHANGES'
+0|text at 6.3:1 and a dot at 3.4:1, in the overview and on the desktop|.
+1|the clock at 4.4:1 in the overview|.bar.overview.targets[0].ratio = 4.4
+1|a workspace dot at 2.9:1 on the desktop|.bar.desktop.targets[1].ratio = 2.9
+1|the desktop left unmeasured|del(.bar.desktop)
+1|nothing measured in the overview|.bar.overview.targets = []
+2|a probe error|{error: "overviewWithWindows: 0 of 3 test windows mapped"}
+2|no report|
+CHANGES
+}
+
+# shellcheck disable=SC2016 # a jq program
+readonly SOLID_BAR_FROM_TOKENS='{solid: false, background: ($t.apex_bar | hex), boxShadow: null, glass: {enabled: true}} as $glass
+| {steps: {unmaximised: $glass, restored: $glass, maximised: {solid: true, background: ($t.apex_bar_solid | hex), glass: {enabled: false},
+    boxShadow: {color: ($t.apex_border | hex), inset: false, x: 0, y: 1, blur: 0, spread: 0}}}}'
+
+test_solid_bar() {
+    local variant failures what change passes
+    for variant in light dark; do
+        while IFS='|' read -r failures what change; do
+            jq -nc --argjson t "$(tokens_for "$variant")" "$JQ_DEFS $HEX_DEF $SOLID_BAR_FROM_TOKENS | $change" |
+                sed 's/^/APEXG2-SOLID-BAR /' >"$T/solid-bar.log"
+            read -r passes _ <<<"$(assertion_counts solid_bar case "$T/solid-bar.log" "$variant")"
+            expect_eq "solid bar ($variant): $what fails $failures of 3" "$failures" $((3 - passes))
+        done <<'CHANGES'
+0|glass, solid while maximised, glass again|.
+1|a bar that stays glass while maximised|.steps.maximised.solid = false
+1|the maximised bar filled with the glass tint|.steps.maximised.background = ($t.apex_bar | hex)
+1|its glass left on|.steps.maximised.glass.enabled = true
+1|no line under it|.steps.maximised.boxShadow = null
+1|a bar left solid after un-maximising|.steps.restored = .steps.maximised
+1|a line under the glass bar|.steps.unmaximised.boxShadow = .steps.maximised.boxShadow
+1|glass paused before any maximise|.steps.unmaximised.glass.enabled = false
+3|a probe error|{error: "no io.github.apex_linux.G2Window window in 10000 ms"}
+CHANGES
+    done
+}
+
 test_no_dock() {
     local failures what change passes
     while IFS='|' read -r failures what change; do
@@ -3209,6 +3267,8 @@ test_network_rows_centred
 test_pr_assertions
 test_action_modes
 test_no_dock
+test_bar_over_fixture
+test_solid_bar
 test_dark_style_off
 test_fixtures
 test_glass
