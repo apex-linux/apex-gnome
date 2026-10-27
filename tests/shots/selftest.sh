@@ -448,7 +448,12 @@ REPORT_OF_A_LAUNCHER_DRAWN_FROM_TOKENS='
     pageHint: {gradient: 0}}}}'
 # shellcheck disable=SC2016 # a jq program
 REPORT_OF_AN_OVERVIEW_LAYER_FROM_TOKENS='
-{topBar: {panel: {width: 1440}}, scenes: {overview: {workArea: {y: 32, height: 868}}}, surfaces: {
+{shown: true, box: [0, 0, 290, 250], surfaceBox: [0, 0, 290, 250], natural: [290, 250], radius: ($t.apex_radius_window_preview | px),
+    boxShadow: {color: ($t.apex_preview_shadow | hex), inset: false, x: 0,
+    y: ($t.apex_preview_shadow_y | px), blur: ($t.apex_preview_shadow_blur | px), spread: 0}} as $layer
+| {styled: true, radius: ($t.apex_radius_window_preview | px), layers: [$layer, ($layer | .boxShadow |= (.color = ($t.apex_preview_shadow_2 | hex)
+    | .y = ($t.apex_preview_shadow_2_y | px) | .blur = ($t.apex_preview_shadow_2_blur | px)))]} as $preview
+| {topBar: {panel: {width: 1440}}, scenes: {overview: {workArea: {y: 32, height: 868}}}, surfaces: {
     overviewLayer: {titleVisible: true, thumbnailsThreshold: 1, thumbnails: {maxScale: 0.081, first: {width: 117, height: 70}},
         workspace: {x: 250, y: 205, width: 939, height: 566, background: false,
             empty: {x: 644, y: 477, width: 150, height: 22, visible: true, text: "No open windows", foreground: ($t.apex_overview_fg_dim | hex),
@@ -456,9 +461,9 @@ REPORT_OF_AN_OVERVIEW_LAYER_FROM_TOKENS='
     overviewWindows: {dock: {x: 540, y: (804 + ($t.apex_dock_bottom_gap | px)), width: 361, height: 70},
         dockBox: {x: 540, y: 820, width: 361, height: 80}, bottom: {stock: 900, hook: (900 - 80 - ($t.apex_dock_bottom_gap | px))},
         previews: [
-            {window: {x: 561, y: 198, width: 317, height: 236}, caption: {x: 602, y: 459, width: 235, height: 29, visible: true}},
-            {window: {x: 414, y: 500, width: 290, height: 250}, caption: {x: 520, y: 775, width: 78, height: 29, visible: true}},
-            {window: {x: 736, y: 500, width: 290, height: 250}, caption: {x: 842, y: 775, width: 78, height: 29, visible: true}}],
+            $preview + {window: {x: 561, y: 198, width: 317, height: 236}, caption: {x: 602, y: 459, width: 235, height: 29, visible: true}},
+            $preview + {window: {x: 414, y: 500, width: 290, height: 250}, caption: {x: 520, y: 775, width: 78, height: 29, visible: true}},
+            $preview + {window: {x: 736, y: 500, width: 290, height: 250}, caption: {x: 842, y: 775, width: 78, height: 29, visible: true}}],
         thumbnails: [{x: 597, y: 108, width: 117, height: 70, spread: 0.42}, {x: 724, y: 108, width: 117, height: 70, spread: 0.31}]},
     appGrid: {grid: {columns: 7, rows: 4, iconSize: 88}, strip: 0, box: {y: 132}}}}'
 # shellcheck disable=SC2016 # a jq program
@@ -1607,7 +1612,7 @@ test_overview_layer() {
     local variant change what passes failures open_gaps
     for variant in light dark; do
         read -r passes failures open_gaps <<<"$(assert_run overview_layer "$variant")"
-        if ((failures == 0 && open_gaps == 0 && passes == 11)); then
+        if ((failures == 0 && open_gaps == 0 && passes == 12)); then
             ok "overview feature ($variant): the layer's overview passes all $passes assertions"
         else
             not_ok "overview feature ($variant): the layer's overview passes (passed/failed/gaps $passes/$failures/$open_gaps): $(grep -m3 '^FAIL' "$T/top-bar.out" | paste -sd'|' -)"
@@ -1633,6 +1638,11 @@ test_overview_layer() {
 .surfaces.overviewWindows.previews[2].caption.y = 780|the last row's captions nearer the dock than $apex_dock_bottom_gap
 .surfaces.overviewWindows.thumbnails[1].spread = 0|stock's flat thumbnail fill
 .surfaces.overviewWindows.bottom.hook = 820|a bottom edge without the dock's gap
+.surfaces.overviewWindows.previews[1].radius = 12|a preview rounded at libadwaita's 12, not board 35's 14
+.surfaces.overviewWindows.previews[2].layers = [.surfaces.overviewWindows.previews[2].layers[0]]|a preview with one shadow layer
+.surfaces.overviewWindows.previews[0].layers[1].box = [0, 0, 290, 240]|a layer cut shorter than its preview
+.surfaces.overviewWindows.previews[0].layers[0].boxShadow.color = "#00000073"|the dark preview shadow in light
+.surfaces.overviewWindows.previews[2].layers[1].boxShadow.blur = 32|the first layer's blur on the second
 .surfaces.appGrid.grid.iconSize = 96|upstream's 96 px launcher icons
 .surfaces.appGrid.box.y = 262|upstream's workspace strip above the grid
 .surfaces.appGrid.box.y = 128|the grid at board 36's old 128, which assumed an 18 px spacing
@@ -2700,6 +2710,60 @@ test_no_nan_allocation() {
         "$passes/$failures $(grep -c 'per log: glass-load.log:1$' "$T/assertions.out")"
 }
 
+test_no_binding_overwritten() {
+    local run=$T/keys-run overwritten passes failures
+    overwritten='libmutter-WARNING **: 09:41:00.000: Overwriting existing binding of keysym 20 with keysym 20 (keycode 41).'
+    mkdir -p "$run"
+    echo 'APEXG2 {"probe": true}' >"$run/default.log"
+    read -r passes failures <<<"$(assertion_counts no_binding_overwritten default "$run/default.log")"
+    expect_eq "key bindings: a clean log passes" "1/0" "$passes/$failures"
+    echo "$overwritten" >"$run/default.late.log"
+    read -r passes failures <<<"$(assertion_counts no_binding_overwritten default "$run/default.log")"
+    expect_eq "key bindings: one overwritten, in the late first start's log too, fails" "0/1" "$passes/$failures"
+    expect_eq "key bindings: and the failure quotes mutter" 1 \
+        "$(grep -c '^FAIL default: Overwriting existing binding of keysym 20 with keysym 20 (keycode 41).$' "$T/assertions.out")"
+    rm "$run/default.late.log"
+}
+
+readonly KEYS_ALL_MODES='["NORMAL", "OVERVIEW", "LOCK_SCREEN", "UNLOCK_SCREEN", "LOGIN_SCREEN", "SYSTEM_MODAL", "LOOKING_GLASS", "POPUP"]'
+readonly KEYS_REPORT="{bindings: {
+    inputSource: {modes: $KEYS_ALL_MODES, accelerators: [\"<Super><Alt>space\", \"XF86Keyboard\"]},
+    inputSourceBackward: {modes: $KEYS_ALL_MODES, accelerators: [\"<Shift><Super><Alt>space\", \"<Shift>XF86Keyboard\"]},
+    panels: {modes: [\"NORMAL\", \"OVERVIEW\", \"LOCK_SCREEN\", \"UNLOCK_SCREEN\", \"LOGIN_SCREEN\"], accelerators: [\"<Control><Alt>Tab\"]},
+    appView: {modes: [\"NORMAL\", \"OVERVIEW\"], accelerators: [\"<Super>a\"]},
+    overlay: {modes: [\"NORMAL\", \"OVERVIEW\"], key: \"Super\"}},
+  allModes: $KEYS_ALL_MODES,
+  pressed: {sources: [\"us\", \"fr\"], first: \"us\", superSpace: {spotlight: true, source: \"us\"},
+    superAltSpace: {source: \"fr\"}, shiftSuperAltSpace: {source: \"us\"},
+    ctrlAltTab: {groups: [{name: \"Windows\", dock: false}, {name: \"Top Bar\", dock: false}, {name: \"Dash\", dock: true}], dockFocused: true},
+    superTap: {overview: true, apps: false}, superA: {overview: true, apps: true}},
+  modals: 0}"
+
+test_keys_case() {
+    local run=$T/keys passes failures change what
+    mkdir -p "$run"
+    echo 'keys exit=0 secs=40 marker-after-exit=no' >"$run/results-main.txt"
+    while IFS='|' read -r failures change what; do
+        printf 'APEXG2-KEYS %s\n' "$(jq -nc "$KEYS_REPORT | $change")" >"$run/keys.log"
+        read -r passes _ <<<"$(assertion_counts keys_case "$run")"
+        expect_eq "keys: $what fails $failures of 13" "$failures" $((13 - passes))
+    done <<'CHANGES'
+0|.|the keys as registered and pressed
+1|.bindings.inputSource.accelerators = ["<Super>space", "XF86Keyboard"]|GNOME's input source key, on Spotlight's Super+Space
+1|.bindings.inputSourceBackward.modes = ["NORMAL"]|a backward input source key in one mode only
+1|.bindings.panels.accelerators = []|no Ctrl+Alt+Tab
+1|.bindings.overlay.key = "Super_R"|another overlay key
+1|.pressed.superSpace.source = "fr"|Super+Space that also switches the input source
+1|.pressed.shiftSuperAltSpace.source = "fr"|a Shift variant that does not go back
+1|.pressed.ctrlAltTab.groups[2].dock = false|Ctrl+Alt+Tab without the dock
+1|.pressed.ctrlAltTab.dockFocused = false|a dock group the focus never reaches
+1|.pressed.superTap.overview = false|a Super tap that opens nothing
+1|.pressed.superA.apps = false|Super+A that opens the windows, not the launcher
+1|.modals = 1|a grab left behind
+10|{error: "keysCase: no keyboard"}|a probe error
+CHANGES
+}
+
 test_no_disposed_apex() {
     local run=$T/disposed-run disposed passes failures
     disposed='Gjs-CRITICAL **: Object St.Widget (0x55e780c0), has been already disposed — impossible to access it.'
@@ -3287,6 +3351,8 @@ test_part_ran
 test_no_nan_allocation
 test_parental_controls_ready
 test_no_disposed_apex
+test_no_binding_overwritten
+test_keys_case
 test_startup_handler_ran
 test_network_rows_centred
 test_pr_assertions
