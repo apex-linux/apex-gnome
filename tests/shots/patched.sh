@@ -19,8 +19,9 @@ blur. A probe imported after startup is counted in the log and the job summary. 
   PATCHED_RPMS=DIR   install the gnome-shell RPMs in DIR instead of building them
   PATCHED_OUT=DIR    keep the RPMs and the run's logs in DIR (default: a temporary one)
   PATCHED_PART=signoff  only direct.sh's signoff part, for signoff.sh: no Fedora baseline, no assertions
-  PATCHED_PART=pr       direct.sh's pr part (CI's cases for a pull request), no Fedora baseline;
-                        only those cases' assertions, and each of them must have run and reported
+  PATCHED_PART=pr       direct.sh's pr part (CI's cases for a pull request) and the fedora part's
+                        fedora-light and fedora-dark; only those cases' assertions, and each of
+                        them must have run and reported
 
   docker run --rm --network=host -v "$PWD:/src:ro" registry.fedoraproject.org/fedora:45 \
       /src/tests/shots/patched.sh
@@ -135,31 +136,38 @@ fedora_part() {
     # malcontent-libs, as the image's flatpak-libs brings it: the shells then read parental controls.
     quietly dnf5 -y "${REPOS[@]}" install "gnome-shell-$fedora_vr" mesa-dri-drivers dbus-daemon python3-dbusmock gcc glib2-devel gjs jq procps-ng \
         malcontent-libs
-    bash /w/direct.sh fedora || echo "# direct.sh fedora: exit $?"
+    G2_PR=$([[ ${PATCHED_PART:-} == pr ]] && echo 1 || :) bash /w/direct.sh fedora || echo "# direct.sh fedora: exit $?"
     # direct.sh main starts the system bus and the fixtures afresh.
     pkill -f /w/fixtures.py || true
     pkill -x dbus-daemon || true
     rm -f /run/dbus/pid
 }
 
-install_shell() {
-    local rpms keys
-    rpms=("$PATCHED_RPMS"/gnome-shell-[0-9]*.x86_64.rpm "$PATCHED_RPMS"/gnome-shell-common-*.noarch.rpm)
-    [[ -f ${rpms[0]} && -f ${rpms[1]} ]] || die "no gnome-shell and gnome-shell-common RPMs in $PATCHED_RPMS"
-    step "the patched shell, the fixtures' services, gjs and jq"
+# What the image gives both shells, so Fedora's baseline and safe mode see the same desktop: its apps
+# and, from 90_apex's override, the weekday and the input source's keys, which leave Super+Space to Spotlight.
+image_inputs() {
+    local keys
+    step "the image's apps and overrides, for both shells"
     # Clocks and Weather, as in the image: the calendar shows their rows only when they are installed.
-    quietly dnf5 -y "${REPOS[@]}" install "${rpms[@]}" mesa-dri-drivers dbus-daemon python3-dbusmock gcc glib2-devel gjs jq nautilus \
-        gnome-clocks gnome-weather malcontent-libs
-    rpm -q gnome-shell | grep -q "\.apex" ||
-        die "the installed gnome-shell is not an Apex build: $(rpm -q gnome-shell)"
-    # What apex-desktop ships: the schema (the layer's fixture), and from 90_apex's override the weekday
-    # and the input source's keys, which leave Super+Space to Spotlight.
-    cp "$REPO/tests/layer/fixtures/io.github.apex_linux.Apex.Desktop.gschema.xml" /usr/share/glib-2.0/schemas/
+    quietly dnf5 -y "${REPOS[@]}" install nautilus gnome-clocks gnome-weather
     # shellcheck disable=SC2016 # expanded by the inner bash
     keys=$(bash -c '. "$1/parts.sh"; printf "switch-input-source=%s\nswitch-input-source-backward=%s\n" \
         "$INPUT_SOURCE_KEYS" "$INPUT_SOURCE_BACKWARD_KEYS"' _ "$HERE")
     printf '%s\n' '[org.gnome.desktop.interface]' 'clock-show-weekday=true' '[org.gnome.desktop.wm.keybindings]' "$keys" \
         >/usr/share/glib-2.0/schemas/90_g2-patched.gschema.override
+    quietly glib-compile-schemas --strict /usr/share/glib-2.0/schemas
+}
+
+install_shell() {
+    local rpms
+    rpms=("$PATCHED_RPMS"/gnome-shell-[0-9]*.x86_64.rpm "$PATCHED_RPMS"/gnome-shell-common-*.noarch.rpm)
+    [[ -f ${rpms[0]} && -f ${rpms[1]} ]] || die "no gnome-shell and gnome-shell-common RPMs in $PATCHED_RPMS"
+    step "the patched shell, the fixtures' services, gjs and jq"
+    quietly dnf5 -y "${REPOS[@]}" install "${rpms[@]}" mesa-dri-drivers dbus-daemon python3-dbusmock gcc glib2-devel gjs jq malcontent-libs
+    rpm -q gnome-shell | grep -q "\.apex" ||
+        die "the installed gnome-shell is not an Apex build: $(rpm -q gnome-shell)"
+    # What apex-desktop ships besides: the schema, the layer's fixture.
+    cp "$REPO/tests/layer/fixtures/io.github.apex_linux.Apex.Desktop.gschema.xml" /usr/share/glib-2.0/schemas/
     quietly glib-compile-schemas --strict /usr/share/glib-2.0/schemas
 }
 
@@ -174,13 +182,14 @@ ln -sfn "$HERE" /w
 ln -sfn "$run" /out
 step "the Facets backdrops"
 bash "$HERE/backdrops.sh" >>"$OUT/dnf.log" 2>&1 || { tail -n 5 "$OUT/dnf.log"; die "backdrops.sh failed; the log is $OUT/dnf.log"; }
+image_inputs
 if [[ ${PATCHED_PART:-} == signoff ]]; then
     install_shell
     step "direct.sh signoff"
     bash /w/direct.sh signoff
     exit
 fi
-[[ ${PATCHED_PART:-} == pr ]] || fedora_part
+fedora_part
 install_shell
 
 part=${PATCHED_PART:-main}

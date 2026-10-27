@@ -22,7 +22,7 @@ readonly APEX_DARK_SHEET=resource:///org/gnome/shell/theme/gnome-shell-dark.css
 readonly STOCK_SHEETS=resource:///org/gnome/shell/theme/stock
 readonly FEDORA_SHEETS=resource:///org/gnome/shell/theme
 readonly DIRECT_CASES=(default default-scale1 dark-style high-contrast large-text default-solid dark-style-solid high-contrast-solid
-    large-text-solid dock-intellihide dock-intellihide-dark dock-one-gpu no-dock stock-light stock-dark safe-env
+    large-text-solid dock-intellihide dock-intellihide-dark dock-one-gpu no-dock no-dock-dark stock-light stock-dark safe-env
     layer-disabled layer-cycles motion idle dock-pin dock-dnd dock-external keys glass-load glass-stress fault-configure fault-enable fault-abort kernel-safe
     fedora-light fedora-dark glass fedora-glass
     indicators indicators-scale1 indicators-dark)
@@ -201,6 +201,33 @@ no_disposed_apex() {
         pass "$label: no disposed object touched from an Apex frame"
     else
         fail "$label: disposed objects touched: $found"
+    fi
+}
+
+# Clutter warns and skips an actor still queued for a relayout once it has left the stage: a shadow
+# layer destroyed with its relayout queued twice, and the panel at logout, before #167, were.
+no_spurious_allocation() {
+    local label=$1 log=$2 found
+    found=$(cat "$log" "${log%.log}.late.log" 2>/dev/null | grep -o 'Spurious clutter_actor_allocate called for actor [^ ]* \[[^]]*\]' |
+        sed 's|.*actor 0x[0-9a-f]*/||' | sort | uniq -c | sed -E 's/^ *//' | paste -sd';' -)
+    if [[ -z $found ]]; then
+        pass "$label: no spurious allocation (Clutter laying out an actor no longer on the stage) in the log"
+    else
+        fail "$label: spurious allocations, count and actor: $found"
+    fi
+}
+
+# At logout a relayout run once its actor has left the stage lays it out off it, and a window unmanaged
+# after the global's disposal reaches ShellWM through a NULL global, as 0019 stops: both warn first.
+clean_shutdown() {
+    local label=$1 log=$2 found
+    found=$(cat "$log" "${log%.log}.late.log" 2>/dev/null | sed -n '/Shutting down GNOME Shell/,$p' |
+        grep -m1 -e 'which is not in the stage' -e 'shell_global_get: assertion' -e 'G_IS_OBJECT' |
+        sed 's/.*\*\*: [0-9:.]* //')
+    if [[ -z $found ]]; then
+        pass "$label: the shell shuts down without laying out an actor off the stage or reaching a gone global"
+    else
+        fail "$label: at shutdown: $found"
     fi
 }
 
@@ -1457,15 +1484,17 @@ scenes_captured() {
     done
 }
 
+# With safe, also each scene of safe mode against Fedora's.
 compare_with_fedora() {
-    local run=$1 scene plan=$1/compare/fedora-plan.json results=$1/compare/fedora-results.json
+    local run=$1 safe=${2:-} scene plan=$1/compare/fedora-plan.json results=$1/compare/fedora-results.json
     mkdir -p "$run/compare"
     {
         # The Apex bar is $apex_bar_height, upstream's 2.2em: the overview below it lays out on
         # another work area, so overview_below_bar checks its layout instead.
-        plan_entry apex-light-vs-fedora-desktop "$run" fedora-light "$run" default desktop "$run/compare" panel dock
-        plan_entry apex-dark-vs-fedora-desktop "$run" fedora-dark "$run" dark-style desktop "$run/compare" panel dock
+        plan_entry apex-light-vs-fedora-desktop "$run" fedora-light "$run" no-dock desktop "$run/compare" panel
+        plan_entry apex-dark-vs-fedora-desktop "$run" fedora-dark "$run" no-dock-dark desktop "$run/compare" panel
         for scene in "${SCENES[@]}"; do
+            [[ $safe == safe ]] || break
             plan_entry "safe-light-vs-fedora-$scene" "$run" fedora-light "$run" stock-light "$scene" "$run/compare"
             plan_entry "safe-dark-vs-fedora-$scene" "$run" fedora-dark "$run" stock-dark "$scene" "$run/compare"
         done
@@ -1972,6 +2001,8 @@ direct_cases() {
         parental_controls_ready "$c" "$f"
         no_disposed_apex "$c" "$f"
         no_binding_overwritten "$c" "$f"
+        no_spurious_allocation "$c" "$f"
+        clean_shutdown "$c" "$f"
         # fault-abort may abort before its report; its exit status says the shell ran.
         [[ $c == fault-abort ]] && continue
         action_modes "$c" "$f"
@@ -2159,7 +2190,7 @@ direct_cases() {
         scenes_captured "$run" "$c"
         overview_below_bar "$c" "$run/$c.log"
     done
-    compare_with_fedora "$run"
+    compare_with_fedora "$run" safe
     glass_frames glass "$run/glass.log"
     shadows_under_glass glass "$run/glass.log"
     glass_manager glass "$run/glass.log" light
@@ -2337,11 +2368,22 @@ keys_case() {
 # The no-dock case: disabled-features=['dock'], so the overview's own dash is back and the
 # workspace-bottom hook leaves stock's edge.
 no_dock_case() {
-    local run=$1
-    exits "$run" no-dock 0
-    no_apex_failure no-dock "$run/no-dock.log"
-    overview_without_dock no-dock "$run/no-dock.log"
+    local run=$1 c
+    for c in no-dock no-dock-dark; do
+        exits "$run" "$c" 0
+        no_apex_failure "$c" "$run/$c.log"
+        desktop_without_dock "$c" "$run/$c.log"
+        overview_without_dock "$c" "$run/$c.log"
+    done
     bar_over_fixture no-dock "$run/no-dock.log"
+}
+
+# The desktop the Fedora comparison takes: captured, with no Apex dock on it.
+desktop_without_dock() {
+    local label=$1 log=$2
+    expect_report "$label" "$log" '.error == null and .desktopOnly and (.scenes.desktop.file | type == "string")' \
+        "the desktop scene is captured for the Fedora comparison" APEXG2-SCENES
+    expect_report "$label" "$log" '.dock == null and .scenes.desktop.boxes.dock == null' "with no Apex dock on it" APEXG2-SCENES
 }
 
 overview_without_dock() {
@@ -2360,7 +2402,7 @@ asserted() {
     local c
     [[ $part == main ]] && return 0
     for c in "$@"; do
-        [[ " ${PR_CASES[*]} " == *" $c "* ]] || return 1
+        [[ " ${PR_CASES[*]} ${PR_FEDORA_CASES[*]} " == *" $c "* ]] || return 1
     done
 }
 
@@ -2368,7 +2410,7 @@ asserted() {
 # PR_CASES lists, and each of those must have run and reported.
 patched_assertions() {
     local run=$1 part=$2 c
-    for c in default default-scale1 dark-style stock-light stock-dark safe-env layer-disabled layer-cycles motion idle dock-pin glass-load glass-stress no-dock; do
+    for c in default default-scale1 dark-style stock-light stock-dark safe-env layer-disabled layer-cycles motion idle dock-pin glass-load glass-stress no-dock no-dock-dark; do
         asserted "${c%:*}" || continue
         no_js_error "$c" "$run/$c.log"
         fixed_clock "$c" "$run/$c.log"
@@ -2384,6 +2426,8 @@ patched_assertions() {
         [[ -e $run/$c.log ]] && parental_controls_ready "$c" "$run/$c.log"
         [[ -e $run/$c.log ]] && no_disposed_apex "$c" "$run/$c.log"
         [[ -e $run/$c.log ]] && no_binding_overwritten "$c" "$run/$c.log"
+        [[ -e $run/$c.log ]] && no_spurious_allocation "$c" "$run/$c.log"
+        [[ -e $run/$c.log ]] && clean_shutdown "$c" "$run/$c.log"
     done
     for c in default default-scale1 dark-style; do
         asserted "${c%:*}" || continue
@@ -2456,12 +2500,15 @@ patched_assertions() {
     asserted glass fedora-glass && glass_unlock_vs_fedora "$run"
     asserted indicators indicators-scale1 indicators-dark && indicator_cases "$run"
     asserted dock-one-gpu && one_gpu_case "$run"
-    asserted no-dock && no_dock_case "$run"
+    asserted no-dock no-dock-dark && no_dock_case "$run"
     asserted dock-dnd && dock_dnd_case "$run"
     asserted dock-external && dock_external_case "$run"
     asserted keys && keys_case "$run"
+    asserted fedora-light fedora-dark no-dock no-dock-dark &&
+        compare_with_fedora "$run" "$(asserted stock-light stock-dark && echo safe)"
     if [[ $part == pr ]]; then
         part_ran "$run" pr "${PR_CASES[@]}"
+        part_ran "$run" fedora "${PR_FEDORA_CASES[@]}"
     fi
 }
 

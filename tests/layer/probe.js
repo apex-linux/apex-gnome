@@ -70,7 +70,13 @@ globalThis.global = {
     }),
     window_group: newEmitter(),
     get_window_actors: () => [...windowActors],
-    stage: {width: 1440, height: 900},
+    stage: {
+        width: 1440, height: 900, flushes: 0,
+        get_allocation_box() {
+            this.flushes++;
+            return {x1: 0, y1: 0, x2: this.width, y2: this.height};
+        },
+    },
     compositor: {get_laters: () => ({add: (_type, fn) => GLib.idle_add(GLib.PRIORITY_DEFAULT, fn), remove: id => GLib.source_remove(id)})},
     pointer: [0, 0],
     get_pointer() {
@@ -948,8 +954,16 @@ async function exerciseShadows() {
     fact('shadows.restyled-alike', Registry.layersOf(surface)[0] === kept ? 'the same layer' : 'rebuilt');
     const sheet = surface._themeNode;
     surface._themeNode = {...sheet, get_shadow: p => p === '-apex-shadow-layer' ? {...sheet.get_shadow(p), blur: 12} : null};
+    const flush = global.stage.get_allocation_box;
+    let keptOnStage = null;
+    global.stage.get_allocation_box = function () {
+        keptOnStage ??= kept.get_parent() !== null;
+        return flush.call(this);
+    };
     surface.emit('style-changed');
     await spin(50);
+    global.stage.get_allocation_box = flush;
+    fact('shadows.rebuild-flushed-first', keptOnStage);
     layers('restyled');
     surface._themeNode = sheet;
     surface.emit('style-changed');
@@ -1100,6 +1114,7 @@ async function exerciseFocusedApp() {
     report('on');
     Main.layoutManager.uiGroup.emit('destroy');
     report('teardown');
+    fact('focused-app.teardown-flushes', global.stage.flushes);
     tracker.focus({get_name: () => 'Files'});
     tracker.focus(null);
     Main.layoutManager.uiGroup.emit('destroy');
@@ -1939,11 +1954,17 @@ async function exerciseIndicators() {
     const watcher = () => Sni.watcherOwner(bus) === bus.get_unique_name() ? 'shell' : Sni.watcherOwner(bus);
     fact('indicators.watcher', watcher());
     fact('indicators.empty', `${indicatorBar(Main)} order=${rightBoxOrder(Main)}`);
-    const sync = new Sni.FakeItem('File sync', {IconName: 'apex-sync'});
-    const chat = new Sni.FakeItem('Chat', {IconName: 'apex-chat-symbolic'}, CHAT_MENU, {byName: true});
-    const games = new Sni.FakeItem('Game launcher', {IconName: 'apex-games', ItemIsMenu: true}, GAMES_MENU);
-    const keys = new Sni.FakeItem('Password manager', {IconPixmap: PIXMAP});
-    await until(() => indicatorBar(Main).split(':').length === 5);
+    // The bar keeps the order the items registered; apps that start together register in any order,
+    // so each app here waits for the one before it to show.
+    const register = async (...args) => {
+        const item = new Sni.FakeItem(...args);
+        await until(() => indicatorBar(Main).includes(`${item.name}:`));
+        return item;
+    };
+    const sync = await register('File sync', {IconName: 'apex-sync'});
+    const games = await register('Game launcher', {IconName: 'apex-games', ItemIsMenu: true}, GAMES_MENU);
+    const keys = await register('Password manager', {IconPixmap: PIXMAP});
+    const chat = await register('Chat', {IconName: 'apex-chat-symbolic'}, CHAT_MENU, {byName: true});
     fact('indicators.four', `${indicatorBar(Main)} order=${rightBoxOrder(Main)}`);
     const music = new Sni.FakeItem('Media player', {IconName: 'apex-missing'});
     await until(() => indicatorBar(Main).includes('overflow=+'));
