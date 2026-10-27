@@ -44,6 +44,8 @@ readonly MESSAGE_ROW_GAP=12
 readonly CARD_COLUMNS='box[apex-message-row[message-icon,box[message-header,message-box[message-content,box]]],message-action-bin]'
 readonly CARD_UPSTREAM='box[message-header,message-box[message-icon,message-content,box],message-action-bin]'
 readonly LAUNCHER_GRID_TOP=132
+# Stock windowPreview.js's WindowPreview hangs the title 64 * (1 - .7) + 6 px under the preview.
+readonly STOCK_CAPTION_GAP=25.2
 # WCAG 2.2 AA: 1.4.3 for text, 1.4.11 for the glyphs a control is known by.
 # direct.sh's stress backdrop.
 readonly SOLID_BACKDROP='#013b88'
@@ -1110,7 +1112,7 @@ overview_layer() {
         "overview: workspace thumbnails at scale $OVERVIEW_THUMBNAIL_SCALE, shown from $((OVERVIEW_THUMBNAILS_THRESHOLD + 1)) workspaces" APEXG2-SCENES
     expect_report "$label" "$log" "{f: $o.thumbnails.first, w: .topBar.panel.width, h: .scenes.overview.workArea.height}
         | (.f.width - .w * $OVERVIEW_THUMBNAIL_SCALE | fabs <= 1) and (.f.height - .h * $OVERVIEW_THUMBNAIL_SCALE | fabs <= 1)" \
-        "overview: and drawn at that scale of the work area (117 x 70 on 1440 x 900)" APEXG2-SCENES
+        "overview: and drawn at that scale of the work area (116 x 70 on 1440 x 900)" APEXG2-SCENES
     expect_report "$label" "$log" "$o.workspace | .background == false and .empty.visible and .empty.text == \"$EMPTY_WORKSPACE_TEXT\"
         and (.x + .width / 2 - .empty.x - .empty.width / 2 | fabs <= 1) and (.y + .height / 2 - .empty.y - .empty.height / 2 | fabs <= 1)" \
         "overview: no workspace background card, and \"$EMPTY_WORKSPACE_TEXT\" centred on the empty workspace" APEXG2-SCENES
@@ -1138,6 +1140,47 @@ overview_layer() {
     top_bar_metric "$label overview" "$scenes" "$tokens" "launcher: no workspace strip; the grid starts at the work area + \$apex_search_top + \$apex_search_height + $STOCK_SEARCH_MARGIN_BOTTOM + twice the spacing, board 36's $LAUNCHER_GRID_TOP px" \
         "{g: .surfaces.appGrid, wa: .scenes.overview.workArea}" "(.wa.y + (\$t.apex_search_top | px) + (\$t.apex_search_height | px) + $STOCK_SEARCH_MARGIN_BOTTOM
             + 2 * (.wa.height * $OVERVIEW_SPACING_RATIO | round)) as \$top | .g.strip == 0 and (.g.box.y - \$top | fabs) <= 1 and \$top == $LAUNCHER_GRID_TOP"
+}
+
+# Boards 34 to 36 as laid out: what the style checks above read from the theme, measured on the allocations.
+# shellcheck disable=SC2016 # jq programs and token names, not shell expansions
+surface_metrics() {
+    local label=$1 log=$2 variant=$3 scenes tokens
+    scenes=$(report_of "$log" APEXG2-SCENES)
+    tokens=$(tokens_for "$variant")
+    local -a metric=(top_bar_metric "$label surface metrics" "$scenes" "$tokens")
+    local n=.surfaces.notificationsLayer
+
+    "${metric[@]}" 'a notification card: its $apex_message_icon_size icon $apex_message_padding_start in and $apex_message_padding down, the header'"'"'s column $apex_banner_gap past it' \
+        "$n.layout.collapsed" '(.icon | (.width | px_is($t.apex_message_icon_size)) and (.height | px_is($t.apex_message_icon_size)))
+            and (.icon.x - .card.x | px_is($t.apex_message_padding_start)) and (.icon.y - .card.y | px_is($t.apex_message_padding))
+            and (.header.x - .icon.x - .icon.width | px_is($t.apex_banner_gap))'
+    "${metric[@]}" 'and its $apex_banner_close_size close button $apex_message_padding_end in from the right, $apex_message_padding down' \
+        "$n.layout.collapsed" '(.close | (.width | px_is($t.apex_banner_close_size)) and (.height | px_is($t.apex_banner_close_size)))
+            and (.card.x + .card.width - .close.x - .close.width | px_is($t.apex_message_padding_end)) and (.close.y - .card.y | px_is($t.apex_message_padding))'
+    "${metric[@]}" 'the footer is $apex_date_menu_footer_height tall: Do Not Disturb $apex_date_menu_footer_padding in from the left, the $apex_clear_button_height Clear $apex_date_menu_footer_padding in from the right, centred' \
+        "$n" '(.footer.height | px_is($t.apex_date_menu_footer_height)) and (.dnd.x - .footer.x | px_is($t.apex_date_menu_footer_padding))
+            and (.clear.height | px_is($t.apex_clear_button_height)) and (.footer.x + .footer.width - .clear.x - .clear.width | px_is($t.apex_date_menu_footer_padding))
+            and (.clear.y + .clear.height / 2 - .footer.y - .footer.height / 2 | fabs <= 1)'
+    "${metric[@]}" 'the current workspace'"'"'s $apex_thumbnail_indicator accent ring hugs its thumbnail, neither casting a shadow; the next thumbnail $apex_thumbnail_gap on' \
+        "{o: .surfaces.overview, w: .surfaces.overviewWindows.thumbnails}" '($t.apex_thumbnail_indicator | px) as $r | .o.thumbnail as $th
+            | (.o.indicator | .x == $th.x - $r and .y == $th.y - $r and .width == $th.width + 2 * $r and .height == $th.height + 2 * $r and .boxShadow == null)
+            and $th.boxShadow == null and (.w[1].x - .w[0].x - .w[0].width | px_is($t.apex_thumbnail_gap))'
+    "${metric[@]}" 'Do Not Disturb: its label, then the stock switch $apex_dnd_switch_gap after it, centred down the row' \
+        "$n.dnd" '.labelBox.x < .switch.x and (.switch.x - .labelBox.x - .labelBox.width - ($t.apex_dnd_switch_gap | px) | fabs <= 1)
+            and (.switch.y + .switch.height / 2 - .y - .height / 2 | fabs <= 1)'
+    "${metric[@]}" "every caption hangs stock's $STOCK_CAPTION_GAP px under its window's preview, \$apex_caption_height tall" \
+        '.surfaces.overviewWindows.previews' "length > 0 and all(.[]; (.caption.y - .window.y - .window.height - $STOCK_CAPTION_GAP | fabs <= 1)
+            and (.caption.height - (\$t.apex_caption_height | px) | fabs <= 1))"
+    "${metric[@]}" "the launcher lays its tiles at its grid's own pitch, tile plus spacing, $LAUNCHER_COLUMNS columns centred on the monitor, a full row's next one under it" \
+        "{a: .surfaces.appGrid, w: .topBar.panel.width}" "(.a.spacing | .tile + .h) as \$dx | (.a.spacing | .tile + .v) as \$dy | .a.spacing.tile as \$tile
+            | .a.tiles as \$r | (\$r | length) >= 2 and ([\$r[:$LAUNCHER_COLUMNS][].y] | unique | length) == 1
+            and all(range([\$r | length, $LAUNCHER_COLUMNS] | min); . as \$i | \$r[\$i] | (.x - \$r[0].x - \$i * \$dx | fabs <= 1) and (.width - \$tile | fabs <= 1))
+            and (2 * \$r[0].x + $((LAUNCHER_COLUMNS - 1)) * \$dx + \$tile - .w | fabs <= 1)
+            and ((\$r | length) <= $LAUNCHER_COLUMNS or (\$r[$LAUNCHER_COLUMNS] | (.x - \$r[0].x | fabs <= 1) and (.y - \$r[0].y - \$dy | fabs <= 1)))"
+    "${metric[@]}" 'the launcher'"'"'s pill is $apex_search_height tall, centred, $apex_search_top below the bar; its scrim the overview'"'"'s $apex_scrim' \
+        "{p: .surfaces.launcher.pill, bar: .topBar.panel, scrim: .surfaces.appGrid.scrim}" '(.p.height | px_is($t.apex_search_height)) and (.p.y - .bar.height | px_is($t.apex_search_top))
+            and (.p.x + .p.width / 2 - .bar.width / 2 | fabs <= 1) and (.scrim.background | colour_is($t.apex_scrim)) and .scrim.boxShadow == null'
 }
 
 # shellcheck disable=SC2016 # jq programs and token names, not shell expansions
@@ -1876,6 +1919,7 @@ direct_cases() {
     tile_preview default "$f" light
     spotlight_style default "$f" light
     launcher_search default "$f" light
+    surface_metrics default "$f" light
     spotlight_glass default "$f" light
     spotlight_keys default "$f" light
     screenshot_ui default "$f" light
@@ -1904,6 +1948,7 @@ direct_cases() {
     tile_preview default-scale1 "$f" light
     spotlight_style default-scale1 "$f" light
     launcher_search default-scale1 "$f" light
+    surface_metrics default-scale1 "$f" light
     spotlight_glass default-scale1 "$f" light
     spotlight_keys default-scale1 "$f" light
     screenshot_ui default-scale1 "$f" light
@@ -1935,6 +1980,7 @@ direct_cases() {
     tile_preview dark-style "$f" dark
     spotlight_style dark-style "$f" dark
     launcher_search dark-style "$f" dark
+    surface_metrics dark-style "$f" dark
     spotlight_glass dark-style "$f" dark
     spotlight_keys dark-style "$f" dark
     screenshot_ui dark-style "$f" dark
@@ -2287,6 +2333,7 @@ patched_assertions() {
         tile_preview "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
         spotlight_style "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
         launcher_search "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
+        surface_metrics "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
         spotlight_glass "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
         spotlight_keys "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
         screenshot_ui "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
