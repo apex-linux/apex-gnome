@@ -954,8 +954,16 @@ async function exerciseShadows() {
     fact('shadows.restyled-alike', Registry.layersOf(surface)[0] === kept ? 'the same layer' : 'rebuilt');
     const sheet = surface._themeNode;
     surface._themeNode = {...sheet, get_shadow: p => p === '-apex-shadow-layer' ? {...sheet.get_shadow(p), blur: 12} : null};
+    const flush = global.stage.get_allocation_box;
+    let keptOnStage = null;
+    global.stage.get_allocation_box = function () {
+        keptOnStage ??= kept.get_parent() !== null;
+        return flush.call(this);
+    };
     surface.emit('style-changed');
     await spin(50);
+    global.stage.get_allocation_box = flush;
+    fact('shadows.rebuild-flushed-first', keptOnStage);
     layers('restyled');
     surface._themeNode = sheet;
     surface.emit('style-changed');

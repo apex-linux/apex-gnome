@@ -72,7 +72,11 @@ function _sync(entry) {
     }
 }
 
+// A layer hidden and shown again can sit twice in the stage's relayout queue, and a destroy takes it
+// out once: the stage runs the queue first, while the layers are still on it, not after they left.
 function _clear(entry) {
+    if (entry.layers.length)
+        global.stage.get_allocation_box();
     entry.layers.forEach(l => l.destroy());
     entry.layers = [];
 }
