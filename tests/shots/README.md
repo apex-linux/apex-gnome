@@ -71,6 +71,8 @@ The direct cases:
 
 Every case: the probe ran (so the static import graph loaded), from `startup-complete`, and no `JS ERROR`;
 no key binding overwrites another (mutter's "Overwriting existing binding" warning);
+St parsed every declaration (no `St-WARNING` naming a line and column of a sheet: St drops
+such a declaration and keeps the cascade's earlier value);
 the wall clock stands at the fixed time and the top bar's clock shows it (`Mon Sep 28`, EN SPACE, `09:41`).
 
 A probe that runs longer than 30 s keeps `gnome-shell-perf-helper` awake with a call every 10 s:
