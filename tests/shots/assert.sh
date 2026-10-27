@@ -165,6 +165,18 @@ parental_controls_ready() {
     fi
 }
 
+# St drops a declaration it cannot parse with a warning naming the sheet's line, and keeps the cascade's earlier value.
+no_st_css_warning() {
+    local label=$1 log=$2 found
+    found=$(grep -ahE 'St-WARNING \*\*: .* at line [0-9]+, col [0-9]+' "$log" "${log%.log}.late.log" 2>/dev/null \
+        | sed -E 's/.*St-WARNING \*\*: [0-9:.]+: //' | sort | uniq -c | sed -E 's/^ *//' | paste -sd';' -)
+    if [[ -z $found ]]; then
+        pass "$label: no St CSS warning (a declaration St ignored) in the log"
+    else
+        fail "$label: St ignored declarations, count and warning: $found"
+    fi
+}
+
 # Clutter refuses a NaN box with a CRITICAL and leaves the actor unallocated, which a case can survive:
 # the CRITICAL fails it, in the case's log and in a late first start's log where the image run reran it.
 no_nan_allocation() {
@@ -1970,6 +1982,7 @@ direct_cases() {
         no_js_error "$c" "$f"
         startup_handler_ran "$c" "$f"
         no_nan_allocation "$c" "$f"
+        no_st_css_warning "$c" "$f"
         parental_controls_ready "$c" "$f"
         no_disposed_apex "$c" "$f"
         no_binding_overwritten "$c" "$f"
@@ -2382,6 +2395,7 @@ patched_assertions() {
         [[ $c == kernel-safe || $c == fault-abort ]] || action_modes "$c" "$run/$c.log"
         [[ $c == kernel-safe ]] || startup_handler_ran "$c" "$run/$c.log"
         [[ -e $run/$c.log ]] && no_nan_allocation "$c" "$run/$c.log"
+        [[ -e $run/$c.log ]] && no_st_css_warning "$c" "$run/$c.log"
         [[ -e $run/$c.log ]] && parental_controls_ready "$c" "$run/$c.log"
         [[ -e $run/$c.log ]] && no_disposed_apex "$c" "$run/$c.log"
         [[ -e $run/$c.log ]] && no_binding_overwritten "$c" "$run/$c.log"

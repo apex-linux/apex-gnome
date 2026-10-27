@@ -2762,6 +2762,24 @@ test_parental_controls_ready() {
     expect_eq "parental controls: one in the late first start fails too" "0/1" "$passes/$failures"
 }
 
+test_no_st_css_warning() {
+    local run=$T/st-css-run warning passes failures
+    warning="(gnome-shell:42): St-WARNING **: 09:41:00.000: Ignoring length property that isn't a number at line 4217, col 16"
+    mkdir -p "$run"
+    printf '%s\n' 'APEXG2 {"probe": true}' "(gnome-shell:42): St-CRITICAL **: 09:41:00.000: st_widget_get_theme_node called on the widget" \
+        >"$run/default.log"
+    read -r passes failures <<<"$(assertion_counts no_st_css_warning default "$run/default.log")"
+    expect_eq "St CSS warnings: a log without one passes, whatever else St says" "1/0" "$passes/$failures"
+    printf '%s\n' "$warning" "$warning" >>"$run/default.log"
+    read -r passes failures <<<"$(assertion_counts no_st_css_warning default "$run/default.log")"
+    expect_eq "St CSS warnings: a declaration St ignored fails once" "0/1" "$passes/$failures"
+    expect_eq "St CSS warnings: and the failure counts it with its line" 1 "$(grep -c "warning: 2 Ignoring length property that isn't a number at line 4217, col 16$" "$T/assertions.out")"
+    echo 'APEXG2 {"probe": true}' >"$run/default.log"
+    echo "$warning" >"$run/default.late.log"
+    read -r passes failures <<<"$(assertion_counts no_st_css_warning default "$run/default.log")"
+    expect_eq "St CSS warnings: one in the late first start fails too" "0/1" "$passes/$failures"
+}
+
 test_no_nan_allocation() {
     local run=$T/nan-run critical passes failures
     critical="Clutter-CRITICAL **: clutter_actor_allocate: assertion '!isnan (real_allocation.x1) && !isnan (real_allocation.x2)' failed"
@@ -3455,6 +3473,7 @@ test_spotlight_key
 test_one_gpu
 test_part_ran
 test_no_nan_allocation
+test_no_st_css_warning
 test_parental_controls_ready
 test_no_disposed_apex
 test_no_binding_overwritten

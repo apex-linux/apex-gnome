@@ -75,6 +75,8 @@ after "Shutting down GNOME Shell", no actor is laid out off the stage (St's "not
 "Spurious clutter_actor_allocate"), as a relayout queued by the layer's teardown and run in `main.js`'s
 shutdown loop did to the panel, and no window effect reaches the disposed global (`shell_global_get`'s
 assertion, `G_IS_OBJECT`), as unmanaging a still-connected client's window did before patch 0019;
+St parsed every declaration (no `St-WARNING` naming a line and column of a sheet: St drops
+such a declaration and keeps the cascade's earlier value);
 the wall clock stands at the fixed time and the top bar's clock shows it (`Mon Sep 28`, EN SPACE, `09:41`).
 
 A probe that runs longer than 30 s keeps `gnome-shell-perf-helper` awake with a call every 10 s:
