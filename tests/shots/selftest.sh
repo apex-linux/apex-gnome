@@ -2975,10 +2975,10 @@ test_pr_assertions() {
     : >"$run/results-pr.txt"
     : >"$run/results-fedora.txt"
     assertion_counts patched_assertions "$run" pr >/dev/null
-    # The desktop comparison's captures name its pair: Apex's against Fedora's, never safe mode's.
+    # The Fedora comparison's captures name their pair: Apex's desktop, and safe mode's every scene.
     while read -r _ label rest; do
         label=${label%:}
-        [[ $label == captures && $rest == apex-*-vs-fedora-desktop* ]] && continue
+        [[ $label == captures && ($rest == apex-*-vs-fedora-desktop* || $rest == safe-*-vs-fedora-*) ]] && continue
         [[ " ${cases[*]} ${fedora[*]} " == *" $label "* ]] || stray+=" $label"
     done < <(grep -E '^(PASS|FAIL) ' "$T/assertions.out")
     expect_eq "parts: the pr part asserts no case it does not run" "" "$stray"
@@ -2988,6 +2988,8 @@ test_pr_assertions() {
     expect_eq "parts: and each of the fedora part's baselines too" "${#fedora[@]}" "$missing"
     expect_eq "parts: CI's pr part compares Apex's desktop with Fedora's" 2 \
         "$(grep -cE '^(PASS|FAIL) captures apex-(light|dark)-vs-fedora-desktop' "$T/assertions.out")"
+    expect_eq "parts: and safe mode's desktop and overview, light and dark" 4 \
+        "$(grep -cE '^(PASS|FAIL) captures safe-(light|dark)-vs-fedora-(desktop|overview)' "$T/assertions.out")"
     expect_eq "parts: CI's pr assertions check main.js's startup-complete handler ran" 1 \
         "$(grep -c "^FAIL default: main.js's startup-complete handler ran 0 times, not once" "$T/assertions.out")"
     # shellcheck disable=SC2016 # expanded by the inner bash
