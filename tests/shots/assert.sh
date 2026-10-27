@@ -1570,7 +1570,10 @@ A11Y_SURFACE='(getpath($path | split("."))) as $s
     | if $s == null then ["not measured"] elif $s.error then ["error: \($s.error)"]
       elif ($s.targets | length) == 0 then ["no text or glyph found"] else empty end'
 # shellcheck disable=SC2016 # jq programs
-A11Y_LOW_CONTRAST='[.targets[] | select((.inactive | not) and (.offscreen | not) and (.ratio < (if .kind == "text" then $text else $icon end)))
+A11Y_INACTIVE_DOT='(.kind == "dot" and .name == "workspace-dot" and .alpha < 1)'
+# shellcheck disable=SC2016 # jq programs
+A11Y_LOW_CONTRAST='[.targets[] | select((.inactive | not) and (.offscreen | not) and (.ratio < (if .kind == "text" then $text else $icon end))
+        and (($gapdot and '"$A11Y_INACTIVE_DOT"') | not))
     | "\(.kind) \(.name | tojson) \(.ink) at \(.alpha) on \(.backdrop): \(.ratio)"]'
 # shellcheck disable=SC2016 # jq programs
 A11Y_LAYOUT='.box as $root | [.targets[] | select(.kind == "text" and (.offscreen | not)) as $t
@@ -1590,31 +1593,64 @@ a11y_verdict() {
     if [[ -z $problems ]]; then pass "$desc"; else fail "$desc (${problems:0:600})"; fi
 }
 
-# The text below 4.5:1 and the glyphs and dots below 3:1 in a report's surface at path.
+# Apex's own gap, not upstream's: workspace-dots.js draws an inactive dot at opacity .45, under
+# WCAG 1.4.11's 3:1 over the light backdrops. Each backdrop's ratio today, which may not fall.
+readonly A11Y_INACTIVE_DOT_GAP="the owner's decision on the inactive workspace dot's .45 opacity (2026-10-27)"
+declare -Ar A11Y_INACTIVE_DOT_TODAY=([default]=2.86 [default-solid]=2.22 [dark-style]=4.24 [dark-style-solid]=3.55
+    [high-contrast]=4.37 [high-contrast-solid]=4.37 [no-dock:bar.overview]=2.58 [no-dock:bar.desktop]=2.32)
+
+# Whether the inactive dot is under 3:1 over the label's backdrop today: the gap holds it apart.
+inactive_dot_gap() {
+    local today=${A11Y_INACTIVE_DOT_TODAY[$1]:-}
+    [[ -n $today ]] && jq -en "$today < $A11Y_ICON_RATIO" >/dev/null
+}
+
+# The inactive workspace dots of the surface at path: today's ratio or better, and, while the
+# gap is open, still under 3:1, so the gap goes once the fix lands.
+inactive_dot() {
+    local label=$1 report=$2 path=$3 key=$4 today=${A11Y_INACTIVE_DOT_TODAY[$4]:-}
+    local -a metric=(top_bar_metric "$label accessibility" "$report" '{}')
+    local dots="getpath(\"$path\" | split(\".\")) | [.targets[]? | select($A11Y_INACTIVE_DOT) | .ratio]"
+    if [[ -z $today ]]; then
+        fail "$label accessibility: $path: no inactive-dot ratio recorded for $key"
+        return
+    fi
+    "${metric[@]}" "$path: the inactive workspace dots are at least today's $today:1" "$dots" "length > 0 and all(. >= $today)"
+    inactive_dot_gap "$key" || return 0
+    known_gap "$A11Y_INACTIVE_DOT_GAP" "${metric[@]}" "$path: the inactive workspace dots are at $A11Y_ICON_RATIO:1 (WCAG 1.4.11)" \
+        "$dots" "length > 0 and all(. >= $A11Y_ICON_RATIO)"
+}
+
+# The text below 4.5:1 and the glyphs and dots below 3:1 in a report's surface at path; with gapdot
+# true, the inactive workspace dots are left to inactive_dot.
 a11y_low_contrast() {
-    local report=$1 path=$2
-    jq -r --arg path "$path" --argjson text "$A11Y_TEXT_RATIO" --argjson icon "$A11Y_ICON_RATIO" \
+    local report=$1 path=$2 gapdot=${3:-false}
+    jq -r --arg path "$path" --argjson text "$A11Y_TEXT_RATIO" --argjson icon "$A11Y_ICON_RATIO" --argjson gapdot "$gapdot" \
         "[$A11Y_SURFACE] as \$e | if (\$e | length) > 0 then \$e else (getpath(\$path | split(\".\")) | $A11Y_LOW_CONTRAST) end | join(\"; \")" \
         <<<"$report" 2>&1
 }
 
 # Each surface's text at 4.5:1 and glyphs at 3:1, against the pixels the stage drew behind them.
 a11y_contrast() {
-    local label=$1 log=$2 report s
+    local label=$1 log=$2 report s gapdot=false
     report=$(report_of "$log" APEXG2-A11Y)
     if [[ -z $report ]]; then
         fail "$label accessibility: no APEXG2-A11Y report"
         return
     fi
+    inactive_dot_gap "$label" && gapdot=true
     for s in "${A11Y_SURFACES[@]}"; do
         known_gap "${A11Y_GAPS[$label:$s]:-}" a11y_verdict "$label accessibility: $s: text $A11Y_TEXT_RATIO:1 and glyphs $A11Y_ICON_RATIO:1 against what is drawn behind them" \
-            "$(a11y_low_contrast "$report" "$s")"
+            "$(a11y_low_contrast "$report" "$s" "$([[ $s == bar* ]] && echo "$gapdot" || echo false)")"
+    done
+    for s in bar barUnread; do
+        inactive_dot "$label" "$report" "$s" "$label"
     done
     expect "$label accessibility" "$report" '.wifiMenuConnected.targets | any(.kind == "text" and (.inactive | not))' \
         "the connected network's name is measured over its row's own fill"
     expect "$label accessibility" "$report" '(.bar.targets | map(select(.kind == "dot" and .name == "workspace-dot")) | length >= 2)
-        and (.barUnread.targets | any(.kind == "dot" and .name == "messages-indicator"))' \
-        "the bar's workspace dots and the clock's unread dot are measured as glyphs"
+        and (.barUnread.targets | any((.kind == "dot" and .name == "messages-indicator") or (.kind == "icon" and .name == "message-indicator-symbolic")))' \
+        "the bar's workspace dots and the clock's unread dot (upstream's glyph in high contrast) are measured as glyphs"
 }
 
 # The bar over the overview's fixture wallpaper, in the overview and on the desktop.
@@ -1627,7 +1663,8 @@ bar_over_fixture() {
     fi
     for s in bar.overview bar.desktop; do
         a11y_verdict "$label accessibility: $s over the fixture wallpaper: text $A11Y_TEXT_RATIO:1 and glyphs $A11Y_ICON_RATIO:1 against what is drawn behind them" \
-            "$(a11y_low_contrast "$report" "$s")"
+            "$(a11y_low_contrast "$report" "$s" "$(inactive_dot_gap "$label:$s" && echo true || echo false)")"
+        inactive_dot "$label" "$report" "$s" "$label:$s"
     done
 }
 

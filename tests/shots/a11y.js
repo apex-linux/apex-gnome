@@ -94,7 +94,8 @@ function targetsOf(root) {
     const walk = actor => {
         if (!actor.visible || !actor.mapped || actor.get_paint_opacity() === 0)
             return;
-        const dot = DOTS.find(d => actor.has_style_class_name?.(d));
+        // Upstream's high-contrast sheet draws the clock's indicator as a glyph, unfilled.
+        const dot = DOTS.find(d => actor.has_style_class_name?.(d) && actor.get_theme_node().get_background_color().alpha > 0);
         if (dot)
             found.push({actor, kind: 'dot', ink: actor, name: dot});
         else if (actor instanceof St.Entry && actor.get_text())

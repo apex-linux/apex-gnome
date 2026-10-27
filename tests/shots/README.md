@@ -530,6 +530,24 @@ file:
 >
 > The calendar's today, white on the accent, is 3.15:1 for blue there too, and 2.59:1 for yellow.
 
+One gap is Apex's own, not upstream's, pending the owner's decision (2026-10-27): an inactive
+workspace dot, `$apex_bar_fg` at `workspace-dots.js`'s `INACTIVE` opacity .45, falls below
+WCAG 1.4.11's 3:1 over the light backdrops.
+
+| Case | Backdrop | Inactive dot today |
+|---|---|---|
+| `default` | Facets light | 2.86:1 |
+| `default-solid` | `#013b88` | 2.22:1 |
+| `no-dock`, overview | the fixture gradient | 2.58:1 |
+| `no-dock`, desktop | the fixture gradient | 2.32:1 |
+| `dark-style` | Facets dark | 4.24:1 |
+| `dark-style-solid` | `#013b88` | 3.55:1 |
+| `high-contrast`, `high-contrast-solid` | upstream's sheet | 4.37:1 |
+
+`inactive_dot` pins each backdrop's ratio (`A11Y_INACTIVE_DOT_TODAY`, at the report's own
+rounding): a lower one fails. Where it is under 3:1 the dot leaves the plain glyph check for a
+gap line, which fails once the dot reaches 3:1, so the fix also removes the gap.
+
 The bar is measured the same way over every wallpaper G2 shows it on: the Facets, light in
 `default` and dark in `dark-style`; `#013b88` in the `-solid` twins; and, in `no-dock`
 (`bar_over_fixture`), the overview's fixture gradient, once in the overview and once on the
