@@ -161,6 +161,7 @@ run_case() {
 run_and_record_case() {
     local name=$1
     [[ $part == pr && " ${PR_CASES[*]} " != *" $name "* ]] && return
+    [[ $part == fedora && ${G2_PR:-} == 1 && " ${PR_FEDORA_CASES[*]} " != *" $name "* ]] && return
     run_case "$@"
     if grep -q 'APEXG2-LATE' "/out/$name.log"; then
         echo "== $name: the probe was imported after startup, and emitted startup-complete again"

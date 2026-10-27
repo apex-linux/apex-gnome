@@ -19,8 +19,9 @@ blur. A probe imported after startup is counted in the log and the job summary. 
   PATCHED_RPMS=DIR   install the gnome-shell RPMs in DIR instead of building them
   PATCHED_OUT=DIR    keep the RPMs and the run's logs in DIR (default: a temporary one)
   PATCHED_PART=signoff  only direct.sh's signoff part, for signoff.sh: no Fedora baseline, no assertions
-  PATCHED_PART=pr       direct.sh's pr part (CI's cases for a pull request), no Fedora baseline;
-                        only those cases' assertions, and each of them must have run and reported
+  PATCHED_PART=pr       direct.sh's pr part (CI's cases for a pull request) and the fedora part's
+                        fedora-light and fedora-dark; only those cases' assertions, and each of
+                        them must have run and reported
 
   docker run --rm --network=host -v "$PWD:/src:ro" registry.fedoraproject.org/fedora:45 \
       /src/tests/shots/patched.sh
@@ -135,7 +136,7 @@ fedora_part() {
     # malcontent-libs, as the image's flatpak-libs brings it: the shells then read parental controls.
     quietly dnf5 -y "${REPOS[@]}" install "gnome-shell-$fedora_vr" mesa-dri-drivers dbus-daemon python3-dbusmock gcc glib2-devel gjs jq procps-ng \
         malcontent-libs
-    bash /w/direct.sh fedora || echo "# direct.sh fedora: exit $?"
+    G2_PR=$([[ ${PATCHED_PART:-} == pr ]] && echo 1 || :) bash /w/direct.sh fedora || echo "# direct.sh fedora: exit $?"
     # direct.sh main starts the system bus and the fixtures afresh.
     pkill -f /w/fixtures.py || true
     pkill -x dbus-daemon || true
@@ -180,7 +181,7 @@ if [[ ${PATCHED_PART:-} == signoff ]]; then
     bash /w/direct.sh signoff
     exit
 fi
-[[ ${PATCHED_PART:-} == pr ]] || fedora_part
+fedora_part
 install_shell
 
 part=${PATCHED_PART:-main}

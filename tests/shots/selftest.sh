@@ -2035,7 +2035,7 @@ EOF
         "$(G2_GJS="$T/gjs-writes-nothing" bash -c "$run_it" _ "$HERE" "$T/one-pair.json" "$T/results.json" | tail -n 1)"
     mkdir -p "$T/run-a" "$T/run-b"
     # shellcheck disable=SC2016 # expanded by the inner bash
-    G2_GJS=false bash -c '. "$1/assert.sh"; compare_with_fedora "$2"' _ "$HERE" "$T/run-a" >"$T/fedora-compare.out" 2>&1 || true
+    G2_GJS=false bash -c '. "$1/assert.sh"; compare_with_fedora "$2" safe' _ "$HERE" "$T/run-a" >"$T/fedora-compare.out" 2>&1 || true
     if grep -q '^FAIL captures: compare.js compared none of 6 ' "$T/fedora-compare.out"; then
         ok "captures: assert.sh fails the Fedora comparisons when compare.js cannot run"
     else
@@ -2899,19 +2899,28 @@ CHANGES
 
 test_pr_assertions() {
     local run=$T/pr-run label rest stray="" missing
-    local -a cases
+    local -a cases fedora
     # shellcheck disable=SC2016 # expanded by the inner bash
     read -ra cases <<<"$(bash -c '. "$1/parts.sh"; echo "${PR_CASES[*]}"' _ "$HERE")"
+    # shellcheck disable=SC2016 # expanded by the inner bash
+    read -ra fedora <<<"$(bash -c '. "$1/parts.sh"; echo "${PR_FEDORA_CASES[*]}"' _ "$HERE")"
     mkdir -p "$run"
     : >"$run/results-pr.txt"
+    : >"$run/results-fedora.txt"
     assertion_counts patched_assertions "$run" pr >/dev/null
+    # The desktop comparison's captures name its pair: Apex's against Fedora's, never safe mode's.
     while read -r _ label rest; do
         label=${label%:}
-        [[ " ${cases[*]} " == *" $label "* ]] || stray+=" $label"
+        [[ $label == captures && $rest == apex-*-vs-fedora-desktop* ]] && continue
+        [[ " ${cases[*]} ${fedora[*]} " == *" $label "* ]] || stray+=" $label"
     done < <(grep -E '^(PASS|FAIL) ' "$T/assertions.out")
     expect_eq "parts: the pr part asserts no case it does not run" "" "$stray"
     missing=$(grep -c ': direct.sh pr did not run it$' "$T/assertions.out")
     expect_eq "parts: and with none of its cases run, part_ran fails each one" "${#cases[@]}" "$missing"
+    missing=$(grep -c ': direct.sh fedora did not run it$' "$T/assertions.out")
+    expect_eq "parts: and each of the fedora part's baselines too" "${#fedora[@]}" "$missing"
+    expect_eq "parts: CI's pr part compares Apex's desktop with Fedora's" 2 \
+        "$(grep -cE '^(PASS|FAIL) captures apex-(light|dark)-vs-fedora-desktop' "$T/assertions.out")"
     expect_eq "parts: CI's pr assertions check main.js's startup-complete handler ran" 1 \
         "$(grep -c "^FAIL default: main.js's startup-complete handler ran 0 times, not once" "$T/assertions.out")"
     # shellcheck disable=SC2016 # expanded by the inner bash
