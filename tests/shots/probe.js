@@ -1576,7 +1576,11 @@ async function notificationsLayer(unit) {
             trees, layout,
             footer: boxOf(footer, unit),
             clear: {...boxOf(list._clearButton, unit), visible: list._clearButton.visible},
-            dnd: dnd && {...boxOf(dnd, unit), label: findDescendant(dnd, a => a instanceof St.Label)?.text ?? null},
+            dnd: dnd && {
+                ...boxOf(dnd, unit), label: findDescendant(dnd, a => a instanceof St.Label)?.text ?? null,
+                labelBox: boxOf(findDescendant(dnd, a => a instanceof St.Label), unit),
+                switch: boxOf(findDescendant(dnd, a => a.has_style_class_name?.('toggle-switch')), unit),
+            },
         };
         const calendar = findDescendant(menu.box, a => a.has_style_class_name?.('calendar'));
         const find = styleClass => findDescendant(calendar, a => a.has_style_class_name?.(styleClass));
@@ -2235,6 +2239,8 @@ async function appGrid(unit) {
         const app = tiles.find(t => t.constructor.name === 'AppIcon');
         folder = tiles.find(t => t.constructor.name === 'FolderIcon');
         const label = app ? firstVisibleLabel(app) : null;
+        // Stock IconGridLayout._calculateSpacing spreads the columns over the page: the launcher's own pitch.
+        const tileSize = appDisplay._grid.layout_manager._getChildrenMaxSize();
         const measured = {
             app: app ? {
                 ...styleOf(app, unit),
@@ -2249,11 +2255,15 @@ async function appGrid(unit) {
                 .getWorkspacesBoxForState(OverviewControls.ControlsState.APP_GRID).get_height() / unit.length),
             box: boxOf(appDisplay, unit),
             searchBottom: (b => b.y + b.height)(boxOf(Main.overview._overview.controls._searchEntry, unit)),
+            scrim: paint(Main.layoutManager.overviewGroup.get_theme_node(), unit),
             grid: {
                 columns: appDisplay._grid.layout_manager.columns_per_page,
                 rows: appDisplay._grid.layout_manager.rows_per_page,
                 iconSize: app?.icon.iconSize ?? null,
             },
+            spacing: (([, , h, v]) => ({tile: round(tileSize / unit.length), h: round(h / unit.length), v: round(v / unit.length)}))(
+                appDisplay._grid.layout_manager._calculateSpacing(tileSize)),
+            tiles: appDisplay._grid.getItemsAtPage(0).map(t => boxOf(t, unit)),
             runningDot: standInStyle('app-grid-running-dot', null, unit),
             pageIndicator: standInStyle('page-indicator-icon', 'page-indicator', unit),
             pageHint: standInStyle('page-navigation-hint next', null, unit),
