@@ -519,6 +519,8 @@ fact "shadows: mapped again, it draws again" \
 fact "shadows: a style change that leaves the layer's CSS as it was rebuilds nothing" 'shadows\.restyled-alike=the same layer'
 fact "shadows: one that changes it rebuilds the layer" \
     'shadows\.restyled=box-shadow: 0px 2px 12px 0px rgba\(20, 30, 60, 0\.2\); border-radius: 14px; at 106,46 300x200 above=true cutout=14'
+fact "shadows: and runs the stage's relayouts while the old layer is still on it, then destroys it" \
+    'shadows\.rebuild-flushed-first=true'
 fact "shadows: layer off: no layer drawn" 'shadows\.off=none'
 fact "shadows: layer back on: the registration draws again" \
     'shadows\.on=box-shadow: 0px 2px 8px 0px rgba\(20, 30, 60, 0\.2\); border-radius: 14px; at 106,46 300x200 above=true cutout=14'

@@ -2802,6 +2802,25 @@ test_no_nan_allocation() {
         "$passes/$failures $(grep -c 'per log: glass-load.log:1$' "$T/assertions.out")"
 }
 
+test_no_spurious_allocation() {
+    local run=$T/spurious-run layer passes failures
+    layer='Clutter-WARNING **: 09:41:00.000: Spurious clutter_actor_allocate called for actor 0x55/apex-shadow-apex-shadow-layer [StWidget] which isn'"'"'t a descendent of the stage!'
+    mkdir -p "$run"
+    echo 'APEXG2 {"probe": true}' >"$run/default.log"
+    read -r passes failures <<<"$(assertion_counts no_spurious_allocation default "$run/default.log")"
+    expect_eq "spurious allocation: a clean log passes" "1/0" "$passes/$failures"
+    printf '%s\n' "$layer" 'APEXG2 {"probe": true}' "${layer/0x55/0x66}" >"$run/default.log"
+    read -r passes failures <<<"$(assertion_counts no_spurious_allocation default "$run/default.log")"
+    expect_eq "spurious allocation: two before shutdown fail, counted by actor" "0/1 1" \
+        "$passes/$failures $(grep -c '^FAIL default: spurious allocations, count and actor: 2 apex-shadow-apex-shadow-layer \[StWidget\]$' "$T/assertions.out")"
+    echo 'APEXG2 {"probe": true}' >"$run/default.log"
+    echo "${layer/apex-shadow-apex-shadow-layer \[StWidget\]/panelBox [StBoxLayout]}" >"$run/default.late.log"
+    read -r passes failures <<<"$(assertion_counts no_spurious_allocation default "$run/default.log")"
+    expect_eq "spurious allocation: one in the late first start's log fails too, naming it" "0/1 1" \
+        "$passes/$failures $(grep -c '^FAIL default: spurious allocations, count and actor: 1 panelBox \[StBoxLayout\]$' "$T/assertions.out")"
+    rm "$run/default.late.log"
+}
+
 test_clean_shutdown() {
     local run=$T/shutdown-run offstage passes failures
     offstage='St-CRITICAL **: 09:41:00.000: st_widget_get_theme_node called on the widget [0x55 StBoxLayout:insensitive "panelBox"] which is not in the stage.'
@@ -2817,10 +2836,9 @@ test_clean_shutdown() {
     expect_eq "shutdown: the panel laid out off the stage after it fails, naming the actor" "0/1 1" \
         "$passes/$failures $(grep -c '^FAIL default: at shutdown: .*"panelBox"\] which is not in the stage.$' "$T/assertions.out")"
     printf '%s\n' 'APEXG2 {"probe": true}' >"$run/default.log"
-    printf '%s\n' '** Message: 09:41:00.000: Shutting down GNOME Shell' \
-        'Clutter-WARNING **: 09:41:00.000: Spurious clutter_actor_allocate called for actor 0x55/panelBox [StBoxLayout]' >"$run/default.late.log"
+    printf '%s\n' '** Message: 09:41:00.000: Shutting down GNOME Shell' "$offstage" >"$run/default.late.log"
     read -r passes failures <<<"$(assertion_counts clean_shutdown default "$run/default.log")"
-    expect_eq "shutdown: and a spurious allocation in the late first start's log fails too" "0/1" "$passes/$failures"
+    expect_eq "shutdown: and so does it in the late first start's log" "0/1" "$passes/$failures"
     rm "$run/default.late.log"
     printf '%s\n' '** Message: 09:41:00.000: Shutting down GNOME Shell' \
         "Shell-CRITICAL **: 09:41:00.000: shell_global_get: assertion 'the_object' failed" >"$run/default.log"
@@ -3508,6 +3526,7 @@ test_no_st_css_warning
 test_parental_controls_ready
 test_no_disposed_apex
 test_no_binding_overwritten
+test_no_spurious_allocation
 test_clean_shutdown
 test_keys_case
 test_startup_handler_ran

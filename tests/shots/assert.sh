@@ -204,13 +204,26 @@ no_disposed_apex() {
     fi
 }
 
+# Clutter warns and skips an actor still queued for a relayout once it has left the stage: a shadow
+# layer destroyed with its relayout queued twice, and the panel at logout, before #167, were.
+no_spurious_allocation() {
+    local label=$1 log=$2 found
+    found=$(cat "$log" "${log%.log}.late.log" 2>/dev/null | grep -o 'Spurious clutter_actor_allocate called for actor [^ ]* \[[^]]*\]' |
+        sed 's|.*actor 0x[0-9a-f]*/||' | sort | uniq -c | sed -E 's/^ *//' | paste -sd';' -)
+    if [[ -z $found ]]; then
+        pass "$label: no spurious allocation (Clutter laying out an actor no longer on the stage) in the log"
+    else
+        fail "$label: spurious allocations, count and actor: $found"
+    fi
+}
+
 # At logout a relayout run once its actor has left the stage lays it out off it, and a window unmanaged
 # after the global's disposal reaches ShellWM through a NULL global, as 0019 stops: both warn first.
 clean_shutdown() {
     local label=$1 log=$2 found
     found=$(cat "$log" "${log%.log}.late.log" 2>/dev/null | sed -n '/Shutting down GNOME Shell/,$p' |
-        grep -m1 -e 'which is not in the stage' -e 'Spurious clutter_actor_allocate' \
-            -e 'shell_global_get: assertion' -e 'G_IS_OBJECT' | sed 's/.*\*\*: [0-9:.]* //')
+        grep -m1 -e 'which is not in the stage' -e 'shell_global_get: assertion' -e 'G_IS_OBJECT' |
+        sed 's/.*\*\*: [0-9:.]* //')
     if [[ -z $found ]]; then
         pass "$label: the shell shuts down without laying out an actor off the stage or reaching a gone global"
     else
@@ -1988,6 +2001,7 @@ direct_cases() {
         parental_controls_ready "$c" "$f"
         no_disposed_apex "$c" "$f"
         no_binding_overwritten "$c" "$f"
+        no_spurious_allocation "$c" "$f"
         clean_shutdown "$c" "$f"
         # fault-abort may abort before its report; its exit status says the shell ran.
         [[ $c == fault-abort ]] && continue
@@ -2412,6 +2426,7 @@ patched_assertions() {
         [[ -e $run/$c.log ]] && parental_controls_ready "$c" "$run/$c.log"
         [[ -e $run/$c.log ]] && no_disposed_apex "$c" "$run/$c.log"
         [[ -e $run/$c.log ]] && no_binding_overwritten "$c" "$run/$c.log"
+        [[ -e $run/$c.log ]] && no_spurious_allocation "$c" "$run/$c.log"
         [[ -e $run/$c.log ]] && clean_shutdown "$c" "$run/$c.log"
     done
     for c in default default-scale1 dark-style; do
