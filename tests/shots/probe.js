@@ -2791,6 +2791,7 @@ async function signoffWindows() {
     const previews = await until(() => countDescendants(Main.layoutManager.overviewGroup,
         a => a.constructor.name === 'WindowPreview' && a.mapped) >= SIGNOFF_APPS.length, SIGNOFF_WINDOWS_MS);
     await settle();
+    await windowsRedrawn("the overview's");
     global.stage.set_key_focus(null);
     const [pointerX, pointerY] = global.get_pointer();
     const panelStates = Object.entries(Main.panel.statusArea)
@@ -2819,6 +2820,13 @@ async function signoffWindows() {
 async function timeAfter(previous) {
     await until(() => global.display.get_current_time_roundtrip() > previous, 1000);
     return global.display.get_current_time_roundtrip();
+}
+
+// A window hidden behind another draws its backdrop state only once the overview shows it, and keeps it
+// for the switcher, which cannot wait as long: with no modifier held it activates its selection after 1.5 s.
+async function windowsRedrawn(what) {
+    if (!await windowsQuiet(SIGNOFF_QUIET_MS, SIGNOFF_WINDOWS_MS))
+        throw new Error(`${what} windows still repaint after ${SIGNOFF_WINDOWS_MS} ms`);
 }
 
 // Text Editor retitles its new document a draft after it maps; a preview shows whatever frame came last.
