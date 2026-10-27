@@ -2434,6 +2434,16 @@ function dropStartupNotifications() {
         source.destroy();
 }
 
+// The desktop alone, as scenes() captures it first: a dock-off case's side of the Fedora comparison.
+async function desktopScene() {
+    dropStartupNotifications();
+    Main.overview.hide();
+    const idle = await settle();
+    const desktop = {idle, ...await capture('desktop')};
+    delete desktop.bytes;
+    return {desktopOnly: true, dock: apexDock() ? dockReport(cssUnit()) : null, scenes: {desktop}};
+}
+
 async function scenes() {
     const unit = cssUnit();
     const startedInOverview = Main.overview.visible;
@@ -3142,6 +3152,16 @@ async function runProbe() {
         let result;
         try {
             result = await scenes();
+        } catch (e) {
+            result = {error: `${e.message}\n${e.stack}`};
+        }
+        console.log(`APEXG2-SCENES ${JSON.stringify(result)}`);
+    }
+
+    if (GLib.getenv('G2_DESKTOP') === '1') {
+        let result;
+        try {
+            result = await desktopScene();
         } catch (e) {
             result = {error: `${e.message}\n${e.stack}`};
         }

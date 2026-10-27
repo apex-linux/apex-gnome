@@ -59,6 +59,9 @@ readonly TWO_SOURCES="org.gnome.desktop.input-sources sources [('xkb', 'us'), ('
 readonly DARK='org.gnome.desktop.interface color-scheme prefer-dark'
 # Two installed favourites for dock-dnd to reorder: Files and Clocks, which the image ships.
 readonly TWO_FAVOURITES="org.gnome.shell favorite-apps ['org.gnome.Nautilus.desktop', 'org.gnome.clocks.desktop']"
+readonly STUB_APPS='io.github.apex_linux.G2Stub1 io.github.apex_linux.G2Stub2 io.github.apex_linux.G2Stub3'
+# Files, Clocks and Weather, which the image ships, and three stubs: a dock as wide as the image's.
+readonly SIX_FAVOURITES="org.gnome.shell favorite-apps ['org.gnome.Nautilus.desktop', 'org.gnome.clocks.desktop', 'org.gnome.Weather.desktop', 'io.github.apex_linux.G2Stub1.desktop', 'io.github.apex_linux.G2Stub2.desktop', 'io.github.apex_linux.G2Stub3.desktop']"
 readonly CAPTURE_SETTINGS='org.gnome.desktop.interface enable-animations false;org.gnome.desktop.interface cursor-blink false;org.gnome.mutter dynamic-workspaces false;org.gnome.desktop.wm.preferences num-workspaces 2;org.gnome.desktop.interface clock-format 24h;org.gnome.desktop.interface show-battery-percentage true'
 
 readonly FACETS_DIR=/usr/share/backgrounds/apex
@@ -123,6 +126,11 @@ run_case() {
         G2_BACKDROP=facets G2_SOLID_BACKDROP="$SOLID_BACKDROP" "$@" \
         timeout "$limit" dbus-run-session -- bash -c '
             set -u
+            for app in ${G2_STUB_APPS:-}; do
+                mkdir -p "$HOME/.local/share/applications"
+                printf "[Desktop Entry]\nType=Application\nName=%s\nExec=true\nIcon=application-x-executable\n" "${app##*.}" \
+                    >"$HOME/.local/share/applications/$app.desktop"
+            done
             gsettings set org.gnome.desktop.interface scaling-factor "$G2_SCALE"
             gsettings set org.gnome.shell welcome-dialog-last-shown-version "\"999\""
             if [ "$G2_BACKDROP" = solid ]; then
@@ -161,6 +169,7 @@ run_case() {
 run_and_record_case() {
     local name=$1
     [[ $part == pr && " ${PR_CASES[*]} " != *" $name "* ]] && return
+    [[ $part == fedora && ${G2_PR:-} == 1 && " ${PR_FEDORA_CASES[*]} " != *" $name "* ]] && return
     run_case "$@"
     if grep -q 'APEXG2-LATE' "/out/$name.log"; then
         echo "== $name: the probe was imported after startup, and emitted startup-complete again"
@@ -193,9 +202,10 @@ case $part in
         exit 0 ;;
 esac
 
-run_and_record_case default "$CAPTURE_SETTINGS" G2_SCENES=1 G2_A11Y=1 G2_SOLID_BAR=1
+run_and_record_case default "$CAPTURE_SETTINGS;$SIX_FAVOURITES" G2_SCENES=1 G2_A11Y=1 G2_SOLID_BAR=1 G2_STUB_APPS="$STUB_APPS"
 run_and_record_case default-scale1 "$CAPTURE_SETTINGS" G2_SCENES=1 G2_SCALE=1 G2_MONITOR=1440x900
-run_and_record_case dark-style "$CAPTURE_SETTINGS;org.gnome.desktop.interface color-scheme prefer-dark" G2_SCENES=1 G2_A11Y=1 G2_SOLID_BAR=1 G2_TURN_DARK_OFF=1
+run_and_record_case dark-style "$CAPTURE_SETTINGS;org.gnome.desktop.interface color-scheme prefer-dark;$SIX_FAVOURITES" G2_SCENES=1 G2_A11Y=1 G2_SOLID_BAR=1 \
+    G2_TURN_DARK_OFF=1 G2_STUB_APPS="$STUB_APPS"
 run_and_record_case high-contrast "$CAPTURE_SETTINGS;org.gnome.desktop.a11y.interface high-contrast true" G2_A11Y=1
 run_and_record_case large-text "$CAPTURE_SETTINGS;org.gnome.desktop.interface text-scaling-factor 1.25;$TWO_SOURCES" G2_A11Y=1
 # The contrast cases again over the stress backdrop, so a friendly wallpaper hides no regression.
@@ -210,7 +220,8 @@ python3 /w/fixtures.py --gpus 1 >"/out/fixtures-one-gpu.txt" 2>&1 || echo "fixtu
 run_and_record_case dock-one-gpu "$CAPTURE_SETTINGS" G2_ONE_GPU=1
 python3 /w/fixtures.py --gpus 2 >>"/out/fixtures-one-gpu.txt" 2>&1 || echo "fixtures.py --gpus 2: exit $?"
 # The overview without the dock: its windows' bottom row keeps stock's bottom edge.
-run_and_record_case no-dock "$CAPTURE_SETTINGS;io.github.apex_linux.Apex.Desktop disabled-features ['dock']" G2_OVERVIEW_WINDOWS=1
+run_and_record_case no-dock "$CAPTURE_SETTINGS;io.github.apex_linux.Apex.Desktop disabled-features ['dock']" G2_DESKTOP=1 G2_OVERVIEW_WINDOWS=1
+run_and_record_case no-dock-dark "$CAPTURE_SETTINGS;$DARK;io.github.apex_linux.Apex.Desktop disabled-features ['dock']" G2_DESKTOP=1 G2_OVERVIEW_WINDOWS=1
 # The indicators get shells of their own, as default, default-scale1 and dark-style.
 run_and_record_case indicators "$CAPTURE_SETTINGS;$NO_HOT_CORNER;$TWO_SOURCES" G2_INDICATORS=1
 run_and_record_case indicators-scale1 "$CAPTURE_SETTINGS;$NO_HOT_CORNER;$TWO_SOURCES" G2_INDICATORS=1 G2_SCALE=1 G2_MONITOR=1440x900
