@@ -25,6 +25,8 @@ const MAX_SAMPLES = 4000;
 const SWITCHER_APPS = ['Text Editor', 'Terminal', 'Web', 'Files', 'Settings'];
 // org.gnome.desktop.interface accent-color: a checked toggle is filled with each.
 export const ACCENTS = ['blue', 'teal', 'green', 'yellow', 'orange', 'red', 'pink', 'purple', 'slate'];
+// The bar's dots draw their background in the bar's ink: glyphs too.
+const DOTS = ['workspace-dot', 'messages-indicator'];
 
 function srgb(channel) {
     const c = channel / 255;
@@ -85,13 +87,18 @@ function bareText(actor) {
     return actor instanceof Clutter.Text && actor.text?.trim() && !(parent instanceof St.Label || parent instanceof St.Entry);
 }
 
-// What a target draws in its foreground colour: the text of a label, an entry or a bare text, or a glyph.
+// What a target draws in its foreground colour: the text of a label, an entry or a bare text, or a
+// glyph; a dot draws its background.
 function targetsOf(root) {
     const found = [];
     const walk = actor => {
         if (!actor.visible || !actor.mapped || actor.get_paint_opacity() === 0)
             return;
-        if (actor instanceof St.Entry && actor.get_text())
+        // Upstream's high-contrast sheet draws the clock's indicator as a glyph, unfilled.
+        const dot = DOTS.find(d => actor.has_style_class_name?.(d) && actor.get_theme_node().get_background_color().alpha > 0);
+        if (dot)
+            found.push({actor, kind: 'dot', ink: actor, name: dot});
+        else if (actor instanceof St.Entry && actor.get_text())
             found.push({actor, kind: 'text', ink: actor.clutter_text, name: actor.get_text()});
         else if (actor instanceof St.Label && actor.get_text().trim())
             found.push({actor, kind: 'text', ink: actor.clutter_text, name: actor.get_text()});
@@ -143,9 +150,12 @@ function card(actor, root, cards) {
 function snapshot(target, root, cards, unit) {
     const {actor} = target;
     const bare = actor instanceof Clutter.Text;
-    const color = bare ? textColour(actor) : actor.get_theme_node().get_foreground_color();
+    const node = bare ? null : actor.get_theme_node();
+    let color = bare ? textColour(actor) : node.get_foreground_color();
+    if (target.kind === 'dot')
+        color = node.get_background_color();
     // Hiding an icon hides its own fill too: it goes back over the captured pixels.
-    const fill = target.kind === 'icon' ? actor.get_theme_node().get_background_color() : null;
+    const fill = target.kind === 'icon' ? node.get_background_color() : null;
     const label = actor instanceof St.Label ? actor : null;
     const layout = bare ? actor.get_layout() : label?.clutter_text?.get_layout();
     return {
@@ -228,6 +238,12 @@ async function surfaceReport(root, settle, unit) {
         found.forEach((t, i) => setOpacity(t.ink, opacities[i]));
     }
     return {box: roundedBox(box, unit), targets: targets.map(t => measure(t, image))};
+}
+
+// The bar over whatever the stage draws now, as a11yReport measures it.
+export async function barReport(settle, unit) {
+    await settle();
+    return surfaceReport(Main.panel, settle, unit);
 }
 
 async function withOpen(open, close, read) {
@@ -317,6 +333,8 @@ export async function a11yReport(h) {
         source.destroy();
     Main.overview.hide();
     out.bar = await report(Main.panel);
+    // Unread notifications put the clock's dot on the bar.
+    out.barUnread = await withOpen(notifications, source => source.destroy(), () => report(Main.panel));
     lap('bar');
     out.dock = await report(h.apexDock());
     lap('dock');

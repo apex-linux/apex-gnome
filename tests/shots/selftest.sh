@@ -759,9 +759,11 @@ assert_run() {
 
 # shellcheck disable=SC2016 # a jq program
 REPORT_OF_LEGIBLE_SURFACES='
-{kind: "text", name: "Label", inactive: false, offscreen: false, ratio: 7, ellipsized: false, expandable: false, card: 0,
+{kind: "text", name: "Label", alpha: 1, inactive: false, offscreen: false, ratio: 7, ellipsized: false, expandable: false, card: 0,
     box: {x: 10, y: 10, width: 60, height: 20}} as $text
 | ($text + {kind: "icon", name: "glyph-symbolic", ratio: 4, box: {x: 80, y: 10, width: 16, height: 16}}) as $icon
+| ($text + {kind: "dot", name: "workspace-dot", ratio: 16, box: {x: 100, y: 10, width: 6, height: 6}}) as $dot
+| ($dot + {alpha: 0.447, ratio: $inactive}) as $inactiveDot
 | {box: {x: 0, y: 0, width: 200, height: 100}, targets: [$text, $icon]} as $s
 | {textScalingFactor: 1.25, monitor: {x: 0, y: 0, width: 1440, height: 900},
     quickSettingsAccents: (["blue", "teal", "green", "yellow", "orange", "red", "pink", "purple", "slate"] | map({key: ., value: $s}) | from_entries),
@@ -769,20 +771,38 @@ REPORT_OF_LEGIBLE_SURFACES='
     dialogAccents: (["blue", "teal", "green", "yellow", "orange", "red", "pink", "purple", "slate"] | map({key: ., value: $s}) | from_entries),
     screenshot: $s,
 
-    bar: $s, dock: $s, popupMenu: $s, osd: $s, banner: $s, quickSettings: $s, wifiMenu: $s, wifiMenuConnected: $s, dateMenu: $s, switcher: $s,
+    bar: ($s | .targets += [$dot, $inactiveDot]), barUnread: ($s | .targets += [$dot + {name: "messages-indicator"}, $inactiveDot]), dock: $s, popupMenu: $s, osd: $s, banner: $s, quickSettings: $s, wifiMenu: $s, wifiMenuConnected: $s, dateMenu: $s, switcher: $s,
     dialog: $s, endSession: $s, spotlight: {popup: $s, toast: $s}, overview: $s, appGrid: $s}'
 
+# The label picks the backdrop: dark-style's inactive dot passes 3:1 today, default's is the gap.
 a11y_run() {
-    local assertions=$1 change=${2:-.}
-    jq -nc "$REPORT_OF_LEGIBLE_SURFACES | $change" | sed 's/^/APEXG2-A11Y /' >"$T/a11y.log"
+    local assertions=$1 change=${2:-.} label=${3:-dark-style} inactive=${4:-4.24}
+    jq -nc --argjson inactive "$inactive" "$REPORT_OF_LEGIBLE_SURFACES | $change" | sed 's/^/APEXG2-A11Y /' >"$T/a11y.log"
     # shellcheck disable=SC2016 # expanded by the inner bash
-    bash -c '. "$1/assert.sh"; "$2" case "$3" >"$4" 2>&1; summary >>"$4"; echo "$npass $nfail $ngap"' \
-        _ "$HERE" "$assertions" "$T/a11y.log" "$T/a11y.out"
+    bash -c '. "$1/assert.sh"; "$2" "$3" "$4" >"$5" 2>&1; summary >>"$5"; echo "$npass $nfail $ngap"' \
+        _ "$HERE" "$assertions" "$label" "$T/a11y.log" "$T/a11y.out"
+}
+
+# default's inactive dot is Apex's known gap: pinned at 2.86:1, and failing once it reaches 3:1.
+test_inactive_dot_gap() {
+    local want_failures want_gaps inactive what passes failures open_gaps
+    while IFS='|' read -r want_failures want_gaps inactive what; do
+        read -r passes failures open_gaps <<<"$(a11y_run a11y_contrast . default "$inactive")"
+        if ((failures == want_failures && open_gaps == want_gaps)); then
+            ok "inactive dot gap: $what fails $want_failures, $want_gaps gap(s)"
+        else
+            not_ok "inactive dot gap: $what fails $want_failures, $want_gaps gap(s) (passed/failed/gaps $passes/$failures/$open_gaps): $(grep -m3 '^FAIL' "$T/a11y.out" | paste -sd'|' -)"
+        fi
+    done <<'CHANGES'
+0|2|2.86|default's dot at today's 2.86:1, in the bar and with the unread dot
+2|2|2.85|a dot below today's 2.86:1
+2|0|3|the dot at 3:1: the gap must go
+CHANGES
 }
 
 test_a11y() {
     local assertions expected change what passes failures open_gaps want
-    for assertions in a11y_contrast:45 a11y_layout:45; do
+    for assertions in a11y_contrast:49 a11y_layout:46; do
         expected=${assertions#*:}
         read -r passes failures open_gaps <<<"$(a11y_run "${assertions%:*}")"
         if ((failures == 0 && open_gaps == 0 && passes == expected)); then
@@ -801,6 +821,12 @@ test_a11y() {
     done <<'CHANGES'
 a11y_contrast|1|.bar.targets[0].ratio = 4.4|text at 4.4:1
 a11y_contrast|1|.dock.targets[1].ratio = 2.9|a glyph at 2.9:1
+a11y_contrast|2|.bar.targets[3].ratio = 2.9|an inactive workspace dot at 2.9:1, under 3:1 and dark-style's 4.24:1
+a11y_contrast|1|.bar.targets[3].ratio = 4.2|an inactive workspace dot at 4.2:1, under dark-style's 4.24:1
+a11y_contrast|1|.barUnread.targets[2].ratio = 2.9|the clock's unread dot at 2.9:1
+a11y_contrast|2|.bar.targets = .bar.targets[:3]|no inactive workspace dot measured
+a11y_contrast|1|.barUnread.targets = .barUnread.targets[:2] + .barUnread.targets[3:]|no unread dot measured
+a11y_contrast|0|.barUnread.targets[2] += {kind: "icon", name: "message-indicator-symbolic"}|high contrast's unread glyph in place of the dot
 a11y_contrast|1|.wifiMenu.targets[0].ratio = 3|a menu row's text at 3:1
 a11y_contrast|1|.wifiMenuConnected.targets[0].ratio = 4.4|the connected network's name at 4.4:1 over its fill
 a11y_contrast|1|.wifiMenuConnected.targets |= map(. + {kind: "icon"})|a connected row with only its glyphs measured
@@ -2930,6 +2956,62 @@ test_action_modes() {
 MODES
 }
 
+# shellcheck disable=SC2016 # a jq program
+readonly BAR_OVER_FIXTURE='{kind: "text", name: "Desktop", alpha: 1, inactive: false, offscreen: false, ratio: 6.3} as $text
+| ($text + {kind: "dot", name: "workspace-dot", alpha: 0.447}) as $inactive
+| {box: {x: 0, y: 0, width: 1440, height: 32}, targets: [$text, ($text + {kind: "dot", name: "workspace-dot", ratio: 6.8})]} as $bar
+| {previews: [], bar: {overview: ($bar | .targets += [$inactive + {ratio: 2.58}]), desktop: ($bar | .targets += [$inactive + {ratio: 2.32}])}}'
+
+test_bar_over_fixture() {
+    local want what change passes failures
+    while IFS='|' read -r want what change; do
+        if [[ -n $change ]]; then
+            printf 'APEXG2-OVERVIEW-WINDOWS %s\n' "$(jq -nc "$BAR_OVER_FIXTURE | $change")" >"$T/no-dock.log"
+        else
+            : >"$T/no-dock.log"
+        fi
+        read -r passes failures <<<"$(assertion_counts bar_over_fixture no-dock "$T/no-dock.log")"
+        expect_eq "bar over the fixture wallpaper: $what fails $want" "$want" "$failures"
+    done <<'CHANGES'
+0|text at 6.3:1, the active dot at 6.8:1 and the inactive at today's 2.58:1 and 2.32:1|.
+1|the clock at 4.4:1 in the overview|.bar.overview.targets[0].ratio = 4.4
+1|the active dot at 2.9:1 on the desktop|.bar.desktop.targets[1].ratio = 2.9
+1|the inactive dot below today's 2.32:1 on the desktop|.bar.desktop.targets[2].ratio = 2.31
+1|the inactive dot at 3:1 in the overview: the gap must go|.bar.overview.targets[2].ratio = 3
+2|the desktop left unmeasured|del(.bar.desktop)
+2|nothing measured in the overview|.bar.overview.targets = []
+4|a probe error|{error: "overviewWithWindows: 0 of 3 test windows mapped"}
+1|no report|
+CHANGES
+}
+
+# shellcheck disable=SC2016 # a jq program
+readonly SOLID_BAR_FROM_TOKENS='{solid: false, background: ($t.apex_bar | hex), boxShadow: null, glass: {enabled: true}} as $glass
+| {steps: {unmaximised: $glass, restored: $glass, maximised: {solid: true, background: ($t.apex_bar_solid | hex), glass: {enabled: false},
+    boxShadow: {color: ($t.apex_border | hex), inset: false, x: 0, y: 1, blur: 0, spread: 0}}}}'
+
+test_solid_bar() {
+    local variant failures what change passes
+    for variant in light dark; do
+        while IFS='|' read -r failures what change; do
+            jq -nc --argjson t "$(tokens_for "$variant")" "$JQ_DEFS $HEX_DEF $SOLID_BAR_FROM_TOKENS | $change" |
+                sed 's/^/APEXG2-SOLID-BAR /' >"$T/solid-bar.log"
+            read -r passes _ <<<"$(assertion_counts solid_bar case "$T/solid-bar.log" "$variant")"
+            expect_eq "solid bar ($variant): $what fails $failures of 3" "$failures" $((3 - passes))
+        done <<'CHANGES'
+0|glass, solid while maximised, glass again|.
+1|a bar that stays glass while maximised|.steps.maximised.solid = false
+1|the maximised bar filled with the glass tint|.steps.maximised.background = ($t.apex_bar | hex)
+1|its glass left on|.steps.maximised.glass.enabled = true
+1|no line under it|.steps.maximised.boxShadow = null
+1|a bar left solid after un-maximising|.steps.restored = .steps.maximised
+1|a line under the glass bar|.steps.unmaximised.boxShadow = .steps.maximised.boxShadow
+1|glass paused before any maximise|.steps.unmaximised.glass.enabled = false
+3|a probe error|{error: "no io.github.apex_linux.G2Window window in 10000 ms"}
+CHANGES
+    done
+}
+
 test_no_dock() {
     local failures what change passes
     while IFS='|' read -r failures what change; do
@@ -3307,6 +3389,7 @@ test_quick_settings
 test_window_switcher
 test_modal_dialog
 test_a11y
+test_inactive_dot_gap
 test_signoff
 test_goldens
 test_date_menu
@@ -3350,6 +3433,8 @@ test_network_rows_centred
 test_pr_assertions
 test_action_modes
 test_no_dock
+test_bar_over_fixture
+test_solid_bar
 test_dark_style_off
 test_fixtures
 test_glass

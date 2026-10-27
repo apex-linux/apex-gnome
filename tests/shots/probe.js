@@ -24,7 +24,7 @@ import * as UserWidget from 'resource:///org/gnome/shell/ui/userWidget.js';
 import * as WindowManager from 'resource:///org/gnome/shell/ui/windowManager.js';
 import * as WorkspaceThumbnail from 'resource:///org/gnome/shell/ui/workspaceThumbnail.js';
 
-import {textColour} from './a11y.js';
+import {barReport, textColour} from './a11y.js';
 import {actionModeName} from './idle.js';
 import * as Png from './png.js';
 
@@ -2178,7 +2178,7 @@ async function overviewWithWindows(unit) {
         const stockBottom = monitor.y + monitor.height;
         const hooks = await apexHooks();
         const Registry = await apexModule(SHADOW_REGISTRY).catch(() => null);
-        return {
+        const result = {
             previews: previews().map(preview => ({
                 window: boxOf(preview.windowContainer, unit),
                 caption: {...boxOf(preview._title, unit), visible: preview._title.visible && preview._title.opacity > 0},
@@ -2198,6 +2198,11 @@ async function overviewWithWindows(unit) {
                 return {...boxOf(t, unit), spread: luminanceSpread(image, {x, y, width, height}, scale)};
             }),
         };
+        // The bar over the fixture wallpaper, in the overview and then on the desktop.
+        result.bar = {overview: await barReport(settle, unit)};
+        Main.overview.hide();
+        result.bar.desktop = await barReport(settle, unit);
+        return result;
     } finally {
         Main.overview.hide();
         primary.force_exit();
@@ -2751,6 +2756,48 @@ async function surfaceEases(window) {
     };
 }
 
+// The bar as a maximised window turns it solid and as un-maximising it turns it back.
+async function solidBar(unit) {
+    Main.overview.hide();
+    await settle();
+    const client = Gio.File.new_for_uri(import.meta.url).get_parent().get_child('window.js').get_path();
+    const launcher = new Gio.SubprocessLauncher({flags: Gio.SubprocessFlags.NONE});
+    launcher.setenv('WAYLAND_DISPLAY', GLib.getenv('G2_WAYLAND_DISPLAY') ?? 'apex-g2', true);
+    launcher.setenv('GDK_BACKEND', 'wayland', true);
+    const find = () => global.get_window_actors().map(a => a.meta_window)
+        .find(w => w.get_gtk_application_id() === MOTION_WINDOW_ID);
+    const read = () => {
+        const node = Main.panel.get_theme_node();
+        const glass = Main.panel.get_effect('apex-glass');
+        return {
+            solid: Main.panel.has_style_class_name('apex-solid-bar'), background: hex(node.get_background_color()),
+            boxShadow: shadow(node, unit), glass: glass ? {enabled: glass.enabled} : null,
+        };
+    };
+    const clientProcess = launcher.spawnv(['gjs', '-m', client]);
+    try {
+        if (!await until(() => find(), MOTION_WAIT_MS))
+            return {error: `no ${MOTION_WINDOW_ID} window in ${MOTION_WAIT_MS} ms`};
+        const window = find();
+        await restAt(window, false, 'the window never showed');
+        await settle();
+        const steps = {unmaximised: read()};
+        window.maximize();
+        await restAt(window, true, 'the maximise never settled');
+        await settle();
+        steps.maximised = read();
+        window.unmaximize();
+        await restAt(window, false, 'the restore never settled');
+        await settle();
+        steps.restored = read();
+        return {steps};
+    } finally {
+        clientProcess.force_exit();
+        await until(() => !find(), MOTION_WAIT_MS);
+        await settle();
+    }
+}
+
 async function motion() {
     Main.overview.hide();
     await Scripting.sleep(MOTION_SETTLE_MS);
@@ -3136,6 +3183,16 @@ async function runProbe() {
             result = {error: `${e.message}\n${e.stack}`};
         }
         console.log(`APEXG2-A11Y ${JSON.stringify(result)}`);
+    }
+
+    if (GLib.getenv('G2_SOLID_BAR') === '1') {
+        let result;
+        try {
+            result = await solidBar(cssUnit());
+        } catch (e) {
+            result = {error: `${e.message}\n${e.stack}`};
+        }
+        console.log(`APEXG2-SOLID-BAR ${JSON.stringify(result)}`);
     }
 
     if (GLib.getenv('G2_INDICATORS') === '1') {

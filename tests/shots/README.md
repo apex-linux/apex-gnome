@@ -46,14 +46,14 @@ The direct cases:
 
 | Case | Settings | Asserts |
 |---|---|---|
-| `default` | `color-scheme` `'default'` | the Apex light sheet with its marker, `prefer-light`, no fault feature, the crash guard's marker created and removed; Super+Space (`toggle-spotlight`) registered in the normal and overview modes; the panel showed the one-time search hint (`search-hint-shown` true; until apex-desktop's schema has the key, the shell reports `no-key`); the top bar's, the dock's and the shell surfaces' metrics, light |
+| `default` | `color-scheme` `'default'` | the Apex light sheet with its marker, `prefer-light`, no fault feature, the crash guard's marker created and removed; Super+Space (`toggle-spotlight`) registered in the normal and overview modes; the panel showed the one-time search hint (`search-hint-shown` true; until apex-desktop's schema has the key, the shell reports `no-key`); the top bar's, the dock's and the shell surfaces' metrics, light; a maximised `window.js` window turns the bar solid and un-maximising it turns it back (`G2_SOLID_BAR=1`) |
 | `default-scale1` | as `default`, on a 1440x900 virtual monitor at scale 1, as the desktop VM runs | the Apex light sheet; the top bar's, the dock's and the shell surfaces' metrics at scale 1 |
-| `dark-style` | `prefer-dark` | the Apex dark sheet; the top bar's, the dock's and the shell surfaces' metrics, dark; then the probe clicks Quick Settings' Dark Style toggle (its own `clicked` signal): the toggle turns off, writes `color-scheme` `'default'`, and the running shell loads the Apex light sheet |
+| `dark-style` | `prefer-dark` | the Apex dark sheet; the top bar's, the dock's and the shell surfaces' metrics, dark, and the solid bar as in `default`; then the probe clicks Quick Settings' Dark Style toggle (its own `clicked` signal): the toggle turns off, writes `color-scheme` `'default'`, and the running shell loads the Apex light sheet |
 | `high-contrast` | the capture settings with `org.gnome.desktop.a11y.interface high-contrast` true | every Apex surface's contrast in the high-contrast sheet (see "Accessibility") |
 | `large-text` | the capture settings with `text-scaling-factor` 1.25, and two input sources as the image's override sets, so the bar carries board 39's input chip | every Apex surface's text whole, on the screen, inside its surface and clear of the rest, the chip's short name among them (see "Accessibility") |
 | `dock-intellihide`, `dock-intellihide-dark` | the capture settings, light or dark, without hot corners (the headless pointer starts at 0,0, in the corner); the probe starts `maximised-window.js`, one maximised GTK window | the dock shows, then hides behind the maximised window as the bar turns solid; a virtual pointer pushing against the bottom edge under it reveals it, under the pointer; moving away hides it; the overview shows it; with `dock-intellihide` off it stays, and while it does, `show-focused-app-name`, `dock-icon-size` (small, then large), `dock-running-indicators` and `dock-show-trash` each change the running shell (the name hidden; every icon 46, then 62; the running dot cleared; Trash gone), and each reset changes it back (the name; `$apex_dock_icon_size`; the dot in `$apex_dock_dot`; Trash last); the key back on, it hides again; the window gone, it shows. The maximised and revealed scenes are captured beside board 37's |
 | `dock-one-gpu` | the capture settings, after `fixtures.py --gpus 1` (put back to two after it) | switcheroo-control reports one GPU, and the dock's first app's menu offers no "Launch Using Discrete Graphics Card" |
-| `no-dock` | the capture settings with `disabled-features` `['dock']`; the probe opens three `window.js` windows and the overview (`G2_OVERVIEW_WINDOWS=1`) | the overview's own dash is back, so the `workspace-bottom` hook gives stock's edge, the monitor's bottom; every caption shows, none over another window's preview or caption |
+| `no-dock` | the capture settings with `disabled-features` `['dock']`; the probe opens three `window.js` windows and the overview (`G2_OVERVIEW_WINDOWS=1`) | the overview's own dash is back, so the `workspace-bottom` hook gives stock's edge, the monitor's bottom; every caption shows, none over another window's preview or caption; the bar's contrast over the fixture wallpaper (see "Accessibility") |
 | `dock-dnd` | the capture settings without hot corners, `favorite-apps` Files then Clocks (both in the image); `dock-dnd.js` drags with a virtual pointer and presses Esc with a virtual keyboard | Clocks dragged onto Files' leading quarter comes first; Weather dragged from the app grid onto Files' leading quarter is pinned after Clocks; a favourite dragged over Show Apps labels it Unpin and dropped there is unpinned; dropped off the dock or on Trash it stays where it was (stock's dash unpins only on Show Apps, and Trash takes no app); a running app outside the favourites (`window.js`, given a desktop file) shows after them and, dropped onto Files' leading quarter, is pinned there; a drag cancelled with Esc changes nothing. Each against `favorite-apps` and the dock's drawn order, with the separator, Show Apps and Trash last, and nothing left dragging: no placeholder, grab or modal, the `NORMAL` action mode, every icon opaque, Show Apps named so, no actor left but the 0x0 one DND keeps for its grabs |
 | `dock-external` | the capture settings without hot corners, a second virtual monitor, 1920x1080, right of the 2880x1800 panel (`G2_MONITOR2`), both at scale 2; `dock-external.js` moves `maximised-window.js`'s window between them | the dock and the bar on the primary alone, the dock `$apex_dock_bottom_gap` above its bottom edge and centred; the window maximised on the external display neither hides the dock nor turns the bar solid, on the primary it does both, and back it undoes both; the overview shows a view on each monitor over a scrim per monitor, each at its monitor's box and scale (2 x `$apex_overview_scrim_blur` x 2 on both), in the launcher too (each styled `apex-launcher`); `ApplyMonitorsConfig` on `org.gnome.Mutter.DisplayConfig` makes the external display the primary, and the dock and the bar follow it, the dock hidden and the bar solid exactly while the maximised window is on the new primary; then, at mixed scale (the external display at scale 1 and primary, the panel at 2), the dock and the bar move to it with their glass at scale 1 (radius 2 x `$apex_dock_blur` and 2 x `$apex_bar_blur`, on laid-out boxes), and in the overview a scrim covers each monitor, blurring an unscaled clone of the desktop at 2 x `$apex_overview_scrim_blur` x that monitor's scale (2 on the panel, 1 on the external display), modelled cheaper per re-blur than one stage-wide scrim at scale 2 (0014-blurcost.py; both printed), and stops once it hides; with the panel the primary again, the glass there is back at scale 2. A monitor plugged in at runtime is not covered: mutter's ScreenCast `RecordVirtual` gives a stream, but adds its monitor only once a PipeWire consumer negotiates, and `pipewiresrc` does not connect in G2's container, so the builder VM's G4 covers hotplug |
 | `stock-light`, `stock-dark` | `APEX_SHELL_SAFE=1` with `prefer-light` or `prefer-dark` | upstream's sheet of that variant from `theme/stock/`; the overview's thumbnails at upstream's maximum scale 0.05 and at the effective scale of Fedora's build; the rebuilt high-contrast sheet, which safe mode keeps, is Fedora's up to the structure marker (Apex only appends); no Super+Space binding |
@@ -543,13 +543,15 @@ default: `glass-unlock.png` against `fedora-glass-unlock.png` differs by 0 pixel
 
 `G2_A11Y=1` (the `default`, `dark-style`, `high-contrast` and `large-text` cases, and their
 `-solid` twins over the stress backdrop) runs
-`a11y.js`, which opens each Apex surface in turn: the bar, the dock, a popup menu, the OSD,
+`a11y.js`, which opens each Apex surface in turn: the bar, again with two unread
+notifications so the clock shows its dot, the dock, a popup menu, the OSD,
 a banner, Quick Settings and its Wi-Fi menu, the date menu with two notifications, the
 window switcher, a polkit-shaped dialog, the shell's own power-off dialog, Spotlight with
 "disk" typed and its toast, the overview and the app grid. Its targets are the visible
 labels, entries and symbolic icons under the surface, and any Clutter.Text outside a label
 or an entry, as a button's own label: St colours that from the button, and board 34's day
-numbers once drew in Clutter's default black there, unmeasured. Their ink is hidden while the shell
+numbers once drew in Clutter's default black there, unmeasured. The bar's workspace dots and
+the clock's unread dot are glyphs too, their ink the background they fill. Their ink is hidden while the shell
 draws the surface, so the capture holds what is behind them, glass and its blur included,
 with an icon's own fill put back over it. Each target's foreground colour, times its alpha
 and paint opacity, is composited over every sampled pixel of its box, and the pixel at the
@@ -574,6 +576,29 @@ file:
 > 3:1). Measured from the stage's pixels with the toggle's own colours.
 >
 > The calendar's today, white on the accent, is 3.15:1 for blue there too, and 2.59:1 for yellow.
+
+One gap is Apex's own, not upstream's, pending the owner's decision (2026-10-27): an inactive
+workspace dot, `$apex_bar_fg` at `workspace-dots.js`'s `INACTIVE` opacity .45, falls below
+WCAG 1.4.11's 3:1 over the light backdrops.
+
+| Case | Backdrop | Inactive dot today |
+|---|---|---|
+| `default` | Facets light | 2.86:1 |
+| `default-solid` | `#013b88` | 2.22:1 |
+| `no-dock`, overview | the fixture gradient | 2.58:1 |
+| `no-dock`, desktop | the fixture gradient | 2.32:1 |
+| `dark-style` | Facets dark | 4.24:1 |
+| `dark-style-solid` | `#013b88` | 3.55:1 |
+| `high-contrast`, `high-contrast-solid` | upstream's sheet | 4.37:1 |
+
+`inactive_dot` pins each backdrop's ratio (`A11Y_INACTIVE_DOT_TODAY`, at the report's own
+rounding): a lower one fails. Where it is under 3:1 the dot leaves the plain glyph check for a
+gap line, which fails once the dot reaches 3:1, so the fix also removes the gap.
+
+The bar is measured the same way over every wallpaper G2 shows it on: the Facets, light in
+`default` and dark in `dark-style`; `#013b88` in the `-solid` twins; and, in `no-dock`
+(`bar_over_fixture`), the overview's fixture gradient, once in the overview and once on the
+desktop after it closes.
 
 ## The idle desktop
 
@@ -767,10 +792,12 @@ removes its pin.
 | no step yet (a clock hook, or the owner accepts it) | `$apex_bar_clock_gap` between the date and the time | about 7 px with G2's 24-hour clock: one label, an EN SPACE. An en-US 12-hour clock adds a FIGURE SPACE before a one-digit hour ("Tue Sep 29" EN SPACE FIGURE SPACE "5:23 AM"): about 14 px |
 | no step yet (a clock hook, or the owner accepts it) | with the dot, the clock pill is padding + text + gap + dot + padding wide | 13 px wider: upstream's invisible pad left of the text |
 
-Not asserted here: the maximised-window trigger of the solid bar (G2 opens no window
-yet; the layer tests cover it), the volume glyph (the container has no audio server), the bar
-text's contrast over other wallpapers (S2b's solid fallback; over the fixture wallpaper
-it is at least 4.8:1), and what the goldens judge: the Apex Symbolic glyphs (S1b), `ss03`
+`solid_bar` (`default` and `dark-style`) opens a `window.js` window: while it is not
+maximised the bar is `$apex_bar` glass with no line under it; maximised, the bar takes
+`apex-solid-bar`, `$apex_bar_solid` over a `0 1px 0 $apex_border` line, and its glass pauses;
+un-maximised, it is glass again. The bar has no ring of its own to turn off.
+
+Not asserted here: the volume glyph (the container has no audio server), and what the goldens judge: the Apex Symbolic glyphs (S1b), `ss03`
 (S1b, fontconfig) and the light bar over the still-dark overview (S1b).
 
 ## Files
@@ -829,7 +856,3 @@ lane's RPMs: they call the shell's own polkit component's `_onInitiate()` with a
 `polkit-fingerprint`) and is never answered. They are for captures and style checks only:
 PAM, polkit-agent-helper-1 and polkitd's verdict never run, and polkitd only describes the
 action. The real `pkexec` path is G4's.
-
-## Not yet
-
-- A bar-text contrast check over the fixture wallpapers.
