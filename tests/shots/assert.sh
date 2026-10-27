@@ -204,6 +204,19 @@ no_disposed_apex() {
     fi
 }
 
+# At logout a relayout queued while an actor was on the stage, run once it has left, lays it out off
+# the stage: Clutter and St warn, as #158's teardown made the panel's do.
+clean_shutdown() {
+    local label=$1 log=$2 found
+    found=$(cat "$log" "${log%.log}.late.log" 2>/dev/null | sed -n '/Shutting down GNOME Shell/,$p' |
+        grep -m1 -e 'which is not in the stage' -e 'Spurious clutter_actor_allocate' | sed 's/.*\*\*: [0-9:.]* //')
+    if [[ -z $found ]]; then
+        pass "$label: the shell shuts down without laying out an actor off the stage"
+    else
+        fail "$label: at shutdown: $found"
+    fi
+}
+
 # Mutter warns when two bindings claim one key: the second silently takes it from the first.
 no_binding_overwritten() {
     local label=$1 log=$2 found
@@ -1974,6 +1987,7 @@ direct_cases() {
         parental_controls_ready "$c" "$f"
         no_disposed_apex "$c" "$f"
         no_binding_overwritten "$c" "$f"
+        clean_shutdown "$c" "$f"
         # fault-abort may abort before its report; its exit status says the shell ran.
         [[ $c == fault-abort ]] && continue
         action_modes "$c" "$f"
@@ -2397,6 +2411,7 @@ patched_assertions() {
         [[ -e $run/$c.log ]] && parental_controls_ready "$c" "$run/$c.log"
         [[ -e $run/$c.log ]] && no_disposed_apex "$c" "$run/$c.log"
         [[ -e $run/$c.log ]] && no_binding_overwritten "$c" "$run/$c.log"
+        [[ -e $run/$c.log ]] && clean_shutdown "$c" "$run/$c.log"
     done
     for c in default default-scale1 dark-style; do
         asserted "${c%:*}" || continue

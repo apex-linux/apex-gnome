@@ -2802,6 +2802,28 @@ test_no_nan_allocation() {
         "$passes/$failures $(grep -c 'per log: glass-load.log:1$' "$T/assertions.out")"
 }
 
+test_clean_shutdown() {
+    local run=$T/shutdown-run offstage passes failures
+    offstage='St-CRITICAL **: 09:41:00.000: st_widget_get_theme_node called on the widget [0x55 StBoxLayout:insensitive "panelBox"] which is not in the stage.'
+    mkdir -p "$run"
+    printf '%s\n' 'APEXG2 {"probe": true}' '** Message: 09:41:00.000: Shutting down GNOME Shell' >"$run/default.log"
+    read -r passes failures <<<"$(assertion_counts clean_shutdown default "$run/default.log")"
+    expect_eq "shutdown: a clean one passes" "1/0" "$passes/$failures"
+    printf '%s\n' "$offstage" 'APEXG2 {"probe": true}' '** Message: 09:41:00.000: Shutting down GNOME Shell' >"$run/default.log"
+    read -r passes failures <<<"$(assertion_counts clean_shutdown default "$run/default.log")"
+    expect_eq "shutdown: the warning before it is another check's" "1/0" "$passes/$failures"
+    printf '%s\n' '** Message: 09:41:00.000: Shutting down GNOME Shell' "$offstage" >"$run/default.log"
+    read -r passes failures <<<"$(assertion_counts clean_shutdown default "$run/default.log")"
+    expect_eq "shutdown: the panel laid out off the stage after it fails, naming the actor" "0/1 1" \
+        "$passes/$failures $(grep -c '^FAIL default: at shutdown: .*"panelBox"\] which is not in the stage.$' "$T/assertions.out")"
+    printf '%s\n' 'APEXG2 {"probe": true}' >"$run/default.log"
+    printf '%s\n' '** Message: 09:41:00.000: Shutting down GNOME Shell' \
+        'Clutter-WARNING **: 09:41:00.000: Spurious clutter_actor_allocate called for actor 0x55/panelBox [StBoxLayout]' >"$run/default.late.log"
+    read -r passes failures <<<"$(assertion_counts clean_shutdown default "$run/default.log")"
+    expect_eq "shutdown: and a spurious allocation in the late first start's log fails too" "0/1" "$passes/$failures"
+    rm "$run/default.late.log"
+}
+
 test_no_binding_overwritten() {
     local run=$T/keys-run overwritten passes failures
     overwritten='libmutter-WARNING **: 09:41:00.000: Overwriting existing binding of keysym 20 with keysym 20 (keycode 41).'
@@ -3477,6 +3499,7 @@ test_no_st_css_warning
 test_parental_controls_ready
 test_no_disposed_apex
 test_no_binding_overwritten
+test_clean_shutdown
 test_keys_case
 test_startup_handler_ran
 test_network_rows_centred
