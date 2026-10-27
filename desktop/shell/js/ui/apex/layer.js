@@ -205,7 +205,11 @@ function _queueFollowSettings() {
 // still runs window and focus signals: every feature disables first, while its actors are alive.
 async function _disableAtTeardown() {
     const Main = await import('../main.js');
-    Main.layoutManager.uiGroup.connect('destroy', () => _disableFeatures());
+    Main.layoutManager.uiGroup.connect('destroy', () => {
+        _disableFeatures();
+        // Their relayouts run now, while the stage holds the panel, not in that loop once it has left.
+        global.stage.get_allocation_box();
+    });
 }
 
 export function enable() {
