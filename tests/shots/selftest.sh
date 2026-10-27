@@ -2822,6 +2822,15 @@ test_clean_shutdown() {
     read -r passes failures <<<"$(assertion_counts clean_shutdown default "$run/default.log")"
     expect_eq "shutdown: and a spurious allocation in the late first start's log fails too" "0/1" "$passes/$failures"
     rm "$run/default.late.log"
+    printf '%s\n' '** Message: 09:41:00.000: Shutting down GNOME Shell' \
+        "Shell-CRITICAL **: 09:41:00.000: shell_global_get: assertion 'the_object' failed" >"$run/default.log"
+    read -r passes failures <<<"$(assertion_counts clean_shutdown default "$run/default.log")"
+    expect_eq "shutdown: a window effect reaching the disposed global fails, quoting the shell" "0/1 1" \
+        "$passes/$failures $(grep -c "^FAIL default: at shutdown: shell_global_get: assertion 'the_object' failed$" "$T/assertions.out")"
+    printf '%s\n' '** Message: 09:41:00.000: Shutting down GNOME Shell' \
+        "GLib-GObject-CRITICAL **: 09:41:00.000: g_object_get: assertion 'G_IS_OBJECT (object)' failed" >"$run/default.log"
+    read -r passes failures <<<"$(assertion_counts clean_shutdown default "$run/default.log")"
+    expect_eq "shutdown: and so does reading its window manager through NULL" "0/1" "$passes/$failures"
 }
 
 test_no_binding_overwritten() {

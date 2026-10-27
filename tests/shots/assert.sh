@@ -204,14 +204,15 @@ no_disposed_apex() {
     fi
 }
 
-# At logout a relayout queued while an actor was on the stage, run once it has left, lays it out off
-# the stage: Clutter and St warn, as #158's teardown made the panel's do.
+# At logout a relayout run once its actor has left the stage lays it out off it, and a window unmanaged
+# after the global's disposal reaches ShellWM through a NULL global, as 0019 stops: both warn first.
 clean_shutdown() {
     local label=$1 log=$2 found
     found=$(cat "$log" "${log%.log}.late.log" 2>/dev/null | sed -n '/Shutting down GNOME Shell/,$p' |
-        grep -m1 -e 'which is not in the stage' -e 'Spurious clutter_actor_allocate' | sed 's/.*\*\*: [0-9:.]* //')
+        grep -m1 -e 'which is not in the stage' -e 'Spurious clutter_actor_allocate' \
+            -e 'shell_global_get: assertion' -e 'G_IS_OBJECT' | sed 's/.*\*\*: [0-9:.]* //')
     if [[ -z $found ]]; then
-        pass "$label: the shell shuts down without laying out an actor off the stage"
+        pass "$label: the shell shuts down without laying out an actor off the stage or reaching a gone global"
     else
         fail "$label: at shutdown: $found"
     fi

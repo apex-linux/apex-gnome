@@ -1,0 +1,238 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Tue, 27 Oct 2026 14:34:54 +0000
+Subject: [PATCH] plugin: no ShellWM once the global is gone
+
+Upstream bug fix, not an Apex change: drop this patch once upstream's
+get_shell_wm() copes with a disposed ShellGlobal.
+
+At exit, meta_context_destroy() destroys the Wayland clients still
+connected after the shell has disposed its global. Unmanaging their
+windows calls back into the plugin (kill_window_effects and friends),
+where get_shell_wm() passes the NULL shell_global_get() to
+g_object_get() and then unrefs an uninitialised pointer: CRITICALs, or
+a segfault when the stack holds garbage. Keep a weak pointer to the
+global, return NULL once it is gone, and complete each effect straight
+to mutter when there is no ShellWM.
+---
+ src/gnome-shell-plugin.c | 91 +++++++++++++++++++++++++++++-----------
+ 1 file changed, 66 insertions(+), 25 deletions(-)
+
+diff --git a/src/gnome-shell-plugin.c b/src/gnome-shell-plugin.c
+index fbdf075..8027749 100644
+--- a/src/gnome-shell-plugin.c
++++ b/src/gnome-shell-plugin.c
+@@ -67,19 +67,27 @@ gnome_shell_plugin_start (MetaPlugin *plugin)
+   GnomeShellPlugin *shell_plugin = GNOME_SHELL_PLUGIN (plugin);
+ 
+   shell_plugin->global = shell_global_get ();
++  g_object_add_weak_pointer (G_OBJECT (shell_plugin->global), (gpointer *) &shell_plugin->global);
+   _shell_global_set_plugin (shell_plugin->global, META_PLUGIN (shell_plugin));
+ }
+ 
++/* NULL once the global is gone: meta_context_destroy() still unmanages the
++ * windows of connected clients after the shell has disposed it. */
+ static ShellWM *
+-get_shell_wm (void)
++get_shell_wm (MetaPlugin *plugin)
+ {
+-  ShellWM *wm;
++  GnomeShellPlugin *shell_plugin = GNOME_SHELL_PLUGIN (plugin);
++  ShellWM *wm = NULL;
++
++  if (!shell_plugin->global)
++    return NULL;
+ 
+-  g_object_get (shell_global_get (),
++  g_object_get (shell_plugin->global,
+                 "window-manager", &wm,
+                 NULL);
+   /* drop extra ref added by g_object_get */
+-  g_object_unref (wm);
++  if (wm)
++    g_object_unref (wm);
+ 
+   return wm;
+ }
+@@ -88,25 +96,34 @@ static void
+ gnome_shell_plugin_minimize (MetaPlugin         *plugin,
+ 			     MetaWindowActor    *actor)
+ {
+-  _shell_wm_minimize (get_shell_wm (),
+-                      actor);
++  ShellWM *wm = get_shell_wm (plugin);
+ 
++  if (wm)
++    _shell_wm_minimize (wm, actor);
++  else
++    meta_plugin_minimize_completed (plugin, actor);
+ }
+ 
+ static void
+ gnome_shell_plugin_unminimize (MetaPlugin         *plugin,
+                                MetaWindowActor    *actor)
+ {
+-  _shell_wm_unminimize (get_shell_wm (),
+-                      actor);
++  ShellWM *wm = get_shell_wm (plugin);
+ 
++  if (wm)
++    _shell_wm_unminimize (wm, actor);
++  else
++    meta_plugin_unminimize_completed (plugin, actor);
+ }
+ 
+ static void
+ gnome_shell_plugin_size_changed (MetaPlugin         *plugin,
+                                  MetaWindowActor    *actor)
+ {
+-  _shell_wm_size_changed (get_shell_wm (), actor);
++  ShellWM *wm = get_shell_wm (plugin);
++
++  if (wm)
++    _shell_wm_size_changed (wm, actor);
+ }
+ 
+ static void
+@@ -116,23 +133,36 @@ gnome_shell_plugin_size_change (MetaPlugin         *plugin,
+                                 MtkRectangle       *old_frame_rect,
+                                 MtkRectangle       *old_buffer_rect)
+ {
+-  _shell_wm_size_change (get_shell_wm (), actor, which_change, old_frame_rect, old_buffer_rect);
++  ShellWM *wm = get_shell_wm (plugin);
++
++  if (wm)
++    _shell_wm_size_change (wm, actor, which_change, old_frame_rect, old_buffer_rect);
++  else
++    meta_plugin_size_change_completed (plugin, actor);
+ }
+ 
+ static void
+ gnome_shell_plugin_map (MetaPlugin         *plugin,
+                         MetaWindowActor    *actor)
+ {
+-  _shell_wm_map (get_shell_wm (),
+-                 actor);
++  ShellWM *wm = get_shell_wm (plugin);
++
++  if (wm)
++    _shell_wm_map (wm, actor);
++  else
++    meta_plugin_map_completed (plugin, actor);
+ }
+ 
+ static void
+ gnome_shell_plugin_destroy (MetaPlugin         *plugin,
+                             MetaWindowActor    *actor)
+ {
+-  _shell_wm_destroy (get_shell_wm (),
+-                     actor);
++  ShellWM *wm = get_shell_wm (plugin);
++
++  if (wm)
++    _shell_wm_destroy (wm, actor);
++  else
++    meta_plugin_destroy_completed (plugin, actor);
+ }
+ 
+ static void
+@@ -141,20 +171,31 @@ gnome_shell_plugin_switch_workspace (MetaPlugin         *plugin,
+                                      gint                to,
+                                      MetaMotionDirection direction)
+ {
+-  _shell_wm_switch_workspace (get_shell_wm(), from, to, direction);
++  ShellWM *wm = get_shell_wm (plugin);
++
++  if (wm)
++    _shell_wm_switch_workspace (wm, from, to, direction);
++  else
++    meta_plugin_switch_workspace_completed (plugin);
+ }
+ 
+ static void
+ gnome_shell_plugin_kill_window_effects (MetaPlugin         *plugin,
+                                         MetaWindowActor    *actor)
+ {
+-  _shell_wm_kill_window_effects (get_shell_wm(), actor);
++  ShellWM *wm = get_shell_wm (plugin);
++
++  if (wm)
++    _shell_wm_kill_window_effects (wm, actor);
+ }
+ 
+ static void
+ gnome_shell_plugin_kill_switch_workspace (MetaPlugin         *plugin)
+ {
+-  _shell_wm_kill_switch_workspace (get_shell_wm());
++  ShellWM *wm = get_shell_wm (plugin);
++
++  if (wm)
++    _shell_wm_kill_switch_workspace (wm);
+ }
+ 
+ static void
+@@ -163,13 +204,13 @@ gnome_shell_plugin_show_tile_preview (MetaPlugin      *plugin,
+                                       MtkRectangle    *tile_rect,
+                                       int              tile_monitor)
+ {
+-  _shell_wm_show_tile_preview (get_shell_wm (), window, tile_rect, tile_monitor);
++  _shell_wm_show_tile_preview (get_shell_wm (plugin), window, tile_rect, tile_monitor);
+ }
+ 
+ static void
+ gnome_shell_plugin_hide_tile_preview (MetaPlugin *plugin)
+ {
+-  _shell_wm_hide_tile_preview (get_shell_wm ());
++  _shell_wm_hide_tile_preview (get_shell_wm (plugin));
+ }
+ 
+ static void
+@@ -179,7 +220,7 @@ gnome_shell_plugin_show_window_menu (MetaPlugin         *plugin,
+                                      int                 x,
+                                      int                 y)
+ {
+-  _shell_wm_show_window_menu (get_shell_wm (), window, menu, x, y);
++  _shell_wm_show_window_menu (get_shell_wm (plugin), window, menu, x, y);
+ }
+ 
+ static void
+@@ -188,34 +229,34 @@ gnome_shell_plugin_show_window_menu_for_rect (MetaPlugin         *plugin,
+                                               MetaWindowMenuType  menu,
+                                               MtkRectangle       *rect)
+ {
+-  _shell_wm_show_window_menu_for_rect (get_shell_wm (), window, menu, rect);
++  _shell_wm_show_window_menu_for_rect (get_shell_wm (plugin), window, menu, rect);
+ }
+ 
+ static gboolean
+ gnome_shell_plugin_keybinding_filter (MetaPlugin     *plugin,
+                                       MetaKeyBinding *binding)
+ {
+-  return _shell_wm_filter_keybinding (get_shell_wm (), binding);
++  return _shell_wm_filter_keybinding (get_shell_wm (plugin), binding);
+ }
+ 
+ static void
+ gnome_shell_plugin_confirm_display_change (MetaPlugin *plugin)
+ {
+-  _shell_wm_confirm_display_change (get_shell_wm ());
++  _shell_wm_confirm_display_change (get_shell_wm (plugin));
+ }
+ 
+ static MetaCloseDialog *
+ gnome_shell_plugin_create_close_dialog (MetaPlugin *plugin,
+                                         MetaWindow *window)
+ {
+-  return _shell_wm_create_close_dialog (get_shell_wm (), window);
++  return _shell_wm_create_close_dialog (get_shell_wm (plugin), window);
+ }
+ 
+ static MetaInhibitShortcutsDialog *
+ gnome_shell_plugin_create_inhibit_shortcuts_dialog (MetaPlugin *plugin,
+                                                     MetaWindow *window)
+ {
+-  return _shell_wm_create_inhibit_shortcuts_dialog (get_shell_wm (), window);
++  return _shell_wm_create_inhibit_shortcuts_dialog (get_shell_wm (plugin), window);
+ }
+ 
+ static void

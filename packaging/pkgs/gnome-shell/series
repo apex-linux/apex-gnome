@@ -11,3 +11,4 @@
 0016-motion.patch
 0017-polkit.patch
 0018-end-session.patch
+0019-plugin-shutdown.patch
