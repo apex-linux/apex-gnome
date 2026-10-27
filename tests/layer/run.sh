@@ -763,6 +763,7 @@ fact "focused-app: and the lock screen" 'focused-app\.locked=Desktop name=Deskto
 fact "focused-app: layer-enabled=false takes it out of the bar" 'focused-app\.off=none'
 fact "focused-app: layer-enabled=true brings it back" 'focused-app\.on=Desktop name=Desktop visible=true reactive=false'
 fact "focused-app: the stage's teardown at logout disables it first, before its label is destroyed" 'focused-app\.teardown=none'
+fact "focused-app: and then runs the stage's relayouts, which the disables queued, while the panel is on it" 'focused-app\.teardown-flushes=1'
 fact "focused-app: a second teardown, then layer-enabled=false, disables nothing twice" 'focused-app\.teardown-then-off=none'
 lacks "focused-app: no feature fails or disables uncleanly" 'off for this session|did not disable cleanly|cannot restyle'
 

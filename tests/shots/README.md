@@ -71,6 +71,9 @@ The direct cases:
 
 Every case: the probe ran (so the static import graph loaded), from `startup-complete`, and no `JS ERROR`;
 no key binding overwrites another (mutter's "Overwriting existing binding" warning);
+after "Shutting down GNOME Shell", no actor is laid out off the stage (St's "not in the stage", Clutter's
+"Spurious clutter_actor_allocate"), as a relayout queued by the layer's teardown and run in `main.js`'s
+shutdown loop did to the panel;
 the wall clock stands at the fixed time and the top bar's clock shows it (`Mon Sep 28`, EN SPACE, `09:41`).
 
 A probe that runs longer than 30 s keeps `gnome-shell-perf-helper` awake with a call every 10 s:
