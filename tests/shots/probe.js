@@ -2900,11 +2900,16 @@ async function signoffWindows() {
     const order = () => global.display.get_tab_list(Meta.TabList.NORMAL, null).map(w => tracker.get_window_app(w)?.get_id());
     const byUserTime = () => Shell.AppSystem.get_default().get_running().map(app => app.get_id())
         .filter(id => expectedOrder.includes(id));
-    const ordered = () => [order(), byUserTime()].every(ids => JSON.stringify(ids) === JSON.stringify(expectedOrder));
+    // A window draws its focused or backdrop state in its next frame: one whose last frame came before its last
+    // focus change shows the other state, and a capture of the dark boards caught Text Editor drawn focused.
+    const drawn = new FocusFrames(expectedOrder.map(id => global.get_window_actors()
+        .find(a => tracker.get_window_app(a.meta_window)?.get_id() === id)).filter(Boolean));
+    const ordered = () => [order(), byUserTime()].every(ids => JSON.stringify(ids) === JSON.stringify(expectedOrder)) &&
+        drawn.stale().length === 0;
     const keepOrder = what => {
         if (!ordered()) {
             throw new Error(`${what} focus order is ${order().join(', ')}, by user time ${byUserTime().join(', ')}, ` +
-                `not ${expectedOrder.join(', ')}`);
+                `not ${expectedOrder.join(', ')}; not drawn since their focus changed: ${drawn.stale().join(', ') || 'none'}`);
         }
     };
     let quiet = loaded, focusAttempts = 0;
@@ -2917,6 +2922,9 @@ async function signoffWindows() {
             time = await timeAfter(time);
             if (window)
                 Main.activateWindow(window, time);
+            // On top, it draws its focused frame before the next window covers it.
+            // eslint-disable-next-line no-await-in-loop
+            await until(() => !drawn.stale().includes(id), SIGNOFF_WINDOWS_MS);
         }
         // eslint-disable-next-line no-await-in-loop
         quiet = await windowsQuiet(SIGNOFF_QUIET_MS, SIGNOFF_WINDOWS_MS);
@@ -2963,11 +2971,45 @@ async function signoffWindows() {
     const altTab = withoutBytes(await capture('signoff-alt-tab', [], {switcher: popup._items.map(item => item.app.get_id())}));
     popup.destroy();
     await settle();
+    drawn.destroy();
     return {
         shown, previews, apps: appsShown(), overview: overview.file, altTab: altTab.file,
-        loaded, quiet, focusAttempts, pointerPlaced, notified,
+        loaded, quiet, focusAttempts, pointerPlaced, notified, drawn: drawn.report(),
         atOverview: {pointer: [pointerX, pointerY], panelStates: Object.fromEntries(panelStates)},
     };
+}
+
+// When each window's focus state last changed and when it last drew a frame, in ms from the watch's start.
+class FocusFrames {
+    constructor(actors) {
+        this._start = GLib.get_monotonic_time();
+        this._tracker = Shell.WindowTracker.get_default();
+        this._windows = actors.map(actor => {
+            const entry = {actor, id: this._tracker.get_window_app(actor.meta_window)?.get_id(), focusUs: 0, frameUs: 0};
+            entry.handlers = [
+                [actor, actor.connect('damaged', () => (entry.frameUs = this._now()))],
+                [actor.meta_window, actor.meta_window.connect('notify::appears-focused', () => (entry.focusUs = this._now()))],
+            ];
+            return entry;
+        });
+    }
+
+    _now() {
+        return Math.max(1, GLib.get_monotonic_time() - this._start);
+    }
+
+    stale() {
+        return this._windows.filter(w => w.frameUs < w.focusUs).map(w => w.id);
+    }
+
+    report() {
+        return Object.fromEntries(this._windows.map(w => [w.id,
+            {focusMs: Math.round(w.focusUs / 1000), frameMs: Math.round(w.frameUs / 1000)}]));
+    }
+
+    destroy() {
+        this._windows.forEach(w => w.handlers.forEach(([object, id]) => object.disconnect(id)));
+    }
 }
 
 async function timeAfter(previous) {
