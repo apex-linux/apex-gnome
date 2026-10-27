@@ -36,6 +36,8 @@ let startedLate = false;
 
 const APEX_SCHEMA = 'io.github.apex_linux.Apex.Desktop';
 const APEX_KEYBINDINGS_SCHEMA = 'io.github.apex_linux.Apex.Desktop.Keybindings';
+const WM_KEYBINDINGS_SCHEMA = 'org.gnome.desktop.wm.keybindings';
+const SHELL_KEYBINDINGS_SCHEMA = 'org.gnome.shell.keybindings';
 const TOGGLE_SPOTLIGHT = 'toggle-spotlight';
 const CRASH_GUARD_MARKER = 'apex-shell-starting';
 // Well before APEX_SHELL_TEST_FAULT=abort-after-enable aborts the shell (5 s after enable).
@@ -151,15 +153,20 @@ function setting(schemaId, read) {
     }
 }
 
+const actionModeNames = mask => Object.entries(Shell.ActionMode)
+    .filter(([name, bit]) => name !== 'ALL' && bit !== 0 && (mask & bit) === bit)
+    .map(([name]) => name);
+
 // windowManager.js keeps each binding's action modes here, and removeKeybinding sets NONE.
-function spotlightKey() {
-    const modes = Main.wm._allowedKeybindings[TOGGLE_SPOTLIGHT] ?? Shell.ActionMode.NONE;
+function keyBinding(name, schemaId) {
     return {
-        modes: Object.entries(Shell.ActionMode)
-            .filter(([name, bit]) => name !== 'ALL' && bit !== 0 && (modes & bit) === bit)
-            .map(([name]) => name),
-        accelerators: setting(APEX_KEYBINDINGS_SCHEMA, s => s.get_strv(TOGGLE_SPOTLIGHT)),
+        modes: actionModeNames(Main.wm._allowedKeybindings[name] ?? Shell.ActionMode.NONE),
+        accelerators: setting(schemaId, s => s.get_strv(name)),
     };
+}
+
+function spotlightKey() {
+    return keyBinding(TOGGLE_SPOTLIGHT, APEX_KEYBINDINGS_SCHEMA);
 }
 
 function startingMarker() {
@@ -1869,6 +1876,81 @@ async function spotlightKeys() {
     }
 }
 
+// Modifiers held down, the key pressed and released, then the modifiers let go: a person's chord.
+async function chord(keyboard, modifiers, keyval) {
+    const at = () => GLib.get_monotonic_time();
+    modifiers.forEach(m => keyboard.notify_keyval(at(), m, Clutter.KeyState.PRESSED));
+    if (keyval !== null) {
+        keyboard.notify_keyval(at(), keyval, Clutter.KeyState.PRESSED);
+        keyboard.notify_keyval(at(), keyval, Clutter.KeyState.RELEASED);
+    }
+    [...modifiers].reverse().forEach(m => keyboard.notify_keyval(at(), m, Clutter.KeyState.RELEASED));
+    await settle();
+}
+
+// The session's keys, each as registered and then pressed, from the desktop with nothing open.
+async function keysCase() {
+    const bindings = {
+        inputSource: keyBinding('switch-input-source', WM_KEYBINDINGS_SCHEMA),
+        inputSourceBackward: keyBinding('switch-input-source-backward', WM_KEYBINDINGS_SCHEMA),
+        panels: keyBinding('switch-panels', WM_KEYBINDINGS_SCHEMA),
+        appView: keyBinding('toggle-application-view', SHELL_KEYBINDINGS_SCHEMA),
+        overlay: {
+            modes: actionModeNames(Main.wm._allowedKeybindings['overlay-key'] ?? Shell.ActionMode.NONE),
+            key: setting('org.gnome.mutter', s => s.get_string('overlay-key')),
+        },
+    };
+    const allModes = actionModeNames(Shell.ActionMode.ALL);
+    const {getInputSourceManager} = await import('resource:///org/gnome/shell/ui/status/keyboard.js');
+    const sources = getInputSourceManager();
+    const source = () => sources.currentSource?.id ?? null;
+    const spotlight = (await apexModule(SPOTLIGHT_FEATURE).catch(() => null))?.popup() ?? null;
+    const seat = global.stage.context.get_backend().get_default_seat();
+    const keyboard = seat.create_virtual_device(Clutter.InputDeviceType.KEYBOARD_DEVICE);
+    const pressed = {sources: Object.values(sources.inputSources).map(s => s.id), first: source()};
+
+    await chord(keyboard, [Clutter.KEY_Super_L], Clutter.KEY_space);
+    pressed.superSpace = {spotlight: spotlight?.isOpen ?? null, source: source()};
+    spotlight?.close();
+    await settle();
+    await chord(keyboard, [Clutter.KEY_Super_L, Clutter.KEY_Alt_L], Clutter.KEY_space);
+    pressed.superAltSpace = {source: source()};
+    await chord(keyboard, [Clutter.KEY_Shift_L, Clutter.KEY_Super_L, Clutter.KEY_Alt_L], Clutter.KEY_space);
+    pressed.shiftSuperAltSpace = {source: source()};
+
+    // SwitcherPopup reads no held modifier from a virtual keyboard and finishes at once, but adds
+    // itself to uiGroup first: its items are read there.
+    const dock = apexDock();
+    const groups = [];
+    const addedId = Main.uiGroup.connect('child-added', (_group, child) => {
+        if (child.constructor.name === 'CtrlAltTabPopup')
+            groups.push(...child._items);
+    });
+    await chord(keyboard, [Clutter.KEY_Control_L, Clutter.KEY_Alt_L], Clutter.KEY_Tab);
+    Main.uiGroup.disconnect(addedId);
+    const dockGroup = groups.find(item => dock && item.root === dock);
+    if (dockGroup)
+        Main.ctrlAltTabManager.focusGroup(dockGroup, global.get_current_time());
+    await settle();
+    const focus = global.stage.get_key_focus();
+    pressed.ctrlAltTab = {
+        groups: groups.map(item => ({name: item.name, dock: item === dockGroup})),
+        dockFocused: !!dock && !!focus && dock.contains(focus),
+    };
+    global.stage.set_key_focus(null);
+    await settle();
+
+    await chord(keyboard, [], Clutter.KEY_Super_L);
+    pressed.superTap = {overview: Main.overview.visible, apps: Main.overview.dash.showAppsButton.checked};
+    Main.overview.hide();
+    await settle();
+    await chord(keyboard, [Clutter.KEY_Super_L], Clutter.KEY_a);
+    pressed.superA = {overview: Main.overview.visible, apps: Main.overview.dash.showAppsButton.checked};
+    Main.overview.hide();
+    await settle();
+    return {bindings, allModes, pressed, modals: Main.modalCount};
+}
+
 // Spotlight's popup, and its toast once a calculation is copied, for G2_A11Y.
 async function withSpotlight(read) {
     if ((await apexHooks())?.safe() !== false)
@@ -2095,10 +2177,14 @@ async function overviewWithWindows(unit) {
         const monitor = Main.layoutManager.primaryMonitor;
         const stockBottom = monitor.y + monitor.height;
         const hooks = await apexHooks();
+        const Registry = await apexModule(SHADOW_REGISTRY).catch(() => null);
         return {
             previews: previews().map(preview => ({
                 window: boxOf(preview.windowContainer, unit),
                 caption: {...boxOf(preview._title, unit), visible: preview._title.visible && preview._title.opacity > 0},
+                styled: preview.has_style_class_name('apex-window-preview'),
+                radius: round(preview.get_theme_node().get_border_radius(St.Corner.TOPLEFT) / unit.length),
+                layers: Registry ? layerReport(Registry, preview, unit) : null,
             })),
             dock: apexDock() ? boxOf(apexDock()._background, unit) : null,
             dockBox: apexDock() ? boxOf(apexDock().get_parent(), unit) : null,
@@ -3081,6 +3167,16 @@ async function runProbe() {
             toggled = {error: `${e.message}\n${e.stack}`};
         }
         console.log(`APEXG2-TOGGLED ${JSON.stringify(toggled)}`);
+    }
+
+    if (GLib.getenv('G2_KEYS') === '1') {
+        let result;
+        try {
+            result = await keysCase();
+        } catch (e) {
+            result = {error: `${e.message}\n${e.stack}`};
+        }
+        console.log(`APEXG2-KEYS ${JSON.stringify(result)}`);
     }
 
     if (GLib.getenv('G2_MOTION') === '1') {
