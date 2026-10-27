@@ -73,7 +73,8 @@ Every case: the probe ran (so the static import graph loaded), from `startup-com
 no key binding overwrites another (mutter's "Overwriting existing binding" warning);
 after "Shutting down GNOME Shell", no actor is laid out off the stage (St's "not in the stage", Clutter's
 "Spurious clutter_actor_allocate"), as a relayout queued by the layer's teardown and run in `main.js`'s
-shutdown loop did to the panel;
+shutdown loop did to the panel, and no window effect reaches the disposed global (`shell_global_get`'s
+assertion, `G_IS_OBJECT`), as unmanaging a still-connected client's window did before patch 0019;
 the wall clock stands at the fixed time and the top bar's clock shows it (`Mon Sep 28`, EN SPACE, `09:41`).
 
 A probe that runs longer than 30 s keeps `gnome-shell-perf-helper` awake with a call every 10 s:
