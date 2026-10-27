@@ -22,7 +22,7 @@ readonly APEX_DARK_SHEET=resource:///org/gnome/shell/theme/gnome-shell-dark.css
 readonly STOCK_SHEETS=resource:///org/gnome/shell/theme/stock
 readonly FEDORA_SHEETS=resource:///org/gnome/shell/theme
 readonly DIRECT_CASES=(default default-scale1 dark-style high-contrast large-text default-solid dark-style-solid high-contrast-solid
-    large-text-solid dock-intellihide dock-intellihide-dark dock-one-gpu no-dock stock-light stock-dark safe-env
+    large-text-solid dock-intellihide dock-intellihide-dark dock-one-gpu no-dock no-dock-dark stock-light stock-dark safe-env
     layer-disabled layer-cycles motion idle dock-pin dock-dnd dock-external keys glass-load glass-stress fault-configure fault-enable fault-abort kernel-safe
     fedora-light fedora-dark glass fedora-glass
     indicators indicators-scale1 indicators-dark)
@@ -1452,8 +1452,8 @@ compare_with_fedora() {
     {
         # The Apex bar is $apex_bar_height, upstream's 2.2em: the overview below it lays out on
         # another work area, so overview_below_bar checks its layout instead.
-        plan_entry apex-light-vs-fedora-desktop "$run" fedora-light "$run" default desktop "$run/compare" panel dock
-        plan_entry apex-dark-vs-fedora-desktop "$run" fedora-dark "$run" dark-style desktop "$run/compare" panel dock
+        plan_entry apex-light-vs-fedora-desktop "$run" fedora-light "$run" no-dock desktop "$run/compare" panel
+        plan_entry apex-dark-vs-fedora-desktop "$run" fedora-dark "$run" no-dock-dark desktop "$run/compare" panel
         for scene in "${SCENES[@]}"; do
             [[ $safe == safe ]] || break
             plan_entry "safe-light-vs-fedora-$scene" "$run" fedora-light "$run" stock-light "$scene" "$run/compare"
@@ -2326,11 +2326,22 @@ keys_case() {
 # The no-dock case: disabled-features=['dock'], so the overview's own dash is back and the
 # workspace-bottom hook leaves stock's edge.
 no_dock_case() {
-    local run=$1
-    exits "$run" no-dock 0
-    no_apex_failure no-dock "$run/no-dock.log"
-    overview_without_dock no-dock "$run/no-dock.log"
+    local run=$1 c
+    for c in no-dock no-dock-dark; do
+        exits "$run" "$c" 0
+        no_apex_failure "$c" "$run/$c.log"
+        desktop_without_dock "$c" "$run/$c.log"
+        overview_without_dock "$c" "$run/$c.log"
+    done
     bar_over_fixture no-dock "$run/no-dock.log"
+}
+
+# The desktop the Fedora comparison takes: captured, with no Apex dock on it.
+desktop_without_dock() {
+    local label=$1 log=$2
+    expect_report "$label" "$log" '.error == null and .desktopOnly and (.scenes.desktop.file | type == "string")' \
+        "the desktop scene is captured for the Fedora comparison" APEXG2-SCENES
+    expect_report "$label" "$log" '.dock == null and .scenes.desktop.boxes.dock == null' "with no Apex dock on it" APEXG2-SCENES
 }
 
 overview_without_dock() {
@@ -2357,7 +2368,7 @@ asserted() {
 # PR_CASES lists, and each of those must have run and reported.
 patched_assertions() {
     local run=$1 part=$2 c
-    for c in default default-scale1 dark-style stock-light stock-dark safe-env layer-disabled layer-cycles motion idle dock-pin glass-load glass-stress no-dock; do
+    for c in default default-scale1 dark-style stock-light stock-dark safe-env layer-disabled layer-cycles motion idle dock-pin glass-load glass-stress no-dock no-dock-dark; do
         asserted "${c%:*}" || continue
         no_js_error "$c" "$run/$c.log"
         fixed_clock "$c" "$run/$c.log"
@@ -2444,11 +2455,11 @@ patched_assertions() {
     asserted glass fedora-glass && glass_unlock_vs_fedora "$run"
     asserted indicators indicators-scale1 indicators-dark && indicator_cases "$run"
     asserted dock-one-gpu && one_gpu_case "$run"
-    asserted no-dock && no_dock_case "$run"
+    asserted no-dock no-dock-dark && no_dock_case "$run"
     asserted dock-dnd && dock_dnd_case "$run"
     asserted dock-external && dock_external_case "$run"
     asserted keys && keys_case "$run"
-    asserted fedora-light fedora-dark default dark-style &&
+    asserted fedora-light fedora-dark no-dock no-dock-dark &&
         compare_with_fedora "$run" "$(asserted stock-light stock-dark && echo safe)"
     if [[ $part == pr ]]; then
         part_ran "$run" pr "${PR_CASES[@]}"

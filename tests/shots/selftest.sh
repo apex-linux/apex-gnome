@@ -3021,6 +3021,28 @@ CHANGES
     done
 }
 
+test_desktop_without_dock() {
+    local failures what change passes
+    while IFS='|' read -r failures what change; do
+        if [[ -n $change ]]; then
+            printf 'APEXG2-SCENES %s\n' "$(jq -nc "{desktopOnly: true, dock: null,
+                scenes: {desktop: {file: \"no-dock-desktop.png\", boxes: {panel: {x: 0, y: 0, width: 2880, height: 64}, dock: null}}}} | $change")" >"$T/no-dock.log"
+        else
+            : >"$T/no-dock.log"
+        fi
+        read -r passes _ <<<"$(assertion_counts desktop_without_dock no-dock "$T/no-dock.log")"
+        expect_eq "dock-off desktop: $what fails $failures of 2" "$failures" $((2 - passes))
+    done <<'CHANGES'
+0|the desktop captured with no dock|.
+1|a desktop never captured|del(.scenes.desktop.file)
+1|a full scenes report in its place|del(.desktopOnly)
+1|an Apex dock still in the report|.dock = {visible: true}
+1|a dock box in the capture|.scenes.desktop.boxes.dock = {x: 968, y: 1640, width: 946, height: 140}
+1|a probe error|{error: "desktopScene: no capture"}
+2|no report|
+CHANGES
+}
+
 test_no_dock() {
     local failures what change passes
     while IFS='|' read -r failures what change; do
@@ -3442,6 +3464,7 @@ test_network_rows_centred
 test_pr_assertions
 test_action_modes
 test_no_dock
+test_desktop_without_dock
 test_bar_over_fixture
 test_solid_bar
 test_dark_style_off

@@ -5,7 +5,7 @@
 # then the quick dock, indicator, safe-mode and fault cases, in main's order.
 readonly PR_CASES=(default default-scale1 dark-style high-contrast large-text default-solid
     dark-style-solid high-contrast-solid large-text-solid dock-intellihide dock-intellihide-dark
-    dock-one-gpu no-dock indicators indicators-scale1 indicators-dark safe-env layer-disabled
+    dock-one-gpu no-dock no-dock-dark indicators indicators-scale1 indicators-dark safe-env layer-disabled
     dock-dnd dock-external keys fault-configure fault-enable fault-abort)
 # direct.sh's fedora part on a pull request: the baselines of the desktop comparison.
 readonly PR_FEDORA_CASES=(fedora-light fedora-dark)
