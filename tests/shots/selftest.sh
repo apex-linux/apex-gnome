@@ -472,13 +472,17 @@ REPORT_OF_SURFACE_METRICS_FROM_TOKENS='
     notificationsLayer: {layout: {collapsed: {card: $card, icon: {x: $ix, y: (52 + $pad), width: $icon, height: $icon},
             header: {x: ($ix + $icon + ($t.apex_banner_gap | px)), y: 67, width: 271, height: 19},
             close: {x: (754 - ($t.apex_message_padding_end | px) - $close), y: (52 + $pad), width: $close, height: $close}}},
-        footer: $footer, dnd: {x: (354 + $fpad), y: 537, width: 149, height: 40},
+        footer: $footer, dnd: {x: (354 + $fpad), y: 537, width: 149, height: 40, labelBox: {x: (354 + $fpad), y: 548, width: 91, height: 18},
+            switch: {x: (354 + $fpad + 91 + ($t.apex_dnd_switch_gap | px)), y: 544, width: 46, height: 26}},
         clear: {x: (754 - $fpad - 65), y: ($footer.y + ($footer.height - $clear) / 2), width: 65, height: $clear}},
     overview: {thumbnail: $thumb, indicator: {x: (599 - $r), y: (108 - $r), width: (116 + 2 * $r), height: (70 + 2 * $r), boxShadow: null}},
-    overviewWindows: {thumbnails: [$thumb, ($thumb | .x += 116 + ($t.apex_thumbnail_gap | px))]},
+    overviewWindows: {thumbnails: [$thumb, ($thumb | .x += 116 + ($t.apex_thumbnail_gap | px))],
+        previews: [{window: {x: 520, y: 185, width: 399, height: 250}, caption: {x: 698, y: 460, width: 43, height: (($t.apex_caption_height | px) + 1)}},
+            {window: {x: 304, y: 500, width: 399, height: 250}, caption: {x: 482, y: 775, width: 43, height: (($t.apex_caption_height | px) + 1)}}]},
     launcher: {pill: {x: (720 - ($t.apex_launcher_search_width | px) / 2), y: (32 + ($t.apex_search_top | px)),
         width: ($t.apex_launcher_search_width | px), height: ($t.apex_search_height | px)}},
-    appGrid: {scrim: {background: ($t.apex_scrim | hex), boxShadow: null}}}}'
+    appGrid: {scrim: {background: ($t.apex_scrim | hex), boxShadow: null}, spacing: {tile: 139, h: 24, v: 22},
+        tiles: [range(12) | {x: (162 + (. % 7) * 163), y: (156 + (. / 7 | floor) * 161), width: 139, height: 139}]}}}'
 # shellcheck disable=SC2016 # a jq program
 REPORT_OF_SHADOW_LAYERS_FROM_TOKENS='
 {shown: true, box: [10, 20, 230, 146], surfaceBox: [10, 20, 230, 146], natural: [105, 126], radius: 0,
@@ -1799,7 +1803,7 @@ test_surface_metrics() {
     local variant change what passes failures open_gaps
     for variant in light dark; do
         read -r passes failures open_gaps <<<"$(assert_run surface_metrics "$variant")"
-        if ((failures == 0 && open_gaps == 0 && passes == 5)); then
+        if ((failures == 0 && open_gaps == 0 && passes == 8)); then
             ok "surface metrics ($variant): boards 34 to 36 as laid out pass all $passes assertions"
         else
             not_ok "surface metrics ($variant): boards 34 to 36 as laid out pass (passed/failed/gaps $passes/$failures/$open_gaps): $(grep -m3 '^FAIL' "$T/top-bar.out" | paste -sd'|' -)"
@@ -1827,6 +1831,18 @@ test_surface_metrics() {
 .surfaces.overview.thumbnail.boxShadow = {x: 0, y: 2, blur: 6}|a shadow under the thumbnails
 .surfaces.overview.indicator += {x: 599, width: 116}|the ring inside the thumbnail's sides, not around them
 .surfaces.overviewWindows.thumbnails[1].x += 6|thumbnails 16 px apart
+.surfaces.notificationsLayer.dnd.switch.x = 340|board 34's switch before the label
+.surfaces.notificationsLayer.dnd.switch.x -= 2|board 34's 10 px gap before the switch
+.surfaces.notificationsLayer.dnd.switch.y += 6|the switch off the row's centre
+.surfaces.overviewWindows.previews[0].caption.y -= 15|board 35's caption 10 px under the preview
+.surfaces.overviewWindows.previews[1].caption.height = 34|a caption taller than $apex_caption_height
+.surfaces.appGrid.spacing.h = 11|board 36's 150 px pitch, against the grid's own
+.surfaces.appGrid.tiles[3].x -= 13|a column off the grid's pitch
+.surfaces.appGrid.tiles[2].width = 112|a tile narrower than the grid's
+.surfaces.appGrid.tiles[6].y = 317|six tiles a row
+.surfaces.appGrid.tiles[7].y += 20|the second row off the grid's pitch
+.surfaces.appGrid.tiles[].x -= 30|the grid off the monitor's centre
+.surfaces.appGrid.tiles[4].x += 2 * 163|a five-app row with a gap
 .surfaces.launcher.pill.x = 500|the launcher's pill off centre
 .surfaces.launcher.pill.y = 60|the launcher's pill 28 px below the bar
 .surfaces.launcher.pill.height = 36|a 36 px launcher pill

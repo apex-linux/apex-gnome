@@ -334,7 +334,7 @@ running dot, page indicator and page hint from stand-ins.
 `overview_layer` checks the `overview` layer feature in the same cases, in the empty
 overview the scene captured: no background card behind the active workspace, "No open
 windows" centred on it in `$apex_fg_dim` at `$apex_font_workspace_empty_size`, the
-thumbnails at scale .081 (one drawn at .081 of the work area, 117 × 70 on 1440 × 900)
+thumbnails at scale .081 (one drawn at .081 of the work area, 116 × 70 on 1440 × 900)
 and the threshold of one workspace, and the launcher's grid at 7 columns, 4 rows and
 88 px icons. In that overview there is no window, so the `window-title-visible` hook's answer
 stands in for a title shown without hover. Then the probe opens three `window.js` windows
@@ -439,13 +439,36 @@ the tokens the style checks above read from the theme:
   the right; the footer `$apex_date_menu_footer_height` tall, with Do Not Disturb and the
   `$apex_clear_button_height` Clear each `$apex_date_menu_footer_padding` in from its side,
   Clear centred down it (`date_menu` reads the opaque `$apex_message_card`);
+- Do Not Disturb: its label, then the stock switch `$apex_dnd_switch_gap` after it,
+  centred down the footer;
 - the overview: the current workspace's `$apex_thumbnail_indicator` ring around its
   thumbnail, with no shadow on either, and the thumbnails `$apex_thumbnail_gap` apart;
+  each window's caption `$apex_caption_height` tall, 25.2 px under its preview, stock
+  `windowPreview.js`'s offset (64 × (1 − .7) + 6);
 - the launcher: its pill `$apex_search_height` tall, centred, `$apex_search_top` under the
-  bar, and the app grid's scrim in `$apex_scrim`.
+  bar, and the app grid's scrim in `$apex_scrim`; its tiles at the pitch stock
+  `IconGridLayout._calculateSpacing` gives the grid (tile plus spacing), 7 columns centred
+  on the monitor, and a full row's next one under it.
 
 None of these surfaces is in a capture compared with Fedora, so the comparison with Fedora's build
 is unchanged: the Apex overview is compared only run to run, and safe mode's with Fedora's.
+
+### Differs from the board, approved as captured
+
+The owner approved boards 34, 35 and 36 on the captures (2026-10-26, goldens 9e042d9).
+Under ADR 0014 the goldens are the standard, so G2 asserts the shell's values where they
+differ from the canvas (1440 × 900):
+
+- Board 35's thumbnails are 112 × 70, the monitor's 1.6 aspect; the shell's are 116 × 70,
+  .081 of the 1440 × 868 work area. The top (108), the 10 px gap and the ring match.
+- Board 35 hangs a caption 10 px under its preview, 28 px tall, with the app's icon; the
+  shell's hangs 25.2 px under, stock's offset, text only, measuring 29 px at its fractional y.
+- Board 36's grid has 150 px columns from x 195 and 136 px rows from y 128; the shell's
+  has 139 px tiles at a 163 px pitch from x 162, rows 161 px apart from y 156. The 7
+  columns, the 88 px icons, the pill and the empty strip match.
+- Board 34's footer puts a 40 × 22 switch before its label, 10 px apart; the shell's puts
+  the label first, then the stock 46 × 26 switch, `$apex_dnd_switch_gap` apart.
+  The footer's height and Clear match.
 
 ## Glass
 

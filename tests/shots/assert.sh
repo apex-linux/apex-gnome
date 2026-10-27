@@ -44,6 +44,8 @@ readonly MESSAGE_ROW_GAP=12
 readonly CARD_COLUMNS='box[apex-message-row[message-icon,box[message-header,message-box[message-content,box]]],message-action-bin]'
 readonly CARD_UPSTREAM='box[message-header,message-box[message-icon,message-content,box],message-action-bin]'
 readonly LAUNCHER_GRID_TOP=132
+# Stock windowPreview.js's WindowPreview hangs the title 64 * (1 - .7) + 6 px under the preview.
+readonly STOCK_CAPTION_GAP=25.2
 # WCAG 2.2 AA: 1.4.3 for text, 1.4.11 for the glyphs a control is known by.
 # direct.sh's stress backdrop.
 readonly SOLID_BACKDROP='#013b88'
@@ -1095,7 +1097,7 @@ overview_layer() {
         "overview: workspace thumbnails at scale $OVERVIEW_THUMBNAIL_SCALE, shown from $((OVERVIEW_THUMBNAILS_THRESHOLD + 1)) workspaces" APEXG2-SCENES
     expect_report "$label" "$log" "{f: $o.thumbnails.first, w: .topBar.panel.width, h: .scenes.overview.workArea.height}
         | (.f.width - .w * $OVERVIEW_THUMBNAIL_SCALE | fabs <= 1) and (.f.height - .h * $OVERVIEW_THUMBNAIL_SCALE | fabs <= 1)" \
-        "overview: and drawn at that scale of the work area (117 x 70 on 1440 x 900)" APEXG2-SCENES
+        "overview: and drawn at that scale of the work area (116 x 70 on 1440 x 900)" APEXG2-SCENES
     expect_report "$label" "$log" "$o.workspace | .background == false and .empty.visible and .empty.text == \"$EMPTY_WORKSPACE_TEXT\"
         and (.x + .width / 2 - .empty.x - .empty.width / 2 | fabs <= 1) and (.y + .height / 2 - .empty.y - .empty.height / 2 | fabs <= 1)" \
         "overview: no workspace background card, and \"$EMPTY_WORKSPACE_TEXT\" centred on the empty workspace" APEXG2-SCENES
@@ -1144,6 +1146,18 @@ surface_metrics() {
         "{o: .surfaces.overview, w: .surfaces.overviewWindows.thumbnails}" '($t.apex_thumbnail_indicator | px) as $r | .o.thumbnail as $th
             | (.o.indicator | .x == $th.x - $r and .y == $th.y - $r and .width == $th.width + 2 * $r and .height == $th.height + 2 * $r and .boxShadow == null)
             and $th.boxShadow == null and (.w[1].x - .w[0].x - .w[0].width | px_is($t.apex_thumbnail_gap))'
+    "${metric[@]}" 'Do Not Disturb: its label, then the stock switch $apex_dnd_switch_gap after it, centred down the row' \
+        "$n.dnd" '.labelBox.x < .switch.x and (.switch.x - .labelBox.x - .labelBox.width - ($t.apex_dnd_switch_gap | px) | fabs <= 1)
+            and (.switch.y + .switch.height / 2 - .y - .height / 2 | fabs <= 1)'
+    "${metric[@]}" "every caption hangs stock's $STOCK_CAPTION_GAP px under its window's preview, \$apex_caption_height tall" \
+        '.surfaces.overviewWindows.previews' "length > 0 and all(.[]; (.caption.y - .window.y - .window.height - $STOCK_CAPTION_GAP | fabs <= 1)
+            and (.caption.height - (\$t.apex_caption_height | px) | fabs <= 1))"
+    "${metric[@]}" "the launcher lays its tiles at its grid's own pitch, tile plus spacing, $LAUNCHER_COLUMNS columns centred on the monitor, a full row's next one under it" \
+        "{a: .surfaces.appGrid, w: .topBar.panel.width}" "(.a.spacing | .tile + .h) as \$dx | (.a.spacing | .tile + .v) as \$dy | .a.spacing.tile as \$tile
+            | .a.tiles as \$r | (\$r | length) >= 2 and ([\$r[:$LAUNCHER_COLUMNS][].y] | unique | length) == 1
+            and all(range([\$r | length, $LAUNCHER_COLUMNS] | min); . as \$i | \$r[\$i] | (.x - \$r[0].x - \$i * \$dx | fabs <= 1) and (.width - \$tile | fabs <= 1))
+            and (2 * \$r[0].x + $((LAUNCHER_COLUMNS - 1)) * \$dx + \$tile - .w | fabs <= 1)
+            and ((\$r | length) <= $LAUNCHER_COLUMNS or (\$r[$LAUNCHER_COLUMNS] | (.x - \$r[0].x | fabs <= 1) and (.y - \$r[0].y - \$dy | fabs <= 1)))"
     "${metric[@]}" 'the launcher'"'"'s pill is $apex_search_height tall, centred, $apex_search_top below the bar; its scrim the overview'"'"'s $apex_scrim' \
         "{p: .surfaces.launcher.pill, bar: .topBar.panel, scrim: .surfaces.appGrid.scrim}" '(.p.height | px_is($t.apex_search_height)) and (.p.y - .bar.height | px_is($t.apex_search_top))
             and (.p.x + .p.width / 2 - .bar.width / 2 | fabs <= 1) and (.scrim.background | colour_is($t.apex_scrim)) and .scrim.boxShadow == null'
