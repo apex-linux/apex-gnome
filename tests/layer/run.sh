@@ -941,6 +941,7 @@ fact "lock: the unlock-dialog hook gives the stock code" 'lock\.run=undefined'
 fact "lock: one stage, the clock over the prompt box, date above time, upstream's hint hidden, the overlay over the backgrounds" \
     'lock\.layout=dialog=unlock-dialog apex-lock stack=apex-lock-stage stage=unlock-dialog-clock,prompt-box clock=date,time,hint hint=false children=backgrounds,apex-lock-overlay,stack'
 fact "lock: opens on the prompt with a conversation" 'lock\.open=page=prompt prompt=conversation-1 cancelled=none'
+fact "lock: which takes keys once PAM asks, not before" 'lock\.open\.keys=false'
 fact "lock: the unlock hint follows the prompt" 'lock\.prompt-box=conversation-1,Press Enter to unlock'
 readonly HINT_PASSWORD='"Press Enter to unlock" glyph=none failed=false'
 readonly HINT_SCAN='"Or touch the fingerprint reader" glyph=auth-fingerprint-symbolic failed=false'
@@ -956,17 +957,27 @@ fact "lock: the reader's next prompt brings the line back" "lock\.hint\.fingerpr
 fact "lock: a prompt rebuilt after blank starts on the password's hint" "lock\.hint\.after-wake=$HINT_PASSWORD message=true indicator=true"
 fact "lock: blanking tears the prompt down and cancels its verifier" 'lock\.blank=page=clock prompt=none cancelled=conversation-1'
 fact "lock: waking builds a new conversation" 'lock\.wake=page=prompt prompt=conversation-2 cancelled=conversation-1'
+fact "lock: and the key that woke the screen cannot answer it" 'lock\.wake\.keys=false'
 fact "lock: standby is blank too" 'lock\.standby=page=clock prompt=none cancelled=conversation-1,conversation-2'
 fact "lock: and waking again builds another" 'lock\.wake-again=page=prompt prompt=conversation-3 cancelled=conversation-1,conversation-2'
 fact "lock: suspend is blank too" 'lock\.suspend=page=clock prompt=none cancelled=conversation-1,conversation-2,conversation-3'
 fact "lock: a display without power saving keeps a prompt" \
     'lock\.unsupported=page=prompt prompt=conversation-4 cancelled=conversation-1,conversation-2,conversation-3'
-count_is "lock: each teardown is logged once, for the VM tests" '^.*Apex: lock: screen blank, prompt torn down$' 4
+count_is "lock: each teardown is logged once, for the VM tests" '^.*Apex: lock: screen blank, prompt torn down$' 5
 count_is "lock: each rebuild too" '^.*Apex: lock: screen on, prompt rebuilt$' 4
 fact "lock: the hint stays after the rebuilt prompt" 'lock\.prompt-box\.after-wake=conversation-4,Press Enter to unlock'
 fact "lock: locked while blank, the first conversation ends as DisplayConfig answers" \
     'lock\.open-blank=page=clock prompt=none cancelled=conversation-1'
 fact "lock: and the next starts when the screen wakes" 'lock\.open-blank\.wake=page=prompt prompt=conversation-2 cancelled=conversation-1'
+fact "lock: a monitor change is no wake" 'lock\.escaped\.monitors=page=clock prompt=none cancelled=conversation-1'
+fact "lock: blanking under upstream's clock page has nothing to tear down" \
+    'lock\.escaped\.blank=page=clock prompt=none cancelled=conversation-1'
+fact "lock: so waking builds nothing: a prompt upstream took down is upstream's to bring back" \
+    'lock\.escaped\.wake=page=clock prompt=none cancelled=conversation-1'
+fact "lock: which its key does" 'lock\.escaped\.key=page=prompt prompt=conversation-2 cancelled=conversation-1'
+fact "lock: a key that woke the screen keeps upstream's prompt, and the wake adds none" \
+    'lock\.key-wake=page=prompt prompt=conversation-2 cancelled=conversation-1'
+fact "lock: upstream's prompt takes keys at once, as upstream's does" 'lock\.key-wake\.keys=true'
 fact "lock: a DisplayConfig that never answers leaves the prompt up" \
     'lock\.display-config-silent=page=prompt prompt=conversation-1 cancelled=none'
 fact "lock: so does one that fails" 'lock\.display-config-error=page=prompt prompt=conversation-1 cancelled=none'

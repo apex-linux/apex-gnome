@@ -1239,6 +1239,9 @@ function newUnlockDialog(St) {
                 return;
             const prompt = new St.Widget({name: `conversation-${++this.conversations}`});
             prompt._message = new St.Label({name: 'message', text: ''});
+            // Upstream's prompt takes keys from the start, until PAM's question says again.
+            prompt.keys = true;
+            prompt.updateSensitivity = ({sensitive}) => (prompt.keys = sensitive);
             prompt._userVerifier = Object.assign(new St.Widget({name: 'verifier'}), {
                 currentMessage: null,
                 destroy() {
@@ -1300,9 +1303,14 @@ function lockState(dialog) {
     return `page=${dialog.page ?? 'none'} prompt=${dialog._authPrompt?.name ?? 'none'} cancelled=${dialog.cancelled.join(',') || 'none'}`;
 }
 
+// As GDBusProxy notifies: the changed properties with their values, then the invalidated ones.
 function setScreen(mode) {
     displayConfig.powerSaveMode = mode;
-    displayConfig.emit('g-properties-changed');
+    displayConfig.emit('g-properties-changed', new GLib.Variant('a{sv}', {PowerSaveMode: new GLib.Variant('i', mode)}), []);
+}
+
+function changeMonitors() {
+    displayConfig.emit('g-properties-changed', new GLib.Variant('a{sv}', {HasExternalMonitor: new GLib.Variant('b', true)}), []);
 }
 
 async function exerciseLock() {
@@ -1320,6 +1328,7 @@ async function exerciseLock() {
         `stage=${names(stage.children ?? [])} clock=${names(dialog._clock.children)} ` +
         `hint=${dialog._clock._hint.visible} children=${names(dialog.children)}`);
     fact('lock.open', lockState(dialog));
+    fact('lock.open.keys', dialog._authPrompt?.keys ?? 'none');
     const promptBoxChildren = () => dialog._promptBox.children
         .map(c => c.text ?? c.name ?? c.children.map(part => part.text ?? '').join('')).join(',');
     fact('lock.prompt-box', promptBoxChildren());
@@ -1339,6 +1348,8 @@ async function exerciseLock() {
         ['suspend', PowerSave.SUSPEND], ['unsupported', PowerSave.UNSUPPORTED]]) {
         setScreen(mode);
         fact(`lock.${label}`, lockState(dialog));
+        if (label === 'wake')
+            fact('lock.wake.keys', dialog._authPrompt?.keys ?? 'none');
     }
     fact('lock.prompt-box.after-wake', promptBoxChildren());
     fact('lock.hint.after-wake', hintState(dialog));
@@ -1352,6 +1363,33 @@ async function exerciseLock() {
     setScreen(PowerSave.ON);
     fact('lock.open-blank.wake', lockState(lockedWhileBlank));
     lockedWhileBlank.emit('destroy');
+
+    // Upstream's Esc: its clock page, no prompt; the screen blanks and wakes under it.
+    const escaped = newUnlockDialog(St);
+    Hooks.run('unlock-dialog', escaped);
+    await spin(50);
+    escaped._showClock();
+    escaped._maybeDestroyAuthPrompt();
+    changeMonitors();
+    fact('lock.escaped.monitors', lockState(escaped));
+    setScreen(PowerSave.OFF);
+    fact('lock.escaped.blank', lockState(escaped));
+    setScreen(PowerSave.ON);
+    fact('lock.escaped.wake', lockState(escaped));
+    escaped._showPrompt();
+    fact('lock.escaped.key', lockState(escaped));
+    escaped.emit('destroy');
+
+    // A key that wakes the screen reaches upstream's handler first: the wake adds no prompt.
+    const woken = newUnlockDialog(St);
+    Hooks.run('unlock-dialog', woken);
+    await spin(50);
+    setScreen(PowerSave.OFF);
+    woken._showPrompt();
+    setScreen(PowerSave.ON);
+    fact('lock.key-wake', lockState(woken));
+    fact('lock.key-wake.keys', woken._authPrompt.keys);
+    woken.emit('destroy');
 
     for (const reply of ['silent', 'error']) {
         displayConfig.reply = reply;
