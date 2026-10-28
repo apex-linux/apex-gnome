@@ -6,7 +6,7 @@ Asserts each shoot.sh case from its log's APEXLOCK lines and gdm-mock.py's log: 
 boards 20 and 12 show, that no case unlocks, that a wrong answer leaves the screen
 locked, that a GDM refusing to reauthenticate leaves it locked, that the fingerprint
 conversation stops while the screen is blank, that blanking cancels the conversation and waking starts a new one, that
-stock and safe mode keep upstream's lock, and that the greeter runs no Apex JS; what board 13's
+stock and safe mode keep upstream's lock, and that the greeter runs no Apex JS and no screencast service; what board 13's
 authentication dialog shows, from a stubbed polkit session that is never answered; and board 34's
 date menu: flat cards headed "app · time" with the app's icon, Clear on the right, Do Not Disturb;
 and what the end-session dialog's update card does with update1-mock.py's Apply.
@@ -40,6 +40,8 @@ LOCK_CASES = {
     "lock-safe": {"apex": False, "question": "Password", "layer": False},
 }
 GREETER_CASES = ["greeter-light", "greeter-dark"]
+# dbus-daemon logs each activation: a mode that cannot screencast has no use for the service (patch 0020).
+SCREENCAST_STARTED = "Activating service name='org.gnome.Shell.Screencast'"
 # Per polkit case: board 13's dialog or upstream's, and the info line PAM sent.
 POLKIT_CASES = {
     "polkit-light": {"apex": True, "info": None},
@@ -175,6 +177,8 @@ def check_lock(shots, case, want):
     log = read(shots, f"{case}.log")
     gdm = read(shots, f"{case}.gdm.log")
     f = facts(log)
+    check(f"{case}: the user session starts the screencast service, for the screenshot UI's cast button",
+          SCREENCAST_STARTED in log)
     steps = ("opened", "wrong-answer", "blank", "wake", "escape", "key-after-escape", "end")
     for step in steps:
         check(f"{case}: {step} is reported", step in f)
@@ -306,6 +310,7 @@ def check_greeter(shots, case):
     # load-witness is in the greeter's environment too: layer.js would warn as it loads.
     check(f"{case}: apex/layer.js never loads", LOAD_WITNESS not in log)
     check(f"{case}: no Apex line at all", not re.search(r"\bApex: ", log))
+    check(f"{case}: the screencast service never starts: gdm mode cannot screencast", SCREENCAST_STARTED not in log)
     if "list" not in f or "prompt" not in f:
         return
     check(f"{case}: the user list", f["list"]["users"] == "apex guest", f["list"]["users"])
