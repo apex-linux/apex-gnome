@@ -6,6 +6,7 @@ Asserts each shoot.sh case from its log's APEXLOCK lines and gdm-mock.py's log: 
 boards 20 and 12 show, that no case unlocks, that a wrong answer leaves the screen
 locked, that a GDM refusing to reauthenticate leaves it locked, that the fingerprint
 conversation stops while the screen is blank, that blanking cancels the conversation and waking starts a new one, that
+the key that wakes the screen never answers a prompt, that
 stock and safe mode keep upstream's lock, and that the greeter runs no Apex JS and no screencast service; what board 13's
 authentication dialog shows, from a stubbed polkit session that is never answered; and board 34's
 date menu: flat cards headed "app · time" with the app's icon, Clear on the right, Do Not Disturb;
@@ -302,6 +303,38 @@ def check_refused(shots, case):
           json.dumps(f.get("opened", {}).get("prompt")))
 
 
+# AuthPromptStatus.VERIFYING: a conversation runs and no answer is on its way.
+VERIFYING = 1
+
+
+def check_wake_key(shots, case, torn_down):
+    """apex-image's local-lock-esc: a Return arriving after the wake's notify gets one prompt and answers nothing."""
+    log = read(shots, f"{case}.log")
+    gdm = read(shots, f"{case}.gdm.log")
+    f = facts(log)
+    steps = ("blank", "woken", "end")
+    check(f"{case}: every step is reported", all(s in f for s in steps))
+    if not all(s in f for s in steps):
+        return
+    for step in steps:
+        check(f"{case}: {step}: locked", f[step]["locked"] is True)
+    check(f"{case}: no JS error", "JS ERROR" not in until(log, "end") and "APEXLOCK-ERROR" not in log)
+    check(f"{case}: blank: no prompt", f["blank"]["prompt"] is None, json.dumps(f["blank"]["prompt"]))
+    woken = f["woken"]
+    check(f"{case}: woken: one prompt, its conversation running and asking",
+          woken["status"] == VERIFYING and (woken["prompt"] or {}).get("question") == "Enter Password", json.dumps(woken))
+    begun = [line for line in between(gdm, "blank", "woken") if re.match(r"channel \d+: BeginVerificationForUser gdm-password", line)]
+    check(f"{case}: one conversation after the wake", len(begun) == 1, json.dumps(begun))
+    check(f"{case}: the key is no answer", "AnswerQuery" not in gdm)
+    torn, rebuilt = (log.count(f"Apex: lock: screen {line}") for line in ("blank, prompt torn down", "on, prompt rebuilt"))
+    if torn_down:
+        check(f"{case}: locked while blank: the lock's prompt torn down, then rebuilt at wake", (torn, rebuilt) == (1, 1),
+              f"torn down {torn}, rebuilt {rebuilt}")
+    else:
+        check(f"{case}: upstream's clock page: nothing torn down or rebuilt, the key brings upstream's prompt",
+              (torn, rebuilt) == (0, 0), f"torn down {torn}, rebuilt {rebuilt}")
+
+
 def check_greeter(shots, case):
     log = read(shots, f"{case}.log")
     f = facts(log)
@@ -566,6 +599,8 @@ def main():
     for case, want in LOCK_CASES.items():
         check_lock(shots, case, want)
     check_refused(shots, "lock-refused")
+    check_wake_key(shots, "lock-wake-key", torn_down=False)
+    check_wake_key(shots, "lock-wake-key-blank", torn_down=True)
     check_fingerprint(shots, "lock-fingerprint")
     for case in GREETER_CASES:
         check_greeter(shots, case)

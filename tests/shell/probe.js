@@ -16,6 +16,7 @@ import * as Scripting from 'resource:///org/gnome/shell/ui/scripting.js';
 
 Gio._promisify(Shell.Screenshot.prototype, 'screenshot_area');
 Gio._promisify(Gio.DBusConnection.prototype, 'call');
+Gio._promisify(Gio.DBusProxy, 'new_for_bus');
 
 const SETTLE_MS = 4000;
 const STEP_MS = 1500;
@@ -173,6 +174,37 @@ async function shootFingerprint(dialog) {
     await setPowerSaveMode(POWER_SAVE_ON);
     await Scripting.sleep(STEP_MS * 2);
     fact('wake', describeLock(dialog));
+    await Scripting.sleep(SETTLE_MS);
+    fact('end', {locked: Main.screenShield.locked});
+}
+
+// apex-image's local-lock-esc on a guest that blanks at lock, and the key that wakes it arriving
+// after the wake's notify, as it did there: on upstream's clock page after Esc, or locked while blank.
+async function shootWakeKey(lockedBlank) {
+    if (lockedBlank)
+        await setPowerSaveMode(POWER_SAVE_OFF);
+    Main.screenShield.lock(false);
+    await Scripting.sleep(STEP_MS);
+    const dialog = Main.screenShield._dialog;
+    const describe = () => ({...describeLock(dialog), status: dialog._authPrompt?.verificationStatus ?? null});
+    if (!lockedBlank) {
+        tap(Clutter.KEY_Escape);
+        await Scripting.sleep(STEP_MS);
+        await setPowerSaveMode(POWER_SAVE_OFF);
+        await Scripting.sleep(STEP_MS);
+    }
+    fact('blank', describe());
+    const displayConfig = await Gio.DBusProxy.new_for_bus(Gio.BusType.SESSION, Gio.DBusProxyFlags.NONE, null,
+        'org.gnome.Mutter.DisplayConfig', '/org/gnome/Mutter/DisplayConfig', 'org.gnome.Mutter.DisplayConfig', null);
+    const id = displayConfig.connect('g-properties-changed', (_proxy, changed) => {
+        if (changed.lookup_value('PowerSaveMode', null)?.unpack() !== POWER_SAVE_ON)
+            return;
+        displayConfig.disconnect(id);
+        tap(Clutter.KEY_Return);
+    });
+    await setPowerSaveMode(POWER_SAVE_ON);
+    await Scripting.sleep(STEP_MS * 2);
+    fact('woken', describe());
     await Scripting.sleep(SETTLE_MS);
     fact('end', {locked: Main.screenShield.locked});
 }
@@ -634,6 +666,8 @@ export async function run() {
             await shootDateMenu();
         else if (GLib.getenv('APEX_END_SESSION') === '1')
             await shootEndSession();
+        else if (GLib.getenv('APEX_WAKE_KEY'))
+            await shootWakeKey(GLib.getenv('APEX_WAKE_KEY') === 'locked-blank');
         else
             await shootLock();
     } catch (e) {

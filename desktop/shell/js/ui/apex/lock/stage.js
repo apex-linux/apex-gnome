@@ -41,17 +41,26 @@ export function tearDownPrompt(dialog) {
     dialog._maybeDestroyAuthPrompt();
 }
 
-// The lines mark each change for the VM tests (apex-image's qualify.sh).
-export function followScreen(dialog, displayConfig) {
-    const hadPrompt = Boolean(dialog._authPrompt);
-    if (_screenIsBlank(displayConfig)) {
+// Built without a key, it takes keys only once PAM asks: else the key that woke the screen answers it.
+function _buildPrompt(dialog) {
+    dialog._showPrompt();
+    dialog._authPrompt.updateSensitivity({sensitive: false});
+}
+
+// The lines are for the VM tests (apex-image's qualify.sh). Only a prompt torn down here comes back.
+export function followScreen(dialog, screen) {
+    if (_screenIsBlank(screen.displayConfig)) {
+        if (!dialog._authPrompt)
+            return;
         tearDownPrompt(dialog);
-        if (hadPrompt)
-            console.log('Apex: lock: screen blank, prompt torn down');
-    } else {
-        dialog._showPrompt();
-        if (!hadPrompt)
-            console.log('Apex: lock: screen on, prompt rebuilt');
+        screen.tornDown = true;
+        console.log('Apex: lock: screen blank, prompt torn down');
+    } else if (screen.tornDown) {
+        screen.tornDown = false;
+        if (dialog._authPrompt)
+            return;
+        _buildPrompt(dialog);
+        console.log('Apex: lock: screen on, prompt rebuilt');
     }
 }
 
@@ -126,8 +135,12 @@ async function _followDisplayConfig(dialog) {
             console.warn(`Apex: lock: no ${DISPLAY_CONFIG}, so the prompt stays at blank: ${e.message}`);
         return;
     }
-    displayConfig.connectObject('g-properties-changed', () => followScreen(dialog, displayConfig), dialog);
-    followScreen(dialog, displayConfig);
+    const screen = {displayConfig, tornDown: false};
+    displayConfig.connectObject('g-properties-changed', (_proxy, changed, invalidated) => {
+        if (changed.lookup_value(POWER_SAVE_MODE, null) || invalidated.includes(POWER_SAVE_MODE))
+            followScreen(dialog, screen);
+    }, dialog);
+    followScreen(dialog, screen);
 }
 
 function _setUp(dialog) {
@@ -139,7 +152,7 @@ function _setUp(dialog) {
     _addHint(dialog);
 
     // Until DisplayConfig answers, and if it never does, as on a screen that is on.
-    dialog._showPrompt();
+    _buildPrompt(dialog);
     _followDisplayConfig(dialog).catch(logError);
     return undefined;
 }

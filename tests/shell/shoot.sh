@@ -18,7 +18,9 @@ _build/gnome-shell/out), headless at scale 2, as root in a throwaway fedora:$APE
 container (just lock-shots). gdm-mock.py stands in for GDM: it asks one question and
 fails every answer, so no case can unlock; lock-refused's GDM refuses even to ask, and
 lock-fingerprint's also runs gdm-fingerprint against fprintd-mock.py's reader. Each lock
-case locks, answers wrongly (lock-fingerprint fails a scan), blanks and wakes the screen; each greeter case (--mode=gdm) shows the user list, then the
+case locks, answers wrongly (lock-fingerprint fails a scan), blanks and wakes the screen,
+but lock-wake-key: after Esc and a blank, a Return that arrives after the wake, and
+lock-wake-key-blank the same, locked while blank; each greeter case (--mode=gdm) shows the user list, then the
 prompt. Each polkit case opens the shell's own authentication dialog through the polkit
 component's _onInitiate(), with a stubbed PolkitAgent.Session that PAM never answers, for
 captures and style checks only (pkexec end to end is G4's). date-menu opens the date menu, sends
@@ -230,6 +232,8 @@ shoot lock-question "$USER_NAME" user default 'Verification code:' || status=1
 shoot lock-disabled "$USER_NAME" user default 'Password:' "$lock_off" || status=1
 shoot lock-safe "$USER_NAME" user default 'Password:' -- APEX_SHELL_SAFE=1 || status=1
 shoot lock-refused "$USER_NAME" user default '' || status=1
+shoot lock-wake-key "$USER_NAME" user default 'Password:' -- APEX_WAKE_KEY=clock || status=1
+shoot lock-wake-key-blank "$USER_NAME" user default 'Password:' -- APEX_WAKE_KEY=locked-blank || status=1
 notifications_off="io.github.apex_linux.Apex.Desktop disabled-features ['notifications']"
 shoot date-menu "$USER_NAME" user default 'Password:' -- APEX_DATE_MENU=1 || status=1
 shoot date-menu-disabled "$USER_NAME" user default 'Password:' "$notifications_off" -- APEX_DATE_MENU=1 || status=1
