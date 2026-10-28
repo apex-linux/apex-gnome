@@ -1,0 +1,36 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Tue, 27 Oct 2026 23:59:11 +0000
+Subject: [PATCH] screenshot: no screencast service where the session mode
+ cannot screencast
+
+Upstream bug fix, not an Apex change: drop this patch once upstream's
+ScreenshotUI stops activating org.gnome.Shell.Screencast in session
+modes without allowScreencast.
+
+ScreenshotUI creates its ScreencastProxy at startup in every session
+mode, so D-Bus starts the screencast service in the greeter and in
+initial setup too, though neither mode can screencast: the cast button
+needs allowScreencast. The service initialises GStreamer and GTK; with
+the greeter's home on gdm's tmpfs, GStreamer rebuilds its plugin
+registry on every greeter start. Where the mode cannot screencast, the
+proxy no longer auto-starts the service.
+---
+ js/ui/screenshot.js | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/js/ui/screenshot.js b/js/ui/screenshot.js
+index 02560b9..57b8889 100644
+--- a/js/ui/screenshot.js
++++ b/js/ui/screenshot.js
+@@ -1532,7 +1532,9 @@ export class ScreenshotUI extends St.Widget {
+ 
+                 this._screencastSupported = this._screencastProxy.ScreencastSupported;
+                 this._syncCastButton();
+-            });
++            },
++            null,
++            Main.sessionMode.allowScreencast ? Gio.DBusProxyFlags.NONE : Gio.DBusProxyFlags.DO_NOT_AUTO_START);
+ 
+         this._screencastProxy.connectSignal('Error', (proxy, sender, [errorName, message]) =>
+             this._screencastFailed(ScreencastPhase.RECORDING,

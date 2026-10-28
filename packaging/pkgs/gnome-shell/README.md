@@ -47,9 +47,10 @@ Fedora's gnome-shell SRPM, rebuilt with the Apex layer inside it
 | `0017-polkit` | `js/ui/components/polkitAgent.js` | +2 | a behaviour hook once the authentication dialog is built (board 13: the shield, the user's role, Details with the action and its vendor, the fingerprint line for pam_fprintd's prompt). Its session, the answers and polkit's verdict stay upstream's: no hook is on their path |
 | `0018-end-session` | `js/ui/endSessionDialog.js` | +2 | a behaviour hook once the end-session dialog has added its buttons, given the dialog and its content (the end-session feature: stock's icon, Restart in the power-off dialog, the theme's gap and widths) |
 | `0019-plugin-shutdown` | `src/gnome-shell-plugin.c` | +66 −25 | not a hook: an upstream bug fix, dropped once upstream has it. At exit, `meta_context_destroy()` unmanages the windows of clients still connected after the shell has disposed its global, and the plugin's window-effect entry points then read a `ShellWM` through a NULL global (CRITICALs, or a segfault). The plugin keeps a weak pointer to the global, and with no `ShellWM` each effect completes straight to mutter |
+| `0020-screencast-greeter` | `js/ui/screenshot.js` | +3 −1 | not a hook: an upstream bug fix, dropped once upstream has it. `ScreenshotUI` creates its screencast proxy in every session mode, so D-Bus starts `org.gnome.Shell.Screencast` in the greeter and in initial setup, which cannot screencast; there it initialises GStreamer and GTK, and rebuilds GStreamer's plugin registry on every greeter start, the greeter's home being on gdm's tmpfs. Where the mode has no `allowScreencast`, the proxy no longer auto-starts the service |
 
 Budget (ADR 0014): at most 450 changed lines of hook hunks in at most 33 upstream files.
-In use: 254 lines in 29 files, 91 of them 0019's upstream fix. The C budget for `shell-blur-effect.{c,h}` (310 lines): 310
+In use: 258 lines in 30 files, 95 of them 0019's and 0020's upstream fixes. The C budget for `shell-blur-effect.{c,h}` (310 lines): 310
 lines, all in 0003-blur.
 
 The patches are `git format-patch` output against Fedora's `%prep` tree (upstream

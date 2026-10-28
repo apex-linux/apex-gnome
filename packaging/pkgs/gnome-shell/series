@@ -12,3 +12,4 @@
 0017-polkit.patch
 0018-end-session.patch
 0019-plugin-shutdown.patch
+0020-screencast-greeter.patch
