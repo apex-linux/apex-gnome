@@ -3298,6 +3298,20 @@ async function runProbe() {
         console.log(`APEXG2-KEYS ${JSON.stringify(result)}`);
     }
 
+    if (GLib.getenv('G2_INPUT_SOURCES') === '1') {
+        let result;
+        try {
+            const InputSources = await import('./input-sources.js');
+            result = await InputSources.inputSourcesReport({
+                settle, chord,
+                spotlight: async () => (await apexModule(SPOTLIGHT_FEATURE).catch(() => null))?.popup() ?? null,
+            });
+        } catch (e) {
+            result = {error: `${e.message}\n${e.stack}`};
+        }
+        console.log(`APEXG2-INPUT-SOURCES ${JSON.stringify(result)}`);
+    }
+
     if (GLib.getenv('G2_MOTION') === '1') {
         let result;
         try {

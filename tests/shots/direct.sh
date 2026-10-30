@@ -56,6 +56,7 @@ readonly FIXTURE_NAMES=(org.freedesktop.UPower org.freedesktop.NetworkManager or
 # the count. A 24-hour clock: in 12 hours a one-digit hour adds a figure space.
 readonly NO_HOT_CORNER='org.gnome.desktop.interface enable-hot-corners false'
 readonly TWO_SOURCES="org.gnome.desktop.input-sources sources [('xkb', 'us'), ('xkb', 'fr')]"
+readonly IMAGE_SOURCES="org.gnome.desktop.input-sources sources [('xkb', 'us'), ('ibus', 'm17n:vi:telex')];org.gnome.desktop.input-sources per-window true"
 readonly DARK='org.gnome.desktop.interface color-scheme prefer-dark'
 # Two installed favourites for dock-dnd to reorder: Files and Clocks, which the image ships.
 readonly TWO_FAVOURITES="org.gnome.shell favorite-apps ['org.gnome.Nautilus.desktop', 'org.gnome.clocks.desktop']"
@@ -242,6 +243,7 @@ run_and_record_case dock-dnd "$CAPTURE_SETTINGS;$NO_HOT_CORNER;$TWO_FAVOURITES" 
 run_and_record_case dock-external "$CAPTURE_SETTINGS;$NO_HOT_CORNER" G2_DOCK_EXTERNAL=1 G2_MONITOR2=1920x1080
 # Two input sources, so Super+Alt+Space has one to switch to.
 run_and_record_case keys "$CAPTURE_SETTINGS;$NO_HOT_CORNER;$TWO_SOURCES" G2_KEYS=1
+run_and_record_case input-sources "$CAPTURE_SETTINGS;$NO_HOT_CORNER;$IMAGE_SOURCES" G2_INPUT_SOURCES=1
 run_and_record_case fault-configure '' APEX_SHELL_TEST_FAULT=configure
 run_and_record_case fault-enable '' APEX_SHELL_TEST_FAULT=enable PROBE_WAIT=10
 run_and_record_case fault-abort '' APEX_SHELL_TEST_FAULT=abort-after-enable PROBE_WAIT=20

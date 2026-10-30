@@ -149,7 +149,7 @@ image_inputs() {
     local keys
     step "the image's apps and overrides, for both shells"
     # Clocks and Weather, as in the image: the calendar shows their rows only when they are installed.
-    quietly dnf5 -y "${REPOS[@]}" install nautilus gnome-clocks gnome-weather
+    quietly dnf5 -y "${REPOS[@]}" install nautilus gnome-clocks gnome-weather ibus ibus-m17n m17n-db
     # shellcheck disable=SC2016 # expanded by the inner bash
     keys=$(bash -c '. "$1/parts.sh"; printf "switch-input-source=%s\nswitch-input-source-backward=%s\n" \
         "$INPUT_SOURCE_KEYS" "$INPUT_SOURCE_BACKWARD_KEYS"' _ "$HERE")
