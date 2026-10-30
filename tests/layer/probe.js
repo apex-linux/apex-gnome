@@ -1391,6 +1391,29 @@ async function exerciseLock() {
     fact('lock.key-wake.keys', woken._authPrompt.keys);
     woken.emit('destroy');
 
+    // ScreenShield at gnome-session's IDLE, which every lock brings: the hook, then the dialog's
+    // cancel, which ends in upstream's _fail(): the clock page, the prompt destroyed.
+    const idle = shielded => {
+        if (Hooks.value('unlock-idle-cancel', true, shielded)) {
+            shielded?._showClock();
+            shielded?._maybeDestroyAuthPrompt();
+        }
+    };
+    const idled = newUnlockDialog(St);
+    Hooks.run('unlock-dialog', idled);
+    fact('lock.idle-cancel', `${Hooks.value('unlock-idle-cancel', true, idled)}`);
+    idle(idled);
+    await spin(50);
+    fact('lock.idle', lockState(idled));
+    setScreen(PowerSave.OFF);
+    fact('lock.idle.blank', lockState(idled));
+    setScreen(PowerSave.ON);
+    fact('lock.idle.wake', lockState(idled));
+    idled.emit('destroy');
+    idle(null);
+    fact('lock.idle-cancel.unlocked', `${Hooks.value('unlock-idle-cancel', true, null)}`);
+    fact('lock.idle-cancel.other-dialog', `${Hooks.value('unlock-idle-cancel', true, newUnlockDialog(St))}`);
+
     for (const reply of ['silent', 'error']) {
         displayConfig.reply = reply;
         setScreen(PowerSave.OFF);
