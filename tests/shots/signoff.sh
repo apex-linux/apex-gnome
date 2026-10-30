@@ -5,7 +5,7 @@ set -uo pipefail
 usage() {
     cat <<'EOF'
 usage: tests/shots/signoff.sh [--goldens] RPM_DIR [OUT]
-       tests/shots/signoff.sh --collect G2_RUN SHELL_SHOTS OUT
+       tests/shots/signoff.sh --collect G2_RUN SHELL_SHOTS OUT [APP=SHOTS...]
 
 The owner's sign-off set: each shell board's scene from the gnome-shell RPMs in RPM_DIR (the
 lane's _build/gnome-shell/out), headless at scale 2, light and dark, as root in a throwaway
@@ -24,8 +24,11 @@ and apex-desktop pins, the layer's features enabled, the scale, the monitor and 
 with the Flatpaks they stand in for; the runs'
 logs stay in _build/signoff-work. A board whose scene has no capture, or a probe whose
 windows never all reached the overview, fails the run, named. --collect does only that last
-step, from a G2 run directory and shoot.sh's captures. --goldens then compares the boards with
-the approved goldens (goldens.sh check OUT).
+step, from a G2 run directory and shoot.sh's captures; each APP=SHOTS adds the rows of an app
+board from that app's shooter's captures (control-center: tests/control-center/run.sh,
+nautilus: tests/nautilus/shoot.sh, ptyxis: tests/ptyxis/shoot.sh). A board has one row per
+scene, keyed NN-SLUG in signoff.json, and a row the shooter captures light only has no dark
+file. --goldens then compares the rows with the approved goldens (goldens.sh check OUT).
 EOF
 }
 
@@ -55,8 +58,12 @@ readonly SCALE=2
 readonly MONITOR=2880x1800
 readonly SHOOT=tests/shell/shoot.sh
 readonly G2='tests/shots/direct.sh signoff'
+readonly CONTROL_CENTER=tests/control-center/run.sh
+readonly NAUTILUS=tests/nautilus/shoot.sh
+readonly PTYXIS=tests/ptyxis/shoot.sh
+declare -rA APP_SOURCES=([control-center]=$CONTROL_CENTER [nautilus]=$NAUTILUS [ptyxis]=$PTYXIS)
 
-# number|slug|title|source|light capture|dark capture|fixture state
+# number|slug|title|source|light capture|dark capture|fixture state: a row per scene, an empty dark capture for a light-only one
 readonly BOARDS="12|greeter|GDM greeter|$SHOOT|greeter-light-list|greeter-dark-list|the user list, apex and guest, on apex-desktop's greeter background
 13|polkit|Authentication dialog|$SHOOT|polkit-light-open|polkit-dark-open|the shell's own dialog for an administrator, its PAM session never answering
 14|power-off|Power off dialog|$SHOOT|end-session-light-power-off|end-session-dark-power-off|power off with an update staged (update1-mock.py), the update card on; no other user logged in, the greeter's session being of class greeter
@@ -71,7 +78,19 @@ readonly BOARDS="12|greeter|GDM greeter|$SHOOT|greeter-light-list|greeter-dark-l
 36|launcher|Launcher|$G2|default-launcher|dark-style-launcher|the app grid's first page, no folder open: the image's apps outside the dock
 37|desktop|Desktop: dock and top bar|$G2|default-desktop|dark-style-desktop|the desktop with the dock and the bar, no window open
 38|spotlight|Spotlight|$G2|default-spotlight-search|dark-style-spotlight-search|Spotlight with \"disk\" typed
-39|indicators|Top bar: indicators|$G2|indicators-indicators-everything|indicators-dark-indicators-everything|everything: two input sources and the StatusNotifierItems sni-items.js starts"
+39|indicators|Top bar: indicators|$G2|indicators-indicators-everything|indicators-dark-indicators-everything|everything: two input sources and the StatusNotifierItems sni-items.js starts
+11|settings-apex-top|Settings: Apex Desktop|$CONTROL_CENTER|light|dark|the Apex Desktop panel at the top, with apex-desktop's schema
+11|settings-apex-scrolled|Settings: Apex Desktop, scrolled|$CONTROL_CENTER|light-scrolled|dark-scrolled|the Apex Desktop panel scrolled to its end, with apex-desktop's schema
+18|settings-updates-updates|Settings: Software Updates|$CONTROL_CENTER|updates-light|updates-dark|System > Software Updates with an update staged and ready (update1.py ready)
+23|settings-appearance-appearance|Settings: Appearance|$CONTROL_CENTER|appearance-light|appearance-dark|Appearance on gnome-backgrounds' Amber wallpaper
+24|settings-power-power|Settings: Power|$CONTROL_CENTER|power-light|power-dark|Power with an NVIDIA card under umockdev: the Graphics and Display group
+26|update-health-health-failure|Update health failure|$CONTROL_CENTER|updates-health-failure||Software Updates after an update whose health check failed (update1.py health-failure)
+26|update-health-fallback|Update health failure|$CONTROL_CENTER|updates-fallback||Software Updates booted back into the previous version (update1.py fallback)
+27|files-home-home|Files: Home|$NAUTILUS|home-light|home-dark|the home folder of home.py in the icon view
+28|files-list-documents|Files: list and details|$NAUTILUS|documents-light|documents-dark|Documents in the list view, the spec selected, details on
+29|files-search-search|Files: search|$NAUTILUS|search-light|search-dark|a search for \"apex\" from the home folder, in the list view
+32|terminal-sessions-sessions|Terminal: sessions|$PTYXIS|light|dark|the sessions of board 32, typed in by a virtual keyboard, statuses from vte.sh
+33|terminal-split-split|Terminal: split panes, needs you|$PTYXIS|split-light|split-dark|board 32's sessions with apex-gnome in a right split"
 
 die() { echo "signoff.sh: $*" >&2; exit 1; }
 
@@ -105,21 +124,33 @@ banners_of() {
 
 collect() {
     local g2=$1 shots=$2 out=$3 number slug title source light dark fixture variant scene from missing=() boards=()
-    local commit features dock banners banner live
+    local commit features dock banners banner live app label
+    local -A dirs=([$G2]=$g2/captures [$SHOOT]=$shots)
+    shift 3
+    for app in "$@"; do
+        [[ $app == *=* && -n ${APP_SOURCES[${app%%=*}]:-} ]] || die "no app source ${app%%=*}: one of ${!APP_SOURCES[*]}"
+        [[ -d ${app#*=} ]] || die "no captures of ${app%%=*} in ${app#*=}"
+        dirs[${APP_SOURCES[${app%%=*}]}]=${app#*=}
+    done
     mkdir -p "$out" || die "cannot create $out"
     banners=$(banners_of "$g2" "$shots")
     while IFS='|' read -r number slug title source light dark fixture; do
+        [[ -n ${dirs[$source]:-} ]] || continue
+        label="board $number ($title)"
+        [[ $source == "$G2" || $source == "$SHOOT" ]] || label="board $number-$slug ($title)"
         for variant in light dark; do
             scene=$light
             [[ $variant == dark ]] && scene=$dark
-            from=$g2/captures/$scene.png
-            [[ $source == "$SHOOT" ]] && from=$shots/$scene.png
+            [[ -n $scene ]] || continue
+            from=${dirs[$source]}/$scene.png
             if png "$from"; then
                 cp "$from" "$out/board-$number-$slug-$variant.png"
             else
-                missing+=("board $number ($title), $variant: no capture of $scene ($source)")
+                missing+=("$label, $variant: no capture of $scene ($source)")
                 continue
             fi
+            # The banner, live-content and Bluetooth records come from the shell's own logs.
+            [[ $source == "$G2" || $source == "$SHOOT" ]] || continue
             banner=$(jq -c --arg f "$scene.png" 'if has($f) then .[$f].banner else "unrecorded" end' <<<"$banners")
             live=$(jq -r --arg f "$scene.png" '.[$f].live // [] | join(", ")' <<<"$banners")
             if [[ $banner == '"unrecorded"' ]]; then
@@ -134,9 +165,10 @@ collect() {
                 missing+=("board $number ($title), $variant: the switcher in $scene lists $(jq -c --arg f "$scene.png" '.[$f].switcher' <<<"$banners"), not $SWITCHER_ORDER")
         done
         boards+=("$(jq -nc --argjson board "$((10#$number))" --arg title "$title" --arg slug "$slug" --arg source "$source" \
-            --arg light "$light" --arg dark "$dark" --arg fixture "$fixture" \
-            '{board: $board, title: $title, slug: $slug, source: $source, fixture: $fixture, scene: {light: $light, dark: $dark},
-              files: {light: "board-\($board)-\($slug)-light.png", dark: "board-\($board)-\($slug)-dark.png"}}')")
+            --arg light "$light" --arg dark "$dark" --arg fixture "$fixture" '
+            {board: $board, key: "\($board)-\($slug)", title: $title, slug: $slug, source: $source, fixture: $fixture,
+             scene: {light: $light, dark: (if $dark == "" then null else $dark end)},
+             files: {light: "board-\($board)-\($slug)-light.png", dark: (if $dark == "" then null else "board-\($board)-\($slug)-dark.png" end)}}')")
     done <<<"$BOARDS"
     for variant in default dark-style; do
         { cat "$g2/$variant.log" "$g2/$variant.late.log" 2>/dev/null || :; } | sed -n 's/.*APEXG2-SIGNOFF //p' |
@@ -153,22 +185,22 @@ collect() {
     features=$(sed -n 's/.*Apex: feature \([a-z-]*\) enabled.*/\1/p' "$g2/default.log" 2>/dev/null | sort -u | jq -Rsc 'split("\n") | map(select(. != ""))')
     dock=$({ cat "$g2/default.log" "$g2/default.late.log" 2>/dev/null || :; } | sed -n 's/.*APEXG2[A-Z-]* \({.*\)/\1/p' |
         jq -sc 'map(.dock?.items? // empty) | first // [] | map(select(.kind == "app") | .name)' 2>/dev/null)
-    printf '%s\n' "${boards[@]}" | jq -s --arg commit "$commit" --arg desktop "$APEX_DESKTOP_REV" \
+    printf '%s\n' "${boards[@]}" | jq -s --arg commit "$commit" --arg desktop "$APEX_DESKTOP_REV" --arg sources "$(printf '%s\n' "${!dirs[@]}" | sort)" \
         --argjson features "${features:-[]}" --argjson scale "$SCALE" --arg monitor "$MONITOR" \
         --arg grid "${GRID_APPS[*]}" --argjson standIns "$FLATPAK_STAND_INS" --argjson dock "${dock:-[]}" \
         --arg pending "${IMAGE_PENDING[*]}" \
         '{commit: $commit, pins: {apexGnome: $commit, apexDesktop: $desktop}, scale: $scale, monitor: $monitor,
           features: $features, apps: {dock: $dock, grid: ($grid | split(" ")), flatpakStandIns: $standIns,
-          notYetInImage: ($pending | split(" "))}, boards: .}' >"$out/signoff.json" ||
+          notYetInImage: ($pending | split(" "))}, sources: ($sources | split("\n")), boards: .}' >"$out/signoff.json" ||
         die "cannot write $out/signoff.json"
-    echo "signoff.sh: $(jq '.boards | length' "$out/signoff.json") boards, light and dark, in $out"
+    echo "signoff.sh: $(jq '.boards | length' "$out/signoff.json") rows of $(jq '[.boards[].board] | unique | length' "$out/signoff.json") boards in $out"
 }
 
 case ${1:-} in
     -h | --help) usage; exit 0 ;;
     --collect)
-        (($# == 4)) || { usage >&2; exit 2; }
-        collect "$2" "$3" "$4"
+        (($# >= 4)) || { usage >&2; exit 2; }
+        collect "${@:2}"
         exit ;;
     '') usage >&2; exit 2 ;;
 esac
