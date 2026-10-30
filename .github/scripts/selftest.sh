@@ -118,8 +118,8 @@ check_true "next-point: the shim installs ahead of dnf5 on PATH" \
     env NEXT_POINT_SHIM="$TMP/np-bin/dnf5" PATH="$TMP/np-bin:$PATH" "$APEX_ROOT/.github/scripts/next-point.sh" shim
 check_false "next-point: a shim that is not the dnf5 on PATH dies" \
     env NEXT_POINT_SHIM="$TMP/np-bin/dnf5" PATH="/usr/bin:/bin" "$APEX_ROOT/.github/scripts/next-point.sh" shim
-check "next-point.yml: no pull_request trigger, no lane cache" "" \
-    "$(grep -nE 'pull_request|actions/cache|APEX_LANE_CACHE' "$APEX_ROOT/.github/workflows/next-point.yml" | grep -vE '^[0-9]+: *#')"
+check "next-point.yml: dispatch and schedule only, no lane cache" "" \
+    "$(grep -nE 'pull_request|push:|actions/cache|APEX_LANE_CACHE' "$APEX_ROOT/.github/workflows/next-point.yml" | grep -vE '^[0-9]+: *#')"
 check "next-point.sh: run by next-point.yml alone" ".github/workflows/next-point.yml" \
     "$(cd "$APEX_ROOT" && grep -l 'next-point.sh' .github/workflows/*.yml | paste -sd ' ')"
 check "the stable lane names no updates-testing: lane.sh and image-args.sh fetch as before" "" \

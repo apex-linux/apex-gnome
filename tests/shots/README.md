@@ -911,6 +911,29 @@ It also asserts the shell surfaces of the same three cases (below). With
 cases also save a scene per surface group (`surfaces`, `quick-settings`, `switcher`,
 `dialog`, `datemenu`, `appgrid`), for placing beside the boards.
 
+## The next point release
+
+`next-point.yml` runs GNOME's next point release from Fedora 45's updates-testing before the GA
+push makes it stable, so a break shows while it is still in testing. It is report-only: it runs
+on dispatch and weekly (Tuesdays), never on a pull request, and no check requires it.
+
+- **lane:** `next-point.sh image` fetches the pinned apex-image and fills its updates-testing
+  allowlist with the builds updates-testing moves among gnome-shell, mutter, gdm, gjs, glib2,
+  gnome-session, gsettings-desktop-schemas, gtk4 and libadwaita. Admitting every build would
+  overflow apex-lane's dnf5 arguments. `lane.sh` then builds gnome-shell from that SRPM through
+  `APEX_IMAGE_SRC`, without `APEX_LANE_CACHE`, so it reads and writes no lane cache. The job
+  summary lists what moves.
+- **g2:** `patched.sh` runs every case on those RPMs.
+- **signoff:** `signoff.sh --goldens` checks the shell boards against the approved goldens.
+
+Both of the last two install `next-point.sh shim` first, a `dnf5` ahead of Fedora's on `PATH`.
+It adds updates-testing beside each `--repo=updates` and updates-testing-source beside each
+`--repo=updates-source`, and enables updates-testing for a call that names no repository. So
+the scripts install what GA brings, unchanged. `lane.sh`, `image-args.sh` and every other
+workflow stay as they are, which `.github/scripts/selftest.sh` checks. Once apex-image passes
+its admission cut (`GA_REACHED=1`), `next-point.sh image` fails: updates-testing is then no
+longer what a GA push brings.
+
 ## The authentication dialog
 
 G2 has no polkit case. `tests/shell/shoot.sh`'s polkit cases capture board 13 from the
