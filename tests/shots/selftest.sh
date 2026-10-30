@@ -2851,6 +2851,57 @@ test_clean_shutdown() {
     expect_eq "shutdown: and so does reading its window manager through NULL" "0/1" "$passes/$failures"
 }
 
+test_no_disposed_at_shutdown() {
+    local run=$T/disposed-shutdown-run disposed frame passes failures
+    disposed='Gjs-CRITICAL **: 09:41:00.000: Object Gjs_ui_messageTray_MessageTray (0x55e780c0), has been already disposed — impossible to access it.'
+    frame='#0   7ffd b   resource:///org/gnome/shell/ui/messageTray.js:1062 (29fd @ 15)'
+    mkdir -p "$run"
+    printf '%s\n' "$disposed" '== Stack trace for context 0x55 ==' "$frame" '** Message: 09:41:00.000: Shutting down GNOME Shell' >"$run/default.log"
+    read -r passes failures <<<"$(assertion_counts no_disposed_at_shutdown default "$run/default.log")"
+    expect_eq "disposed at shutdown: one before it is another check's" "1/0" "$passes/$failures"
+    printf '%s\n' '** Message: 09:41:00.000: Shutting down GNOME Shell' "$disposed" '== Stack trace for context 0x55 ==' "$frame" >"$run/default.log"
+    read -r passes failures <<<"$(assertion_counts no_disposed_at_shutdown default "$run/default.log")"
+    expect_eq "disposed at shutdown: the tray's banner timeout after it fails, naming the object and the frame" "0/1 1" \
+        "$passes/$failures $(grep -c '^FAIL default: .*touched: Gjs_ui_messageTray_MessageTray at resource:///org/gnome/shell/ui/messageTray.js:1062$' "$T/assertions.out")"
+    echo 'APEXG2 {"probe": true}' >"$run/default.log"
+    printf '%s\n' '** Message: 09:41:00.000: Shutting down GNOME Shell' "$disposed" >"$run/default.late.log"
+    read -r passes failures <<<"$(assertion_counts no_disposed_at_shutdown default "$run/default.log")"
+    expect_eq "disposed at shutdown: and so does one with no stack, in the late first start's log" "0/1 1" \
+        "$passes/$failures $(grep -c '^FAIL default: .*touched: Gjs_ui_messageTray_MessageTray$' "$T/assertions.out")"
+    rm "$run/default.late.log"
+}
+
+test_tray_idle() {
+    local want_pass what report passes failures
+    while IFS='|' read -r want_pass what report; do
+        if [[ -n $report ]]; then printf 'APEXG2-TRAY %s\n' "$report" >"$T/tray.log"; else : >"$T/tray.log"; fi
+        read -r passes failures <<<"$(assertion_counts tray_idle default "$T/tray.log")"
+        expect_eq "tray at exit: $what" "$want_pass/$((1 - want_pass))" "$passes/$failures"
+    done <<'CASES'
+1|an idle tray passes|{"idle":true}
+0|a banner still up fails|{"idle":false}
+0|no report fails|
+CASES
+}
+
+test_shutdown_banner_case() {
+    local run=$T/shutdown-banner passes failures status pending armed shutdown what
+    mkdir -p "$run"
+    while IFS='|' read -r failures status pending armed shutdown what; do
+        echo "shutdown-banner exit=$status secs=5 marker-after-exit=no" >"$run/results-main.txt"
+        echo "APEXG2-SHUTDOWN-BANNER {\"pending\":$pending,\"armed\":$armed}" >"$run/shutdown-banner.log"
+        echo "$shutdown" >>"$run/shutdown-banner.log"
+        read -r passes _ <<<"$(assertion_counts shutdown_banner_case "$run")"
+        expect_eq "shutdown-banner: $what fails $failures of 4" "$failures" $((4 - passes))
+    done <<'CHANGES'
+0|0|true|true|** Message: 09:41:00.000: Shutting down GNOME Shell|a notification pending and the timeout armed as the shell exits
+1|134|true|true|** Message: 09:41:00.000: Shutting down GNOME Shell|the shell aborting in the shutdown loop
+1|0|false|true|** Message: 09:41:00.000: Shutting down GNOME Shell|no notification pending
+1|0|true|false|** Message: 09:41:00.000: Shutting down GNOME Shell|no timeout armed
+1|0|true|true||a log without the shutdown
+CHANGES
+}
+
 test_no_binding_overwritten() {
     local run=$T/keys-run overwritten passes failures
     overwritten='libmutter-WARNING **: 09:41:00.000: Overwriting existing binding of keysym 20 with keysym 20 (keycode 41).'
@@ -3530,7 +3581,10 @@ test_no_disposed_apex
 test_no_binding_overwritten
 test_no_spurious_allocation
 test_clean_shutdown
+test_no_disposed_at_shutdown
+test_tray_idle
 test_keys_case
+test_shutdown_banner_case
 test_startup_handler_ran
 test_network_rows_centred
 test_pr_assertions

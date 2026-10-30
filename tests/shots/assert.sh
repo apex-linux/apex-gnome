@@ -23,7 +23,8 @@ readonly STOCK_SHEETS=resource:///org/gnome/shell/theme/stock
 readonly FEDORA_SHEETS=resource:///org/gnome/shell/theme
 readonly DIRECT_CASES=(default default-scale1 dark-style high-contrast large-text default-solid dark-style-solid high-contrast-solid
     large-text-solid dock-intellihide dock-intellihide-dark dock-one-gpu no-dock no-dock-dark stock-light stock-dark safe-env
-    layer-disabled layer-cycles motion idle dock-pin dock-dnd dock-external keys glass-load glass-stress fault-configure fault-enable fault-abort kernel-safe
+    layer-disabled layer-cycles motion idle dock-pin dock-dnd dock-external keys glass-load glass-stress fault-configure fault-enable fault-abort shutdown-banner
+    kernel-safe
     fedora-light fedora-dark glass fedora-glass
     indicators indicators-scale1 indicators-dark)
 readonly DIRECT_PARTS=(main kernel fedora)
@@ -229,6 +230,27 @@ clean_shutdown() {
     else
         fail "$label: at shutdown: $found"
     fi
+}
+
+# gnome-shell 51 runs a main loop after its shutdown destroyed uiGroup: a banner timeout the tray left
+# armed runs there on the disposed tray, as Apex's notifications feature stops.
+no_disposed_at_shutdown() {
+    local label=$1 log=$2 found
+    found=$(cat "$log" "${log%.log}.late.log" 2>/dev/null | sed -n '/Shutting down GNOME Shell/,$p' |
+        awk '/has been already disposed/ && !object { object = $0; sub(/.*Object /, "", object); sub(/ \(0x.*/, "", object); next }
+            object && /^#0/ && !frame { frame = $0; sub(/^#0 +[^ ]+ +[a-z] +/, "", frame); sub(/ \(.*/, "", frame) }
+            END { if (object) print object (frame ? " at " frame : "") }')
+    if [[ -z $found ]]; then
+        pass "$label: nothing touches a disposed object once the shell is shutting down"
+    else
+        fail "$label: after 'Shutting down GNOME Shell', a disposed object touched: $found"
+    fi
+}
+
+# The probe empties the tray before the shell exits, so no case but shutdown-banner meets that race.
+tray_idle() {
+    local label=$1 log=$2
+    expect "$label" "$(report_of "$log" APEXG2-TRAY)" '.idle == true' "the probe leaves no banner up for the shell's shutdown"
 }
 
 # Mutter warns when two bindings claim one key: the second silently takes it from the first.
@@ -2003,9 +2025,11 @@ direct_cases() {
         no_binding_overwritten "$c" "$f"
         no_spurious_allocation "$c" "$f"
         clean_shutdown "$c" "$f"
+        no_disposed_at_shutdown "$c" "$f"
         # fault-abort may abort before its report; its exit status says the shell ran.
         [[ $c == fault-abort ]] && continue
         action_modes "$c" "$f"
+        [[ $c == shutdown-banner ]] || tray_idle "$c" "$f"
         expect_report "$c" "$f" '.mode == "user"' "the probe ran: the static import graph loaded"
         fixed_clock "$c" "$f"
         backdrop_painted "$c" "$f"
@@ -2201,6 +2225,7 @@ direct_cases() {
     dock_dnd_case "$run"
     dock_external_case "$run"
     keys_case "$run"
+    shutdown_banner_case "$run"
 }
 
 # shellcheck disable=SC2016 # jq programs
@@ -2406,6 +2431,17 @@ asserted() {
     done
 }
 
+# The shutdown-banner case: the tray's banner timeout falls due in gnome-shell's shutdown loop, after the
+# tray went with uiGroup; clean_shutdown and no_disposed_at_shutdown read the log past it.
+shutdown_banner_case() {
+    local run=$1 f=$1/shutdown-banner.log
+    exits "$run" shutdown-banner 0
+    no_apex_failure shutdown-banner "$f"
+    expect shutdown-banner "$(report_of "$f" APEXG2-SHUTDOWN-BANNER)" '.pending and .armed' \
+        "as the shell exits, a notification is up or queued, and the tray's banner timeout is armed"
+    logs shutdown-banner "$f" 'Shutting down GNOME Shell' "the shell went through its shutdown"
+}
+
 # patched.sh's assertions after direct.sh's PART: main asserts every case, pr only the cases
 # PR_CASES lists, and each of those must have run and reported.
 patched_assertions() {
@@ -2420,6 +2456,7 @@ patched_assertions() {
         asserted "$c" || continue
         [[ $c == kernel-safe || $c == fault-abort ]] || backdrop_painted "$c" "$run/$c.log"
         [[ $c == kernel-safe || $c == fault-abort ]] || action_modes "$c" "$run/$c.log"
+        [[ $c == kernel-safe || $c == fault-abort || $c == shutdown-banner ]] || tray_idle "$c" "$run/$c.log"
         [[ $c == kernel-safe ]] || startup_handler_ran "$c" "$run/$c.log"
         [[ -e $run/$c.log ]] && no_nan_allocation "$c" "$run/$c.log"
         [[ -e $run/$c.log ]] && no_st_css_warning "$c" "$run/$c.log"
@@ -2428,6 +2465,7 @@ patched_assertions() {
         [[ -e $run/$c.log ]] && no_binding_overwritten "$c" "$run/$c.log"
         [[ -e $run/$c.log ]] && no_spurious_allocation "$c" "$run/$c.log"
         [[ -e $run/$c.log ]] && clean_shutdown "$c" "$run/$c.log"
+        [[ -e $run/$c.log ]] && no_disposed_at_shutdown "$c" "$run/$c.log"
     done
     for c in default default-scale1 dark-style; do
         asserted "${c%:*}" || continue
@@ -2504,6 +2542,7 @@ patched_assertions() {
     asserted dock-dnd && dock_dnd_case "$run"
     asserted dock-external && dock_external_case "$run"
     asserted keys && keys_case "$run"
+    asserted shutdown-banner && shutdown_banner_case "$run"
     asserted fedora-light fedora-dark no-dock no-dock-dark &&
         compare_with_fedora "$run" "$(asserted stock-light stock-dark && echo safe)"
     if [[ $part == pr ]]; then

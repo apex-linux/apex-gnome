@@ -420,6 +420,10 @@ The layer also does what every feature relies on:
   dark one. The gdm mode keeps upstream's `'prefer-dark'`.
 - `enable()` creates `$XDG_RUNTIME_DIR/apex-shell-starting` and removes it after 60 s
   or at shutdown, for the crash guard (ADR 0014).
+- At logout, as `layout.js` destroys `uiGroup`, it disables every feature while its actors
+  are still alive, passing `disable({teardown: true})`. The notifications feature then clears
+  the tray's banner timeouts. Otherwise gnome-shell 51's shutdown loop, which runs after
+  `uiGroup` has gone, would run them on the destroyed tray.
 - `APEX_SHELL_TEST_FAULT` in the shell's environment adds the `fault` feature after
   every real one, for the safety net's tests (ROADMAP S1a exit). `configure` makes its
   `configure()` throw and `enable` its `enable()`: the feature is off for the session,

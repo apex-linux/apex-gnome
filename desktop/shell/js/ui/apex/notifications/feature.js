@@ -5,6 +5,7 @@ import Gio from 'gi://Gio';
 import St from 'gi://St';
 
 import * as Hooks from '../hooks.js';
+import * as Main from '../../main.js';
 import * as PopupMenu from '../../popupMenu.js';
 
 export const DND_STYLE_CLASS = 'apex-dnd-button';
@@ -248,8 +249,14 @@ export function enable() {
     _refreshIcons();
 }
 
-export function disable() {
+// gnome-shell's shutdown runs the default main loop after layout.js destroys uiGroup and the tray
+// with it: a banner timeout left armed would run there on the destroyed tray.
+export function disable({teardown = false} = {}) {
     _enabled = false;
+    if (teardown) {
+        Main.messageTray._updateNotificationTimeout(0);
+        Main.messageTray._resetNotificationLeftTimeout();
+    }
     _headers.forEach(_plainHeader);
     _groups.forEach((parts, group) => _restack(group, parts));
     _calendars.forEach((parts, calendar) => _plainCalendar(calendar, parts));

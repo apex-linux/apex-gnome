@@ -77,6 +77,9 @@ const SIGNOFF_FOCUS_ORDER = ['org.gnome.Calendar.desktop', 'org.gnome.TextEditor
 const SIGNOFF_QUIET_MS = 1500;
 const SIGNOFF_FOCUS_ATTEMPTS = 3;
 const WIFI_SCAN_MS = 5000;
+const TRAY_DRAIN_MS = 3000;
+const SHUTDOWN_HISTORY_DELAY_MS = 300;
+const SHUTDOWN_BANNER_TIMEOUT_MS = 100;
 const AVATAR_SIZE = 32;
 const OVERVIEW_WINDOWS = 3;
 const FIXTURE_WALLPAPER = {width: 160, height: 100};
@@ -3169,6 +3172,34 @@ function keepPerfHelperAwake() {
     });
 }
 
+// gnome-shell 51's shutdown destroys the tray, then runs a main loop that fires any banner timeout
+// still armed; every case but shutdown-banner exits with the tray idle, Apex's notifications or not.
+async function drainMessageTray() {
+    dropStartupNotifications();
+    const idle = await until(() => Main.messageTray._banner === null, TRAY_DRAIN_MS);
+    Main.messageTray._updateNotificationTimeout(0);
+    Main.messageTray._resetNotificationLeftTimeout();
+    return idle;
+}
+
+// The race made certain: a notification for the tray to show, and its timeout due inside a slowed
+// shutdown loop. The shell exits here, not after scripting.js's helper round trip, which could outlast it.
+async function shutdownWithBanner() {
+    Main.notify('G2 banner', 'shown as the shell exits');
+    await settle();
+    const writeHistory = Main.timeLimitsManager.shutdown.bind(Main.timeLimitsManager);
+    Main.timeLimitsManager.shutdown = async () => {
+        await Scripting.sleep(SHUTDOWN_HISTORY_DELAY_MS);
+        await writeHistory();
+    };
+    Main.messageTray._updateNotificationTimeout(SHUTDOWN_BANNER_TIMEOUT_MS);
+    const tray = Main.messageTray;
+    console.log(`APEXG2-SHUTDOWN-BANNER ${JSON.stringify({
+        pending: tray._banner !== null || tray._notificationQueue.length > 0, armed: tray._notificationTimeoutId !== 0,
+    })}`);
+    global.context.terminate();
+}
+
 export async function run() {
     actionModeAtRun = actionModeName();
     const pingId = keepPerfHelperAwake();
@@ -3177,6 +3208,10 @@ export async function run() {
     } finally {
         GLib.source_remove(pingId);
     }
+    if (GLib.getenv('G2_SHUTDOWN_BANNER') === '1')
+        await shutdownWithBanner();
+    else
+        console.log(`APEXG2-TRAY ${JSON.stringify({idle: await drainMessageTray()})}`);
 }
 
 async function runProbe() {
