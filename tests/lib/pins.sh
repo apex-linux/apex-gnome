@@ -4,7 +4,7 @@
 # shellcheck disable=SC2034 # read by lane.sh, tests/s2c/agent.sh and tests/s7/accent-test.sh
 
 readonly APEX_IMAGE_URL=https://github.com/apex-linux/apex-image
-readonly APEX_IMAGE_REV=9304e95f98279cfa5b6744c19a23c87ab91e41bf
+readonly APEX_IMAGE_REV=95d3600e07f8b2119bfcbdf42056524b87a395b4
 readonly APEX_SYSTEM_URL=https://github.com/apex-linux/apex-system
 readonly APEX_SYSTEM_REV=70fa599d8f8a56b7ba5b7f6eecc59ac84975fbe4
 readonly APEX_DESKTOP_URL=https://github.com/apex-linux/apex-desktop
