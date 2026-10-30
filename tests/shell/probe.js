@@ -180,6 +180,32 @@ async function shootFingerprint(dialog) {
     fact('end', {locked: Main.screenShield.locked});
 }
 
+// logind's PrepareForSleep, from its mock: upstream cancels the dialog's conversation before sleep,
+// and the lock's prompt has to come back at resume with no key.
+function prepareForSleep(aboutToSuspend) {
+    return Gio.DBus.system.call('org.freedesktop.login1', '/org/freedesktop/login1', 'org.freedesktop.DBus.Mock',
+        'EmitSignal', new GLib.Variant('(sssav)', ['org.freedesktop.login1.Manager', 'PrepareForSleep', 'b',
+            [new GLib.Variant('b', aboutToSuspend)]]), null, Gio.DBusCallFlags.NONE, -1, null);
+}
+
+async function shootSuspend() {
+    Main.screenShield.lock(false);
+    await Scripting.sleep(STEP_MS);
+    const dialog = Main.screenShield._dialog;
+    const describe = () => ({...describeLock(dialog), status: dialog._authPrompt?.verificationStatus ?? null});
+    fact('locked', describe());
+    await prepareForSleep(true);
+    await Scripting.sleep(STEP_MS);
+    fact('asleep', describe());
+    await Scripting.sleep(STEP_MS);
+    fact('still-asleep', describe());
+    await prepareForSleep(false);
+    await Scripting.sleep(STEP_MS * 2);
+    fact('resumed', describe());
+    await Scripting.sleep(SETTLE_MS);
+    fact('end', {locked: Main.screenShield.locked});
+}
+
 // apex-image's local-lock-blank-wake: gnome-session goes idle at every real lock, and upstream's
 // ScreenShield answers that by cancelling the dialog; then the screen blanks and wakes, no key.
 async function shootIdleLock() {
@@ -691,6 +717,8 @@ export async function run() {
             await shootDateMenu();
         else if (GLib.getenv('APEX_END_SESSION') === '1')
             await shootEndSession();
+        else if (GLib.getenv('APEX_SUSPEND') === '1')
+            await shootSuspend();
         else if (GLib.getenv('APEX_IDLE') === '1')
             await shootIdleLock();
         else if (GLib.getenv('APEX_WAKE_KEY'))

@@ -7,6 +7,7 @@ import Clutter from 'gi://Clutter';
 import Gio from 'gi://Gio';
 import St from 'gi://St';
 
+import * as LoginManager from '../../../misc/loginManager.js';
 import * as Hooks from '../hooks.js';
 
 import * as Fingerprint from './fingerprint.js';
@@ -63,28 +64,50 @@ export function tearDownPrompt(dialog) {
     dialog._maybeDestroyAuthPrompt();
 }
 
+// The lines are for the VM tests (apex-image's qualify.sh). Only a prompt torn down here comes back.
+function _owe(dialog, why) {
+    if (!dialog._authPrompt)
+        return;
+    tearDownPrompt(dialog);
+    _screens.get(dialog).tornDown = true;
+    console.log(`Apex: lock: ${why}, prompt torn down`);
+}
+
+function _asleep() {
+    return LoginManager.getLoginManager().preparingForSleep;
+}
+
 // Built without a key, it takes keys only once PAM asks: else the key that woke the screen answers it.
 function _buildPrompt(dialog) {
     dialog._showPrompt();
     dialog._authPrompt.updateSensitivity({sensitive: false});
 }
 
-// The lines are for the VM tests (apex-image's qualify.sh). Only a prompt torn down here comes back.
-export function followScreen(dialog) {
+// Whether after blank or resume, the screen is on: qualify.sh waits for this one line.
+function _repay(dialog) {
     const screen = _screens.get(dialog);
-    if (_screenIsBlank(screen.displayConfig)) {
-        if (!dialog._authPrompt)
-            return;
-        tearDownPrompt(dialog);
-        screen.tornDown = true;
-        console.log('Apex: lock: screen blank, prompt torn down');
-    } else if (screen.tornDown) {
-        screen.tornDown = false;
-        if (dialog._authPrompt)
-            return;
-        _buildPrompt(dialog);
-        console.log('Apex: lock: screen on, prompt rebuilt');
-    }
+    if (!screen.tornDown || _asleep() || (screen.displayConfig && _screenIsBlank(screen.displayConfig)))
+        return;
+    screen.tornDown = false;
+    if (dialog._authPrompt)
+        return;
+    _buildPrompt(dialog);
+    console.log('Apex: lock: screen on, prompt rebuilt');
+}
+
+// Upstream cancels the conversation before sleep; taking the prompt down instead ends it as well, and owes it.
+function _sleepCancel(stock, dialog) {
+    if (!_enabled || !_screens.has(dialog))
+        return stock;
+    _owe(dialog, 'suspend');
+    return false;
+}
+
+export function followScreen(dialog) {
+    if (_screenIsBlank(_screens.get(dialog).displayConfig))
+        _owe(dialog, 'screen blank');
+    else
+        _repay(dialog);
 }
 
 function _restack(dialog) {
@@ -176,10 +199,15 @@ function _setUp(dialog) {
     _restack(dialog);
     _addOverlay(dialog);
     _addHint(dialog);
-    _screens.set(dialog, {displayConfig: null, tornDown: false});
+    _screens.set(dialog, {displayConfig: null, tornDown: _asleep()});
+    LoginManager.getLoginManager().connectObject('prepare-for-sleep', (_manager, aboutToSuspend) => {
+        if (!aboutToSuspend)
+            _repay(dialog);
+    }, dialog);
 
-    // Until DisplayConfig answers, and if it never does, as on a screen that is on.
-    _buildPrompt(dialog);
+    // Until DisplayConfig answers, and if it never does, as on a screen that is on; a lock taken for sleep owes it.
+    if (!_asleep())
+        _buildPrompt(dialog);
     _followDisplayConfig(dialog).catch(logError);
     return undefined;
 }
@@ -189,6 +217,7 @@ export function configure(featureName) {
     Hooks.provide(featureName, 'unlock-dialog', _setUp);
     Hooks.provide(featureName, 'unlock-idle-cancel', _idleCancel);
     Hooks.provide(featureName, 'unlock-stack-box', _stackBox);
+    Hooks.provide(featureName, 'unlock-sleep-cancel', _sleepCancel);
 }
 
 export function enable() {
