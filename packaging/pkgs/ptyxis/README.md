@@ -49,6 +49,11 @@ path `source1_paths` allows; `tests/ptyxis/selftest.sh` checks both.
 | `src/apex/apex-palette.c` | `apex_profile_follow_palette_files()`: a profile notifies `palette` when the palette list reloads a file with its palette id, so open terminals and the window dressing take a rewritten user palette (apex-session-agent's `apex.palette`) |
 | `src/apex/apex-session-row.c`, `apex-glyph.c` | a row (title, subtitle, time, glyph, the 2 px progress bar) and the Apex Symbolic glyphs drawn from their 16 px paths |
 
+In a split, Ctrl+Alt+O moves the focus to the other pane and Ctrl+Alt+W closes the
+focused one (`apex.focus-other-pane`, `apex.close-pane`); closing the first gives its tab
+to the second, through Ptyxis's own close and its prompt for a running command. The pair
+is the owner's pick, in `apex-panes.c`'s `FOCUS_OTHER_PANE_ACCEL` and `CLOSE_PANE_ACCEL`.
+
 ### What a session shows
 
 | Status | From | Subtitle |
@@ -140,6 +145,8 @@ Ctrl+Alt+R and Ctrl+Alt+D. It focuses each pane by a click and measures the othe
 dimming against DESIGN's .7 header and .62 body. It runs `cargo` and `claude` in the
 second pane and `rpmbuild` and `just` in the first, so each header shows its own
 command, OSC 9;4 progress, exit status and bell. The bell's needs-you clears on focus,
-and the session row keeps the stronger status. Close Pane on the second pane's header
-then unsplits. A `true` typed first, which ends within one VTE batch, must leave the
+and the session row keeps the stronger status. The focus key moves the focus both ways;
+Close Pane on the second pane's header, then the close key on the focused second pane,
+unsplit; and the close key on the focused first pane leaves the second in its tab, the
+first's row gone. A `true` typed first, which ends within one VTE batch, must leave the
 session done. CI runs it after the palette test.
