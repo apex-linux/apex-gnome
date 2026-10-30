@@ -2905,6 +2905,41 @@ test_keys_case() {
 CHANGES
 }
 
+# A privacy case on main's RPMs: both indicators on real streams, then gone.
+readonly PRIVACY_REPORT='{unit: {length: 1, fontSize: 1024}, before: {camera: false, microphone: false}, viewerStarts: 1, shown: true,
+    inUse: {pill: {x: 1261, y: 4, width: 171, height: 24, paddingLeft: 4},
+        privacy: {x: 1265, y: 6, width: 48, height: 20, radius: 10, colour: "#c64600ff", next: {x: 1323, y: 4, width: 16, height: 24},
+            glyphs: [{x: 1272, y: 6, width: 14, height: 20, iconName: "camera-web-symbolic", colour: "#ffffffff"},
+                {x: 1292, y: 6, width: 14, height: 20, iconName: "microphone-sensitivity-high-symbolic", colour: "#ffffffff"}]},
+        microphone: "microphone-sensitivity-high-symbolic", stream: {name: "g2-mic", volume: 65536, muted: false, normal: 65536}},
+    hidden: true, after: {pill: {x: 1313, y: 4, width: 119, height: 24, paddingLeft: 10}, privacy: null}}'
+
+test_privacy_case() {
+    local run=$T/privacy passes failures change what
+    mkdir -p "$run"
+    echo 'privacy exit=0 secs=30 marker-after-exit=no' >"$run/results-main.txt"
+    while IFS='|' read -r failures change what; do
+        printf 'APEXG2-PRIVACY %s\n' "$(jq -nc "$PRIVACY_REPORT | $change")" >"$run/privacy.log"
+        read -r passes _ <<<"$(assertion_counts privacy_case "$run")"
+        expect_eq "privacy: $what fails $failures of 9" "$failures" $((9 - passes))
+    done <<'CHANGES'
+0|.|both indicators on real streams, then gone
+1|.before.camera = true|a camera shown before any stream
+1|.shown = false|streams that never showed both
+1|.inUse.privacy.height = 24|a group taller than $apex_privacy_height
+1|.inUse.privacy.glyphs[1].x = 1294|glyphs further apart than $apex_privacy_gap
+1|.inUse.microphone = "microphone-sensitivity-medium-symbolic"|a microphone icon volume.js would not give the stream
+1|.inUse.stream.muted = true|a muted stream under a live microphone icon
+1|.inUse.stream.name = "auto_null"|the microphone of another source than g2-mic
+1|.inUse.privacy.glyphs = [.inUse.privacy.glyphs[0] + {iconName: .inUse.microphone}, .inUse.privacy.glyphs[1] + {iconName: "camera-web-symbolic"}]|the microphone before the camera
+1|.inUse.privacy.glyphs[0].iconName = "camera-disabled-symbolic"|another camera glyph
+1|.hidden = false|an indicator left after the streams stop
+1|.after.privacy = .inUse.privacy|a group left after the streams stop
+1|.after.pill.paddingLeft = 4|a pill still padded for the group
+6|{error: "privacyReport: no PipeWire"}|a probe error
+CHANGES
+}
+
 test_no_disposed_apex() {
     local run=$T/disposed-run disposed passes failures
     disposed='Gjs-CRITICAL **: Object St.Widget (0x55e780c0), has been already disposed — impossible to access it.'
@@ -3531,6 +3566,7 @@ test_no_binding_overwritten
 test_no_spurious_allocation
 test_clean_shutdown
 test_keys_case
+test_privacy_case
 test_startup_handler_ran
 test_network_rows_centred
 test_pr_assertions

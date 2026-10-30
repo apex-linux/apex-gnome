@@ -155,9 +155,21 @@ run_case() {
                 "layer-enabled=$(gsettings get io.github.apex_linux.Apex.Desktop layer-enabled)" \
                 "backdrop=$G2_BACKDROP picture-uri=$(gsettings get org.gnome.desktop.background picture-uri)"
             # Only reads of the wall clock stand still: timers and frames keep the real clocks.
-            exec env LD_PRELOAD="$G2_CLOCK_LIB" \
+            set -- env LD_PRELOAD="$G2_CLOCK_LIB" \
                 gnome-shell --headless --virtual-monitor "$G2_MONITOR" ${G2_MONITOR2:+--virtual-monitor "$G2_MONITOR2"} \
                 --wayland-display="$G2_WAYLAND_DISPLAY" --automation-script /w/probe.js
+            [ "${G2_PIPEWIRE:-0}" = 1 ] || exec "$@"
+            # The camera monitor connects to PipeWire once, as the shell starts; g2-mic is the null source.
+            mkdir -p "$HOME/.config/pipewire/pipewire.conf.d"
+            printf "%s\n" "context.objects = [ { factory = adapter args = { factory.name = support.null-audio-sink" \
+                "node.name = g2-mic media.class = Audio/Source/Virtual audio.position = [ MONO ] } } ]" \
+                >"$HOME/.config/pipewire/pipewire.conf.d/g2-mic.conf"
+            pipewire & pipewire-pulse & wireplumber &
+            for _ in $(seq 50); do [ -S "$XDG_RUNTIME_DIR/pipewire-0" ] && [ -S "$XDG_RUNTIME_DIR/pulse/native" ] && break; sleep 0.1; done
+            "$@"
+            rc=$?
+            kill $(jobs -p) 2>/dev/null
+            exit "$rc"
         ' >"/out/$name.log" 2>&1
     rc=$?
     [[ -e $run/apex-shell-starting ]] && left=yes
@@ -226,6 +238,8 @@ run_and_record_case no-dock-dark "$CAPTURE_SETTINGS;$DARK;io.github.apex_linux.A
 run_and_record_case indicators "$CAPTURE_SETTINGS;$NO_HOT_CORNER;$TWO_SOURCES" G2_INDICATORS=1
 run_and_record_case indicators-scale1 "$CAPTURE_SETTINGS;$NO_HOT_CORNER;$TWO_SOURCES" G2_INDICATORS=1 G2_SCALE=1 G2_MONITOR=1440x900
 run_and_record_case indicators-dark "$CAPTURE_SETTINGS;$NO_HOT_CORNER;$TWO_SOURCES;org.gnome.desktop.interface color-scheme prefer-dark" G2_INDICATORS=1
+# The camera and microphone indicators on real PipeWire streams, started before the shell.
+run_and_record_case privacy "$CAPTURE_SETTINGS;$NO_HOT_CORNER" G2_PRIVACY=1 G2_PIPEWIRE=1
 run_and_record_case stock-light "$CAPTURE_SETTINGS;org.gnome.desktop.interface color-scheme prefer-light" APEX_SHELL_SAFE=1 G2_SCENES=1
 run_and_record_case stock-dark "$CAPTURE_SETTINGS;org.gnome.desktop.interface color-scheme prefer-dark" APEX_SHELL_SAFE=1 G2_SCENES=1
 run_and_record_case safe-env '' APEX_SHELL_SAFE=1

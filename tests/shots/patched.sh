@@ -166,6 +166,8 @@ install_shell() {
     quietly dnf5 -y "${REPOS[@]}" install "${rpms[@]}" mesa-dri-drivers dbus-daemon python3-dbusmock gcc glib2-devel gjs jq malcontent-libs
     rpm -q gnome-shell | grep -q "\.apex" ||
         die "the installed gnome-shell is not an Apex build: $(rpm -q gnome-shell)"
+    # The privacy case's PipeWire and its GStreamer clients, as the image ships them.
+    quietly dnf5 -y "${REPOS[@]}" install pipewire wireplumber pipewire-pulseaudio pipewire-gstreamer gstreamer1-plugins-good
     # What apex-desktop ships besides: the schema, the layer's fixture.
     cp "$REPO/tests/layer/fixtures/io.github.apex_linux.Apex.Desktop.gschema.xml" /usr/share/glib-2.0/schemas/
     quietly glib-compile-schemas --strict /usr/share/glib-2.0/schemas

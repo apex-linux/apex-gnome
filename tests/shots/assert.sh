@@ -25,7 +25,7 @@ readonly DIRECT_CASES=(default default-scale1 dark-style high-contrast large-tex
     large-text-solid dock-intellihide dock-intellihide-dark dock-one-gpu no-dock no-dock-dark stock-light stock-dark safe-env
     layer-disabled layer-cycles motion idle dock-pin dock-dnd dock-external keys glass-load glass-stress fault-configure fault-enable fault-abort kernel-safe
     fedora-light fedora-dark glass fedora-glass
-    indicators indicators-scale1 indicators-dark)
+    indicators indicators-scale1 indicators-dark privacy)
 readonly DIRECT_PARTS=(main kernel fedora)
 readonly CAPTURE_CASES=(default default-scale1 dark-style stock-light stock-dark fedora-light fedora-dark)
 readonly SCENES=(desktop overview)
@@ -541,6 +541,24 @@ dock_intellihide() {
 }
 
 # shellcheck disable=SC2016 # jq programs and token names, not shell expansions
+# Board 39's privacy group with the camera and the microphone in use, at AT in REPORT: indicators.js
+# shows them by hand, privacy.js on real streams.
+privacy_group_metrics() {
+    local label=$1 report=$2 tokens=$3 at=$4
+    local -a metric=(top_bar_metric "$label" "$report" "$tokens")
+    "${metric[@]}" 'the camera and microphone in use: a $apex_privacy_height $apex_privacy group, radius $apex_radius_privacy, $apex_bar_pill_padding_privacy into the status pill' \
+        "$at | {g: .privacy, pill}" '(.g | (.height | px_is($t.apex_privacy_height)) and (.radius | px_is($t.apex_radius_privacy)) and (.colour | colour_is($t.apex_privacy)))
+            and (.g.x - .pill.x | px_is($t.apex_bar_pill_padding_privacy)) and (.pill.paddingLeft | px_is($t.apex_bar_pill_padding_privacy))
+            and (.g.y + .g.height / 2 - .pill.y - .pill.height / 2 | fabs < 0.51)'
+    "${metric[@]}" 'its glyphs are $apex_privacy_icon_size in $apex_privacy_fg, padded $apex_privacy_padding and $apex_privacy_gap apart' \
+        "$at.privacy" '(.glyphs | length == 2 and all((.width | px_is($t.apex_privacy_icon_size)) and (.colour | colour_is($t.apex_privacy_fg))))
+            and (.glyphs[0].x - .x | px_is($t.apex_privacy_padding)) and (.x + .width - .glyphs[-1].x - .glyphs[-1].width | px_is($t.apex_privacy_padding))
+            and (.glyphs[1].x - .glyphs[0].x - .glyphs[0].width | px_is($t.apex_privacy_gap))'
+    "${metric[@]}" 'the next status glyph follows it after $apex_privacy_margin + $apex_bar_status_gap' \
+        "$at.privacy" '.next.x - .x - .width | px_is(($t.apex_privacy_margin | px) + ($t.apex_bar_status_gap | px))'
+}
+
+# shellcheck disable=SC2016 # jq programs and token names, not shell expansions
 indicator_metrics() {
     local label=$1 log=$2 variant=$3 report tokens
     report=$(report_of "$log" APEXG2-INDICATORS)
@@ -576,16 +594,7 @@ indicator_metrics() {
             and (.search.x - .d.x - .d.width | px_is(($t.apex_indicators_divider_margin | px) + ($t.apex_bar_gap | px)))'
     "${metric[@]}" 'the search button starts the stock items, before the recording pill, the input chip, the sharing pill and the status pill' \
         '.everything.order' 'index("apex-search") as $s | $s >= 2 and .[$s - 2:$s] == ["indicators", "divider"] and .[$s + 1:] == ["screenRecording", "keyboard", "screenSharing", "quickSettings"]'
-    "${metric[@]}" 'the camera and microphone in use: a $apex_privacy_height $apex_privacy group, radius $apex_radius_privacy, $apex_bar_pill_padding_privacy into the status pill' \
-        '.everything | {g: .privacy, pill}' '(.g | (.height | px_is($t.apex_privacy_height)) and (.radius | px_is($t.apex_radius_privacy)) and (.colour | colour_is($t.apex_privacy)))
-            and (.g.x - .pill.x | px_is($t.apex_bar_pill_padding_privacy)) and (.pill.paddingLeft | px_is($t.apex_bar_pill_padding_privacy))
-            and (.g.y + .g.height / 2 - .pill.y - .pill.height / 2 | fabs < 0.51)'
-    "${metric[@]}" 'its glyphs are $apex_privacy_icon_size in $apex_privacy_fg, padded $apex_privacy_padding and $apex_privacy_gap apart' \
-        '.everything.privacy' '(.glyphs | length == 2 and all((.width | px_is($t.apex_privacy_icon_size)) and (.colour | colour_is($t.apex_privacy_fg))))
-            and (.glyphs[0].x - .x | px_is($t.apex_privacy_padding)) and (.x + .width - .glyphs[-1].x - .glyphs[-1].width | px_is($t.apex_privacy_padding))
-            and (.glyphs[1].x - .glyphs[0].x - .glyphs[0].width | px_is($t.apex_privacy_gap))'
-    "${metric[@]}" 'the next status glyph follows it after $apex_privacy_margin + $apex_bar_status_gap' \
-        '.everything.privacy' '.next.x - .x - .width | px_is(($t.apex_privacy_margin | px) + ($t.apex_bar_status_gap | px))'
+    privacy_group_metrics "$label indicators" "$report" "$tokens" .everything
     "${metric[@]}" 'with nothing in use the group goes and the pill starts $apex_bar_pill_padding in again' \
         '.everything.after' '.privacy == false and (.paddingLeft | px_is($t.apex_bar_pill_padding))'
     "${metric[@]}" 'a recording is a $apex_bar_pill_height $apex_recording pill, radius $apex_radius_bar_pill' \
@@ -2196,6 +2205,7 @@ direct_cases() {
     glass_manager glass "$run/glass.log" light
     glass_unlock_vs_fedora "$run"
     indicator_cases "$run"
+    privacy_case "$run"
     one_gpu_case "$run"
     no_dock_case "$run"
     dock_dnd_case "$run"
@@ -2499,6 +2509,7 @@ patched_assertions() {
     asserted glass && glass_manager glass "$run/glass.log" light
     asserted glass fedora-glass && glass_unlock_vs_fedora "$run"
     asserted indicators indicators-scale1 indicators-dark && indicator_cases "$run"
+    asserted privacy && privacy_case "$run"
     asserted dock-one-gpu && one_gpu_case "$run"
     asserted no-dock no-dock-dark && no_dock_case "$run"
     asserted dock-dnd && dock_dnd_case "$run"
@@ -2560,6 +2571,26 @@ indicator_cases() {
         no_apex_failure "${c%:*}" "$run/${c%:*}.log"
         indicator_metrics "${c%:*}" "$run/${c%:*}.log" "${c#*:}"
     done
+}
+
+# shellcheck disable=SC2016 # jq programs and token names, not shell expansions
+# privacy.js: the indicators on real PipeWire streams, from a camera node and a capture of the null source g2-mic.
+privacy_case() {
+    local run=$1 log=$1/privacy.log report tokens
+    exits "$run" privacy 0
+    no_js_error privacy "$log"
+    no_apex_failure privacy "$log"
+    report=$(report_of "$log" APEXG2-PRIVACY)
+    tokens=$(tokens_for light)
+    expect_report privacy "$log" '.error == null and (.before | (.camera or .microphone) | not) and .shown' \
+        "no indicator before the streams; a pipewiresrc viewer of a videotestsrc Camera node and a pulsesrc capture of g2-mic show both" APEXG2-PRIVACY
+    privacy_group_metrics privacy "$report" "$tokens" .inUse
+    expect_report privacy "$log" '.inUse | (.stream | if .muted or .volume <= 0 then 0 else [[3 * .volume / .normal | ceil, 1] | max, 3] | min end) as $n
+            | .stream.name == "g2-mic" and .microphone == "microphone-sensitivity-\(["muted", "low", "medium", "high"][$n])-symbolic"
+            and [.privacy.glyphs[].iconName] == ["camera-web-symbolic", .microphone]' \
+        "the camera's glyph, then the microphone's, named as volume.js names it from the real stream's volume and mute" APEXG2-PRIVACY
+    top_bar_metric privacy "$report" "$tokens" 'the streams stopped, both indicators hide, the group goes and the pill starts $apex_bar_pill_padding in again' \
+        '{hidden, after}' '.hidden and .after.privacy == null and (.after.pill.paddingLeft | px_is($t.apex_bar_pill_padding))'
 }
 
 # Patch 0003's glass in the frames the shell drew (glass.js, the glass case).
