@@ -247,10 +247,12 @@ no_disposed_at_shutdown() {
     fi
 }
 
-# The probe empties the tray before the shell exits, so no case but shutdown-banner meets that race.
-tray_idle() {
+# The probe empties the tray, and waits out the calendar server and the app list, before the shell exits:
+# no case but shutdown-banner meets those races.
+quiet_exit() {
     local label=$1 log=$2
-    expect "$label" "$(report_of "$log" APEXG2-TRAY)" '.idle == true' "the probe leaves no banner up for the shell's shutdown"
+    expect "$label" "$(report_of "$log" APEXG2-EXIT)" '.tray == true and .quiet == true' \
+        "the probe leaves no banner up, and the calendar server and the app list quiet, for the shell's shutdown"
 }
 
 # Mutter warns when two bindings claim one key: the second silently takes it from the first.
@@ -2029,7 +2031,7 @@ direct_cases() {
         # fault-abort may abort before its report; its exit status says the shell ran.
         [[ $c == fault-abort ]] && continue
         action_modes "$c" "$f"
-        [[ $c == shutdown-banner ]] || tray_idle "$c" "$f"
+        [[ $c == shutdown-banner ]] || quiet_exit "$c" "$f"
         expect_report "$c" "$f" '.mode == "user"' "the probe ran: the static import graph loaded"
         fixed_clock "$c" "$f"
         backdrop_painted "$c" "$f"
@@ -2437,8 +2439,8 @@ shutdown_banner_case() {
     local run=$1 f=$1/shutdown-banner.log
     exits "$run" shutdown-banner 0
     no_apex_failure shutdown-banner "$f"
-    expect shutdown-banner "$(report_of "$f" APEXG2-SHUTDOWN-BANNER)" '.pending and .armed' \
-        "as the shell exits, a notification is up or queued, and the tray's banner timeout is armed"
+    expect shutdown-banner "$(report_of "$f" APEXG2-SHUTDOWN-BANNER)" '.pending and .armed and .quiet' \
+        "as the shell exits, a notification is up or queued and the tray's banner timeout armed, with nothing else due"
     logs shutdown-banner "$f" 'Shutting down GNOME Shell' "the shell went through its shutdown"
 }
 
@@ -2456,7 +2458,7 @@ patched_assertions() {
         asserted "$c" || continue
         [[ $c == kernel-safe || $c == fault-abort ]] || backdrop_painted "$c" "$run/$c.log"
         [[ $c == kernel-safe || $c == fault-abort ]] || action_modes "$c" "$run/$c.log"
-        [[ $c == kernel-safe || $c == fault-abort || $c == shutdown-banner ]] || tray_idle "$c" "$run/$c.log"
+        [[ $c == kernel-safe || $c == fault-abort || $c == shutdown-banner ]] || quiet_exit "$c" "$run/$c.log"
         [[ $c == kernel-safe ]] || startup_handler_ran "$c" "$run/$c.log"
         [[ -e $run/$c.log ]] && no_nan_allocation "$c" "$run/$c.log"
         [[ -e $run/$c.log ]] && no_st_css_warning "$c" "$run/$c.log"

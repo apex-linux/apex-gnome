@@ -66,7 +66,7 @@ The direct cases:
 | `keys` | the capture settings without hot corners, and two input sources (`us`, `fr`) | every key the session relies on, as registered (accelerators from their schemas and apex-desktop's override, action modes as `windowManager.js` keeps them) and then pressed through a virtual keyboard: Super+Space opens Spotlight and leaves the input source alone; Super+Alt+Space switches to the next input source and Shift+Super+Alt+Space back, in every mode; Ctrl+Alt+Tab, in the session, overview, lock, unlock and login modes, lists the dock among its groups and moves the keyboard focus into it; a Super tap opens the overview and Super+A the launcher (the app grid), both in the session and overview modes; no grab is left behind |
 | `fault-configure`, `fault-enable` | `APEX_SHELL_TEST_FAULT` | only the fault feature is off; the `witness` feature after it still enables; the rest of the layer runs, Super+Space included, and the shell survives |
 | `fault-abort` | `abort-after-enable` | SIGABRT (exit 134) with the crash guard's marker left behind |
-| `shutdown-banner` | `G2_SHUTDOWN_BANNER=1` | after the usual reports, a notification for the tray and its banner timeout due 100 ms into a shutdown whose history write is held 300 ms: the layer's teardown disables the notifications feature, which clears the tray's banner timeouts before `layout.js` destroys it, so `main.js`'s shutdown loop runs none on the disposed tray |
+| `shutdown-banner` | `G2_SHUTDOWN_BANNER=1` | after the usual reports and the same wait for a quiet calendar server and app list, a notification for the tray and its banner timeout due 100 ms into a shutdown whose history write is held 300 ms: the layer's teardown disables the notifications feature, which clears the tray's banner timeouts before `layout.js` destroys it, so `main.js`'s shutdown loop runs none on the disposed tray |
 | `fedora-light`, `fedora-dark` | Fedora's build, `prefer-light` or `prefer-dark` | no Apex module; upstream's sheet at its own path, byte for byte the one safe mode loads from `theme/stock/` |
 | `glass`, `fedora-glass` | the capture settings, `G2_GLASS=1` | patch 0003's glass in the frames the shell drew; the stock unlock blur captured in both shells (see "Glass") |
 
@@ -79,8 +79,12 @@ queued by the layer's teardown and run in `main.js`'s shutdown loop did to the p
 effect reaches the disposed global (`shell_global_get`'s assertion, `G_IS_OBJECT`), as unmanaging a
 still-connected client's window did before patch 0019, and nothing touches a disposed object
 ("has been already disposed"), as a banner timeout the tray left armed did when that loop ran it after
-`layout.js` had destroyed the tray (upstream gnome-shell 51); every case but `shutdown-banner` exits
-with the tray empty and its timeouts cleared (`APEXG2-TRAY`), so stock's tray cannot meet that race;
+`layout.js` had destroyed the tray (upstream gnome-shell 51). Every case but `shutdown-banner` exits
+only once the tray is empty and its timeouts are cleared. It also waits until the calendar server's
+`HasCalendars` and the app list have been quiet for 2 s, for at most 20 s; if they haven't, `quiet` is
+false and the case fails. Otherwise that loop could deliver them to the date menu's destroyed events
+section too (`dateMenu.js:326`, upstream as well). With both waits, stock's shell cannot meet those
+races (`APEXG2-EXIT`);
 St parsed every declaration (no `St-WARNING` naming a line and column of a sheet: St drops
 such a declaration and keeps the cascade's earlier value);
 the wall clock stands at the fixed time and the top bar's clock shows it (`Mon Sep 28`, EN SPACE, `09:41`).

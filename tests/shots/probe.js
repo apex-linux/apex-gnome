@@ -78,6 +78,8 @@ const SIGNOFF_QUIET_MS = 1500;
 const SIGNOFF_FOCUS_ATTEMPTS = 3;
 const WIFI_SCAN_MS = 5000;
 const TRAY_DRAIN_MS = 3000;
+const SHUTDOWN_QUIET_MS = 2000;
+const SHUTDOWN_QUIET_WAIT_MS = 20000;
 const SHUTDOWN_HISTORY_DELAY_MS = 300;
 const SHUTDOWN_BANNER_TIMEOUT_MS = 100;
 const AVATAR_SIZE = 32;
@@ -3182,9 +3184,29 @@ async function drainMessageTray() {
     return idle;
 }
 
+// That loop also delivers the calendar server's late HasCalendars and the app list's late changes to
+// the date menu's destroyed events section (dateMenu.js:326): the shell exits once both are quiet.
+function watchShutdownSignals() {
+    const source = Main.panel.statusArea.dateMenu._eventSource;
+    const appSystem = Shell.AppSystem.get_default();
+    const now = () => GLib.get_monotonic_time() / 1000;
+    const watch = {last: now()};
+    const seen = () => (watch.last = now());
+    const ids = [[source, source.connect('notify::has-calendars', seen)],
+        [appSystem, appSystem.connect('installed-changed', seen)]];
+    watch.quiet = async () => {
+        const quiet = await until(() => source._initialized && now() - watch.last >= SHUTDOWN_QUIET_MS,
+            SHUTDOWN_QUIET_WAIT_MS);
+        ids.forEach(([object, id]) => object.disconnect(id));
+        return quiet;
+    };
+    return watch;
+}
+
 // The race made certain: a notification for the tray to show, and its timeout due inside a slowed
 // shutdown loop. The shell exits here, not after scripting.js's helper round trip, which could outlast it.
-async function shutdownWithBanner() {
+async function shutdownWithBanner(watch) {
+    const quiet = await watch.quiet();
     Main.notify('G2 banner', 'shown as the shell exits');
     await settle();
     const writeHistory = Main.timeLimitsManager.shutdown.bind(Main.timeLimitsManager);
@@ -3195,13 +3217,14 @@ async function shutdownWithBanner() {
     Main.messageTray._updateNotificationTimeout(SHUTDOWN_BANNER_TIMEOUT_MS);
     const tray = Main.messageTray;
     console.log(`APEXG2-SHUTDOWN-BANNER ${JSON.stringify({
-        pending: tray._banner !== null || tray._notificationQueue.length > 0, armed: tray._notificationTimeoutId !== 0,
+        pending: tray._banner !== null || tray._notificationQueue.length > 0, armed: tray._notificationTimeoutId !== 0, quiet,
     })}`);
     global.context.terminate();
 }
 
 export async function run() {
     actionModeAtRun = actionModeName();
+    const watch = watchShutdownSignals();
     const pingId = keepPerfHelperAwake();
     try {
         await runProbe();
@@ -3209,9 +3232,9 @@ export async function run() {
         GLib.source_remove(pingId);
     }
     if (GLib.getenv('G2_SHUTDOWN_BANNER') === '1')
-        await shutdownWithBanner();
+        await shutdownWithBanner(watch);
     else
-        console.log(`APEXG2-TRAY ${JSON.stringify({idle: await drainMessageTray()})}`);
+        console.log(`APEXG2-EXIT ${JSON.stringify({tray: await drainMessageTray(), quiet: await watch.quiet()})}`);
 }
 
 async function runProbe() {
