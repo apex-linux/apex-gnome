@@ -1114,6 +1114,16 @@ test_signoff_banners() {
     else
         not_ok "signoff: the sign-off scene's own error fails boards 15 and 35, named: $(tail -n 3 "$T/signoff.out")"
     fi
+    rm -rf "$dir" && cp -r "$1" "$dir"
+    sed -i '/^APEXG2-SESSION /s/"icon-theme":"Apex"}/"icon-theme":"Adwaita"}/' "$dir/g2/dark-style.log"
+    if ! "$HERE/signoff.sh" --collect "$dir/g2" "$dir/shots" "$dir/out" >"$T/signoff.out" 2>&1 &&
+        grep -q '^signoff.sh: session defaults: 11 passed, 1 failed$' "$T/signoff.out" &&
+        grep -q 'dark-style: the session reads .*(icon-theme is "Adwaita", not "Apex")' "$T/signoff.out" &&
+        grep -q '1 session default check(s) failed' "$T/signoff.out"; then
+        ok "signoff: a session default that is not apex-desktop's fails its own check line, naming the key"
+    else
+        not_ok "signoff: a session default that is not apex-desktop's fails its own check line, naming the key: $(tail -n 3 "$T/signoff.out")"
+    fi
 }
 
 test_signoff() {
@@ -1134,6 +1144,7 @@ test_signoff() {
     printf 'Apex: feature panel enabled\nApex: feature dock enabled\nAPEXG2-SIGNOFF {"previews":true}\n%s\n' \
         'APEXG2 {"dock":{"items":[{"kind":"app","name":"Files"},{"kind":"separator"},{"kind":"app","name":"Bazaar"}]}}' >"$dir/g2/default.log"
     echo 'APEXG2-SIGNOFF {"previews":true}' >"$dir/g2/dark-style.late.log"
+    printf 'APEXG2-SESSION %s\n' "$(jq -c . <<<"$SESSION_REPORT")" | tee -a "$dir/g2/default.log" >>"$dir/g2/dark-style.log"
     for scene in "$dir"/g2/captures/*.png; do
         scene=$(basename "$scene")
         case $scene in
@@ -3083,6 +3094,56 @@ test_shutdown_banner_case() {
 CHANGES
 }
 
+readonly SESSION_REPORT='{"settings": {"font-name": "Adwaita Sans 10.125", "document-font-name": "Adwaita Sans 10.125",
+    "monospace-font-name": "JetBrains Mono 9.75", "font-hinting": "none", "icon-theme": "Apex"},
+  "shell": {"font": "Adwaita Sans 10.125", "iconTheme": "Apex"},
+  "fontconfig": {"sans": {"family": "Adwaita Sans", "file": "/usr/share/fonts/adwaita-sans-fonts/AdwaitaSans-Regular.ttf", "features": ["ss03"]},
+    "mono": {"family": "JetBrains Mono", "file": "/usr/share/fonts/jetbrains-mono-fonts/JetBrainsMono-Regular.otf", "features": []}},
+  "drawn": {"clock": "Adwaita Sans"},
+  "icons": {"bar": [{"icon": "battery-level-80-symbolic", "file": "/usr/share/icons/Apex/symbolic/battery-level-80-symbolic.svg", "app": null}],
+    "dock": [{"icon": "org.gnome.Nautilus", "file": "/usr/share/icons/Apex/scalable/apps/org.gnome.Nautilus.svg", "app": "org.gnome.Nautilus.desktop"},
+      {"icon": "application-x-executable", "file": "/usr/share/icons/Adwaita/scalable/mimetypes/application-x-executable.svg",
+       "app": "io.github.apex_linux.G2Stub1.desktop"}],
+    "dash": null,
+    "quickSettings": [{"icon": ". GThemedIcon screenshooter-symbolic screenshooter",
+      "file": "/org/gnome/shell/icons/scalable/actions/screenshooter-symbolic.svg", "app": null}]}}'
+
+test_session_defaults() {
+    local passes failures change what stubs
+    stubs=$(sed -n "s/^readonly STUB_APPS='\(.*\)'\$/\1/p" "$HERE/direct.sh" | tr ' ' '\n' | sed 's/$/.desktop/' | paste -sd' ' -)
+    # shellcheck disable=SC2016 # expanded by the inner bash
+    expect_eq "session defaults: assert.sh's fixture apps are direct.sh's STUB_APPS" "$stubs" \
+        "$(bash -c '. "$1/assert.sh"; echo "${FIXTURE_APPS[*]}"' _ "$HERE")"
+    while IFS='|' read -r failures change what; do
+        printf 'APEXG2-SESSION %s\n' "$(jq -nc "$SESSION_REPORT | $change")" >"$T/session.log"
+        read -r passes _ <<<"$(assertion_counts session_defaults default "$T/session.log")"
+        expect_eq "session defaults: $what fails $failures of 6" "$failures" $((6 - passes))
+    done <<'CHANGES'
+0|.|apex-desktop's defaults, a fixture app's generic icon and the shell's own screenshooter
+1|.settings["monospace-font-name"] = "DejaVu Sans Mono 10"|another monospace font in the settings
+1|.settings["icon-theme"] = "Adwaita"|another icon theme in the settings
+1|.shell.iconTheme = "Adwaita"|a shell that draws another icon theme
+1|.fontconfig.sans.features = []|Adwaita Sans without ss03
+1|.fontconfig.mono = {family: "DejaVu Sans Mono", file: "/usr/share/fonts/dejavu-sans-mono-fonts/DejaVuSansMono.ttf", features: []}|no JetBrains Mono, so fontconfig falls back
+1|.drawn.clock = "Cantarell"|a clock drawn in another family
+1|.icons.bar[0].file = "/usr/share/icons/Adwaita/symbolic/status/battery-level-80-symbolic.svg"|an Adwaita glyph in the bar
+1|.icons.quickSettings[0].file = null|an icon that resolves nowhere
+1|.icons.dock[0].file = "/usr/share/icons/hicolor/scalable/apps/org.gnome.Nautilus.svg"|an image app's icon from outside Apex
+1|.icons.quickSettings[0].icon = ". GThemedIcon camera-photo-symbolic"|a shell icon that is not on the list
+1|.icons = {bar: [], dock: null, dash: null, quickSettings: []}|no icons reported
+6|{error: "sessionDefaultsReport: no panel"}|a probe error
+CHANGES
+    printf 'APEXG2-SESSION %s\n' "$(jq -nc "$SESSION_REPORT | .icons.bar[0].file = null")" >"$T/session.log"
+    assertion_counts session_defaults default "$T/session.log" >/dev/null
+    expect_eq "session defaults: a failure names the place and the icon" 1 \
+        "$(grep -c '^FAIL default: every icon .* (bar battery-level-80-symbolic: no icon)$' "$T/assertions.out")"
+    printf 'APEXG2-SESSION %s\n' "$(jq -nc "$SESSION_REPORT | .fontconfig.mono = {family: \"Noto Sans\", file: \"NotoSans.ttf\", features: []}")" \
+        >"$T/session.log"
+    assertion_counts session_defaults default "$T/session.log" >/dev/null
+    expect_eq "session defaults: a missing JetBrains Mono names the family fontconfig fell back to" 1 \
+        "$(grep -c '^FAIL default: fontconfig gives JetBrains Mono .*(got {"family":"Noto Sans",' "$T/assertions.out")"
+}
+
 test_no_binding_overwritten() {
     local run=$T/keys-run overwritten passes failures
     overwritten='libmutter-WARNING **: 09:41:00.000: Overwriting existing binding of keysym 20 with keysym 20 (keycode 41).'
@@ -3763,6 +3824,7 @@ test_no_disposed_apex
 test_no_binding_overwritten
 test_no_spurious_allocation
 test_clean_shutdown
+test_session_defaults
 test_no_disposed_at_shutdown
 test_quiet_exit
 test_keys_case
