@@ -27,6 +27,9 @@ escalation rule. The lane, `apex-lane`, and the formats of the files here are in
   upstream file. Nothing is moved or deleted.
 - Fedora's spec has no patch of its own; the series follows as `Patch1001` and up, and
   `%autosetup -p1` applies it with `patch`, at Fedora's fuzz 0.
+- Checked 2026-10-30 against GNOME 51.1 (FEDORA-2026-2812a1754d): no ptyxis update is
+  pending for F45. The series applies at fuzz 0 to ptyxis-50.1-6.fc45 and the lane
+  builds it with the 51.1 update in the buildroot.
 
 ## `desktop/ptyxis/`
 
