@@ -275,7 +275,8 @@ Shift+Alt+Super+Space. A missing row or another key fails.
 A second part of the run starts `update1.py`, a stand-in for apex-updated, on the system
 bus, and opens `gnome-control-center system software-updates` on its scenarios: board
 18's "ready" state (captured light and dark, at the top and scrolled), up to date, an
-update available, a download under way, a health failure and a fallback (board 26's
+update available, one waiting on a gate (on battery: "Update Waiting" and Download
+Anyway), a download under way, a health failure and a fallback (board 26's
 dialog in each, captured dark too as `updates-health-failure-dark` and
 `updates-fallback-dark`), and no service at all. `updates.py` checks each
 state's texts through AT-SPI, that board 26's dialog shows, and presses each button and
