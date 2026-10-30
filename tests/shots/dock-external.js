@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
-// G2's dock-external case (G2_DOCK_EXTERNAL=1): two virtual monitors. The dock and the bar stay on the
-// primary, only its windows hide the dock or turn the bar solid, and both follow a new primary.
+// G2's dock-external case (G2_DOCK_EXTERNAL=1): two virtual monitors, and a third plugged in at runtime. The dock
+// and the bar stay on the primary, only its windows hide the dock or turn the bar solid, and both follow a new primary.
 
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
@@ -22,6 +22,9 @@ const GLASS_EFFECT = 'apex-glass';
 const DISPLAY_CONFIG = ['org.gnome.Mutter.DisplayConfig', '/org/gnome/Mutter/DisplayConfig', 'org.gnome.Mutter.DisplayConfig'];
 // ApplyMonitorsConfig's method: temporary, as Settings applies before the user keeps it.
 const TEMPORARY = 1;
+const SCREEN_CAST = ['org.gnome.Mutter.ScreenCast', 'org.gnome.Mutter.ScreenCast.Session'];
+// The size the consumer asks for: mutter gives the virtual monitor the negotiated size.
+const PLUGGED = {width: 1280, height: 720};
 
 const rect = ({x, y, width, height}) => ({x, y, width, height});
 
@@ -75,8 +78,8 @@ function overviewState() {
     };
 }
 
-function call(method, parameters) {
-    return new Promise((resolve, reject) => Gio.DBus.session.call(...DISPLAY_CONFIG, method, parameters, null,
+function call(method, parameters, target = DISPLAY_CONFIG) {
+    return new Promise((resolve, reject) => Gio.DBus.session.call(...target, method, parameters, null,
         Gio.DBusCallFlags.NONE, -1, null, (bus, result) => {
             try {
                 resolve(bus.call_finish(result).deepUnpack());
@@ -159,6 +162,71 @@ function glassState(apexDock) {
     return {dock: glass(apexDock()._background), bar: glass(Main.panel), scrims, cost: scrimCost(scrims)};
 }
 
+function monitorsChanged() {
+    return new Promise(resolve => {
+        const id = Main.layoutManager.connect('monitors-changed', () => {
+            Main.layoutManager.disconnect(id);
+            resolve(true);
+        });
+    });
+}
+
+function monitorScales() {
+    return Main.layoutManager.monitors.map(m => m.geometry_scale);
+}
+
+// A monitor plugged in at runtime: ScreenCast's RecordVirtual, which mutter adds once a PipeWire
+// consumer negotiates its stream. The consumer runs without the shell's still wall clock.
+async function plugIn() {
+    const [sessionPath] = await call('CreateSession', new GLib.Variant('(a{sv})', [{}]),
+        [SCREEN_CAST[0], '/org/gnome/Mutter/ScreenCast', SCREEN_CAST[0]]);
+    const session = [SCREEN_CAST[0], sessionPath, SCREEN_CAST[1]];
+    const [streamPath] = await call('RecordVirtual', new GLib.Variant('(a{sv})', [{'cursor-mode': new GLib.Variant('u', 0)}]), session);
+    let node = null;
+    const id = Gio.DBus.session.signal_subscribe(SCREEN_CAST[0], `${SCREEN_CAST[0]}.Stream`, 'PipeWireStreamAdded', streamPath, null,
+        Gio.DBusSignalFlags.NONE, (...args) => (node = args[5].deepUnpack()[0]));
+    await call('Start', null, session);
+    await until(() => node !== null, WINDOW_TIMEOUT_MS);
+    Gio.DBus.session.signal_unsubscribe(id);
+    if (node === null)
+        throw new Error('RecordVirtual gave no PipeWire stream');
+    const launcher = new Gio.SubprocessLauncher({flags: Gio.SubprocessFlags.STDOUT_SILENCE});
+    launcher.unsetenv('LD_PRELOAD');
+    launcher.set_stderr_file_path(GLib.build_filenamev([GLib.getenv('G2_CAPTURES'), `${GLib.getenv('G2_CASE')}-plugged.log`]));
+    const consumer = launcher.spawnv(['gst-launch-1.0', '-q', 'pipewiresrc', `path=${node}`, '!',
+        `video/x-raw,width=${PLUGGED.width},height=${PLUGGED.height}`, '!', 'fakesink', 'sync=false']);
+    return {session, consumer};
+}
+
+async function unplug({session, consumer}) {
+    consumer.send_signal(15);
+    await new Promise(resolve => consumer.wait_async(null, () => resolve()));
+    await call('Stop', null, session);
+}
+
+async function settledChange(change, helpers) {
+    const changed = monitorsChanged();
+    const handle = await change();
+    const seen = await Promise.race([changed, Scripting.sleep(WINDOW_TIMEOUT_MS).then(() => false)]);
+    await Scripting.sleep(SLIDE_MS);
+    await helpers.settle();
+    return {seen, handle};
+}
+
+async function hotplug(apexDock, helpers) {
+    const before = {...layout(apexDock), scales: monitorScales(), scrims: scrimActors().length};
+    const {seen: added, handle} = await settledChange(plugIn, helpers);
+    const plugged = {changed: added, ...layout(apexDock), scales: monitorScales()};
+    Main.overview.show();
+    await helpers.settle();
+    Object.assign(plugged, {overview: overviewState(), glass: glassState(apexDock)});
+    Main.overview.hide();
+    await helpers.settle();
+    const {seen: removed} = await settledChange(() => unplug(handle), helpers);
+    const unplugged = {changed: removed, ...layout(apexDock), scales: monitorScales(), scrims: scrimActors().map(rect)};
+    return {asked: PLUGGED, before, plugged, unplugged};
+}
+
 export async function dockExternalReport(helpers) {
     const settled = await settleDesktop(helpers);
     const {apexDock} = helpers;
@@ -203,6 +271,8 @@ export async function dockExternalReport(helpers) {
 
         steps.mixed = {changed: await relayout(mixed(true), helpers)};
         Object.assign(steps.mixed, layout(apexDock), {dock: helpers.dockReport(), glass: glassState(apexDock)});
+
+        steps.hotplug = await hotplug(apexDock, helpers);
     } finally {
         client.force_exit();
     }

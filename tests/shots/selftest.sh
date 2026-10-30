@@ -2422,6 +2422,7 @@ readonly DOCK_EXTERNAL_REPORT='def lay($p; $window; $hidden; $solid): {primary: 
   def mon0: {x: 0, y: 0, width: 1440, height: 900};
   def mon1: {x: 1440, y: 0, width: 960, height: 540};
   def ext1: {x: 1440, y: 0, width: 1920, height: 1080};
+  def plug: {x: 3360, y: 0, width: 640, height: 360};
   def unscaled: {clone: {x: 0, y: 0, width: 0, height: 0}, source: {x: 0, y: 0, width: 0, height: 0}};
   def overview($state): {shown: true, controlsState: $state,
     scrims: [{visible: true, box: mon0, launcher: ($state == 2)}, {visible: true, box: mon1, launcher: ($state == 2)}],
@@ -2449,7 +2450,14 @@ readonly DOCK_EXTERNAL_REPORT='def lay($p; $window; $hidden; $solid): {primary: 
      mixed: (lay(0; {monitor: 0, maximised: true}; true; true) + {changed: true,
        monitors: [{x: 0, y: 0, width: 1440, height: 900, index: 0}, {x: 1440, y: 0, width: 1920, height: 1080, index: 1}],
        dockBox: {x: 596, y: 980, width: 249, height: 80},
-       glass: {dock: glass(112; 2; {x: 596, y: 990, width: 249, height: 70}), bar: (glass(96; 2; {x: 0, y: 0, width: 1440, height: 32}) + {enabled: false})}})}}'
+       glass: {dock: glass(112; 2; {x: 596, y: 990, width: 249, height: 70}), bar: (glass(96; 2; {x: 0, y: 0, width: 1440, height: 32}) + {enabled: false})}}),
+     hotplug: (lay(0; null; false; false) | {asked: {width: 1280, height: 720},
+       before: (. + {monitors: [(mon0 + {index: 0}), (ext1 + {index: 1})], dockBox: {x: 596, y: 980, width: 249, height: 80}, scales: [2, 1], scrims: 2}),
+       plugged: (. + {changed: true, monitors: [(mon0 + {index: 0}), (ext1 + {index: 1}), (plug + {index: 2})], dockBox: {x: 596, y: 980, width: 249, height: 80},
+         scales: [2, 1, 2], overview: {scrims: [mon0, ext1, plug] | map({visible: true, box: ., launcher: false}), monitors: [mon0, ext1, plug]},
+         glass: {scrims: [(glass(144; 2; mon0) + unscaled), (glass(72; 1; ext1) + unscaled), (glass(144; 2; plug) + unscaled)]}}),
+       unplugged: (. + {changed: true, monitors: [(mon0 + {index: 0}), (ext1 + {index: 1})], dockBox: {x: 596, y: 980, width: 249, height: 80},
+         scales: [2, 1], scrims: [mon0, ext1]})})}}'
 
 test_dock_external() {
     local change what passes failures all
@@ -2493,6 +2501,13 @@ test_dock_external() {
 .steps.mixedOnExternal.desktopGlass.scrims[1].enabled = true|a hidden scrim still blurring
 .steps.mixed.barSolid = false|a bar translucent over the panel's maximised window
 .steps.mixed.glass.dock.resourceScale = 1|dock glass left at scale 1 back on the panel
+.steps.hotplug.plugged.changed = false|a plugged monitor the shell never saw
+.steps.hotplug.plugged.monitors[2].width = 1280|a plugged monitor not at the negotiated size
+.steps.hotplug.plugged.dockBox.x = 3616|a dock that moved to the plugged monitor
+.steps.hotplug.plugged.overview.scrims = .steps.hotplug.plugged.overview.scrims[:2]|no scrim on the plugged monitor
+.steps.hotplug.plugged.glass.scrims[2] += {radius: 72, resourceScale: 1}|the plugged monitor's scrim blurred at another scale
+.steps.hotplug.unplugged.scrims += [{x: 3360, y: 0, width: 640, height: 360}]|a scrim left on the unplugged monitor
+.steps.hotplug.unplugged.changed = false|an unplug the shell never saw
 CHANGES
     write_report_run dock-external DOCK-EXTERNAL '{error: "G2 runs 1 monitor(s), not two\ndock-external.js:98"}' .
     read -r passes failures <<<"$(assertion_counts dock_external_case "$T/dock-external")"

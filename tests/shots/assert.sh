@@ -2339,6 +2339,19 @@ dock_external_case() {
     "${metric[@]}" 'and the dock, under the panel (hidden there), and its glass blur at scale 2 again' \
         '.steps.mixed' "$DOCK_BLURS .monitors[0] as \$m | .dockBox.x >= \$m.x and .dockBox.x + .dockBox.width <= \$m.x + \$m.width and
         (.glass.dock | blurs(\$t.apex_dock_blur; 2)) and (.glass.bar | .resourceScale == 2 and .radius == 2 * (\$t.apex_bar_blur | px) * 2)"
+    expect dock-external "$r" '.steps.hotplug | .plugged.changed and (.plugged.monitors | length) == (.before.monitors | length) + 1
+        and .plugged.monitors[:-1] == .before.monitors
+        and (.plugged.monitors[-1].width * .plugged.scales[-1]) == .asked.width and (.plugged.monitors[-1].height * .plugged.scales[-1]) == .asked.height' \
+        "a monitor plugged in at runtime (ScreenCast RecordVirtual, its stream negotiated by a pipewiresrc): monitors-changed, and one monitor more at the negotiated size"
+    expect dock-external "$r" '.steps.hotplug | .plugged.primary == .before.primary and .plugged.dockBox == .before.dockBox and .plugged.panelBox == .before.panelBox' \
+        "the dock and the bar stay on the primary, unmoved"
+    "${metric[@]}" 'in the overview a scrim covers each of the three monitors, blurring at 2 x $apex_overview_scrim_blur x that monitor'"'"'s scale' \
+        '.steps.hotplug.plugged' "$DOCK_BLURS (.overview.scrims | length == 3) and [.overview.scrims[].box] == .overview.monitors
+        and ([.overview.scrims[].visible] | all) and [.glass.scrims[].box] == .overview.monitors
+        and ([.glass.scrims, .scales] | transpose | all(.[1] as \$s | .[0] | blurs(\$t.apex_overview_scrim_blur; \$s)))"
+    expect dock-external "$r" '.steps.hotplug | .unplugged.changed and .unplugged.monitors == .before.monitors
+        and .unplugged.scrims == [.before.monitors[] | {x, y, width, height}] and .unplugged.dockBox == .before.dockBox' \
+        "unplugged, the monitor goes: a scrim for each monitor left, none for the gone one, and the dock where it was"
 }
 
 # The keys case: each binding as registered, then pressed through a virtual keyboard.
