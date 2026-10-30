@@ -78,11 +78,11 @@ check "image-args: apex-image's two declarations, the default before FROM and th
 check "image-args: no ARG GA_REACHED (the admission cut) leaves the flag out" \
     "--repos-base https://dl.fedoraproject.org/pub/fedora/linux" "$(image_args FROM x "$REPOS_ARG")"
 for bad in "ARG GA_REACHED=2" "ARG GA_REACHED=yes" "ARG GA_REACHED=" "ARG GA_REACHED"; do
-    check_false "image-args: '$bad' dies" bash -c 'printf "%s\n" "$1" "$2" >"$3" && "$4" "$3"' _ \
-        "$REPOS_ARG" "$bad" "$TMP/bad" "$APEX_ROOT/tests/lib/image-args.sh"
+    printf '%s\n' "$REPOS_ARG" "$bad" >"$TMP/Containerfile"
+    check_false "image-args: '$bad' dies" "$APEX_ROOT/tests/lib/image-args.sh" "$TMP/Containerfile"
 done
-check_false "image-args: no ARG REPOS_BASE dies" bash -c 'printf "%s\n" "ARG GA_REACHED=1" >"$1" && "$2" "$1"' _ \
-    "$TMP/no-repos" "$APEX_ROOT/tests/lib/image-args.sh"
+printf '%s\n' "ARG GA_REACHED=1" >"$TMP/Containerfile"
+check_false "image-args: no ARG REPOS_BASE dies" "$APEX_ROOT/tests/lib/image-args.sh" "$TMP/Containerfile"
 
 # --- signoff.yml runs on a pull request that can change the captures ---------------------
 signoff_paths() { printf '%s\n' "$@" | "$APEX_ROOT/.github/scripts/signoff-paths.sh" 2>/dev/null; }
