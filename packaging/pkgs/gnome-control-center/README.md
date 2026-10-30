@@ -101,8 +101,8 @@ active wallpaper as a cue that does not rely on colour; the board shows only the
 The active wallpaper's name sits beside the Background header and a note under the
 chooser says whether it has a dark version and follows the style
 (`panels/apex/cc-apex-background.c`); a wallpaper the chooser does not list shows neither.
-Stock's chooser lays thumbnails out at a fixed size, so the grid holds as many as fit,
-three at the window size the captures use, where the board has four.
+Stock's chooser draws its thumbnails at a fixed 144 px and 4:3, three to a row at the
+window size the captures use; 0004 makes them 120 px and 16:10, the board's four.
 
 ## Power
 
@@ -218,7 +218,7 @@ copy keeps apex-system's bytes and licence, GPL-3.0-or-later, so the built packa
 | `0001-apex-desktop` | `panels/meson.build`, `shell/meson.build`, `shell/cc-panel-loader.c`, `shell/cc-panel-list.c` | +7 | `subdir('apex')` after upstream's panels; `apex_shell_sources` added to `shell_sources`; the panel registered as `apex`; `"apex"` and a separator at the head of `panel_order[]` |
 | `0002-sidebar-tiles` | `shell/cc-panel-list.c` | +8 −7 | the include; each row's icon handed to `cc_apex_sidebar_tile()`; `panel_order[]` in the design's order |
 | `0003-software-updates` | `panels/system/cc-system-panel.c`, `panels/system/cc-system-panel.blp` | +6 −3 | the include; the `software-updates` subpage; the Software Updates group always shown; its row pushes the page (`navigation.push`) instead of spawning gnome-software, with a forward arrow for the external-link one |
-| `0004-appearance` | `panels/background/cc-background-chooser.c` | +4 | the include; the active item's name and whether it has a dark version handed to `cc_apex_background_show()` where the chooser marks it, and cleared when it gets a new one |
+| `0004-appearance` | `panels/background/cc-background-chooser.c` | +6 −2 | the include; the thumbnails 120 px wide and 16:10; the active item's name and whether it has a dark version handed to `cc_apex_background_show()` where the chooser marks it, and cleared when it gets a new one |
 | `0005-power` | `panels/power/cc-power-panel.c` | +2 | the include; `cc_apex_power_add()` after `setup_general_section()`, handed the General page and Power Mode's group |
 
 The resource goes into the executable as sources, not as a static library in
@@ -226,7 +226,7 @@ The resource goes into the executable as sources, not as a static library in
 and nothing upstream does.
 
 Budget (ADR 0014): at most 150 changed lines in upstream files, in hook hunks only; the
-added files under `panels/apex/` do not count. In use: 37 lines in 8 files.
+added files under `panels/apex/` do not count. In use: 41 lines in 8 files.
 
 The patches are `git format-patch` output against Fedora's `%prep` tree, with `a/` and
 `b/` prefixes, applied with `-p1`. Write them with apex-image's
