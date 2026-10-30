@@ -70,9 +70,11 @@ $_open_states: hover, focus, active, checked;
         (($apex_bar_pill_height - $_diamond_svg_size) / 2);
     }
 
-    // The workspace-dots feature reads -apex-active-width; St ignores a property it does not know.
+    // The workspace-dots feature reads -apex-active-width and -apex-inactive-opacity; St ignores a
+    // property it does not know.
     .workspace-dot {
       -apex-active-width: $apex_bar_dot_active_width;
+      -apex-inactive-opacity: $apex_bar_dot_inactive_opacity;
       min-width: $apex_bar_dot_size;
       min-height: $apex_bar_dot_size;
       border-radius: $apex_radius_workspace_dot;
@@ -111,7 +113,7 @@ $_open_states: hover, focus, active, checked;
 
     &:active .clock:hover, &:checked .clock:hover { box-shadow: none; }
 
-    // The accent dot waits for S1b's wallpaper: over Fedora's, the light bar hides it.
+    // $apex_bar_fg until the owner chooses the accent rule; G2 measures each accent over the Facets.
     .messages-indicator {
       icon-size: $apex_bar_clock_dot_size;
       color: transparent;
@@ -210,7 +212,7 @@ $_open_states: hover, focus, active, checked;
   box-shadow: 0 1px 0 $apex_border;
 }
 
-// The lock screen and the greeter keep upstream's transparent panel and its fills until S3b.
+// Boards 12 and 20 were approved over upstream's transparent panel and fills: S3b restyled the stage only.
 #panel.unlock-screen, #panel.login-screen {
   &.apex-solid-bar {
     background-color: transparent;

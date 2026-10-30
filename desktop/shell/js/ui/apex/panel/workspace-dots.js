@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 //
-// DESIGN's workspace dots: the active one as wide as the sheet's -apex-active-width, the
-// others full size at .45, where panel.js widens one by a factor and shrinks the rest.
+// DESIGN's workspace dots: the active one as wide as the sheet's -apex-active-width, the others full
+// size at its -apex-inactive-opacity, read off the first dot since panel.js's hook passes none.
 
 import * as Hooks from '../hooks.js';
 import * as Main from '../../main.js';
 
 const ACTIVE_WIDTH_PROPERTY = '-apex-active-width';
-const INACTIVE = {opacity: 0.45, scale: 1};
+const INACTIVE_OPACITY_PROPERTY = '-apex-inactive-opacity';
+const INACTIVE_SCALE = 1;
 
 let _enabled = false;
 
@@ -21,7 +22,11 @@ function _width(stock, natural, dot, expansion) {
 }
 
 function _inactive(stock) {
-    return _enabled ? INACTIVE : stock;
+    if (!_enabled)
+        return stock;
+    const dot = Main.panel.statusArea.activities.get_first_child().get_first_child()?._dot;
+    const [found, opacity] = dot?.peek_theme_node()?.lookup_double(INACTIVE_OPACITY_PROPERTY, false) ?? [false, 0];
+    return found ? {opacity, scale: INACTIVE_SCALE} : stock;
 }
 
 // A dot restyles itself only when its expansion changes.
