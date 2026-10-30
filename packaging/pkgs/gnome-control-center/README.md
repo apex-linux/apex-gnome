@@ -256,11 +256,22 @@ switch or toggle the row offers writes its key (and the second key of the two-ke
 A third run without the schema checks the explanation. CI runs it after the lane and
 keeps the captures as the `control-center-shots` artifact.
 
+For one case the run also installs apex-desktop's `desktop/keybindings/60-apex.xml` in
+`/usr/share/gnome-control-center/keybindings/` and its `90_apex.gschema.override`, from
+the commit `tests/lib/pins.sh` pins (or `APEX_DESKTOP_SRC`, a checkout), and removes them
+after: the override also sets the icon theme, the fonts and the input sources, which no
+other capture may take. That case opens `gnome-control-center keyboard`; that row has no
+AT-SPI action, so `keyboard.py locate` gives `probe.js` the centre of "View and Customize
+Shortcuts" to click, and `keyboard.py` then searches the shortcut list through AT-SPI: Open Spotlight must
+show Super+Space, and Switch to next and previous input source Alt+Super+Space and
+Shift+Alt+Super+Space. A missing row or another key fails.
+
 A second part of the run starts `update1.py`, a stand-in for apex-updated, on the system
 bus, and opens `gnome-control-center system software-updates` on its scenarios: board
 18's "ready" state (captured light and dark, at the top and scrolled), up to date, an
 update available, a download under way, a health failure and a fallback (board 26's
-dialog in each), and no service at all. `updates.py` checks each
+dialog in each, captured dark too as `updates-health-failure-dark` and
+`updates-fallback-dark`), and no service at all. `updates.py` checks each
 state's texts through AT-SPI, that board 26's dialog shows, and presses each button and
 the Automatic Downloads switch: `update1.py`'s log must show the method call each makes,
 with its arguments, and the switch must go back when `update1.py` refuses it as polkit
