@@ -27,6 +27,9 @@ escalation rule. The lane, `apex-lane`, and the formats of the files here are in
   upstream file. Nothing is moved or deleted.
 - Fedora's spec has no patch of its own; the series follows as `Patch1001` and up, and
   `%autosetup -p1` applies it with `patch`, at Fedora's fuzz 0.
+- Checked 2026-10-30 against GNOME 51.1 (FEDORA-2026-2812a1754d): no ptyxis update is
+  pending for F45. The series applies at fuzz 0 to ptyxis-50.1-6.fc45 and the lane
+  builds it with the 51.1 update in the buildroot.
 
 ## `desktop/ptyxis/`
 
@@ -95,6 +98,9 @@ just ptyxis-lane     # podman or docker: apex-lane's container half in fedora:45
 just ptyxis-shots    # the built RPM in a headless gnome-shell, light and dark
 just ptyxis-palette  # the built RPM: a palette rewritten under an open terminal
 ```
+
+For C, `just app-dev ptyxis` in apex-image rebuilds the Apex build the desktop VM runs
+incrementally and runs it there ([desktop/README.md](../../../desktop/README.md#c-in-the-apps-just-app-dev)).
 
 `tests/lib/lane.sh ptyxis` builds `apex-lane` from a pinned apex-image commit and runs its
 container half, `apex-lane in-container build ptyxis`, as the builder VM does: the

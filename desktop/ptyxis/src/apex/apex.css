@@ -213,10 +213,10 @@ apex-panes paned > separator {
   border-radius: 7px;
 }
 
-.apex-pane.dimmed > .apex-pane-header {
+.apex-pane.apex-dimmed > .apex-pane-header {
   opacity: 0.7;
 }
 
-.apex-pane.dimmed > .apex-pane-body {
+.apex-pane.apex-dimmed > .apex-pane-body {
   opacity: 0.62;
 }

@@ -21,6 +21,9 @@ the files here are in
 - On a failed build the lane holds the family and the image keeps Fedora's libadwaita;
   its degraded name is `adwaita`. Apps then read `apex.css` only at start, through the
   user's `gtk.css`.
+- Checked 2026-10-30 against GNOME 51.1 (FEDORA-2026-2812a1754d): no libadwaita update
+  is pending for F45. The patch applies at fuzz 0 to libadwaita-1.10.0-2.fc45 and the
+  lane builds it with the 51.1 update in the buildroot.
 
 ## `0001-apex-css`
 
