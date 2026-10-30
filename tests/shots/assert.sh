@@ -220,10 +220,22 @@ no_spurious_allocation() {
 # At logout a relayout run once its actor has left the stage lays it out off it, and a window unmanaged
 # after the global's disposal reaches ShellWM through a NULL global, as 0019 stops: both warn first.
 clean_shutdown() {
-    local label=$1 log=$2 found
-    found=$(cat "$log" "${log%.log}.late.log" 2>/dev/null | sed -n '/Shutting down GNOME Shell/,$p' |
-        grep -m1 -e 'which is not in the stage' -e 'shell_global_get: assertion' -e 'G_IS_OBJECT' |
-        sed 's/.*\*\*: [0-9:.]* //')
+    local label=$1 log=$2 out found
+    # A line another process logs as the shell goes, as ibus-daemon's once it loses the display, is
+    # not the shell's and prints as a note; the shell's own lines, and lines without a process, fail.
+    out=$(cat "$log" "${log%.log}.late.log" 2>/dev/null | sed -n '/Shutting down GNOME Shell/,$p' | awk '
+        match($0, /^\([^():]+:[0-9]+\): /) {
+            name = substr($0, 2, index($0, ":") - 2)
+            sub(/.*\//, "", name)
+            if (name != "gnome-shell") {
+                if (/CRITICAL|WARNING/) print "# note " name ": " substr($0, RLENGTH + 1)
+                next
+            }
+        }
+        found == "" && /which is not in the stage|shell_global_get: assertion|G_IS_OBJECT/ { found = $0 }
+        END { if (found != "") print "FOUND " found }')
+    grep '^# note ' <<<"$out"
+    found=$(sed -n 's/^FOUND //p' <<<"$out" | sed 's/.*\*\*: [0-9:.]* //')
     if [[ -z $found ]]; then
         pass "$label: the shell shuts down without laying out an actor off the stage or reaching a gone global"
     else

@@ -141,4 +141,5 @@ dimming against DESIGN's .7 header and .62 body. It runs `cargo` and `claude` in
 second pane and `rpmbuild` and `just` in the first, so each header shows its own
 command, OSC 9;4 progress, exit status and bell. The bell's needs-you clears on focus,
 and the session row keeps the stronger status. Close Pane on the second pane's header
-then unsplits. CI runs it after the palette test.
+then unsplits. A `true` typed first, which ends within one VTE batch, must leave the
+session done. CI runs it after the palette test.

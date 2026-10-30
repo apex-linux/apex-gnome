@@ -3012,6 +3012,22 @@ test_clean_shutdown() {
         "GLib-GObject-CRITICAL **: 09:41:00.000: g_object_get: assertion 'G_IS_OBJECT (object)' failed" >"$run/default.log"
     read -r passes failures <<<"$(assertion_counts clean_shutdown default "$run/default.log")"
     expect_eq "shutdown: and so does reading its window manager through NULL" "0/1" "$passes/$failures"
+    local ibus="(ibus-daemon:1240): GLib-GObject-CRITICAL **: 09:41:00.000: g_object_ref: assertion 'G_IS_OBJECT (object)' failed"
+    printf '%s\n' '** Message: 09:41:00.000: Shutting down GNOME Shell' "$ibus" \
+        '(/usr/libexec/xdg-desktop-portal:1311): xdg-desktop-portal-WARNING **: 09:41:00.000: lost the bus' >"$run/default.log"
+    read -r passes failures <<<"$(assertion_counts clean_shutdown default "$run/default.log")"
+    expect_eq "shutdown: ibus-daemon's own CRITICAL as it loses the display is not the shell's" "1/0" "$passes/$failures"
+    expect_eq "shutdown: but prints as a note, as does another process's WARNING" \
+        "# note ibus-daemon: GLib-GObject-CRITICAL **: 09:41:00.000: g_object_ref: assertion 'G_IS_OBJECT (object)' failed|# note xdg-desktop-portal: xdg-desktop-portal-WARNING **: 09:41:00.000: lost the bus" \
+        "$(grep '^# note ' "$T/assertions.out" | paste -sd'|' -)"
+    printf '%s\n' '** Message: 09:41:00.000: Shutting down GNOME Shell' "${ibus/ibus-daemon:1240/gnome-shell:766}" >"$run/default.log"
+    read -r passes failures <<<"$(assertion_counts clean_shutdown default "$run/default.log")"
+    expect_eq "shutdown: the same line from gnome-shell itself fails" "0/1" "$passes/$failures"
+    printf '%s\n' '** Message: 09:41:00.000: Shutting down GNOME Shell' "$ibus" \
+        "Shell-CRITICAL **: 09:41:00.000: shell_global_get: assertion 'the_object' failed" >"$run/default.log"
+    read -r passes failures <<<"$(assertion_counts clean_shutdown default "$run/default.log")"
+    expect_eq "shutdown: and an unprefixed shell_global_get fails after another process's note" "0/1 1" \
+        "$passes/$failures $(grep -c "^FAIL default: at shutdown: shell_global_get: assertion 'the_object' failed$" "$T/assertions.out")"
 }
 
 test_no_binding_overwritten() {
