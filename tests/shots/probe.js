@@ -3268,6 +3268,17 @@ async function runProbe() {
         console.log(`APEXG2-INDICATORS ${JSON.stringify(result)}`);
     }
 
+    if (GLib.getenv('G2_PRIVACY') === '1') {
+        let result;
+        try {
+            const Privacy = await import('./privacy.js');
+            result = await Privacy.privacyReport({cssUnit, settle});
+        } catch (e) {
+            result = {error: `${e.message}\n${e.stack}`};
+        }
+        console.log(`APEXG2-PRIVACY ${JSON.stringify(result)}`);
+    }
+
     if (GLib.getenv('G2_SIGNOFF') === '1') {
         let result;
         try {
