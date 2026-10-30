@@ -685,13 +685,30 @@ with `G2_SURFACE_SCENES=1`, the first two with `G2_SIGNOFF=1`, which opens Text 
 manager) and captures the overview and the real app switcher over them, after the
 scenes that want an empty desktop. The launcher's board is its grid, captured before the
 probe opens a folder. `tests/shell/shoot.sh` shoots the greeter, the lock screen, polkit's
-dialog and the power-off dialog with an update staged. Each board's scene is copied to
-`board-NN-SLUG-light.png` and `-dark.png`, and `signoff.json` records its title, its scene
-and fixture state, the apex-gnome and apex-desktop pins, the layer's features enabled, the
-scale and the monitor. `signoff.sh` itself compares nothing. It fails the run, naming the
-board, when:
+dialog and the power-off dialog with an update staged.
 
-- a scene has no capture;
+The app boards come from their lanes' own shooters, on the lanes' RPMs with the lane's
+libadwaita installed over Fedora's: `tests/control-center/run.sh` (boards 11, 18, 23, 24 and
+26), `tests/nautilus/shoot.sh` (27 to 29, with `APEX_DESKTOP_SRC` at the pinned apex-desktop)
+and `tests/ptyxis/shoot.sh` (32 and 33). A board has one row per scene in `signoff.sh`'s
+`BOARDS`, with the board's number and the slug `BOARD-SLUG-SCENE`: board 11 has the rows
+`11-settings-apex-top` and `11-settings-apex-scrolled`, board 26 `26-update-health-health-failure`
+and `26-update-health-fallback`, and each other app board one, its scene the capture's stem
+(`18-settings-updates-updates`). The fifteen shell boards keep one row each, its slug the
+board's. `signoff.sh --collect G2_RUN SHELL_SHOTS OUT` collects the shell's rows, and each
+`APP=SHOTS` (`control-center`, `nautilus`, `ptyxis`) adds that app's rows from its shooter's
+captures.
+
+Each row's scene is copied to `board-NN-SLUG-light.png` and `-dark.png`. A row its shooter
+captures light only (board 26, whose `run.sh` shoots its alerts light only) has no dark file,
+and its `scene.dark` and `files.dark` are `null`. `signoff.json` records each row's key
+(`NN-SLUG`), number, slug, title, scene and fixture state, the sources collected, the
+apex-gnome and apex-desktop pins, the layer's features enabled, the scale and the monitor.
+`signoff.sh` itself compares nothing. It fails the run, naming the board (and, for an app
+row, its key), when:
+
+- a scene has no capture. This is the only check on an app row: the next three read the
+  shell's own logs, and the app shooters fail their own job when a scene does not open;
 - the probe's three windows never all reached the overview, or brought a notification (a
   focus mutter refused posts "X is ready", so the probe activates them with a fresh server
   timestamp);
@@ -704,8 +721,11 @@ board, when:
   fixtures' keyboard before any shell starts: with no device, nothing can reach the indicator
   late. G2 keeps the connected keyboard, which its top-bar assertion needs.
 
-The `signoff` workflow uploads the set as `signoff-SHA`, then checks it against the approved
-goldens (below).
+In the `signoff` workflow, the shell's job runs `signoff.sh` and passes its G2 run and
+`shoot.sh` captures on. Each app's job builds libadwaita and the app through
+`tests/lib/lane.sh`, restoring `ci.yml`'s `lane-` caches without saving them, and runs the
+shooter. One collect job then runs `signoff.sh --collect` over all of them, checks the set
+against the approved goldens (below) and uploads it as `signoff-SHA`.
 
 ## Approved goldens
 
@@ -713,52 +733,64 @@ The boards the owner approved on the sign-off page are G2's goldens (ADR 0014, t
 They live on the orphan branch `goldens`, so a re-approval never adds images to main's
 history. `tests/shots/goldens.lock` pins the commit G2 compares with. That commit holds:
 
-- `boards/board-NN-light.png` and `-dark.png`, at capture resolution;
-- `manifest.json`, with, per board: its title, slug, scene ids and fixture state, the shots
-  hash, `signoff.json`'s pins, scale and monitor, and the approval record (`status`,
-  `approvedAt`, the decision's `shots`, and its `note`, if any).
+- `boards/board-KEY-light.png` and `-dark.png`, at capture resolution;
+- `manifest.json`, with, per KEY: the board's number, title, slug, scene ids and fixture
+  state, the files, the shots hash, `signoff.json`'s pins, scale and monitor, and the approval
+  record (`status`, `approvedAt`, the decision's `shots`, and its `note`, if any).
+
+A KEY is a row's `NN-SLUG`. The fifteen shell boards approved before the app boards joined are
+keyed by their number alone (`NN`), with their slug recorded: a legacy key stands for a board
+of one row, and the check matches it by number and slug, so those goldens stay as approved.
 
 The shots hash is the page's: sha256 over the light PNG's bytes, then the dark PNG's, first
-12 hex digits.
+12 hex digits. A light-only row hashes its light PNG alone.
+
+The page shows a board as approved only when all its rows are. `goldens.sh` imports and checks
+row by row, so a board of two rows may have one row's golden while the other awaits.
 
 ### Importing after a sign-off
 
 CI never talks to the sign-off page. After the owner decides, the lead:
 
 1. exports the page's decisions as `DECISIONS.json`:
-   `{"boards": {"36": {"status": "approved", "shots": "…", "approvedAt": "…", "note": "…"}}}`;
+   `{"boards": {"11-settings-apex-top": {"status": "approved", "shots": "…", "approvedAt": "…", "note": "…"}}}`,
+   keyed by each row's `NN-SLUG` (a legacy `NN` is valid only for a board of one row);
 2. downloads the run's `signoff-SHA` artifact;
 3. runs `tests/shots/goldens.sh import SIGNOFF_DIR DECISIONS.json`;
 4. pushes the new commit (`git -C _build/goldens push origin HEAD:refs/heads/goldens`), then
    opens a pull request with the `goldens.lock` it moved.
 
-The import takes only the boards whose decision is `approved` with a `shots` hash equal to
-their capture's. It refuses the whole import, naming each board and why, when an approval
-names other captures (a stale approval), a field is unknown or of the wrong type, or no board
-is approved. A board that isn't approved keeps the golden it had, if any. The new commit sits
+The import takes only the rows whose decision is `approved` with a `shots` hash equal to
+their capture's. It refuses the whole import, naming each row and why, when an approval
+names other captures (a stale approval), a key names no row (or a legacy `NN` a board of more
+than one), a field is unknown or of the wrong type, or no row is approved. A board that isn't approved keeps the golden it had, if any. The new commit sits
 on the pinned one, or is the branch's first.
 
 ### The check
 
-`tests/shots/goldens.sh check SIGNOFF_DIR` (or `signoff.sh --goldens`) compares each board
-that has a golden with its capture, light and dark, through `compare.js`. The comparison is
-pixel for pixel outside the masks, as G2's other captures are.
+`tests/shots/goldens.sh check SIGNOFF_DIR` (or `signoff.sh --goldens`) compares each row
+that has a golden with its capture, light and dark (light alone for a light-only row), through
+`compare.js`. The comparison is pixel for pixel outside the masks, as G2's other captures are.
 
-- A board without a golden is reported `AWAIT`: awaiting sign-off, not failed.
-- A board that differs fails, naming the board, the variant, the number of pixels and their
-  box, with a difference image in `SIGNOFF_DIR/goldens-diff/`.
-- A golden for a board the run no longer has fails, and so does a golden whose files don't
-  hash to its manifest.
+- A row without a golden is reported `AWAIT`: awaiting sign-off, not failed.
+- A row that differs fails, naming the board (and the row's key, for a board of more than one
+  row), the variant, the number of pixels and their box, with a difference image in
+  `SIGNOFF_DIR/goldens-diff/`.
+- A golden for a row the run no longer has fails, and so do a golden whose files don't hash
+  to its manifest and one whose variants are not its row's. A golden of a source the run did
+  not collect (`signoff.json`'s `sources`: the shell's alone, say) is out of its scope.
 
-It runs in `signoff.yml`, after the capture:
+It runs in `signoff.yml`'s collect job, after the captures:
 
-- on a push to main that changes the shell, its recipe, `tests/shots`, `tests/shell` or
-  `tests/lib` (apex-desktop's pin);
+- on a push to main that changes the shell or an app (Settings, Files, Terminal), their
+  recipes or libadwaita's, `tests/shots`, `tests/shell`, the apps' tests, `tests/lib` (the
+  pins) or the schema fixture;
 - daily;
 - on dispatch;
-- on a pull request that changes what the captures render: the shell, its recipe, the
-  scenes and fixtures (`tests/shots` but its README, selftest, `assert.sh` and `stable.sh`),
-  `tests/shell`, `tests/lib`, the schema fixture or `signoff.yml`
+- on a pull request that changes what the captures render: the shell and the apps, their
+  recipes and libadwaita's, the scenes and fixtures (`tests/shots` but its README, selftest,
+  `assert.sh` and `stable.sh`), `tests/shell`, the apps' tests, `tests/lib`, the schema fixture
+  or `signoff.yml`
   (`.github/scripts/signoff-paths.sh` decides), and on one labelled `goldens`. A board that
   moves fails before merge, its difference image in the `signoff-SHA` artifact's
   `goldens-diff/`.
@@ -767,8 +799,9 @@ The goldens come from `signoff.sh`'s container, with its RPM and desktop-entry s
 and `shoot.sh`'s mocks. The builder VM's image draws the launcher and the dock from real
 Flatpaks, so the check runs where the goldens were made, not in G2's VM run.
 
-`golden-masks.json` lists the masks, per board, in capture pixels: `{"boards": {"NN":
-[{"name", "x", "y", "width", "height", "why"}]}}`. A mask may cover at most 5 % of a
+`golden-masks.json` lists the masks, per row, in capture pixels: `{"boards": {"NN-SLUG":
+[{"name", "x", "y", "width", "height", "why"}]}}`, where a legacy `NN` stands for a board of one
+row. A mask may cover at most 5 % of a
 capture. It has none. G2's wall clock is fixed, and nothing live is left in a board: the
 fixtures' Wi-Fi scan finishes as a real one does (`RequestScan` moves `LastScan`), so board
 17's menu is captured after the scan, without its spinner. A capture that still holds live

@@ -54,7 +54,7 @@ rpms=("$1"/libadwaita-[0-9]*.x86_64.rpm "$1"/gnome-control-center-[0-9]*.x86_64.
     "$1"/nautilus-extensions-[0-9]*.x86_64.rpm)
 shopt -u nullglob
 ((${#rpms[@]} == 5)) || die "radius-test.sh: expected libadwaita, gnome-control-center(-filesystem) and nautilus(-extensions) in $1"
-dnf5 -y -q --setopt=install_weak_deps=False --repo=fedora --repo=updates install "${rpms[@]}" ||
+dnf5 -y -q --setopt=install_weak_deps=False --repo=fedora --repo=updates install --allowerasing "${rpms[@]}" ||
     die "radius-test.sh: cannot install ${rpms[*]}"
 rpm -q libadwaita gnome-control-center nautilus ptyxis >"$out/rpms.txt"
 grep -q 'libadwaita-.*\.apex' "$out/rpms.txt" || die "radius-test.sh: the installed libadwaita is not the lane's"

@@ -163,16 +163,16 @@ apex_panes_update_dimming (ApexPanes *self)
   gboolean split = second != NULL;
 
   if (split && self->second_focused)
-    gtk_widget_add_css_class (self->first, "dimmed");
+    gtk_widget_add_css_class (self->first, "apex-dimmed");
   else
-    gtk_widget_remove_css_class (self->first, "dimmed");
+    gtk_widget_remove_css_class (self->first, "apex-dimmed");
 
   if (second != NULL)
     {
       if (self->second_focused)
-        gtk_widget_remove_css_class (second, "dimmed");
+        gtk_widget_remove_css_class (second, "apex-dimmed");
       else
-        gtk_widget_add_css_class (second, "dimmed");
+        gtk_widget_add_css_class (second, "apex-dimmed");
     }
 }
 
