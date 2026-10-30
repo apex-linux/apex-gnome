@@ -1451,6 +1451,7 @@ async function exerciseLock() {
     Hooks.run('unlock-dialog', slept);
     await spin(50);
     fact('lock.sleep-cancel', `${Hooks.value('unlock-sleep-cancel', true, null)} ${Hooks.value('unlock-sleep-cancel', true, newUnlockDialog(St))}`);
+    say(slept, 'gdm-fingerprint', 'Failed to match fingerprint', true);
     sleep(slept, true);
     fact('lock.sleep', lockState(slept));
     setScreen(PowerSave.OFF);
@@ -1459,6 +1460,9 @@ async function exerciseLock() {
     sleep(slept, false);
     fact('lock.resume', lockState(slept));
     fact('lock.resume.keys', slept._authPrompt?.keys ?? 'none');
+    fact('lock.hint.after-resume', hintState(slept));
+    say(slept, 'gdm-fingerprint', '(or place finger on reader)', false);
+    fact('lock.hint.after-resume.scan', hintState(slept));
     sleep(slept, true);
     setScreen(PowerSave.OFF);
     sleep(slept, false);

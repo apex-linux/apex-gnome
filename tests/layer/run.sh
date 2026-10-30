@@ -1008,6 +1008,10 @@ fact "lock: a wake while the machine goes to sleep builds nothing" \
     'lock\.sleep\.wake=page=clock prompt=none cancelled=conversation-1'
 fact "lock: resume with the screen on rebuilds it" 'lock\.resume=page=prompt prompt=conversation-2 cancelled=conversation-1'
 fact "lock: and it takes keys once PAM asks" 'lock\.resume\.keys=false'
+fact "lock: a failed scan before sleep does not outlive it: the rebuilt prompt starts on the password's hint" \
+    "lock\.hint\.after-resume=$HINT_PASSWORD message=true indicator=true"
+fact "lock: and the reader's prompt on it is board 20's line again" \
+    "lock\.hint\.after-resume\.scan=$HINT_SCAN message=false indicator=false"
 fact "lock: resume with the screen blank builds nothing" \
     'lock\.resume-blank=page=clock prompt=none cancelled=conversation-1,conversation-2'
 fact "lock: the wake after it does" 'lock\.resume-blank\.wake=page=prompt prompt=conversation-3 cancelled=conversation-1,conversation-2'

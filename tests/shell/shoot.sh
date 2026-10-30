@@ -17,7 +17,8 @@ The lock screen, the greeter, the date menu and the end-session dialog of the gn
 _build/gnome-shell/out), headless at scale 2, as root in a throwaway fedora:$APEX_FEDORA
 container (just lock-shots). gdm-mock.py stands in for GDM: it asks one question and
 fails every answer, so no case can unlock; lock-refused's GDM refuses even to ask, and
-lock-fingerprint's also runs gdm-fingerprint against fprintd-mock.py's reader. Each lock
+lock-fingerprint's also runs gdm-fingerprint against fprintd-mock.py's reader, and
+lock-fingerprint-suspend runs it across logind's sleep and resume. Each lock
 case locks, answers wrongly (lock-fingerprint fails a scan), blanks and wakes the screen,
 but lock-wake-key: after Esc and a blank, a Return that arrives after the wake, and
 lock-wake-key-blank the same, locked while blank; lock-idle sends gnome-session's
@@ -192,7 +193,7 @@ shoot() {
     rm -rf "$home/.config/dconf"
     run=$(mktemp -d)
     chown "$user:" "$run" && chmod 700 "$run"
-    if [[ " $* " == *" APEX_FINGERPRINT=1 "* ]]; then
+    if [[ " $* " == *" APEX_FINGERPRINT="* ]]; then
         fingerprint=(--fingerprint)
         python3 "$HERE/fprintd-mock.py" "$out/$name.fprintd.log" 2>"$out/$name.fprintd.err" &
         fprintd=$!
@@ -250,6 +251,7 @@ if ! authselect enable-feature with-fingerprint >"$out/authselect.log" 2>&1 || !
     die "authselect cannot enable with-fingerprint; see ${out#"$APEX_ROOT/"}/authselect.log"
 fi
 shoot lock-fingerprint "$USER_NAME" user default 'Password:' -- APEX_FINGERPRINT=1 || status=1
+shoot lock-fingerprint-suspend "$USER_NAME" user default 'Password:' -- APEX_FINGERPRINT=suspend || status=1
 if ! authselect disable-feature with-fingerprint >>"$out/authselect.log" 2>&1 || ! dconf update; then
     log "authselect: cannot disable with-fingerprint"
 fi
