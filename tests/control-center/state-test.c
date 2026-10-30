@@ -43,8 +43,9 @@ test_available_and_waiting (void)
     CcApexUpdatesFacts f = { .state = "available", .target_version = "45.20261010.133", .now = NOW };
 
     assert_hero (&f, "Update Available", NULL, CC_APEX_UPDATES_ACTION_DOWNLOAD, CC_APEX_UPDATES_ACTION_NONE);
-    f.deferred_reason = "It downloads when the laptop is plugged in.";
-    assert_hero (&f, "Update Waiting", "45.20261010.133 It downloads when the laptop is plugged in.",
+    f.deferred_reason = "The battery is below 50%. Connect the charger to download the update.";
+    assert_hero (&f, "Update Waiting",
+                 "The battery is below 50%. Connect the charger to download the update. 45.20261010.133 waits until then.",
                  CC_APEX_UPDATES_ACTION_NONE, CC_APEX_UPDATES_ACTION_DOWNLOAD_ANYWAY);
 }
 

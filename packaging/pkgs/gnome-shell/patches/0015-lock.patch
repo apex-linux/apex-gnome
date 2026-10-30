@@ -13,18 +13,24 @@ that throws gives the stock value or code at its call site.
 
 - UnlockDialog: a value hook over the background blur's brightness and
   radius; one over the clock's share of the transition progress, so the
-  clock can stay shown with the prompt; a behaviour hook at the end of
+  clock can stay shown with the prompt; one over the stack's box in
+  UnlockDialogLayout, so the layer's stage keeps one layout across
+  upstream's changes to it; a behaviour hook at the end of
   _init(), through which the layer lays the dialog out and shows or
   tears down the prompt as the screen wakes or blanks;
+- ScreenShield: a value hook over whether the session going idle
+  cancels the unlock dialog's conversation, given the dialog, so the
+  layer keeps a prompt it manages until the screen blanks;
 - AuthPrompt: a value hook over the question shown for a PAM question,
   given upstream's text and PAM's own;
 - Avatar: a value hook over the child shown when the user has no
   picture.
 ---
  js/gdm/authPrompt.js  |  9 +++++----
- js/ui/unlockDialog.js | 18 +++++++++++-------
+ js/ui/screenShield.js |  4 +++-
+ js/ui/unlockDialog.js | 20 ++++++++++++--------
  js/ui/userWidget.js   |  5 +++--
- 3 files changed, 19 insertions(+), 13 deletions(-)
+ 4 files changed, 23 insertions(+), 15 deletions(-)
 
 diff --git a/js/gdm/authPrompt.js b/js/gdm/authPrompt.js
 index 06a8758..6e870a6 100644
@@ -53,6 +59,28 @@ index 06a8758..6e870a6 100644
  
          this.emit('prompted');
      }
+diff --git a/js/ui/screenShield.js b/js/ui/screenShield.js
+index 5961ea1..c3178f5 100644
+--- a/js/ui/screenShield.js
++++ b/js/ui/screenShield.js
+@@ -20,6 +20,7 @@ import * as ShellDBus from './shellDBus.js';
+ import * as SmartcardManager from '../gdm/smartcardManager.js';
+ 
+ import {adjustAnimationTime} from '../misc/animationUtils.js';
++import * as ApexHooks from './apex/hooks.js';
+ 
+ const SCREENSAVER_SCHEMA = 'org.gnome.desktop.screensaver';
+ const LOCK_ENABLED_KEY = 'lock-enabled';
+@@ -249,7 +250,8 @@ export class ScreenShield extends Signals.EventEmitter {
+         if (status !== GnomeSession.PresenceStatus.IDLE)
+             return;
+ 
+-        this._maybeCancelDialog();
++        if (ApexHooks.value('unlock-idle-cancel', true, this._dialog))
++            this._maybeCancelDialog();
+ 
+         if (this._longLightbox.visible) {
+             // We're in the process of showing.
 diff --git a/js/ui/unlockDialog.js b/js/ui/unlockDialog.js
 index 21b4736..8c77b98 100644
 --- a/js/ui/unlockDialog.js
@@ -65,6 +93,15 @@ index 21b4736..8c77b98 100644
  
  const PRIMARY_UNLOCK_METHOD_SECTION_NAME = _('Unlock Options');
  
+@@ -504,7 +505,7 @@ class UnlockDialogLayout extends Clutter.LayoutManager {
+         actorBox.x2 = columnX1 + columnWidth;
+         actorBox.y2 = stackY + stackHeight;
+ 
+-        this._stack.allocate(actorBox);
++        this._stack.allocate(ApexHooks.value('unlock-stack-box', actorBox, this, box));
+ 
+         // Auth Indicator button (bottom start)
+         if (this._authIndicatorButton.visible) {
 @@ -740,6 +741,7 @@ export const UnlockDialog = GObject.registerClass({
          this._idleWatchId = this._idleMonitor.add_idle_watch(IDLE_TIMEOUT * 1000, this._escape.bind(this));
  

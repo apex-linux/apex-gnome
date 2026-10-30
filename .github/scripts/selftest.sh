@@ -62,16 +62,41 @@ done
 check_false ".gitignore keeps the layer's fixtures" \
     git -C "$APEX_ROOT" check-ignore -q --no-index tests/layer/fixtures/apex-shell-safe.service
 
+# --- lane.sh reads apex-lane's arguments from apex-image's Containerfile ------------------
+image_args() {
+    printf '%s\n' "$@" >"$TMP/Containerfile"
+    "$APEX_ROOT/tests/lib/image-args.sh" "$TMP/Containerfile" 2>/dev/null | paste -sd ' '
+}
+readonly REPOS_ARG='ARG REPOS_BASE=https://dl.fedoraproject.org/pub/fedora/linux'
+for ga in 0 1; do
+    check "image-args: GA_REACHED=$ga is passed on" "--repos-base https://dl.fedoraproject.org/pub/fedora/linux --ga-reached $ga" \
+        "$(image_args FROM x "$REPOS_ARG" "ARG GA_REACHED=$ga")"
+done
+check "image-args: apex-image's two declarations, the default before FROM and the bare one after" \
+    "--repos-base https://dl.fedoraproject.org/pub/fedora/linux --ga-reached 0" \
+    "$(image_args "ARG GA_REACHED=0" "$REPOS_ARG" FROM x "ARG GA_REACHED")"
+check "image-args: no ARG GA_REACHED (the admission cut) leaves the flag out" \
+    "--repos-base https://dl.fedoraproject.org/pub/fedora/linux" "$(image_args FROM x "$REPOS_ARG")"
+for bad in "ARG GA_REACHED=2" "ARG GA_REACHED=yes" "ARG GA_REACHED=" "ARG GA_REACHED"; do
+    printf '%s\n' "$REPOS_ARG" "$bad" >"$TMP/Containerfile"
+    check_false "image-args: '$bad' dies" "$APEX_ROOT/tests/lib/image-args.sh" "$TMP/Containerfile"
+done
+printf '%s\n' "ARG GA_REACHED=1" >"$TMP/Containerfile"
+check_false "image-args: no ARG REPOS_BASE dies" "$APEX_ROOT/tests/lib/image-args.sh" "$TMP/Containerfile"
+
 # --- signoff.yml runs on a pull request that can change the captures ---------------------
 signoff_paths() { printf '%s\n' "$@" | "$APEX_ROOT/.github/scripts/signoff-paths.sh" 2>/dev/null; }
 for f in desktop/shell/data/theme/apex/_input.scss packaging/pkgs/gnome-shell/patches/0010-panel.patch \
     tests/shots/probe.js tests/shots/direct.sh tests/shots/signoff.sh tests/shots/fixtures.py tests/shots/glass.js \
     tests/shell/shoot.sh tests/lib/pins.sh tests/layer/fixtures/io.github.apex_linux.Apex.Desktop.gschema.xml \
-    .github/workflows/signoff.yml; do
+    .github/workflows/signoff.yml desktop/control-center/panels/apex/settings-tiles.json desktop/nautilus/src/apex/apex-count-bar.c \
+    desktop/ptyxis/src/apex/apex-glyph.c packaging/pkgs/gnome-control-center/check.sh packaging/pkgs/nautilus/patches/0001-build.patch \
+    packaging/pkgs/ptyxis/check.sh packaging/pkgs/libadwaita/check.sh tests/control-center/bindings.py tests/nautilus/check.py \
+    tests/ptyxis/fixture.c; do
     check "signoff runs on a pull request changing $f" touches=true "$(signoff_paths README.md "$f")"
 done
 for f in tests/shots/README.md tests/shots/selftest.sh tests/shots/assert.sh tests/shots/stable.sh \
-    packaging/pkgs/nautilus/patches/0001-build.patch desktop/control-center/panels/apex/settings-tiles.json \
+    tests/s2c/radius-test.sh tests/s7/accent-test.sh tests/libadwaita/radius-test.sh tests/laptop/selftest.sh \
     .github/workflows/ci.yml docs/x.md; do
     check "signoff skips a pull request changing only $f" touches=false "$(signoff_paths "$f")"
 done

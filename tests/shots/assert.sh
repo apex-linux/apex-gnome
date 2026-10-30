@@ -23,7 +23,8 @@ readonly STOCK_SHEETS=resource:///org/gnome/shell/theme/stock
 readonly FEDORA_SHEETS=resource:///org/gnome/shell/theme
 readonly DIRECT_CASES=(default default-scale1 dark-style high-contrast large-text default-solid dark-style-solid high-contrast-solid
     large-text-solid dock-intellihide dock-intellihide-dark dock-one-gpu no-dock no-dock-dark stock-light stock-dark safe-env
-    layer-disabled layer-cycles motion idle dock-pin dock-dnd dock-external keys input-sources glass-load glass-stress fault-configure fault-enable fault-abort kernel-safe
+    layer-disabled layer-cycles motion idle dock-pin dock-dnd dock-external keys input-sources glass-load glass-stress fault-configure fault-enable fault-abort
+    shutdown-banner kernel-safe
     fedora-light fedora-dark glass fedora-glass
     indicators indicators-scale1 indicators-dark)
 readonly DIRECT_PARTS=(main kernel fedora)
@@ -220,15 +221,50 @@ no_spurious_allocation() {
 # At logout a relayout run once its actor has left the stage lays it out off it, and a window unmanaged
 # after the global's disposal reaches ShellWM through a NULL global, as 0019 stops: both warn first.
 clean_shutdown() {
-    local label=$1 log=$2 found
-    found=$(cat "$log" "${log%.log}.late.log" 2>/dev/null | sed -n '/Shutting down GNOME Shell/,$p' |
-        grep -m1 -e 'which is not in the stage' -e 'shell_global_get: assertion' -e 'G_IS_OBJECT' |
-        sed 's/.*\*\*: [0-9:.]* //')
+    local label=$1 log=$2 out found
+    # A line another process logs as the shell goes, as ibus-daemon's once it loses the display, is
+    # not the shell's and prints as a note; the shell's own lines, and lines without a process, fail.
+    out=$(cat "$log" "${log%.log}.late.log" 2>/dev/null | sed -n '/Shutting down GNOME Shell/,$p' | awk '
+        match($0, /^\([^():]+:[0-9]+\): /) {
+            name = substr($0, 2, index($0, ":") - 2)
+            sub(/.*\//, "", name)
+            if (name != "gnome-shell") {
+                if (/CRITICAL|WARNING/) print "# note " name ": " substr($0, RLENGTH + 1)
+                next
+            }
+        }
+        found == "" && /which is not in the stage|shell_global_get: assertion|G_IS_OBJECT/ { found = $0 }
+        END { if (found != "") print "FOUND " found }')
+    grep '^# note ' <<<"$out"
+    found=$(sed -n 's/^FOUND //p' <<<"$out" | sed 's/.*\*\*: [0-9:.]* //')
     if [[ -z $found ]]; then
         pass "$label: the shell shuts down without laying out an actor off the stage or reaching a gone global"
     else
         fail "$label: at shutdown: $found"
     fi
+}
+
+# gnome-shell 51 runs a main loop after its shutdown destroyed uiGroup: a banner timeout the tray left
+# armed runs there on the disposed tray, as Apex's notifications feature stops.
+no_disposed_at_shutdown() {
+    local label=$1 log=$2 found
+    found=$(cat "$log" "${log%.log}.late.log" 2>/dev/null | sed -n '/Shutting down GNOME Shell/,$p' |
+        awk '/has been already disposed/ && !object { object = $0; sub(/.*Object /, "", object); sub(/ \(0x.*/, "", object); next }
+            object && /^#0/ && !frame { frame = $0; sub(/^#0 +[^ ]+ +[a-z] +/, "", frame); sub(/ \(.*/, "", frame) }
+            END { if (object) print object (frame ? " at " frame : "") }')
+    if [[ -z $found ]]; then
+        pass "$label: nothing touches a disposed object once the shell is shutting down"
+    else
+        fail "$label: after 'Shutting down GNOME Shell', a disposed object touched: $found"
+    fi
+}
+
+# The probe empties the tray, and waits out the calendar server and the app list, before the shell exits:
+# no case but shutdown-banner meets those races.
+quiet_exit() {
+    local label=$1 log=$2
+    expect "$label" "$(report_of "$log" APEXG2-EXIT)" '.tray == true and .quiet == true' \
+        "the probe leaves no banner up, and the calendar server and the app list quiet, for the shell's shutdown"
 }
 
 # Mutter warns when two bindings claim one key: the second silently takes it from the first.
@@ -2003,9 +2039,11 @@ direct_cases() {
         no_binding_overwritten "$c" "$f"
         no_spurious_allocation "$c" "$f"
         clean_shutdown "$c" "$f"
+        no_disposed_at_shutdown "$c" "$f"
         # fault-abort may abort before its report; its exit status says the shell ran.
         [[ $c == fault-abort ]] && continue
         action_modes "$c" "$f"
+        [[ $c == shutdown-banner ]] || quiet_exit "$c" "$f"
         expect_report "$c" "$f" '.mode == "user"' "the probe ran: the static import graph loaded"
         fixed_clock "$c" "$f"
         backdrop_painted "$c" "$f"
@@ -2202,6 +2240,7 @@ direct_cases() {
     dock_external_case "$run"
     keys_case "$run"
     input_sources_case "$run"
+    shutdown_banner_case "$run"
 }
 
 # shellcheck disable=SC2016 # jq programs
@@ -2441,6 +2480,17 @@ asserted() {
     done
 }
 
+# The shutdown-banner case: the tray's banner timeout falls due in gnome-shell's shutdown loop, after the
+# tray went with uiGroup; clean_shutdown and no_disposed_at_shutdown read the log past it.
+shutdown_banner_case() {
+    local run=$1 f=$1/shutdown-banner.log
+    exits "$run" shutdown-banner 0
+    no_apex_failure shutdown-banner "$f"
+    expect shutdown-banner "$(report_of "$f" APEXG2-SHUTDOWN-BANNER)" '.pending and .armed and .quiet' \
+        "as the shell exits, a notification is up or queued and the tray's banner timeout armed, with nothing else due"
+    logs shutdown-banner "$f" 'Shutting down GNOME Shell' "the shell went through its shutdown"
+}
+
 # patched.sh's assertions after direct.sh's PART: main asserts every case, pr only the cases
 # PR_CASES lists, and each of those must have run and reported.
 patched_assertions() {
@@ -2455,6 +2505,7 @@ patched_assertions() {
         asserted "$c" || continue
         [[ $c == kernel-safe || $c == fault-abort ]] || backdrop_painted "$c" "$run/$c.log"
         [[ $c == kernel-safe || $c == fault-abort ]] || action_modes "$c" "$run/$c.log"
+        [[ $c == kernel-safe || $c == fault-abort || $c == shutdown-banner ]] || quiet_exit "$c" "$run/$c.log"
         [[ $c == kernel-safe ]] || startup_handler_ran "$c" "$run/$c.log"
         [[ -e $run/$c.log ]] && no_nan_allocation "$c" "$run/$c.log"
         [[ -e $run/$c.log ]] && no_st_css_warning "$c" "$run/$c.log"
@@ -2463,6 +2514,7 @@ patched_assertions() {
         [[ -e $run/$c.log ]] && no_binding_overwritten "$c" "$run/$c.log"
         [[ -e $run/$c.log ]] && no_spurious_allocation "$c" "$run/$c.log"
         [[ -e $run/$c.log ]] && clean_shutdown "$c" "$run/$c.log"
+        [[ -e $run/$c.log ]] && no_disposed_at_shutdown "$c" "$run/$c.log"
     done
     for c in default default-scale1 dark-style; do
         asserted "${c%:*}" || continue
@@ -2540,6 +2592,7 @@ patched_assertions() {
     asserted dock-external && dock_external_case "$run"
     asserted keys && keys_case "$run"
     asserted input-sources && input_sources_case "$run"
+    asserted shutdown-banner && shutdown_banner_case "$run"
     asserted fedora-light fedora-dark no-dock no-dock-dark &&
         compare_with_fedora "$run" "$(asserted stock-light stock-dark && echo safe)"
     if [[ $part == pr ]]; then

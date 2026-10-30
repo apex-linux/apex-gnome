@@ -1,0 +1,35 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Fri, 30 Oct 2026 14:57:27 +0000
+Subject: [PATCH] screenshot: Don't start the screencast service where it can't
+ be used
+
+ScreenshotUI creates its ScreencastProxy at startup in every session
+mode, so D-Bus starts org.gnome.Shell.Screencast in the greeter and in
+initial setup too, though neither mode can screencast: the cast button
+needs allowScreencast. The service initialises GStreamer and GTK, and
+with GDM's dynamic greeter users, whose home is a tmpfs directory GDM
+deletes, GStreamer rebuilds its whole plugin registry on every greeter
+start.
+
+Where the session mode doesn't allow screencasts, don't let the proxy
+auto-start the service.
+---
+ js/ui/screenshot.js | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/js/ui/screenshot.js b/js/ui/screenshot.js
+index 02560b9..57b8889 100644
+--- a/js/ui/screenshot.js
++++ b/js/ui/screenshot.js
+@@ -1532,7 +1532,9 @@ export class ScreenshotUI extends St.Widget {
+ 
+                 this._screencastSupported = this._screencastProxy.ScreencastSupported;
+                 this._syncCastButton();
+-            });
++            },
++            null,
++            Main.sessionMode.allowScreencast ? Gio.DBusProxyFlags.NONE : Gio.DBusProxyFlags.DO_NOT_AUTO_START);
+ 
+         this._screencastProxy.connectSignal('Error', (proxy, sender, [errorName, message]) =>
+             this._screencastFailed(ScreencastPhase.RECORDING,

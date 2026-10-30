@@ -697,10 +697,13 @@ async function exerciseNotifications() {
         fact(`${label}.days`, `${month.days.map(b => day(b.get_child())).join(' ')} ` +
             `own-text=${month.days.every((b, i) => b.get_child() === month.texts[i])}`);
     };
+    const Main = await import(`file://${shellDir}/js/ui/main.js`);
+    const trayCleared = () => Main.messageTray.cleared.splice(0).join(',') || 'none';
     calendarState('nf');
     settings.set_boolean('layer-enabled', false);
     await spin(200);
     calendarState('nf.off');
+    fact('nf.off.tray', trayCleared());
     groups.push(new MessageList.NotificationMessageGroup({title: 'Chat', icon: 'chat-icon'}, 2));
     notificationsState('nf.off', list, groups);
     cardsState('nf.off', groups[0]);
@@ -710,6 +713,9 @@ async function exerciseNotifications() {
     notificationsState('nf.on', list, groups);
     cardsState('nf.on', groups[0]);
     calendarState('nf.on');
+    fact('nf.on.tray', trayCleared());
+    Main.layoutManager.uiGroup.emit('destroy');
+    fact('nf.teardown.tray', trayCleared());
 }
 
 // endSessionDialog.js as patch 0018's hook sees it: a stock row of Cancel and the confirm
@@ -1390,6 +1396,48 @@ async function exerciseLock() {
     fact('lock.key-wake', lockState(woken));
     fact('lock.key-wake.keys', woken._authPrompt.keys);
     woken.emit('destroy');
+
+    // ScreenShield at gnome-session's IDLE, which every lock brings: the hook, then the dialog's
+    // cancel, which ends in upstream's _fail(): the clock page, the prompt destroyed.
+    const idle = shielded => {
+        if (Hooks.value('unlock-idle-cancel', true, shielded)) {
+            shielded?._showClock();
+            shielded?._maybeDestroyAuthPrompt();
+        }
+    };
+    const idled = newUnlockDialog(St);
+    Hooks.run('unlock-dialog', idled);
+    fact('lock.idle-cancel', `${Hooks.value('unlock-idle-cancel', true, idled)}`);
+    idle(idled);
+    await spin(50);
+    fact('lock.idle', lockState(idled));
+    setScreen(PowerSave.OFF);
+    fact('lock.idle.blank', lockState(idled));
+    setScreen(PowerSave.ON);
+    fact('lock.idle.wake', lockState(idled));
+    idled.emit('destroy');
+    idle(null);
+    fact('lock.idle-cancel.unlocked', `${Hooks.value('unlock-idle-cancel', true, null)}`);
+    fact('lock.idle-cancel.other-dialog', `${Hooks.value('unlock-idle-cancel', true, newUnlockDialog(St))}`);
+
+    // UnlockDialogLayout's stack box through the hook, given the layout and its box: 51.0's at every height.
+    const boxed = newUnlockDialog(St);
+    Hooks.run('unlock-dialog', boxed);
+    await spin(50);
+    const notifications = {get_preferred_size: () => [0, 0, 0, 40]};
+    for (const height of [900, 1080, 1440]) {
+        boxed.height = height;
+        boxed.emit('notify::height');
+        const given = {x1: 0, x2: 100, y1: -1, y2: -1};
+        const got = Hooks.value('unlock-stack-box', given, {_stack: boxed._stack, _notifications: notifications},
+            {get_height: () => height});
+        fact(`lock.stack-box.${height}`, `${got.y1}..${got.y2}`);
+        fact(`lock.stack-height.${height}`, `${boxed._stack.natural_height}`);
+    }
+    const otherBox = Hooks.value('unlock-stack-box', {y1: -1, y2: -1},
+        {_stack: newUnlockDialog(St)._stack, _notifications: notifications}, {get_height: () => 900});
+    fact('lock.stack-box.other', `${otherBox.y1}..${otherBox.y2}`);
+    boxed.emit('destroy');
 
     for (const reply of ['silent', 'error']) {
         displayConfig.reply = reply;
