@@ -238,6 +238,9 @@ just control-center-lane   # podman or docker: apex-lane's container half in fed
 just control-center-run    # podman or docker: the built Settings in a headless gnome-shell
 ```
 
+For C, `just app-dev gnome-control-center` in apex-image rebuilds the Apex build the desktop VM runs
+incrementally and runs it there ([desktop/README.md](../../../desktop/README.md#c-in-the-apps-just-app-dev)).
+
 `tests/lib/lane.sh gnome-control-center` builds `apex-lane` from a pinned apex-image commit and
 runs its container half, `apex-lane in-container build gnome-control-center`, as the
 builder VM does: the SRPM's signature, `spec-edit`, the series at fuzz 0, the exact-tree
