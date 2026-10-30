@@ -6,7 +6,7 @@ Asserts each shoot.sh case from its log's APEXLOCK lines and gdm-mock.py's log: 
 boards 20 and 12 show, that no case unlocks, that a wrong answer leaves the screen
 locked, that a GDM refusing to reauthenticate leaves it locked, that the fingerprint
 conversation stops while the screen is blank, that blanking cancels the conversation and waking starts a new one, that
-the key that wakes the screen never answers a prompt, that gnome-session's idle at lock leaves the prompt to blank, that
+the key that wakes the screen never answers a prompt, that gnome-session's idle at lock leaves the prompt to blank, that resume brings back the prompt sleep took down, that
 stock and safe mode keep upstream's lock, and that the greeter runs no Apex JS and no screencast service; what board 13's
 authentication dialog shows, from a stubbed polkit session that is never answered; and board 34's
 date menu: flat cards headed "app · time" with the app's icon, Clear on the right, Do Not Disturb;
@@ -359,6 +359,32 @@ def check_idle(shots, case):
           (f["woken"]["prompt"] or {}).get("question") == "Enter Password", json.dumps(begun))
 
 
+def check_suspend(shots, case):
+    """logind's PrepareForSleep: the conversation ends before sleep, none runs asleep, and resume brings the prompt back."""
+    log = read(shots, f"{case}.log")
+    gdm = read(shots, f"{case}.gdm.log")
+    f = facts(log)
+    steps = ("locked", "asleep", "still-asleep", "resumed", "end")
+    check(f"{case}: every step is reported", all(s in f for s in steps))
+    if not all(s in f for s in steps):
+        return
+    for step in steps:
+        check(f"{case}: {step}: locked", f[step]["locked"] is True)
+    check(f"{case}: no JS error", "JS ERROR" not in until(log, "end") and "APEXLOCK-ERROR" not in log)
+    check(f"{case}: sleep ends the conversation", f["asleep"]["prompt"] is None and
+          any(line.endswith(": Cancel") for line in between(gdm, "locked", "asleep")), json.dumps(between(gdm, "locked", "asleep")))
+    check(f"{case}: none starts while asleep", not any("BeginVerification" in line for line in between(gdm, "asleep", "still-asleep")),
+          json.dumps(between(gdm, "asleep", "still-asleep")))
+    begun = [line for line in between(gdm, "still-asleep", "resumed")
+             if re.match(r"channel \d+: BeginVerificationForUser gdm-password", line)]
+    check(f"{case}: resume brings the prompt back, with a conversation and no key", len(begun) == 1 and
+          f["resumed"]["status"] == VERIFYING and (f["resumed"]["prompt"] or {}).get("question") == "Enter Password",
+          json.dumps(begun))
+    torn, rebuilt = "Apex: lock: suspend, prompt torn down", "Apex: lock: screen on, prompt rebuilt"
+    check(f"{case}: both logged once, the rebuild as qualify.sh's screen-on line after the teardown",
+          (log.count(torn), log.count(rebuilt)) == (1, 1) and log.index(torn) < log.index(rebuilt))
+
+
 def check_greeter(shots, case):
     log = read(shots, f"{case}.log")
     f = facts(log)
@@ -626,6 +652,7 @@ def main():
     check_wake_key(shots, "lock-wake-key", torn_down=False)
     check_wake_key(shots, "lock-wake-key-blank", torn_down=True)
     check_idle(shots, "lock-idle")
+    check_suspend(shots, "lock-suspend")
     check_fingerprint(shots, "lock-fingerprint")
     for case in GREETER_CASES:
         check_greeter(shots, case)
