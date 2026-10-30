@@ -190,6 +190,29 @@ function prepareForSleep(aboutToSuspend) {
             [new GLib.Variant('b', aboutToSuspend)]]), null, Gio.DBusCallFlags.NONE, -1, null);
 }
 
+// Board 20's reader across sleep: the fingerprint conversation ends with the password one and comes
+// back once at resume, its line the reader's again until a scan fails.
+async function shootFingerprintSuspend(dialog) {
+    fact('opened', describeLock(dialog));
+    await failScan();
+    await Scripting.sleep(STEP_MS * 2);
+    fact('scan-failed', describeLock(dialog));
+    await prepareForSleep(true);
+    await Scripting.sleep(STEP_MS);
+    fact('asleep', describeLock(dialog));
+    await Scripting.sleep(STEP_MS);
+    fact('still-asleep', describeLock(dialog));
+    await prepareForSleep(false);
+    await Scripting.sleep(STEP_MS * 2);
+    fact('resumed', describeLock(dialog));
+    await capture('resumed');
+    await failScan();
+    await Scripting.sleep(STEP_MS * 2);
+    fact('resumed-scan-failed', describeLock(dialog));
+    await Scripting.sleep(SETTLE_MS);
+    fact('end', {locked: Main.screenShield.locked});
+}
+
 async function shootSuspend() {
     Main.screenShield.lock(false);
     await Scripting.sleep(STEP_MS);
@@ -271,6 +294,10 @@ async function shootLock() {
     await Scripting.sleep(SETTLE_MS);
     if (GLib.getenv('APEX_FINGERPRINT') === '1') {
         await shootFingerprint(Main.screenShield._dialog);
+        return;
+    }
+    if (GLib.getenv('APEX_FINGERPRINT') === 'suspend') {
+        await shootFingerprintSuspend(Main.screenShield._dialog);
         return;
     }
     const dialog = Main.screenShield._dialog;
