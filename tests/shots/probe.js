@@ -3200,9 +3200,8 @@ function cutDateMenu() {
     ]));
 }
 
-// The races made certain: a notification for the tray to show, its timeout due inside a slowed shutdown
-// loop, and each date-menu signal sent in that loop. The shell exits here, not after scripting.js's helper
-// round trip, which could outlast the timeout.
+// The races made certain: the tray's timeout due in a slowed shutdown loop, each date-menu signal sent in it.
+// The shell exits here, not after scripting.js's helper round trip, which could outlast the timeout.
 async function shutdownWithBanner() {
     const cut = cutDateMenu();
     Main.notify('G2 banner', 'shown as the shell exits');
