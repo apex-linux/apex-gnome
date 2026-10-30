@@ -262,5 +262,15 @@ check "focusing the second pane clears its needs-you: both panes running again" 
 check "Close Pane on the second pane's header: one pane, no toggle pressed, the first's just still running" \
     '.closed | .terminals == 1 and (.panes | length == 0) and .row.subtitle == "just vm-image · running"
      and .toggles == {"Split Right": false, "Split Down": false} and .footer.running == 1'
+check "the focus key moves the focus to the first pane, and the second dims" \
+    '.focusOther.panes | .[0].focused and (.[1].focused | not)'
+check "and again back to the second" '.focusBack.panes | .[1].focused and (.[0].focused | not)'
+check "the close key on the focused second pane closes it: one pane, the first's just still running" \
+    '.closeKeySecond | .terminals == 1 and (.panes | length == 0)
+     and .row.subtitle == "just vm-image · running"'
+check "the close key on the focused first pane closes it: the second takes its tab, its row goes" \
+    '.closeKeyFirst | .terminals == 1 and (.panes | length == 0)
+     and .toggles == {"Split Right": false, "Split Down": false}
+     and .footer == {"needsYou": 0, "running": 0, "failed": 0, "done": 0}'
 ((failures == 0)) || die "panes-test.sh: $failures check(s) failed; see ${out#"$APEX_ROOT/"}/panes.json"
 log "panes-test.sh: the panes split, focus, keep their own statuses and close"

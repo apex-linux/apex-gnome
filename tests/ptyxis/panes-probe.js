@@ -21,6 +21,9 @@ const SETTLE_MS = 600;
 // fixture.c: cargo and rpmbuild exit after 2 s, claude rings the bell after 4 s (sessions.sh).
 const RUN_WAIT_MS = 6000;
 const SCROLLBAR_FADE_MS = 1500;
+// The owner's pair, as apex-panes.c's FOCUS_OTHER_PANE_ACCEL and CLOSE_PANE_ACCEL.
+const FOCUS_OTHER_KEY = Clutter.KEY_o;
+const CLOSE_KEY = Clutter.KEY_w;
 
 let keyboard;
 let pointer;
@@ -234,8 +237,29 @@ async function drive() {
     await clickAt(r.bell.panes[1].body);
     r.bellCleared = await until('the second pane focused', t => t.panes[1].focused && !t.panes[1].needsYou);
 
+    tap(FOCUS_OTHER_KEY, ctrlAlt);
+    r.focusOther = await until('the focus key', t => t.panes[0].focused);
+    tap(FOCUS_OTHER_KEY, ctrlAlt);
+    r.focusBack = await until('the focus key again', t => t.panes[1].focused);
+
     await atspi('click', 'Close Pane', '0');
     r.closed = await until('Close Pane', single);
+
+    tap(Clutter.KEY_r, ctrlAlt);
+    await until('Ctrl+Alt+R, the new shell prompted', t => right(t) && t.panes[1].prompted && t.panes[1].focused);
+    tap(CLOSE_KEY, ctrlAlt);
+    r.closeKeySecond = await until('the close key on the second pane', single);
+
+    // Ptyxis asks before it closes a tab that runs a command, so the first pane's just stops first.
+    tap(Clutter.KEY_c, [Clutter.KEY_Control_L]);
+    await until('just stopped', t => t.footer.running === 0);
+    tap(Clutter.KEY_r, ctrlAlt);
+    const twoPanes = await until('Ctrl+Alt+R, the new shell prompted', t => right(t) && t.panes[1].prompted);
+    await clickAt(twoPanes.panes[0].body);
+    await until('a click on the first pane', t => t.panes[0].focused);
+    tap(CLOSE_KEY, ctrlAlt);
+    r.closeKeyFirst = await until('the close key on the first pane',
+        t => single(t) && Object.values(t.footer).every(n => n === 0));
     return r;
 }
 
