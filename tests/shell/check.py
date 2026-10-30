@@ -290,6 +290,42 @@ def check_fingerprint(shots, case):
           fingerprint_line(f["wake"], FINGERPRINT_HINT, False), json.dumps(f["wake"]))
 
 
+def check_fingerprint_suspend(shots, case):
+    log, gdm = read(shots, f"{case}.log"), read(shots, f"{case}.gdm.log")
+    f = facts(log)
+    steps = ("opened", "scan-failed", "asleep", "still-asleep", "resumed", "resumed-scan-failed", "end")
+    check(f"{case}: every step is reported", all(step in f for step in steps))
+    if not all(step in f for step in steps):
+        return
+    for step in steps:
+        check(f"{case}: {step}: locked", f[step]["locked"] is True)
+    check(f"{case}: GDM never completes a verification", "VerificationComplete" not in gdm)
+    check(f"{case}: no JS error", "JS ERROR" not in until(log, "end") and "APEXLOCK-ERROR" not in log)
+    check(f"{case}: a failed scan before sleep swaps the line", fingerprint_line(f["scan-failed"], FINGERPRINT_FAILED, True),
+          json.dumps(f["scan-failed"]))
+    before = between(gdm, "scan-failed", "asleep")
+    check(f"{case}: sleep cancels the conversations the reader and the password were in",
+          any(line.endswith(": Cancel") for line in before), json.dumps(before))
+    check(f"{case}: asleep: no prompt", f["asleep"]["prompt"] is None and f["still-asleep"]["prompt"] is None)
+    asleep = between(gdm, "asleep", "still-asleep")
+    check(f"{case}: while asleep, no conversation starts and the reader is left alone", asleep == [], json.dumps(asleep))
+    resumed = between(gdm, "still-asleep", "resumed")
+    opened = [m.group(1) for m in map(re.compile(r"channel (\d+): connected$").match, resumed) if m]
+    live = [c for c in opened if f"channel {c}: Cancel" not in resumed]
+    # Upstream's prompt opens a channel and cancels it before the one it keeps, at wake as at resume.
+    check(f"{case}: resume leaves one channel running the password's and the reader's conversations",
+          len(live) == 1 and all(f"channel {live[0]}: BeginVerificationForUser {service} apex" in resumed
+                                 for service in ("gdm-password", "gdm-fingerprint")), json.dumps(resumed))
+    check(f"{case}: and the line is the reader's again, not the failure from before sleep",
+          fingerprint_line(f["resumed"], FINGERPRINT_HINT, False), json.dumps(f["resumed"]))
+    check(f"{case}: upstream's fingerprint indicator still stands aside", f["resumed"].get("indicator") is False,
+          json.dumps(f["resumed"]))
+    check(f"{case}: a failed scan after resume swaps the line, and the screen stays locked",
+          fingerprint_line(f["resumed-scan-failed"], FINGERPRINT_FAILED, True), json.dumps(f["resumed-scan-failed"]))
+    check(f"{case}: logged as qualify.sh reads it", (log.count("Apex: lock: suspend, prompt torn down"),
+                                                    log.count("Apex: lock: screen on, prompt rebuilt")) == (1, 1))
+
+
 def check_refused(shots, case):
     log = read(shots, f"{case}.log")
     f = facts(log)
@@ -654,6 +690,7 @@ def main():
     check_idle(shots, "lock-idle")
     check_suspend(shots, "lock-suspend")
     check_fingerprint(shots, "lock-fingerprint")
+    check_fingerprint_suspend(shots, "lock-fingerprint-suspend")
     for case in GREETER_CASES:
         check_greeter(shots, case)
     for case, want in POLKIT_CASES.items():
