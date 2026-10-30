@@ -928,6 +928,7 @@ lock_is_stock() {
     fact "$why: and opens on the clock, with no conversation" 'lock\.open=page=none prompt=none cancelled=none'
     fact "$why: blanking touches nothing" 'lock\.blank=page=none prompt=none cancelled=none'
     fact "$why: going idle cancels as upstream's does" 'lock\.idle-cancel=true'
+    fact "$why: upstream lays out the stack" 'lock\.stack-box\.900=-1\.\.-1'
     fact "$why: upstream's blur" 'lock\.blur=\{"brightness":0\.65,"radius":90\}'
     fact "$why: the clock slides away as upstream's" 'lock\.clock-progress=0 0\.5 1'
     fact "$why: upstream's \"Password\"" 'lock\.question\."Password:"="Password"'
@@ -986,6 +987,13 @@ fact "lock: blank tears it down" 'lock\.idle\.blank=page=clock prompt=none cance
 fact "lock: and the wake rebuilds it" 'lock\.idle\.wake=page=prompt prompt=conversation-2 cancelled=conversation-1'
 fact "lock: idle with no unlock dialog keeps upstream's cancel, and nothing throws" 'lock\.idle-cancel\.unlocked=true'
 fact "lock: so does a dialog the lock did not set up" 'lock\.idle-cancel\.other-dialog=true'
+fact "lock: at 900 px the stack's box is 51.0's: a tenth of the way down, to the bottom" 'lock\.stack-box\.900=90\.\.900'
+fact "lock: at 1080 px too" 'lock\.stack-box\.1080=108\.\.1080'
+fact "lock: at 1440 px too" 'lock\.stack-box\.1440=144\.\.1440'
+fact "lock: the stack asks for the stage's height, as 51.0's did, so the notifications get none of it" \
+    'lock\.stack-height\.900=810'
+fact "lock: and at 1440 px" 'lock\.stack-height\.1440=1296'
+fact "lock: a stack the lock did not set up keeps upstream's box" 'lock\.stack-box\.other=-1\.\.-1'
 fact "lock: a DisplayConfig that never answers leaves the prompt up" \
     'lock\.display-config-silent=page=prompt prompt=conversation-1 cancelled=none'
 fact "lock: so does one that fails" 'lock\.display-config-error=page=prompt prompt=conversation-1 cancelled=none'
