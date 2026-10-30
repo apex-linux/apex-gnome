@@ -25,6 +25,7 @@ const MAX_SAMPLES = 4000;
 const SWITCHER_APPS = ['Text Editor', 'Terminal', 'Web', 'Files', 'Settings'];
 // org.gnome.desktop.interface accent-color: a checked toggle is filled with each.
 export const ACCENTS = ['blue', 'teal', 'green', 'yellow', 'orange', 'red', 'pink', 'purple', 'slate'];
+const UNREAD_DOT_DARKENING = 0.25;
 // The bar's dots draw their background in the bar's ink: glyphs too.
 const DOTS = ['workspace-dot', 'messages-indicator'];
 
@@ -246,6 +247,24 @@ export async function barReport(settle, unit) {
     return surfaceReport(Main.panel, settle, unit);
 }
 
+// Inks the sheet does not draw, each composited over the pixels behind actor, its own ink hidden.
+async function inksOverBackdrop(actor, inks, settle, unit) {
+    const box = extents(actor);
+    const opacity = actor.opacity;
+    setOpacity(actor, 0);
+    let image;
+    try {
+        await settle();
+        image = await stagePixels(box);
+    } finally {
+        setOpacity(actor, opacity);
+    }
+    return Object.fromEntries(Object.entries(inks).map(([name, rgb]) => {
+        const {ink, backdrop, ratio: r} = measure({kind: 'dot', name, extents: box, box: roundedBox(box, unit), rgb, alpha: 1, fill: null}, image);
+        return [name, {ink, backdrop, ratio: r}];
+    }));
+}
+
 async function withOpen(open, close, read) {
     const opened = await open();
     try {
@@ -369,6 +388,28 @@ export async function a11yReport(h) {
             () => menu.close(BoxPointer.PopupAnimation.NONE), () => menu.box);
     }
     lap('quickSettingsAccents');
+    // SPEC's unread dot is the accent, raw or 25 % toward black: measured where the dot is, not drawn.
+    if (accents) {
+        out.barUnreadAccents = await withOpen(notifications, source => source.destroy(), async () => {
+            const measured = {};
+            try {
+                for (const accent of ACCENTS) {
+                    iface.set_string('accent-color', accent);
+                    // eslint-disable-next-line no-await-in-loop
+                    await settle();
+                    const [colour] = St.ThemeContext.get_for_stage(global.stage).get_accent_color();
+                    const raw = [colour.red, colour.green, colour.blue];
+                    // eslint-disable-next-line no-await-in-loop
+                    measured[accent] = await inksOverBackdrop(Main.panel.statusArea.dateMenu._indicator,
+                        {raw, darker: raw.map(c => c * (1 - UNREAD_DOT_DARKENING))}, settle, unit);
+                }
+            } finally {
+                iface.reset('accent-color');
+            }
+            return measured;
+        });
+    }
+    lap('barUnreadAccents');
     const wifi = h.findDescendant(menu.box, a => a.constructor.name === 'NMWirelessToggle');
     out.wifiMenu = wifi ? await withOpen(() => {
         menu.open(BoxPointer.PopupAnimation.NONE);
