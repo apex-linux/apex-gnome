@@ -9,7 +9,8 @@ set -euo pipefail
 
 readonly SHIM=${NEXT_POINT_SHIM:-/usr/local/bin/dnf5}
 readonly REAL_DNF5=${NEXT_POINT_DNF5:-/usr/bin/dnf5}
-readonly WATCHED=(gnome-shell mutter gdm gjs glib2 gnome-session gsettings-desktop-schemas gtk4 libadwaita)
+readonly WATCHED=(gnome-shell mutter gdm gjs glib2 gnome-session gsettings-desktop-schemas gtk4 libadwaita
+    gnome-control-center nautilus)
 
 usage() {
     cat <<EOF
@@ -26,8 +27,9 @@ usage: .github/scripts/next-point.sh COMMAND
   versions    a Markdown table of ${WATCHED[*]}: stable, and with updates-testing
   counts KIND LOG
               PASSED/FAILED from LOG, or ? when LOG has none: g2 and goldens read the last
-              '# N passed, M failed' line (patched.sh's, goldens.sh's), shoot counts the TAP
-              lines (tests/shell/shoot.sh's, the only ones in signoff.sh's output)
+              '# N passed, M failed' line (patched.sh's, goldens.sh's), tap counts the TAP
+              lines (tests/shell/shoot.sh's, the only ones in signoff.sh's output, or
+              tests/control-center/run.sh's and tests/nautilus/shoot.sh's); shoot is tap
 
 It never touches lane.sh's cache: next-point.yml runs lane.sh without APEX_LANE_CACHE.
 EOF
@@ -95,7 +97,7 @@ counts() {
     case $kind in
         g2 | goldens)
             sed -nE 's/^# ([0-9]+) passed, ([0-9]+) failed.*/\1\/\2/p' "$log" 2>/dev/null | tail -n 1 | grep . || echo '?' ;;
-        shoot)
+        shoot | tap)
             awk '/^ok / { ok++ } /^not ok / { bad++ } END { print (ok + bad ? ok + 0 "/" bad + 0 : "?") }' "$log" 2>/dev/null || echo '?' ;;
         *) usage >&2; exit 2 ;;
     esac
