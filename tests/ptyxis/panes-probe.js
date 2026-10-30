@@ -157,6 +157,8 @@ async function drive() {
     const r = {};
     r.start = await until('one terminal, prompted',
         s => s.terminals === 1 && s.prompted[0] && window.get_frame_rect().width === WINDOW.width);
+    await type('true');
+    r.fast = await until('true done', t => t.footer.done === 1);
     const split = s => s.panes.length === 2;
     const single = s => s.terminals === 1 && s.panes.length === 0;
     const right = s => split(s) && s.panes[1].body[0] > s.panes[0].body[0];
@@ -179,17 +181,15 @@ async function drive() {
     tap(Clutter.KEY_d, ctrlAlt);
     r.keyDownOff = await until('Ctrl+Alt+D again', single);
 
-    // VTE reports a command that ends within one batch as precmd before preexec, which leaves its pane running.
-    const OUTLAST_A_BATCH = '; sleep 1';
     tap(Clutter.KEY_r, ctrlAlt);
     // A command typed before the new shell's first prompt can leave the pane reading running.
     const s = await until('Ctrl+Alt+R, and the new shell prompted', t => right(t) && t.panes[1].prompted);
     // 24 lines take the caret below the measured half without scrolling, which would show the scrollbar.
-    await type(`seq 1 24${OUTLAST_A_BATCH}`);
+    await type('seq 1 24');
     await clickAt(s.panes[0].body);
     r.clickFirst = await until('a click on the first pane', t => t.panes[0].focused);
-    await type(`seq 1 24${OUTLAST_A_BATCH}`);
-    await until('both seq done', t => t.footer.done === 1);
+    await type('seq 1 24');
+    await until('both seq done', t => t.footer.running === 0);
     await park();
     const firstFocused = {first: await capture(r.clickFirst.panes[0]), second: await capture(r.clickFirst.panes[1])};
     await clickAt(r.clickFirst.panes[1].body);
@@ -222,7 +222,7 @@ async function drive() {
 
     await clickAt(r.justRunning.panes[1].body);
     await until('a click on the second pane', t => t.panes[1].focused);
-    await type(`printf '\\e]9;4;1;20\\e\\\\'${OUTLAST_A_BATCH}`);
+    await type("printf '\\e]9;4;1;20\\e\\\\'");
     await Scripting.sleep(RUN_WAIT_MS / 2);
     r.secondProgress = await state();
 
