@@ -99,6 +99,9 @@ just ptyxis-shots    # the built RPM in a headless gnome-shell, light and dark
 just ptyxis-palette  # the built RPM: a palette rewritten under an open terminal
 ```
 
+For C, `just app-dev ptyxis` in apex-image rebuilds the Apex build the desktop VM runs
+incrementally and runs it there ([desktop/README.md](../../../desktop/README.md#c-in-the-apps-just-app-dev)).
+
 `tests/lib/lane.sh ptyxis` builds `apex-lane` from a pinned apex-image commit and runs its
 container half, `apex-lane in-container build ptyxis`, as the builder VM does: the
 SRPM's signature, `spec-edit`, the series at fuzz 0, the exact-tree check,

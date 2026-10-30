@@ -470,6 +470,7 @@ gsettings set io.github.apex_linux.Apex.Desktop layer-enabled true
 |---|---|---|
 | Apex JS, SCSS and assets in `shell/`; upstream JS in the lane's work tree | `just shell-dev`: a nested shell in the desktop VM | 2 to 3 s (the S1a exit asks for 15 s) |
 | C in gnome-shell | `just shell-c` prints the procedure: ninja in an F45 toolbox, `bootc usroverlay` | under 30 s with the nested shell's restart |
+| C in gnome-control-center, nautilus or ptyxis | `just app-dev PKG build`, then `run`: ninja in an F45 toolbox in the VM, `bootc usroverlay` | 5 s (ptyxis) to 50 s (gnome-control-center), and under 1 s to install |
 | the lane's RPM | `just pkg-build gnome-shell` | 10 to 15 minutes |
 | the image | `just vm-image`, then `just desktop-update` | about 3 minutes after the build, with the reboot |
 
@@ -580,4 +581,33 @@ tree and Fedora's meson options (`redhat-linux-build`) are exactly the package's
 The tree is a git repository (Fedora's `%autosetup -S git`). A change to keep is
 committed there, applied as a commit to the builder VM's work tree, and written out with
 `just pkg-export gnome-shell`.
+
+#### C in the apps: `just app-dev`
+
+`just app-dev PKG` (in apex-image, [#123](https://github.com/apex-linux/apex-image/pull/123))
+runs the same loop as `just shell-c` for gnome-control-center, nautilus and ptyxis, one
+recipe per step:
+
+```bash
+just app-dev ptyxis fetch   # the Apex SRPM of the build the VM runs; uses the builder VM
+just app-dev ptyxis push    # sends it to /var/lib/apex-app-dev/ptyxis in the VM
+just app-dev ptyxis build   # log in to GNOME in the VM window first
+just app-dev ptyxis run     # stops a running ptyxis and starts the new one
+```
+
+`build` works as the user logged in to GNOME, in an F45 toolbox called `apex-app-dev`:
+`rpmbuild -rc` once per SRPM, then each time `ninja`, `meson install --destdir`, and the
+install unpacked over `/usr` after `bootc usroverlay`. The tree is
+`~/apex-app-dev/PKG/BUILD/` in the VM; edit it there and build again. `build` refuses an
+SRPM of another build than the one the VM runs, and `fetch` refuses a lock that ships
+Fedora's own package.
+
+| Package | `rpmbuild -rc` once | `ninja` after one Apex `.c` | install |
+|---|---|---|---|
+| gnome-control-center | 265 s | 50 s (mostly the LTO relink) | 0.5 s |
+| nautilus | 147 s | 42 s | 0.7 s |
+| ptyxis | 25 s | 5 s | 0.4 s |
+
+Measured in fedora:45 on 4 CPUs. As with `just shell-c`, a VM reboot drops the build. A
+change to keep goes back into the package's `desktop/` files or its series, here.
 
