@@ -1755,6 +1755,23 @@ a11y_contrast() {
     expect "$label accessibility" "$report" '(.bar.targets | map(select(.kind == "dot" and .name == "workspace-dot")) | length >= 2)
         and (.barUnread.targets | any((.kind == "dot" and .name == "messages-indicator") or (.kind == "icon" and .name == "message-indicator-symbolic")))' \
         "the bar's workspace dots and the clock's unread dot (upstream's glyph in high contrast) are measured as glyphs"
+    unread_dot_accents "$label" "$report"
+}
+
+# SPEC's unread dot in each accent, raw and 25 % toward black, over what is behind the dot: the
+# owner's numbers for its rule, printed once all nine are measured, asserted only once it is chosen.
+unread_dot_accents() {
+    local label=$1 report=$2 desc="the unread dot's backdrop is measured under each of the nine accents, raw and 25 % toward black"
+    if jq -e --args '(.barUnreadAccents // {}) as $m
+        | $ARGS.positional | all(. as $a | $m[$a] | (.raw.ratio | type == "number") and (.darker.ratio | type == "number"))' \
+        "${A11Y_ACCENTS[@]}" <<<"$report" >/dev/null 2>&1; then
+        pass "$label accessibility: $desc"
+        jq -r --args '.barUnreadAccents as $m | $ARGS.positional[] as $a
+            | "# \($a): raw \($m[$a].raw.ink) \($m[$a].raw.ratio):1, darker \($m[$a].darker.ink) \($m[$a].darker.ratio):1 over \($m[$a].raw.backdrop)"' \
+            "${A11Y_ACCENTS[@]}" <<<"$report" | sed "s/^# /# $label unread dot, /"
+    else
+        fail "$label accessibility: $desc"
+    fi
 }
 
 # The bar over the overview's fixture wallpaper, in the overview and on the desktop.

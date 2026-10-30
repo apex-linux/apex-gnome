@@ -769,6 +769,8 @@ REPORT_OF_LEGIBLE_SURFACES='
     quickSettingsAccents: (["blue", "teal", "green", "yellow", "orange", "red", "pink", "purple", "slate"] | map({key: ., value: $s}) | from_entries),
     dateMenuAccents: (["blue", "teal", "green", "yellow", "orange", "red", "pink", "purple", "slate"] | map({key: ., value: $s}) | from_entries),
     dialogAccents: (["blue", "teal", "green", "yellow", "orange", "red", "pink", "purple", "slate"] | map({key: ., value: $s}) | from_entries),
+    barUnreadAccents: (["blue", "teal", "green", "yellow", "orange", "red", "pink", "purple", "slate"]
+        | map({key: ., value: {raw: {ink: "#3584e4", backdrop: "#eff2f7", ratio: 3.4}, darker: {ink: "#2863ab", backdrop: "#eff2f7", ratio: 5.3}}}) | from_entries),
     screenshot: $s,
 
     bar: ($s | .targets += [$dot, $inactiveDot]), barUnread: ($s | .targets += [$dot + {name: "messages-indicator"}, $inactiveDot]), dock: $s, popupMenu: $s, osd: $s, banner: $s, quickSettings: $s, wifiMenu: $s, wifiMenuConnected: $s, dateMenu: $s, switcher: $s,
@@ -802,7 +804,7 @@ CHANGES
 
 test_a11y() {
     local assertions expected change what passes failures open_gaps want
-    for assertions in a11y_contrast:49 a11y_layout:46; do
+    for assertions in a11y_contrast:50 a11y_layout:46; do
         expected=${assertions#*:}
         read -r passes failures open_gaps <<<"$(a11y_run "${assertions%:*}")"
         if ((failures == 0 && open_gaps == 0 && passes == expected)); then
@@ -833,6 +835,8 @@ a11y_contrast|1|.wifiMenuConnected.targets |= map(. + {kind: "icon"})|a connecte
 a11y_contrast|1|.spotlight.toast.targets[0].ratio = 3|the toast's text at 3:1
 a11y_contrast|1|.quickSettingsAccents.yellow.targets[0].ratio = 4.49|a checked toggle on the yellow accent at 4.49:1
 a11y_contrast|1|del(.quickSettingsAccents.slate)|an accent left unmeasured
+a11y_contrast|1|del(.barUnreadAccents.pink)|the unread dot left unmeasured under one accent
+a11y_contrast|1|.barUnreadAccents.teal.darker.ratio = null|the unread dot's darker accent left unmeasured
 a11y_contrast|1|.dateMenuAccents.orange.targets[0].ratio = 4.3|today on the orange accent at 4.3:1
 a11y_contrast|1|.dialogAccents.yellow.targets[0].ratio = 3.01|a default button on the raw yellow accent at 3.01:1
 a11y_contrast|1|.screenshot.targets[0].ratio = 2.5|a screenshot type label at 2.5:1
