@@ -26,6 +26,7 @@ const POWER_SAVE_MODE = 'PowerSaveMode';
 const BLANK_POWER_SAVE_MODES = [1, 2, 3];
 
 let _enabled = false;
+const _screens = new WeakMap();
 
 function _clockProgress(stock) {
     return _enabled ? CLOCK_ALWAYS_SHOWN : stock;
@@ -33,6 +34,11 @@ function _clockProgress(stock) {
 
 function _screenIsBlank(displayConfig) {
     return BLANK_POWER_SAVE_MODES.includes(displayConfig.get_cached_property(POWER_SAVE_MODE)?.unpack());
+}
+
+// Locking makes the session idle, and upstream's idle cancel would end the prompt before blank could tear it down.
+function _idleCancel(stock, dialog) {
+    return _enabled && _screens.has(dialog) ? false : stock;
 }
 
 // _showClock() alone destroys the prompt only after its fade; blanking must not wait.
@@ -48,7 +54,8 @@ function _buildPrompt(dialog) {
 }
 
 // The lines are for the VM tests (apex-image's qualify.sh). Only a prompt torn down here comes back.
-export function followScreen(dialog, screen) {
+export function followScreen(dialog) {
+    const screen = _screens.get(dialog);
     if (_screenIsBlank(screen.displayConfig)) {
         if (!dialog._authPrompt)
             return;
@@ -135,12 +142,12 @@ async function _followDisplayConfig(dialog) {
             console.warn(`Apex: lock: no ${DISPLAY_CONFIG}, so the prompt stays at blank: ${e.message}`);
         return;
     }
-    const screen = {displayConfig, tornDown: false};
+    _screens.get(dialog).displayConfig = displayConfig;
     displayConfig.connectObject('g-properties-changed', (_proxy, changed, invalidated) => {
         if (changed.lookup_value(POWER_SAVE_MODE, null) || invalidated.includes(POWER_SAVE_MODE))
-            followScreen(dialog, screen);
+            followScreen(dialog);
     }, dialog);
-    followScreen(dialog, screen);
+    followScreen(dialog);
 }
 
 function _setUp(dialog) {
@@ -150,6 +157,7 @@ function _setUp(dialog) {
     _restack(dialog);
     _addOverlay(dialog);
     _addHint(dialog);
+    _screens.set(dialog, {displayConfig: null, tornDown: false});
 
     // Until DisplayConfig answers, and if it never does, as on a screen that is on.
     _buildPrompt(dialog);
@@ -160,6 +168,7 @@ function _setUp(dialog) {
 export function configure(featureName) {
     Hooks.provide(featureName, 'unlock-clock-progress', _clockProgress);
     Hooks.provide(featureName, 'unlock-dialog', _setUp);
+    Hooks.provide(featureName, 'unlock-idle-cancel', _idleCancel);
 }
 
 export function enable() {

@@ -935,6 +935,7 @@ lock_is_stock() {
     fact "$why: the lock screen keeps upstream's two stages" "lock\.layout=$STOCK_LOCK_LAYOUT"
     fact "$why: and opens on the clock, with no conversation" 'lock\.open=page=none prompt=none cancelled=none'
     fact "$why: blanking touches nothing" 'lock\.blank=page=none prompt=none cancelled=none'
+    fact "$why: going idle cancels as upstream's does" 'lock\.idle-cancel=true'
     fact "$why: upstream's blur" 'lock\.blur=\{"brightness":0\.65,"radius":90\}'
     fact "$why: the clock slides away as upstream's" 'lock\.clock-progress=0 0\.5 1'
     fact "$why: upstream's \"Password\"" 'lock\.question\."Password:"="Password"'
@@ -971,8 +972,8 @@ fact "lock: and waking again builds another" 'lock\.wake-again=page=prompt promp
 fact "lock: suspend is blank too" 'lock\.suspend=page=clock prompt=none cancelled=conversation-1,conversation-2,conversation-3'
 fact "lock: a display without power saving keeps a prompt" \
     'lock\.unsupported=page=prompt prompt=conversation-4 cancelled=conversation-1,conversation-2,conversation-3'
-count_is "lock: each teardown is logged once, for the VM tests" '^.*Apex: lock: screen blank, prompt torn down$' 5
-count_is "lock: each rebuild too" '^.*Apex: lock: screen on, prompt rebuilt$' 4
+count_is "lock: each teardown is logged once, for the VM tests" '^.*Apex: lock: screen blank, prompt torn down$' 6
+count_is "lock: each rebuild too" '^.*Apex: lock: screen on, prompt rebuilt$' 5
 fact "lock: the hint stays after the rebuilt prompt" 'lock\.prompt-box\.after-wake=conversation-4,Press Enter to unlock'
 fact "lock: locked while blank, the first conversation ends as DisplayConfig answers" \
     'lock\.open-blank=page=clock prompt=none cancelled=conversation-1'
@@ -986,6 +987,13 @@ fact "lock: which its key does" 'lock\.escaped\.key=page=prompt prompt=conversat
 fact "lock: a key that woke the screen keeps upstream's prompt, and the wake adds none" \
     'lock\.key-wake=page=prompt prompt=conversation-2 cancelled=conversation-1'
 fact "lock: upstream's prompt takes keys at once, as upstream's does" 'lock\.key-wake\.keys=true'
+fact "lock: the session going idle at lock does not cancel the lock's prompt, before DisplayConfig answers too" \
+    'lock\.idle-cancel=false'
+fact "lock: so the prompt is up until blank" 'lock\.idle=page=prompt prompt=conversation-1 cancelled=none'
+fact "lock: blank tears it down" 'lock\.idle\.blank=page=clock prompt=none cancelled=conversation-1'
+fact "lock: and the wake rebuilds it" 'lock\.idle\.wake=page=prompt prompt=conversation-2 cancelled=conversation-1'
+fact "lock: idle with no unlock dialog keeps upstream's cancel, and nothing throws" 'lock\.idle-cancel\.unlocked=true'
+fact "lock: so does a dialog the lock did not set up" 'lock\.idle-cancel\.other-dialog=true'
 fact "lock: a DisplayConfig that never answers leaves the prompt up" \
     'lock\.display-config-silent=page=prompt prompt=conversation-1 cancelled=none'
 fact "lock: so does one that fails" 'lock\.display-config-error=page=prompt prompt=conversation-1 cancelled=none'
