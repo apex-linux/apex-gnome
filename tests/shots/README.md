@@ -153,6 +153,30 @@ active and none, nor an Apex D-Bus service, started (the ROADMAP's "no agent run
 the trip again with dconf already running. `direct.sh` and `guard.sh` refuse to run
 outside run.sh's container (`/run/.containerenv`).
 
+## Session defaults
+
+S1b's first exit row, "a new session starts with the Apex theme, Colloid icons, JetBrains Mono
+and the wallpaper", read in the shells that run with apex-desktop installed: the VM's G2
+(`default`, `dark-style`, and `safe-env`, where safe mode keeps the image's fonts and icons) and
+the sign-off shells (above). Every case's probe reports them (`session-defaults.js`,
+`APEXG2-SESSION`); `session_defaults` asserts:
+
+- `org.gnome.desktop.interface`'s `font-name`, `document-font-name`, `monospace-font-name`,
+  `font-hinting` and `icon-theme` are the override's (`parts.sh` keeps their copies, which
+  apex-image's contracts hold equal to apex-desktop's), naming each key that differs;
+- the shell draws with that font and icon theme (`St.Settings`);
+- fontconfig gives Adwaita Sans, with `ss03`, and JetBrains Mono for their families, so a
+  missing JetBrains Mono fails rather than falling back to another monospace font;
+- the bar's clock is drawn in Adwaita Sans, as Pango resolves it;
+- every icon shown in the bar, the dock, the overview's dash and Quick Settings resolves under
+  `/usr/share/icons/Apex/`. Two explicit lists name the only others: `FIXTURE_APPS`, G2's own
+  stub apps, which have no icon and draw GNOME's generic one, and `SHELL_RESOURCE_ICONS`,
+  icons the shell draws from its own resource because board 31 has no glyph of that name
+  (`screenshooter-symbolic`). A failure names each icon, where it showed, its app and the
+  file it resolved to, or "no icon".
+
+The wallpaper is `backdrop_painted`'s (below).
+
 ## The backdrop
 
 Every case runs over a pinned backdrop, never whatever the session would load: a shell
@@ -734,6 +758,13 @@ row, its key), when:
   fixtures' keyboard before any shell starts: with no device, nothing can reach the indicator
   late. G2 keeps the connected keyboard, which its top-bar assertion needs.
 
+Beside the boards, `signoff.sh --collect` runs one more check line on the same shells:
+G2's `session_defaults` on the `default` and `dark-style` logs, printed as
+`signoff.sh: session defaults: N passed, M failed`, with each failure naming its key or icon
+(below, "Session defaults"). It is a check of its own, outside the board count, and the only
+per-PR job whose shells run with apex-desktop's fonts and icon theme: `shots-patched` installs
+just the shell and two of the override's keys.
+
 In the `signoff` workflow, the shell's job runs `signoff.sh` and passes its G2 run, its
 `shoot.sh` captures and board 31's sheets on. Each app's job builds libadwaita and the app through
 `tests/lib/lane.sh`, restoring `ci.yml`'s `lane-` caches without saving them, and runs the
@@ -892,6 +923,7 @@ Not asserted here: the volume glyph (the container has no audio server), and wha
 | `a11y.js` | the shell | the accessibility cases: contrast against what is drawn, and the Large Text layout |
 | `backdrop.js`, `backdrops.sh` | the shell; a throwaway container | whether the pinned backdrop painted, and the Facets it pins rendered where an image has them |
 | `indicators.js`, `sni-items.js` | the shell; gjs | the app-indicator part of `default`, `default-scale1` and `dark-style`, and the StatusNotifierItems it starts |
+| `session-defaults.js` | every case's shell | the fonts and icon theme the session reads, fontconfig's families for them, the clock's drawn family, and the file each shown icon of the bar, dock, dash and Quick Settings resolves to |
 | `idle.js` | the `idle` case's shell | the settled desktop, its paints and relayouts over 10 s, and the counter's control |
 | `glass-load.js`, `load-window.js` | the `glass-load` and `glass-stress` cases' shells; gjs, GTK 4 | ADR 0014's scenarios as work counts, and the client that stands in for a video; `tests/laptop` runs both on the laptop, the client with `measure=` |
 | `frame.c`, `G2Frame-1.gir` | the glass cases' shells | `G2Frame.read()`, a region of the frame the shell drew |
