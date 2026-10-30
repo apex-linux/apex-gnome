@@ -1210,6 +1210,19 @@ test_signoff_apps() {
     else
         not_ok "signoff: the app boards add a row per scene, keyed NN-SLUG, light and dark, beside the fifteen shell boards: $(tail -n 3 "$T/signoff.out")"
     fi
+    # No board is light-only today: a copy of signoff.sh whose fallback row has no dark capture stands in for one.
+    mkdir -p "$T/light-only/tests/shots" "$T/light-only/tests/lib"
+    cp "$HERE/../lib/pins.sh" "$T/light-only/tests/lib/"
+    sed 's/|updates-fallback|updates-fallback-dark|/|updates-fallback||/' "$HERE/signoff.sh" >"$T/light-only/tests/shots/signoff.sh"
+    rm "$dir/cc/updates-fallback-dark.png"
+    if bash "$T/light-only/tests/shots/signoff.sh" --collect "$dir/g2" "$dir/shots" "$dir/light-only" control-center="$dir/cc" >"$T/signoff.out" 2>&1 &&
+        [[ -e $dir/light-only/board-26-update-health-fallback-light.png && ! -e $dir/light-only/board-26-update-health-fallback-dark.png ]] &&
+        jq -e '.boards[] | select(.key == "26-update-health-fallback") | .scene.dark == null and .files.dark == null'             "$dir/light-only/signoff.json" >/dev/null; then
+        ok "signoff: a row its shooter captures light only has no dark file, and null for its dark scene and file"
+    else
+        not_ok "signoff: a row its shooter captures light only has no dark file, and null for its dark scene and file: $(tail -n 3 "$T/signoff.out")"
+    fi
+    printf '\x89PNG\r\n\x1a\n' >"$dir/cc/updates-fallback-dark.png"
     rm "$dir/cc/dark-scrolled.png"
     if ! "$HERE/signoff.sh" --collect "$dir/g2" "$dir/shots" "$dir/apps2" control-center="$dir/cc" >"$T/signoff.out" 2>&1 &&
         grep -q 'board 11-settings-apex-scrolled (Settings: Apex Desktop, scrolled), dark: no capture of dark-scrolled (tests/control-center/run.sh)' "$T/signoff.out" &&
