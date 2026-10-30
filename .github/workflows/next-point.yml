@@ -5,6 +5,8 @@ name: next-point
 # never on a pull request, never required, and lane.sh runs without APEX_LANE_CACHE, so no lane cache is read or written.
 on:
   workflow_dispatch: {}
+  push:
+    branches: [claude/next-point-apps]
   schedule:
     - cron: '23 3 * * 2'
 
@@ -169,14 +171,127 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
+  apps:
+    name: ${{ matrix.shoot }} (Fedora 45 with updates-testing, the ${{ matrix.app }} boards)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    permissions:
+      contents: read
+    container:
+      image: registry.fedoraproject.org/fedora:45@sha256:1e13e11f63e147a40a935c9046c79d53a30b861a3cf05ebb023bb53c562382cb
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - app: control-center
+            key: cc
+            pkg: gnome-control-center
+            shoot: tests/control-center/run.sh
+            packages: >-
+              gnome-shell mesa-dri-drivers dbus-daemon python3-dbusmock python3-gobject at-spi2-core gcc util-linux
+              adwaita-sans-fonts python3-dbus systemd gnome-backgrounds umockdev
+          - app: nautilus
+            key: files
+            pkg: nautilus
+            shoot: tests/nautilus/shoot.sh
+            packages: >-
+              gnome-shell mesa-dri-drivers dbus-daemon python3-dbusmock gcc util-linux at-spi2-core python3-gobject
+              inkscape glycin-thumbnailer adwaita-sans-fonts jetbrains-mono-fonts-all
+    steps:
+      - name: git for the checkout and the Source1 archive
+        run: >-
+          dnf5 -y --setopt=install_weak_deps=False --repo=fedora --repo=updates install
+          git-core bash coreutils findutils sed grep tar zstd
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: apex-image admitting updates-testing
+        run: .github/scripts/next-point.sh image "$PWD/_build/next-point/apex-image"
+
+      - name: tests/lib/lane.sh libadwaita and ${{ matrix.pkg }}
+        env:
+          PKG: ${{ matrix.pkg }}
+        run: |
+          APEX_IMAGE_SRC="$PWD/_build/next-point/apex-image" tests/lib/lane.sh libadwaita
+          APEX_IMAGE_SRC="$PWD/_build/next-point/apex-image" tests/lib/lane.sh "$PKG"
+
+      - name: dnf5 sees updates-testing
+        run: .github/scripts/next-point.sh shim
+
+      - name: the shooter's packages, then the lane's libadwaita over Fedora's
+        env:
+          PACKAGES: ${{ matrix.packages }}
+        run: |
+          read -ra packages <<<"$PACKAGES"
+          dnf5 -y -q --setopt=install_weak_deps=False --repo=fedora --repo=updates install "${packages[@]}"
+          if rpm -q libadwaita-devel >/dev/null; then
+              dnf5 -y -q --setopt=clean_requirements_on_remove=False remove libadwaita-devel
+          fi
+          dnf5 -y -q --setopt=install_weak_deps=False --repo=fedora --repo=updates install _build/libadwaita/out/libadwaita-[0-9]*.x86_64.rpm
+          rpm -q libadwaita | grep -q '\.apex'
+
+      - name: apex-desktop at tests/lib/pins.sh's APEX_DESKTOP_REV
+        if: matrix.app == 'nautilus'
+        run: |
+          . tests/lib/pins.sh
+          git init -q _build/apex-desktop
+          git -C _build/apex-desktop fetch -q --depth 1 "$APEX_DESKTOP_URL" "$APEX_DESKTOP_REV"
+          git -C _build/apex-desktop checkout -q --detach FETCH_HEAD
+          echo "APEX_DESKTOP_SRC=$PWD/_build/apex-desktop" >>"$GITHUB_ENV"
+
+      - name: ${{ matrix.shoot }} on the lane's RPMs
+        env:
+          SHOOT: ${{ matrix.shoot }}
+          PKG: ${{ matrix.pkg }}
+        run: |
+          mkdir -p _build/next-point
+          "$SHOOT" "_build/$PKG/out" 2>&1 | tee "_build/next-point/$PKG.log"
+
+      - name: the app's counts
+        if: ${{ !cancelled() }}
+        env:
+          KEY: ${{ matrix.key }}
+          PKG: ${{ matrix.pkg }}
+        run: |
+          mkdir -p _build/next-point/counts
+          echo "$(rpm -qp --qf '%{name}-%{version}-%{release}' "_build/$PKG/out/$PKG"-[0-9]*.x86_64.rpm 2>/dev/null || echo "$PKG ?")" \
+            "$(.github/scripts/next-point.sh counts tap "_build/next-point/$PKG.log")" >"_build/next-point/counts/$KEY"
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: ${{ !cancelled() }}
+        with:
+          name: next-point-count-${{ matrix.key }}
+          path: _build/next-point/counts/
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: ${{ !cancelled() }}
+        with:
+          name: next-point-${{ matrix.app }}
+          path: |
+            _build/next-point/${{ matrix.pkg }}.log
+            _build/${{ matrix.app }}/shots/
+          if-no-files-found: ignore
+          retention-days: 7
+
   report:
     name: next-point's one-line result
-    needs: [lane, g2, signoff]
+    needs: [lane, g2, signoff, apps]
     if: ${{ !cancelled() }}
     runs-on: ubuntu-24.04
     timeout-minutes: 5
-    permissions: {}
+    permissions:
+      contents: read
     steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: next-point-count-*
+          path: counts
+          merge-multiple: true
+
       - name: the line, passed/failed for each, ? where a job gave none
         env:
           SHELL_NEVR: ${{ needs.lane.outputs.shell || '?' }}
@@ -184,6 +299,7 @@ jobs:
           GOLDENS: ${{ needs.signoff.outputs.goldens || '?' }}
           SHOOT: ${{ needs.signoff.outputs.shoot || '?' }}
         run: |
-          line="next-point: $SHELL_NEVR g2 $G2 goldens $GOLDENS shoot $SHOOT"
+          app() { [[ -s counts/$1 ]] && cat "counts/$1" || echo "$1 ?"; }
+          line="next-point: $SHELL_NEVR g2 $G2 goldens $GOLDENS shoot $SHOOT | $(app cc) | $(app files)"
           echo "$line"
           printf '%s\n' "\`$line\`" >>"$GITHUB_STEP_SUMMARY"
