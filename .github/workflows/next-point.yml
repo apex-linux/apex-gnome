@@ -186,4 +186,4 @@ jobs:
         run: |
           line="next-point: $SHELL_NEVR g2 $G2 goldens $GOLDENS shoot $SHOOT"
           echo "$line"
-          printf '`%s`\n' "$line" >>"$GITHUB_STEP_SUMMARY"
+          printf '%s\n' "\`$line\`" >>"$GITHUB_STEP_SUMMARY"
