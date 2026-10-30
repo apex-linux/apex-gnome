@@ -154,9 +154,12 @@ template $CcApexUpdatesPage: Adw.NavigationPage {
                     title: _("Next Restart");
 
                     [suffix]
-                    Label staged_built {
+                    Label {
+                      label: _("Checked");
+                      valign: center;
+
                       styles [
-                        "dim-label",
+                        "apex-checked",
                       ]
                     }
                   }
@@ -169,11 +172,6 @@ template $CcApexUpdatesPage: Adw.NavigationPage {
                       label: _("Use at Next Restart…");
                       valign: center;
                       clicked => $rollback_clicked_cb(template);
-
-                      styles [
-                        "flat",
-                        "apex-link",
-                      ]
                     }
                   }
                 }

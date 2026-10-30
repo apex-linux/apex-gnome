@@ -163,8 +163,10 @@ and polkit asks in the daemon, never in Settings.
   `a(sstbts)` or, from a daemon before apex-system K4, `a(sstbt)`.
 - **What's New**: `GetChanges` for the staged digest, summed up as its GNOME, Linux and
   Mesa versions (then other packages), with every change in the expanded row.
-- **Versions**: Booted, Staged and Rollback, each as version, short digest and build
-  date, and "Kept by Apex: …" with the `pin-reason` of a deployment the daemon pinned;
+- **Versions**: Booted, Staged and Rollback, each as version and short digest in
+  monospace and the build date, Staged with a "Checked" pill instead (the daemon keeps a
+  staged image only once its signature checks out), and "Kept by Apex: …" with the
+  `pin-reason` of a deployment the daemon pinned;
   a Kept row for each deployment in `Kept`, the daemon's other pinned ones;
   Use at Next Restart… on the previous one calls `Rollback(false)`.
 - **Preferences**: Automatic Downloads (`AutomaticDownloads`, set with

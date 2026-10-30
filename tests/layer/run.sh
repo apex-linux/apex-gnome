@@ -54,7 +54,7 @@ done
 # Spotlight's providers: upstream's app search and remote providers, faked.
 cp "$HERE"/stubs/appDisplay.js "$HERE"/stubs/remoteSearch.js "$HERE"/stubs/searchProviders.js "$T/shell/js/ui/"
 mkdir -p "$T/shell/js/misc"
-cp "$HERE/stubs/systemActions.js" "$T/shell/js/misc/"
+cp "$HERE/stubs/systemActions.js" "$HERE/stubs/loginManager.js" "$T/shell/js/misc/"
 cp "$HERE"/stubs/St.js "$HERE"/stubs/Clutter.js "$HERE"/stubs/Shell.js "$HERE"/stubs/Meta.js "$HERE"/stubs/Graphene.js "$HERE"/stubs/Mtk.js "$HERE"/stubs/Pango.js \
     "$HERE"/stubs/GdkPixbuf.js "$HERE"/stubs/Polkit.js "$HERE"/stubs/AccountsService.js "$T/"
 # The shadow cutout and the indicators' mask are GObject subclasses of Clutter.ShaderEffect, which the stubs cannot be.
@@ -480,6 +480,10 @@ fact "notifications: a click turns Do Not Disturb off" 'nf\.dnd-click=show-banne
 fact "notifications: the month on the left, both chevrons on the right" 'nf\.calendar=header=month,back,forward align=1 class=true'
 fact "notifications: every day keeps a dot under its number, in an St.Label that takes the day's colour" \
     'nf\.days=Label:27/apex-event-dot Label:28/apex-event-dot Label:29/apex-event-dot own-text=false'
+fact "notifications: layer off: the tray's banner timeouts run as stock's" 'nf\.off\.tray=none'
+fact "notifications: layer back on: still stock's while the session runs" 'nf\.on\.tray=none'
+fact "notifications: at logout the teardown clears them, so gnome-shell's shutdown loop cannot run them on the destroyed tray" \
+    'nf\.teardown\.tray=banner:0,left'
 fact "notifications: layer off: stock's header" 'nf\.off\.calendar=header=back,month,forward align=2 class=false'
 fact "notifications: layer off: stock's day buttons, each with its own text again" 'nf\.off\.days=ButtonText:27 ButtonText:28 ButtonText:29 own-text=true'
 fact "notifications: layer back on: the header and dots again" 'nf\.on\.calendar=header=month,back,forward align=1 class=true'
@@ -928,6 +932,8 @@ lock_is_stock() {
     fact "$why: and opens on the clock, with no conversation" 'lock\.open=page=none prompt=none cancelled=none'
     fact "$why: blanking touches nothing" 'lock\.blank=page=none prompt=none cancelled=none'
     fact "$why: going idle cancels as upstream's does" 'lock\.idle-cancel=true'
+    fact "$why: upstream lays out the stack" 'lock\.stack-box\.900=-1\.\.-1'
+    fact "$why: so does preparing for sleep" 'lock\.sleep-cancel=true true'
     fact "$why: upstream's blur" 'lock\.blur=\{"brightness":0\.65,"radius":90\}'
     fact "$why: the clock slides away as upstream's" 'lock\.clock-progress=0 0\.5 1'
     fact "$why: upstream's \"Password\"" 'lock\.question\."Password:"="Password"'
@@ -965,7 +971,8 @@ fact "lock: suspend is blank too" 'lock\.suspend=page=clock prompt=none cancelle
 fact "lock: a display without power saving keeps a prompt" \
     'lock\.unsupported=page=prompt prompt=conversation-4 cancelled=conversation-1,conversation-2,conversation-3'
 count_is "lock: each teardown is logged once, for the VM tests" '^.*Apex: lock: screen blank, prompt torn down$' 6
-count_is "lock: each rebuild too" '^.*Apex: lock: screen on, prompt rebuilt$' 5
+count_is "lock: each rebuild too, at resume as at wake" '^.*Apex: lock: screen on, prompt rebuilt$' 8
+count_is "lock: each teardown for sleep is logged once" '^.*Apex: lock: suspend, prompt torn down$' 2
 fact "lock: the hint stays after the rebuilt prompt" 'lock\.prompt-box\.after-wake=conversation-4,Press Enter to unlock'
 fact "lock: locked while blank, the first conversation ends as DisplayConfig answers" \
     'lock\.open-blank=page=clock prompt=none cancelled=conversation-1'
@@ -986,6 +993,31 @@ fact "lock: blank tears it down" 'lock\.idle\.blank=page=clock prompt=none cance
 fact "lock: and the wake rebuilds it" 'lock\.idle\.wake=page=prompt prompt=conversation-2 cancelled=conversation-1'
 fact "lock: idle with no unlock dialog keeps upstream's cancel, and nothing throws" 'lock\.idle-cancel\.unlocked=true'
 fact "lock: so does a dialog the lock did not set up" 'lock\.idle-cancel\.other-dialog=true'
+fact "lock: at 900 px the stack's box is 51.0's: a tenth of the way down, to the bottom" 'lock\.stack-box\.900=90\.\.900'
+fact "lock: at 1080 px too" 'lock\.stack-box\.1080=108\.\.1080'
+fact "lock: at 1440 px too" 'lock\.stack-box\.1440=144\.\.1440'
+fact "lock: the stack asks for the stage's height, as 51.0's did, so the notifications get none of it" \
+    'lock\.stack-height\.900=810'
+fact "lock: and at 1440 px" 'lock\.stack-height\.1440=1296'
+fact "lock: a stack the lock did not set up keeps upstream's box" 'lock\.stack-box\.other=-1\.\.-1'
+fact "lock: preparing for sleep with no unlock dialog, or one the lock did not set up, cancels as upstream's does" \
+    'lock\.sleep-cancel=true true'
+fact "lock: preparing for sleep takes the lock's prompt down, which ends its conversation, and owes it" \
+    'lock\.sleep=page=clock prompt=none cancelled=conversation-1'
+fact "lock: a wake while the machine goes to sleep builds nothing" \
+    'lock\.sleep\.wake=page=clock prompt=none cancelled=conversation-1'
+fact "lock: resume with the screen on rebuilds it" 'lock\.resume=page=prompt prompt=conversation-2 cancelled=conversation-1'
+fact "lock: and it takes keys once PAM asks" 'lock\.resume\.keys=false'
+fact "lock: a failed scan before sleep does not outlive it: the rebuilt prompt starts on the password's hint" \
+    "lock\.hint\.after-resume=$HINT_PASSWORD message=true indicator=true"
+fact "lock: and the reader's prompt on it is board 20's line again" \
+    "lock\.hint\.after-resume\.scan=$HINT_SCAN message=false indicator=false"
+fact "lock: resume with the screen blank builds nothing" \
+    'lock\.resume-blank=page=clock prompt=none cancelled=conversation-1,conversation-2'
+fact "lock: the wake after it does" 'lock\.resume-blank\.wake=page=prompt prompt=conversation-3 cancelled=conversation-1,conversation-2'
+fact "lock: a lock taken as the machine goes to sleep starts no conversation" \
+    'lock\.locked-for-sleep=page=none prompt=none cancelled=none'
+fact "lock: and its prompt comes at resume" 'lock\.locked-for-sleep\.resume=page=prompt prompt=conversation-1 cancelled=none'
 fact "lock: a DisplayConfig that never answers leaves the prompt up" \
     'lock\.display-config-silent=page=prompt prompt=conversation-1 cancelled=none'
 fact "lock: so does one that fails" 'lock\.display-config-error=page=prompt prompt=conversation-1 cancelled=none'

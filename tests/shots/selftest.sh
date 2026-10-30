@@ -1114,6 +1114,16 @@ test_signoff_banners() {
     else
         not_ok "signoff: the sign-off scene's own error fails boards 15 and 35, named: $(tail -n 3 "$T/signoff.out")"
     fi
+    rm -rf "$dir" && cp -r "$1" "$dir"
+    sed -i '/^APEXG2-SESSION /s/"icon-theme":"Apex"}/"icon-theme":"Adwaita"}/' "$dir/g2/dark-style.log"
+    if ! "$HERE/signoff.sh" --collect "$dir/g2" "$dir/shots" "$dir/out" >"$T/signoff.out" 2>&1 &&
+        grep -q '^signoff.sh: session defaults: 11 passed, 1 failed$' "$T/signoff.out" &&
+        grep -q 'dark-style: the session reads .*(icon-theme is "Adwaita", not "Apex")' "$T/signoff.out" &&
+        grep -q '1 session default check(s) failed' "$T/signoff.out"; then
+        ok "signoff: a session default that is not apex-desktop's fails its own check line, naming the key"
+    else
+        not_ok "signoff: a session default that is not apex-desktop's fails its own check line, naming the key: $(tail -n 3 "$T/signoff.out")"
+    fi
 }
 
 test_signoff() {
@@ -1134,6 +1144,7 @@ test_signoff() {
     printf 'Apex: feature panel enabled\nApex: feature dock enabled\nAPEXG2-SIGNOFF {"previews":true}\n%s\n' \
         'APEXG2 {"dock":{"items":[{"kind":"app","name":"Files"},{"kind":"separator"},{"kind":"app","name":"Bazaar"}]}}' >"$dir/g2/default.log"
     echo 'APEXG2-SIGNOFF {"previews":true}' >"$dir/g2/dark-style.late.log"
+    printf 'APEXG2-SESSION %s\n' "$(jq -c . <<<"$SESSION_REPORT")" | tee -a "$dir/g2/default.log" >>"$dir/g2/dark-style.log"
     for scene in "$dir"/g2/captures/*.png; do
         scene=$(basename "$scene")
         case $scene in
@@ -3030,6 +3041,109 @@ test_clean_shutdown() {
         "$passes/$failures $(grep -c "^FAIL default: at shutdown: shell_global_get: assertion 'the_object' failed$" "$T/assertions.out")"
 }
 
+test_no_disposed_at_shutdown() {
+    local run=$T/disposed-shutdown-run disposed frame passes failures
+    disposed='Gjs-CRITICAL **: 09:41:00.000: Object Gjs_ui_messageTray_MessageTray (0x55e780c0), has been already disposed — impossible to access it.'
+    frame='#0   7ffd b   resource:///org/gnome/shell/ui/messageTray.js:1062 (29fd @ 15)'
+    mkdir -p "$run"
+    printf '%s\n' "$disposed" '== Stack trace for context 0x55 ==' "$frame" '** Message: 09:41:00.000: Shutting down GNOME Shell' >"$run/default.log"
+    read -r passes failures <<<"$(assertion_counts no_disposed_at_shutdown default "$run/default.log")"
+    expect_eq "disposed at shutdown: one before it is another check's" "1/0" "$passes/$failures"
+    printf '%s\n' '** Message: 09:41:00.000: Shutting down GNOME Shell' "$disposed" '== Stack trace for context 0x55 ==' "$frame" >"$run/default.log"
+    read -r passes failures <<<"$(assertion_counts no_disposed_at_shutdown default "$run/default.log")"
+    expect_eq "disposed at shutdown: the tray's banner timeout after it fails, naming the object and the frame" "0/1 1" \
+        "$passes/$failures $(grep -c '^FAIL default: .*touched: Gjs_ui_messageTray_MessageTray at resource:///org/gnome/shell/ui/messageTray.js:1062$' "$T/assertions.out")"
+    echo 'APEXG2 {"probe": true}' >"$run/default.log"
+    printf '%s\n' '** Message: 09:41:00.000: Shutting down GNOME Shell' "$disposed" >"$run/default.late.log"
+    read -r passes failures <<<"$(assertion_counts no_disposed_at_shutdown default "$run/default.log")"
+    expect_eq "disposed at shutdown: and so does one with no stack, in the late first start's log" "0/1 1" \
+        "$passes/$failures $(grep -c '^FAIL default: .*touched: Gjs_ui_messageTray_MessageTray$' "$T/assertions.out")"
+    rm "$run/default.late.log"
+}
+
+test_quiet_exit() {
+    local want_pass what report passes failures
+    while IFS='|' read -r want_pass what report; do
+        if [[ -n $report ]]; then printf 'APEXG2-EXIT %s\n' "$report" >"$T/exit.log"; else : >"$T/exit.log"; fi
+        read -r passes failures <<<"$(assertion_counts quiet_exit default "$T/exit.log")"
+        expect_eq "exit: $what" "$want_pass/$((1 - want_pass))" "$passes/$failures"
+    done <<'CASES'
+1|an idle tray and a quiet calendar server and app list pass|{"tray":true,"quiet":true}
+0|a banner still up fails|{"tray":false,"quiet":true}
+0|a calendar server or app list still changing fails|{"tray":true,"quiet":false}
+0|no report fails|
+CASES
+}
+
+test_shutdown_banner_case() {
+    local run=$T/shutdown-banner passes failures status pending armed quiet shutdown what
+    mkdir -p "$run"
+    while IFS='|' read -r failures status pending armed quiet shutdown what; do
+        echo "shutdown-banner exit=$status secs=5 marker-after-exit=no" >"$run/results-main.txt"
+        echo "APEXG2-SHUTDOWN-BANNER {\"pending\":$pending,\"armed\":$armed,\"quiet\":$quiet}" >"$run/shutdown-banner.log"
+        echo "$shutdown" >>"$run/shutdown-banner.log"
+        read -r passes _ <<<"$(assertion_counts shutdown_banner_case "$run")"
+        expect_eq "shutdown-banner: $what fails $failures of 4" "$failures" $((4 - passes))
+    done <<'CHANGES'
+0|0|true|true|true|** Message: 09:41:00.000: Shutting down GNOME Shell|a notification pending and the timeout armed as the shell exits
+1|134|true|true|true|** Message: 09:41:00.000: Shutting down GNOME Shell|the shell aborting in the shutdown loop
+1|0|false|true|true|** Message: 09:41:00.000: Shutting down GNOME Shell|no notification pending
+1|0|true|false|true|** Message: 09:41:00.000: Shutting down GNOME Shell|no timeout armed
+1|0|true|true|false|** Message: 09:41:00.000: Shutting down GNOME Shell|a calendar server or app list still changing
+1|0|true|true|true||a log without the shutdown
+CHANGES
+}
+
+readonly SESSION_REPORT='{"settings": {"font-name": "Adwaita Sans 10.125", "document-font-name": "Adwaita Sans 10.125",
+    "monospace-font-name": "JetBrains Mono 9.75", "font-hinting": "none", "icon-theme": "Apex"},
+  "shell": {"font": "Adwaita Sans 10.125", "iconTheme": "Apex"},
+  "fontconfig": {"sans": {"family": "Adwaita Sans", "file": "/usr/share/fonts/adwaita-sans-fonts/AdwaitaSans-Regular.ttf", "features": ["ss03"]},
+    "mono": {"family": "JetBrains Mono", "file": "/usr/share/fonts/jetbrains-mono-fonts/JetBrainsMono-Regular.otf", "features": []}},
+  "drawn": {"clock": "Adwaita Sans"},
+  "icons": {"bar": [{"icon": "battery-level-80-symbolic", "file": "/usr/share/icons/Apex/symbolic/battery-level-80-symbolic.svg", "app": null}],
+    "dock": [{"icon": "org.gnome.Nautilus", "file": "/usr/share/icons/Apex/scalable/apps/org.gnome.Nautilus.svg", "app": "org.gnome.Nautilus.desktop"},
+      {"icon": "application-x-executable", "file": "/usr/share/icons/Adwaita/scalable/mimetypes/application-x-executable.svg",
+       "app": "io.github.apex_linux.G2Stub1.desktop"}],
+    "dash": null,
+    "quickSettings": [{"icon": ". GThemedIcon screenshooter-symbolic screenshooter",
+      "file": "/org/gnome/shell/icons/scalable/actions/screenshooter-symbolic.svg", "app": null}]}}'
+
+test_session_defaults() {
+    local passes failures change what stubs
+    stubs=$(sed -n "s/^readonly STUB_APPS='\(.*\)'\$/\1/p" "$HERE/direct.sh" | tr ' ' '\n' | sed 's/$/.desktop/' | paste -sd' ' -)
+    # shellcheck disable=SC2016 # expanded by the inner bash
+    expect_eq "session defaults: assert.sh's fixture apps are direct.sh's STUB_APPS" "$stubs" \
+        "$(bash -c '. "$1/assert.sh"; echo "${FIXTURE_APPS[*]}"' _ "$HERE")"
+    while IFS='|' read -r failures change what; do
+        printf 'APEXG2-SESSION %s\n' "$(jq -nc "$SESSION_REPORT | $change")" >"$T/session.log"
+        read -r passes _ <<<"$(assertion_counts session_defaults default "$T/session.log")"
+        expect_eq "session defaults: $what fails $failures of 6" "$failures" $((6 - passes))
+    done <<'CHANGES'
+0|.|apex-desktop's defaults, a fixture app's generic icon and the shell's own screenshooter
+1|.settings["monospace-font-name"] = "DejaVu Sans Mono 10"|another monospace font in the settings
+1|.settings["icon-theme"] = "Adwaita"|another icon theme in the settings
+1|.shell.iconTheme = "Adwaita"|a shell that draws another icon theme
+1|.fontconfig.sans.features = []|Adwaita Sans without ss03
+1|.fontconfig.mono = {family: "DejaVu Sans Mono", file: "/usr/share/fonts/dejavu-sans-mono-fonts/DejaVuSansMono.ttf", features: []}|no JetBrains Mono, so fontconfig falls back
+1|.drawn.clock = "Cantarell"|a clock drawn in another family
+1|.icons.bar[0].file = "/usr/share/icons/Adwaita/symbolic/status/battery-level-80-symbolic.svg"|an Adwaita glyph in the bar
+1|.icons.quickSettings[0].file = null|an icon that resolves nowhere
+1|.icons.dock[0].file = "/usr/share/icons/hicolor/scalable/apps/org.gnome.Nautilus.svg"|an image app's icon from outside Apex
+1|.icons.quickSettings[0].icon = ". GThemedIcon camera-photo-symbolic"|a shell icon that is not on the list
+1|.icons = {bar: [], dock: null, dash: null, quickSettings: []}|no icons reported
+6|{error: "sessionDefaultsReport: no panel"}|a probe error
+CHANGES
+    printf 'APEXG2-SESSION %s\n' "$(jq -nc "$SESSION_REPORT | .icons.bar[0].file = null")" >"$T/session.log"
+    assertion_counts session_defaults default "$T/session.log" >/dev/null
+    expect_eq "session defaults: a failure names the place and the icon" 1 \
+        "$(grep -c '^FAIL default: every icon .* (bar battery-level-80-symbolic: no icon)$' "$T/assertions.out")"
+    printf 'APEXG2-SESSION %s\n' "$(jq -nc "$SESSION_REPORT | .fontconfig.mono = {family: \"Noto Sans\", file: \"NotoSans.ttf\", features: []}")" \
+        >"$T/session.log"
+    assertion_counts session_defaults default "$T/session.log" >/dev/null
+    expect_eq "session defaults: a missing JetBrains Mono names the family fontconfig fell back to" 1 \
+        "$(grep -c '^FAIL default: fontconfig gives JetBrains Mono .*(got {"family":"Noto Sans",' "$T/assertions.out")"
+}
+
 test_no_binding_overwritten() {
     local run=$T/keys-run overwritten passes failures
     overwritten='libmutter-WARNING **: 09:41:00.000: Overwriting existing binding of keysym 20 with keysym 20 (keycode 41).'
@@ -3710,7 +3824,11 @@ test_no_disposed_apex
 test_no_binding_overwritten
 test_no_spurious_allocation
 test_clean_shutdown
+test_session_defaults
+test_no_disposed_at_shutdown
+test_quiet_exit
 test_keys_case
+test_shutdown_banner_case
 test_startup_handler_ran
 test_network_rows_centred
 test_pr_assertions

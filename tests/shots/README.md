@@ -37,7 +37,7 @@ A case that gets no report within `direct.sh`'s timeout stops G2 at once.
 | G1's `image/checks/desktop.sh` | a container of the image | it passes on the image under test, so no text file under `/usr` or `/etc` names `APEX_SHELL_TEST_FAULT` |
 | `direct.sh main` | a container of the image plus `dbus-daemon` (the image has no `dbus-run-session`), `python3-dbusmock` and `gcc` for `clock.c`; `rpm -V` shows the shell's packages unmodified | each case below: one headless shell with a fresh home, dconf and runtime directory, the fixtures on the system bus and the fixed clock (see "Fixtures and the clock") |
 | `direct.sh kernel` | the same, with `apex.safe=1` bound over `/proc/cmdline` | the kernel switch |
-| `direct.sh pr` | CI's `shots-patched` job on a pull request, through `patched.sh` with `PATCHED_PART=pr` on the gnome-shell lane's RPMs | the cases `parts.sh`'s `PR_CASES` names, in `main`'s order (the scenes and every a11y check with their solid-backdrop twins, then the quick dock, indicator, safe-mode and fault cases, `dock-dnd`, `dock-external` and `keys` among them), with their assertions; each listed case must have run and reported (`part_ran`). Before them, `direct.sh fedora` runs only `PR_FEDORA_CASES`, `fedora-light` and `fedora-dark`, so the pull request compares Apex's desktop and safe mode's (`stock-light`, `stock-dark`) with Fedora's (`compare_with_fedora`). A push to `main` and the daily run take `main` with the whole Fedora baseline |
+| `direct.sh pr` | CI's `shots-patched` job on a pull request, through `patched.sh` with `PATCHED_PART=pr` on the gnome-shell lane's RPMs | the cases `parts.sh`'s `PR_CASES` names, in `main`'s order (the scenes and every a11y check with their solid-backdrop twins, then the quick dock, indicator, safe-mode, fault and shutdown cases, `dock-dnd`, `dock-external`, `keys` and `shutdown-banner` among them), with their assertions; each listed case must have run and reported (`part_ran`). Before them, `direct.sh fedora` runs only `PR_FEDORA_CASES`, `fedora-light` and `fedora-dark`, so the pull request compares Apex's desktop and safe mode's (`stock-light`, `stock-dark`) with Fedora's (`compare_with_fedora`). A push to `main` and the daily run take `main` with the whole Fedora baseline |
 | `direct.sh fedora` | the same image with Fedora's own gnome-shell and gnome-shell-common of the tested NVR in place of the Apex build, downloaded from Fedora's repositories; each RPM must report `digests signatures OK` against a keyring that holds Fedora's key alone, so an unsigned RPM fails | the baseline of the captures |
 | `guard.sh` | a container of the image booted with its own systemd; a test user's `systemd --user` with the image's unmodified units | the crash guard, and that neither the user manager nor the shell's unit sets `APEX_SHELL_TEST_FAULT` |
 | `assert.sh` | the builder VM; `compare.js` in a container of the image | everything below |
@@ -66,6 +66,7 @@ The direct cases:
 | `keys` | the capture settings without hot corners, and two input sources (`us`, `fr`) | every key the session relies on, as registered (accelerators from their schemas and apex-desktop's override, action modes as `windowManager.js` keeps them) and then pressed through a virtual keyboard: Super+Space opens Spotlight and leaves the input source alone; Super+Alt+Space switches to the next input source and Shift+Super+Alt+Space back, in every mode; Ctrl+Alt+Tab, in the session, overview, lock, unlock and login modes, lists the dock among its groups and moves the keyboard focus into it; a Super tap opens the overview and Super+A the launcher (the app grid), both in the session and overview modes; no grab is left behind |
 | `fault-configure`, `fault-enable` | `APEX_SHELL_TEST_FAULT` | only the fault feature is off; the `witness` feature after it still enables; the rest of the layer runs, Super+Space included, and the shell survives |
 | `fault-abort` | `abort-after-enable` | SIGABRT (exit 134) with the crash guard's marker left behind |
+| `shutdown-banner` | `G2_SHUTDOWN_BANNER=1` | after the usual reports and the same wait for a quiet calendar server and app list, a notification for the tray and its banner timeout due 100 ms into a shutdown whose history write is held 300 ms: the layer's teardown disables the notifications feature, which clears the tray's banner timeouts before `layout.js` destroys it, so `main.js`'s shutdown loop runs none on the disposed tray |
 | `fedora-light`, `fedora-dark` | Fedora's build, `prefer-light` or `prefer-dark` | no Apex module; upstream's sheet at its own path, byte for byte the one safe mode loads from `theme/stock/` |
 | `glass`, `fedora-glass` | the capture settings, `G2_GLASS=1` | patch 0003's glass in the frames the shell drew; the stock unlock blur captured in both shells (see "Glass") |
 
@@ -76,7 +77,14 @@ shadow layer destroyed with its relayout queued twice;
 after "Shutting down GNOME Shell", St styles no actor off the stage ("not in the stage"), as a relayout
 queued by the layer's teardown and run in `main.js`'s shutdown loop did to the panel, and no window
 effect reaches the disposed global (`shell_global_get`'s assertion, `G_IS_OBJECT`), as unmanaging a
-still-connected client's window did before patch 0019;
+still-connected client's window did before patch 0019, and nothing touches a disposed object
+("has been already disposed"), as a banner timeout the tray left armed did when that loop ran it after
+`layout.js` had destroyed the tray (upstream gnome-shell 51). Every case but `shutdown-banner` exits
+only once the tray is empty and its timeouts are cleared. It also waits until the calendar server's
+`HasCalendars` and the app list have been quiet for 2 s, for at most 20 s; if they haven't, `quiet` is
+false and the case fails. Otherwise that loop could deliver them to the date menu's destroyed events
+section too (`dateMenu.js:326`, upstream as well). With both waits, stock's shell cannot meet those
+races (`APEXG2-EXIT`);
 St parsed every declaration (no `St-WARNING` naming a line and column of a sheet: St drops
 such a declaration and keeps the cascade's earlier value);
 the wall clock stands at the fixed time and the top bar's clock shows it (`Mon Sep 28`, EN SPACE, `09:41`).
@@ -144,6 +152,30 @@ the Dark Style toggle off, the shell turns light, and afterwards no Apex user un
 active and none, nor an Apex D-Bus service, started (the ROADMAP's "no agent runs");
 the trip again with dconf already running. `direct.sh` and `guard.sh` refuse to run
 outside run.sh's container (`/run/.containerenv`).
+
+## Session defaults
+
+S1b's first exit row, "a new session starts with the Apex theme, Colloid icons, JetBrains Mono
+and the wallpaper", read in the shells that run with apex-desktop installed: the VM's G2
+(`default`, `dark-style`, and `safe-env`, where safe mode keeps the image's fonts and icons) and
+the sign-off shells (above). Every case's probe reports them (`session-defaults.js`,
+`APEXG2-SESSION`); `session_defaults` asserts:
+
+- `org.gnome.desktop.interface`'s `font-name`, `document-font-name`, `monospace-font-name`,
+  `font-hinting` and `icon-theme` are the override's (`parts.sh` keeps their copies, which
+  apex-image's contracts hold equal to apex-desktop's), naming each key that differs;
+- the shell draws with that font and icon theme (`St.Settings`);
+- fontconfig gives Adwaita Sans, with `ss03`, and JetBrains Mono for their families, so a
+  missing JetBrains Mono fails rather than falling back to another monospace font;
+- the bar's clock is drawn in Adwaita Sans, as Pango resolves it;
+- every icon shown in the bar, the dock, the overview's dash and Quick Settings resolves under
+  `/usr/share/icons/Apex/`. Two explicit lists name the only others: `FIXTURE_APPS`, G2's own
+  stub apps, which have no icon and draw GNOME's generic one, and `SHELL_RESOURCE_ICONS`,
+  icons the shell draws from its own resource because board 31 has no glyph of that name
+  (`screenshooter-symbolic`). A failure names each icon, where it showed, its app and the
+  file it resolved to, or "no icon".
+
+The wallpaper is `backdrop_painted`'s (below).
 
 ## The backdrop
 
@@ -726,6 +758,13 @@ row, its key), when:
   fixtures' keyboard before any shell starts: with no device, nothing can reach the indicator
   late. G2 keeps the connected keyboard, which its top-bar assertion needs.
 
+Beside the boards, `signoff.sh --collect` runs one more check line on the same shells:
+G2's `session_defaults` on the `default` and `dark-style` logs, printed as
+`signoff.sh: session defaults: N passed, M failed`, with each failure naming its key or icon
+(below, "Session defaults"). It is a check of its own, outside the board count, and the only
+per-PR job whose shells run with apex-desktop's fonts and icon theme: `shots-patched` installs
+just the shell and two of the override's keys.
+
 In the `signoff` workflow, the shell's job runs `signoff.sh` and passes its G2 run, its
 `shoot.sh` captures and board 31's sheets on. Each app's job builds libadwaita and the app through
 `tests/lib/lane.sh`, restoring `ci.yml`'s `lane-` caches without saving them, and runs the
@@ -884,6 +923,7 @@ Not asserted here: the volume glyph (the container has no audio server), and wha
 | `a11y.js` | the shell | the accessibility cases: contrast against what is drawn, and the Large Text layout |
 | `backdrop.js`, `backdrops.sh` | the shell; a throwaway container | whether the pinned backdrop painted, and the Facets it pins rendered where an image has them |
 | `indicators.js`, `sni-items.js` | the shell; gjs | the app-indicator part of `default`, `default-scale1` and `dark-style`, and the StatusNotifierItems it starts |
+| `session-defaults.js` | every case's shell | the fonts and icon theme the session reads, fontconfig's families for them, the clock's drawn family, and the file each shown icon of the bar, dock, dash and Quick Settings resolves to |
 | `idle.js` | the `idle` case's shell | the settled desktop, its paints and relayouts over 10 s, and the counter's control |
 | `glass-load.js`, `load-window.js` | the `glass-load` and `glass-stress` cases' shells; gjs, GTK 4 | ADR 0014's scenarios as work counts, and the client that stands in for a video; `tests/laptop` runs both on the laptop, the client with `measure=` |
 | `frame.c`, `G2Frame-1.gir` | the glass cases' shells | `G2Frame.read()`, a region of the frame the shell drew |
