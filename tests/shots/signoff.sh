@@ -89,8 +89,8 @@ readonly BOARDS="12|greeter|GDM greeter|$SHOOT|greeter-light-list|greeter-dark-l
 18|settings-updates-updates|Settings: Software Updates|$CONTROL_CENTER|updates-light|updates-dark|System > Software Updates with an update staged and ready (update1.py ready)
 23|settings-appearance-appearance|Settings: Appearance|$CONTROL_CENTER|appearance-light|appearance-dark|Appearance on gnome-backgrounds' Amber wallpaper
 24|settings-power-power|Settings: Power|$CONTROL_CENTER|power-light|power-dark|Power with an NVIDIA card under umockdev: the Graphics and Display group
-26|update-health-health-failure|Update health failure|$CONTROL_CENTER|updates-health-failure||Software Updates after an update whose health check failed (update1.py health-failure)
-26|update-health-fallback|Update health failure|$CONTROL_CENTER|updates-fallback||Software Updates booted back into the previous version (update1.py fallback)
+26|update-health-health-failure|Update health failure|$CONTROL_CENTER|updates-health-failure|updates-health-failure-dark|Software Updates after an update whose health check failed (update1.py health-failure)
+26|update-health-fallback|Update health failure|$CONTROL_CENTER|updates-fallback|updates-fallback-dark|Software Updates booted back into the previous version (update1.py fallback)
 27|files-home-home|Files: Home|$NAUTILUS|home-light|home-dark|the home folder of home.py in the icon view
 28|files-list-documents|Files: list and details|$NAUTILUS|documents-light|documents-dark|Documents in the list view, the spec selected, details on
 29|files-search-search|Files: search|$NAUTILUS|search-light|search-dark|a search for \"apex\" from the home folder, in the list view

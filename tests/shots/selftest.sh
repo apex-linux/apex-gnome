@@ -1186,7 +1186,7 @@ test_signoff() {
 test_signoff_apps() {
     local dir=$1 app scene
     declare -A scenes=([cc]='light dark light-scrolled dark-scrolled updates-light updates-dark appearance-light appearance-dark
-        power-light power-dark updates-health-failure updates-fallback'
+        power-light power-dark updates-health-failure updates-health-failure-dark updates-fallback updates-fallback-dark'
         [files]='home-light home-dark documents-light documents-dark search-light search-dark'
         [terminal]='light dark split-light split-dark')
     for app in cc files terminal; do
@@ -1197,19 +1197,32 @@ test_signoff_apps() {
     done
     if "$HERE/signoff.sh" --collect "$dir/g2" "$dir/shots" "$dir/apps" control-center="$dir/cc" nautilus="$dir/files" ptyxis="$dir/terminal" \
         >"$T/signoff.out" 2>&1 &&
-        [[ $(find "$dir/apps" -name 'board-*.png' | wc -l) == 52 && ! -e $dir/apps/board-26-update-health-fallback-dark.png ]] &&
+        [[ $(find "$dir/apps" -name 'board-*.png' | wc -l) == 54 ]] &&
         jq -e '(.boards | length) == 27 and (.boards | map(.key) | unique | length) == 27
             and .sources == ["tests/control-center/run.sh", "tests/nautilus/shoot.sh", "tests/ptyxis/shoot.sh", "tests/shell/shoot.sh", "tests/shots/direct.sh signoff"]
             and ([.boards[] | select(.board == 11) | .key] == ["11-settings-apex-top", "11-settings-apex-scrolled"])
             and (.boards[] | select(.key == "11-settings-apex-scrolled") | .scene == {light: "light-scrolled", dark: "dark-scrolled"}
                 and .files.dark == "board-11-settings-apex-scrolled-dark.png")
-            and ([.boards[] | select(.board == 26) | .files.dark, .scene.dark] | all(. == null))
+            and ([.boards[] | select(.board == 26) | .files.dark] == ["board-26-update-health-health-failure-dark.png", "board-26-update-health-fallback-dark.png"])
             and (.boards[] | select(.key == "12-greeter") | .files.light == "board-12-greeter-light.png")' \
             "$dir/apps/signoff.json" >/dev/null; then
-        ok "signoff: the app boards add a row per scene, keyed NN-SLUG, board 26's light only, beside the fifteen shell boards"
+        ok "signoff: the app boards add a row per scene, keyed NN-SLUG, light and dark, beside the fifteen shell boards"
     else
-        not_ok "signoff: the app boards add a row per scene, keyed NN-SLUG, board 26's light only, beside the fifteen shell boards: $(tail -n 3 "$T/signoff.out")"
+        not_ok "signoff: the app boards add a row per scene, keyed NN-SLUG, light and dark, beside the fifteen shell boards: $(tail -n 3 "$T/signoff.out")"
     fi
+    # No board is light-only today: a copy of signoff.sh whose fallback row has no dark capture stands in for one.
+    mkdir -p "$T/light-only/tests/shots" "$T/light-only/tests/lib"
+    cp "$HERE/../lib/pins.sh" "$T/light-only/tests/lib/"
+    sed 's/|updates-fallback|updates-fallback-dark|/|updates-fallback||/' "$HERE/signoff.sh" >"$T/light-only/tests/shots/signoff.sh"
+    rm "$dir/cc/updates-fallback-dark.png"
+    if bash "$T/light-only/tests/shots/signoff.sh" --collect "$dir/g2" "$dir/shots" "$dir/light-only" control-center="$dir/cc" >"$T/signoff.out" 2>&1 &&
+        [[ -e $dir/light-only/board-26-update-health-fallback-light.png && ! -e $dir/light-only/board-26-update-health-fallback-dark.png ]] &&
+        jq -e '.boards[] | select(.key == "26-update-health-fallback") | .scene.dark == null and .files.dark == null'             "$dir/light-only/signoff.json" >/dev/null; then
+        ok "signoff: a row its shooter captures light only has no dark file, and null for its dark scene and file"
+    else
+        not_ok "signoff: a row its shooter captures light only has no dark file, and null for its dark scene and file: $(tail -n 3 "$T/signoff.out")"
+    fi
+    printf '\x89PNG\r\n\x1a\n' >"$dir/cc/updates-fallback-dark.png"
     rm "$dir/cc/dark-scrolled.png"
     if ! "$HERE/signoff.sh" --collect "$dir/g2" "$dir/shots" "$dir/apps2" control-center="$dir/cc" >"$T/signoff.out" 2>&1 &&
         grep -q 'board 11-settings-apex-scrolled (Settings: Apex Desktop, scrolled), dark: no capture of dark-scrolled (tests/control-center/run.sh)' "$T/signoff.out" &&
