@@ -72,6 +72,31 @@ apex_session_state_precmd (ApexSessionState *state,
   return TRUE;
 }
 
+/* VTE hands over the marks it parsed in one batch by termprop id, precmd first. At a
+ * prompt they can only be a command that started and ended; in one, its end, then the next. */
+gboolean
+apex_session_state_shell (ApexSessionState *state,
+                          ApexShellMarks    marks,
+                          int               exit_code,
+                          gint64            now)
+{
+  gboolean changed = FALSE;
+
+  if (!state->in_command && (marks & APEX_SHELL_PREEXEC))
+    {
+      changed |= apex_session_state_preexec (state, now);
+      marks &= ~APEX_SHELL_PREEXEC;
+    }
+  if (marks & APEX_SHELL_POSTEXEC)
+    changed |= apex_session_state_postexec (state, exit_code);
+  if (marks & APEX_SHELL_PRECMD)
+    changed |= apex_session_state_precmd (state, now);
+  if (marks & APEX_SHELL_PREEXEC)
+    changed |= apex_session_state_preexec (state, now);
+
+  return changed;
+}
+
 gboolean
 apex_session_state_bell (ApexSessionState *state,
                          gboolean          focused,
