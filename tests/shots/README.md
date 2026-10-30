@@ -933,6 +933,8 @@ on dispatch and weekly (Tuesdays), never on a pull request, and no check require
   summary lists what moves.
 - **g2:** `patched.sh` runs every case on those RPMs.
 - **signoff:** `signoff.sh --goldens` checks the shell boards against the approved goldens.
+- **report:** one line in the run's summary, passed/failed for each, `?` where a job gave
+  none: `next-point: gnome-shell-51.1-1.fc45.apex1 g2 1865/0 goldens 30/0 shoot 523/0`.
 
 Both of the last two install `next-point.sh shim` first, a `dnf5` ahead of Fedora's on `PATH`.
 It adds updates-testing beside each `--repo=updates` and updates-testing-source beside each

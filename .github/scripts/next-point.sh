@@ -24,6 +24,10 @@ usage: .github/scripts/next-point.sh COMMAND
               updates-testing-source beside each --repo=updates-source; with no --repo at all,
               --enable-repo=updates-testing. The scripts' own repositories stay as written.
   versions    a Markdown table of ${WATCHED[*]}: stable, and with updates-testing
+  counts KIND LOG
+              PASSED/FAILED from LOG, or ? when LOG has none: g2 and goldens read the last
+              '# N passed, M failed' line (patched.sh's, goldens.sh's), shoot counts the TAP
+              lines (tests/shell/shoot.sh's, the only ones in signoff.sh's output)
 
 It never touches lane.sh's cache: next-point.yml runs lane.sh without APEX_LANE_CACHE.
 EOF
@@ -86,11 +90,23 @@ versions() {
     done
 }
 
+counts() {
+    local kind=$1 log=$2
+    case $kind in
+        g2 | goldens)
+            sed -nE 's/^# ([0-9]+) passed, ([0-9]+) failed.*/\1\/\2/p' "$log" 2>/dev/null | tail -n 1 | grep . || echo '?' ;;
+        shoot)
+            awk '/^ok / { ok++ } /^not ok / { bad++ } END { print (ok + bad ? ok + 0 "/" bad + 0 : "?") }' "$log" 2>/dev/null || echo '?' ;;
+        *) usage >&2; exit 2 ;;
+    esac
+}
+
 case ${1:-} in
     -h | --help) usage; exit 0 ;;
     dnf5) dnf5_ "${@:2}" ;;
     image) (($# == 2)) || { usage >&2; exit 2; }; image "$2" ;;
     shim) shim ;;
     versions) versions ;;
+    counts) (($# == 3)) || { usage >&2; exit 2; }; counts "$2" "$3" ;;
     *) usage >&2; exit 2 ;;
 esac

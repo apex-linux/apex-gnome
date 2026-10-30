@@ -118,6 +118,16 @@ check_true "next-point: the shim installs ahead of dnf5 on PATH" \
     env NEXT_POINT_SHIM="$TMP/np-bin/dnf5" PATH="$TMP/np-bin:$PATH" "$APEX_ROOT/.github/scripts/next-point.sh" shim
 check_false "next-point: a shim that is not the dnf5 on PATH dies" \
     env NEXT_POINT_SHIM="$TMP/np-bin/dnf5" PATH="/usr/bin:/bin" "$APEX_ROOT/.github/scripts/next-point.sh" shim
+printf '%s\n' '## direct.sh main' '# 1865 passed, 0 failed, 50 known gaps' >"$TMP/np-g2.log"
+printf '%s\n' 'ok - lock-light: a' 'not ok - lock-dark: b' 'ok - greeter: c' 'PASS captures board 12' \
+    '# 2 passed, 0 failed, 0 known gaps' '# 28 passed, 2 failed, 0 known gaps' >"$TMP/np-signoff.log"
+np_counts() { "$APEX_ROOT/.github/scripts/next-point.sh" counts "$@"; }
+check "next-point: counts g2 reads patched.sh's last summary" 1865/0 "$(np_counts g2 "$TMP/np-g2.log")"
+check "next-point: counts goldens reads goldens.sh's, the last" 28/2 "$(np_counts goldens "$TMP/np-signoff.log")"
+check "next-point: counts shoot counts shoot.sh's TAP lines" 2/1 "$(np_counts shoot "$TMP/np-signoff.log")"
+check "next-point: a log without a summary counts ?" "? ?" \
+    "$(np_counts goldens "$TMP/dnf5") $(np_counts shoot "$TMP/np-g2.log")"
+check "next-point: a missing log counts ?" "? ?" "$(np_counts g2 "$TMP/none") $(np_counts shoot "$TMP/none")"
 check "next-point.yml: dispatch and schedule only, no lane cache" "" \
     "$(grep -nE 'pull_request|push:|actions/cache|APEX_LANE_CACHE' "$APEX_ROOT/.github/workflows/next-point.yml" | grep -vE '^[0-9]+: *#')"
 check "next-point.sh: run by next-point.yml alone" ".github/workflows/next-point.yml" \

@@ -21,6 +21,8 @@ jobs:
     timeout-minutes: 60
     permissions:
       contents: read
+    outputs:
+      shell: ${{ steps.lane.outputs.shell }}
     container:
       image: registry.fedoraproject.org/fedora:45@sha256:1e13e11f63e147a40a935c9046c79d53a30b861a3cf05ebb023bb53c562382cb
     steps:
@@ -39,7 +41,10 @@ jobs:
           .github/scripts/next-point.sh versions | tee -a "$GITHUB_STEP_SUMMARY"
 
       - name: tests/lib/lane.sh gnome-shell
-        run: APEX_IMAGE_SRC="$PWD/_build/next-point/apex-image" tests/lib/lane.sh gnome-shell
+        id: lane
+        run: |
+          APEX_IMAGE_SRC="$PWD/_build/next-point/apex-image" tests/lib/lane.sh gnome-shell
+          echo "shell=$(rpm -qp --qf '%{name}-%{version}-%{release}' _build/gnome-shell/out/gnome-shell-[0-9]*.x86_64.rpm)" >>"$GITHUB_OUTPUT"
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -64,6 +69,8 @@ jobs:
     timeout-minutes: 60
     permissions:
       contents: read
+    outputs:
+      g2: ${{ steps.counts.outputs.g2 }}
     container:
       image: registry.fedoraproject.org/fedora:45@sha256:1e13e11f63e147a40a935c9046c79d53a30b861a3cf05ebb023bb53c562382cb
     steps:
@@ -85,7 +92,15 @@ jobs:
         run: .github/scripts/next-point.sh shim
 
       - name: tests/shots/patched.sh on the lane's RPMs
-        run: PATCHED_RPMS="$PWD/_build/next-point/rpms" PATCHED_OUT="$PWD/_build/next-point/g2" tests/shots/patched.sh
+        run: |
+          mkdir -p _build/next-point/g2
+          PATCHED_RPMS="$PWD/_build/next-point/rpms" PATCHED_OUT="$PWD/_build/next-point/g2" tests/shots/patched.sh 2>&1 |
+            tee _build/next-point/g2.log
+
+      - name: G2's counts
+        id: counts
+        if: ${{ !cancelled() }}
+        run: echo "g2=$(.github/scripts/next-point.sh counts g2 _build/next-point/g2.log)" >>"$GITHUB_OUTPUT"
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: ${{ !cancelled() }}
@@ -102,6 +117,9 @@ jobs:
     timeout-minutes: 90
     permissions:
       contents: read
+    outputs:
+      goldens: ${{ steps.counts.outputs.goldens }}
+      shoot: ${{ steps.counts.outputs.shoot }}
     container:
       image: registry.fedoraproject.org/fedora:45@sha256:1e13e11f63e147a40a935c9046c79d53a30b861a3cf05ebb023bb53c562382cb
     steps:
@@ -129,7 +147,16 @@ jobs:
           openssl git-core adwaita-sans-fonts jetbrains-mono-fonts-all procps-ng jq
 
       - name: tests/shots/signoff.sh --goldens
-        run: tests/shots/signoff.sh --goldens _build/next-point/rpms _build/signoff
+        run: |
+          mkdir -p _build/next-point
+          tests/shots/signoff.sh --goldens _build/next-point/rpms _build/signoff 2>&1 | tee _build/next-point/signoff.log
+
+      - name: the goldens' and shoot.sh's counts
+        id: counts
+        if: ${{ !cancelled() }}
+        run: |
+          echo "goldens=$(.github/scripts/next-point.sh counts goldens _build/next-point/signoff.log)" >>"$GITHUB_OUTPUT"
+          echo "shoot=$(.github/scripts/next-point.sh counts shoot _build/next-point/signoff.log)" >>"$GITHUB_OUTPUT"
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: ${{ !cancelled() }}
@@ -141,3 +168,22 @@ jobs:
             _build/gnome-shell/shots/
           if-no-files-found: ignore
           retention-days: 7
+
+  report:
+    name: next-point's one-line result
+    needs: [lane, g2, signoff]
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - name: the line, passed/failed for each, ? where a job gave none
+        env:
+          SHELL_NEVR: ${{ needs.lane.outputs.shell || '?' }}
+          G2: ${{ needs.g2.outputs.g2 || '?' }}
+          GOLDENS: ${{ needs.signoff.outputs.goldens || '?' }}
+          SHOOT: ${{ needs.signoff.outputs.shoot || '?' }}
+        run: |
+          line="next-point: $SHELL_NEVR g2 $G2 goldens $GOLDENS shoot $SHOOT"
+          echo "$line"
+          printf '`%s`\n' "$line" >>"$GITHUB_STEP_SUMMARY"
