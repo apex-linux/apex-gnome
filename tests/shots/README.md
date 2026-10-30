@@ -700,8 +700,17 @@ and `tests/ptyxis/shoot.sh` (32 and 33). A board has one row per scene in `signo
 and `26-update-health-fallback`, and each other app board one, its scene the capture's stem
 (`18-settings-updates-updates`). The fifteen shell boards keep one row each, its slug the
 board's. `signoff.sh --collect G2_RUN SHELL_SHOTS OUT` collects the shell's rows, and each
-`APP=SHOTS` (`control-center`, `nautilus`, `ptyxis`) adds that app's rows from its shooter's
-captures.
+`APP=SHOTS` (`control-center`, `nautilus`, `ptyxis`, `symbolic`) adds that source's rows from
+its captures.
+
+Board 31, Apex Symbolic's contact sheet, comes from the pinned apex-desktop's own
+`tools/icons/contact-sheet.sh`: every glyph as GTK 4 draws it, recoloured, at scale 2, light
+and dark, one sheet per scene of its `tools/icons/boards.txt` (`core`, `status`, `actions`,
+`everywhere`, `aliases`), so its rows are `31-symbolic-core` to `31-symbolic-aliases`.
+`signoff.sh` draws them from the Apex theme it installed, after the shell's captures, so the
+shell boards' container stays the one their goldens came from; GTK 4 for Python and Xvfb come
+in only then. A glyph that is missing or draws nothing leaves its scene without a sheet, and
+the collection names that row.
 
 Each row's scene is copied to `board-NN-SLUG-light.png` and `-dark.png`. A row its shooter
 captures light only (board 26, whose `run.sh` shoots its alerts light only) has no dark file,
@@ -725,8 +734,8 @@ row, its key), when:
   fixtures' keyboard before any shell starts: with no device, nothing can reach the indicator
   late. G2 keeps the connected keyboard, which its top-bar assertion needs.
 
-In the `signoff` workflow, the shell's job runs `signoff.sh` and passes its G2 run and
-`shoot.sh` captures on. Each app's job builds libadwaita and the app through
+In the `signoff` workflow, the shell's job runs `signoff.sh` and passes its G2 run, its
+`shoot.sh` captures and board 31's sheets on. Each app's job builds libadwaita and the app through
 `tests/lib/lane.sh`, restoring `ci.yml`'s `lane-` caches without saving them, and runs the
 shooter. One collect job then runs `signoff.sh --collect` over all of them, checks the set
 against the approved goldens (below) and uploads it as `signoff-SHA`.

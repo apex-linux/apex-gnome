@@ -94,6 +94,49 @@ test_fast_command_without_cmdline (Fixture       *f,
   assert_subtitle (&f->state, "exit 1");
 }
 
+#define PROMPT_MARKS (APEX_SHELL_POSTEXEC | APEX_SHELL_PRECMD)
+#define ALL_MARKS (PROMPT_MARKS | APEX_SHELL_PREEXEC)
+
+static void
+test_one_batch_command_ends (Fixture       *f,
+                             gconstpointer  data)
+{
+  g_assert_true (apex_session_state_shell (&f->state, ALL_MARKS, 0, SECONDS (1)));
+  g_assert_false (f->state.in_command);
+  g_assert_cmpint (apex_session_state_status (&f->state), ==, APEX_STATUS_DONE);
+
+  g_assert_true (apex_session_state_shell (&f->state, ALL_MARKS, 2, SECONDS (2)));
+  g_assert_cmpint (apex_session_state_status (&f->state), ==, APEX_STATUS_FAILED);
+  assert_subtitle (&f->state, "exit 2");
+}
+
+static void
+test_one_batch_in_a_command (Fixture       *f,
+                             gconstpointer  data)
+{
+  apex_session_state_preexec (&f->state, SECONDS (1));
+
+  g_assert_true (apex_session_state_shell (&f->state, PROMPT_MARKS, 1, SECONDS (2)));
+  g_assert_cmpint (apex_session_state_status (&f->state), ==, APEX_STATUS_FAILED);
+
+  apex_session_state_preexec (&f->state, SECONDS (3));
+  g_assert_true (apex_session_state_shell (&f->state, ALL_MARKS, 1, SECONDS (4)));
+  g_assert_true (f->state.in_command);
+  g_assert_cmpint (f->state.exit_code, ==, APEX_EXIT_UNKNOWN);
+  g_assert_cmpint (apex_session_state_status (&f->state), ==, APEX_STATUS_RUNNING);
+}
+
+static void
+test_one_batch_empty_prompt_keeps_status (Fixture       *f,
+                                          gconstpointer  data)
+{
+  run_command (&f->state, "false", 1, SECONDS (1));
+
+  g_assert_false (apex_session_state_shell (&f->state, PROMPT_MARKS, 0, SECONDS (30)));
+  g_assert_cmpint (apex_session_state_status (&f->state), ==, APEX_STATUS_FAILED);
+  g_assert_cmpint (f->state.changed_at, ==, SECONDS (1));
+}
+
 static void
 test_empty_prompt_keeps_status (Fixture       *f,
                                 gconstpointer  data)
@@ -251,6 +294,9 @@ main (int   argc,
   ADD ("/apex/status/failure-shows-exit-code", test_failure_shows_exit_code);
   ADD ("/apex/status/fast-command-without-cmdline", test_fast_command_without_cmdline);
   ADD ("/apex/status/empty-prompt-keeps-status", test_empty_prompt_keeps_status);
+  ADD ("/apex/status/one-batch-command-ends", test_one_batch_command_ends);
+  ADD ("/apex/status/one-batch-in-a-command", test_one_batch_in_a_command);
+  ADD ("/apex/status/one-batch-empty-prompt", test_one_batch_empty_prompt_keeps_status);
   ADD ("/apex/status/next-command-clears-failure", test_next_command_clears_failure);
   ADD ("/apex/status/command-outside-a-command", test_command_outside_a_command_is_ignored);
   ADD ("/apex/status/bell-unfocused-needs-you", test_bell_unfocused_needs_you);

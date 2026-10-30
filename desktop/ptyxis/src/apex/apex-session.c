@@ -197,30 +197,32 @@ apex_session_update_title (ApexSession *self)
   set_str (self, &self->title, title, PROP_TITLE);
 }
 
-static void
-apex_session_preexec_cb (ApexSession *self)
+static gboolean
+apex_session_termprops_cb (ApexSession *self,
+                           const int   *props,
+                           int          n_props,
+                           VteTerminal *terminal)
 {
-  if (apex_session_state_preexec (&self->state, g_get_real_time ()))
+  ApexShellMarks marks = 0;
+  guint64 exit_code = 0;
+
+  for (int i = 0; i < n_props; i++)
+    {
+      if (props[i] == VTE_PROPERTY_ID_SHELL_PRECMD)
+        marks |= APEX_SHELL_PRECMD;
+      else if (props[i] == VTE_PROPERTY_ID_SHELL_PREEXEC)
+        marks |= APEX_SHELL_PREEXEC;
+      else if (props[i] == VTE_PROPERTY_ID_SHELL_POSTEXEC &&
+               vte_terminal_get_termprop_uint_by_id (terminal, VTE_PROPERTY_ID_SHELL_POSTEXEC, &exit_code))
+        marks |= APEX_SHELL_POSTEXEC;
+    }
+
+  if (apex_session_state_shell (&self->state, marks, (int) MIN (exit_code, G_MAXINT), g_get_real_time ()))
     apex_session_status_changed (self);
-}
+  if (marks & APEX_SHELL_PRECMD)
+    apex_session_update_title (self);
 
-static void
-apex_session_precmd_cb (ApexSession *self)
-{
-  if (apex_session_state_precmd (&self->state, g_get_real_time ()))
-    apex_session_status_changed (self);
-  apex_session_update_title (self);
-}
-
-static void
-apex_session_postexec_cb (ApexSession *self,
-                          const char  *name,
-                          VteTerminal *terminal)
-{
-  guint64 exit_code;
-
-  if (vte_terminal_get_termprop_uint_by_id (terminal, VTE_PROPERTY_ID_SHELL_POSTEXEC, &exit_code))
-    apex_session_state_postexec (&self->state, (int) MIN (exit_code, G_MAXINT));
+  return FALSE;
 }
 
 static void
@@ -391,10 +393,7 @@ apex_session_new (PtyxisTab *tab)
   terminal = ptyxis_tab_get_terminal (self->tab);
   apex_session_state_init (&self->state, g_get_real_time ());
 
-  g_signal_connect_object (terminal, "shell-preexec", G_CALLBACK (apex_session_preexec_cb), self, G_CONNECT_SWAPPED);
-  g_signal_connect_object (terminal, "shell-precmd", G_CALLBACK (apex_session_precmd_cb), self, G_CONNECT_SWAPPED);
-  g_signal_connect_object (terminal, "termprop-changed::" VTE_TERMPROP_SHELL_POSTEXEC,
-                           G_CALLBACK (apex_session_postexec_cb), self, G_CONNECT_SWAPPED);
+  g_signal_connect_object (terminal, "termprops-changed", G_CALLBACK (apex_session_termprops_cb), self, G_CONNECT_SWAPPED);
   g_signal_connect_object (terminal, "termprop-changed::" VTE_TERMPROP_CONTAINER_NAME,
                            G_CALLBACK (apex_session_container_cb), self, G_CONNECT_SWAPPED);
   g_signal_connect_object (terminal, "termprop-changed::" VTE_TERMPROP_CURRENT_DIRECTORY_URI,

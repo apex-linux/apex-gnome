@@ -20,6 +20,9 @@ puts it in the lane; ROADMAP track C, S2c and S2d define its series. The lane,
 
 - Fedora 45 ships gnome-control-center 51.0 (`gnome-control-center-51.0-2.fc45`, in
   `fedora`), on GTK 4.24 and libadwaita 1.10.
+- Absorbed 2026-10-30: GNOME 51.1 (FEDORA-2026-2812a1754d). The five patches apply at
+  fuzz 0 to gnome-control-center-51.1-1.fc45 as well as 51.0-2.fc45, and the lane builds
+  it with the whole update in the buildroot. No patch changed.
 - `Release: %{autorelease}.apexN` gives `51.0-2.fc45.apexN`, above Fedora's build and
   below its next one.
 - `install=` takes `gnome-control-center` and `gnome-control-center-filesystem`, ADR
@@ -98,8 +101,8 @@ active wallpaper as a cue that does not rely on colour; the board shows only the
 The active wallpaper's name sits beside the Background header and a note under the
 chooser says whether it has a dark version and follows the style
 (`panels/apex/cc-apex-background.c`); a wallpaper the chooser does not list shows neither.
-Stock's chooser lays thumbnails out at a fixed size, so the grid holds as many as fit,
-three at the window size the captures use, where the board has four.
+Stock's chooser draws its thumbnails at a fixed 144 px and 4:3, three to a row at the
+window size the captures use; 0004 makes them 120 px and 16:10, the board's four.
 
 ## Power
 
@@ -215,7 +218,7 @@ copy keeps apex-system's bytes and licence, GPL-3.0-or-later, so the built packa
 | `0001-apex-desktop` | `panels/meson.build`, `shell/meson.build`, `shell/cc-panel-loader.c`, `shell/cc-panel-list.c` | +7 | `subdir('apex')` after upstream's panels; `apex_shell_sources` added to `shell_sources`; the panel registered as `apex`; `"apex"` and a separator at the head of `panel_order[]` |
 | `0002-sidebar-tiles` | `shell/cc-panel-list.c` | +8 −7 | the include; each row's icon handed to `cc_apex_sidebar_tile()`; `panel_order[]` in the design's order |
 | `0003-software-updates` | `panels/system/cc-system-panel.c`, `panels/system/cc-system-panel.blp` | +6 −3 | the include; the `software-updates` subpage; the Software Updates group always shown; its row pushes the page (`navigation.push`) instead of spawning gnome-software, with a forward arrow for the external-link one |
-| `0004-appearance` | `panels/background/cc-background-chooser.c` | +4 | the include; the active item's name and whether it has a dark version handed to `cc_apex_background_show()` where the chooser marks it, and cleared when it gets a new one |
+| `0004-appearance` | `panels/background/cc-background-chooser.c` | +6 −2 | the include; the thumbnails 120 px wide and 16:10; the active item's name and whether it has a dark version handed to `cc_apex_background_show()` where the chooser marks it, and cleared when it gets a new one |
 | `0005-power` | `panels/power/cc-power-panel.c` | +2 | the include; `cc_apex_power_add()` after `setup_general_section()`, handed the General page and Power Mode's group |
 
 The resource goes into the executable as sources, not as a static library in
@@ -223,7 +226,7 @@ The resource goes into the executable as sources, not as a static library in
 and nothing upstream does.
 
 Budget (ADR 0014): at most 150 changed lines in upstream files, in hook hunks only; the
-added files under `panels/apex/` do not count. In use: 37 lines in 8 files.
+added files under `panels/apex/` do not count. In use: 41 lines in 8 files.
 
 The patches are `git format-patch` output against Fedora's `%prep` tree, with `a/` and
 `b/` prefixes, applied with `-p1`. Write them with apex-image's
@@ -259,11 +262,22 @@ switch or toggle the row offers writes its key (and the second key of the two-ke
 A third run without the schema checks the explanation. CI runs it after the lane and
 keeps the captures as the `control-center-shots` artifact.
 
+For one case the run also installs apex-desktop's `desktop/keybindings/60-apex.xml` in
+`/usr/share/gnome-control-center/keybindings/` and its `90_apex.gschema.override`, from
+the commit `tests/lib/pins.sh` pins (or `APEX_DESKTOP_SRC`, a checkout), and removes them
+after: the override also sets the icon theme, the fonts and the input sources, which no
+other capture may take. That case opens `gnome-control-center keyboard`; that row has no
+AT-SPI action, so `keyboard.py locate` gives `probe.js` the centre of "View and Customize
+Shortcuts" to click, and `keyboard.py` then searches the shortcut list through AT-SPI: Open Spotlight must
+show Super+Space, and Switch to next and previous input source Alt+Super+Space and
+Shift+Alt+Super+Space. A missing row or another key fails.
+
 A second part of the run starts `update1.py`, a stand-in for apex-updated, on the system
 bus, and opens `gnome-control-center system software-updates` on its scenarios: board
 18's "ready" state (captured light and dark, at the top and scrolled), up to date, an
 update available, a download under way, a health failure and a fallback (board 26's
-dialog in each), and no service at all. `updates.py` checks each
+dialog in each, captured dark too as `updates-health-failure-dark` and
+`updates-fallback-dark`), and no service at all. `updates.py` checks each
 state's texts through AT-SPI, that board 26's dialog shows, and presses each button and
 the Automatic Downloads switch: `update1.py`'s log must show the method call each makes,
 with its arguments, and the switch must go back when `update1.py` refuses it as polkit

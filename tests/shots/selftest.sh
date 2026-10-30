@@ -1218,6 +1218,30 @@ test_signoff_apps() {
     else
         not_ok "signoff: an app scene that did not open fails the run with its row's key, and app rows need no banner record: $(tail -n 3 "$T/signoff.out")"
     fi
+    mkdir -p "$dir/symbolic"
+    for scene in core status actions everywhere aliases; do
+        printf '\x89PNG\r\n\x1a\n' | tee "$dir/symbolic/board-31-symbolic-$scene-light.png" >"$dir/symbolic/board-31-symbolic-$scene-dark.png"
+    done
+    if "$HERE/signoff.sh" --collect "$dir/g2" "$dir/shots" "$dir/symbolic-out" symbolic="$dir/symbolic" >"$T/signoff.out" 2>&1 &&
+        [[ $(find "$dir/symbolic-out" -name 'board-31-*.png' | wc -l) == 10 ]] &&
+        jq -e '(.boards | length) == 20
+            and ([.boards[] | select(.board == 31) | .key] == ["31-symbolic-core", "31-symbolic-status", "31-symbolic-actions",
+                "31-symbolic-everywhere", "31-symbolic-aliases"])
+            and (.boards[] | select(.key == "31-symbolic-aliases") | .files == {light: "board-31-symbolic-aliases-light.png",
+                dark: "board-31-symbolic-aliases-dark.png"} and .title == "Apex Symbolic: contact sheet")
+            and (.sources | index("apex-desktop tools/icons/contact-sheet.sh") != null)' "$dir/symbolic-out/signoff.json" >/dev/null; then
+        ok "signoff: board 31's five scenes from contact-sheet.sh's sheets, a row each, keyed 31-symbolic-SCENE"
+    else
+        not_ok "signoff: board 31's five scenes from contact-sheet.sh's sheets, a row each, keyed 31-symbolic-SCENE: $(tail -n 3 "$T/signoff.out")"
+    fi
+    rm "$dir/symbolic/board-31-symbolic-status-dark.png"
+    if ! "$HERE/signoff.sh" --collect "$dir/g2" "$dir/shots" "$dir/symbolic-out2" symbolic="$dir/symbolic" >"$T/signoff.out" 2>&1 &&
+        grep -q 'board 31-symbolic-status (Apex Symbolic: contact sheet), dark: no capture of board-31-symbolic-status-dark (apex-desktop tools/icons/contact-sheet.sh)' "$T/signoff.out" &&
+        [[ $(grep -c 'no capture' "$T/signoff.out") == 1 ]]; then
+        ok "signoff: a scene contact-sheet.sh did not draw, a glyph of it missing, fails the run with its row's key"
+    else
+        not_ok "signoff: a scene contact-sheet.sh did not draw, a glyph of it missing, fails the run with its row's key: $(tail -n 3 "$T/signoff.out")"
+    fi
     if ! "$HERE/signoff.sh" --collect "$dir/g2" "$dir/shots" "$dir/apps3" files="$dir/files" >"$T/signoff.out" 2>&1 &&
         grep -q 'no app source files: one of' "$T/signoff.out"; then
         ok "signoff: an unknown app source is refused"
@@ -2975,6 +2999,22 @@ test_clean_shutdown() {
         "GLib-GObject-CRITICAL **: 09:41:00.000: g_object_get: assertion 'G_IS_OBJECT (object)' failed" >"$run/default.log"
     read -r passes failures <<<"$(assertion_counts clean_shutdown default "$run/default.log")"
     expect_eq "shutdown: and so does reading its window manager through NULL" "0/1" "$passes/$failures"
+    local ibus="(ibus-daemon:1240): GLib-GObject-CRITICAL **: 09:41:00.000: g_object_ref: assertion 'G_IS_OBJECT (object)' failed"
+    printf '%s\n' '** Message: 09:41:00.000: Shutting down GNOME Shell' "$ibus" \
+        '(/usr/libexec/xdg-desktop-portal:1311): xdg-desktop-portal-WARNING **: 09:41:00.000: lost the bus' >"$run/default.log"
+    read -r passes failures <<<"$(assertion_counts clean_shutdown default "$run/default.log")"
+    expect_eq "shutdown: ibus-daemon's own CRITICAL as it loses the display is not the shell's" "1/0" "$passes/$failures"
+    expect_eq "shutdown: but prints as a note, as does another process's WARNING" \
+        "# note ibus-daemon: GLib-GObject-CRITICAL **: 09:41:00.000: g_object_ref: assertion 'G_IS_OBJECT (object)' failed|# note xdg-desktop-portal: xdg-desktop-portal-WARNING **: 09:41:00.000: lost the bus" \
+        "$(grep '^# note ' "$T/assertions.out" | paste -sd'|' -)"
+    printf '%s\n' '** Message: 09:41:00.000: Shutting down GNOME Shell' "${ibus/ibus-daemon:1240/gnome-shell:766}" >"$run/default.log"
+    read -r passes failures <<<"$(assertion_counts clean_shutdown default "$run/default.log")"
+    expect_eq "shutdown: the same line from gnome-shell itself fails" "0/1" "$passes/$failures"
+    printf '%s\n' '** Message: 09:41:00.000: Shutting down GNOME Shell' "$ibus" \
+        "Shell-CRITICAL **: 09:41:00.000: shell_global_get: assertion 'the_object' failed" >"$run/default.log"
+    read -r passes failures <<<"$(assertion_counts clean_shutdown default "$run/default.log")"
+    expect_eq "shutdown: and an unprefixed shell_global_get fails after another process's note" "0/1 1" \
+        "$passes/$failures $(grep -c "^FAIL default: at shutdown: shell_global_get: assertion 'the_object' failed$" "$T/assertions.out")"
 }
 
 test_no_disposed_at_shutdown() {

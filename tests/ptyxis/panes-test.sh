@@ -218,6 +218,8 @@ check() {
 check "one terminal at start, no pane header, neither toggle pressed" \
     '.start | .terminals == 1 and (.panes | length == 0)
      and .toggles == {"Split Right": false, "Split Down": false}'
+check "true, which ends within one VTE batch, leaves the session done" \
+    '.fast | .row.subtitle == "done" and .footer == {"needsYou": 0, "running": 0, "failed": 0, "done": 1}'
 check "Split Right (the header toggle): two panes side by side, the toggle pressed, the new pane focused" \
     '.toggleRight | (.panes | length == 2 and .[1].body[0] > .[0].body[0] and .[1].body[1] == .[0].body[1]
      and .[1].focused) and .toggles == {"Split Right": true, "Split Down": false}'

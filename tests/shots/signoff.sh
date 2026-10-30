@@ -18,7 +18,8 @@ away the apps apex-desktop's build dependencies brought.
 patched.sh then runs direct.sh's signoff part (main's capture and indicator cases, every
 scene saved, and G2_SIGNOFF's real windows for the switcher and the overview);
 tests/shell/shoot.sh shoots the greeter, the lock screen, polkit's dialog and the power-off
-dialog. OUT (default _build/signoff) gets board-NN-SLUG-light.png and -dark.png for each
+dialog, and apex-desktop's tools/icons/contact-sheet.sh then draws board 31 from the installed
+Apex theme. OUT (default _build/signoff) gets board-NN-SLUG-light.png and -dark.png for each
 board, and signoff.json: each board's number, title, scene and fixture state, the apex-gnome
 and apex-desktop pins, the layer's features enabled, the scale, the monitor and the launcher's apps
 with the Flatpaks they stand in for; the runs'
@@ -26,7 +27,8 @@ logs stay in _build/signoff-work. A board whose scene has no capture, or a probe
 windows never all reached the overview, fails the run, named. --collect does only that last
 step, from a G2 run directory and shoot.sh's captures; each APP=SHOTS adds the rows of an app
 board from that app's shooter's captures (control-center: tests/control-center/run.sh,
-nautilus: tests/nautilus/shoot.sh, ptyxis: tests/ptyxis/shoot.sh). A board has one row per
+nautilus: tests/nautilus/shoot.sh, ptyxis: tests/ptyxis/shoot.sh, symbolic: apex-desktop's
+tools/icons/contact-sheet.sh). A board has one row per
 scene, keyed NN-SLUG in signoff.json, and a row the shooter captures light only has no dark
 file. --goldens then compares the rows with the approved goldens (goldens.sh check OUT).
 EOF
@@ -61,7 +63,10 @@ readonly G2='tests/shots/direct.sh signoff'
 readonly CONTROL_CENTER=tests/control-center/run.sh
 readonly NAUTILUS=tests/nautilus/shoot.sh
 readonly PTYXIS=tests/ptyxis/shoot.sh
-declare -rA APP_SOURCES=([control-center]=$CONTROL_CENTER [nautilus]=$NAUTILUS [ptyxis]=$PTYXIS)
+readonly SYMBOLIC='apex-desktop tools/icons/contact-sheet.sh'
+declare -rA APP_SOURCES=([control-center]=$CONTROL_CENTER [nautilus]=$NAUTILUS [ptyxis]=$PTYXIS [symbolic]=$SYMBOLIC)
+# What contact-sheet.sh needs beyond the fonts and the Apex theme apex-desktop brings.
+readonly SYMBOLIC_PACKAGES=(python3-gobject gtk4 gobject-introspection xorg-x11-server-Xvfb fontconfig)
 
 # number|slug|title|source|light capture|dark capture|fixture state: a row per scene, an empty dark capture for a light-only one
 readonly BOARDS="12|greeter|GDM greeter|$SHOOT|greeter-light-list|greeter-dark-list|the user list, apex and guest, on apex-desktop's greeter background
@@ -90,7 +95,12 @@ readonly BOARDS="12|greeter|GDM greeter|$SHOOT|greeter-light-list|greeter-dark-l
 28|files-list-documents|Files: list and details|$NAUTILUS|documents-light|documents-dark|Documents in the list view, the spec selected, details on
 29|files-search-search|Files: search|$NAUTILUS|search-light|search-dark|a search for \"apex\" from the home folder, in the list view
 32|terminal-sessions-sessions|Terminal: sessions|$PTYXIS|light|dark|the sessions of board 32, typed in by a virtual keyboard, statuses from vte.sh
-33|terminal-split-split|Terminal: split panes, needs you|$PTYXIS|split-light|split-dark|board 32's sessions with apex-gnome in a right split"
+33|terminal-split-split|Terminal: split panes, needs you|$PTYXIS|split-light|split-dark|board 32's sessions with apex-gnome in a right split
+31|symbolic-core|Apex Symbolic: contact sheet|$SYMBOLIC|board-31-symbolic-core-light|board-31-symbolic-core-dark|boards.txt's core glyphs as GTK 4 draws them, recoloured, at scale 2
+31|symbolic-status|Apex Symbolic: contact sheet|$SYMBOLIC|board-31-symbolic-status-light|board-31-symbolic-status-dark|boards.txt's status glyphs as GTK 4 draws them, recoloured, at scale 2
+31|symbolic-actions|Apex Symbolic: contact sheet|$SYMBOLIC|board-31-symbolic-actions-light|board-31-symbolic-actions-dark|boards.txt's actions glyphs as GTK 4 draws them, recoloured, at scale 2
+31|symbolic-everywhere|Apex Symbolic: contact sheet|$SYMBOLIC|board-31-symbolic-everywhere-light|board-31-symbolic-everywhere-dark|boards.txt's everywhere glyphs as GTK 4 draws them, recoloured, at scale 2
+31|symbolic-aliases|Apex Symbolic: contact sheet|$SYMBOLIC|board-31-symbolic-aliases-light|board-31-symbolic-aliases-dark|boards.txt's aliases as GTK 4 draws them, recoloured, at scale 2"
 
 die() { echo "signoff.sh: $*" >&2; exit 1; }
 
@@ -257,6 +267,11 @@ pkill -x dbus-daemon
 rm -f /run/dbus/pid /run/dbus/system_bus_socket
 # Its own assertions are G2's business; a scene that did not open shows below.
 bash "$REPO/$SHOOT" "$rpms" || echo "signoff.sh: shoot.sh exited $?; the boards it shoots are checked below"
+# Board 31 draws after the shell's captures, so the shell boards' container stays the one their goldens came from.
+dnf5 -y -q --setopt=install_weak_deps=False --repo=fedora --repo=updates install "${SYMBOLIC_PACKAGES[@]}" ||
+    die "cannot install ${SYMBOLIC_PACKAGES[*]}"
+bash "$desktop/tools/icons/contact-sheet.sh" /usr/share/icons "$work/symbolic" ||
+    echo "signoff.sh: contact-sheet.sh exited $?; the scenes it draws are checked below"
 not_in_image
-collect "$work/g2/run" "$REPO/_build/gnome-shell/shots" "$out"
+collect "$work/g2/run" "$REPO/_build/gnome-shell/shots" "$out" symbolic="$work/symbolic"
 ((goldens == 0)) || exec bash "$HERE/goldens.sh" check "$out"
