@@ -3248,6 +3248,13 @@ async function runProbe() {
         backdrop = {error: `${e.message}\n${e.stack}`};
     }
     console.log(`APEXG2-BACKDROP ${JSON.stringify(backdrop)}`);
+    let defaults;
+    try {
+        defaults = (await import('./session-defaults.js')).sessionDefaultsReport({apexDock});
+    } catch (e) {
+        defaults = {error: `${e.message}\n${e.stack}`};
+    }
+    console.log(`APEXG2-SESSION ${JSON.stringify(defaults)}`);
 
     if (GLib.getenv('G2_SCENES') === '1') {
         let result;

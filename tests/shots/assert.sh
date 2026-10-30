@@ -268,6 +268,64 @@ exit_cut() {
         "the probe leaves no banner up, and blocks the date menu's event-source and app-list handlers, for the shell's shutdown"
 }
 
+# G2's fixture apps (direct.sh's STUB_APPS) have no icon of their own: GNOME draws its generic one.
+readonly FIXTURE_APPS=(io.github.apex_linux.G2Stub1.desktop io.github.apex_linux.G2Stub2.desktop io.github.apex_linux.G2Stub3.desktop)
+# Icons the shell draws from its own resource because Apex Symbolic (board 31) draws none of that name.
+readonly SHELL_RESOURCE_ICONS=(screenshooter-symbolic)
+
+# expect, but a failure quotes DETAIL, what the shell had, rather than the condition's false.
+expect_named() {
+    local label=$1 report=$2 cond=$3 detail=$4 desc=$5
+    if [[ -z $report ]]; then
+        fail "$label: $desc (no report)"
+    elif jq -e "$cond" <<<"$report" >/dev/null 2>&1; then
+        pass "$label: $desc"
+    else
+        fail "$label: $desc (got $(jq -c "$detail" <<<"$report" 2>&1 | head -c 300))"
+    fi
+}
+
+# S1b's session defaults, as the image's apex-desktop sets them: its fonts, hinting and icon theme read
+# and drawn, and every icon the bar, the dock, the dash and Quick Settings show resolved through Apex.
+session_defaults() {
+    local label=$1 log=$2 r want bad
+    r=$(report_of "$log" APEXG2-SESSION)
+    if [[ -n $r && -n $(jq -r '.error // empty' <<<"$r") ]]; then
+        fail "$label: session defaults: $(jq -r '.error' <<<"$r" | head -n 1)"
+        return
+    fi
+    want=$(jq -nc --arg f "$SESSION_FONT_NAME" --arg d "$SESSION_DOCUMENT_FONT_NAME" --arg m "$SESSION_MONOSPACE_FONT_NAME" \
+        --arg h "$SESSION_FONT_HINTING" --arg i "$SESSION_ICON_THEME" '[$f, $d, $m, $h, $i] | map(ltrimstr("\u0027") | rtrimstr("\u0027"))
+        | {"font-name": .[0], "document-font-name": .[1], "monospace-font-name": .[2], "font-hinting": .[3], "icon-theme": .[4]}')
+    bad=$(jq -r --argjson want "$want" '.settings as $s | $want | to_entries[] | select($s[.key] != .value)
+        | "\(.key) is \($s[.key] | tojson), not \(.value | tojson)"' <<<"$r" 2>&1 | paste -sd';' -)
+    if [[ -n $r && -z $bad ]]; then
+        pass "$label: the session reads apex-desktop's fonts, hinting and icon theme"
+    else
+        fail "$label: the session reads apex-desktop's fonts, hinting and icon theme (${bad:-no report})"
+    fi
+    expect_named "$label" "$r" ".shell == $(jq -c '{font: .["font-name"], iconTheme: .["icon-theme"]}' <<<"$want")" .shell \
+        "the shell draws with that font and icon theme"
+    expect_named "$label" "$r" '.fontconfig.sans.family == "Adwaita Sans" and (.fontconfig.sans.features | index("ss03") != null)' \
+        .fontconfig.sans "fontconfig gives Adwaita Sans, with ss03, for its family"
+    expect_named "$label" "$r" '.fontconfig.mono.family == "JetBrains Mono"' .fontconfig.mono \
+        "fontconfig gives JetBrains Mono for its family, not a fallback"
+    expect_named "$label" "$r" '.drawn.clock == "Adwaita Sans"' .drawn.clock "the bar's clock is drawn in Adwaita Sans"
+    bad=$(jq -r --argjson fixtures "$(printf '%s\n' "${FIXTURE_APPS[@]}" | jq -R . | jq -sc .)" \
+        --argjson resource "$(printf '%s\n' "${SHELL_RESOURCE_ICONS[@]}" | jq -R . | jq -sc .)" '
+        .icons | to_entries[] | .key as $where | (.value // [])[]
+        | (.icon | if startswith(". GThemedIcon ") then split(" ")[2] else . end) as $name
+        | select((.file // "" | startswith("/usr/share/icons/Apex/")) | not)
+        | select(((.file // "" | startswith("/org/gnome/shell/icons/")) and ($resource | index($name))) | not)
+        | .app as $app | select($app == null or ($fixtures | index($app) | not))
+        | "\($where) \($name)\(if $app then " (\($app))" else "" end): \(.file // "no icon")"' <<<"$r" 2>&1 | paste -sd';' -)
+    if [[ -n $r && -z $bad && $(jq '[.icons[] // [] | length] | add' <<<"$r") -gt 0 ]]; then
+        pass "$label: every icon the bar, the dock, the dash and Quick Settings draw resolves through Apex"
+    else
+        fail "$label: every icon the bar, the dock, the dash and Quick Settings draw resolves through Apex (${bad:-no icons reported})"
+    fi
+}
+
 # Mutter warns when two bindings claim one key: the second silently takes it from the first.
 no_binding_overwritten() {
     local label=$1 log=$2 found
@@ -2054,6 +2112,7 @@ direct_cases() {
     f=$run/default.log
     exits "$run" default 0
     apex_light default "$f"
+    session_defaults default "$f"
     no_apex_failure default "$f"
     spotlight_key default "$f"
     search_hint default "$f" true
@@ -2118,6 +2177,7 @@ direct_cases() {
 
     f=$run/dark-style.log
     exits "$run" dark-style 0
+    session_defaults dark-style "$f"
     expect_report dark-style "$f" ".stylesheet == \"$APEX_DARK_SHEET\" and .sheet.markers == [\"dark\"]" \
         "color-scheme prefer-dark loads the Apex dark sheet with its marker"
     expect_report dark-style "$f" '(.markerColor | colour_is("#f6f6f8")) and .safe == false' \
@@ -2174,6 +2234,7 @@ direct_cases() {
     stock_scheme safe-env "$f"
     search_hint safe-env "$f" false
     virtual_monitor safe-env "$f"
+    session_defaults safe-env "$f"
 
     f=$run/layer-disabled.log
     exits "$run" layer-disabled 0
