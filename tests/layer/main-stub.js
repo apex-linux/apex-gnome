@@ -178,6 +178,13 @@ export const screenshotUI = {
 
 export const messageTray = {
     _bannerBin: Object.assign(new StubActor('banner-bin', {parent: uiGroup}), {children: []}),
+    cleared: [],
+    _updateNotificationTimeout(timeout) {
+        this.cleared.push(`banner:${timeout}`);
+    },
+    _resetNotificationLeftTimeout() {
+        this.cleared.push('left');
+    },
     showBanner() {
         const banner = new StubActor('banner', {glass: {...POPOVER_GLASS, radius: 16}, extents: [490, 44, 460, 80], parent: this._bannerBin});
         banner._classes.add('notification-banner');

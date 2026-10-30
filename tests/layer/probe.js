@@ -697,10 +697,13 @@ async function exerciseNotifications() {
         fact(`${label}.days`, `${month.days.map(b => day(b.get_child())).join(' ')} ` +
             `own-text=${month.days.every((b, i) => b.get_child() === month.texts[i])}`);
     };
+    const Main = await import(`file://${shellDir}/js/ui/main.js`);
+    const trayCleared = () => Main.messageTray.cleared.splice(0).join(',') || 'none';
     calendarState('nf');
     settings.set_boolean('layer-enabled', false);
     await spin(200);
     calendarState('nf.off');
+    fact('nf.off.tray', trayCleared());
     groups.push(new MessageList.NotificationMessageGroup({title: 'Chat', icon: 'chat-icon'}, 2));
     notificationsState('nf.off', list, groups);
     cardsState('nf.off', groups[0]);
@@ -710,6 +713,9 @@ async function exerciseNotifications() {
     notificationsState('nf.on', list, groups);
     cardsState('nf.on', groups[0]);
     calendarState('nf.on');
+    fact('nf.on.tray', trayCleared());
+    Main.layoutManager.uiGroup.emit('destroy');
+    fact('nf.teardown.tray', trayCleared());
 }
 
 // endSessionDialog.js as patch 0018's hook sees it: a stock row of Cancel and the confirm

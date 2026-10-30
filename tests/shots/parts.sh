@@ -2,11 +2,11 @@
 # shellcheck shell=bash disable=SC2034 # read by direct.sh, patched.sh and assert.sh
 
 # direct.sh's pr part, which CI runs on every pull request: the scenes and every a11y check, then the
-# quick dock, indicator, safe-mode (stock-light, stock-dark among them) and fault cases, in main's order.
+# quick dock, indicator, safe-mode (stock-light, stock-dark among them), fault and shutdown cases, in main's order.
 readonly PR_CASES=(default default-scale1 dark-style high-contrast large-text default-solid
     dark-style-solid high-contrast-solid large-text-solid dock-intellihide dock-intellihide-dark
     dock-one-gpu no-dock no-dock-dark indicators indicators-scale1 indicators-dark stock-light stock-dark safe-env layer-disabled
-    dock-dnd dock-external keys fault-configure fault-enable fault-abort)
+    dock-dnd dock-external keys fault-configure fault-enable fault-abort shutdown-banner)
 # direct.sh's fedora part on a pull request: the baselines of the desktop comparison.
 readonly PR_FEDORA_CASES=(fedora-light fedora-dark)
 

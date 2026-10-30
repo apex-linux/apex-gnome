@@ -480,6 +480,10 @@ fact "notifications: a click turns Do Not Disturb off" 'nf\.dnd-click=show-banne
 fact "notifications: the month on the left, both chevrons on the right" 'nf\.calendar=header=month,back,forward align=1 class=true'
 fact "notifications: every day keeps a dot under its number, in an St.Label that takes the day's colour" \
     'nf\.days=Label:27/apex-event-dot Label:28/apex-event-dot Label:29/apex-event-dot own-text=false'
+fact "notifications: layer off: the tray's banner timeouts run as stock's" 'nf\.off\.tray=none'
+fact "notifications: layer back on: still stock's while the session runs" 'nf\.on\.tray=none'
+fact "notifications: at logout the teardown clears them, so gnome-shell's shutdown loop cannot run them on the destroyed tray" \
+    'nf\.teardown\.tray=banner:0,left'
 fact "notifications: layer off: stock's header" 'nf\.off\.calendar=header=back,month,forward align=2 class=false'
 fact "notifications: layer off: stock's day buttons, each with its own text again" 'nf\.off\.days=ButtonText:27 ButtonText:28 ButtonText:29 own-text=true'
 fact "notifications: layer back on: the header and dots again" 'nf\.on\.calendar=header=month,back,forward align=1 class=true'

@@ -88,8 +88,15 @@ image.apex-tile {
   font-weight: 700;
 }
 
-button.apex-link {
+/* Board 18: a staged image is kept only once its signature checks out. */
+.apex-checked {
+  min-height: 22px;
+  padding: 0 9px;
+  border-radius: 11px;
+  background-color: color-mix(in srgb, var(--accent-bg-color) 16%, transparent);
   color: var(--accent-color);
+  font-size: 0.85em;
+  font-weight: 700;
 }
 
 /* Board 23: stock Appearance's own classes; the panel gains no rows. */
