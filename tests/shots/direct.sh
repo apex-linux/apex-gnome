@@ -253,7 +253,7 @@ run_and_record_case glass-stress "$CAPTURE_SETTINGS;$NO_HOT_CORNER" G2_GLASS=1 G
 run_and_record_case dock-pin "$CAPTURE_SETTINGS;$NO_HOT_CORNER" G2_DOCK_PIN=1
 run_and_record_case dock-dnd "$CAPTURE_SETTINGS;$NO_HOT_CORNER;$TWO_FAVOURITES" G2_DOCK_DND=1
 # A 1920x1080 external display right of the 2880x1800 panel, as a laptop on a desk has.
-run_and_record_case dock-external "$CAPTURE_SETTINGS;$NO_HOT_CORNER" G2_DOCK_EXTERNAL=1 G2_MONITOR2=1920x1080
+run_and_record_case dock-external "$CAPTURE_SETTINGS;$NO_HOT_CORNER" G2_DOCK_EXTERNAL=1 G2_MONITOR2=1920x1080 G2_PIPEWIRE=1
 # Two input sources, so Super+Alt+Space has one to switch to.
 run_and_record_case keys "$CAPTURE_SETTINGS;$NO_HOT_CORNER;$TWO_SOURCES" G2_KEYS=1
 run_and_record_case fault-configure '' APEX_SHELL_TEST_FAULT=configure
