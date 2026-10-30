@@ -72,8 +72,8 @@ apex_session_state_precmd (ApexSessionState *state,
   return TRUE;
 }
 
-/* VTE hands over the marks it parsed in one batch by termprop id, precmd first. At a
- * prompt they can only be a command that started and ended; in one, its end, then the next. */
+/* VTE hands over the marks of one batch by termprop id, precmd first. At a prompt
+ * they can only be a command that started and ended; in one, its end, then the next. */
 gboolean
 apex_session_state_shell (ApexSessionState *state,
                           ApexShellMarks    marks,
