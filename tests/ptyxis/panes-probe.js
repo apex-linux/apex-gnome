@@ -184,10 +184,11 @@ async function drive() {
     tap(Clutter.KEY_r, ctrlAlt);
     // A command typed before the new shell's first prompt can leave the pane reading running.
     const s = await until('Ctrl+Alt+R, and the new shell prompted', t => right(t) && t.panes[1].prompted);
-    await type(`seq 1 30${OUTLAST_A_BATCH}`);
+    // 24 lines take the caret below the measured half without scrolling, which would show the scrollbar.
+    await type(`seq 1 24${OUTLAST_A_BATCH}`);
     await clickAt(s.panes[0].body);
     r.clickFirst = await until('a click on the first pane', t => t.panes[0].focused);
-    await type(`seq 1 30${OUTLAST_A_BATCH}`);
+    await type(`seq 1 24${OUTLAST_A_BATCH}`);
     await until('both seq done', t => t.footer.done === 1);
     await park();
     const firstFocused = {first: await capture(r.clickFirst.panes[0]), second: await capture(r.clickFirst.panes[1])};

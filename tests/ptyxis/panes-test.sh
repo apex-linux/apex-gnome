@@ -42,6 +42,12 @@ chmod 777 "$out"
 [[ -z ${1:-} ]] || headless_install_rpm "$1" ptyxis
 rpm -q ptyxis >"$out/ptyxis.txt"
 
+# CI runs the palette test before this one in the same container, and its palette and settings would stay.
+if id "$USER_NAME" >/dev/null 2>&1; then
+    pkill -u "$USER_NAME" 2>/dev/null
+    userdel -r "$USER_NAME" 2>/dev/null
+    ! id "$USER_NAME" >/dev/null 2>&1 || die "panes-test.sh: cannot remove the earlier test's user $USER_NAME"
+fi
 headless_user
 home=$HEADLESS_HOME
 fixtures=$home/.apex-fixtures

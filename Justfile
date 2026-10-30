@@ -50,7 +50,7 @@ ptyxis-palette:
 # The Ptyxis that ptyxis-lane built: board 33's panes split, focused, closed and each with its own status (podman or docker).
 ptyxis-panes:
     engine=$(command -v podman || command -v docker) && "$engine" run --rm -v "{{justfile_directory()}}:/apex-gnome:z" -w /apex-gnome {{ptyxis_image}} \
-        bash -c 'dnf5 -y -q --setopt=install_weak_deps=False install {{ptyxis_shots_packages}} python3-gobject at-spi2-core && tests/ptyxis/panes-test.sh _build/ptyxis/out'
+        bash -c 'dnf5 -y -q --setopt=install_weak_deps=False install {{ptyxis_shots_packages}} python3-gobject at-spi2-core procps-ng && tests/ptyxis/panes-test.sh _build/ptyxis/out'
 
 libadwaita_image := "registry.fedoraproject.org/fedora:45@sha256:1e13e11f63e147a40a935c9046c79d53a30b861a3cf05ebb023bb53c562382cb"
 

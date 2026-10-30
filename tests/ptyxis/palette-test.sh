@@ -14,6 +14,7 @@ readonly BEFORE='#ff0000' AFTER='#00ff00'
 readonly CARET_FROM=blue CARET_FROM_HEX='#3584e4' CARET_TO=green CARET_TO_HEX='#3a944a'
 readonly APEX_SCHEMA_FIXTURE=$PTYXIS_TESTS/../layer/fixtures/io.github.apex_linux.Apex.Desktop.gschema.xml
 readonly SCHEMA_DIR=/usr/share/glib-2.0/schemas
+readonly AGENT=/usr/libexec/apex/apex-session-agent
 
 usage() {
     cat <<EOF
@@ -37,6 +38,7 @@ esac
 headless_require_container palette-test.sh
 agent=${2:-$APEX_ROOT/_build/s2c/apex-session-agent}
 [[ -x $agent ]] || die "palette-test.sh: no agent at $agent (tests/s2c/agent.sh)"
+install -D -m 755 "$agent" "$AGENT"
 
 out=$APEX_ROOT/_build/ptyxis/palette
 rm -rf -- "$out"
@@ -68,7 +70,7 @@ headless_run "$out/palette.log" "$PTYXIS_TESTS/palette-probe.js" "$SHELL_TIMEOUT
 org.gnome.Ptyxis cursor-blink-mode 'off'
 org.gnome.desktop.interface accent-color '$CARET_FROM'" \
     APEX_PALETTE_FILE="$palettes/apex.palette" APEX_PALETTE_REWRITE="$out/rewrite.palette" \
-    APEX_AGENT="$agent" APEX_AGENT_LOG="$out/agent.log" APEX_CARET_ACCENTS="$caret_accents" RUST_LOG=info
+    APEX_AGENT="$AGENT" APEX_AGENT_LOG="$out/agent.log" APEX_CARET_ACCENTS="$caret_accents" RUST_LOG=info
 log "palette-test.sh: shell exit $?"
 
 result=$(sed -n 's/.*APEXPALETTE //p' "$out/palette.log")

@@ -207,7 +207,7 @@ jobs:
 
       - name: tests/ptyxis/panes-test.sh on the built RPM
         run: |
-          dnf5 -y -q --setopt=install_weak_deps=False --repo=fedora --repo=updates install python3-gobject at-spi2-core
+          dnf5 -y -q --setopt=install_weak_deps=False --repo=fedora --repo=updates install python3-gobject at-spi2-core procps-ng
           tests/ptyxis/panes-test.sh _build/ptyxis/out
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
