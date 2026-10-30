@@ -2718,10 +2718,20 @@ crash_guard() {
     check "window: the layer removed its marker by 65 s" grep -q 'starting marker gone' "$run/guard-window.marker65"
     check "window: SIGABRT after 65 s fails the unit (core-dump) and triggers OnFailure=" \
         bash -c "grep -q 'Failed with result .core-dump.' '$f' && grep -q 'Triggering OnFailure= dependencies' '$f'"
-    check "window: apex-shell-safe.service is skipped (ConditionPathExists=%t/apex-shell-starting unmet)" \
-        grep -q 'apex-shell-safe.service .*skipped, unmet condition check ConditionPathExists=/run/user/1000/apex-shell-starting' "$f"
+    check "window: apex-shell-safe.service runs on the late failure (Starting ... Finished)" \
+        bash -c "grep -q 'Starting apex-shell-safe.service' '$f' && grep -q 'Finished apex-shell-safe.service' '$f'"
+    check "window: and counts it without tripping: shell-guard-trips = none 1 or <deployment> 1" \
+        grep -Eq '^guard counter: (none|[0-9a-f]+\.[0-9]+) 1$' "$run/guard-window.state"
     check "window: layer-enabled stays true" grep -q '^layer-enabled=true$' "$run/guard-window.state"
     check "window: no guard marker" grep -q 'guard marker: .*No such file' "$run/guard-window.state"
+
+    f=$run/guard-second.journal
+    check "second: the layer removed its marker by 65 s again" grep -q 'starting marker gone' "$run/guard-second.marker65"
+    check "second: a 2nd late failure on the same deployment runs apex-shell-safe.service" \
+        bash -c "grep -q 'Starting apex-shell-safe.service' '$f' && grep -q 'Finished apex-shell-safe.service' '$f'"
+    check "second: and trips: layer-enabled is false afterwards" grep -q '^layer-enabled=false$' "$run/guard-second.state"
+    check "second: ~/.local/state/apex/shell-guard-tripped exists" grep -q 'guard marker: -rw' "$run/guard-second.state"
+    check "second: the counter is gone" grep -q 'guard counter: .*No such file' "$run/guard-second.state"
 
     for t in trip trip-warm; do
         f=$run/guard-$t.journal

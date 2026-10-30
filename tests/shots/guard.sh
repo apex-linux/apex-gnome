@@ -14,7 +14,12 @@ apex-shell-safe.service.
 
 Phases, each leaving /out/guard-PHASE.{state,journal}:
   window     layer on, SIGABRT 65 s after start, when the layer has removed its marker:
-             the guard's condition fails and layer-enabled stays true
+             apex-shell-safe.service counts a late failure on the booted deployment
+             (~/.local/state/apex/shell-guard-trips, `none 1` without ostree=) and
+             layer-enabled stays true
+  second     the same again on the same deployment: the second late failure trips,
+             as below, and removes the counter; then layer-enabled=true again and the
+             guard marker removed, for the phases after it
   trip       APEX_SHELL_TEST_FAULT=abort-after-enable: the shell aborts 5 s after
              enable, OnFailure= starts apex-shell-safe.service, which sets
              layer-enabled=false, leaves ~/.local/state/apex/shell-guard-tripped and
@@ -87,6 +92,7 @@ status_block() {
     show -p ActiveState,Result,ConditionResult,ExecMainStatus,InvocationID,StateChangeTimestamp "$GUARD" | paste -sd' '
     echo "layer-enabled=$(as_user gsettings get "$SCHEMA" layer-enabled)"
     echo "guard marker: $(ls -l --time-style=+%T "$TEST_HOME/.local/state/apex/shell-guard-tripped" 2>&1)"
+    echo "guard counter: $(cat "$TEST_HOME/.local/state/apex/shell-guard-trips" 2>&1)"
     echo "starting marker: $(ls -l --time-style=+%T "$TEST_RUNTIME_DIR/apex-shell-starting" 2>&1)"
 }
 
@@ -148,17 +154,29 @@ show -p FragmentPath,DropInPaths,OnFailure,OnFailureJobMode,SuccessExitStatus,Ty
 as_user gsettings set org.gnome.desktop.interface scaling-factor 2
 as_user systemctl --user set-environment XDG_SESSION_TYPE=wayland
 
+late_failure() {
+    local name=$1 phase_cursor t0
+    phase_cursor=$(cursor)
+    as_user systemctl --user set-environment PROBE_WAIT=90
+    t0=$SECONDS
+    start_shell
+    sleep 65
+    echo "65 s after start: starting marker $([[ -e $TEST_RUNTIME_DIR/apex-shell-starting ]] && echo present || echo gone)" |
+        tee "/out/guard-$name.marker65"
+    as_user systemctl --user kill --kill-whom=main --signal=SIGABRT "$UNIT"
+    wait_for_active_state "$UNIT" 'failed|inactive' 30 "$t0"
+    wait_for_active_state "$GUARD" 'inactive|failed' 30 "$t0"
+    as_user systemctl --user unset-environment PROBE_WAIT
+    phase_end "$name" "$phase_cursor"
+}
+
 say "phase window: layer on, SIGABRT 65 s after start"
-phase_cursor=$(cursor)
-as_user systemctl --user set-environment PROBE_WAIT=90
-t0=$SECONDS
-start_shell
-sleep 65
-echo "65 s after start: starting marker $([[ -e $TEST_RUNTIME_DIR/apex-shell-starting ]] && echo present || echo gone)" | tee /out/guard-window.marker65
-as_user systemctl --user kill --kill-whom=main --signal=SIGABRT "$UNIT"
-wait_for_active_state "$UNIT" 'failed|inactive' 30 "$t0"
-wait_for_active_state "$GUARD" 'inactive|failed' 30 "$t0"
-phase_end window "$phase_cursor"
+late_failure window
+
+say "phase second: a second late failure on the same deployment"
+late_failure second
+as_user gsettings set "$SCHEMA" layer-enabled true
+rm -f "$TEST_HOME/.local/state/apex/shell-guard-tripped"
 
 say "phase trip: $FAULT_VAR=abort-after-enable"
 phase_cursor=$(cursor)
