@@ -439,7 +439,10 @@ export const panel = Object.assign(new StubActor('panel', {glass: PANEL_GLASS, e
     },
 });
 
+export let notifies = 0;
+
 export function notify(title) {
+    notifies++;
     fact('notify', title);
 }
 
