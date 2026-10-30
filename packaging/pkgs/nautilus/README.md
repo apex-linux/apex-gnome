@@ -111,6 +111,12 @@ The patches are `git format-patch` output against Fedora's `%prep` tree, with `a
 and `just pkg-export nautilus`, as for gnome-shell
 ([its README](../gnome-shell/README.md#changing-a-patch-or-rebasing)).
 
+Fedora updates absorbed:
+
+- 2026-10-30, GNOME 51.1 (FEDORA-2026-2812a1754d, F45 `updates-testing`, request stable):
+  every patch applies at fuzz 0 to `nautilus-51.1-1.fc45` as well as `51.0.1-1.fc45`, and
+  the lane builds it with the whole update in the buildroot. No patch changed.
+
 ## Building it here
 
 ```bash
