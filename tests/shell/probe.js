@@ -138,6 +138,8 @@ function describeLayout(dialog, hint) {
         if (actor?.mapped && actor.opacity > 0)
             layout[name] = box(actor);
     }
+    // Upstream's message line, empty or not: it sits between the field and the hint.
+    layout.messageLine = prompt?._message?.mapped ? box(prompt._message) : null;
     layout.reveal = describeReveal(prompt?._entry);
     return layout;
 }

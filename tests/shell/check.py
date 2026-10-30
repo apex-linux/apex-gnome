@@ -74,7 +74,7 @@ def tokens():
     found = {}
     with open(TOKENS, encoding="utf-8") as f:
         for line in f:
-            m = re.match(r"\$(apex_greeter_\w+):\s*(.+?);", line)
+            m = re.match(r"\$(apex_(?:greeter|lock)_\w+):\s*(.+?);", line)
             if m:
                 found[m.group(1)] = m.group(2).strip("'\"")
     return found
@@ -152,12 +152,29 @@ def check_layout(case, layout, overlay_alpha=None):
           {"date", "time", "avatar", "field", "hint"} <= dict(parts).keys() and not off, json.dumps(layout))
     overlaps = [f"{a}/{b}" for (a, ba), (b, bb) in itertools.pairwise(parts) if ba["y"] + ba["height"] > bb["y"] + 1]
     check(f"{case}: top to bottom, nothing overlaps", not overlaps, ", ".join(overlaps))
+    if overlay_alpha is None and {"avatar", "field", "hint"} <= dict(parts).keys():
+        check_spacing(case, layout)
     got = layout.get("overlay") or ""
     if overlay_alpha is None:
         check(f"{case}: the overlay darkens as $apex_lock_overlay", got == OVERLAY, got)
     else:
         check(f"{case}: high contrast darkens more, to alpha {overlay_alpha:#x}",
               got[:7] == "#000000" and len(got) == 9 and int(got[7:], 16) >= overlay_alpha, got)
+
+
+def check_spacing(case, layout):
+    """Board 20's prompt, top to bottom, as the Apex sheets space it: a GNOME point release's margins fail here by name."""
+    gap = px(tokens()["apex_lock_prompt_gap"])
+    avatar, field, hint, line = layout["avatar"], layout["field"], layout["hint"], layout.get("messageLine")
+    field_end = field["y"] + field["height"]
+    check(f"{case}: the field sits $apex_lock_prompt_gap ({gap:g} px) below the name",
+          abs(field["y"] - avatar["y"] - avatar["height"] - gap) <= 1, json.dumps([avatar, field]))
+    if line:
+        check(f"{case}: upstream's message line starts where the field ends", abs(line["y"] - field_end) <= 1,
+              json.dumps([field, line]))
+    above = line["y"] + line["height"] if line else field_end
+    check(f"{case}: the hint starts where the {'message line' if line else 'field'} ends", abs(hint["y"] - above) <= 1,
+          json.dumps([field, line, hint]))
 
 
 def check_reveal(case, reveal):
