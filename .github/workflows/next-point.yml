@@ -5,8 +5,6 @@ name: next-point
 # never on a pull request, never required, and lane.sh runs without APEX_LANE_CACHE, so no lane cache is read or written.
 on:
   workflow_dispatch: {}
-  push:
-    branches: [claude/next-point-apps]
   schedule:
     - cron: '23 3 * * 2'
 

@@ -927,16 +927,20 @@ on dispatch and weekly (Tuesdays), never on a pull request, and no check require
 
 - **lane:** `next-point.sh image` fetches the pinned apex-image and fills its updates-testing
   allowlist with the builds updates-testing moves among gnome-shell, mutter, gdm, gjs, glib2,
-  gnome-session, gsettings-desktop-schemas, gtk4 and libadwaita. Admitting every build would
-  overflow apex-lane's dnf5 arguments. `lane.sh` then builds gnome-shell from that SRPM through
+  gnome-session, gsettings-desktop-schemas, gtk4, libadwaita, gnome-control-center and
+  nautilus. Admitting every build would overflow apex-lane's dnf5 arguments. `lane.sh` then builds gnome-shell from that SRPM through
   `APEX_IMAGE_SRC`, without `APEX_LANE_CACHE`, so it reads and writes no lane cache. The job
   summary lists what moves.
 - **g2:** `patched.sh` runs every case on those RPMs.
 - **signoff:** `signoff.sh --goldens` checks the shell boards against the approved goldens.
+- **apps:** for Settings and Files, the lane's libadwaita and the app from updates-testing,
+  installed under the shim, then `tests/control-center/run.sh` and `tests/nautilus/shoot.sh`.
 - **report:** one line in the run's summary, passed/failed for each, `?` where a job gave
-  none: `next-point: gnome-shell-51.1-1.fc45.apex1 g2 1865/0 goldens 30/0 shoot 523/0`.
+  none, then each app's NEVR and its ok/not ok count: `next-point: gnome-shell-51.1-1.fc45.apex1
+  g2 1954/0 goldens 30/0 shoot 523/0 | gnome-control-center-51.1-1.fc45.apex1 46/0 |
+  nautilus-51.1-1.fc45.apex1 84/0`.
 
-Both of the last two install `next-point.sh shim` first, a `dnf5` ahead of Fedora's on `PATH`.
+g2, signoff and apps install `next-point.sh shim` first, a `dnf5` ahead of Fedora's on `PATH`.
 It adds updates-testing beside each `--repo=updates` and updates-testing-source beside each
 `--repo=updates-source`, and enables updates-testing for a call that names no repository. So
 the scripts install what GA brings, unchanged. `lane.sh`, `image-args.sh` and every other
