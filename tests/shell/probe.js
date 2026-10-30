@@ -611,7 +611,11 @@ async function shootDateMenu() {
     await Scripting.sleep(SETTLE_MS);
     const {dateMenu} = Main.panel.statusArea;
     const list = dateMenu._messageList;
-    // The session's own notifications (the search hint) would only blur the counts.
+    // Upstream's Clear follows its placeholder only after a first notification (calendar.js:840, no
+    // SYNC_CREATE): one comes and goes, as the search hint did before it waited out Do Not Disturb.
+    Main.notify('G2: a notification to clear');
+    await Scripting.sleep(STEP_MS);
+    // The session's own notifications would only blur the counts.
     Main.messageTray.getSources().forEach(source => source.destroy());
     dateMenu.menu.open();
     await Scripting.sleep(STEP_MS);
