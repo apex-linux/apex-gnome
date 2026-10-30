@@ -13,7 +13,9 @@ that throws gives the stock value or code at its call site.
 
 - UnlockDialog: a value hook over the background blur's brightness and
   radius; one over the clock's share of the transition progress, so the
-  clock can stay shown with the prompt; a behaviour hook at the end of
+  clock can stay shown with the prompt; one over the stack's box in
+  UnlockDialogLayout, so the layer's stage keeps one layout across
+  upstream's changes to it; a behaviour hook at the end of
   _init(), through which the layer lays the dialog out and shows or
   tears down the prompt as the screen wakes or blanks;
 - ScreenShield: a value hook over whether the session going idle
@@ -26,9 +28,9 @@ that throws gives the stock value or code at its call site.
 ---
  js/gdm/authPrompt.js  |  9 +++++----
  js/ui/screenShield.js |  4 +++-
- js/ui/unlockDialog.js | 18 +++++++++++-------
+ js/ui/unlockDialog.js | 20 ++++++++++++--------
  js/ui/userWidget.js   |  5 +++--
- 4 files changed, 22 insertions(+), 14 deletions(-)
+ 4 files changed, 23 insertions(+), 15 deletions(-)
 
 diff --git a/js/gdm/authPrompt.js b/js/gdm/authPrompt.js
 index 06a8758..6e870a6 100644
@@ -91,6 +93,15 @@ index 21b4736..8c77b98 100644
  
  const PRIMARY_UNLOCK_METHOD_SECTION_NAME = _('Unlock Options');
  
+@@ -504,7 +505,7 @@ class UnlockDialogLayout extends Clutter.LayoutManager {
+         actorBox.x2 = columnX1 + columnWidth;
+         actorBox.y2 = stackY + stackHeight;
+ 
+-        this._stack.allocate(actorBox);
++        this._stack.allocate(ApexHooks.value('unlock-stack-box', actorBox, this, box));
+ 
+         // Auth Indicator button (bottom start)
+         if (this._authIndicatorButton.visible) {
 @@ -740,6 +741,7 @@ export const UnlockDialog = GObject.registerClass({
          this._idleWatchId = this._idleMonitor.add_idle_watch(IDLE_TIMEOUT * 1000, this._escape.bind(this));
  

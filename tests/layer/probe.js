@@ -1414,6 +1414,25 @@ async function exerciseLock() {
     fact('lock.idle-cancel.unlocked', `${Hooks.value('unlock-idle-cancel', true, null)}`);
     fact('lock.idle-cancel.other-dialog', `${Hooks.value('unlock-idle-cancel', true, newUnlockDialog(St))}`);
 
+    // UnlockDialogLayout's stack box through the hook, given the layout and its box: 51.0's at every height.
+    const boxed = newUnlockDialog(St);
+    Hooks.run('unlock-dialog', boxed);
+    await spin(50);
+    const notifications = {get_preferred_size: () => [0, 0, 0, 40]};
+    for (const height of [900, 1080, 1440]) {
+        boxed.height = height;
+        boxed.emit('notify::height');
+        const stock = {x1: 0, x2: 100, y1: -1, y2: -1};
+        const got = Hooks.value('unlock-stack-box', stock, {_stack: boxed._stack, _notifications: notifications},
+            {get_height: () => height});
+        fact(`lock.stack-box.${height}`, `${got.y1}..${got.y2}`);
+        fact(`lock.stack-height.${height}`, `${boxed._stack.natural_height}`);
+    }
+    const otherBox = Hooks.value('unlock-stack-box', {y1: -1, y2: -1},
+        {_stack: newUnlockDialog(St)._stack, _notifications: notifications}, {get_height: () => 900});
+    fact('lock.stack-box.other', `${otherBox.y1}..${otherBox.y2}`);
+    boxed.emit('destroy');
+
     for (const reply of ['silent', 'error']) {
         displayConfig.reply = reply;
         setScreen(PowerSave.OFF);
