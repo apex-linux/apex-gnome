@@ -259,12 +259,13 @@ no_disposed_at_shutdown() {
     fi
 }
 
-# The probe empties the tray, and waits out the calendar server and the app list, before the shell exits:
-# no case but shutdown-banner meets those races.
-quiet_exit() {
+# The probe empties the tray, and blocks the date menu's signal paths, before the shell exits: no case but
+# shutdown-banner meets those races, and a path that blocks no handler (a rename upstream) fails here.
+readonly DATE_MENU_CUT='(.cut | keys) == ["changed", "installed-changed", "notify::has-calendars"] and all(.cut[]; . > 0)'
+exit_cut() {
     local label=$1 log=$2
-    expect "$label" "$(report_of "$log" APEXG2-EXIT)" '.tray == true and .quiet == true' \
-        "the probe leaves no banner up, and the calendar server and the app list quiet, for the shell's shutdown"
+    expect "$label" "$(report_of "$log" APEXG2-EXIT)" ".tray == true and $DATE_MENU_CUT" \
+        "the probe leaves no banner up, and blocks the date menu's event-source and app-list handlers, for the shell's shutdown"
 }
 
 # G2's fixture apps (direct.sh's STUB_APPS) have no icon of their own: GNOME draws its generic one.
@@ -2101,7 +2102,7 @@ direct_cases() {
         # fault-abort may abort before its report; its exit status says the shell ran.
         [[ $c == fault-abort ]] && continue
         action_modes "$c" "$f"
-        [[ $c == shutdown-banner ]] || quiet_exit "$c" "$f"
+        [[ $c == shutdown-banner ]] || exit_cut "$c" "$f"
         expect_report "$c" "$f" '.mode == "user"' "the probe ran: the static import graph loaded"
         fixed_clock "$c" "$f"
         backdrop_painted "$c" "$f"
@@ -2512,8 +2513,8 @@ shutdown_banner_case() {
     local run=$1 f=$1/shutdown-banner.log
     exits "$run" shutdown-banner 0
     no_apex_failure shutdown-banner "$f"
-    expect shutdown-banner "$(report_of "$f" APEXG2-SHUTDOWN-BANNER)" '.pending and .armed and .quiet' \
-        "as the shell exits, a notification is up or queued and the tray's banner timeout armed, with nothing else due"
+    expect shutdown-banner "$(report_of "$f" APEXG2-SHUTDOWN-BANNER)" ".pending and .armed and $DATE_MENU_CUT" \
+        "as the shell exits, a notification is up or queued, the tray's banner timeout armed, and the date menu's handlers blocked"
     logs shutdown-banner "$f" 'Shutting down GNOME Shell' "the shell went through its shutdown"
 }
 
@@ -2531,7 +2532,7 @@ patched_assertions() {
         asserted "$c" || continue
         [[ $c == kernel-safe || $c == fault-abort ]] || backdrop_painted "$c" "$run/$c.log"
         [[ $c == kernel-safe || $c == fault-abort ]] || action_modes "$c" "$run/$c.log"
-        [[ $c == kernel-safe || $c == fault-abort || $c == shutdown-banner ]] || quiet_exit "$c" "$run/$c.log"
+        [[ $c == kernel-safe || $c == fault-abort || $c == shutdown-banner ]] || exit_cut "$c" "$run/$c.log"
         [[ $c == kernel-safe ]] || startup_handler_ran "$c" "$run/$c.log"
         [[ -e $run/$c.log ]] && no_nan_allocation "$c" "$run/$c.log"
         [[ -e $run/$c.log ]] && no_st_css_warning "$c" "$run/$c.log"
