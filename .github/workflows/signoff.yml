@@ -60,7 +60,7 @@ jobs:
         run: git diff --name-only "$BASE...$HEAD" | .github/scripts/signoff-paths.sh >>"$GITHUB_OUTPUT"
 
   signoff:
-    name: tests/shots/signoff.sh (Fedora 45, every shell board, light and dark)
+    name: tests/shots/signoff.sh (Fedora 45, every shell board and board 31, light and dark)
     needs: rendered
     # Another label on a pull request neither starts a run nor, through the job's group, cancels one.
     if: >-
@@ -115,6 +115,7 @@ jobs:
           name: signoff-shell-${{ github.sha }}
           path: |
             _build/signoff-work/g2/run/
+            _build/signoff-work/symbolic/
             _build/gnome-shell/shots/
           if-no-files-found: error
           retention-days: 3
@@ -285,7 +286,7 @@ jobs:
           tests/shots/signoff.sh --collect "$SOURCES/signoff-shell-$SHA/signoff-work/g2/run"
           "$SOURCES/signoff-shell-$SHA/gnome-shell/shots" _build/signoff
           "control-center=$SOURCES/signoff-control-center-$SHA" "nautilus=$SOURCES/signoff-nautilus-$SHA"
-          "ptyxis=$SOURCES/signoff-ptyxis-$SHA"
+          "ptyxis=$SOURCES/signoff-ptyxis-$SHA" "symbolic=$SOURCES/signoff-shell-$SHA/signoff-work/symbolic"
 
       - name: tests/shots/goldens.sh check
         run: tests/shots/goldens.sh check _build/signoff
