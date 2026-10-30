@@ -7,7 +7,6 @@ set -euo pipefail
 # shellcheck source=SCRIPTDIR/../../tests/lib/pins.sh
 . "$APEX_ROOT/tests/lib/pins.sh"
 
-readonly ADMIT_ALL='*'
 readonly SHIM=${NEXT_POINT_SHIM:-/usr/local/bin/dnf5}
 readonly REAL_DNF5=${NEXT_POINT_DNF5:-/usr/bin/dnf5}
 readonly WATCHED=(gnome-shell mutter gdm gjs glib2 gnome-session gsettings-desktop-schemas gtk4 libadwaita)
@@ -16,9 +15,10 @@ usage() {
     cat <<EOF
 usage: .github/scripts/next-point.sh COMMAND
 
-  image DIR   apex-image $APEX_IMAGE_REV in DIR, its updates-testing allowlist admitting
-              every build ($ADMIT_ALL), for lane.sh's APEX_IMAGE_SRC. apex-lane then builds from
-              updates-testing's SRPM on a buildroot that has it.
+  image DIR   apex-image $APEX_IMAGE_REV in DIR, its updates-testing allowlist admitting the
+              builds of ${WATCHED[*]} that updates-testing moves, for
+              lane.sh's APEX_IMAGE_SRC: apex-lane then builds from updates-testing's SRPM on a
+              buildroot that has them. Every build would overflow apex-lane's dnf5 arguments.
   shim        installs $SHIM, which runs 'next-point.sh dnf5' ahead of $REAL_DNF5 on PATH
   dnf5 ARG... $REAL_DNF5 with updates-testing beside each --repo=updates and
               updates-testing-source beside each --repo=updates-source; with no --repo at all,
@@ -44,15 +44,17 @@ dnf5_() {
 }
 
 image() {
-    local dir=$1
+    local dir=$1 moved
     git_() { git -c safe.directory='*' "$@"; }
     [[ -d $dir/.git ]] || git_ init -q "$dir"
     git_ -C "$dir" fetch -q --depth 1 "$APEX_IMAGE_URL" "$APEX_IMAGE_REV" || die "cannot fetch apex-image $APEX_IMAGE_REV"
     git_ -C "$dir" checkout -q --detach -f "$APEX_IMAGE_REV"
     grep -Eq '^ARG GA_REACHED=0$' "$dir/image/Containerfile" ||
         die "apex-image $APEX_IMAGE_REV has passed its admission cut: updates-testing is no longer what GA brings"
-    printf '%s\n' "$ADMIT_ALL" >"$dir/image/packages/updates-testing-allowlist.txt"
-    log "next-point: apex-image $APEX_IMAGE_REV in $dir admits every updates-testing build"
+    moved=$(moved)
+    [[ -n $moved ]] || die "updates-testing moves none of ${WATCHED[*]}"
+    printf '%s\n' "$moved" >"$dir/image/packages/updates-testing-allowlist.txt"
+    log "next-point: apex-image $APEX_IMAGE_REV in $dir admits $(paste -sd ' ' <<<"$moved")"
 }
 
 shim() {
@@ -63,6 +65,15 @@ shim() {
 
 newest() {
     "$REAL_DNF5" -q repoquery "${@:2}" --latest-limit=1 --arch=x86_64,noarch --qf '%{name}-%{version}-%{release}\n' "$1" 2>/dev/null | tail -n 1
+}
+
+moved() {
+    local p stable testing
+    for p in "${WATCHED[@]}"; do
+        stable=$(newest "$p" --repo=fedora --repo=updates)
+        testing=$(newest "$p" --repo=fedora --repo=updates --repo=updates-testing)
+        [[ -z $testing || $testing == "$stable" ]] || printf '%s\n' "$testing"
+    done
 }
 
 versions() {
