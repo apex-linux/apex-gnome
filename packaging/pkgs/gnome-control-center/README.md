@@ -262,6 +262,26 @@ switch or toggle the row offers writes its key (and the second key of the two-ke
 A third run without the schema checks the explanation. CI runs it after the lane and
 keeps the captures as the `control-center-shots` artifact.
 
+Every capture but two comes out byte for byte the same from run to run, and each wait
+below fails its case when it gives up:
+
+- `probe.js` sends the window size until the frame has it, up to 10 times: a resize can
+  land before the window maps, or not stick while Settings is busy.
+- `probe.js` captures again every 250 ms, for up to 90 s, until the capture has not
+  changed for 5 s. Scrolled to the end, a page's bottom edge still fades for a moment,
+  which left a 2 to 4 px strip different from run to run.
+- The Appearance cases also set `APEX_READY=thumbnails.py`, which must pass on that still
+  capture: every wallpaper thumbnail on screen painted. The chooser decodes
+  gnome-backgrounds' JXL files one by one, which takes 30 to 60 s headless, and paints a
+  light/dark pair's dark half after its light one. `thumbnails.py` finds the thumbnails
+  through AT-SPI and calls one blank only while it matches the card colour in the gap
+  beside it, so a one-colour wallpaper such as VNC counts once painted.
+
+Open item: `appearance-light-scrolled` and `appearance-dark-scrolled` vary by 1 in a
+channel value from one Settings process to the next, in the Appearance note's line only
+("… has a light and a dark version and follows the style.") and still within a run. The
+cause is under investigation, so those two are not for approval until it is closed.
+
 For one case the run also installs apex-desktop's `desktop/keybindings/60-apex.xml` in
 `/usr/share/gnome-control-center/keybindings/` and its `90_apex.gschema.override`, from
 the commit `tests/lib/pins.sh` pins (or `APEX_DESKTOP_SRC`, a checkout), and removes them
