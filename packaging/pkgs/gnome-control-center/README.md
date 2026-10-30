@@ -20,6 +20,9 @@ puts it in the lane; ROADMAP track C, S2c and S2d define its series. The lane,
 
 - Fedora 45 ships gnome-control-center 51.0 (`gnome-control-center-51.0-2.fc45`, in
   `fedora`), on GTK 4.24 and libadwaita 1.10.
+- Absorbed 2026-10-30: GNOME 51.1 (FEDORA-2026-2812a1754d). The five patches apply at
+  fuzz 0 to gnome-control-center-51.1-1.fc45 as well as 51.0-2.fc45, and the lane builds
+  it with the whole update in the buildroot. No patch changed.
 - `Release: %{autorelease}.apexN` gives `51.0-2.fc45.apexN`, above Fedora's build and
   below its next one.
 - `install=` takes `gnome-control-center` and `gnome-control-center-filesystem`, ADR
