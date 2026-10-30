@@ -4,6 +4,7 @@ import Atk from 'gi://Atk';
 import Clutter from 'gi://Clutter';
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
+import GObject from 'gi://GObject';
 import Graphene from 'gi://Graphene';
 import Meta from 'gi://Meta';
 import Mtk from 'gi://Mtk';
@@ -78,8 +79,6 @@ const SIGNOFF_QUIET_MS = 1500;
 const SIGNOFF_FOCUS_ATTEMPTS = 3;
 const WIFI_SCAN_MS = 5000;
 const TRAY_DRAIN_MS = 3000;
-const SHUTDOWN_QUIET_MS = 2000;
-const SHUTDOWN_QUIET_WAIT_MS = 20000;
 const SHUTDOWN_HISTORY_DELAY_MS = 300;
 const SHUTDOWN_BANNER_TIMEOUT_MS = 100;
 const AVATAR_SIZE = 32;
@@ -3184,47 +3183,49 @@ async function drainMessageTray() {
     return idle;
 }
 
-// That loop also delivers the calendar server's late HasCalendars and the app list's late changes to
-// the date menu's destroyed events section (dateMenu.js:326): the shell exits once both are quiet.
-function watchShutdownSignals() {
-    const source = Main.panel.statusArea.dateMenu._eventSource;
-    const appSystem = Shell.AppSystem.get_default();
-    const now = () => GLib.get_monotonic_time() / 1000;
-    const watch = {last: now()};
-    const seen = () => (watch.last = now());
-    const ids = [[source, source.connect('notify::has-calendars', seen)],
-        [appSystem, appSystem.connect('installed-changed', seen)]];
-    watch.quiet = async () => {
-        const quiet = await until(() => source._initialized && now() - watch.last >= SHUTDOWN_QUIET_MS,
-            SHUTDOWN_QUIET_WAIT_MS);
-        ids.forEach(([object, id]) => object.disconnect(id));
-        return quiet;
-    };
-    return watch;
+// That loop also reaches the date menu's destroyed events section whenever the calendar server or the app
+// list signals in it: the event source's changes (dateMenu.js:297), its HasCalendars (:326), the apps (:322).
+const DATE_MENU_SIGNALS = [['source', 'changed'], ['source', 'notify', 'has-calendars'], ['apps', 'installed-changed']];
+
+function dateMenuSources() {
+    return {source: Main.panel.statusArea.dateMenu._eventSource, apps: Shell.AppSystem.get_default()};
 }
 
-// The race made certain: a notification for the tray to show, and its timeout due inside a slowed
-// shutdown loop. The shell exits here, not after scripting.js's helper round trip, which could outlast it.
-async function shutdownWithBanner(watch) {
-    const quiet = await watch.quiet();
+// Every case blocks each handler on those paths before the shell exits, so none can run in that loop.
+function cutDateMenu() {
+    const objects = dateMenuSources();
+    return Object.fromEntries(DATE_MENU_SIGNALS.map(([object, signalId, detail]) => [
+        detail ? `${signalId}::${detail}` : signalId,
+        GObject.signal_handlers_block_matched(objects[object], detail ? {signalId, detail} : {signalId}),
+    ]));
+}
+
+// The races made certain: a notification for the tray to show, its timeout due inside a slowed shutdown
+// loop, and each date-menu signal sent in that loop. The shell exits here, not after scripting.js's helper
+// round trip, which could outlast the timeout.
+async function shutdownWithBanner() {
+    const cut = cutDateMenu();
     Main.notify('G2 banner', 'shown as the shell exits');
     await settle();
+    const {source, apps} = dateMenuSources();
     const writeHistory = Main.timeLimitsManager.shutdown.bind(Main.timeLimitsManager);
     Main.timeLimitsManager.shutdown = async () => {
         await Scripting.sleep(SHUTDOWN_HISTORY_DELAY_MS);
+        source.emit('changed');
+        source.notify('has-calendars');
+        apps.emit('installed-changed');
         await writeHistory();
     };
     Main.messageTray._updateNotificationTimeout(SHUTDOWN_BANNER_TIMEOUT_MS);
     const tray = Main.messageTray;
     console.log(`APEXG2-SHUTDOWN-BANNER ${JSON.stringify({
-        pending: tray._banner !== null || tray._notificationQueue.length > 0, armed: tray._notificationTimeoutId !== 0, quiet,
+        pending: tray._banner !== null || tray._notificationQueue.length > 0, armed: tray._notificationTimeoutId !== 0, cut,
     })}`);
     global.context.terminate();
 }
 
 export async function run() {
     actionModeAtRun = actionModeName();
-    const watch = watchShutdownSignals();
     const pingId = keepPerfHelperAwake();
     try {
         await runProbe();
@@ -3232,9 +3233,9 @@ export async function run() {
         GLib.source_remove(pingId);
     }
     if (GLib.getenv('G2_SHUTDOWN_BANNER') === '1')
-        await shutdownWithBanner(watch);
+        await shutdownWithBanner();
     else
-        console.log(`APEXG2-EXIT ${JSON.stringify({tray: await drainMessageTray(), quiet: await watch.quiet()})}`);
+        console.log(`APEXG2-EXIT ${JSON.stringify({tray: await drainMessageTray(), cut: cutDateMenu()})}`);
 }
 
 async function runProbe() {

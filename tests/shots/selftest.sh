@@ -3050,36 +3050,39 @@ test_no_disposed_at_shutdown() {
     rm "$run/default.late.log"
 }
 
-test_quiet_exit() {
+readonly EXIT_CUT='{"changed":2,"notify::has-calendars":1,"installed-changed":4}'
+
+test_exit_cut() {
     local want_pass what report passes failures
     while IFS='|' read -r want_pass what report; do
         if [[ -n $report ]]; then printf 'APEXG2-EXIT %s\n' "$report" >"$T/exit.log"; else : >"$T/exit.log"; fi
-        read -r passes failures <<<"$(assertion_counts quiet_exit default "$T/exit.log")"
+        read -r passes failures <<<"$(assertion_counts exit_cut default "$T/exit.log")"
         expect_eq "exit: $what" "$want_pass/$((1 - want_pass))" "$passes/$failures"
-    done <<'CASES'
-1|an idle tray and a quiet calendar server and app list pass|{"tray":true,"quiet":true}
-0|a banner still up fails|{"tray":false,"quiet":true}
-0|a calendar server or app list still changing fails|{"tray":true,"quiet":false}
+    done <<CASES
+1|an idle tray and every date-menu path blocked pass|{"tray":true,"cut":$EXIT_CUT}
+0|a banner still up fails|{"tray":false,"cut":$EXIT_CUT}
+0|a path that blocked no handler fails|{"tray":true,"cut":{"changed":2,"notify::has-calendars":0,"installed-changed":4}}
+0|a path missing from the cut fails|{"tray":true,"cut":{"changed":2,"installed-changed":4}}
 0|no report fails|
 CASES
 }
 
 test_shutdown_banner_case() {
-    local run=$T/shutdown-banner passes failures status pending armed quiet shutdown what
+    local run=$T/shutdown-banner passes failures status pending armed cut shutdown what
     mkdir -p "$run"
-    while IFS='|' read -r failures status pending armed quiet shutdown what; do
+    while IFS='|' read -r failures status pending armed cut shutdown what; do
         echo "shutdown-banner exit=$status secs=5 marker-after-exit=no" >"$run/results-main.txt"
-        echo "APEXG2-SHUTDOWN-BANNER {\"pending\":$pending,\"armed\":$armed,\"quiet\":$quiet}" >"$run/shutdown-banner.log"
+        echo "APEXG2-SHUTDOWN-BANNER {\"pending\":$pending,\"armed\":$armed,\"cut\":${cut:-$EXIT_CUT}}" >"$run/shutdown-banner.log"
         echo "$shutdown" >>"$run/shutdown-banner.log"
         read -r passes _ <<<"$(assertion_counts shutdown_banner_case "$run")"
         expect_eq "shutdown-banner: $what fails $failures of 4" "$failures" $((4 - passes))
     done <<'CHANGES'
-0|0|true|true|true|** Message: 09:41:00.000: Shutting down GNOME Shell|a notification pending and the timeout armed as the shell exits
-1|134|true|true|true|** Message: 09:41:00.000: Shutting down GNOME Shell|the shell aborting in the shutdown loop
-1|0|false|true|true|** Message: 09:41:00.000: Shutting down GNOME Shell|no notification pending
-1|0|true|false|true|** Message: 09:41:00.000: Shutting down GNOME Shell|no timeout armed
-1|0|true|true|false|** Message: 09:41:00.000: Shutting down GNOME Shell|a calendar server or app list still changing
-1|0|true|true|true||a log without the shutdown
+0|0|true|true||** Message: 09:41:00.000: Shutting down GNOME Shell|a notification pending, the timeout armed and the date menu cut as the shell exits
+1|134|true|true||** Message: 09:41:00.000: Shutting down GNOME Shell|the shell aborting in the shutdown loop
+1|0|false|true||** Message: 09:41:00.000: Shutting down GNOME Shell|no notification pending
+1|0|true|false||** Message: 09:41:00.000: Shutting down GNOME Shell|no timeout armed
+1|0|true|true|{"changed":0,"notify::has-calendars":1,"installed-changed":4}|** Message: 09:41:00.000: Shutting down GNOME Shell|a date-menu path with no handler blocked
+1|0|true|true|||a log without the shutdown
 CHANGES
 }
 
@@ -3764,7 +3767,7 @@ test_no_binding_overwritten
 test_no_spurious_allocation
 test_clean_shutdown
 test_no_disposed_at_shutdown
-test_quiet_exit
+test_exit_cut
 test_keys_case
 test_shutdown_banner_case
 test_startup_handler_ran
