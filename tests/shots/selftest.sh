@@ -971,6 +971,87 @@ test_goldens() {
     fi
 }
 
+rows_goldens() {
+    GOLDENS_LOCK=$T/rows.lock GOLDENS_WORK=$T/rows-work GOLDENS_URL=$T/no-remote GOLDENS_MASKS=$T/no-masks.json \
+        GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t "$HERE/goldens.sh" "$@" >"$T/goldens.out" 2>&1
+}
+
+# The app boards' rows: a board of two rows, a light-only row and a shell board of one, keyed NN-SLUG.
+test_goldens_rows() {
+    local dir=$T/rows-signoff top fallback rc
+    mkdir -p "$dir"
+    cat >"$T/rows-make.js" <<EOF
+import GLib from 'gi://GLib';
+import * as Png from 'file://$HERE/png.js';
+
+const image = shade => ({width: 40, height: 30, rgba: new Uint8Array(40 * 30 * 4).fill(shade)});
+for (const [name, shade] of [['11-settings-apex-top-light', 210], ['11-settings-apex-top-dark', 50], ['11-settings-apex-scrolled-light', 200],
+    ['11-settings-apex-scrolled-dark', 60], ['26-update-health-fallback-light', 190], ['14-end-session-light', 230], ['14-end-session-dark', 30]])
+    GLib.file_set_contents('$dir/board-' + name + '.png', Png.encode(image(shade)));
+EOF
+    gjs -m "$T/rows-make.js"
+    jq -n --arg cc tests/control-center/run.sh '
+        def row($n; $slug; $title; $source; $dark): {board: $n, key: "\($n)-\($slug)", title: $title, slug: $slug, source: $source, fixture: "f",
+            scene: {light: "l", dark: (if $dark then "d" else null end)},
+            files: {light: "board-\($n)-\($slug)-light.png", dark: (if $dark then "board-\($n)-\($slug)-dark.png" else null end)}};
+        {commit: "c0ffee", pins: {apexGnome: "c0ffee", apexDesktop: "acde"}, scale: 2, monitor: "2880x1800", sources: [$cc, "s"],
+         boards: [row(14; "end-session"; "End session"; "s"; true), row(11; "settings-apex-top"; "Settings: Apex Desktop"; $cc; true),
+                  row(11; "settings-apex-scrolled"; "Settings: Apex Desktop, scrolled"; $cc; true), row(26; "update-health-fallback"; "Update health failure"; $cc; false)]}' \
+        >"$dir/signoff.json"
+    printf '# test\nGOLDENS_REV=\n' >"$T/rows.lock"
+    echo '{"boards": {}}' >"$T/no-masks.json"
+    top=$(cat "$dir/board-11-settings-apex-top-light.png" "$dir/board-11-settings-apex-top-dark.png" | sha256sum | cut -c 1-12)
+    fallback=$(sha256sum <"$dir/board-26-update-health-fallback-light.png" | cut -c 1-12)
+
+    jq -n --arg h "$top" '{boards: {"11": {status: "approved", shots: $h, approvedAt: "2026-10-30T09:41:00Z"}}}' >"$T/rows-legacy.json"
+    if ! rows_goldens import "$dir" "$T/rows-legacy.json" &&
+        grep -q 'board 11: a number alone keys a board of one row; its rows are 11-settings-apex-top, 11-settings-apex-scrolled' "$T/goldens.out" &&
+        grep -qx 'GOLDENS_REV=' "$T/rows.lock"; then
+        ok "goldens import: a legacy number for a board of two rows is refused, naming its rows"
+    else
+        not_ok "goldens import: a legacy number for a board of two rows is refused, naming its rows: $(tail -n 3 "$T/goldens.out")"
+    fi
+    jq -n --arg t "$top" --arg f "$fallback" '{boards: {"11-settings-apex-top": {status: "approved", shots: $t, approvedAt: "2026-10-30T09:41:00Z"},
+        "26-update-health-fallback": {status: "approved", shots: $f, approvedAt: "2026-10-30T09:42:00Z"},
+        "11-settings-apex-scrolled": {status: "changes-requested", shots: "0123456789ab"}}}' >"$T/rows-decisions.json"
+    if rows_goldens import "$dir" "$T/rows-decisions.json" &&
+        [[ $(git -C "$T/rows-work" ls-files | paste -sd' ') == 'boards/board-11-settings-apex-top-dark.png boards/board-11-settings-apex-top-light.png boards/board-26-update-health-fallback-light.png manifest.json' ]] &&
+        jq -e --arg t "$top" --arg f "$fallback" '.boards | keys == ["11-settings-apex-top", "26-update-health-fallback"]
+            and .["11-settings-apex-top"].board == 11 and .["11-settings-apex-top"].shots == $t
+            and (.["26-update-health-fallback"] | .shots == $f and .files == {light: "boards/board-26-update-health-fallback-light.png", dark: null})' \
+            "$T/rows-work/manifest.json" >/dev/null; then
+        ok "goldens import: each approved row by its key, a light-only row hashed on its light capture alone"
+    else
+        not_ok "goldens import: each approved row by its key, a light-only row hashed on its light capture alone: $(tail -n 3 "$T/goldens.out")"
+    fi
+    if rows_goldens check "$dir" "$T/rows-work" &&
+        grep -q '^PASS captures board 11-settings-apex-top (Settings: Apex Desktop), dark: equal' "$T/goldens.out" &&
+        grep -q '^PASS captures board 26 (Update health failure), light: equal' "$T/goldens.out" &&
+        ! grep -q 'board 26 (Update health failure), dark' "$T/goldens.out" &&
+        grep -q '^AWAIT board 11-settings-apex-scrolled (Settings: Apex Desktop, scrolled): no approved golden' "$T/goldens.out" &&
+        grep -q '^AWAIT board 14 (End session): no approved golden' "$T/goldens.out" &&
+        grep -q '^# 2 row(s) awaiting sign-off: 11-settings-apex-scrolled 14-end-session' "$T/goldens.out"; then
+        ok "goldens check: the approved rows pass, a light-only one on light alone; the other rows await sign-off"
+    else
+        not_ok "goldens check: the approved rows pass, a light-only one on light alone; the other rows await sign-off: $(tail -n 4 "$T/goldens.out")"
+    fi
+    jq '.sources = ["s"] | .boards |= map(select(.source == "s"))' "$dir/signoff.json" >"$T/rows-shell.json"
+    cp "$dir/signoff.json" "$T/rows-all.json" && cp "$T/rows-shell.json" "$dir/signoff.json"
+    if rows_goldens check "$dir" "$T/rows-work" && ! grep -q 'no such board' "$T/goldens.out"; then
+        ok "goldens check: an app's goldens are out of scope when the sign-off did not collect that app"
+    else
+        not_ok "goldens check: an app's goldens are out of scope when the sign-off did not collect that app: $(tail -n 3 "$T/goldens.out")"
+    fi
+    jq '.boards |= map(select(.board != 26))' "$T/rows-all.json" >"$dir/signoff.json"
+    rc=0
+    rows_goldens check "$dir" "$T/rows-work" || rc=$?
+    if ((rc == 1)) && grep -q 'board 26-update-health-fallback (Update health failure): a golden, but no such board' "$T/goldens.out"; then
+        ok "goldens check: a golden of a collected app with no row fails"
+    else
+        not_ok "goldens check: a golden of a collected app with no row fails (exit $rc): $(tail -n 3 "$T/goldens.out")"
+    fi
+}
+
 test_signoff_banners() {
     local dir=$T/signoff-banners
     rm -rf "$dir" && cp -r "$1" "$dir"
@@ -1084,6 +1165,7 @@ test_signoff() {
         not_ok "signoff: fifteen boards, light and dark, and signoff.json from their captures: $(tail -n 3 "$T/signoff.out")"
     fi
     test_signoff_banners "$dir"
+    test_signoff_apps "$dir"
     rm "$dir/g2/captures/dark-style-tile-preview.png"
     if ! "$HERE/signoff.sh" --collect "$dir/g2" "$dir/shots" "$dir/out2" >"$T/signoff.out" 2>&1 &&
         grep -q 'board 22 (Edge tiling), dark: no capture of dark-style-tile-preview' "$T/signoff.out"; then
@@ -1097,6 +1179,50 @@ test_signoff() {
         ok "signoff: sign-off windows missing from the overview fail the run"
     else
         not_ok "signoff: sign-off windows missing from the overview fail the run: $(tail -n 3 "$T/signoff.out")"
+    fi
+}
+
+# The app boards' rows from their shooters' captures, collected with the shell's.
+test_signoff_apps() {
+    local dir=$1 app scene
+    declare -A scenes=([cc]='light dark light-scrolled dark-scrolled updates-light updates-dark appearance-light appearance-dark
+        power-light power-dark updates-health-failure updates-fallback'
+        [files]='home-light home-dark documents-light documents-dark search-light search-dark'
+        [terminal]='light dark split-light split-dark')
+    for app in cc files terminal; do
+        mkdir -p "$dir/$app"
+        for scene in ${scenes[$app]}; do
+            printf '\x89PNG\r\n\x1a\n' >"$dir/$app/$scene.png"
+        done
+    done
+    if "$HERE/signoff.sh" --collect "$dir/g2" "$dir/shots" "$dir/apps" control-center="$dir/cc" nautilus="$dir/files" ptyxis="$dir/terminal" \
+        >"$T/signoff.out" 2>&1 &&
+        [[ $(find "$dir/apps" -name 'board-*.png' | wc -l) == 52 && ! -e $dir/apps/board-26-update-health-fallback-dark.png ]] &&
+        jq -e '(.boards | length) == 27 and (.boards | map(.key) | unique | length) == 27
+            and .sources == ["tests/control-center/run.sh", "tests/nautilus/shoot.sh", "tests/ptyxis/shoot.sh", "tests/shell/shoot.sh", "tests/shots/direct.sh signoff"]
+            and ([.boards[] | select(.board == 11) | .key] == ["11-settings-apex-top", "11-settings-apex-scrolled"])
+            and (.boards[] | select(.key == "11-settings-apex-scrolled") | .scene == {light: "light-scrolled", dark: "dark-scrolled"}
+                and .files.dark == "board-11-settings-apex-scrolled-dark.png")
+            and ([.boards[] | select(.board == 26) | .files.dark, .scene.dark] | all(. == null))
+            and (.boards[] | select(.key == "12-greeter") | .files.light == "board-12-greeter-light.png")' \
+            "$dir/apps/signoff.json" >/dev/null; then
+        ok "signoff: the app boards add a row per scene, keyed NN-SLUG, board 26's light only, beside the fifteen shell boards"
+    else
+        not_ok "signoff: the app boards add a row per scene, keyed NN-SLUG, board 26's light only, beside the fifteen shell boards: $(tail -n 3 "$T/signoff.out")"
+    fi
+    rm "$dir/cc/dark-scrolled.png"
+    if ! "$HERE/signoff.sh" --collect "$dir/g2" "$dir/shots" "$dir/apps2" control-center="$dir/cc" >"$T/signoff.out" 2>&1 &&
+        grep -q 'board 11-settings-apex-scrolled (Settings: Apex Desktop, scrolled), dark: no capture of dark-scrolled (tests/control-center/run.sh)' "$T/signoff.out" &&
+        [[ $(grep -c 'no capture' "$T/signoff.out") == 1 ]]; then
+        ok "signoff: an app scene that did not open fails the run with its row's key, and app rows need no banner record"
+    else
+        not_ok "signoff: an app scene that did not open fails the run with its row's key, and app rows need no banner record: $(tail -n 3 "$T/signoff.out")"
+    fi
+    if ! "$HERE/signoff.sh" --collect "$dir/g2" "$dir/shots" "$dir/apps3" files="$dir/files" >"$T/signoff.out" 2>&1 &&
+        grep -q 'no app source files: one of' "$T/signoff.out"; then
+        ok "signoff: an unknown app source is refused"
+    else
+        not_ok "signoff: an unknown app source is refused: $(tail -n 3 "$T/signoff.out")"
     fi
 }
 
@@ -3492,6 +3618,7 @@ test_a11y
 test_inactive_dot_gap
 test_signoff
 test_goldens
+test_goldens_rows
 test_date_menu
 test_overview_style
 test_app_grid

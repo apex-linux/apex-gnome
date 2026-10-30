@@ -11,15 +11,15 @@ The owner's approved sign-off boards, kept as goldens on the orphan branch golde
 commit tests/shots/goldens.lock pins (README, "Approved goldens").
 
 import writes a goldens commit from signoff.sh's OUT and the sign-off page's decisions,
-{"boards": {"NN": {"status", "shots", "approvedAt", "note"}}}. It takes each board whose
-status is "approved" and whose shots hash (sha256 of the light PNG's bytes, then the dark
-PNG's, first 12 hex) is its capture's, on top of the pinned commit (or as the branch's first
-commit), and points goldens.lock at the new commit. A decision for another capture, or of
-another shape, refuses the whole import. It never pushes: the commit is in GOLDENS_WORK
-(default _build/goldens).
+{"boards": {"NN-SLUG": {"status", "shots", "approvedAt", "note"}}}, keyed by row (a legacy NN
+only for a board of one row). It takes each row whose status is "approved" and whose shots
+hash (sha256 of the light PNG's bytes, then the dark PNG's if the row has one, first 12 hex)
+is its capture's, on top of the pinned commit (or as the branch's first commit), and points
+goldens.lock at the new commit. A decision for another capture, or of another shape, refuses
+the whole import. It never pushes: the commit is in GOLDENS_WORK (default _build/goldens).
 
-check compares each board of SIGNOFF_DIR that has a golden with it, pixel for pixel outside
-golden-masks.json's masks, through compare.js; a board without one is awaiting sign-off.
+check compares each row of SIGNOFF_DIR that has a golden with it, pixel for pixel outside
+golden-masks.json's masks, through compare.js; a row without one is awaiting sign-off.
 GOLDENS_DIR is a goldens checkout; without it, the pinned commit is fetched. Exit 1 when a
 board differs from its golden, 2 when the goldens cannot be read.
 
@@ -41,9 +41,17 @@ locked_rev() {
     sed -n 's/^GOLDENS_REV=\([0-9a-f]*\)$/\1/p' "$GOLDENS_LOCK" | head -n 1
 }
 
+# A row's light PNG, then its dark one if it has one.
 shots_hash() {
-    cat "$1" "$2" | sha256sum | cut -c 1-12
+    cat "$@" | sha256sum | cut -c 1-12
 }
+
+# signoff.json's rows with their keys and how many rows their board has; an older signoff.json has no keys.
+# shellcheck disable=SC2016 # a jq program
+readonly ROWS='.boards | map(. + {key: (.key // "\(.board)-\(.slug)")}) | group_by(.board) | map(length as $n | map(. + {rows: $n})) | add // []'
+# The row a decision key names: NN-SLUG, or a legacy NN for a board of one row.
+# shellcheck disable=SC2016 # a jq program
+readonly ROW_OF='def row_of($k): map(select(.key == $k or (.rows == 1 and (.board | tostring) == $k)))[0];'
 
 fetch_goldens() {
     local dir=$1 rev=$2
@@ -61,12 +69,14 @@ signoff_json() {
 
 # Every key and value is checked, so a page export of another shape never half-imports.
 decision_errors() {
-    jq -r --slurpfile signoff "$1/signoff.json" '
-        ($signoff[0].boards | map(.board | tostring)) as $boards
+    jq -r --slurpfile signoff "$1/signoff.json" "$ROW_OF"'
+        ($signoff[0] | '"$ROWS"') as $rows
         | if type != "object" or (keys != ["boards"]) or (.boards | type) != "object" then
               "DECISIONS.json is not {\"boards\": {...}}"
           else .boards | to_entries[] | .key as $n | .value
-              | if ($boards | index($n)) == null then "board \($n): not in signoff.json"
+              | if ($n | test("^[0-9]+$")) and ($rows | map(select((.board | tostring) == $n)) | length) > 1 then
+                    "board \($n): a number alone keys a board of one row; its rows are \($rows | map(select((.board | tostring) == $n) | .key) | join(", "))"
+                elif ($rows | row_of($n)) == null then "board \($n): not in signoff.json"
                 elif type != "object" then "board \($n): the decision is not an object"
                 elif (keys - ["approvedAt", "note", "shots", "status"]) != [] then
                     "board \($n): unknown field(s) \(keys - ["approvedAt", "note", "shots", "status"] | join(", "))"
@@ -82,7 +92,7 @@ decision_errors() {
 }
 
 import() {
-    local signoff=$1 decisions=$2 errors=() approved=() board title light dark hash shots rev commit entries=()
+    local signoff=$1 decisions=$2 errors=() approved=() board row title light dark hash shots rev commit entries=() variant from
     signoff_json "$signoff"
     [[ -s $decisions ]] || die "no decisions in $decisions"
     mapfile -t errors < <(decision_errors "$signoff" "$decisions")
@@ -92,14 +102,16 @@ import() {
     fi
     mapfile -t approved < <(jq -r '.boards // {} | to_entries[] | select(.value.status == "approved") | .key' "$decisions" 2>/dev/null)
     for board in "${approved[@]}"; do
-        title=$(jq -r --argjson n "$board" '.boards[] | select(.board == $n) | .title' "$signoff/signoff.json")
-        light=$signoff/$(jq -r --argjson n "$board" '.boards[] | select(.board == $n) | .files.light' "$signoff/signoff.json")
-        dark=$signoff/$(jq -r --argjson n "$board" '.boards[] | select(.board == $n) | .files.dark' "$signoff/signoff.json")
-        if [[ ! -s $light || ! -s $dark ]]; then
+        row=$(jq -c --arg k "$board" "$ROW_OF ${ROWS} | row_of(\$k)" "$signoff/signoff.json")
+        title=$(jq -r .title <<<"$row")
+        light=$signoff/$(jq -r .files.light <<<"$row")
+        dark=$(jq -r '.files.dark // empty' <<<"$row")
+        if [[ ! -s $light || ( -n $dark && ! -s $signoff/$dark ) ]]; then
             errors+=("board $board ($title): no capture in $signoff")
             continue
         fi
-        hash=$(shots_hash "$light" "$dark")
+        [[ -z $dark ]] || dark=$signoff/$dark
+        hash=$(shots_hash "$light" ${dark:+"$dark"})
         shots=$(jq -r --arg n "$board" '.boards[$n].shots' "$decisions")
         [[ $shots == "$hash" ]] ||
             errors+=("board $board ($title): approved shots $shots, but its captures hash to $hash: a stale approval")
@@ -117,16 +129,18 @@ import() {
     [[ -s $GOLDENS_WORK/manifest.json ]] || echo '{"boards": {}}' >"$GOLDENS_WORK/manifest.json"
     for entry in "${entries[@]}"; do
         IFS='|' read -r board hash light dark <<<"$entry"
-        if ! cp "$light" "$GOLDENS_WORK/boards/board-$board-light.png" || ! cp "$dark" "$GOLDENS_WORK/boards/board-$board-dark.png"; then
-            die "cannot copy board $board's captures"
-        fi
-        jq --argjson n "$board" --arg hash "$hash" --slurpfile signoff "$signoff/signoff.json" --slurpfile d "$decisions" '
-            ($signoff[0] | .boards[] | select(.board == $n)) as $b
-            | .boards[$n | tostring] = {
-                title: $b.title, slug: $b.slug, source: $b.source, fixture: $b.fixture, scene: $b.scene, shots: $hash,
-                files: {light: "boards/board-\($n)-light.png", dark: "boards/board-\($n)-dark.png"},
+        for variant in light dark; do
+            [[ $variant == light ]] && from=$light || from=$dark
+            [[ -n $from ]] || continue
+            cp "$from" "$GOLDENS_WORK/boards/board-$board-$variant.png" || die "cannot copy board $board's captures"
+        done
+        jq --arg k "$board" --arg hash "$hash" --slurpfile signoff "$signoff/signoff.json" --slurpfile d "$decisions" "$ROW_OF"'
+            ($signoff[0] | '"$ROWS"' | row_of($k)) as $b
+            | .boards[$k] = {
+                board: $b.board, title: $b.title, slug: $b.slug, source: $b.source, fixture: $b.fixture, scene: $b.scene, shots: $hash,
+                files: {light: "boards/board-\($k)-light.png", dark: (if $b.files.dark == null then null else "boards/board-\($k)-dark.png" end)},
                 pins: $signoff[0].pins, scale: $signoff[0].scale, monitor: $signoff[0].monitor,
-                approval: ($d[0].boards[$n | tostring] | {status, approvedAt, shots} + (if has("note") then {note} else {} end))}' \
+                approval: ($d[0].boards[$k] | {status, approvedAt, shots} + (if has("note") then {note} else {} end))}' \
             "$GOLDENS_WORK/manifest.json" >"$GOLDENS_WORK/manifest.json.new" || die "cannot write board $board's manifest entry"
         mv "$GOLDENS_WORK/manifest.json.new" "$GOLDENS_WORK/manifest.json" || die "cannot write $GOLDENS_WORK/manifest.json"
     done
@@ -140,7 +154,7 @@ import() {
 }
 
 check() {
-    local signoff=$1 goldens=${2:-} rev board title light dark expected plan results awaiting=()
+    local signoff=$1 goldens=${2:-} rev row key label golden expected plan results matched=() awaiting=() files
     # shellcheck source=tests/shots/lib.sh
     . "$HERE/lib.sh"
     signoff_json "$signoff"
@@ -157,33 +171,49 @@ check() {
     plan=$signoff/goldens-plan.json results=$signoff/goldens-results.json
     rm -rf "$signoff/goldens-diff" && mkdir -p "$signoff/goldens-diff"
     echo '[]' >"$plan"
-    while IFS=$'\t' read -r board title light dark; do
-        expected=$(jq -r --arg n "$board" '.boards[$n].shots // empty' "$goldens/manifest.json")
-        if [[ -z $expected ]]; then
-            awaiting+=("$board")
-            echo "AWAIT board $board ($title): no approved golden, awaiting sign-off"
+    while IFS= read -r row; do
+        key=$(jq -r .key <<<"$row")
+        label=$(jq -r 'if .rows == 1 then "board \(.board) (\(.title))" else "board \(.key) (\(.title))" end' <<<"$row")
+        # A legacy golden keyed NN stands for a board of one row, matched by its recorded slug.
+        golden=$(jq -r --argjson row "$row" '.boards | if has($row.key) then $row.key
+            elif $row.rows == 1 and (.[$row.board | tostring].slug == $row.slug) then $row.board | tostring else empty end' \
+            "$goldens/manifest.json")
+        if [[ -z $golden ]]; then
+            awaiting+=("$key")
+            echo "AWAIT $label: no approved golden, awaiting sign-off"
             continue
         fi
-        if [[ $(shots_hash "$goldens/boards/board-$board-light.png" "$goldens/boards/board-$board-dark.png" 2>/dev/null) != "$expected" ]]; then
-            fail "board $board ($title): the golden's files do not hash to its manifest's shots $expected"
+        matched+=("$golden")
+        expected=$(jq -r --arg g "$golden" '.boards[$g].shots // empty' "$goldens/manifest.json")
+        mapfile -t files < <(jq -r --arg g "$golden" '.boards[$g].files | .light, (.dark // empty)' "$goldens/manifest.json")
+        if [[ $(jq -r --arg g "$golden" '.boards[$g].files.dark == null' "$goldens/manifest.json") != $(jq -r '.files.dark == null' <<<"$row") ]]; then
+            fail "$label: the golden and the capture differ in which variants they have"
             continue
         fi
-        jq --arg n "$board" --arg title "$title" --arg signoff "$signoff" --arg goldens "$goldens" \
-            --arg light "$light" --arg dark "$dark" --slurpfile masks "$GOLDENS_MASKS" '
-            . + [{variant: "light", file: $light}, {variant: "dark", file: $dark}
-                 | {name: "board \($n) (\($title)), \(.variant)", expected: "\($goldens)/boards/board-\($n)-\(.variant).png",
-                    actual: "\($signoff)/\(.file)", diff: "\($signoff)/goldens-diff/board-\($n)-\(.variant).png",
-                    masks: [$masks[0].boards[$n][]? | {name, x, y, width, height}]}]' "$plan" >"$plan.new" || die "cannot plan board $board"
+        if [[ $(cd -- "$goldens" && shots_hash "${files[@]}" 2>/dev/null) != "$expected" ]]; then
+            fail "$label: the golden's files do not hash to its manifest's shots $expected"
+            continue
+        fi
+        jq --argjson row "$row" --arg label "$label" --arg g "$golden" --arg signoff "$signoff" --arg goldens "$goldens" \
+            --slurpfile manifest "$goldens/manifest.json" --slurpfile masks "$GOLDENS_MASKS" '
+            . + [{variant: "light"}, {variant: "dark"} | select($row.files[.variant] != null)
+                 | {name: "\($label), \(.variant)", expected: "\($goldens)/\($manifest[0].boards[$g].files[.variant])",
+                    actual: "\($signoff)/\($row.files[.variant])", diff: "\($signoff)/goldens-diff/board-\($g)-\(.variant).png",
+                    masks: [($masks[0].boards[$row.key] // (if $row.rows == 1 then $masks[0].boards[$row.board | tostring] else null end))[]?
+                            | {name, x, y, width, height}]}]' "$plan" >"$plan.new" || die "cannot plan $label"
         mv "$plan.new" "$plan" || die "cannot write $plan"
-    done < <(jq -r '.boards[] | [.board, .title, .files.light, .files.dark] | @tsv' "$signoff/signoff.json")
-    while IFS= read -r board; do
-        fail "board $board ($(jq -r --arg n "$board" '.boards[$n].title' "$goldens/manifest.json")): a golden, but no such board in $signoff"
-    done < <(jq -r --slurpfile s "$signoff/signoff.json" '.boards | keys[] | select(. as $n | $s[0].boards | map(.board | tostring) | index($n) | not)' \
-        "$goldens/manifest.json")
+    done < <(jq -c "$ROWS | .[]" "$signoff/signoff.json")
+    # A golden of a source this sign-off did not collect is out of its scope, not missing from it.
+    while IFS=$'\t' read -r golden label; do
+        fail "board $golden ($label): a golden, but no such board in $signoff"
+    done < <(jq -r --slurpfile s "$signoff/signoff.json" --args '
+        .boards | to_entries[] | select(.key as $k | $ARGS.positional | index($k) | not)
+        | select($s[0].sources == null or (.value.source as $src | $s[0].sources | index($src)))
+        | [.key, .value.title] | @tsv' "${matched[@]}" <"$goldens/manifest.json")
     if [[ $(jq length "$plan") != 0 ]]; then
         compare_and_expect_equal "$plan" "$results"
     fi
-    echo "# ${#awaiting[@]} board(s) awaiting sign-off${awaiting[*]:+: ${awaiting[*]}}"
+    echo "# ${#awaiting[@]} row(s) awaiting sign-off${awaiting[*]:+: ${awaiting[*]}}"
     summary
 }
 
