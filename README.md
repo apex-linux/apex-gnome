@@ -2,7 +2,8 @@
 
 The patched GNOME of [Apex](https://github.com/apex-linux/apex), a Fedora 45 bootc desktop
 for one laptop, the ASUS Vivobook Pro 14X OLED (M7400QC). Today that is gnome-shell with
-the Apex layer; libadwaita, Settings and Files patch series join it in S2.
+the Apex layer, with libadwaita, Settings (gnome-control-center), Files (nautilus) and
+Ptyxis, each rebuilt in the lane from its recipe in `packaging/pkgs/`.
 
 | Path | What it is |
 |---|---|
