@@ -24,6 +24,8 @@ const KEY_MS = 15;
 const WRONG_ANSWER = 'not-the-password';
 const POWER_SAVE_ON = 0;
 const POWER_SAVE_OFF = 3;
+// gnome-session's PresenceStatus.IDLE.
+const PRESENCE_IDLE = 3;
 
 const POINTER_NUDGE = 4;
 
@@ -174,6 +176,29 @@ async function shootFingerprint(dialog) {
     await setPowerSaveMode(POWER_SAVE_ON);
     await Scripting.sleep(STEP_MS * 2);
     fact('wake', describeLock(dialog));
+    await Scripting.sleep(SETTLE_MS);
+    fact('end', {locked: Main.screenShield.locked});
+}
+
+// apex-image's local-lock-blank-wake: gnome-session goes idle at every real lock, and upstream's
+// ScreenShield answers that by cancelling the dialog; then the screen blanks and wakes, no key.
+async function shootIdleLock() {
+    Gio.bus_own_name_on_connection(Gio.DBus.session, 'org.gnome.SessionManager', Gio.BusNameOwnerFlags.NONE, null, null);
+    Main.screenShield.lock(false);
+    await Scripting.sleep(STEP_MS);
+    const dialog = Main.screenShield._dialog;
+    const describe = () => ({...describeLock(dialog), status: dialog._authPrompt?.verificationStatus ?? null});
+    fact('locked', describe());
+    Gio.DBus.session.emit_signal(null, '/org/gnome/SessionManager/Presence', 'org.gnome.SessionManager.Presence',
+        'StatusChanged', new GLib.Variant('(u)', [PRESENCE_IDLE]));
+    await Scripting.sleep(STEP_MS);
+    fact('idle', describe());
+    await setPowerSaveMode(POWER_SAVE_OFF);
+    await Scripting.sleep(STEP_MS);
+    fact('blank', describe());
+    await setPowerSaveMode(POWER_SAVE_ON);
+    await Scripting.sleep(STEP_MS * 2);
+    fact('woken', describe());
     await Scripting.sleep(SETTLE_MS);
     fact('end', {locked: Main.screenShield.locked});
 }
@@ -666,6 +691,8 @@ export async function run() {
             await shootDateMenu();
         else if (GLib.getenv('APEX_END_SESSION') === '1')
             await shootEndSession();
+        else if (GLib.getenv('APEX_IDLE') === '1')
+            await shootIdleLock();
         else if (GLib.getenv('APEX_WAKE_KEY'))
             await shootWakeKey(GLib.getenv('APEX_WAKE_KEY') === 'locked-blank');
         else

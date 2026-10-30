@@ -6,7 +6,7 @@ Asserts each shoot.sh case from its log's APEXLOCK lines and gdm-mock.py's log: 
 boards 20 and 12 show, that no case unlocks, that a wrong answer leaves the screen
 locked, that a GDM refusing to reauthenticate leaves it locked, that the fingerprint
 conversation stops while the screen is blank, that blanking cancels the conversation and waking starts a new one, that
-the key that wakes the screen never answers a prompt, that
+the key that wakes the screen never answers a prompt, that gnome-session's idle at lock leaves the prompt to blank, that
 stock and safe mode keep upstream's lock, and that the greeter runs no Apex JS and no screencast service; what board 13's
 authentication dialog shows, from a stubbed polkit session that is never answered; and board 34's
 date menu: flat cards headed "app · time" with the app's icon, Clear on the right, Do Not Disturb;
@@ -335,6 +335,30 @@ def check_wake_key(shots, case, torn_down):
               (torn, rebuilt) == (0, 0), f"torn down {torn}, rebuilt {rebuilt}")
 
 
+def check_idle(shots, case):
+    """apex-image's local-lock-blank-wake: gnome-session's IDLE at lock leaves the lock's prompt for blank to tear down."""
+    log = read(shots, f"{case}.log")
+    gdm = read(shots, f"{case}.gdm.log")
+    f = facts(log)
+    steps = ("locked", "idle", "blank", "woken", "end")
+    check(f"{case}: every step is reported", all(s in f for s in steps))
+    if not all(s in f for s in steps):
+        return
+    for step in steps:
+        check(f"{case}: {step}: locked", f[step]["locked"] is True)
+    check(f"{case}: no JS error", "JS ERROR" not in until(log, "end") and "APEXLOCK-ERROR" not in log)
+    check(f"{case}: idle keeps the lock's prompt and its conversation",
+          f["idle"]["prompt"] is not None and f["idle"]["status"] == VERIFYING, json.dumps(f["idle"]))
+    check(f"{case}: idle cancels nothing", not any(line.endswith(": Cancel") for line in between(gdm, "locked", "idle")),
+          json.dumps(between(gdm, "locked", "idle")))
+    check(f"{case}: blank tears the prompt down", f["blank"]["prompt"] is None and
+          log.count("Apex: lock: screen blank, prompt torn down") == 1, json.dumps(f["blank"]["prompt"]))
+    begun = [line for line in between(gdm, "blank", "woken") if re.match(r"channel \d+: BeginVerificationForUser gdm-password", line)]
+    check(f"{case}: the wake rebuilds it, with a conversation and no key", len(begun) == 1 and
+          log.count("Apex: lock: screen on, prompt rebuilt") == 1 and f["woken"]["status"] == VERIFYING and
+          (f["woken"]["prompt"] or {}).get("question") == "Enter Password", json.dumps(begun))
+
+
 def check_greeter(shots, case):
     log = read(shots, f"{case}.log")
     f = facts(log)
@@ -601,6 +625,7 @@ def main():
     check_refused(shots, "lock-refused")
     check_wake_key(shots, "lock-wake-key", torn_down=False)
     check_wake_key(shots, "lock-wake-key-blank", torn_down=True)
+    check_idle(shots, "lock-idle")
     check_fingerprint(shots, "lock-fingerprint")
     for case in GREETER_CASES:
         check_greeter(shots, case)
