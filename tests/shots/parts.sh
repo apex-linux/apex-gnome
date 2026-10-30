@@ -13,3 +13,9 @@ readonly PR_FEDORA_CASES=(fedora-light fedora-dark)
 # apex-desktop's 90_apex override (tests/lib/pins.sh) moves the input source off Spotlight's Super+Space.
 readonly INPUT_SOURCE_KEYS="['<Super><Alt>space', 'XF86Keyboard']"
 readonly INPUT_SOURCE_BACKWARD_KEYS="['<Shift><Super><Alt>space', '<Shift>XF86Keyboard']"
+# Its fonts, hinting and icon theme, as org.gnome.desktop.interface keys in the override's syntax.
+readonly SESSION_FONT_NAME="'Adwaita Sans 10.125'"
+readonly SESSION_DOCUMENT_FONT_NAME="'Adwaita Sans 10.125'"
+readonly SESSION_MONOSPACE_FONT_NAME="'JetBrains Mono 9.75'"
+readonly SESSION_FONT_HINTING="'none'"
+readonly SESSION_ICON_THEME="'Apex'"

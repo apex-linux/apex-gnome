@@ -134,7 +134,7 @@ banners_of() {
 
 collect() {
     local g2=$1 shots=$2 out=$3 number slug title source light dark fixture variant scene from missing=() boards=()
-    local commit features dock banners banner live app label
+    local commit features dock banners banner live app label defaults wrong
     local -A dirs=([$G2]=$g2/captures [$SHOOT]=$shots)
     shift 3
     for app in "$@"; do
@@ -187,10 +187,19 @@ collect() {
         scene=$(sed -n 's/.*APEXG2-SIGNOFF //p' "$g2/$variant.log" 2>/dev/null | jq -r '.error // empty' 2>/dev/null | head -n 1)
         [[ -z $scene ]] || missing+=("boards 15 and 35, $variant: $scene")
     done
+    # S1b's session defaults on the same shells, a check of its own beside the boards: G2's session_defaults.
+    defaults=$(for variant in default dark-style; do
+        # shellcheck disable=SC2016 # expanded by the inner bash
+        bash -c '. "$1/assert.sh"; session_defaults "$2" "$3"' _ "$HERE" "$variant" "$g2/$variant.log"
+    done)
+    wrong=$(sed -n 's/^FAIL //p' <<<"$defaults")
+    echo "signoff.sh: session defaults: $(grep -c '^PASS' <<<"$defaults") passed, $(grep -c '^FAIL' <<<"$defaults") failed"
+    [[ -z $wrong ]] || printf 'signoff.sh: session defaults: %s\n' "$wrong" >&2
     if ((${#missing[@]})); then
         printf 'signoff.sh: %s\n' "${missing[@]}" >&2
         die "${#missing[@]} scene(s) did not open as their boards need"
     fi
+    [[ -z $wrong ]] || die "$(grep -c . <<<"$wrong") session default check(s) failed: the shells did not start with apex-desktop's fonts and icons"
     commit=$(git -c safe.directory='*' -C "$REPO" rev-parse HEAD 2>/dev/null || echo "${GITHUB_SHA:-unknown}")
     features=$(sed -n 's/.*Apex: feature \([a-z-]*\) enabled.*/\1/p' "$g2/default.log" 2>/dev/null | sort -u | jq -Rsc 'split("\n") | map(select(. != ""))')
     dock=$({ cat "$g2/default.log" "$g2/default.late.log" 2>/dev/null || :; } | sed -n 's/.*APEXG2[A-Z-]* \({.*\)/\1/p' |

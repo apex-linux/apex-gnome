@@ -1438,6 +1438,46 @@ async function exerciseLock() {
         {_stack: newUnlockDialog(St)._stack, _notifications: notifications}, {get_height: () => 900});
     fact('lock.stack-box.other', `${otherBox.y1}..${otherBox.y2}`);
     boxed.emit('destroy');
+    // logind's PrepareForSleep around ScreenShield's _prepareForSleep: before sleep the hook, then the
+    // dialog's cancel; at resume upstream only wakes the screen.
+    const LoginManager = await import(`file://${shellDir}/js/misc/loginManager.js`);
+    const sleep = (sleeper, aboutToSuspend) => LoginManager.prepareForSleep(aboutToSuspend, asleep => {
+        if (asleep && Hooks.value('unlock-sleep-cancel', true, sleeper)) {
+            sleeper?._showClock();
+            sleeper?._maybeDestroyAuthPrompt();
+        }
+    });
+    const slept = newUnlockDialog(St);
+    Hooks.run('unlock-dialog', slept);
+    await spin(50);
+    fact('lock.sleep-cancel', `${Hooks.value('unlock-sleep-cancel', true, null)} ${Hooks.value('unlock-sleep-cancel', true, newUnlockDialog(St))}`);
+    say(slept, 'gdm-fingerprint', 'Failed to match fingerprint', true);
+    sleep(slept, true);
+    fact('lock.sleep', lockState(slept));
+    setScreen(PowerSave.OFF);
+    setScreen(PowerSave.ON);
+    fact('lock.sleep.wake', lockState(slept));
+    sleep(slept, false);
+    fact('lock.resume', lockState(slept));
+    fact('lock.resume.keys', slept._authPrompt?.keys ?? 'none');
+    fact('lock.hint.after-resume', hintState(slept));
+    say(slept, 'gdm-fingerprint', '(or place finger on reader)', false);
+    fact('lock.hint.after-resume.scan', hintState(slept));
+    sleep(slept, true);
+    setScreen(PowerSave.OFF);
+    sleep(slept, false);
+    fact('lock.resume-blank', lockState(slept));
+    setScreen(PowerSave.ON);
+    fact('lock.resume-blank.wake', lockState(slept));
+    slept.emit('destroy');
+    LoginManager.prepareForSleep(true);
+    const lockedForSleep = newUnlockDialog(St);
+    Hooks.run('unlock-dialog', lockedForSleep);
+    await spin(50);
+    fact('lock.locked-for-sleep', lockState(lockedForSleep));
+    sleep(lockedForSleep, false);
+    fact('lock.locked-for-sleep.resume', lockState(lockedForSleep));
+    lockedForSleep.emit('destroy');
 
     for (const reply of ['silent', 'error']) {
         displayConfig.reply = reply;

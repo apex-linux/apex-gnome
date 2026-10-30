@@ -20,17 +20,19 @@ that throws gives the stock value or code at its call site.
   tears down the prompt as the screen wakes or blanks;
 - ScreenShield: a value hook over whether the session going idle
   cancels the unlock dialog's conversation, given the dialog, so the
-  layer keeps a prompt it manages until the screen blanks;
+  layer keeps a prompt it manages until the screen blanks; and one over
+  whether preparing for sleep cancels it, so the layer takes the prompt
+  down itself and brings it back after resume;
 - AuthPrompt: a value hook over the question shown for a PAM question,
   given upstream's text and PAM's own;
 - Avatar: a value hook over the child shown when the user has no
   picture.
 ---
  js/gdm/authPrompt.js  |  9 +++++----
- js/ui/screenShield.js |  4 +++-
+ js/ui/screenShield.js |  7 +++++--
  js/ui/unlockDialog.js | 20 ++++++++++++--------
  js/ui/userWidget.js   |  5 +++--
- 4 files changed, 23 insertions(+), 15 deletions(-)
+ 4 files changed, 25 insertions(+), 16 deletions(-)
 
 diff --git a/js/gdm/authPrompt.js b/js/gdm/authPrompt.js
 index 06a8758..6e870a6 100644
@@ -60,7 +62,7 @@ index 06a8758..6e870a6 100644
          this.emit('prompted');
      }
 diff --git a/js/ui/screenShield.js b/js/ui/screenShield.js
-index 5961ea1..c3178f5 100644
+index 5961ea1..3e3bd47 100644
 --- a/js/ui/screenShield.js
 +++ b/js/ui/screenShield.js
 @@ -20,6 +20,7 @@ import * as ShellDBus from './shellDBus.js';
@@ -71,7 +73,17 @@ index 5961ea1..c3178f5 100644
  
  const SCREENSAVER_SCHEMA = 'org.gnome.desktop.screensaver';
  const LOCK_ENABLED_KEY = 'lock-enabled';
-@@ -249,7 +250,8 @@ export class ScreenShield extends Signals.EventEmitter {
+@@ -237,7 +238,8 @@ export class ScreenShield extends Signals.EventEmitter {
+ 
+     _prepareForSleep(loginManager, aboutToSuspend) {
+         if (aboutToSuspend) {
+-            this._dialog?.cancel();
++            if (ApexHooks.value('unlock-sleep-cancel', true, this._dialog))
++                this._dialog?.cancel();
+             if (this._settings.get_boolean(LOCK_ENABLED_KEY))
+                 this.lock(true);
+         } else {
+@@ -249,7 +251,8 @@ export class ScreenShield extends Signals.EventEmitter {
          if (status !== GnomeSession.PresenceStatus.IDLE)
              return;
  
