@@ -58,6 +58,13 @@ The patches are `git format-patch` output against Fedora's `%prep` tree (upstrea
 then the diff with `a/` and `b/` prefixes, applied with `-p1`. Write them with
 `just pkg-export`, never by hand.
 
+Fedora updates absorbed:
+
+- 2026-10-30, GNOME 51.1 (FEDORA-2026-2812a1754d, F45 `updates-testing`, request stable):
+  every patch applies at fuzz 0 to `gnome-shell-51.1-1.fc45` as well as `51.0-1.fc45`, and
+  the lane builds it with the whole update in the buildroot (`mutter-devel` 51.1 meets the
+  pin). 51.1 carries neither 0019 nor 0020. No patch changed.
+
 ## Changing a patch or rebasing
 
 ```bash
