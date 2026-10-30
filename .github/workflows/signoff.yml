@@ -211,6 +211,10 @@ jobs:
         run: |
           read -ra packages <<<"$PACKAGES"
           dnf5 -y -q --setopt=install_weak_deps=False --repo=fedora --repo=updates install "${packages[@]}"
+          # A lane that built rather than reused its cache left Fedora's libadwaita-devel, which pins Fedora's libadwaita.
+          if rpm -q libadwaita-devel >/dev/null; then
+              dnf5 -y -q --setopt=clean_requirements_on_remove=False remove libadwaita-devel
+          fi
           dnf5 -y -q --setopt=install_weak_deps=False --repo=fedora --repo=updates install _build/libadwaita/out/libadwaita-[0-9]*.x86_64.rpm
           rpm -q libadwaita | grep -q '\.apex'
 
