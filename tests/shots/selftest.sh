@@ -3030,6 +3030,59 @@ test_clean_shutdown() {
         "$passes/$failures $(grep -c "^FAIL default: at shutdown: shell_global_get: assertion 'the_object' failed$" "$T/assertions.out")"
 }
 
+test_no_disposed_at_shutdown() {
+    local run=$T/disposed-shutdown-run disposed frame passes failures
+    disposed='Gjs-CRITICAL **: 09:41:00.000: Object Gjs_ui_messageTray_MessageTray (0x55e780c0), has been already disposed — impossible to access it.'
+    frame='#0   7ffd b   resource:///org/gnome/shell/ui/messageTray.js:1062 (29fd @ 15)'
+    mkdir -p "$run"
+    printf '%s\n' "$disposed" '== Stack trace for context 0x55 ==' "$frame" '** Message: 09:41:00.000: Shutting down GNOME Shell' >"$run/default.log"
+    read -r passes failures <<<"$(assertion_counts no_disposed_at_shutdown default "$run/default.log")"
+    expect_eq "disposed at shutdown: one before it is another check's" "1/0" "$passes/$failures"
+    printf '%s\n' '** Message: 09:41:00.000: Shutting down GNOME Shell' "$disposed" '== Stack trace for context 0x55 ==' "$frame" >"$run/default.log"
+    read -r passes failures <<<"$(assertion_counts no_disposed_at_shutdown default "$run/default.log")"
+    expect_eq "disposed at shutdown: the tray's banner timeout after it fails, naming the object and the frame" "0/1 1" \
+        "$passes/$failures $(grep -c '^FAIL default: .*touched: Gjs_ui_messageTray_MessageTray at resource:///org/gnome/shell/ui/messageTray.js:1062$' "$T/assertions.out")"
+    echo 'APEXG2 {"probe": true}' >"$run/default.log"
+    printf '%s\n' '** Message: 09:41:00.000: Shutting down GNOME Shell' "$disposed" >"$run/default.late.log"
+    read -r passes failures <<<"$(assertion_counts no_disposed_at_shutdown default "$run/default.log")"
+    expect_eq "disposed at shutdown: and so does one with no stack, in the late first start's log" "0/1 1" \
+        "$passes/$failures $(grep -c '^FAIL default: .*touched: Gjs_ui_messageTray_MessageTray$' "$T/assertions.out")"
+    rm "$run/default.late.log"
+}
+
+test_quiet_exit() {
+    local want_pass what report passes failures
+    while IFS='|' read -r want_pass what report; do
+        if [[ -n $report ]]; then printf 'APEXG2-EXIT %s\n' "$report" >"$T/exit.log"; else : >"$T/exit.log"; fi
+        read -r passes failures <<<"$(assertion_counts quiet_exit default "$T/exit.log")"
+        expect_eq "exit: $what" "$want_pass/$((1 - want_pass))" "$passes/$failures"
+    done <<'CASES'
+1|an idle tray and a quiet calendar server and app list pass|{"tray":true,"quiet":true}
+0|a banner still up fails|{"tray":false,"quiet":true}
+0|a calendar server or app list still changing fails|{"tray":true,"quiet":false}
+0|no report fails|
+CASES
+}
+
+test_shutdown_banner_case() {
+    local run=$T/shutdown-banner passes failures status pending armed quiet shutdown what
+    mkdir -p "$run"
+    while IFS='|' read -r failures status pending armed quiet shutdown what; do
+        echo "shutdown-banner exit=$status secs=5 marker-after-exit=no" >"$run/results-main.txt"
+        echo "APEXG2-SHUTDOWN-BANNER {\"pending\":$pending,\"armed\":$armed,\"quiet\":$quiet}" >"$run/shutdown-banner.log"
+        echo "$shutdown" >>"$run/shutdown-banner.log"
+        read -r passes _ <<<"$(assertion_counts shutdown_banner_case "$run")"
+        expect_eq "shutdown-banner: $what fails $failures of 4" "$failures" $((4 - passes))
+    done <<'CHANGES'
+0|0|true|true|true|** Message: 09:41:00.000: Shutting down GNOME Shell|a notification pending and the timeout armed as the shell exits
+1|134|true|true|true|** Message: 09:41:00.000: Shutting down GNOME Shell|the shell aborting in the shutdown loop
+1|0|false|true|true|** Message: 09:41:00.000: Shutting down GNOME Shell|no notification pending
+1|0|true|false|true|** Message: 09:41:00.000: Shutting down GNOME Shell|no timeout armed
+1|0|true|true|false|** Message: 09:41:00.000: Shutting down GNOME Shell|a calendar server or app list still changing
+1|0|true|true|true||a log without the shutdown
+CHANGES
+}
+
 test_no_binding_overwritten() {
     local run=$T/keys-run overwritten passes failures
     overwritten='libmutter-WARNING **: 09:41:00.000: Overwriting existing binding of keysym 20 with keysym 20 (keycode 41).'
@@ -3710,7 +3763,10 @@ test_no_disposed_apex
 test_no_binding_overwritten
 test_no_spurious_allocation
 test_clean_shutdown
+test_no_disposed_at_shutdown
+test_quiet_exit
 test_keys_case
+test_shutdown_banner_case
 test_startup_handler_ran
 test_network_rows_centred
 test_pr_assertions
