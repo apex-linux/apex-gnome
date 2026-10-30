@@ -61,7 +61,7 @@ cc_apex_updates_hero_init (CcApexUpdatesHero *hero, const CcApexUpdatesFacts *f)
         hero->primary = CC_APEX_UPDATES_ACTION_CHECK;
     } else if (g_str_equal (state, "available") && is_set (f->deferred_reason)) {
         hero->title = g_strdup (_("Update Waiting"));
-        hero->subtitle = g_strdup_printf ("%s %s", or_unknown (f->target_version), f->deferred_reason);
+        hero->subtitle = g_strdup_printf (_("%s %s waits until then."), f->deferred_reason, or_unknown (f->target_version));
         hero->tone = CC_APEX_UPDATES_TONE_WARNING;
         hero->secondary = CC_APEX_UPDATES_ACTION_DOWNLOAD_ANYWAY;
     } else if (g_str_equal (state, "available")) {

@@ -65,6 +65,8 @@ SCENARIOS = {
                    "Booted": deployment(BOOTED["version"], BOOTED["digest"], 8, held=dbus.Array(["nautilus"], signature="s"),
                                         holds=OLD_HOLDS)},
     "available": {"State": "available", "Staged": EMPTY, "Available": AVAILABLE},
+    "waiting": {"State": "available", "Staged": EMPTY, "Available": AVAILABLE,
+                "DeferredReason": "The battery is below 50%. Connect the charger to download the update."},
     "downloading": {"State": "downloading", "Staged": EMPTY, "Available": AVAILABLE, "Progress": dbus.Double(0.64)},
     "health-failure": {"State": "health-failure", "Staged": EMPTY, "Available": EMPTY,
                        "HealthFailure": BOOTED["digest"],
