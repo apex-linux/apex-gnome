@@ -713,7 +713,7 @@ in only then. A glyph that is missing or draws nothing leaves its scene without 
 the collection names that row.
 
 Each row's scene is copied to `board-NN-SLUG-light.png` and `-dark.png`. A row its shooter
-captures light only (board 26, whose `run.sh` shoots its alerts light only) has no dark file,
+captures light only (an empty dark capture in `BOARDS`; no row is one today) has no dark file,
 and its `scene.dark` and `files.dark` are `null`. `signoff.json` records each row's key
 (`NN-SLUG`), number, slug, title, scene and fixture state, the sources collected, the
 apex-gnome and apex-desktop pins, the layer's features enabled, the scale and the monitor.
