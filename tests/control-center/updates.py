@@ -22,6 +22,7 @@ EXPECT = {
         "GNOME 51.0 → 51.1, Linux 7.2.7 → 7.2.9, Mesa 26.1.0 → 26.1.2",
         "45.20261008.131 · sha256:3f9c…a71e",
         "45.20261010.133 · sha256:9e41…0c2b",
+        "Checked",
         "45.20261001.124 · sha256:b02d…19c4",
         "Kept by Apex: the last version that started cleanly",
         "45.20260924.118 · sha256:7c1d…5e21",
