@@ -96,7 +96,8 @@ and `just pkg-export ptyxis`, as for gnome-shell
 just ptyxis-test     # desktop/ptyxis's licence and paths; the status logic's unit test
 just ptyxis-lane     # podman or docker: apex-lane's container half in fedora:45
 just ptyxis-shots    # the built RPM in a headless gnome-shell, light and dark
-just ptyxis-palette  # the built RPM: a palette rewritten under an open terminal
+just ptyxis-palette  # the built RPM: a palette rewritten, and the accent's caret, under an open terminal
+just ptyxis-panes    # the built RPM: board 33's panes split, focused, closed, each with its status
 ```
 
 For C, `just app-dev ptyxis` in apex-image rebuilds the Apex build the desktop VM runs
@@ -126,5 +127,18 @@ it after the lane and keeps the captures as the `ptyxis-shots` artifact.
 `tests/ptyxis/palette-test.sh` runs the same headless shell. Its automation script,
 `palette-probe.js`, opens a terminal on a user palette with a red background, rewrites
 the file with a green one, and samples the terminal's pixels; the test fails unless the
-terminal is green within 1 s. On Fedora's own ptyxis it stays red. CI runs it after the
-captures.
+terminal is green within 1 s. On Fedora's own ptyxis it stays red. It then starts
+apex-session-agent, built by `tests/s2c/agent.sh`, with the accent blue, finds the
+terminal's caret in the accent (Ptyxis's `cursor-blink-mode` off), turns the accent
+green, and fails unless the caret is green within 1 s. CI runs it after the captures.
+
+`tests/ptyxis/panes-test.sh` runs the same headless shell on one apex-gnome session,
+with `fixture.c` and `sessions.sh` as `shoot.sh` uses them. Its automation script,
+`panes-probe.js`, reads Ptyxis over AT-SPI and drives it with a virtual keyboard and
+pointer. It splits with the header's Split Right and Split Down toggles and with
+Ctrl+Alt+R and Ctrl+Alt+D. It focuses each pane by a click and measures the other's
+dimming against DESIGN's .7 header and .62 body. It runs `cargo` and `claude` in the
+second pane and `rpmbuild` and `just` in the first, so each header shows its own
+command, OSC 9;4 progress, exit status and bell. The bell's needs-you clears on focus,
+and the session row keeps the stronger status. Close Pane on the second pane's header
+then unsplits. CI runs it after the palette test.
