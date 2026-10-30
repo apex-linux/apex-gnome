@@ -1422,8 +1422,8 @@ async function exerciseLock() {
     for (const height of [900, 1080, 1440]) {
         boxed.height = height;
         boxed.emit('notify::height');
-        const stock = {x1: 0, x2: 100, y1: -1, y2: -1};
-        const got = Hooks.value('unlock-stack-box', stock, {_stack: boxed._stack, _notifications: notifications},
+        const given = {x1: 0, x2: 100, y1: -1, y2: -1};
+        const got = Hooks.value('unlock-stack-box', given, {_stack: boxed._stack, _notifications: notifications},
             {get_height: () => height});
         fact(`lock.stack-box.${height}`, `${got.y1}..${got.y2}`);
         fact(`lock.stack-height.${height}`, `${boxed._stack.natural_height}`);
