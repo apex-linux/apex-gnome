@@ -455,15 +455,20 @@ async function shootPolkitCancel() {
     Polkit.Authority.prototype.enumerate_actions = function (cancellable) {
         const lookup = {cancelled: false};
         lookups.push(lookup);
-        return new Promise((resolve, reject) => cancellable.connect('cancelled', () => {
+        return new Promise((resolve, reject) => cancellable.connect(() => {
             lookup.cancelled = true;
             reject(new GLib.Error(Gio.IOErrorEnum, Gio.IOErrorEnum.CANCELLED, 'cancelled'));
         }));
     };
     const {agent, dialog, sessions} = await openPolkit(null, STEP_MS);
     fact('polkit', describePolkit(dialog));
+    // The dialog is destroyed inside its own 'done', so the agent's completion is what records the verdict.
     let done = null;
-    dialog.connect('done', (_d, dismissed) => (done = dismissed));
+    const complete = agent._completeRequest;
+    agent._completeRequest = dismissed => {
+        done = dismissed;
+        complete.call(agent, dismissed);
+    };
     tap(Clutter.KEY_Escape);
     await Scripting.sleep(SETTLE_MS);
     fact('cancelled', {done, current: agent._currentDialog === dialog, sessions, lookups});
