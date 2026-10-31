@@ -396,6 +396,21 @@ release_trimmed (const char *evr)
     return dot ? g_strndup (start, dot - start) : g_strdup (start);
 }
 
+/* Update1's kind tokens as words a translation can carry; a token it adds later shows as the daemon sent it. */
+static char *
+change_kind (const char *kind)
+{
+    if (g_str_equal (kind, "added"))
+        return g_strdup (C_("package change", "added"));
+    if (g_str_equal (kind, "removed"))
+        return g_strdup (C_("package change", "removed"));
+    if (g_str_equal (kind, "upgraded"))
+        return g_strdup (C_("package change", "upgraded"));
+    if (g_str_equal (kind, "downgraded"))
+        return g_strdup (C_("package change", "downgraded"));
+    return g_strdup (kind);
+}
+
 GPtrArray *
 cc_apex_updates_changes (GVariant *changes)
 {
@@ -412,7 +427,7 @@ cc_apex_updates_changes (GVariant *changes)
         g_autofree char *from_short = release_trimmed (from);
         g_autofree char *to_short = release_trimmed (to);
 
-        change->kind = g_strdup (kind);
+        change->kind = change_kind (kind);
         change->package = g_strdup (name);
         change->from = g_strdup (from);
         change->to = g_strdup (to);

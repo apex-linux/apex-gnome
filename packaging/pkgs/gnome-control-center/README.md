@@ -163,7 +163,8 @@ and polkit asks in the daemon, never in Settings.
   `a(sstbts)` or, from a daemon before apex-system K4, `a(sstbt)`.
 - **What's New**: `GetChanges` for the staged digest, summed up as its GNOME, Linux and
   Mesa versions (then other packages), with every change in the expanded row as one
-  grid of kind, package and versions, the package and versions in monospace.
+  grid of kind, package and versions, the package and versions in monospace; the kind is
+  Update1's token as a `C_("package change", …)` word, an unknown one as the daemon sent it.
 - **Versions**: Booted, Staged and Rollback, each as version and short digest in
   monospace and the build date, Staged with a "Checked" pill instead (the daemon keeps a
   staged image only once its signature checks out), and "Kept by Apex: …" with the

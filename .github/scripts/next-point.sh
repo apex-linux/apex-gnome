@@ -10,7 +10,7 @@ set -euo pipefail
 readonly SHIM=${NEXT_POINT_SHIM:-/usr/local/bin/dnf5}
 readonly REAL_DNF5=${NEXT_POINT_DNF5:-/usr/bin/dnf5}
 readonly WATCHED=(gnome-shell mutter gdm gjs glib2 gnome-session gsettings-desktop-schemas gtk4 libadwaita
-    gnome-control-center nautilus)
+    gnome-control-center nautilus ptyxis vte291-gtk4)
 
 usage() {
     cat <<EOF
