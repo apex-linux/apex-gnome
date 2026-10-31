@@ -387,8 +387,9 @@ $apex_tile_preview_saturation: 160%;
 // The lock screen and the greeter draw white on the blurred wallpaper in both variants.
 $apex_lock_fg: #ffffff;
 $apex_lock_fg_dim: rgba(255, 255, 255, .7);
-$apex_lock_placeholder: rgba(255, 255, 255, .62);
-$apex_lock_overlay: rgba(8, 10, 20, .34);
+// Every lock and greeter text at 4.5:1 over light Facets: the light scrim .68, the placeholder .96 in both.
+$apex_lock_placeholder: rgba(255, 255, 255, .96);
+$apex_lock_scrim: if($variant == 'light', rgba(8, 10, 20, .68), rgba(8, 10, 20, .34));
 // High contrast's overlay: darker, so its white text holds on the bright blurred wallpaper.
 $apex_lock_overlay_contrast: rgba(0, 0, 0, .55);
 $apex_lock_date_fg: rgba($apex_lock_fg, .92);

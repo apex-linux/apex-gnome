@@ -15,6 +15,7 @@ import * as ModalDialog from 'resource:///org/gnome/shell/ui/modalDialog.js';
 import * as Overview from 'resource:///org/gnome/shell/ui/overview.js';
 import * as Scripting from 'resource:///org/gnome/shell/ui/scripting.js';
 
+import {surfaceReport} from '../shots/a11y.js';
 import {iconsOf, shellIconTheme} from '../shots/session-defaults.js';
 
 Gio._promisify(Shell.Screenshot.prototype, 'screenshot_area');
@@ -297,6 +298,13 @@ async function shootWakeKey(lockedBlank) {
     fact('end', {locked: Main.screenShield.locked});
 }
 
+const CONTRAST_SETTLE_MS = 500;
+
+// G2's text and glyph contrast (tests/shots/a11y.js) over what the stage draws behind ROOT.
+function contrastOf(root) {
+    return surfaceReport(root, () => Scripting.sleep(CONTRAST_SETTLE_MS), {length: scale()});
+}
+
 // Locking fades to black, as before the screen blanks; activity lifts it. A move does not
 // open upstream's prompt, so its lock keeps two stages.
 async function shootLock() {
@@ -316,10 +324,20 @@ async function shootLock() {
     fact('opened', describeLock(dialog));
     iconFact('opened', [dialog, Main.panel]);
     await capture('open');
+    const contrast = GLib.getenv('APEX_CONTRAST') === '1';
+    if (contrast) {
+        fact('contrast-opened', await contrastOf(dialog));
+        const entry = dialog._authPrompt._entry;
+        entry.set_text(WRONG_ANSWER);
+        fact('contrast-field', await contrastOf(entry));
+        entry.set_text('');
+    }
 
     await type(WRONG_ANSWER);
     await Scripting.sleep(STEP_MS * 2);
     fact('wrong-answer', describeLock(dialog));
+    if (contrast)
+        fact('contrast-wrong-answer', await contrastOf(dialog._authPrompt));
 
     await setPowerSaveMode(POWER_SAVE_OFF);
     await Scripting.sleep(STEP_MS);
@@ -600,6 +618,7 @@ async function shootGreeter() {
     fact('list', describeGreeter(dialog));
     iconFact('list', [dialog, Main.panel]);
     await capture('list');
+    fact('contrast-list', await contrastOf(dialog));
     const settings = GLib.getenv('APEX_MOTION') ? motionSettings() : null;
     const stop = settings ? sampleMotion(() => ({transitions: transitionsUnder(dialog)})) : null;
     dialog._userList.getItemFromUserName(GLib.getenv('APEX_USER')).emit('activate');
@@ -609,6 +628,11 @@ async function shootGreeter() {
     fact('prompt', describeGreeter(dialog));
     iconFact('prompt', [dialog, Main.panel]);
     await capture('prompt');
+    fact('contrast-prompt', await contrastOf(dialog));
+    const entry = dialog._authPrompt._entry;
+    entry.set_text(WRONG_ANSWER);
+    fact('contrast-field', await contrastOf(entry));
+    entry.set_text('');
 }
 
 const UPDATE1 = ['io.github.apex_linux.Apex.Update1', '/io/github/apex_linux/Apex/Update1'];

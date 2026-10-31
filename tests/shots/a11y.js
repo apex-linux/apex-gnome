@@ -225,7 +225,7 @@ function setOpacity(actor, opacity) {
 }
 
 // Each target's ink hidden while the stage draws what is behind it, then shown again.
-async function surfaceReport(root, settle, unit) {
+export async function surfaceReport(root, settle, unit) {
     if (!root?.mapped)
         return {error: 'not shown'};
     const found = targetsOf(root);

@@ -118,7 +118,7 @@
   .apex-lock-hint-failed .apex-lock-hint, .apex-lock-hint-failed .apex-lock-hint-glyph { color: $apex_lock_fg; }
 }
 
-.apex-lock-overlay { background-color: $apex_lock_overlay; }
+.apex-lock-overlay { background-color: $apex_lock_scrim; }
 
 .apex-lock-background {
   -apex-lock-blur: $apex_lock_blur;
