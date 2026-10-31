@@ -51,6 +51,12 @@ export function enable() {
     click.connect('recognize', () => toggleSpotlight());
     _button.add_action(click);
     Main.panel.addToStatusArea(ROLE, _button, 0, 'right');
+    // The indicators feature puts its items and divider right before the button: enabled again on
+    // its own, the button goes back after them.
+    const box = _button.container.get_parent();
+    const divider = box?.get_children().find(c => c.has_style_class_name?.('apex-indicators-divider'));
+    if (divider)
+        box.set_child_above_sibling(_button.container, divider);
     _tooltip = new St.Label({style_class: 'dash-label', text: NAME, visible: false});
     Main.layoutManager.addChrome(_tooltip);
     _button.connect('notify::hover', _syncTooltip);

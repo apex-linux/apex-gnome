@@ -549,6 +549,8 @@ function networkRow(St, Clutter, active) {
     [new St.Icon({name: 'signal'}), row._secureIcon].forEach(i => icons.add_child(i));
     row._label = new St.Label({name: 'label', y_align: Clutter.ActorAlign.FILL});
     [icons, row._label, new St.Icon({name: 'check'})].forEach(c => row.add_child(c));
+    row.accessibleNames = 0;
+    row._updateAccessibleName = () => row.accessibleNames++;
     return row;
 }
 
@@ -599,6 +601,8 @@ async function exerciseSubmenus(Main) {
     Hooks.run('quick-settings-network-item', active);
     Hooks.run('quick-settings-network-item', other);
     Hooks.run('quick-settings-toggle-menu', menu);
+    active.network.emit('notify::icon-name');
+    fact('qs.row.best-ap', `names=${active.accessibleNames}`);
     fact('qs.row.active', rowState(active));
     fact('qs.row.other', rowState(other));
     fact('qs.menu', menu.subtitleAt());
@@ -1145,6 +1149,27 @@ async function exerciseFocusedApp() {
     settings.set_boolean('layer-enabled', false);
     await spin(200);
     report('teardown-then-off');
+}
+
+// The search button's place among the right box's Apex items, at enable and after panel comes
+// back out of disabled-features on its own, when the button is added at the box's start again.
+async function exerciseSearchOrder() {
+    if (GLib.getenv('PROBE_SEARCH_ORDER') !== '1')
+        return;
+    const Main = await import(`file://${shellDir}/js/ui/main.js`);
+    const order = () => Main.panel.rightBox.children.slice(0, 3).map(c => {
+        if (c.name === 'apexIndicators')
+            return 'indicators';
+        if (c.has_style_class_name?.('apex-indicators-divider'))
+            return 'divider';
+        return c === Main.panel.statusArea['apex-search']?.container ? 'search' : c.name;
+    }).join(',');
+    fact('search-order', order());
+    settings.set_strv('disabled-features', ['panel']);
+    await spin(200);
+    settings.set_strv('disabled-features', []);
+    await spin(200);
+    fact('search-order.panel-again', order());
 }
 
 async function exerciseSearchButton() {
@@ -2368,6 +2393,7 @@ if (layer && GLib.getenv('PROBE_ENABLE') === '1') {
     await exerciseSolidBar();
     await exerciseFocusedApp();
     await exerciseSearchButton();
+    await exerciseSearchOrder();
     await exerciseMaximisedWindow();
     await exerciseOverview();
     await exerciseDock();

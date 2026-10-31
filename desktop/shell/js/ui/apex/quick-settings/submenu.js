@@ -24,7 +24,10 @@ export function addRow(item) {
     if (_rows.has(item) || !icons || !item._label)
         return;
     const entry = {lock, icons, yAlign: lock.y_align, labelYAlign: item._label.y_align};
+    // Stock names the row before its first access point is in, and a new best access point
+    // changes the strength notifying only icon-name (network.js:994): the name kept 0 %.
     entry.ids = [[item.network, item.network.connect('notify::is-active', () => _followActive(item))],
+        [item.network, item.network.connect('notify::icon-name', () => item._updateAccessibleName())],
         [item, item.connect('destroy', () => _forgetRow(item))]];
     _rows.set(item, entry);
     icons.remove_child(lock);

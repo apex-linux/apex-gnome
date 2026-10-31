@@ -192,6 +192,14 @@ the sign-off shells (above). Every case's probe reports them (`session-defaults.
   Disturb's switch glyphs. Each surface passes or fails on its own, naming its board; a surface
   that did not open, or drew no icon, fails too.
 
+What only `tests/shell` shoots, G2 never opens: the lock screen with its top bar (board 20, and
+its fingerprint line), the greeter's user list and prompt (board 12) and polkit's own
+authentication dialog (board 13, and its fingerprint line). The shell probe records the icons
+each step draws (`icons-STEP` facts in `CASE.log`) and `shell_icons` holds them to the same rule
+and lists, one check per step named by its board. `signoff.sh --collect` runs it on the line
+above, where apex-desktop's theme is installed. Without that theme, as in CI's own `tests/shell`
+job, `check.py` reports it "not run: no Apex theme", never a pass.
+
 The wallpaper is `backdrop_painted`'s (below).
 
 ### Open: glyphs board 31 lacks
@@ -606,6 +614,23 @@ window's, the frame equals a full redraw; without, the blur's halo stays stale (
 OSD shown, an Alt+Tab list in a stand-in popup and the screenshot panel (styled while closed)
 each carry the popovers' `$apex_panel_blur` and `$apex_panel_saturation`.
 
+Every glass surface conforms, checked from the registry rather than a list: `glass.js` records
+every surface the glass registry gets during the case (the shell's, not its own `emptyTest`),
+and a surface the case never checked fails by name, as does one the assertions do not know, so
+a surface a later slice registers is caught until the case checks it. Each surface's blur is
+rounded at its border radius, all four corners alike, over the box St paints its background in
+(`get_background_paint_box` of its allocation). For the dock, Quick Settings, the calendar, a
+banner, the OSD, the Spotlight panel and the toast (the Alt+Tab list as above), a black and white
+checker goes under the surface's bottom-left corner, and that corner square is read with the
+glass on and with the surface unregistered: no pixel past the border's arc changes, every pixel
+in the 4 CSS px band just inside it does (no surface's padding lets content in there), the
+surface carries one glass effect, and a screenshot of the surface matches the screen over the
+square to 1/255 a channel (off stage, the dock, the OSD, the Spotlight panel and the toast
+round a few pixels the other way; the others match exactly). The toast hides itself after 2 s;
+a check it outlives is read again on a new toast, at most three times. A banner check first
+dismisses a banner the case did not post, such as the one-time search hint, which never expires
+while no one types and would hold the case's banner back.
+
 `shadows_under_glass` checks the `shadows` feature against the glass in the same case, light
 and dark: `glass.js` lays the tile grid under Quick Settings, a popup menu and a dialog and
 reads each box with `framePixels()`, once with the shadows on and once with `shadows` in
@@ -691,7 +716,13 @@ the privacy group's glyphs 3:1, each over what is drawn behind it, the pill's ow
 Apex fills at rest (the recording, the share, the privacy group) is also read against the bar:
 the median of its fill across its middle, clear of the corners, against the bar a pixel or two
 beyond each end, at 3:1 (WCAG 1.4.11). Upstream's high-contrast sheet fills the button instead,
-so there `bar_pills` leaves the edge out. Every text passes; the gaps (`A11Y_PILL_TODAY`, pinned as
+so there `bar_pills` leaves the edge out. sni-items.js's five apps join them, the fifth behind the
+overflow: each app's glyph, drawn as a mask in the bar's ink, wants 3:1 and the overflow's count
+4.5:1. With everything on the bar it is one surface too (`barPills.crowded`), which `a11y_layout`
+wants whole at Large Text, none of its text cut short, off the screen or over another's. The Chat
+app's menu (`barPills.indicatorMenu`) is measured as the other surfaces are. Its right click waits
+for each step, not a time: the hot corner off, so the new pointer's first motion is not held at 0,0
+by its barrier, then the pointer over the button, then the menu open on it. Every text passes; the gaps (`A11Y_PILL_TODAY`, pinned as
 the inactive dot is) are the owner's to decide:
 
 | Case | Part | Today |
@@ -1088,6 +1119,17 @@ and on) waits there before an updates push. apex-image's admission cut sets `GA_
 deletes the ARG, and apex-lane then admits nothing from updates-testing, so `next-point.sh
 image` reopens its own copy (`next-point.sh reopen`): `ARG GA_REACHED=0` again, the ARG added
 if the cut deleted it. The real apex-image and every lane cache stay as they are.
+
+Often updates-testing moves none of them, as right after a push: `next-point.sh allowlist`
+then leaves the allowlist empty, apex-lane admits nothing, the lanes build the stable ones, and
+the report line ends `(nothing moves)`. That is not a failure. A query that fails or finds no
+build, on either side, still fails the run with its own message, so an unreachable
+updates-testing never reads as a quiet week.
+
+next-point's lanes number every release `.apex1` (`lane.sh` passes `--n 1`). The builder VM's
+N is the recipe and lane repositories' commit count, so it carries across stock versions:
+`gnome-shell-51.0-1.fc45.apex331` is followed by `51.1-1.fc45.apex33x`, not `.apex1`. Either
+sorts above every build of the version before.
 
 ## The authentication dialog
 

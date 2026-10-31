@@ -18,6 +18,7 @@ import itertools
 import json
 import os
 import re
+import subprocess
 import sys
 
 DATE = "Wednesday October 21"
@@ -751,6 +752,22 @@ def check_date_menu(shots, case, apex):
         check_footer(case, "dnd-clicked", once, apex)
 
 
+ASSERT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../shots/assert.sh")
+
+
+def check_icons(shots):
+    """S1b's icon rule, by tests/shots/assert.sh's shell_icons and its lists; not run without the Apex theme."""
+    opened = facts(read(shots, "lock-light.log")).get("icons-opened") or {}
+    if opened.get("installed") is not True:
+        print("not run - icons: no Apex theme installed (/usr/share/icons/Apex); signoff.sh runs this check")
+        return
+    out = subprocess.run(["bash", "-c", '. "$1"; shell_icons shell "$2"', "_", ASSERT, shots],
+                         capture_output=True, text=True, check=False).stdout
+    for line in out.splitlines():
+        if line.startswith(("PASS ", "FAIL ")):
+            check(line[5:], line.startswith("PASS "))
+
+
 def main():
     if len(sys.argv) != 2:
         print(__doc__, file=sys.stderr)
@@ -764,6 +781,7 @@ def main():
     check_idle(shots, "lock-idle")
     check_suspend(shots, "lock-suspend")
     check_fingerprint(shots, "lock-fingerprint")
+    check_icons(shots)
     check_fingerprint_suspend(shots, "lock-fingerprint-suspend")
     for case in GREETER_CASES:
         check_greeter(shots, case)

@@ -39,7 +39,7 @@ function shownWithin(actor, root) {
     return true;
 }
 
-function iconsOf(root, theme, scale) {
+export function iconsOf(root, theme, scale) {
     if (!root)
         return null;
     const icons = [];
@@ -72,7 +72,7 @@ function apexSymbolicNames() {
     }
 }
 
-function shellIconTheme() {
+export function shellIconTheme() {
     const theme = new St.IconTheme();
     theme.add_resource_path('/org/gnome/shell/icons');
     return {theme, scale: St.ThemeContext.get_for_stage(Main.uiGroup.get_stage()).scale_factor};
