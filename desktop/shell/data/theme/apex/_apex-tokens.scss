@@ -389,6 +389,9 @@ $apex_lock_fg: #ffffff;
 $apex_lock_fg_dim: rgba(255, 255, 255, .7);
 $apex_lock_placeholder: rgba(255, 255, 255, .62);
 $apex_lock_overlay: rgba(8, 10, 20, .34);
+// High contrast's overlay: darker, so its white text holds on the bright blurred wallpaper.
+$apex_lock_overlay_contrast: rgba(0, 0, 0, .55);
+$apex_lock_date_fg: rgba($apex_lock_fg, .92);
 $apex_lock_glass: rgba(255, 255, 255, .18);
 $apex_lock_glass_border: rgba(255, 255, 255, .25);
 $apex_lock_glass_strong: rgba(255, 255, 255, .22);
@@ -398,7 +401,7 @@ $apex_lock_list: rgba(255, 255, 255, .14);
 $apex_lock_list_border: rgba(255, 255, 255, .22);
 $apex_lock_list_separator: rgba(255, 255, 255, .12);
 $apex_lock_greeter_base: #0c1122;
-// lock/background.js applies the same sigma and saturation to the lock's blur.
+// lock/background.js reads them from the sheet (-apex-lock-blur, -apex-lock-saturation) for the lock's blur.
 $apex_lock_blur: 30px;
 $apex_lock_saturation: 130%;
 
