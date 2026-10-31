@@ -757,6 +757,67 @@ async function shootDateMenu() {
     await capture('cleared');
 }
 
+// The bar as panel.js and the Apex panel parts leave it: each box's items by role, every actor
+// under each box, the input chip's names and Clear. A part rebuilt twice shows in the counts.
+function describeBar() {
+    const {leftBox, centerBox, rightBox, statusArea} = Main.panel;
+    const roleOf = c => Object.keys(statusArea).find(role => statusArea[role].container === c) ?? c.name ?? 'unnamed';
+    const count = actor => actor.get_children().reduce((n, c) => n + 1 + count(c), 0);
+    const boxes = {left: leftBox, center: centerBox, right: rightBox};
+    return {
+        ...Object.fromEntries(Object.entries(boxes).map(([side, b]) => [side, b.get_children().map(roleOf)])),
+        actors: Object.fromEntries(Object.entries(boxes).map(([side, b]) => [side, count(b)])),
+        chip: statusArea.keyboard?._container.get_children().map(label => label.text) ?? null,
+        clear: statusArea.dateMenu._messageList._clearButton.visible,
+        mode: Main.sessionMode.currentMode,
+    };
+}
+
+async function captureBar(name) {
+    const path = GLib.build_filenamev([GLib.getenv('APEX_SHOTS'), `${GLib.getenv('APEX_SHOT')}-${name}.png`]);
+    const stream = Gio.File.new_for_path(path).replace(null, false, Gio.FileCreateFlags.NONE, null);
+    try {
+        const [, y] = Main.panel.get_transformed_position();
+        await new Shell.Screenshot().screenshot_area(0, y, global.stage.width, Main.panel.height, stream);
+    } finally {
+        stream.close(null);
+    }
+    fact(`capture.${name}`, path);
+}
+
+// What loginctl lock-session and unlock-session make logind emit on the session.
+function emitSessionSignal(signal) {
+    const path = `/org/freedesktop/login1/session/${GLib.getenv('XDG_SESSION_ID')}`;
+    return Gio.DBus.system.call('org.freedesktop.login1', path, 'org.freedesktop.DBus.Mock', 'EmitSignal',
+        new GLib.Variant('(sssav)', ['org.freedesktop.login1.Session', signal, '', []]),
+        null, Gio.DBusCallFlags.NONE, -1, null);
+}
+
+// The bar across two locks: logind's Lock and Unlock, then the lock's own stage with its prompt up
+// and GDM's success (deactivate(), as gdm-mock never gives one). Each unlock gives back the same bar.
+async function shootBarCycle() {
+    await Scripting.sleep(SETTLE_MS);
+    Main.messageTray.getSources().forEach(source => source.destroy());
+    await Scripting.sleep(STEP_MS);
+    fact('before', describeBar());
+    await captureBar('before');
+    await emitSessionSignal('Lock');
+    await Scripting.sleep(STEP_MS * 2);
+    fact('logind-locked', {locked: Main.screenShield.locked, bar: describeBar()});
+    await emitSessionSignal('Unlock');
+    await Scripting.sleep(SETTLE_MS);
+    fact('after-logind', describeBar());
+    await captureBar('after-logind');
+    Main.screenShield.lock(false);
+    await Scripting.sleep(STEP_MS * 2);
+    const {locked, prompt} = describeLock(Main.screenShield._dialog);
+    fact('dialog-locked', {locked, prompt: prompt !== null});
+    Main.screenShield.deactivate(false);
+    await Scripting.sleep(SETTLE_MS);
+    fact('after-dialog', describeBar());
+    await captureBar('after-dialog');
+}
+
 // main.js connects to startup-complete only after importing this module, so a startup that
 // completes during the import would never run the script and leave the shell up.
 export function init() {
@@ -779,6 +840,8 @@ export async function run() {
             await shootPolkitLocked(GLib.getenv('APEX_POLKIT') === 'suspend');
         else if (GLib.getenv('APEX_DATE_MENU') === '1')
             await shootDateMenu();
+        else if (GLib.getenv('APEX_BAR_CYCLE') === '1')
+            await shootBarCycle();
         else if (GLib.getenv('APEX_END_SESSION') === '1')
             await shootEndSession();
         else if (GLib.getenv('APEX_SUSPEND') === '1')

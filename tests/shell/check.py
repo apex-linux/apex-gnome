@@ -728,6 +728,39 @@ def check_date_menu(shots, case, apex):
         check_footer(case, "dnd-clicked", once, apex)
 
 
+def check_bar_cycle(shots, case):
+    log = read(shots, f"{case}.log")
+    f = facts(log)
+    steps = ("before", "logind-locked", "after-logind", "dialog-locked", "after-dialog")
+    for step in steps:
+        check(f"{case}: {step} is reported", step in f)
+    check(f"{case}: no JS error", "JS ERROR" not in until(log, "after-dialog") and "APEXLOCK-ERROR" not in log)
+    check(f"{case}: the layer loaded", LOAD_WITNESS in log)
+    if not all(step in f for step in steps):
+        return
+    before = f["before"]
+    check(f"{case}: before: the user session's bar, with the chip and the search button",
+          before["mode"] == "user" and before["chip"] == ["EN", "FR"] and "apex-search" in before["right"], json.dumps(before))
+    check(f"{case}: logind's Lock locks", f["logind-locked"]["locked"] is True)
+    check(f"{case}: the lock's own stage locks with its prompt up",
+          f["dialog-locked"]["locked"] is True and f["dialog-locked"]["prompt"] is True, json.dumps(f["dialog-locked"]))
+    def capture(step):
+        with open(os.path.join(shots, os.path.basename(f[f"capture.{step}"])), "rb") as png:
+            return png.read()
+    bar = capture("before")
+    for step in ("after-logind", "after-dialog"):
+        after = f[step]
+        for side in ("left", "center", "right"):
+            check(f"{case}: {step}: the {side} box's items as before", after[side] == before[side],
+                  f"{after[side]} != {before[side]}")
+            check(f"{case}: {step}: as many actors in the {side} box as before ({before['actors'][side]})",
+                  after["actors"][side] == before["actors"][side], str(after["actors"][side]))
+        check(f"{case}: {step}: the chip and Clear as before",
+              (after["chip"], after["clear"], after["mode"]) == (before["chip"], before["clear"], before["mode"]),
+              json.dumps(after))
+        check(f"{case}: {step}: the bar's capture is the same as before's", capture(step) == bar, f[f"capture.{step}"])
+
+
 def main():
     if len(sys.argv) != 2:
         print(__doc__, file=sys.stderr)
@@ -750,6 +783,7 @@ def main():
         check_polkit_locked(shots, case, apex, sleeps)
     check_date_menu(shots, "date-menu", True)
     check_date_menu(shots, "date-menu-disabled", False)
+    check_bar_cycle(shots, "bar-lock-cycle")
     for case in END_SESSION_CASES:
         check_end_session(shots, case)
     return 1 if failed else 0
