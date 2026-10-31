@@ -606,6 +606,15 @@ window's, the frame equals a full redraw; without, the blur's halo stays stale (
 OSD shown, an Alt+Tab list in a stand-in popup and the screenshot panel (styled while closed)
 each carry the popovers' `$apex_panel_blur` and `$apex_panel_saturation`.
 
+Opacity-following is measured in pixels: a scrim-styled glass the case registers over the tile
+pattern is read at opacity 255 (B), 128 (H) and 0 (D). D equals the pattern, pixel for pixel,
+and B differs from it. Every channel of H lies within 1 + 64/255 steps of (128·B + 127·D) / 255,
+the blend 0003's `follow-opacity` asks for. The bound is three roundings: the blurred colour
+c, multiplied by 128/255, is converted to 8 bits before blending (½ step); the blend's sum is
+written to the 8-bit frame (½ step); and the reference reads c from B, which holds c rounded
+(½ step, carried at 128/255: 64/255). Measured: 1.208 steps; with `follow-opacity` forced off,
+88.651.
+
 `shadows_under_glass` checks the `shadows` feature against the glass in the same case, light
 and dark: `glass.js` lays the tile grid under Quick Settings, a popup menu and a dialog and
 reads each box with `framePixels()`, once with the shadows on and once with `shadows` in

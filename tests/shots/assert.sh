@@ -2875,6 +2875,10 @@ glass_manager() {
     empty=$(report_of "$log" APEXG2-GLASS | jq -r '.manager.emptyBox | "\(.emptyFrames) empty frames; laid out \(.laidOut.allocation | join("x")) after \(.laidOut.frames) frames, \(if .laidOut.enabled then "on" else "off" end)"' 2>/dev/null)
     "${expect_glass[@]}" '.manager.emptyBox | ([.shown, .hidden, .shownAgain] | all(.enabled | not)) and .emptyFrames == 3 and .laidOut.enabled and (.zeroHeight.enabled | not)' \
         "an actor-mode surface with an empty box draws a frame shown, hidden and shown again without blurring, blurs once laid out, and pauses at zero height (${empty:-no report})"
+    local opacity
+    opacity=$(report_of "$log" APEXG2-GLASS | jq -r '.manager.opacity | "\(.half) steps off at 128"' 2>/dev/null)
+    "${expect_glass[@]}" '.manager.opacity | .followOpacity and .fullDiffering > 0 and .noneDiffering == 0 and .half <= 1.251' \
+        "a glass follows its surface's opacity: at 128 the frame is the blur at 128/255 over the pattern within 1 + 64/255 steps, at 0 the pattern alone (${opacity:-no report})"
     "${expect_glass[@]}" "$glass"' .t as $t | .manager.monitorScale as $s | .manager.derived
         | (.osd | glass($t.apex_panel_blur; $t.apex_panel_saturation; $s)) and (.switcher | glass($t.apex_panel_blur; $t.apex_panel_saturation; $s))
         and (.screenshot | .radius == 2 * ($t.apex_panel_blur | px) * $s and .fine and (.enabled | not))' \
