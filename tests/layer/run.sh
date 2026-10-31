@@ -699,7 +699,7 @@ fact "screen pills: sharing moves from after the recording to after the input so
     'right-box=screenRecording,a11y,keyboard,screenSharing,indicators,divider,quickSettings,'
 fact "screen pills: right before the status pill again after panel.js re-adds its items" \
     'right-box\.after-session-update=screenRecording,a11y,keyboard,indicators,divider,screenSharing,quickSettings,'
-fact "input chip: the sources' short names in capitals" 'input-chip=EN,VI'
+fact "input chip: an xkb source's short name in capitals, an IBus source's language, not its symbol" 'input-chip=EN,VI'
 fact "input chip: and so after keyboard.js renames one or adds a source" 'input-chip\.changed=EN,VI₂,FR'
 fact "input chip: its short names never ellipsize, whatever Large Text makes of the chip" 'input-chip\.ellipsize=none,none,none'
 fact "date menu: an empty list hides Clear, as calendar.js's binding would with SYNC_CREATE" 'clear=placeholder=true clear=false'
@@ -714,7 +714,7 @@ fact "layer-enabled=false: no privacy group, and the pill's start is stock" 'pri
 fact "layer-enabled=false: the recording button is stock's, timer then glyph" 'recording\.off=0:42,screencast-stop-symbolic hidden=none name=Stop Screencast'
 fact "layer-enabled=false: so is sharing, named as stock names it" 'sharing\.off=screen-shared-symbolic,screencast-stop-symbolic hidden=none name=Stop Screen Sharing'
 fact "layer-enabled=false: sharing goes back after the recording" 'right-box\.off=screenRecording,screenSharing,a11y,keyboard,quickSettings,'
-fact "layer-enabled=false: the input chip has stock's names back" 'input-chip\.off=en,vi₂,fr'
+fact "layer-enabled=false: the input chip has stock's names back, the IBus symbol too" 'input-chip\.off=en,Ắ₂,fr'
 fact "layer-enabled=false: and stock's ellipsizing" 'input-chip\.off\.ellipsize=end,end,end'
 fact "layer-enabled=false: Clear as stock left it, shown" 'clear\.off=placeholder=true clear=true'
 fact "layer-enabled=true: the filter again" "pill\.on=$KEPT_PILL"
@@ -738,7 +738,7 @@ fact "disabled-features=['panel']: the dot hooks give stock" 'top-bar\.dots=99 9
 fact "disabled-features=['panel']: the status pill keeps every indicator" "pill=$STOCK_PILL"
 fact "disabled-features=['panel']: the recording button stays stock's" 'recording=0:42,screencast-stop-symbolic hidden=none name=Stop Screencast'
 fact "disabled-features=['panel']: sharing stays where panel.js puts it" 'right-box\.after-session-update=screenRecording,screenSharing,a11y,keyboard,indicators,divider,quickSettings,'
-fact "disabled-features=['panel']: the input chip keeps stock's names" 'input-chip\.changed=en,vi₂,fr'
+fact "disabled-features=['panel']: the input chip keeps stock's names" 'input-chip\.changed=en,Ắ₂,fr'
 fact "disabled-features=['panel']: Clear stays as stock leaves it" 'clear=placeholder=true clear=true'
 fact "disabled-features=['panel']: the corner stays stock" 'hot-corner\.zone=none reactive=false x=undefined y=undefined undefinedxundefined'
 lacks "disabled-features=['panel']: nothing is rebuilt or restyled" 'hot-corners=rebuilt|workspace-dot=restyled'
