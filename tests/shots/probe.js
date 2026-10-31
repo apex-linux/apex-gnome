@@ -19,6 +19,7 @@ import * as ModalDialog from 'resource:///org/gnome/shell/ui/modalDialog.js';
 import * as OverviewControls from 'resource:///org/gnome/shell/ui/overviewControls.js';
 import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 import * as Scripting from 'resource:///org/gnome/shell/ui/scripting.js';
+import * as ShellMountOperation from 'resource:///org/gnome/shell/ui/shellMountOperation.js';
 import * as Slider from 'resource:///org/gnome/shell/ui/slider.js';
 import * as SwitcherPopup from 'resource:///org/gnome/shell/ui/switcherPopup.js';
 import * as UserWidget from 'resource:///org/gnome/shell/ui/userWidget.js';
@@ -75,6 +76,8 @@ const SIGNOFF_APPS = [['gnome-text-editor', '--new-window'], ['gnome-calendar'],
 const SIGNOFF_WINDOWS_MS = 30000;
 const SIGNOFF_FOCUS_ORDER = ['org.gnome.Calendar.desktop', 'org.gnome.TextEditor.desktop', 'org.gnome.Ptyxis.desktop'];
 const SIGNOFF_QUIET_MS = 1500;
+// Well inside the 1.5 s after which a switcher with no modifier held activates its selection.
+const SWITCHER_UNFOCUSED_MS = 1000;
 const SIGNOFF_FOCUS_ATTEMPTS = 3;
 const WIFI_SCAN_MS = 5000;
 const TRAY_DRAIN_MS = 3000;
@@ -1488,6 +1491,39 @@ async function modalDialog(unit) {
     }
 }
 
+// The mount password dialog, as a mount's ask-password opens it: its Remember Password is a check box.
+function openMountPasswordDialog() {
+    const operation = new ShellMountOperation.ShellMountOperation({get_drive: () => null});
+    operation.mountOp.emit('ask-password', 'Password Required\nEnter the password for the G2 share', 'apex', 'WORKGROUP',
+        Gio.AskPasswordFlags.NEED_PASSWORD | Gio.AskPasswordFlags.SAVING_SUPPORTED);
+    const dialog = operation._dialog;
+    return {
+        root: dialog.dialogLayout._dialog,
+        check: dialog._rememberChoice,
+        close: () => operation.close(),
+    };
+}
+
+async function checkBoxDialog(unit) {
+    const opened = openMountPasswordDialog();
+    const {check} = opened;
+    const state = checked => {
+        check.checked = checked;
+        return {
+            ...styleOf(check._check, unit),
+            hover: underPseudoClass(check, 'hover', () => ({borderColor: hex(check._check.get_theme_node().get_border_color(St.Side.TOP))})),
+        };
+    };
+    try {
+        await settle();
+        global.stage.set_key_focus(null);
+        return {background: styleOf(opened.root, unit).background, label: check.getLabelActor().text, unchecked: state(false), checked: state(true)};
+    } finally {
+        opened.close();
+        await settle();
+    }
+}
+
 // The calendar's day buttons, and the colour each one's number is drawn in, which St gives a
 // Clutter.Text only as the button's own child.
 function calendarDays(calendar, unit) {
@@ -1886,32 +1922,47 @@ function spotlightSections(popup) {
 // A virtual device's events reach the stage through mutter's input thread, which leisure does not
 // wait for. They arrive in the order sent, so an F24 (bound to nothing) tapped after them follows them.
 let sentinelKeyboard = null;
-// While an entry has the input method's focus, every key goes to IBus and comes back to the stage
-// later, in order: the F24 the stage sees first is the one IBus has not answered yet.
-function keysViaInputMethod() {
-    const im = Main.inputMethod;
-    return Boolean(im?._context && im._currentSource && im.currentFocus);
-}
+// While an entry has the input method's focus, IBus takes the keys and the shell sends them on once
+// it answers, in order: when it took the F24, the barrier waits for the copy it sends on too.
+const IBUS_RELEASE_MASK = 1 << 30;
+let lastBarrierViaInputMethod = false;
 
 async function inputDelivered() {
     sentinelKeyboard ??= global.stage.context.get_backend().get_default_seat()
         .create_virtual_device(Clutter.InputDeviceType.KEYBOARD_DEVICE);
-    let filterId = 0, releases = keysViaInputMethod() ? 2 : 1;
-    const seen = new Promise(resolve => {
-        filterId = Clutter.Event.add_filter(global.stage, event => {
-            if (event.type() === Clutter.EventType.KEY_RELEASE && event.get_key_symbol() === Clutter.KEY_F24 &&
-                --releases === 0)
-                resolve(true);
-            return Clutter.EVENT_PROPAGATE;
-        });
+    const context = Main.inputMethod?._context ?? null;
+    let seen = 0, taken = 0, resolve;
+    const delivered = new Promise(r => (resolve = r));
+    if (context) {
+        const process = context.process_key_event_async;
+        context.process_key_event_async = function (keyval, keycode, state, ...rest) {
+            if (keyval === Clutter.KEY_F24 && state & IBUS_RELEASE_MASK)
+                taken++;
+            return process.call(this, keyval, keycode, state, ...rest);
+        };
+    }
+    // The stage's filters see an event as it is queued; its next frame dispatches it, and the input method
+    // takes it then, before that frame's laters run.
+    const filterId = Clutter.Event.add_filter(global.stage, event => {
+        if (event.type() === Clutter.EventType.KEY_RELEASE && event.get_key_symbol() === Clutter.KEY_F24) {
+            seen++;
+            latersRun().then(() => {
+                if (seen >= 1 + taken)
+                    resolve(true);
+            });
+        }
+        return Clutter.EVENT_PROPAGATE;
     });
     sentinelKeyboard.notify_keyval(GLib.get_monotonic_time(), Clutter.KEY_F24, Clutter.KeyState.PRESSED);
     sentinelKeyboard.notify_keyval(GLib.get_monotonic_time(), Clutter.KEY_F24, Clutter.KeyState.RELEASED);
     try {
-        if (!await Promise.race([seen, Scripting.sleep(SETTLE_TIMEOUT_MS).then(() => false)]))
+        if (!await Promise.race([delivered, Scripting.sleep(SETTLE_TIMEOUT_MS).then(() => false)]))
             throw new Error(`a virtual key event did not reach the stage in ${SETTLE_TIMEOUT_MS} ms`);
     } finally {
         Clutter.Event.remove_filter(filterId);
+        if (context)
+            delete context.process_key_event_async;
+        lastBarrierViaInputMethod = taken > 0;
     }
 }
 
@@ -2022,16 +2073,17 @@ async function keysCase() {
     a11yIds.forEach(id => seat.disconnect(id));
     pressed.sentinel = {before, after: state(), a11yChanges};
 
-    // A key typed into an entry has reached it by the time the barrier returns, IBus or not.
-    const entry = new St.Entry({can_focus: true});
+    // A key to an entry, which IBus takes and sends on (it commits printable ones as text instead),
+    // has reached it by the time the barrier returns.
+    const entry = new St.Entry({can_focus: true, text: 'ab'});
     Main.uiGroup.add_child(entry);
     entry.grab_key_focus();
+    entry.clutter_text.set_cursor_position(-1);
     await settle();
-    const viaInputMethod = keysViaInputMethod();
-    keyboard.notify_keyval(GLib.get_monotonic_time(), Clutter.KEY_a, Clutter.KeyState.PRESSED);
-    keyboard.notify_keyval(GLib.get_monotonic_time(), Clutter.KEY_a, Clutter.KeyState.RELEASED);
+    keyboard.notify_keyval(GLib.get_monotonic_time(), Clutter.KEY_BackSpace, Clutter.KeyState.PRESSED);
+    keyboard.notify_keyval(GLib.get_monotonic_time(), Clutter.KEY_BackSpace, Clutter.KeyState.RELEASED);
     await inputDelivered();
-    pressed.entryKey = {viaInputMethod, text: entry.get_text()};
+    pressed.entryKey = {viaInputMethod: lastBarrierViaInputMethod, text: entry.get_text()};
     entry.destroy();
     await settle();
 
@@ -2598,7 +2650,10 @@ async function scenes() {
         surfaces.idleRepaints = await idleRepaints();
     }
     surfaces.switcher = await windowSwitcher(unit);
-    surfaces.dialog = {...await modalDialog(unit), endSession: await endSessionDialog(unit), updateCard: await updateCard(unit)};
+    surfaces.dialog = {
+        ...await modalDialog(unit), endSession: await endSessionDialog(unit), updateCard: await updateCard(unit),
+        checkBox: await checkBoxDialog(unit),
+    };
     surfaces.dateMenu = await calendarMenu(unit);
     surfaces.notificationsLayer = await notificationsLayer(unit);
     surfaces.derived = derivedSurfaces(unit);
@@ -3091,11 +3146,19 @@ async function signoffWindows() {
     await settle();
     const {AppSwitcherPopup} = await import('resource:///org/gnome/shell/ui/altTab.js');
     const popup = new AppSwitcherPopup();
+    // The switcher's grab takes the keyboard from the focused window, which then draws itself unfocused
+    // (a hollow terminal caret): the capture shows that state, not whichever frame came first.
+    const focused = global.display.focus_window?.get_compositor_private() ?? null;
+    let unfocusedDrawn = !focused;
+    const damagedId = focused?.connect('damaged', () => (unfocusedDrawn = true));
     // No modifier mask: nothing held down, so the popup stays until it is destroyed.
     popup.show(false, 'switch-applications', 0);
     // switcherPopup.js shows it after POPUP_DELAY_TIMEOUT, a GLib timeout that leisure does not wait for.
     const altTabShown = await until(() => popup.opacity === 255, 3000);
     shadowsBuilt.altTab = Registry ? await layersBuilt(Registry, shadowedSurfaces(Registry, popup)) : null;
+    const altTabUnfocused = await until(() => unfocusedDrawn, SWITCHER_UNFOCUSED_MS);
+    if (damagedId)
+        focused.disconnect(damagedId);
     await settle();
     keepOrder("the switcher's");
     const altTab = withoutBytes(await capture('signoff-alt-tab', [], {switcher: popup._items.map(item => item.app.get_id())}));
@@ -3103,7 +3166,7 @@ async function signoffWindows() {
     await settle();
     drawn.destroy();
     return {
-        shown, previews, apps: appsShown(), overview: overview.file, altTab: altTab.file, altTabShown, shadowsBuilt,
+        shown, previews, apps: appsShown(), overview: overview.file, altTab: altTab.file, altTabShown, altTabUnfocused, shadowsBuilt,
         loaded, quiet, focusAttempts, pointerPlaced, notified, drawn: drawn.report(),
         atOverview: {pointer: [pointerX, pointerY], panelStates: Object.fromEntries(panelStates)},
     };
@@ -3508,8 +3571,8 @@ async function runProbe() {
             const A11y = await import('./a11y.js');
             result = await A11y.a11yReport({
                 settle, unit: cssUnit(), apexDock, findDescendant, openPopupMenu, openOsd, openBanner,
-                openModalDialog: () => openPromptDialog({avatar: true}), openEndSessionDialog: openShellEndSession, withSpotlight, typeInSpotlight,
-                inputDelivered,
+                openModalDialog: () => openPromptDialog({avatar: true}), openEndSessionDialog: openShellEndSession, withSpotlight,
+                openMountPasswordDialog, typeInSpotlight, inputDelivered,
             });
         } catch (e) {
             result = {error: `${e.message}\n${e.stack}`};

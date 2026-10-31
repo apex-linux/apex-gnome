@@ -205,6 +205,9 @@ jobs:
       - name: tests/ptyxis/contrast-test.sh on shoot.sh's captures
         run: tests/ptyxis/contrast-test.sh
 
+      - name: tests/ptyxis/layout-test.sh on shoot.sh's captures
+        run: tests/ptyxis/layout-test.sh
+
       - name: tests/s2c/agent.sh
         run: tests/s2c/agent.sh
 

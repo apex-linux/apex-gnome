@@ -188,6 +188,9 @@ collect() {
         { cat "$g2/$variant.log" "$g2/$variant.late.log" 2>/dev/null || :; } | sed -n 's/.*APEXG2-SIGNOFF //p' |
             jq -se 'any(.altTabShown == true)' >/dev/null ||
             missing+=("board 15, $variant: the Alt+Tab switcher never showed")
+        { cat "$g2/$variant.log" "$g2/$variant.late.log" 2>/dev/null || :; } | sed -n 's/.*APEXG2-SIGNOFF //p' |
+            jq -se 'any(.altTabUnfocused == true)' >/dev/null ||
+            missing+=("board 15, $variant: the focused window never drew itself unfocused under the switcher")
         scene=$(sed -n 's/.*APEXG2-SIGNOFF //p' "$g2/$variant.log" 2>/dev/null | jq -r '.error // empty' 2>/dev/null | head -n 1)
         [[ -z $scene ]] || missing+=("boards 15 and 35, $variant: $scene")
     done

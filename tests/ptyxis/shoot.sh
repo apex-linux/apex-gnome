@@ -21,7 +21,8 @@ terminals by a virtual keyboard, so the statuses come from bash's shell integrat
 (vte.sh); the split captures add board 33's right split of apex-gnome. The captures and
 logs land in _build/ptyxis/shots/. With APEX_PTYXIS_TARGETS=1 each capture also writes
 contrast-test.sh's targets, read over AT-SPI (python3-gobject, at-spi2-core), and the four
-scenes are taken again in high contrast (hc-light, hc-dark, hc-split-light, hc-split-dark).
+scenes are taken again in high contrast (hc-light, hc-dark, hc-split-light, hc-split-dark)
+and, light, with GNOME's Large Text (large, split-large) for layout-test.sh.
 
 It needs gnome-shell, mesa-dri-drivers, dbus-daemon, python3-dbusmock, gcc, util-linux and
 the Apex fonts (jetbrains-mono-fonts-all, adwaita-sans-fonts). G2's clock.c and fixtures.py
@@ -70,9 +71,11 @@ atspi=$out/contrast-atspi.py
 install -m 644 "$PTYXIS_TESTS/contrast-atspi.py" "$atspi"
 
 shoot() {
-    local name=$1 scene=$2 scheme=$3 style=$4 contrast=${5:-false}
-    headless_run "$out/$name.log" "$PTYXIS_TESTS/probe.js" "$SHELL_TIMEOUT" \
-        "org.gnome.desktop.interface color-scheme '$scheme'"$'\n'"org.gnome.Ptyxis interface-style '$style'"$'\n'"org.gnome.desktop.a11y.interface high-contrast $contrast" \
+    local name=$1 scene=$2 scheme=$3 style=$4 contrast=${5:-false} text=${6:-1.0}
+    local settings="org.gnome.desktop.interface color-scheme '$scheme'"$'\n'"org.gnome.Ptyxis interface-style '$style'"
+    settings+=$'\n'"org.gnome.desktop.a11y.interface high-contrast $contrast"
+    settings+=$'\n'"org.gnome.desktop.interface text-scaling-factor $text"
+    headless_run "$out/$name.log" "$PTYXIS_TESTS/probe.js" "$SHELL_TIMEOUT" "$settings" \
         APEX_SHOTS="$out" APEX_SHOT="$name" APEX_SCENE="$scene" ${APEX_PTYXIS_TARGETS:+APEX_SHOT_ATSPI="$atspi"}
     log "shoot.sh: $name: exit $?"
     grep -q 'APEXPTYXIS ' "$out/$name.log" && [[ -s $out/$name.png ]]
@@ -84,12 +87,14 @@ shoot light sessions default light || status=1
 shoot dark sessions prefer-dark dark || status=1
 shoot split-light split default light || status=1
 shoot split-dark split prefer-dark dark || status=1
-# High contrast for contrast-test.sh alone: signoff's captures stay the four above.
+# High contrast and large text for contrast-test.sh and layout-test.sh alone: signoff's captures stay the four above.
 if [[ -n ${APEX_PTYXIS_TARGETS:-} ]]; then
     shoot hc-light sessions default light true || status=1
     shoot hc-dark sessions prefer-dark dark true || status=1
     shoot hc-split-light split default light true || status=1
     shoot hc-split-dark split prefer-dark dark true || status=1
+    shoot large sessions default light false 1.25 || status=1
+    shoot split-large split default light false 1.25 || status=1
 fi
 ((status == 0)) || die "shoot.sh: a capture failed; see ${out#"$APEX_ROOT/"}/*.log"
 log "shoot.sh: captures in ${out#"$APEX_ROOT/"}"

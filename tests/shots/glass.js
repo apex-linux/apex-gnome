@@ -1077,6 +1077,93 @@ async function emptyBoxTests() {
     }
 }
 
+// The tile colours under a box, a tile's width past each side, between the windows and the shell.
+function tilesUnder({x, y, width, height}) {
+    const pattern = new St.Widget({x: x - TILE, y: y - TILE});
+    for (let row = 0; row < Math.ceil(height / TILE) + 2; row++) {
+        for (let column = 0; column < Math.ceil(width / TILE) + 2; column++) {
+            pattern.add_child(new St.Widget({
+                x: column * TILE, y: row * TILE, width: TILE, height: TILE,
+                style: `background-color: ${colourOf(column, row)};`,
+            }));
+        }
+    }
+    Main.uiGroup.insert_child_above(pattern, global.window_group);
+    return pattern;
+}
+
+// Within the stage: intellihide's slide takes the dock past the screen's edge.
+function unionOf(a, b) {
+    const x = Math.max(0, Math.min(a.x, b.x)), y = Math.max(0, Math.min(a.y, b.y));
+    const right = Math.min(global.stage.width, Math.max(a.x + a.width, b.x + b.width));
+    const bottom = Math.min(global.stage.height, Math.max(a.y + a.height, b.y + b.height));
+    return {x, y, width: right - x, height: bottom - y};
+}
+
+function boxOf(actor) {
+    const [x, y] = actor.get_transformed_position().map(Math.floor);
+    const [width, height] = actor.get_transformed_size().map(Math.ceil);
+    return {x, y, width: width + 1, height: height + 1};
+}
+
+// A glass moved by a property: the frame the move itself draws, against a full redraw of the
+// same state by a fresh glass, over the box it left and the box it took. A blur left behind differs.
+async function moved(glass, mover, move) {
+    const Registry = await import('resource:///org/gnome/shell/ui/apex/glass/registry.js');
+    const surface = Registry.surfaces().find(registered => registered.actor === glass);
+    if (!surface)
+        return null;
+    const scale = glass.get_resource_scale();
+    const rest = boxOf(glass);
+    const pattern = tilesUnder({...rest, y: rest.y - rest.height, height: 3 * rest.height});
+    try {
+        await laidOut(glass);
+        await fullFrame(Main.uiGroup, scale, unionOf(rest, rest));
+        const undo = move(mover);
+        const now = boxOf(glass);
+        const span = unionOf(rest, now);
+        try {
+            const frame = await nextFrame(scale, `moved ${glass}`, span);
+            // A full redraw alone would draw a kept result again: the glass is made anew first.
+            Registry.unregister(glass);
+            Registry.register(glass, surface);
+            const full = await fullFrame(Main.uiGroup, scale, span);
+            return {
+                moved: now.x !== rest.x || now.y !== rest.y || now.width !== rest.width,
+                enabled: glass.get_effect(GLASS_EFFECT)?.enabled ?? null,
+                covered: frame.covered,
+                differingFromFull: BlurRef.differing(frame.rgba, full),
+                pixels: full.length / 4,
+            };
+        } finally {
+            undo();
+        }
+    } finally {
+        pattern.destroy();
+    }
+}
+
+// Each move set by property, not by an animation's clock: up into the screen and down past its
+// edge, as intellihide slides it; a popover halfway open.
+async function motionTests() {
+    const dockBox = Main.layoutManager.uiGroup.get_children().find(actor => actor.get_name() === 'apexDockBox');
+    const slide = direction => box => {
+        box.translation_y = direction * Math.round(box.height / 2);
+        return () => (box.translation_y = 0);
+    };
+    const dock = await moved(dockBackground(), dockBox, slide(-1));
+    const dockPastEdge = await moved(dockBackground(), dockBox, slide(1));
+    const {quickSettings} = Main.panel.statusArea;
+    const popover = await withMenuOpen(quickSettings.menu, glass => moved(glass, quickSettings.menu.actor, boxPointer => {
+        // BoxPointer's open, halfway from 0.96 and the arrow's rise.
+        const rise = boxPointer.get_theme_node().get_length('-arrow-rise');
+        boxPointer.set_pivot_point(0.5, 0);
+        boxPointer.set({scale_x: 0.98, scale_y: 0.98, translation_y: -Math.round(rise / 2)});
+        return () => boxPointer.set({scale_x: 1, scale_y: 1, translation_y: 0});
+    }));
+    return {dock, dockPastEdge, popover};
+}
+
 // follow-opacity in pixels: a glass at HALF_OPACITY over the pattern draws that share of its blur
 // over the rest of the pattern, as the frames at 255 and at 0 show them; at 0 the pattern alone.
 async function opacityTests() {
@@ -1137,6 +1224,7 @@ async function managerTests() {
             opacity: await opacityTests(),
         };
         report.conformance = await conformanceTests(registered, report);
+        report.motion = await motionTests();
         return Object.assign(report, {
             reduceTransparency: await withSetting(apex, 'reduce-transparency', new GLib.Variant('b', true), surfacesState),
             highContrast: await withSetting(a11y, 'high-contrast', new GLib.Variant('b', true), surfacesState),

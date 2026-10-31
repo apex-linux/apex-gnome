@@ -97,6 +97,10 @@ def px:
   else error("\(.) is not a length in px") end;
 def colour_is($want): (. | rgba) as $got | [$got, ($want | rgba)] | transpose | all(.[0] - .[1] | fabs <= 1);
 def px_is($want): (. - ($want | px)) | fabs < 0.01;
+def luminance: map(. / 255 | if . <= 0.04045 then . / 12.92 else pow((. + 0.055) / 1.055; 2.4) end) | .[0] * 0.2126 + .[1] * 0.7152 + .[2] * 0.0722;
+def contrast_on($bg): (rgba) as $f | ($bg | rgba) as $b | ($f[3] / 255) as $a
+  | ([range(3) as $i | $f[$i] * $a + $b[$i] * (1 - $a)] | luminance) as $l | ($b[0:3] | luminance) as $m
+  | (([$l, $m] | max) + 0.05) / (([$l, $m] | min) + 0.05);
 '
 
 tokens_json() {
