@@ -1022,6 +1022,9 @@ quick_settings_layer() {
         expect "$label Quick Settings" "$scenes" \
             "$q.wifiMenu.rows | length > 1 and all(.accessibleName == \"\\(.ssid), \\(if .secure then \"Secure\" else \"Not secure\" end), Signal strength \\(.strength)%\")" \
             "each row names its network, security and its best access point's signal for a screen reader"
+        expect "$label Quick Settings" "$scenes" \
+            "$q.wifiMenu.late | .ssid == \"Apex-Late\" and .secure and .strength == 64 and .accessibleName == \"Apex-Late, Secure, Signal strength 64%\"" \
+            "a secured network that appears with the menu open is named secure, at its signal, for a screen reader"
         network_rows_centred "$label" "$scenes" "$q.wifiMenu.rows"
         top_bar_metric "$label Quick Settings" "$scenes" "$(tokens_for "$variant")" \
             'a secure network'"'"'s lock follows its name, $apex_quick_menu_lock_size in $apex_fg at $apex_quick_menu_lock_opacity' \

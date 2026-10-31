@@ -79,6 +79,10 @@ const SIGNOFF_FOCUS_ORDER = ['org.gnome.Calendar.desktop', 'org.gnome.TextEditor
 const SIGNOFF_QUIET_MS = 1500;
 const SIGNOFF_FOCUS_ATTEMPTS = 3;
 const WIFI_SCAN_MS = 5000;
+// A secured network that appears while the Wi-Fi menu is open (fixtures.py's NM mock).
+const LATE_NETWORK = {name: 'apexlate', ssid: 'Apex-Late', address: '02:A5:E0:00:00:09', frequency: 5745, rate: 866700,
+    strength: 64, security: 0x100};
+const NM_DEVICE = '/org/freedesktop/NetworkManager/Devices/wlan0';
 const TRAY_DRAIN_MS = 3000;
 const SHUTDOWN_HISTORY_DELAY_MS = 300;
 const SHUTDOWN_BANNER_TIMEOUT_MS = 100;
@@ -1060,32 +1064,65 @@ async function wifiMenuRows(unit) {
         await settle();
         const {_header: header, _headerSubtitle: subtitle} = wifi.menu;
         const meta = header.layout_manager.get_child_meta(header, subtitle);
-        const rows = findAll(wifi.menu.box, a => a.constructor.name === 'NMWirelessNetworkItem');
+        const rows = () => findAll(wifi.menu.box, a => a.constructor.name === 'NMWirelessNetworkItem');
+        const describe = row => {
+            const lock = row._secureIcon;
+            const children = row.get_children();
+            return {
+                ssid: row._label.text,
+                active: row.network.is_active,
+                checked: row.has_style_pseudo_class('checked'),
+                accessibleName: row.accessible_name ?? null,
+                accessibleChecked: row.get_accessible().ref_state_set().contains_state(Atk.StateType.CHECKED),
+                strength: row.network.signal_strength,
+                secure: !!lock.icon_name,
+                lockAfterName: children.indexOf(lock) === children.indexOf(row._label) + 1,
+                box: boxOf(row, unit), label: boxOf(row._label, unit), signal: boxOf(row._signalIcon, unit),
+                lockBox: lock.icon_name ? boxOf(lock, unit) : null,
+                lockSize: lengthOrNull(lock.get_theme_node(), 'icon-size', unit),
+                lockColor: hex(lock.get_theme_node().get_foreground_color()),
+            };
+        };
+        const listed = rows().map(describe);
         return {
             subtitle: {column: meta.left_attach, row: meta.top_attach, xAlign: subtitle.x_align, end: Clutter.ActorAlign.END},
-            rows: rows.map(row => {
-                const lock = row._secureIcon;
-                const children = row.get_children();
-                return {
-                    ssid: row._label.text,
-                    active: row.network.is_active,
-                    checked: row.has_style_pseudo_class('checked'),
-                    accessibleName: row.accessible_name ?? null,
-                    accessibleChecked: row.get_accessible().ref_state_set().contains_state(Atk.StateType.CHECKED),
-                    strength: row.network.signal_strength,
-                    secure: !!lock.icon_name,
-                    lockAfterName: children.indexOf(lock) === children.indexOf(row._label) + 1,
-                    box: boxOf(row, unit), label: boxOf(row._label, unit), signal: boxOf(row._signalIcon, unit),
-                    lockBox: lock.icon_name ? boxOf(lock, unit) : null,
-                    lockSize: lengthOrNull(lock.get_theme_node(), 'icon-size', unit),
-                    lockColor: hex(lock.get_theme_node().get_foreground_color()),
-                };
-            }),
+            rows: listed,
+            late: await lateNetworkRow(rows, describe),
         };
     } finally {
         wifi.menu.close(BoxPointer.PopupAnimation.NONE);
         menu.close(BoxPointer.PopupAnimation.NONE);
         await settle();
+    }
+}
+
+// network.js names a new network's row as its first access point arrives, before it is the
+// best one: the name must still end up with the access point's strength.
+async function lateNetworkRow(rows, describe) {
+    const call = (method, signature, args) => new Promise((resolve, reject) => Gio.DBus.system.call(
+        'org.freedesktop.NetworkManager', '/org/freedesktop/NetworkManager', 'org.freedesktop.DBus.Mock', method,
+        new GLib.Variant(signature, args), null, Gio.DBusCallFlags.NONE, -1, null, (bus, res) => {
+            try {
+                resolve(bus.call_finish(res).deepUnpack()[0]);
+            } catch (e) {
+                reject(e);
+            }
+        }));
+    const {name, ssid, address, frequency, rate, strength, security} = LATE_NETWORK;
+    let path;
+    try {
+        path = await call('AddAccessPoint', '(ssssuuuyu)',
+            [NM_DEVICE, name, ssid, address, 2, frequency, rate, strength, security]);
+        const late = () => rows().find(row => row._label.text === ssid);
+        for (let waited = 0; !late() && waited < WIFI_SCAN_MS; waited += 100)
+            await Scripting.sleep(100); // eslint-disable-line no-await-in-loop
+        await settle();
+        return late() ? describe(late()) : {error: `no row for ${ssid} within ${WIFI_SCAN_MS} ms`};
+    } catch (e) {
+        return {error: e.message};
+    } finally {
+        if (path)
+            await call('RemoveAccessPoint', '(ss)', [NM_DEVICE, path]).catch(() => {});
     }
 }
 
