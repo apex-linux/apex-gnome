@@ -20,15 +20,19 @@ schema it captures and checks the explanation the panel shows instead. It captur
 Appearance (board 23) light and dark on a gnome-backgrounds wallpaper, and appearance.py
 checks that the name and note follow the wallpaper. It captures Power (board 24) with an
 NVIDIA card under umockdev, and power.py checks the Graphics and Display group: the refresh
-row against its key both ways, and the card's row following power/runtime_status. Then, with
+row against its key both ways, and the card's row following power/runtime_status. With
+apex-desktop's keybindings and schema override ($APEX_DESKTOP_REV, or APEX_DESKTOP_SRC, a
+checkout), installed for that case only, it opens Keyboard, and keyboard.py checks that the
+shortcut list shows Open Spotlight on Super+Space and the input-source switch on
+Alt+Super+Space and Shift+Alt+Super+Space. Then, with
 update1.py standing in for apex-updated on the system bus, it opens System > Software
 Updates and captures board 18 light and dark, and updates.py checks each state's texts
-and that each button makes its Update1 call. The captures and logs land in
+and that each button makes its Update1 call; board 26's two dialogs are captured dark too. The captures and logs land in
 _build/control-center/shots/.
 
 It needs gnome-shell, mesa-dri-drivers, dbus-daemon, python3-dbusmock, python3-gobject,
 at-spi2-core, gcc, util-linux, adwaita-sans-fonts, python3-dbus, systemd,
-gnome-backgrounds and umockdev. G2's clock.c and fixtures.py
+gnome-backgrounds, umockdev and git-core. G2's clock.c and fixtures.py
 (tests/shots) are used as they are.
 EOF
 }
@@ -58,7 +62,7 @@ run_case() {
         APEX_SHOTS="$out" APEX_SHOT="$name" ADW_DEBUG_COLOR_SCHEME="$scheme" "$@"
     log "run.sh: $name: exit $?"
     grep -q 'APEXCC ' "$out/$name.log" && [[ -s $out/$name.png ]] || return 1
-    ! grep -q '"check":false' "$out/$name.log"
+    ! grep -q '"check":false\|"ready":false' "$out/$name.log"
 }
 
 status=0
@@ -73,10 +77,12 @@ amber="org.gnome.desktop.background picture-uri 'file:///usr/share/backgrounds/g
 org.gnome.desktop.background picture-uri-dark 'file:///usr/share/backgrounds/gnome/amber-d.jxl'
 org.gnome.desktop.background primary-color '#F57511'
 org.gnome.desktop.background secondary-color '#DD4C38'"
-CASE_SETTINGS=$amber run_case appearance-light default APEX_OPEN=background APEX_SCROLL=1 \
+CASE_SETTINGS=$amber run_case appearance-light default APEX_OPEN=background APEX_SCROLL=1 APEX_READY=thumbnails.py \
     "APEX_CHECK=appearance.py amber" || status=1
-CASE_SETTINGS=$amber run_case appearance-dark prefer-dark APEX_OPEN=background APEX_SCROLL=1 || status=1
-run_case appearance-custom default APEX_OPEN=background "APEX_CHECK=appearance.py custom" || status=1
+CASE_SETTINGS=$amber run_case appearance-dark prefer-dark APEX_OPEN=background APEX_SCROLL=1 APEX_READY=thumbnails.py \
+    || status=1
+run_case appearance-custom default APEX_OPEN=background APEX_READY=thumbnails.py "APEX_CHECK=appearance.py custom" \
+    || status=1
 
 # Board 24: Power with headless_dgpu's graphics under umockdev, then without an NVIDIA card.
 headless_dgpu "$out/dgpu.devices"
@@ -84,6 +90,11 @@ dgpu="APEX_LAUNCH=umockdev-run -d $out/dgpu.devices --"
 run_case power-light default APEX_OPEN=power APEX_SCROLL=1 "$dgpu" "APEX_CHECK=power.py dgpu" || status=1
 run_case power-dark prefer-dark APEX_OPEN=power APEX_SCROLL=1 "$dgpu" || status=1
 run_case power-no-dgpu default APEX_OPEN=power "APEX_CHECK=power.py plain" || status=1
+
+# S1b: Spotlight and the input-source switch in Keyboard's shortcut list, on apex-desktop's keys.
+headless_apex_desktop yes
+run_case keyboard default APEX_OPEN=keyboard APEX_SCROLL=1 "APEX_CLICK=keyboard.py locate" "APEX_CHECK=keyboard.py" || status=1
+headless_apex_desktop no
 
 # update_case SCENARIO NAME SCHEME [NAME=VALUE...]: System > Software Updates on update1.py's SCENARIO.
 update_case() {
@@ -99,10 +110,14 @@ update_case() {
 
 update_case ready updates-light default APEX_SCROLL=1 "APEX_CHECK=updates.py ready" || status=1
 update_case ready updates-dark prefer-dark APEX_SCROLL=1 || status=1
-for scenario in up-to-date available downloading health-failure fallback unavailable; do
+for scenario in up-to-date available waiting downloading health-failure fallback unavailable; do
     update_case "$scenario" "updates-$scenario" default "APEX_CHECK=updates.py $scenario" || status=1
+done
+# Board 26 dark: its two dialogs.
+for scenario in health-failure fallback; do
+    update_case "$scenario" "updates-$scenario-dark" prefer-dark || status=1
 done
 headless_update1_stop
 grep -h '^ok \|^FAIL \|APEXCC-' "$out"/*.log || true
 ((status == 0)) || die "run.sh: a case failed; see ${out#"$APEX_ROOT/"}/*.log"
-log "run.sh: every row is bound, Appearance and Power check out and every Software Updates state is checked; captures in ${out#"$APEX_ROOT/"}"
+log "run.sh: every row is bound, Appearance, Power and Keyboard check out and every Software Updates state is checked; captures in ${out#"$APEX_ROOT/"}"

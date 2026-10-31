@@ -12,11 +12,15 @@ import * as Scripting from 'resource:///org/gnome/shell/ui/scripting.js';
 
 Gio._promisify(Shell.Screenshot.prototype, 'screenshot_area');
 Gio._promisify(Gio.Subprocess.prototype, 'wait_check_async');
+Gio._promisify(Gio.Subprocess.prototype, 'communicate_utf8_async');
 
 // Board 11's Settings window, in the logical pixels of its 1440 × 900 desktop.
 const WINDOW = {x: 170, y: 64, width: 1100, height: 730};
 const SETTLE_MS = 3000;
 const WINDOW_WAIT_MS = 30000;
+const READY_WAIT_MS = 90000;
+const RESIZE_TRIES = 10;
+const STILL_MS = 5000;
 
 function settingsWindows() {
     return global.get_window_actors().map(a => a.meta_window)
@@ -36,6 +40,32 @@ async function capture(window, suffix) {
     return name;
 }
 
+// A capture counts once the frame has not changed for STILL_MS (an overshoot glow fades, a light/dark pair's dark
+// half paints after its light one) and APEX_READY's script, given the frame's width, passes on it.
+async function settledCapture(window, suffix) {
+    const ready = GLib.getenv('APEX_READY');
+    const now = () => GLib.get_monotonic_time() / 1000;
+    const deadline = now() + READY_WAIT_MS;
+    let last = null, since = now();
+    for (;;) {
+        const name = await capture(window, suffix);
+        const path = GLib.build_filenamev([GLib.getenv('APEX_SHOTS'), name]);
+        const [, contents] = GLib.file_get_contents(path);
+        const sum = GLib.compute_checksum_for_data(GLib.ChecksumType.SHA256, contents);
+        if (sum !== last) {
+            last = sum;
+            since = now();
+        }
+        if (now() - since >= STILL_MS && (!ready || await check(`${ready} ${path} ${window.get_frame_rect().width}`)))
+            return {name, ready: true};
+        if (now() > deadline) {
+            console.log(`APEXCC-NOT-READY ${name}: not settled and still for ${STILL_MS} ms within ${READY_WAIT_MS} ms`);
+            return {name, ready: false};
+        }
+        await Scripting.sleep(250);
+    }
+}
+
 async function scrollToEnd(window) {
     const pointer = global.stage.context.get_backend().get_default_seat()
         .create_virtual_device(Clutter.InputDeviceType.POINTER_DEVICE);
@@ -52,6 +82,30 @@ async function scrollToEnd(window) {
         pointer.notify_discrete_scroll(now(), Clutter.ScrollDirection.DOWN, Clutter.ScrollSource.WHEEL);
         await Scripting.sleep(30);
     }
+}
+
+// APEX_CLICK's locator prints "APEXCC-AT x y" in window coordinates: a row AT-SPI cannot activate gets a click.
+async function clickLocated(window, command) {
+    const [script, ...args] = command.split(' ');
+    const proc = Gio.Subprocess.new(['python3', GLib.build_filenamev([GLib.getenv('CC_TESTS'), script]), ...args],
+        Gio.SubprocessFlags.STDOUT_PIPE);
+    const [stdout] = await proc.communicate_utf8_async(null, null);
+    const at = stdout.match(/^APEXCC-AT (\d+) (\d+)$/m);
+    if (!at)
+        return false;
+    const r = window.get_buffer_rect();
+    const pointer = global.stage.context.get_backend().get_default_seat()
+        .create_virtual_device(Clutter.InputDeviceType.POINTER_DEVICE);
+    const now = () => GLib.get_monotonic_time();
+    // The seat drops a new pointer's first motion, so it moves twice.
+    for (let i = 0; i < 2; i++) {
+        pointer.notify_absolute_motion(now(), r.x + Number(at[1]), r.y + Number(at[2]));
+        await Scripting.sleep(100);
+    }
+    pointer.notify_button(now(), Clutter.BUTTON_PRIMARY, Clutter.ButtonState.PRESSED);
+    pointer.notify_button(now(), Clutter.BUTTON_PRIMARY, Clutter.ButtonState.RELEASED);
+    await Scripting.sleep(SETTLE_MS);
+    return true;
 }
 
 async function check(command) {
@@ -78,21 +132,33 @@ async function probe() {
     const [window] = settingsWindows();
     if (!window)
         throw new Error(`no Settings window ${WINDOW_WAIT_MS} ms after gnome-control-center ${page.join(' ')}`);
-    // The first resize can land before the window is mapped, so the second makes the size stick.
-    for (let i = 0; i < 2; i++) {
+    // A resize can land before the window is mapped, or while it is busy, so it is sent until the frame matches.
+    const sized = () => {
+        const r = window.get_frame_rect();
+        return r.x === WINDOW.x && r.y === WINDOW.y && r.width === WINDOW.width && r.height === WINDOW.height;
+    };
+    for (let i = 0; i < 2 || (!sized() && i < RESIZE_TRIES); i++) {
         window.move_resize_frame(false, WINDOW.x, WINDOW.y, WINDOW.width, WINDOW.height);
         await Scripting.sleep(SETTLE_MS);
     }
+    if (!sized())
+        throw new Error(`the Settings window is not ${WINDOW.width}x${WINDOW.height} after ${RESIZE_TRIES} resizes`);
 
     const command = GLib.getenv('APEX_CHECK');
-    const result = {top: await capture(window, '')};
+    const top = await settledCapture(window, '');
+    const result = {top: top.name, ready: top.ready};
     if (GLib.getenv('APEX_SCROLL')) {
         await scrollToEnd(window);
         await Scripting.sleep(SETTLE_MS);
-        result.scrolled = await capture(window, '-scrolled');
+        const scrolled = await settledCapture(window, '-scrolled');
+        result.scrolled = scrolled.name;
+        result.ready &&= scrolled.ready;
     }
+    const click = GLib.getenv('APEX_CLICK');
+    if (click)
+        result.clicked = await clickLocated(window, click);
     if (command)
-        result.check = await check(command);
+        result.check = result.clicked !== false && await check(command);
     const r = window.get_frame_rect();
     result.frame = [r.x, r.y, r.width, r.height];
     console.log(`APEXCC ${JSON.stringify(result)}`);

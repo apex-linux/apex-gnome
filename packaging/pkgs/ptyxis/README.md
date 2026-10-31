@@ -27,6 +27,9 @@ escalation rule. The lane, `apex-lane`, and the formats of the files here are in
   upstream file. Nothing is moved or deleted.
 - Fedora's spec has no patch of its own; the series follows as `Patch1001` and up, and
   `%autosetup -p1` applies it with `patch`, at Fedora's fuzz 0.
+- Checked 2026-10-30 against GNOME 51.1 (FEDORA-2026-2812a1754d): no ptyxis update is
+  pending for F45. The series applies at fuzz 0 to ptyxis-50.1-6.fc45 and the lane
+  builds it with the 51.1 update in the buildroot.
 
 ## `desktop/ptyxis/`
 
@@ -93,8 +96,12 @@ and `just pkg-export ptyxis`, as for gnome-shell
 just ptyxis-test     # desktop/ptyxis's licence and paths; the status logic's unit test
 just ptyxis-lane     # podman or docker: apex-lane's container half in fedora:45
 just ptyxis-shots    # the built RPM in a headless gnome-shell, light and dark
-just ptyxis-palette  # the built RPM: a palette rewritten under an open terminal
+just ptyxis-palette  # the built RPM: a palette rewritten, and the accent's caret, under an open terminal
+just ptyxis-panes    # the built RPM: board 33's panes split, focused, closed, each with its status
 ```
+
+For C, `just app-dev ptyxis` in apex-image rebuilds the Apex build the desktop VM runs
+incrementally and runs it there ([desktop/README.md](../../../desktop/README.md#c-in-the-apps-just-app-dev)).
 
 `tests/lib/lane.sh ptyxis` builds `apex-lane` from a pinned apex-image commit and runs its
 container half, `apex-lane in-container build ptyxis`, as the builder VM does: the
@@ -120,5 +127,58 @@ it after the lane and keeps the captures as the `ptyxis-shots` artifact.
 `tests/ptyxis/palette-test.sh` runs the same headless shell. Its automation script,
 `palette-probe.js`, opens a terminal on a user palette with a red background, rewrites
 the file with a green one, and samples the terminal's pixels; the test fails unless the
-terminal is green within 1 s. On Fedora's own ptyxis it stays red. CI runs it after the
-captures.
+terminal is green within 1 s. On Fedora's own ptyxis it stays red. It then starts
+apex-session-agent, built by `tests/s2c/agent.sh`, with the accent blue, finds the
+terminal's caret in the accent (Ptyxis's `cursor-blink-mode` off), turns the accent
+green, and fails unless the caret is green within 1 s. CI runs it after the captures.
+
+`tests/ptyxis/panes-test.sh` runs the same headless shell on one apex-gnome session,
+with `fixture.c` and `sessions.sh` as `shoot.sh` uses them. Its automation script,
+`panes-probe.js`, reads Ptyxis over AT-SPI and drives it with a virtual keyboard and
+pointer. It splits with the header's Split Right and Split Down toggles and with
+Ctrl+Alt+R and Ctrl+Alt+D. It focuses each pane by a click and measures the other's
+dimming against DESIGN's .7 header and .62 body. It runs `cargo` and `claude` in the
+second pane and `rpmbuild` and `just` in the first, so each header shows its own
+command, OSC 9;4 progress, exit status and bell. The bell's needs-you clears on focus,
+and the session row keeps the stronger status. Close Pane on the second pane's header
+then unsplits. A `true` typed first, which ends within one VTE batch, must leave the
+session done. CI runs it after the palette test.
+
+## S6 (Fedora 46)
+
+Checked 2026-10-30 against rawhide, the base of apex-image's `next` lane
+(`image/fedora/46.env`, `REPOS_BASE`). Rawhide has not rebuilt Ptyxis or VTE yet:
+
+| Package | Fedora 45 | Rawhide (46) |
+|---|---|---|
+| ptyxis | 50.1-6.fc45 | 50.1-6.fc45, F45's build signed with F46's key |
+| vte291-gtk4 | 0.84.1-1.fc45 | 0.84.1-1.fc45 |
+| libadwaita | 1.10.0-2.fc45 | 1.10.0-3.fc46 |
+| gtk4, glib2 | F45's | 4.24.1-1.fc46, 2.90.1-1.fc46 |
+| gnome-shell, mutter | 51.1 | 51.1-1.fc46, 51.1-2.fc46 |
+
+- **The lane:** `tests/lib/lane.sh ptyxis` in that container (`APEX_FEDORA=46`)
+  downloads and verifies the SRPM, then stops: "stock release 6.fc45 does not end in
+  the container's %dist .fc46". apex-lane builds only a stock release of the
+  container's own Fedora, so the `next` lane builds Ptyxis once Fedora rebuilds it for
+  46 (the mass rebuild, or Ptyxis 52). Whether it should also take an inherited build is
+  apex-image's call.
+- **The series, built by hand there:** the F45 lane's Apex SRPM
+  (`ptyxis-50.1-6.fc45.apex1.src.rpm`), rebuilt with `rpmbuild --rebuild` in the same
+  container, applies its four patches at fuzz 0. `src/apex/` compiles with no warning
+  against rawhide's libadwaita, GTK and GLib; the build's one warning, an unused `self`
+  in `ptyxis-window.c` when `g_assert` compiles out, is upstream's and F45's too.
+  Fedora's `%check` passes.
+- **The tests**, on that build in that container: `status-test.sh` 18 of 18;
+  `palette-test.sh` takes the rewritten palette in 57 ms and the accent's caret in
+  52 ms (apex-session-agent 70fa599); `panes-test.sh` passes all 23 checks, its
+  dimming included.
+
+Nothing needed fixing for 46. Left for S6:
+- the first real F46 Ptyxis and VTE: re-run this, then rebase the series. Ptyxis 52's
+  `ptyxis-window.c` and `ptyxis-tab.c` are where the hunks' contexts can move;
+- apex-session reads a batch of shell marks in VTE's termprop id order
+  (`VTE_PROPERTY_ID_SHELL_PRECMD` 6, `PREEXEC` 7, `POSTEXEC` 8): a VTE that renumbers
+  them, or emits them apart, is checked by `status-test.sh` and the panes test's `true`;
+- the lane's stop on an inherited build, above, if 46 branches before Fedora rebuilds
+  Ptyxis.

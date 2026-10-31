@@ -461,6 +461,16 @@ function inputChipEllipsize({_container: container}) {
     return container.get_children().map(label => ['none', 'start', 'middle', 'end'][label.clutter_text.ellipsize]).join(',');
 }
 
+function clearState({_messageList: list}) {
+    return `placeholder=${list._placeholder.visible} clear=${list._clearButton.visible}`;
+}
+
+// What calendar.js's binding does once the placeholder changes.
+function setPlaceholder({_messageList: list}, visible) {
+    list._placeholder.visible = visible;
+    list._clearButton.visible = !visible;
+}
+
 function newHotCorner() {
     const signalHandlers = {};
     let triggers = 0;
@@ -697,10 +707,13 @@ async function exerciseNotifications() {
         fact(`${label}.days`, `${month.days.map(b => day(b.get_child())).join(' ')} ` +
             `own-text=${month.days.every((b, i) => b.get_child() === month.texts[i])}`);
     };
+    const Main = await import(`file://${shellDir}/js/ui/main.js`);
+    const trayCleared = () => Main.messageTray.cleared.splice(0).join(',') || 'none';
     calendarState('nf');
     settings.set_boolean('layer-enabled', false);
     await spin(200);
     calendarState('nf.off');
+    fact('nf.off.tray', trayCleared());
     groups.push(new MessageList.NotificationMessageGroup({title: 'Chat', icon: 'chat-icon'}, 2));
     notificationsState('nf.off', list, groups);
     cardsState('nf.off', groups[0]);
@@ -710,6 +723,9 @@ async function exerciseNotifications() {
     notificationsState('nf.on', list, groups);
     cardsState('nf.on', groups[0]);
     calendarState('nf.on');
+    fact('nf.on.tray', trayCleared());
+    Main.layoutManager.uiGroup.emit('destroy');
+    fact('nf.teardown.tray', trayCleared());
 }
 
 // endSessionDialog.js as patch 0018's hook sees it: a stock row of Cancel and the confirm
@@ -1027,9 +1043,10 @@ async function exerciseTopBar() {
     Main.sessionMode.lock(false);
     fact('right-box.after-session-update', rightBoxOrder(Main));
     fact('input-chip', inputChipTexts(keyboard));
+    fact('clear', clearState(Main.panel.statusArea.dateMenu));
     // keyboard.js renames a label for an IBus input mode, and adds one for a new source.
     const [, vietnamese] = keyboard._container.get_children();
-    vietnamese.text = 'vi₂';
+    vietnamese.text = 'Ắ₂';
     vietnamese.emit('notify::text');
     const french = new St.Label({text: 'fr'});
     keyboard._container.add_child(french);
@@ -1052,6 +1069,11 @@ async function exerciseTopBar() {
         corner.handlers['enter-event']();
     }
 
+    if (GLib.getenv('PROBE_CLEAR_SYNCED') === '1') {
+        setPlaceholder(Main.panel.statusArea.dateMenu, false);
+        setPlaceholder(Main.panel.statusArea.dateMenu, true);
+    }
+
     settings.set_boolean('layer-enabled', false);
     await spin(200);
     topBarHooks('top-bar.off');
@@ -1062,12 +1084,14 @@ async function exerciseTopBar() {
     fact('right-box.off', rightBoxOrder(Main));
     fact('input-chip.off', inputChipTexts(keyboard));
     fact('input-chip.off.ellipsize', inputChipEllipsize(keyboard));
+    fact('clear.off', clearState(Main.panel.statusArea.dateMenu));
     settings.set_boolean('layer-enabled', true);
     await spin(200);
     fact('pill.on', pillNames(quickSettings));
     fact('recording.on', screenParts(screenRecording));
     fact('sharing.on', screenParts(screenSharing));
     fact('input-chip.on', inputChipTexts(keyboard));
+    fact('clear.on', clearState(Main.panel.statusArea.dateMenu));
 }
 
 async function exerciseSolidBar() {
@@ -1413,6 +1437,65 @@ async function exerciseLock() {
     idle(null);
     fact('lock.idle-cancel.unlocked', `${Hooks.value('unlock-idle-cancel', true, null)}`);
     fact('lock.idle-cancel.other-dialog', `${Hooks.value('unlock-idle-cancel', true, newUnlockDialog(St))}`);
+
+    // UnlockDialogLayout's stack box through the hook, given the layout and its box: 51.0's at every height.
+    const boxed = newUnlockDialog(St);
+    Hooks.run('unlock-dialog', boxed);
+    await spin(50);
+    const notifications = {get_preferred_size: () => [0, 0, 0, 40]};
+    for (const height of [900, 1080, 1440]) {
+        boxed.height = height;
+        boxed.emit('notify::height');
+        const given = {x1: 0, x2: 100, y1: -1, y2: -1};
+        const got = Hooks.value('unlock-stack-box', given, {_stack: boxed._stack, _notifications: notifications},
+            {get_height: () => height});
+        fact(`lock.stack-box.${height}`, `${got.y1}..${got.y2}`);
+        fact(`lock.stack-height.${height}`, `${boxed._stack.natural_height}`);
+    }
+    const otherBox = Hooks.value('unlock-stack-box', {y1: -1, y2: -1},
+        {_stack: newUnlockDialog(St)._stack, _notifications: notifications}, {get_height: () => 900});
+    fact('lock.stack-box.other', `${otherBox.y1}..${otherBox.y2}`);
+    boxed.emit('destroy');
+    // logind's PrepareForSleep around ScreenShield's _prepareForSleep: before sleep the hook, then the
+    // dialog's cancel; at resume upstream only wakes the screen.
+    const LoginManager = await import(`file://${shellDir}/js/misc/loginManager.js`);
+    const sleep = (sleeper, aboutToSuspend) => LoginManager.prepareForSleep(aboutToSuspend, asleep => {
+        if (asleep && Hooks.value('unlock-sleep-cancel', true, sleeper)) {
+            sleeper?._showClock();
+            sleeper?._maybeDestroyAuthPrompt();
+        }
+    });
+    const slept = newUnlockDialog(St);
+    Hooks.run('unlock-dialog', slept);
+    await spin(50);
+    fact('lock.sleep-cancel', `${Hooks.value('unlock-sleep-cancel', true, null)} ${Hooks.value('unlock-sleep-cancel', true, newUnlockDialog(St))}`);
+    say(slept, 'gdm-fingerprint', 'Failed to match fingerprint', true);
+    sleep(slept, true);
+    fact('lock.sleep', lockState(slept));
+    setScreen(PowerSave.OFF);
+    setScreen(PowerSave.ON);
+    fact('lock.sleep.wake', lockState(slept));
+    sleep(slept, false);
+    fact('lock.resume', lockState(slept));
+    fact('lock.resume.keys', slept._authPrompt?.keys ?? 'none');
+    fact('lock.hint.after-resume', hintState(slept));
+    say(slept, 'gdm-fingerprint', '(or place finger on reader)', false);
+    fact('lock.hint.after-resume.scan', hintState(slept));
+    sleep(slept, true);
+    setScreen(PowerSave.OFF);
+    sleep(slept, false);
+    fact('lock.resume-blank', lockState(slept));
+    setScreen(PowerSave.ON);
+    fact('lock.resume-blank.wake', lockState(slept));
+    slept.emit('destroy');
+    LoginManager.prepareForSleep(true);
+    const lockedForSleep = newUnlockDialog(St);
+    Hooks.run('unlock-dialog', lockedForSleep);
+    await spin(50);
+    fact('lock.locked-for-sleep', lockState(lockedForSleep));
+    sleep(lockedForSleep, false);
+    fact('lock.locked-for-sleep.resume', lockState(lockedForSleep));
+    lockedForSleep.emit('destroy');
 
     for (const reply of ['silent', 'error']) {
         displayConfig.reply = reply;

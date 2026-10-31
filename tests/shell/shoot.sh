@@ -17,16 +17,21 @@ The lock screen, the greeter, the date menu and the end-session dialog of the gn
 _build/gnome-shell/out), headless at scale 2, as root in a throwaway fedora:$APEX_FEDORA
 container (just lock-shots). gdm-mock.py stands in for GDM: it asks one question and
 fails every answer, so no case can unlock; lock-refused's GDM refuses even to ask, and
-lock-fingerprint's also runs gdm-fingerprint against fprintd-mock.py's reader. Each lock
+lock-fingerprint's also runs gdm-fingerprint against fprintd-mock.py's reader, and
+lock-fingerprint-suspend runs it across logind's sleep and resume. Each lock
 case locks, answers wrongly (lock-fingerprint fails a scan), blanks and wakes the screen,
 but lock-wake-key: after Esc and a blank, a Return that arrives after the wake, and
 lock-wake-key-blank the same, locked while blank; lock-idle sends gnome-session's
-IDLE at lock, as every real lock does, then blanks and wakes with no key; each greeter case (--mode=gdm) shows the user list, then the
+IDLE at lock, as every real lock does, then blanks and wakes with no key; lock-suspend
+has logind's mock prepare for sleep and resume; each greeter case (--mode=gdm) shows the user list, then the
 prompt. Each polkit case opens the shell's own authentication dialog through the polkit
 component's _onInitiate(), with a stubbed PolkitAgent.Session that PAM never answers, for
-captures and style checks only (pkexec end to end is G4's). date-menu opens the date menu, sends
+captures and style checks only (pkexec end to end is G4's); polkit-lock and polkit-suspend
+lock the screen, or sleep and resume, under the open dialog, type at the lock, then end the lock,
+and polkit-lock-safe does so in safe mode. date-menu opens the date menu, sends
 the shell's notification daemon one notification, then four more, toggles Do Not Disturb twice
-and clears the list; date-menu-disabled does the same with the layer's notifications off.
+and clears the list; date-menu-disabled does the same with the layer's notifications off. Both
+run without the search hint, so no notification syncs stock's Clear before panel/clear-sync.js does.
 Each end-session case opens the end-session dialog over D-Bus against update1-mock.py's
 Update1 (tests/shots), from up to date through staged and ready-for-reboot to failing Applies.
 check.py asserts the cases' logs and the mock's. The users apex and guest come
@@ -189,7 +194,7 @@ shoot() {
     rm -rf "$home/.config/dconf"
     run=$(mktemp -d)
     chown "$user:" "$run" && chmod 700 "$run"
-    if [[ " $* " == *" APEX_FINGERPRINT=1 "* ]]; then
+    if [[ " $* " == *" APEX_FINGERPRINT="* ]]; then
         fingerprint=(--fingerprint)
         python3 "$HERE/fprintd-mock.py" "$out/$name.fprintd.log" 2>"$out/$name.fprintd.err" &
         fprintd=$!
@@ -236,9 +241,11 @@ shoot lock-refused "$USER_NAME" user default '' || status=1
 shoot lock-wake-key "$USER_NAME" user default 'Password:' -- APEX_WAKE_KEY=clock || status=1
 shoot lock-wake-key-blank "$USER_NAME" user default 'Password:' -- APEX_WAKE_KEY=locked-blank || status=1
 shoot lock-idle "$USER_NAME" user default 'Password:' -- APEX_IDLE=1 || status=1
+shoot lock-suspend "$USER_NAME" user default 'Password:' -- APEX_SUSPEND=1 || status=1
 notifications_off="io.github.apex_linux.Apex.Desktop disabled-features ['notifications']"
-shoot date-menu "$USER_NAME" user default 'Password:' -- APEX_DATE_MENU=1 || status=1
-shoot date-menu-disabled "$USER_NAME" user default 'Password:' "$notifications_off" -- APEX_DATE_MENU=1 || status=1
+hint_shown="io.github.apex_linux.Apex.Desktop search-hint-shown true"
+shoot date-menu "$USER_NAME" user default 'Password:' "$hint_shown" -- APEX_DATE_MENU=1 || status=1
+shoot date-menu-disabled "$USER_NAME" user default 'Password:' "$hint_shown" "$notifications_off" -- APEX_DATE_MENU=1 || status=1
 shoot lock-high-contrast "$USER_NAME" user default 'Password:' "org.gnome.desktop.a11y.interface high-contrast true" || status=1
 shoot lock-large-text "$USER_NAME" user default 'Password:' "org.gnome.desktop.interface text-scaling-factor 1.25" || status=1
 # authselect locks GDM's fingerprint key off; an image with a reader enables the feature.
@@ -246,6 +253,7 @@ if ! authselect enable-feature with-fingerprint >"$out/authselect.log" 2>&1 || !
     die "authselect cannot enable with-fingerprint; see ${out#"$APEX_ROOT/"}/authselect.log"
 fi
 shoot lock-fingerprint "$USER_NAME" user default 'Password:' -- APEX_FINGERPRINT=1 || status=1
+shoot lock-fingerprint-suspend "$USER_NAME" user default 'Password:' -- APEX_FINGERPRINT=suspend || status=1
 if ! authselect disable-feature with-fingerprint >>"$out/authselect.log" 2>&1 || ! dconf update; then
     log "authselect: cannot disable with-fingerprint"
 fi
@@ -257,6 +265,9 @@ for scheme in light dark; do
 done
 shoot polkit-fingerprint "$USER_NAME" user default 'Password:' -- APEX_POLKIT=1 APEX_POLKIT_INFO=fingerprint || status=1
 shoot polkit-disabled "$USER_NAME" user default 'Password:' "$polkit_off" -- APEX_POLKIT=1 || status=1
+shoot polkit-lock "$USER_NAME" user default 'Password:' -- APEX_POLKIT=lock || status=1
+shoot polkit-suspend "$USER_NAME" user default 'Password:' -- APEX_POLKIT=suspend || status=1
+shoot polkit-lock-safe "$USER_NAME" user default 'Password:' -- APEX_POLKIT=lock APEX_SHELL_SAFE=1 || status=1
 # The end-session dialog's update card against a fresh Update1 each time: the probe moves it
 # from up to date through staged and ready-for-reboot to an Apply that fails.
 for scheme in light dark; do

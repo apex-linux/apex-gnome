@@ -5,7 +5,7 @@ $_quick_toggle_width: apex-text-size(($apex_quick_settings_width - 2 * $apex_qui
 $_quick_toggle_checked: st-mix(black, $apex_accent, $apex_quick_toggle_checked_shade);
 $_toggle_states: hover, focus, active;
 
-// Glass, like the OSD: the tint until S2b's glass manager blurs behind it.
+// Glass, like the OSD: the glass manager blurs behind the tint.
 .popup-menu-content.quick-settings {
   @include apex-surface($apex_panel);
   @include apex-shadow-layer;
