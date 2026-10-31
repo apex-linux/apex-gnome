@@ -571,13 +571,25 @@ async function settle() {
         }),
         Scripting.sleep(SETTLE_TIMEOUT_MS),
     ]);
-    // Leisure can come while a queued relayout still waits for the frame clock.
+    // Leisure can come while a queued relayout still waits for the frame clock, and with laters queued:
+    // one queued now runs after them, and the frame painted then runs any they queued in turn.
+    await latersRun();
     await paintedFrame();
     const deadline = GLib.get_monotonic_time() + SETTLE_TIMEOUT_MS * 1000;
     while (iconLoading(global.stage) && GLib.get_monotonic_time() < deadline)
         // eslint-disable-next-line no-await-in-loop
         await paintedFrame();
     return idle;
+}
+
+function latersRun() {
+    return new Promise(resolve => {
+        global.compositor.get_laters().add(Meta.LaterType.BEFORE_REDRAW, () => {
+            resolve();
+            return GLib.SOURCE_REMOVE;
+        });
+        global.stage.queue_redraw();
+    });
 }
 
 // St loads an icon's texture in a thread, which leisure does not wait for: until then it is at opacity 0.

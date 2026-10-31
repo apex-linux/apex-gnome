@@ -1040,8 +1040,10 @@ root-cause: make it fail on demand first, then make it impossible. A retry, a lo
 rerun on failure hides it until a gate run meets it.
 
 The probe waits on events, never on a fixed time. `settle()` is `waitLeisure` (no `begin_work` held:
-no animation) or its 20 s cap, then one painted frame, then more frames while any mapped `St.Icon`
-still waits for its texture (St loads it in a thread, at opacity 0 until then). Leisure does not see
+no animation) or its 20 s cap, then a `BEFORE_REDRAW` later of its own (laters run in order, so every
+one queued before it has run), then one painted frame (which runs any later those queued), then more
+frames while any mapped `St.Icon` still waits for its texture (St loads it in a thread, at opacity 0
+until then). Leisure does not see
 a pending GLib timeout, another thread or a virtual device's events, so a step that depends on one
 waits for its effect: `typeInSpotlight` awaits Spotlight's own search (after its 50 ms typing pause),
 the sign-off Alt+Tab waits for the popup to show (after switcherPopup.js's 150 ms delay), and
