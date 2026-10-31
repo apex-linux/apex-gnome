@@ -38,6 +38,8 @@ $_item_bottom: $apex_dock_dot_gap + $apex_dock_dot_size;
     &:hover, &:focus, &:active, &:checked {
       .overview-icon { background-color: transparent; box-shadow: none; }
     }
+
+    &:focus .overview-icon { box-shadow: inset 0 0 0 $apex_entry_focus_ring $apex_accent !important; }
   }
 
   .show-apps-icon {
