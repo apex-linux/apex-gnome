@@ -1035,7 +1035,7 @@ async function exerciseTopBar() {
     fact('input-chip', inputChipTexts(keyboard));
     // keyboard.js renames a label for an IBus input mode, and adds one for a new source.
     const [, vietnamese] = keyboard._container.get_children();
-    vietnamese.text = 'vi₂';
+    vietnamese.text = 'Ắ₂';
     vietnamese.emit('notify::text');
     const french = new St.Label({text: 'fr'});
     keyboard._container.add_child(french);

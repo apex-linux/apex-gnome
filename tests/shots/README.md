@@ -318,7 +318,8 @@ apps are, and registers them with the shell's watcher. Every call an item gets l
   glyphs and place in the status pill, whose start narrows for it and widens again once
   nothing is in use; the recording pill's stop square and tabular timer; the sharing
   pill's glyph, square, name and gap to the status pill; the input chip's "EN", font,
-  tracking and minimum width.
+  tracking and minimum width, and each source's chip: an xkb source's short name in
+  capitals, an IBus source's engine language code.
 
 The captures `<case>-indicators.png`, `<case>-indicators-everything.png`,
 `<case>-indicator-menu.png` and `<case>-indicator-overflow.png` show the bar, the bar in
