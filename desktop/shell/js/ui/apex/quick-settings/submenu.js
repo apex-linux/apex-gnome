@@ -34,6 +34,9 @@ export function addRow(item) {
     // network.js leaves the name filling the row, its text at the top of board 17's taller rows.
     item._label.y_align = Clutter.ActorAlign.CENTER;
     _followActive(item);
+    // network.js sets the row's checked state and accessible name only on a change (51.0, 51.1).
+    item._isActiveChanged();
+    item._updateAccessibleName();
 }
 
 function _forgetRow(item) {
