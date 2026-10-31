@@ -771,6 +771,7 @@ function describeBar() {
         clear: statusArea.dateMenu._messageList._clearButton.visible,
         mode: Main.sessionMode.currentMode,
         overview: Main.overview.visible,
+        pointer: global.get_pointer().slice(0, 2),
     };
 }
 
@@ -794,10 +795,11 @@ function emitSessionSignal(signal) {
         null, Gio.DBusCallFlags.NONE, -1, null);
 }
 
-// The bar across two locks: logind's Lock and Unlock, then the lock's own stage with its prompt up
-// and GDM's success (deactivate(), as gdm-mock never gives one). Each unlock gives back the same bar.
+// The desktop's bar across two locks: logind's Lock and Unlock, then the lock's own stage and GDM's
+// success (deactivate(), as gdm-mock never gives one). Each unlock gives back the same bar.
 async function shootBarCycle() {
     await Scripting.sleep(SETTLE_MS);
+    Main.overview.hide();
     Main.messageTray.getSources().forEach(source => source.destroy());
     await Scripting.sleep(STEP_MS);
     fact('before', describeBar());

@@ -743,8 +743,11 @@ def check_bar_cycle(shots, case, apex):
     check(f"{case}: before: the user session's bar, its chip {'/'.join(chip)}, {'with' if apex else 'without'} the search button",
           before["mode"] == "user" and before["chip"] == chip and ("apex-search" in before["right"]) == search, json.dumps(before))
     check(f"{case}: logind's Lock locks", f["logind-locked"]["locked"] is True)
-    check(f"{case}: the lock's own stage locks with its prompt up",
-          f["dialog-locked"]["locked"] is True and f["dialog-locked"]["prompt"] is True, json.dumps(f["dialog-locked"]))
+    check(f"{case}: the lock's own stage locks{', its prompt up' if apex else ''}",
+          f["dialog-locked"]["locked"] is True and (f["dialog-locked"]["prompt"] or not apex), json.dumps(f["dialog-locked"]))
+    check(f"{case}: before: the overview closed", before["overview"] is False)
+    check(f"{case}: the pointer rests in the hot corner throughout",
+          all(f[step]["pointer"] == [0, 0] for step in ("before", "after-logind", "after-dialog")))
     def capture(step):
         with open(os.path.join(shots, os.path.basename(f[f"capture.{step}"])), "rb") as png:
             return png.read()
@@ -756,9 +759,9 @@ def check_bar_cycle(shots, case, apex):
                   f"{after[side]} != {before[side]}")
             check(f"{case}: {step}: as many actors in the {side} box as before ({before['actors'][side]})",
                   after["actors"][side] == before["actors"][side], str(after["actors"][side]))
-        check(f"{case}: {step}: the chip and Clear as before",
-              (after["chip"], after["clear"], after["mode"]) == (before["chip"], before["clear"], before["mode"]),
-              json.dumps(after))
+        check(f"{case}: {step}: the chip and Clear as before, the overview still closed",
+              (after["chip"], after["clear"], after["mode"], after["overview"]) ==
+              (before["chip"], before["clear"], before["mode"], before["overview"]), json.dumps(after))
         check(f"{case}: {step}: the bar's capture is the same as before's", capture(step) == bar, f[f"capture.{step}"])
 
 

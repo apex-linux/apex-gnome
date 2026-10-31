@@ -1058,15 +1058,17 @@ async function exerciseTopBar() {
     Hooks.run('hot-corner', corner, Main.layoutManager);
     fact('hot-corner.zone', `${corner.name ?? 'none'} reactive=${corner.reactive ?? false} ` +
         `x=${corner.x} y=${corner.y} ${corner.width}x${corner.height}`);
-    if (corner.handlers['enter-event']) {
-        corner.handlers['enter-event']();
-        corner.handlers['enter-event']();
+    if (corner.handlers['motion-event']) {
+        corner.handlers['enter-event']?.();
+        fact('hot-corner.after-enter', corner._pressureBarrier._isTriggered);
+        corner.handlers['motion-event']();
+        corner.handlers['motion-event']();
         corner._pressureBarrier._barriers[0]._isHit = true;
         corner.handlers['leave-event']();
         fact('hot-corner.after-leave-on-the-barrier', corner._pressureBarrier._isTriggered);
         corner._pressureBarrier._barriers[0]._isHit = false;
         corner.handlers['leave-event']();
-        corner.handlers['enter-event']();
+        corner.handlers['motion-event']();
     }
 
     if (GLib.getenv('PROBE_CLEAR_SYNCED') === '1') {
