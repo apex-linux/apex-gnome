@@ -1546,9 +1546,9 @@ function newAuthenticationDialog(St, {
     userBox.add_child(avatar);
     userBox.add_child(userLabel);
     const info = new St.Label({style_class: 'prompt-dialog-info-label', visible: false, text: ''});
+    const error = new St.Label({style_class: 'prompt-dialog-error-label', visible: false, text: ''});
     const warnings = new St.BoxLayout({name: 'warnings'});
-    for (const label of [new St.Label({name: 'caps-lock'}), new St.Label({name: 'error', visible: false}),
-        info, new St.Label({name: 'null'})])
+    for (const label of [new St.Label({name: 'caps-lock'}), error, info, new St.Label({name: 'null'})])
         warnings.add_child(label);
     const body = new St.BoxLayout({name: 'body'});
     for (const part of [userBox, new St.Entry({name: 'password'}), warnings])
@@ -1560,7 +1560,8 @@ function newAuthenticationDialog(St, {
     Object.assign(user, {is_loaded: loaded, get_user_name: () => userName, get_account_type: () => accountType});
     const dialog = new St.Widget({style_class: 'prompt-dialog'});
     Object.assign(dialog, {
-        actionId, contentLayout, _userAvatar: avatar, _userLabel: userLabel, _user: user, _infoMessageLabel: info, warnings,
+        actionId, contentLayout, _userAvatar: avatar, _userLabel: userLabel, _user: user, _infoMessageLabel: info,
+        _errorMessageLabel: error, warnings,
     });
     return dialog;
 }
@@ -1624,6 +1625,12 @@ async function exercisePolkit() {
     info.text = 'Place your left thumb on the fingerprint reader';
     info.visible = false;
     fact('polkit.info.hidden', polkitInfo(dialog));
+    const errorClass = () => `${dialog.has_style_class_name('apex-polkit-error')}`;
+    fact('polkit.error.none', errorClass());
+    dialog._errorMessageLabel.visible = true;
+    fact('polkit.error.shown', errorClass());
+    dialog._errorMessageLabel.visible = false;
+    fact('polkit.error.hidden', errorClass());
 
     for (const [label, who] of [['standard', {accountType: 0}], ['root', {userName: 'root', accountType: 1}]]) {
         const other = newAuthenticationDialog(St, who);
