@@ -55,7 +55,6 @@ readonly USER_NAME=apex
 readonly GREETER_USER=gdm-greeter
 readonly SHELL_TIMEOUT=120
 readonly CLOCK_LIB=/run/apex-lock-clock.so
-readonly FIXTURE_NAMES=(org.freedesktop.UPower org.freedesktop.NetworkManager org.bluez)
 # fixtures.py's keyboard, at its KEYBOARD_ADDRESS.
 readonly KEYBOARD_PATH=/org/bluez/hci0/dev_DC_2C_26_4B_33_01
 readonly GDM_NAME=org.gnome.DisplayManager
@@ -142,9 +141,10 @@ id "$GREETER_USER" >/dev/null 2>&1 || useradd -r -m -d /run/$GREETER_USER "$GREE
 # tests/nautilus/shoot.sh takes them, but with logind's mock: the shield needs a logind.
 mkdir -p /run/systemd/seats
 mkdir -p /run/dbus /etc/dbus-1 /tmp/.X11-unix && chmod 1777 /tmp/.X11-unix
+mapfile -t fixture_names < <(python3 "$SHOTS/fixtures.py" --names)
 {
     echo '<busconfig><policy user="root">'
-    for name in "${FIXTURE_NAMES[@]}" "$GDM_NAME" "$LOGIND_NAME" "$FPRINT_NAME" "$UPDATE1_NAME"; do
+    for name in "${fixture_names[@]}" "$GDM_NAME" "$LOGIND_NAME" "$FPRINT_NAME" "$UPDATE1_NAME"; do
         printf '<allow own="%s"/><allow send_destination="%s"/>\n' "$name" "$name"
     done
     printf '</policy><policy context="default">'

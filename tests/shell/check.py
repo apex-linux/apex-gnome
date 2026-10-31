@@ -768,11 +768,30 @@ def check_icons(shots):
             check(line[5:], line.startswith("PASS "))
 
 
+# What fixtures.py sets up in this lane; power profiles and accountsservice are G2's opt-ins.
+LANE_FIXTURES = ("battery", "wifi", "keyboard", "gpus")
+
+
+def check_fixtures(shots):
+    text = read(shots, "fixtures.txt")
+    m = re.search(r"^G2-FIXTURES (\{.*\})$", text, re.M)
+    if not m:
+        died = re.findall(r'fixtures\.py", line \d+, in (\w+)', text)
+        last = [line for line in text.splitlines() if line.strip()][-1:] or ["no output"]
+        check("fixtures.py sets up every fixture of the lane", False,
+              f"died in {died[-1] if died else 'its setup'}(): {last[0][:300]}")
+        return
+    report = json.loads(m.group(1))
+    missing = [name for name in LANE_FIXTURES if report.get(name) is None]
+    check("fixtures.py sets up every fixture of the lane", not missing, f"missing: {', '.join(missing)}")
+
+
 def main():
     if len(sys.argv) != 2:
         print(__doc__, file=sys.stderr)
         return 2
     shots = sys.argv[1]
+    check_fixtures(shots)
     for case, want in LOCK_CASES.items():
         check_lock(shots, case, want)
     check_refused(shots, "lock-refused")
