@@ -2888,6 +2888,18 @@ glass_manager() {
         'over a checker, an Alt+Tab list'"'"'s bottom-left corner blurs no pixel past its border'"'"'s arc and every pixel inside it (board 15)'
     "${expect_glass[@]}" '.manager.derived.switcher.corner.capturedDiffering == 0' \
         'and a screenshot shows that corner as the screen does, pixel for pixel: off stage, the blur maps the stage through the capture'"'"'s viewport'
+    local conformance
+    conformance=$(report_of "$log" APEXG2-GLASS | jq -r '.manager.conformance | "\(.registered | length) registered: \(.registered | join(", "))"' 2>/dev/null)
+    "${expect_glass[@]}" '.manager.conformance | (.registered | length) > 0 and .unchecked == [] and (.registered | all(. as $n | $n | IN(["panel", "dock", "quick-settings", "calendar", "banner", "osd", "spotlight", "toast", "switcher", "screenshot", "tilePreview"][]) or startswith("scrim-")))' \
+        "every surface the glass registry got in the case was checked, each by name, and none unknown to it (${conformance:-no report})"
+    "${expect_glass[@]}" '.manager.conformance.checked | to_entries | all(.value | .cornerRadius as $r
+        | (.painted.radii | all(. == $r)) and (.allocation[0] == null or .painted.box == [0, 0] + .allocation))' \
+        'each rounds its blur at its border radius, all four corners, over the box St paints its background in: the Spotlight panel and the toast too'
+    "${expect_glass[@]}" '.manager.conformance.checked | ["dock", "quick-settings", "calendar", "banner", "osd", "spotlight", "toast"] as $rounded
+        | [$rounded[] as $n | .[$n].corner | .radius > 0 and .outside > 0 and .ring > 0 and .blurredOutside == 0 and .blurredRing == .ring] | length == 7 and all' \
+        'over a checker, the bottom-left corner of the dock, Quick Settings, the calendar, a banner, the OSD, the Spotlight panel and the toast blurs no pixel past its border'"'"'s arc and every pixel in the band inside it'
+    "${expect_glass[@]}" '.manager.conformance.checked | [.["dock", "quick-settings", "calendar", "banner", "osd", "spotlight", "toast"].corner.capturedDiffering] | length == 7 and all(. == 0)' \
+        'and a screenshot shows each of those corners as the screen does, pixel for pixel'
     "${expect_glass[@]}" "$glass"' .t as $t | .manager.monitorScale as $s | .manager.tile.shown.glass
         | glass($t.apex_tile_preview_blur; $t.apex_tile_preview_saturation; $s) and .cornerRadius == ($t.apex_radius_tile_preview | px) * $s' \
         'the shown tile preview registers its glass at board 22'"'"'s $apex_tile_preview_blur and $apex_tile_preview_saturation, rounded $apex_radius_tile_preview'

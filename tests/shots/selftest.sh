@@ -3805,6 +3805,8 @@ CHANGES
         | {panel: $on, dock: $dock, quickSettings: $p, calendar: $p, banner: $p, blurEffects: ["panel"], solidClass: false} as $g
         | {panel: null, dock: null, quickSettings: null, calendar: null, banner: null, blurEffects: []} as $none
         | {radius: 144, saturation: 1.5, enabled: true, fine: true, followOpacity: true, background: false} as $scrim
+        | {radius: 52, outside: 560, inside: 2080, ring: 760, square: 2704, blurredOutside: 0, blurredInside: 2080, blurredRing: 760,
+            capturedDiffering: 0} as $corner
         | {manager: {monitorScale: 2, glass: $g, reduceTransparency: ($none + {solidClass: true}), highContrast: ($none + {solidClass: true}),
             disabled: ($none + {solidClass: false}), restored: $g,
             scrims: {overview: $scrim, launcher: ($scrim + {radius: 160, saturation: 1.6}), hidden: ($scrim + {enabled: false}), barOverScrim: $on,
@@ -3822,11 +3824,19 @@ CHANGES
                 hidden: {glass: null, visible: false, differing: 0},
                 ring: ($ring + {expected: 4, corners: [4.02, 3.98, 4, 4.01], edges: [4, 4, 4, 4]}),
                 reduceTransparency: $ring,
-                highContrast: ($ring + {borders: [0, 0, 0, 0], radius: 0, borderColor: "#00000000", background: "#00000000", previewBackground: "#3584e47f"})}}}')
+                highContrast: ($ring + {borders: [0, 0, 0, 0], radius: 0, borderColor: "#00000000", background: "#00000000", previewBackground: "#3584e47f"})},
+            conformance: {registered: ["banner", "calendar", "dock", "osd", "panel", "quick-settings", "scrim-0", "screenshot", "spotlight",
+                    "switcher", "tilePreview", "toast"], unchecked: [],
+                checked: {panel: $on, "scrim-0": ($scrim + {cornerRadius: 0, allocation: [1440, 900], painted: {box: [0, 0, 1440, 900], radii: [0, 0, 0, 0]}}),
+                    dock: ($dock + {corner: $corner}), "quick-settings": ($p + {corner: $corner}), calendar: ($p + {corner: $corner}),
+                    banner: ($p + {corner: $corner}), osd: ($p + {corner: $corner}), spotlight: ($p + {corner: $corner}),
+                    toast: ($p + {corner: $corner, tries: 1}), switcher: ($p + {corner: $corner}), screenshot: ($p + {enabled: false, allocation: [null, null]}),
+                    tilePreview: {radius: 80, saturation: 1.6, cornerRadius: 28, enabled: true, fine: true, followOpacity: true, background: true,
+                        allocation: [372, 180], painted: {box: [0, 0, 372, 180], radii: [28, 28, 28, 28]}}}}}}')
     while IFS='|' read -r failures what change; do
         jq -c "$change" <<<"$manager" | sed 's/^/APEXG2-GLASS /' >"$T/glass.log"
         read -r passes _ <<<"$(assertion_counts glass_manager glass "$T/glass.log" light)"
-        expect_eq "glass manager: $what fails $failures of 21" "$failures" $((21 - passes))
+        expect_eq "glass manager: $what fails $failures of 25" "$failures" $((25 - passes))
     done <<'CHANGES'
 0|the bar, the dock and the popovers at their tokens, every switch honoured|.
 1|the bar at the popovers' sigma|.manager.glass.panel.radius = 120
@@ -3872,7 +3882,15 @@ CHANGES
 1|Reduce Transparency that drops the glass actor, ring and all|.manager.tile.reduceTransparency.mapped = false
 1|high contrast that drops the class|.manager.tile.highContrast.glassed = false
 1|a glass actor that paints a ring over upstream's high-contrast preview|.manager.tile.highContrast.borders = [2, 2, 2, 2]
-21|no manager|.manager = null
+1|a surface a later slice registers that the case never reached|.manager.conformance += {registered: (.manager.conformance.registered + ["notifications"]), unchecked: ["notifications"]}
+1|a checked surface the assertions do not know|.manager.conformance.registered += ["notifications"]
+1|a Spotlight panel rounded one px off its border|.manager.conformance.checked.spotlight.cornerRadius = 51
+1|a toast blurred over a box larger than its paint box|.manager.conformance.checked.toast.allocation = [361, 400]
+1|a blur past the Spotlight panel's arc|.manager.conformance.checked.spotlight.corner.blurredOutside = 40
+1|a toast corner left unblurred in the band|.manager.conformance.checked.toast.corner.blurredRing = 700
+1|a dock corner a screenshot draws otherwise|.manager.conformance.checked.dock.corner.capturedDiffering = 200
+3|a toast never checked|.manager.conformance.checked.toast = null
+25|no manager|.manager = null
 CHANGES
 }
 

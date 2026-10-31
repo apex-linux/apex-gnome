@@ -606,6 +606,19 @@ window's, the frame equals a full redraw; without, the blur's halo stays stale (
 OSD shown, an Alt+Tab list in a stand-in popup and the screenshot panel (styled while closed)
 each carry the popovers' `$apex_panel_blur` and `$apex_panel_saturation`.
 
+Every glass surface conforms, checked from the registry rather than a list: `glass.js` records
+every surface the glass registry gets during the case (the shell's, not its own `emptyTest`),
+and a surface the case never checked fails by name, as does one the assertions do not know, so
+a surface a later slice registers is caught until the case checks it. Each surface's blur is
+rounded at its border radius, all four corners alike, over the box St paints its background in
+(`get_background_paint_box` of its allocation). For the dock, Quick Settings, the calendar, a
+banner, the OSD, the Spotlight panel and the toast (the Alt+Tab list as above), a black and white
+checker goes under the surface's bottom-left corner, and that corner square is read with the
+glass on and off: no pixel past the border's arc changes, every pixel in the 4 CSS px band just
+inside it does (no surface's padding lets content in there), and a screenshot of the surface
+equals the screen over the square, pixel for pixel. The toast hides itself after 2 s; a check it
+outlives is read again on a new toast, at most three times.
+
 `shadows_under_glass` checks the `shadows` feature against the glass in the same case, light
 and dark: `glass.js` lays the tile grid under Quick Settings, a popup menu and a dialog and
 reads each box with `framePixels()`, once with the shadows on and once with `shadows` in
