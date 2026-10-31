@@ -1997,7 +1997,7 @@ bar_pills() {
 a11y_low_contrast() {
     local report=$1 path=$2 gapdot=${3:-false}
     jq -r --arg path "$path" --argjson text "$A11Y_TEXT_RATIO" --argjson icon "$A11Y_ICON_RATIO" --argjson gapdot "$gapdot" \
-        "[$A11Y_SURFACE] as \$e | if (\$e | length) > 0 then \$e else (getpath(\$path | split(\".\")) | $A11Y_LOW_CONTRAST) end | join(\"; \")" \
+        "([$A11Y_SURFACE] | add // []) as \$e | if (\$e | length) > 0 then \$e else (getpath(\$path | split(\".\")) | $A11Y_LOW_CONTRAST) end | join(\"; \")" \
         <<<"$report" 2>&1
 }
 
@@ -2047,12 +2047,12 @@ a11y_layout() {
     expect "$label accessibility" "$report" '.textScalingFactor == 1.25' "text-scaling-factor is 1.25"
     for s in "${A11Y_SURFACES[@]}"; do
         problems=$(jq -r --arg path "$s" \
-            ".monitor as \$m | [$A11Y_SURFACE] as \$e | if (\$e | length) > 0 then \$e else (getpath(\$path | split(\".\")) | $A11Y_LAYOUT) end | join(\"; \")" \
+            ".monitor as \$m | ([$A11Y_SURFACE] | add // []) as \$e | if (\$e | length) > 0 then \$e else (getpath(\$path | split(\".\")) | $A11Y_LAYOUT) end | join(\"; \")" \
             <<<"$report" 2>&1)
         known_gap "${A11Y_GAPS[$label:$s]:-}" a11y_verdict "$label accessibility: $s: no text cut short, off the screen, outside its surface or overlapping" "$problems"
     done
     problems=$(jq -r --arg path barPills.crowded \
-        ".monitor as \$m | [$A11Y_SURFACE] as \$e | if (\$e | length) > 0 then \$e else (.barPills.crowded | $A11Y_LAYOUT) end | join(\"; \")" \
+        ".monitor as \$m | ([$A11Y_SURFACE] | add // []) as \$e | if (\$e | length) > 0 then \$e else (.barPills.crowded | $A11Y_LAYOUT) end | join(\"; \")" \
         <<<"$report" 2>&1)
     a11y_verdict "$label accessibility: board 39's crowded bar (chip, recording, share, privacy, five apps): no text cut short, off the screen or overlapping" \
         "$problems"
