@@ -744,6 +744,24 @@ the inactive dot is) are the owner's to decide:
 
 Over the Facets every fill holds 3:1: 5.44:1 and 4.38:1 in `default`, 3.14:1 and 3.90:1 in `dark-style`.
 
+Key focus is measured too (`focus`, WCAG 2.4.11 and 1.4.11). On the first focusable control of
+Quick Settings, the dock, the polkit-shaped dialog and Spotlight, the probe reads the stage with
+nothing focused and again with that control focused, each after the shell's idle and a painted
+frame. The indicator is whatever changed, wherever the control draws it. A 1 px line around the
+control's own box must change by 3:1: the pixel at that count, among the changed pixels sorted by
+how far each moved from its unfocused self. Each control is read twice, over the case's backdrop
+and over a busy wallpaper (fine stripes of black, white and accents), so glass shows the ring
+over a real blurred backdrop. The probe sets that wallpaper only for the step and waits for the
+background to swap each way. `focus_rings` wants focus to land and the 3:1 line; today's
+shortfalls (`A11Y_FOCUS_TODAY`) are the owner's:
+
+| Control | Cases | Today |
+|---|---|---|
+| a dock item | every case | no indicator (1:1) |
+| Spotlight's entry | every case | the caret only (1:1) |
+| Quick Settings' first toggle | `default`, `default-solid` | 2.37:1, 1.91:1; 2.14:1 over the busy wallpaper |
+| the dialog's entry | `dark-style`, `dark-style-solid` | 2.87:1 |
+
 The bar is measured the same way over every wallpaper G2 shows it on: the Facets, light in
 `default` and dark in `dark-style`; `#013b88` in the `-solid` twins; and, in `no-dock`
 (`bar_over_fixture`), the overview's fixture gradient, once in the overview and once on the
