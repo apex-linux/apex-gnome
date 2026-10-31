@@ -3235,11 +3235,11 @@ CHANGES
 
 readonly INPUT_SOURCES_MODE='{start: {source: "us", engine: "xkb:us::eng", chip: "EN"},
     superSpace: {spotlight: true, source: "us", engine: "xkb:us::eng", chip: "EN"},
-    superAltSpace: {switcher: [["us", "m17n:vi:telex"]], source: "m17n:vi:telex", engine: "m17n:vi:telex", chip: "Ắ"},
-    superSpaceInTelex: {spotlight: true, source: "m17n:vi:telex", engine: "m17n:vi:telex", chip: "Ắ"},
+    superAltSpace: {switcher: [["us", "m17n:vi:telex"]], source: "m17n:vi:telex", engine: "m17n:vi:telex", chip: "VI"},
+    superSpaceInTelex: {spotlight: true, source: "m17n:vi:telex", engine: "m17n:vi:telex", chip: "VI"},
     shiftSuperAltSpace: {switcher: [["m17n:vi:telex", "us"]], source: "us", engine: "xkb:us::eng", chip: "EN"},
     heldSuperAlt: {held: {shown: true, items: ["us", "m17n:vi:telex"], selected: "m17n:vi:telex", source: "us",
-        engine: "xkb:us::eng", chip: "EN"}, released: {shown: true, source: "m17n:vi:telex", engine: "m17n:vi:telex", chip: "Ắ"}},
+        engine: "xkb:us::eng", chip: "EN"}, released: {shown: true, source: "m17n:vi:telex", engine: "m17n:vi:telex", chip: "VI"}},
     back: {switcher: [["m17n:vi:telex", "us"]], source: "us", engine: "xkb:us::eng", chip: "EN"}}'
 readonly INPUT_SOURCES_REPORT="{ready: true, sources: [{type: \"xkb\", id: \"us\"}, {type: \"ibus\", id: \"m17n:vi:telex\"}],
     telexEngine: \"m17n:vi:telex\", session: $INPUT_SOURCES_MODE, typed: {engine: \"m17n:vi:telex\", text: \"Việt \"},
@@ -3272,7 +3272,8 @@ test_input_sources_case() {
 1|.overview.heldSuperAlt.held.selected = "us"|a held switcher highlighting the current source
 1|.overview.heldSuperAlt.released.engine = "xkb:us::eng"|a release that switches nothing
 1|.session.superAltSpace.chip = "EN"|a chip that stays EN on Telex
-1|.overview.back.chip = "Ắ"|a chip that does not come back to EN
+1|.overview.superSpaceInTelex.chip = "Ắ"|a Telex chip showing its engine's symbol, not its language
+1|.overview.back.chip = "VI"|a chip that does not come back to EN
 1|.session.heldSuperAlt.released.chip = null|no chip on Telex
 1|.modals = 1|a grab left behind
 13|{error: "inputSourcesReport: no IBus"}|a probe error

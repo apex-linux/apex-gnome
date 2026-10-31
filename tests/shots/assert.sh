@@ -2557,8 +2557,8 @@ input_sources_case() {
             and {source, engine} == $us) and (.released | {source, engine}) == {source: $telex, engine: $telex}" \
             "held, Super+Alt+Space shows the switcher on Telex, and switches only when Super+Alt are released"
         expect "$label" "$r" ".$m | ([.start, .superSpace, .shiftSuperAltSpace, .heldSuperAlt.held, .back] | all(.chip == \"EN\"))
-            and ([.superAltSpace, .superSpaceInTelex, .heldSuperAlt.released] | all(.chip != null and .chip != \"EN\"))" \
-            "board 39's chip follows the source: EN on us, the Telex engine's own on Telex, EN again"
+            and ([.superAltSpace, .superSpaceInTelex, .heldSuperAlt.released] | all(.chip == \"VI\"))" \
+            "board 39's chip follows the source: EN on us, VI on Telex (its engine's language, not its symbol), EN again"
     done
     expect input-sources "$r" ".typed.engine == $telex and .typed.text == \"Việt \"" \
         "Vieetj and a space, typed into Spotlight under Telex, give \"Việt \""
