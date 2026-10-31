@@ -62,7 +62,7 @@ run_case() {
         APEX_SHOTS="$out" APEX_SHOT="$name" ADW_DEBUG_COLOR_SCHEME="$scheme" "$@"
     log "run.sh: $name: exit $?"
     grep -q 'APEXCC ' "$out/$name.log" && [[ -s $out/$name.png ]] || return 1
-    ! grep -q '"check":false' "$out/$name.log"
+    ! grep -q '"check":false\|"ready":false' "$out/$name.log"
 }
 
 status=0
@@ -77,10 +77,12 @@ amber="org.gnome.desktop.background picture-uri 'file:///usr/share/backgrounds/g
 org.gnome.desktop.background picture-uri-dark 'file:///usr/share/backgrounds/gnome/amber-d.jxl'
 org.gnome.desktop.background primary-color '#F57511'
 org.gnome.desktop.background secondary-color '#DD4C38'"
-CASE_SETTINGS=$amber run_case appearance-light default APEX_OPEN=background APEX_SCROLL=1 \
+CASE_SETTINGS=$amber run_case appearance-light default APEX_OPEN=background APEX_SCROLL=1 APEX_READY=thumbnails.py \
     "APEX_CHECK=appearance.py amber" || status=1
-CASE_SETTINGS=$amber run_case appearance-dark prefer-dark APEX_OPEN=background APEX_SCROLL=1 || status=1
-run_case appearance-custom default APEX_OPEN=background "APEX_CHECK=appearance.py custom" || status=1
+CASE_SETTINGS=$amber run_case appearance-dark prefer-dark APEX_OPEN=background APEX_SCROLL=1 APEX_READY=thumbnails.py \
+    || status=1
+run_case appearance-custom default APEX_OPEN=background APEX_READY=thumbnails.py "APEX_CHECK=appearance.py custom" \
+    || status=1
 
 # Board 24: Power with headless_dgpu's graphics under umockdev, then without an NVIDIA card.
 headless_dgpu "$out/dgpu.devices"
