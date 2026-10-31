@@ -412,6 +412,12 @@ Last, with `update1-mock.py` (python-dbusmock's Update1, started by `direct.sh`)
 update card: its place under the text, inset, radius, gap, fill and ring, the icon, the
 title and the versions, the switch (on, sensitive only when staged) and Restart's label,
 capturing `end-session-update` and `end-session-ready`.
+Then a mount's `ask-password`, through `shellMountOperation.js` as a mount asks it, opens the
+password dialog with its Remember Password check box: unchecked, its 2 px ring is
+`$apex_fg_dim` (`$apex_fg` hovered) and at least 3:1 on the dialog's fill, where stock's black
+or white at .15 is about 1.5:1; checked, the box is the accent shaded
+`$apex_quick_toggle_checked_shade`, the check white and the ring gone. The keyring prompt and
+the portal's access dialog take the same rule.
 
 `date_menu` runs in the same cases. The probe posts two low-urgency notifications (no
 banner), opens the calendar menu at the fixed date, captures it with
@@ -669,7 +675,8 @@ default: `glass-unlock.png` against `fedora-glass-unlock.png` differs by 0 pixel
 `a11y.js`, which opens each Apex surface in turn: the bar, again with two unread
 notifications so the clock shows its dot, the dock, a popup menu, the OSD,
 a banner, Quick Settings and its Wi-Fi menu, the date menu with two notifications, the
-window switcher, a polkit-shaped dialog, the shell's own power-off dialog, Spotlight with
+window switcher, a polkit-shaped dialog, the mount password dialog with its box checked
+(under each accent), the shell's own power-off dialog, Spotlight with
 "disk" typed and its toast, the overview and the app grid. Its targets are the visible
 labels, entries and symbolic icons under the surface, and any Clutter.Text outside a label
 or an entry, as a button's own label: St colours that from the button, and board 34's day
