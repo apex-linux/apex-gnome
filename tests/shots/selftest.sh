@@ -3815,6 +3815,37 @@ REPORTS
 REPORTS
 }
 
+# glass_views: two moves and the straddling box exact against a fresh effect, the box within the
+# glass bounds away from the boundary, the seam pinned at today's and a known gap.
+test_glass_views() {
+    local report failures what change passes fails
+    report='{"views": 2, "scale": 2, "boundary": 1440,
+        "straddling": {"views": 2, "liveDifferingFromFresh": 0,
+            "live": {"band": 8, "seamMax": 93.58, "interiorMax": 2.91, "edgeMax": 9.83, "mean": 0.8},
+            "fresh": {"band": 8, "seamMax": 93.58, "interiorMax": 2.91, "edgeMax": 9.83, "mean": 0.8}},
+        "across": {"views": 2, "differingFromFresh": 0, "pixels": 235520},
+        "back": {"views": 2, "differingFromFresh": 0, "pixels": 235520}}'
+    while IFS='|' read -r failures what change; do
+        jq -c "$change" <<<"$report" | sed 's/^/APEXG2-GLASS-VIEWS /' >"$T/glass-views.log"
+        read -r passes fails <<<"$(assertion_counts glass_views glass-views "$T/glass-views.log")"
+        expect_eq "glass views: $what fails $failures of 4" "$failures" "$fails"
+        if ((failures == 0)); then
+            expect_eq "glass views: $what passes 3 of 4, the 4th its known gap" 3 "$passes"
+        fi
+    done <<'CHANGES'
+0|both moves exact, the straddling box deterministic and within bounds away from its seam|.
+1|a box that keeps its blur on the view it left|.across.differingFromFresh = 9200
+1|a box moved back that one view never repainted|.back.views = 1
+1|a straddling box that a fresh effect draws otherwise|.straddling.liveDifferingFromFresh = 640
+1|a box off the reference by 9/255 away from the seam|.straddling.live.interiorMax = 9
+2|a seam within the bounds: off its pin, and a gap that holds now|.straddling.live.seamMax = 3.5
+1|a seam 2/255 wider than its pin|.straddling.live.seamMax = 95.6
+1|a seam 2/255 narrower than its pin, still a gap|.straddling.live.seamMax = 91.5
+1|one view only|.views = 1
+3|no report|del(.views, .straddling, .across, .back)
+CHANGES
+}
+
 test_shadows_under_glass() {
     local surface='{"covered": true, "sameSize": true, "interiorDiffering": 0, "rim": 9, "picked": "St.BoxLayout.popup-menu-content", "samePick": true}'
     local good passes failures what change
@@ -4095,6 +4126,7 @@ test_solid_bar
 test_dark_style_off
 test_fixtures
 test_glass
+test_glass_views
 test_shadows_under_glass
 
 printf '1..%d\n' "$tests"

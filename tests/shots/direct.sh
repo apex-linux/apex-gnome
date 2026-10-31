@@ -248,3 +248,4 @@ run_and_record_case fault-abort '' APEX_SHELL_TEST_FAULT=abort-after-enable PROB
 run_and_record_case shutdown-banner '' G2_SHUTDOWN_BANNER=1
 run_and_record_case glass "$CAPTURE_SETTINGS" G2_GLASS=1 GI_TYPELIB_PATH="$FRAME_DIR"
 run_and_record_case glass-scale1 "$CAPTURE_SETTINGS" G2_GLASS=1 G2_SCALE=1 G2_MONITOR=1440x900 GI_TYPELIB_PATH="$FRAME_DIR"
+run_and_record_case glass-views "$CAPTURE_SETTINGS" G2_GLASS_VIEWS=1 G2_MONITOR2=1920x1080 GI_TYPELIB_PATH="$FRAME_DIR"

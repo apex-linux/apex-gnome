@@ -3583,6 +3583,17 @@ async function runProbe() {
         console.log(`APEXG2-DOCK-EXTERNAL ${JSON.stringify(result)}`);
     }
 
+    if (GLib.getenv('G2_GLASS_VIEWS') === '1') {
+        let result;
+        try {
+            const GlassViews = await import('./glass-views.js');
+            result = await GlassViews.glassViewsReport();
+        } catch (e) {
+            result = {error: `${e.message}\n${e.stack}`};
+        }
+        console.log(`APEXG2-GLASS-VIEWS ${JSON.stringify(result)}`);
+    }
+
     if (GLib.getenv('G2_DOCK') === '1') {
         let result;
         try {
