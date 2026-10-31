@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 """usage: fixtures.py LOG_DIR
        fixtures.py --gpus 1|2
+       fixtures.py --names
 
 G2's python-dbusmock fixtures on the system bus (DBUS_SYSTEM_BUS_ADDRESS, or the
 default): UPower with a battery at 87 %, NetworkManager on the Wi-Fi network
@@ -17,6 +18,8 @@ Prints one line, G2-FIXTURES and what the bus then reports, as JSON.
 --gpus sets the running switcheroo-control mock to the laptop's iGPU alone, as with no
 NVIDIA driver bound (/apex/pair-mode off), or back to both. It prints G2-GPUS and the
 mock's state.
+
+--names prints the bus names LOG_DIR's run would own, one per line, for a bus policy.
 """
 
 import json
@@ -257,6 +260,9 @@ def power_profiles(bus):
 
 
 def main():
+    if sys.argv[1:] == ["--names"]:
+        print("\n".join(name for name, _args in services().values()))
+        return 0
     if len(sys.argv) == 3 and sys.argv[1] == "--gpus" and sys.argv[2] in ("1", "2"):
         print("G2-GPUS " + json.dumps(gpus(dbus.SystemBus(), GPUS[:int(sys.argv[2])], update=True)))
         return 0
