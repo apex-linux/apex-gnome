@@ -708,7 +708,13 @@ the privacy group's glyphs 3:1, each over what is drawn behind it, the pill's ow
 Apex fills at rest (the recording, the share, the privacy group) is also read against the bar:
 the median of its fill across its middle, clear of the corners, against the bar a pixel or two
 beyond each end, at 3:1 (WCAG 1.4.11). Upstream's high-contrast sheet fills the button instead,
-so there `bar_pills` leaves the edge out. Every text passes; the gaps (`A11Y_PILL_TODAY`, pinned as
+so there `bar_pills` leaves the edge out. sni-items.js's five apps join them, the fifth behind the
+overflow: each app's glyph, drawn as a mask in the bar's ink, wants 3:1 and the overflow's count
+4.5:1. With everything on the bar it is one surface too (`barPills.crowded`), which `a11y_layout`
+wants whole at Large Text, none of its text cut short, off the screen or over another's. The Chat
+app's menu (`barPills.indicatorMenu`) is measured as the other surfaces are. Its right click waits
+for each step, not a time: the hot corner off, so the new pointer's first motion is not held at 0,0
+by its barrier, then the pointer over the button, then the menu open on it. Every text passes; the gaps (`A11Y_PILL_TODAY`, pinned as
 the inactive dot is) are the owner's to decide:
 
 | Case | Part | Today |

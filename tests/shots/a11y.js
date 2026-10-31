@@ -15,7 +15,7 @@ import * as MessageTray from 'resource:///org/gnome/shell/ui/messageTray.js';
 import * as Scripting from 'resource:///org/gnome/shell/ui/scripting.js';
 import * as SwitcherPopup from 'resource:///org/gnome/shell/ui/switcherPopup.js';
 
-import {showInUse} from './indicators.js';
+import {showInUse, showItems} from './indicators.js';
 import * as Png from './png.js';
 
 Gio._promisify(Shell.Screenshot.prototype, 'screenshot_area');
@@ -276,14 +276,21 @@ async function chipShown(keyboard) {
         await Scripting.sleep(100);
 }
 
-// Board 39's pills, the input chip among them: each pill's text and glyphs over its own fill and,
-// for a pill filled at rest, that fill against the bar beside it.
-async function pillsReport(settle, unit) {
+// An app indicator draws its icon as a mask in the bar's ink, symbolic or not: a glyph.
+function indicatorTargets(pill) {
+    const glyph = pill.get_first_child();
+    return glyph?.mapped ? [{actor: glyph, kind: 'icon', ink: glyph, name: pill.get_parent().accessible_name}] : [];
+}
+
+// Board 39's bar with everything on it, sni-items.js's apps and the overflow too: each pill over its
+// fill, a filled pill against the bar, the whole bar for Large Text's layout and the Chat app's menu.
+async function pillsReport(settle, unit, report) {
     const {quickSettings, screenRecording, screenSharing, keyboard} = Main.panel.statusArea;
     const sources = new Gio.Settings({schema_id: 'org.gnome.desktop.input-sources'});
     const saved = sources.get_value('sources');
     sources.set_value('sources', new GLib.Variant('a(ss)', TWO_SOURCES));
     const hideInUse = showInUse();
+    const items = await showItems();
     try {
         await chipShown(keyboard);
         await settle();
@@ -292,8 +299,15 @@ async function pillsReport(settle, unit) {
             recording: screenRecording._box,
             sharing: screenSharing.get_first_child(),
             privacy: quickSettings.get_first_child().get_children().find(a => a.name === 'apexPrivacyGroup') ?? null,
+            overflow: items.overflow,
+            ...Object.fromEntries(items.pills.map((pill, i) => [`indicator${i}`, pill])),
         };
-        const found = Object.fromEntries(Object.entries(roots).map(([pill, root]) => [pill, root?.mapped ? targetsOf(root) : []]));
+        const targetsIn = (pill, root) => {
+            if (!root?.mapped)
+                return [];
+            return pill.startsWith('indicator') ? indicatorTargets(root) : targetsOf(root);
+        };
+        const found = Object.fromEntries(Object.entries(roots).map(([pill, root]) => [pill, targetsIn(pill, root)]));
         const targets = Object.fromEntries(Object.entries(found).map(([pill, list]) =>
             [pill, list.map(t => snapshot(t, roots[pill], new Map(), unit))]));
         const inks = Object.values(found).flat().map(t => t.ink);
@@ -312,8 +326,12 @@ async function pillsReport(settle, unit) {
             const filled = root.get_theme_node().get_background_color().alpha > 0;
             return [pill, {targets: targets[pill].map(t => measure(t, image)), edge: filled ? edgeOf(root, image) : null}];
         }));
-        return {box: roundedBox(extents(Main.panel), unit), pills};
+        const crowded = await report(Main.panel);
+        const indicatorMenu = await withOpen(() => items.openMenu(), menu => menu?.close(), menu => menu ? report(menu.box)
+            : {error: 'no menu'});
+        return {box: roundedBox(extents(Main.panel), unit), pills, crowded, indicatorMenu};
     } finally {
+        await items.end();
         hideInUse();
         sources.set_value('sources', saved);
     }
@@ -415,7 +433,7 @@ export async function a11yReport(h) {
     // Unread notifications put the clock's dot on the bar.
     out.barUnread = await withOpen(notifications, source => source.destroy(), () => report(Main.panel));
     lap('bar');
-    out.barPills = await pillsReport(settle, unit);
+    out.barPills = await pillsReport(settle, unit, report);
     lap('barPills');
     out.dock = await report(h.apexDock());
     lap('dock');

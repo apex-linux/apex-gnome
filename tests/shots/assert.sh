@@ -55,7 +55,7 @@ readonly A11Y_ICON_RATIO=3
 readonly A11Y_ACCENTS=(blue teal green yellow orange red pink purple slate)
 readonly A11Y_SURFACES=(bar barUnread dock popupMenu osd banner quickSettings "${A11Y_ACCENTS[@]/#/quickSettingsAccents.}" wifiMenu wifiMenuConnected dateMenu
     "${A11Y_ACCENTS[@]/#/dateMenuAccents.}" switcher dialog "${A11Y_ACCENTS[@]/#/dialogAccents.}" endSession screenshot
-    spotlight.popup spotlight.toast overview appGrid)
+    spotlight.popup spotlight.toast overview appGrid barPills.indicatorMenu)
 # The failures still open: upstream's high-contrast sheet, which safe mode keeps as Fedora's.
 readonly A11Y_HC_TOGGLE="upstream HC sheet: Quick Settings' checked toggle, white on its accent (3.15:1), and its menu arrow (2.31:1)"
 declare -A A11Y_GAPS=([high-contrast:quickSettings]=$A11Y_HC_TOGGLE)
@@ -1903,7 +1903,8 @@ inactive_dot() {
 
 # Board 39's pills: the chip's and the timer's text at 4.5:1, the share's and the privacy group's glyphs
 # at 3:1, and a pill Apex fills against the bar at 3:1; upstream's high-contrast sheet fills the button instead.
-readonly A11Y_PILL_PARTS=(input:text recording:text sharing:icon privacy:icon recording:edge sharing:edge privacy:edge)
+readonly A11Y_PILL_PARTS=(input:text recording:text sharing:icon privacy:icon overflow:text indicators:icon recording:edge sharing:edge
+    privacy:edge)
 readonly A11Y_PILL_GAP="the owner's decision on board 39's pill fills over #013b88 (2026-10-31)"
 readonly A11Y_PILL_HC_GAP="upstream HC sheet: the screen-sharing glyph, white on its #ff7800 fill (2.54:1)"
 # Each part under WCAG AA today, at the report's own rounding: a lower one fails.
@@ -1917,8 +1918,9 @@ pill_ratio() {
     if [[ $part == edge ]]; then
         jq -r --arg p "$pill" '.barPills.pills[$p].edge.ratio // empty' <<<"$report" 2>/dev/null
     else
-        jq -r --arg p "$pill" --arg k "$part" \
-            '[.barPills.pills[$p].targets[]? | select(.kind == $k and (.offscreen | not)) | .ratio] | min // empty' <<<"$report" 2>/dev/null
+        # indicators: every app indicator's pill, indicator0 to indicator3.
+        jq -r --arg p "$pill" --arg k "$part" '[.barPills.pills | to_entries[] | select(.key == $p or ($p == "indicators" and (.key | startswith("indicator"))))
+            | .value.targets[]? | select(.kind == $k and (.offscreen | not)) | .ratio] | min // empty' <<<"$report" 2>/dev/null
     fi
 }
 
@@ -2012,6 +2014,11 @@ a11y_layout() {
             <<<"$report" 2>&1)
         known_gap "${A11Y_GAPS[$label:$s]:-}" a11y_verdict "$label accessibility: $s: no text cut short, off the screen, outside its surface or overlapping" "$problems"
     done
+    problems=$(jq -r --arg path barPills.crowded \
+        ".monitor as \$m | [$A11Y_SURFACE] as \$e | if (\$e | length) > 0 then \$e else (.barPills.crowded | $A11Y_LAYOUT) end | join(\"; \")" \
+        <<<"$report" 2>&1)
+    a11y_verdict "$label accessibility: board 39's crowded bar (chip, recording, share, privacy, five apps): no text cut short, off the screen or overlapping" \
+        "$problems"
 }
 
 # The light and dark captures, high contrast and Large Text, each with its own shell, over the
