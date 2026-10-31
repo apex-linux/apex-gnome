@@ -54,7 +54,7 @@ readonly A11Y_TEXT_RATIO=4.5
 readonly A11Y_ICON_RATIO=3
 readonly A11Y_ACCENTS=(blue teal green yellow orange red pink purple slate)
 readonly A11Y_SURFACES=(bar barUnread dock popupMenu osd banner quickSettings "${A11Y_ACCENTS[@]/#/quickSettingsAccents.}" wifiMenu wifiMenuConnected dateMenu
-    "${A11Y_ACCENTS[@]/#/dateMenuAccents.}" switcher dialog "${A11Y_ACCENTS[@]/#/dialogAccents.}" endSession screenshot
+    "${A11Y_ACCENTS[@]/#/dateMenuAccents.}" switcher inputSourceSwitcher ctrlAltTabSwitcher monitorSwitcher dialog "${A11Y_ACCENTS[@]/#/dialogAccents.}" endSession screenshot
     spotlight.popup spotlight.toast overview appGrid barPills.indicatorMenu)
 # The failures still open: upstream's high-contrast sheet, which safe mode keeps as Fedora's.
 readonly A11Y_HC_TOGGLE="upstream HC sheet: Quick Settings' checked toggle, white on its accent (3.15:1), and its menu arrow (2.31:1)"
@@ -2925,21 +2925,23 @@ glass_manager() {
     "${expect_glass[@]}" '.manager.emptyBox | ([.shown, .hidden, .shownAgain] | all(.enabled | not)) and .emptyFrames == 3 and .laidOut.enabled and (.zeroHeight.enabled | not)' \
         "an actor-mode surface with an empty box draws a frame shown, hidden and shown again without blurring, blurs once laid out, and pauses at zero height (${empty:-no report})"
     "${expect_glass[@]}" "$glass"' .t as $t | .manager.monitorScale as $s | .manager.derived
-        | (.osd | glass($t.apex_panel_blur; $t.apex_panel_saturation; $s)) and (.switcher | glass($t.apex_panel_blur; $t.apex_panel_saturation; $s))
+        | (.osd | glass($t.apex_panel_blur; $t.apex_panel_saturation; $s))
+        and (.switchers | length == 4 and all(glass($t.apex_panel_blur; $t.apex_panel_saturation; $s)))
         and (.screenshot | .radius == 2 * ($t.apex_panel_blur | px) * $s and .fine and (.enabled | not))' \
-        'the derived glass: the OSD and an Alt+Tab list blur at $apex_panel_blur and $apex_panel_saturation as the popovers do; the screenshot panel too, paused while closed'
+        'the derived glass: the OSD and every switcher (Alt+Tab, the held input-source switcher, Ctrl+Alt+Tab, Super+P) blur at $apex_panel_blur and $apex_panel_saturation as the popovers do; the screenshot panel too, paused while closed'
     "${expect_glass[@]}" 'def fits: .cornerRadius as $r | .painted.radii | all(. == $r); .manager
-        | ([.glass.panel, .glass.dock, .glass.quickSettings, .glass.calendar, .glass.banner, .derived.osd, .derived.switcher, .tile.shown.glass]
+        | ([.glass.panel, .glass.dock, .glass.quickSettings, .glass.calendar, .glass.banner, .derived.osd, .derived.switchers[], .tile.shown.glass]
             | all(fits and .painted.box == [0, 0] + .allocation))
         and (.derived.screenshot | fits)' \
-        'every glass rounds its blur at its border radius, all four corners, over the box St paints its background in: the bar, the dock, Quick Settings, the calendar, a banner, the OSD, an Alt+Tab list and the tile preview; the screenshot panel'"'"'s corners too'
-    "${expect_glass[@]}" '.manager.derived.switcher.corner | .radius > 0 and .outside > 0 and .inside > 0 and .blurredOutside == 0 and .blurredInside == .inside' \
-        'over a checker, an Alt+Tab list'"'"'s bottom-left corner blurs no pixel past its border'"'"'s arc and every pixel inside it (board 15)'
-    "${expect_glass[@]}" '.manager.derived.switcher.corner.capturedDiffering == 0' \
-        'and a screenshot shows that corner as the screen does, pixel for pixel: off stage, the blur maps the stage through the capture'"'"'s viewport'
+        'every glass rounds its blur at its border radius, all four corners, over the box St paints its background in: the bar, the dock, Quick Settings, the calendar, a banner, the OSD, each switcher'"'"'s list and the tile preview; the screenshot panel'"'"'s corners too'
+    "${expect_glass[@]}" '[.manager.derived.switchers[].corner] | length == 4 and all(.radius > 0 and .outside > 0 and .inside > 0 and .blurredOutside == 0 and .blurredInside == .inside)' \
+        'over a checker, each switcher list'"'"'s bottom-left corner blurs no pixel past its border'"'"'s arc and every pixel inside it (board 15)'
+    "${expect_glass[@]}" '[.manager.derived.switchers[].corner.capturedDiffering] | length == 4 and all(. == 0)' \
+        'and a screenshot shows each of those corners as the screen does, pixel for pixel: off stage, the blur maps the stage through the capture'"'"'s viewport'
     local conformance
     conformance=$(report_of "$log" APEXG2-GLASS | jq -r '.manager.conformance | "\(.registered | length) registered: \(.registered | join(", "))"' 2>/dev/null)
-    "${expect_glass[@]}" '.manager.conformance | (.registered | length) > 0 and .unchecked == [] and (.registered | all(. as $n | $n | IN(["panel", "dock", "quick-settings", "calendar", "banner", "osd", "spotlight", "toast", "switcher", "screenshot", "tilePreview"][]) or startswith("scrim-")))' \
+    "${expect_glass[@]}" '.manager.conformance | (.registered | length) > 0 and .unchecked == [] and (.registered | all(. as $n | $n | IN(["panel", "dock", "quick-settings", "calendar", "banner", "osd", "spotlight", "toast", "switcher", "input-source-switcher",
+            "ctrl-alt-tab-switcher", "monitor-switcher", "screenshot", "tilePreview"][]) or startswith("scrim-")))' \
         "every surface the glass registry got in the case was checked, each by name, and none unknown to it (${conformance:-no report})"
     "${expect_glass[@]}" '.manager.conformance.checked | to_entries | all(.value | .cornerRadius as $r
         | (.painted.radii | all(. == $r)) and (.allocation[0] == null or .painted.box == [0, 0] + .allocation))' \

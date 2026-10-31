@@ -611,8 +611,12 @@ mode at `$apex_overview_scrim_blur` and `$apex_overview_scrim_saturation`, and a
 A stand-in window in `window_group` (a `Clutter.Actor`: St restyles no unmapped actor)
 changes colour under the scrim: with the damage forwarded as the manager forwards a
 window's, the frame equals a full redraw; without, the blur's halo stays stale (the control). The derived glass: an
-OSD shown, an Alt+Tab list in a stand-in popup and the screenshot panel (styled while closed)
-each carry the popovers' `$apex_panel_blur` and `$apex_panel_saturation`.
+OSD shown, every switcher popup and the screenshot panel (styled while closed) each carry the
+popovers' `$apex_panel_blur` and `$apex_panel_saturation`. The switchers are `switchers.js`'s, each
+shown as its keybinding shows it with no modifier held: an Alt+Tab list in a stand-in of
+`switcherPopup.js`'s class, the held Super+Alt+Space switcher with two sources, Ctrl+Alt+Tab over
+the bar's focus group, and Super+P's (through `SwitcherPopup`'s own `show()`, as one monitor
+cannot switch). `glass/derived.js` matches them by class, so each registers under its own name.
 
 Every glass surface conforms, checked from the registry rather than a list: `glass.js` records
 every surface the glass registry gets during the case (the shell's, not its own `emptyTest`),
@@ -620,7 +624,7 @@ and a surface the case never checked fails by name, as does one the assertions d
 a surface a later slice registers is caught until the case checks it. Each surface's blur is
 rounded at its border radius, all four corners alike, over the box St paints its background in
 (`get_background_paint_box` of its allocation). For the dock, Quick Settings, the calendar, a
-banner, the OSD, the Spotlight panel and the toast (the Alt+Tab list as above), a black and white
+banner, the OSD, the Spotlight panel and the toast (each switcher's list as above), a black and white
 checker goes under the surface's bottom-left corner, and that corner square is read with the
 glass on and with the surface unregistered: no pixel past the border's arc changes, every pixel
 in the 4 CSS px band just inside it does (no surface's padding lets content in there), the
@@ -660,7 +664,7 @@ default: `glass-unlock.png` against `fedora-glass-unlock.png` differs by 0 pixel
 `a11y.js`, which opens each Apex surface in turn: the bar, again with two unread
 notifications so the clock shows its dot, the dock, a popup menu, the OSD,
 a banner, Quick Settings and its Wi-Fi menu, the date menu with two notifications, the
-window switcher, a polkit-shaped dialog, the shell's own power-off dialog, Spotlight with
+window switcher, the held input-source switcher, Ctrl+Alt+Tab and Super+P's (`switchers.js`), a polkit-shaped dialog, the shell's own power-off dialog, Spotlight with
 "disk" typed and its toast, the overview and the app grid. Its targets are the visible
 labels, entries and symbolic icons under the surface, and any Clutter.Text outside a label
 or an entry, as a button's own label: St colours that from the button, and board 34's day
