@@ -821,6 +821,38 @@ async function shootBarCycle() {
     await captureBar('after-dialog');
 }
 
+// The bar across the layer's own live changes: layer-enabled off and on, panel out of and back in
+// disabled-features, then a lock from the overview. Each return gives back the first bar.
+async function shootBarLive() {
+    const apex = new Gio.Settings({schema_id: 'io.github.apex_linux.Apex.Desktop'});
+    const step = async (name, change) => {
+        change();
+        await Scripting.sleep(SETTLE_MS);
+        fact(name, describeBar());
+    };
+    await Scripting.sleep(SETTLE_MS);
+    Main.overview.hide();
+    Main.messageTray.getSources().forEach(source => source.destroy());
+    await Scripting.sleep(STEP_MS);
+    fact('before', describeBar());
+    await captureBar('before');
+    await step('layer-off', () => apex.set_boolean('layer-enabled', false));
+    await step('layer-on', () => apex.reset('layer-enabled'));
+    await captureBar('layer-on');
+    await step('panel-off', () => apex.set_strv('disabled-features', ['panel']));
+    await step('panel-on', () => apex.reset('disabled-features'));
+    await captureBar('panel-on');
+    Main.overview.show();
+    await Scripting.sleep(STEP_MS * 2);
+    Main.screenShield.lock(false);
+    await Scripting.sleep(STEP_MS * 2);
+    fact('overview-locked', {locked: Main.screenShield.locked});
+    Main.screenShield.deactivate(false);
+    await Scripting.sleep(SETTLE_MS);
+    fact('overview-unlocked', describeBar());
+    await captureBar('overview-unlocked');
+}
+
 // main.js connects to startup-complete only after importing this module, so a startup that
 // completes during the import would never run the script and leave the shell up.
 export function init() {
@@ -845,6 +877,8 @@ export async function run() {
             await shootDateMenu();
         else if (GLib.getenv('APEX_BAR_CYCLE') === '1')
             await shootBarCycle();
+        else if (GLib.getenv('APEX_BAR_LIVE') === '1')
+            await shootBarLive();
         else if (GLib.getenv('APEX_END_SESSION') === '1')
             await shootEndSession();
         else if (GLib.getenv('APEX_SUSPEND') === '1')

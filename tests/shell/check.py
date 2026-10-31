@@ -765,6 +765,42 @@ def check_bar_cycle(shots, case, apex):
         check(f"{case}: {step}: the bar's capture is the same as before's", capture(step) == bar, f[f"capture.{step}"])
 
 
+def check_bar_live(shots, case, stock_case):
+    log = read(shots, f"{case}.log")
+    f = facts(log)
+    stock = facts(read(shots, f"{stock_case}.log")).get("before")
+    steps = ("before", "layer-off", "layer-on", "panel-off", "panel-on", "overview-locked", "overview-unlocked")
+    for step in steps:
+        check(f"{case}: {step} is reported", step in f)
+    check(f"{case}: no JS error", "JS ERROR" not in until(log, "overview-unlocked") and "APEXLOCK-ERROR" not in log)
+    if not all(step in f for step in steps) or stock is None:
+        return
+    before = f["before"]
+    def bar(state):
+        return {k: state[k] for k in ("left", "center", "right", "actors", "chip", "clear")}
+    check(f"{case}: layer-enabled=false gives {stock_case}'s stock bar: items, actors, chip and Clear",
+          bar(f["layer-off"]) == bar(stock), json.dumps({"layer-off": bar(f["layer-off"]), "stock": bar(stock)}))
+    off = f["panel-off"]
+    check(f"{case}: panel in disabled-features: stock's panel items, no search button, stock's chip",
+          off["left"] == stock["left"] and "apex-search" not in off["right"] and off["chip"] == stock["chip"], json.dumps(off))
+    check(f"{case}: the lock from the overview locks", f["overview-locked"]["locked"] is True)
+
+    def capture(step):
+        with open(os.path.join(shots, os.path.basename(f[f"capture.{step}"])), "rb") as png:
+            return png.read()
+    first = capture("before")
+    for step in ("layer-on", "panel-on", "overview-unlocked"):
+        after = f[step]
+        for side in ("left", "center", "right"):
+            check(f"{case}: {step}: the {side} box's items as before", after[side] == before[side],
+                  f"{after[side]} != {before[side]}")
+            check(f"{case}: {step}: as many actors in the {side} box as before ({before['actors'][side]})",
+                  after["actors"][side] == before["actors"][side], str(after["actors"][side]))
+        check(f"{case}: {step}: the chip and Clear as before, the overview closed",
+              (after["chip"], after["clear"], after["overview"]) == (before["chip"], before["clear"], False), json.dumps(after))
+        check(f"{case}: {step}: the bar's capture is the same as before's", capture(step) == first, f[f"capture.{step}"])
+
+
 def main():
     if len(sys.argv) != 2:
         print(__doc__, file=sys.stderr)
@@ -789,6 +825,7 @@ def main():
     check_date_menu(shots, "date-menu-disabled", False)
     check_bar_cycle(shots, "bar-lock-cycle", True)
     check_bar_cycle(shots, "bar-lock-cycle-safe", False)
+    check_bar_live(shots, "bar-live", "bar-lock-cycle-safe")
     for case in END_SESSION_CASES:
         check_end_session(shots, case)
     return 1 if failed else 0
