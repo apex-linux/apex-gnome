@@ -152,10 +152,16 @@ stock bar when it is disabled:
   session-mode change, since panel.js then re-adds its items in stock order. Both keep their
   clicks, so the shell keeps a control that stops a share.
 - `panel/input-chip.js`: the input source's short names in capitals ("EN", "VI"), however
-  keyboard.js sets them. `_top-bar.scss` draws the chip at
+  keyboard.js sets them. An IBus source shows its engine's language code, not the engine's
+  symbol (`m17n:vi:telex` is "VI", not "Ắ"); with the layer off the stock names come back. `_top-bar.scss` draws the chip at
   `$apex_font_input_chip_size`/`$apex_font_input_chip_weight`, tracked
   `$apex_font_input_chip_tracking`, at least `$apex_input_chip_min_width` wide; stock shows it
   only with two or more sources.
+- `panel/clear-sync.js`: the date menu's Clear follows its placeholder from the start. calendar.js
+  binds the two without `SYNC_CREATE` (51.0 and 51.1), so an empty list showed Clear until a first
+  notification came and went. The part syncs it once on enable, and on disable gives back stock's
+  value unless stock's binding has synced it since. It is the panel's, not the notifications', so
+  the fix holds with `notifications` in disabled-features.
 
 `panel/solid-bar.js` makes the bar solid while `translucent-top-bar` is off (live), or while
 a window on the primary monitor's active workspace is maximised, showing and not the

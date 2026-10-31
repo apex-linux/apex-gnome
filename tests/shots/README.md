@@ -350,7 +350,10 @@ apps are, and registers them with the shell's watcher. Every call an item gets l
   glyphs and place in the status pill, whose start narrows for it and widens again once
   nothing is in use; the recording pill's stop square and tabular timer; the sharing
   pill's glyph, square, name and gap to the status pill; the input chip's "EN", font,
-  tracking and minimum width.
+  tracking and minimum width, and each source's chip: an xkb source's short name in
+  capitals, an IBus source's engine language code. The image's sources here are xkb (us, fr):
+  the IBus mapping is checked against a stub in tests/layer; the real engine is #187's case and
+  the VM run.
 
 The captures `<case>-indicators.png`, `<case>-indicators-everything.png`,
 `<case>-indicator-menu.png` and `<case>-indicator-overflow.png` show the bar, the bar in
@@ -680,6 +683,26 @@ WCAG 1.4.11's 3:1 over the light backdrops.
 `inactive_dot` pins each backdrop's ratio (`A11Y_INACTIVE_DOT_TODAY`, at the report's own
 rounding): a lower one fails. Where it is under 3:1 the dot leaves the plain glyph check for a
 gap line, which fails once the dot reaches 3:1, so the fix also removes the gap.
+
+Board 39's pills are measured on the bar too (`barPills`): with two input sources set for the
+step, the input chip, and, as in `indicators.js`'s "everything", the camera and microphone in
+use, a recording at 0:42 and a share. The chip's and the timer's text want 4.5:1, the share's and
+the privacy group's glyphs 3:1, each over what is drawn behind it, the pill's own fill. A pill
+Apex fills at rest (the recording, the share, the privacy group) is also read against the bar:
+the median of its fill across its middle, clear of the corners, against the bar a pixel or two
+beyond each end, at 3:1 (WCAG 1.4.11). Upstream's high-contrast sheet fills the button instead,
+so there `bar_pills` leaves the edge out. Every text passes; the gaps (`A11Y_PILL_TODAY`, pinned as
+the inactive dot is) are the owner's to decide:
+
+| Case | Part | Today |
+|---|---|---|
+| `default-solid` | the recording pill's `$apex_recording` against the bar | 2.02:1 |
+| `default-solid` | the sharing pill's and the privacy group's `$apex_privacy` against the bar | 1.62:1 |
+| `dark-style-solid` | the recording pill's fill against the bar | 2.13:1 |
+| `dark-style-solid` | the sharing pill's and the privacy group's fill against the bar | 2.65:1 |
+| `high-contrast`, `high-contrast-solid` | upstream's screen-sharing glyph, white on `#ff7800` | 2.54:1 |
+
+Over the Facets every fill holds 3:1: 5.44:1 and 4.38:1 in `default`, 3.14:1 and 3.90:1 in `dark-style`.
 
 The bar is measured the same way over every wallpaper G2 shows it on: the Facets, light in
 `default` and dark in `dark-style`; `#013b88` in the `-solid` twins; and, in `no-dock`

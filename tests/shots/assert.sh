@@ -767,6 +767,10 @@ indicator_metrics() {
     "${metric[@]}" 'two input sources show the chip: "EN" at $apex_font_input_chip_size, weight $apex_font_input_chip_weight, tracked $apex_font_input_chip_tracking' \
         '.everything.input' '.text == "EN" and (.size | px_is($t.apex_font_input_chip_size)) and .weight == ($t.apex_font_input_chip_weight | tonumber)
             and (.tracking - ($t.apex_font_input_chip_tracking | rtrimstr("em") | num) * ($t.apex_font_input_chip_size | px) | fabs < 0.05)'
+    "${metric[@]}" 'each source'"'"'s chip is its short name in capitals, an IBus source'"'"'s its engine'"'"'s language code, never its symbol' \
+        '.everything.input.sources' 'length >= 2 and all(.[]; (.language // "" | split("_")[0]) as $code
+            | .text == (if .type == "ibus" and ($code | length) >= 2 and ($code | length) <= 3
+                then $code + (.stock | capture("(?<s>[₀-₉]*)$").s) else .stock end | ascii_upcase))'
     "${metric[@]}" 'the chip is a $apex_bar_pill_height pill, radius $apex_radius_bar_pill, at least $apex_input_chip_min_width wide' \
         '.everything.input.pill' '(.height | px_is($t.apex_bar_pill_height)) and (.radius | px_is($t.apex_radius_bar_pill)) and .width >= ($t.apex_input_chip_min_width | px) - 0.01'
     "${metric[@]}" 'a share is a $apex_bar_pill_height $apex_privacy pill, radius $apex_radius_bar_pill, named "Stop screen sharing", $apex_sharing_margin + $apex_bar_gap before the status pill' \
@@ -1892,6 +1896,58 @@ inactive_dot() {
         "$dots" "length > 0 and all(. >= $A11Y_ICON_RATIO)"
 }
 
+# Board 39's pills: the chip's and the timer's text at 4.5:1, the share's and the privacy group's glyphs
+# at 3:1, and a pill Apex fills against the bar at 3:1; upstream's high-contrast sheet fills the button instead.
+readonly A11Y_PILL_PARTS=(input:text recording:text sharing:icon privacy:icon recording:edge sharing:edge privacy:edge)
+readonly A11Y_PILL_GAP="the owner's decision on board 39's pill fills over #013b88 (2026-10-31)"
+readonly A11Y_PILL_HC_GAP="upstream HC sheet: the screen-sharing glyph, white on its #ff7800 fill (2.54:1)"
+# Each part under WCAG AA today, at the report's own rounding: a lower one fails.
+declare -Ar A11Y_PILL_TODAY=([default-solid:recording:edge]=2.02 [default-solid:sharing:edge]=1.62 [default-solid:privacy:edge]=1.62
+    [dark-style-solid:recording:edge]=2.13 [dark-style-solid:sharing:edge]=2.65 [dark-style-solid:privacy:edge]=2.65
+    [high-contrast:sharing:icon]=2.54 [high-contrast-solid:sharing:icon]=2.54)
+
+# A pill part's worst ratio in an APEXG2-A11Y report, or nothing when it was not measured.
+pill_ratio() {
+    local report=$1 pill=${2%:*} part=${2#*:}
+    if [[ $part == edge ]]; then
+        jq -r --arg p "$pill" '.barPills.pills[$p].edge.ratio // empty' <<<"$report" 2>/dev/null
+    else
+        jq -r --arg p "$pill" --arg k "$part" \
+            '[.barPills.pills[$p].targets[]? | select(.kind == $k and (.offscreen | not)) | .ratio] | min // empty' <<<"$report" 2>/dev/null
+    fi
+}
+
+pill_verdict() {
+    local desc=$1 worst=$2 threshold=$3
+    if jq -en "$worst >= $threshold" >/dev/null; then pass "$desc"; else fail "$desc ($worst:1)"; fi
+}
+
+# Each pill part at its threshold, or, pinned, at least today's ratio and still a gap.
+bar_pills() {
+    local label=$1 report=$2 p worst threshold today desc gap=$A11Y_PILL_GAP
+    local -A part_desc=([text]="text over what is drawn behind it" [icon]="glyphs over its fill" [edge]="fill against the bar beside it")
+    local -A part_noun=([text]=text [icon]=glyphs [edge]=fill)
+    [[ $label == high-contrast* ]] && gap=$A11Y_PILL_HC_GAP
+    for p in "${A11Y_PILL_PARTS[@]}"; do
+        [[ $label == high-contrast* && $p == *:edge ]] && continue
+        threshold=$A11Y_ICON_RATIO
+        [[ $p == *:text ]] && threshold=$A11Y_TEXT_RATIO
+        desc="$label accessibility: barPills: the ${p%:*} pill's ${part_desc[${p#*:}]} at $threshold:1"
+        worst=$(pill_ratio "$report" "$p")
+        if [[ -z $worst ]]; then
+            fail "$desc (not measured)"
+            continue
+        fi
+        today=${A11Y_PILL_TODAY[$label:$p]:-}
+        if [[ -z $today ]]; then
+            pill_verdict "$desc" "$worst" "$threshold"
+            continue
+        fi
+        pill_verdict "$label accessibility: barPills: the ${p%:*} pill's ${part_noun[${p#*:}]} is at least today's $today:1" "$worst" "$today"
+        known_gap "$gap" pill_verdict "$desc" "$worst" "$threshold"
+    done
+}
+
 # The text below 4.5:1 and the glyphs and dots below 3:1 in a report's surface at path; with gapdot
 # true, the inactive workspace dots are left to inactive_dot.
 a11y_low_contrast() {
@@ -1917,6 +1973,7 @@ a11y_contrast() {
     for s in bar barUnread; do
         inactive_dot "$label" "$report" "$s" "$label"
     done
+    bar_pills "$label" "$report"
     expect "$label accessibility" "$report" '.wifiMenuConnected.targets | any(.kind == "text" and (.inactive | not))' \
         "the connected network's name is measured over its row's own fill"
     expect "$label accessibility" "$report" '(.bar.targets | map(select(.kind == "dot" and .name == "workspace-dot")) | length >= 2)

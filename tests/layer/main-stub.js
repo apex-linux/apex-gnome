@@ -275,10 +275,20 @@ function newScreenButton(role, accessibleName, index, children) {
     return button;
 }
 
+// IBus Telex's short name is its engine's symbol; its engine's language is Vietnamese.
 function newInputSources() {
-    const keyboard = {_container: new St.Widget()};
-    for (const text of ['en', 'vi'])
-        keyboard._container.add_child(new St.Label({text}));
+    const sources = [{type: 'xkb', id: 'us', shortName: 'en'}, {type: 'ibus', id: 'm17n:vi:telex', shortName: 'Ắ'}];
+    const keyboard = {
+        _container: new St.Widget(),
+        _inputSources: sources.map((is, index) => ({...is, index})),
+        _indicatorLabels: {},
+        _calculateSourceIndicatorIndex: is => is.index,
+        _inputSourceManager: {_ibusManager: {getEngineDesc: id => id === 'm17n:vi:telex' ? {get_language: () => 'vi_VN'} : null}},
+    };
+    for (const is of keyboard._inputSources) {
+        keyboard._indicatorLabels[is.index] = new St.Label({text: is.shortName});
+        keyboard._container.add_child(keyboard._indicatorLabels[is.index]);
+    }
     return keyboard;
 }
 
@@ -442,7 +452,12 @@ export const panel = Object.assign(new StubActor('panel', {glass: PANEL_GLASS, e
         screenSharing: newScreenButton('screenSharing', 'Stop Screen Sharing', 1,
             [new St.Icon({icon_name: 'screen-shared-symbolic'}), new St.Icon({icon_name: 'screencast-stop-symbolic'})]),
         keyboard: newInputSources(),
-        dateMenu: {menu: {box: new StubActor('calendar', {glass: POPOVER_GLASS, extents: [354, 40, 732, 468], parent: boxPointer})}},
+        // calendar.js's message list as built: its placeholder shows, and Clear, never synced, too.
+        // Labels, the stub's actors that notify visible as GObjects do.
+        dateMenu: {
+            menu: {box: new StubActor('calendar', {glass: POPOVER_GLASS, extents: [354, 40, 732, 468], parent: boxPointer})},
+            _messageList: {_clearButton: new St.Label(), _placeholder: new St.Label()},
+        },
     },
 });
 
