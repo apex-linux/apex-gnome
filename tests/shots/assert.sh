@@ -270,8 +270,27 @@ exit_cut() {
 
 # G2's fixture apps (direct.sh's STUB_APPS) have no icon of their own: GNOME draws its generic one.
 readonly FIXTURE_APPS=(io.github.apex_linux.G2Stub1.desktop io.github.apex_linux.G2Stub2.desktop io.github.apex_linux.G2Stub3.desktop)
-# Icons the shell draws from its own resource because Apex Symbolic (board 31) draws none of that name.
-readonly SHELL_RESOURCE_ICONS=(screenshooter-symbolic)
+# Icons the shell draws from its own resource because Apex Symbolic (board 31) draws none of that name yet: each
+# is one apex-desktop#35 ships, and leaves this list when APEX_DESKTOP_REV reaches it (surface_icons fails it then).
+readonly SHELL_RESOURCE_ICONS=(
+    screenshooter-symbolic
+    notification-expand-symbolic
+    switch-on-symbolic
+    switch-off-symbolic
+    screenshot-ui-area-symbolic
+    screenshot-ui-display-symbolic
+    screenshot-ui-window-symbolic
+    screenshot-ui-show-pointer-symbolic
+    preview-close-symbolic
+)
+# Stock icons a surface legitimately draws, "surface name" by exact name, never a pattern.
+readonly STAND_IN_ICONS=(
+    # G2's switcher stand-in (probe.js's windowSwitcher) gives its items GNOME's generic app icon.
+    'switcher application-x-executable'
+    # A full-colour device icon a search provider returns: Apex draws symbolic glyphs, Colloid app icons and
+    # boards 27-29's places and mimetypes, and inherits Adwaita's devices by design (Inherits=Adwaita,hicolor).
+    'spotlight drive-harddisk'
+)
 
 # expect, but a failure quotes DETAIL, what the shell had, rather than the condition's false.
 expect_named() {
@@ -311,19 +330,72 @@ session_defaults() {
     expect_named "$label" "$r" '.fontconfig.mono.family == "JetBrains Mono"' .fontconfig.mono \
         "fontconfig gives JetBrains Mono for its family, not a fallback"
     expect_named "$label" "$r" '.drawn.clock == "Adwaita Sans"' .drawn.clock "the bar's clock is drawn in Adwaita Sans"
-    bad=$(jq -r --argjson fixtures "$(printf '%s\n' "${FIXTURE_APPS[@]}" | jq -R . | jq -sc .)" \
-        --argjson resource "$(printf '%s\n' "${SHELL_RESOURCE_ICONS[@]}" | jq -R . | jq -sc .)" '
-        .icons | to_entries[] | .key as $where | (.value // [])[]
-        | (.icon | if startswith(". GThemedIcon ") then split(" ")[2] else . end) as $name
-        | select((.file // "" | startswith("/usr/share/icons/Apex/")) | not)
-        | select(((.file // "" | startswith("/org/gnome/shell/icons/")) and ($resource | index($name))) | not)
-        | .app as $app | select($app == null or ($fixtures | index($app) | not))
-        | "\($where) \($name)\(if $app then " (\($app))" else "" end): \(.file // "no icon")"' <<<"$r" 2>&1 | paste -sd';' -)
+    bad=$(jq '.icons' <<<"$r" 2>/dev/null | icons_not_apex)
     if [[ -n $r && -z $bad && $(jq '[.icons[] // [] | length] | add' <<<"$r") -gt 0 ]]; then
         pass "$label: every icon the bar, the dock, the dash and Quick Settings draw resolves through Apex"
     else
         fail "$label: every icon the bar, the dock, the dash and Quick Settings draw resolves through Apex (${bad:-no icons reported})"
     fi
+    bad=$(jq -r --argjson resource "$(printf '%s\n' "${SHELL_RESOURCE_ICONS[@]}" | jq -R . | jq -sc .)" \
+        '[.apexSymbolic // [] | .[] | select(. as $n | $resource | index($n))] | join(", ")' <<<"$r" 2>/dev/null)
+    if [[ -n $r && $(jq '.apexSymbolic // [] | length' <<<"$r") -gt 0 && -z $bad ]]; then
+        pass "$label: no icon listed as the shell's own (SHELL_RESOURCE_ICONS) is one Apex Symbolic ships"
+    else
+        [[ -n $bad ]] && bad="listed as shell-only, but /usr/share/icons/Apex has it: $bad"
+        fail "$label: no icon listed as the shell's own (SHELL_RESOURCE_ICONS) is one Apex Symbolic ships (${bad:-no Apex Symbolic glyphs reported})"
+    fi
+    grep -q 'APEXG2-SCENES ' "$log" 2>/dev/null && surface_icons "$label" "$log"
+}
+
+# Each icon of an object of surfaces that resolves neither under Apex nor to a listed exception, as "where name: file".
+icons_not_apex() {
+    jq -r --argjson fixtures "$(printf '%s\n' "${FIXTURE_APPS[@]}" | jq -R . | jq -sc .)" \
+        --argjson resource "$(printf '%s\n' "${SHELL_RESOURCE_ICONS[@]}" | jq -R . | jq -sc .)" \
+        --argjson standIn "$(printf '%s\n' "${STAND_IN_ICONS[@]}" | jq -R . | jq -sc .)" '
+        to_entries[] | .key as $where | (.value // [])[]
+        | (.icon | if startswith(". GThemedIcon ") then split(" ")[2] else . end) as $name
+        | select((.file // "" | startswith("/usr/share/icons/Apex/")) | not)
+        | select($standIn | index("\($where) \($name)") | not)
+        | select(((.file // "" | startswith("/org/gnome/shell/icons/")) and ($resource | index($name))) | not)
+        | .app as $app | select($app == null or ($fixtures | index($app) | not))
+        | "\($where) \($name)\(if $app then " (\($app))" else "" end): \(.file // "no icon")"' 2>&1 | paste -sd';' -
+}
+
+# The surfaces the probe opens after its scenes (probe.js's iconSurfaces), by the boards they draw.
+readonly ICON_SURFACES=(
+    "dateMenu|board 34's date menu and notifications"
+    "overview|board 35's overview"
+    "launcher|board 36's launcher grid"
+    "spotlight|board 38's Spotlight results"
+    "switcher|board 15's window switcher"
+    "surfaces|board 16's popup menu, OSD and banner"
+    "dialog|board 13's dialog"
+    "endSession|board 14's end-session dialog"
+    "screenshot|board 19's screenshot UI"
+)
+
+# S1b's exit row over every surface G2 opens: each draws icons, and every one resolves as session_defaults' rule says.
+surface_icons() {
+    local label=$1 log=$2 r entry key desc got bad
+    r=$(report_of "$log" APEXG2-SESSION-SURFACES)
+    if [[ -z $r || -n $(jq -r '.error // empty' <<<"$r" 2>/dev/null) ]]; then
+        fail "$label: the probe walks the icons of every surface it opens (${r:+$(jq -r '.error' <<<"$r" | head -n 1)}${r:-no report})"
+        return
+    fi
+    for entry in "${ICON_SURFACES[@]}"; do
+        key=${entry%%|*} desc=${entry#*|}
+        got=$(jq -c --arg k "$key" '.[$k]' <<<"$r")
+        if [[ $got == null || $(jq -r 'if type == "array" then length else 0 end' <<<"$got") == 0 ]]; then
+            fail "$label: $desc draws icons for the walk (got $(jq -c '.' <<<"$got" | head -c 200))"
+            continue
+        fi
+        bad=$(jq --arg k "$key" '{($k): .[$k]}' <<<"$r" | icons_not_apex)
+        if [[ -z $bad ]]; then
+            pass "$label: every icon $desc draws resolves through Apex ($(jq length <<<"$got") icons)"
+        else
+            fail "$label: every icon $desc draws resolves through Apex ($bad)"
+        fi
+    done
 }
 
 # Mutter warns when two bindings claim one key: the second silently takes it from the first.
