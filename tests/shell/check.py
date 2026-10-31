@@ -846,6 +846,43 @@ def check_fixtures(shots):
     check("fixtures.py sets up every fixture of the lane", not missing, f"missing: {', '.join(missing)}")
 
 
+def check_bar_cycle(shots, case, apex):
+    log = read(shots, f"{case}.log")
+    f = facts(log)
+    steps = ("before", "logind-locked", "after-logind", "dialog-locked", "after-dialog")
+    for step in steps:
+        check(f"{case}: {step} is reported", step in f)
+    check(f"{case}: no JS error", "JS ERROR" not in until(log, "after-dialog") and "APEXLOCK-ERROR" not in log)
+    check(f"{case}: the layer {'loaded' if apex else 'did not load'}", (LOAD_WITNESS in log) == apex)
+    if not all(step in f for step in steps):
+        return
+    before = f["before"]
+    chip, search = (["EN", "FR"], True) if apex else (["en", "fr"], False)
+    check(f"{case}: before: the user session's bar, its chip {'/'.join(chip)}, {'with' if apex else 'without'} the search button",
+          before["mode"] == "user" and before["chip"] == chip and ("apex-search" in before["right"]) == search, json.dumps(before))
+    check(f"{case}: logind's Lock locks", f["logind-locked"]["locked"] is True)
+    check(f"{case}: the lock's own stage locks{', its prompt up' if apex else ''}",
+          f["dialog-locked"]["locked"] is True and (f["dialog-locked"]["prompt"] or not apex), json.dumps(f["dialog-locked"]))
+    check(f"{case}: before: the overview closed", before["overview"] is False)
+    check(f"{case}: the pointer rests in the hot corner throughout",
+          all(f[step]["pointer"] == [0, 0] for step in ("before", "after-logind", "after-dialog")))
+    def capture(step):
+        with open(os.path.join(shots, os.path.basename(f[f"capture.{step}"])), "rb") as png:
+            return png.read()
+    bar = capture("before")
+    for step in ("after-logind", "after-dialog"):
+        after = f[step]
+        for side in ("left", "center", "right"):
+            check(f"{case}: {step}: the {side} box's items as before", after[side] == before[side],
+                  f"{after[side]} != {before[side]}")
+            check(f"{case}: {step}: as many actors in the {side} box as before ({before['actors'][side]})",
+                  after["actors"][side] == before["actors"][side], str(after["actors"][side]))
+        check(f"{case}: {step}: the chip and Clear as before, the overview still closed",
+              (after["chip"], after["clear"], after["mode"], after["overview"]) ==
+              (before["chip"], before["clear"], before["mode"], before["overview"]), json.dumps(after))
+        check(f"{case}: {step}: the bar's capture is the same as before's", capture(step) == bar, f[f"capture.{step}"])
+
+
 def main():
     if len(sys.argv) != 2:
         print(__doc__, file=sys.stderr)
@@ -873,6 +910,8 @@ def main():
         check_polkit_locked(shots, case, apex, sleeps)
     check_date_menu(shots, "date-menu", True)
     check_date_menu(shots, "date-menu-disabled", False)
+    check_bar_cycle(shots, "bar-lock-cycle", True)
+    check_bar_cycle(shots, "bar-lock-cycle-safe", False)
     for case in END_SESSION_CASES:
         check_end_session(shots, case)
     return 1 if failed else 0

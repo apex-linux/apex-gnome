@@ -708,7 +708,8 @@ fact "date menu: an empty list hides Clear, as calendar.js's binding would with 
 fact "hot-corner: the corner becomes a reactive 4 x 4 zone at its own position, in scaled px" \
     'hot-corner\.zone=hot-corner reactive=true x=0 y=0 8x8'
 fact "hot-corner: in the chrome, hidden under fullscreen windows" 'chrome\.add=hot-corner trackFullscreen=true'
-count_is "hot-corner: entering it triggers the barrier once, until the pointer leaves it off the barrier" '^probe: hot-corner\.trigger=' 2
+fact "hot-corner: the zone coming back under a resting pointer triggers nothing" 'hot-corner\.after-enter=false'
+count_is "hot-corner: moving in it triggers the barrier once, until the pointer leaves it off the barrier" '^probe: hot-corner\.trigger=' 2
 fact "hot-corner: leaving it while on the barrier keeps the barrier's trigger" 'hot-corner\.after-leave-on-the-barrier=true'
 fact "layer-enabled=false: the dot hooks give stock" 'top-bar\.off\.dots=99 99 99 inactive="stock"'
 fact "layer-enabled=false: the status pill gets every indicator back, in order" "pill\.off=$STOCK_PILL"
@@ -769,6 +770,8 @@ panel_classes_are "disabled-features=['panel']: the bar stays translucent" \
 probe focused-app "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_FOCUSED_APP=1
 has "focused-app: the panel feature enables" 'Apex: feature panel enabled'
 fact "focused-app: its item follows the Activities pill in the left box" 'panel\.add=apex-focused-app at 1 in left'
+fact "focused-app: after Activities in the left box" 'focused-app\.left-box=activities,focused-app'
+fact "focused-app: and again once panel.js has put Activities back at the box's end" 'focused-app\.left-box\.after-session-update=activities,focused-app'
 fact "focused-app: \"Desktop\" while nothing has focus, a label that takes no clicks" \
     'focused-app\.none=Desktop name=Desktop visible=true reactive=false'
 fact "focused-app: the focused app's name" 'focused-app\.files=Files name=Files visible=true reactive=false'

@@ -1062,15 +1062,17 @@ async function exerciseTopBar() {
     Hooks.run('hot-corner', corner, Main.layoutManager);
     fact('hot-corner.zone', `${corner.name ?? 'none'} reactive=${corner.reactive ?? false} ` +
         `x=${corner.x} y=${corner.y} ${corner.width}x${corner.height}`);
-    if (corner.handlers['enter-event']) {
-        corner.handlers['enter-event']();
-        corner.handlers['enter-event']();
+    if (corner.handlers['motion-event']) {
+        corner.handlers['enter-event']?.();
+        fact('hot-corner.after-enter', corner._pressureBarrier._isTriggered);
+        corner.handlers['motion-event']();
+        corner.handlers['motion-event']();
         corner._pressureBarrier._barriers[0]._isHit = true;
         corner.handlers['leave-event']();
         fact('hot-corner.after-leave-on-the-barrier', corner._pressureBarrier._isTriggered);
         corner._pressureBarrier._barriers[0]._isHit = false;
         corner.handlers['leave-event']();
-        corner.handlers['enter-event']();
+        corner.handlers['motion-event']();
     }
 
     if (GLib.getenv('PROBE_CLEAR_SYNCED') === '1') {
@@ -1123,6 +1125,14 @@ async function exerciseFocusedApp() {
             : 'none');
     };
     report('none');
+    const leftBoxOrder = () => Main.panel.leftBox.children.map(c => c.name ?? (c.child?.accessible_name && 'focused-app')).join(',');
+    fact('focused-app.left-box', leftBoxOrder());
+    // panel.js puts its own items back at the box's end at each session-mode change.
+    const activities = Main.panel.statusArea.activities.container;
+    Main.panel.leftBox.remove_child(activities);
+    Main.panel.leftBox.insert_child_at_index(activities, Main.panel.leftBox.children.length);
+    Main.sessionMode.lock(false);
+    fact('focused-app.left-box.after-session-update', leftBoxOrder());
     tracker.focus({get_name: () => 'Files'});
     report('files');
     tracker.focus(null);
