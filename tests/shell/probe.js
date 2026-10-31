@@ -760,7 +760,7 @@ async function shootDateMenu() {
 // The bar as panel.js and the Apex panel parts leave it: each box's items by role, every actor
 // under each box, the input chip's names and Clear. A part rebuilt twice shows in the counts.
 function describeBar() {
-    const {leftBox, centerBox, rightBox, statusArea} = Main.panel;
+    const {_leftBox: leftBox, _centerBox: centerBox, _rightBox: rightBox, statusArea} = Main.panel;
     const roleOf = c => Object.keys(statusArea).find(role => statusArea[role].container === c) ?? c.name ?? 'unnamed';
     const count = actor => actor.get_children().reduce((n, c) => n + 1 + count(c), 0);
     const boxes = {left: leftBox, center: centerBox, right: rightBox};
