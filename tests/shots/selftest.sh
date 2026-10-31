@@ -1227,7 +1227,7 @@ test_signoff() {
 test_signoff_apps() {
     local dir=$1 app scene
     declare -A scenes=([cc]='light dark light-scrolled dark-scrolled updates-light updates-dark appearance-light appearance-dark
-        power-light power-dark updates-health-failure updates-health-failure-dark updates-fallback updates-fallback-dark'
+        power-light power-dark updates-health-failure updates-health-failure-dark updates-fallback updates-fallback-dark updates-fallback-changes'
         [files]='home-light home-dark documents-light documents-dark search-light search-dark'
         [terminal]='light dark split-light split-dark')
     for app in cc files terminal; do
@@ -1238,20 +1238,20 @@ test_signoff_apps() {
     done
     if "$HERE/signoff.sh" --collect "$dir/g2" "$dir/shots" "$dir/apps" control-center="$dir/cc" nautilus="$dir/files" ptyxis="$dir/terminal" \
         >"$T/signoff.out" 2>&1 &&
-        [[ $(find "$dir/apps" -name 'board-*.png' | wc -l) == 54 ]] &&
-        jq -e '(.boards | length) == 27 and (.boards | map(.key) | unique | length) == 27
+        [[ $(find "$dir/apps" -name 'board-*.png' | wc -l) == 55 ]] &&
+        jq -e '(.boards | length) == 28 and (.boards | map(.key) | unique | length) == 28
             and .sources == ["tests/control-center/run.sh", "tests/nautilus/shoot.sh", "tests/ptyxis/shoot.sh", "tests/shell/shoot.sh", "tests/shots/direct.sh signoff"]
             and ([.boards[] | select(.board == 11) | .key] == ["11-settings-apex-top", "11-settings-apex-scrolled"])
             and (.boards[] | select(.key == "11-settings-apex-scrolled") | .scene == {light: "light-scrolled", dark: "dark-scrolled"}
                 and .files.dark == "board-11-settings-apex-scrolled-dark.png")
-            and ([.boards[] | select(.board == 26) | .files.dark] == ["board-26-update-health-health-failure-dark.png", "board-26-update-health-fallback-dark.png"])
+            and ([.boards[] | select(.board == 26) | .files.dark] == ["board-26-update-health-health-failure-dark.png", "board-26-update-health-fallback-dark.png", null])
             and (.boards[] | select(.key == "12-greeter") | .files.light == "board-12-greeter-light.png")' \
             "$dir/apps/signoff.json" >/dev/null; then
         ok "signoff: the app boards add a row per scene, keyed NN-SLUG, light and dark, beside the fifteen shell boards"
     else
         not_ok "signoff: the app boards add a row per scene, keyed NN-SLUG, light and dark, beside the fifteen shell boards: $(tail -n 3 "$T/signoff.out")"
     fi
-    # No board is light-only today: a copy of signoff.sh whose fallback row has no dark capture stands in for one.
+    # A copy of signoff.sh whose fallback row has no dark capture: a row made light-only, its dark file gone too.
     mkdir -p "$T/light-only/tests/shots" "$T/light-only/tests/lib"
     cp "$HERE/../lib/pins.sh" "$T/light-only/tests/lib/"
     sed 's/|updates-fallback|updates-fallback-dark|/|updates-fallback||/' "$HERE/signoff.sh" >"$T/light-only/tests/shots/signoff.sh"

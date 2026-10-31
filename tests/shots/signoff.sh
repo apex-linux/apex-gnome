@@ -91,6 +91,7 @@ readonly BOARDS="12|greeter|GDM greeter|$SHOOT|greeter-light-list|greeter-dark-l
 24|settings-power-power|Settings: Power|$CONTROL_CENTER|power-light|power-dark|Power with an NVIDIA card under umockdev: the Graphics and Display group
 26|update-health-health-failure|Update health failure|$CONTROL_CENTER|updates-health-failure|updates-health-failure-dark|Software Updates after an update whose health check failed (update1.py health-failure)
 26|update-health-fallback|Update health failure|$CONTROL_CENTER|updates-fallback|updates-fallback-dark|Software Updates booted back into the previous version (update1.py fallback)
+26|update-health-fallback-changes|Update health failure|$CONTROL_CENTER|updates-fallback-changes||the set-aside version's changes from Show Changes, in board 18's grid (update1.py fallback)
 27|files-home-home|Files: Home|$NAUTILUS|home-light|home-dark|the home folder of home.py in the icon view
 28|files-list-documents|Files: list and details|$NAUTILUS|documents-light|documents-dark|Documents in the list view, the spec selected, details on
 29|files-search-search|Files: search|$NAUTILUS|search-light|search-dark|a search for \"apex\" from the home folder, in the list view
