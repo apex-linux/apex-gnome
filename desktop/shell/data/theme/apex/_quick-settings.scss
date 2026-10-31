@@ -72,8 +72,9 @@ $_toggle_states: hover, focus, active;
     &:#{$state} { color: $apex_fg; background-color: $apex_button_hover; }
   }
 
-  &:focus { box-shadow: inset 0 0 0 $apex_entry_focus_ring $apex_fg; }
-  &:checked:focus, .apex-lit &:focus { box-shadow: inset 0 0 0 $apex_entry_focus_ring -st-accent-fg-color; }
+  // Upstream's accent ring is !important, and 2.37:1 over the light fill.
+  &:focus { box-shadow: inset 0 0 0 $apex_entry_focus_ring $apex_fg !important; }
+  &:checked:focus, .apex-lit &:focus { box-shadow: inset 0 0 0 $apex_entry_focus_ring -st-accent-fg-color !important; }
 
   // apex-lit: the quick-settings feature lights Power Mode at every profile (DESIGN).
   &:checked, &:checked:hover, &:checked:focus, &:checked:active,
