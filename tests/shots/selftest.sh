@@ -3494,7 +3494,7 @@ test_pr_assertions() {
         "$(grep -c "^FAIL default: main.js's startup-complete handler ran 0 times, not once" "$T/assertions.out")"
     # shellcheck disable=SC2016 # expanded by the inner bash
     expect_eq "parts: main asserts every case, pr only its own" "0 1 0" \
-        "$(bash -c '. "$1/assert.sh"; part=main; asserted glass; a=$?; part=pr; asserted glass; b=$?; asserted default; echo "$a $b $?"' _ "$HERE")"
+        "$(bash -c '. "$1/assert.sh"; part=main; asserted glass-load; a=$?; part=pr; asserted glass-load; b=$?; asserted default; echo "$a $b $?"' _ "$HERE")"
 }
 
 test_one_gpu() {
