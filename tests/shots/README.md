@@ -412,6 +412,12 @@ Last, with `update1-mock.py` (python-dbusmock's Update1, started by `direct.sh`)
 update card: its place under the text, inset, radius, gap, fill and ring, the icon, the
 title and the versions, the switch (on, sensitive only when staged) and Restart's label,
 capturing `end-session-update` and `end-session-ready`.
+Then a mount's `ask-password`, through `shellMountOperation.js` as a mount asks it, opens the
+password dialog with its Remember Password check box: unchecked, its 2 px ring is
+`$apex_fg_dim` (`$apex_fg` hovered) and at least 3:1 on the dialog's fill, where stock's black
+or white at .15 is about 1.5:1; checked, the box is the accent shaded
+`$apex_quick_toggle_checked_shade`, the check white and the ring gone. The keyring prompt and
+the portal's access dialog take the same rule.
 
 `date_menu` runs in the same cases. The probe posts two low-urgency notifications (no
 banner), opens the calendar menu at the fixed date, captures it with
@@ -640,6 +646,16 @@ written to the 8-bit frame (½ step); and the reference reads c from B, which ho
 (½ step, carried at 128/255: 64/255). Measured: 1.208 steps; with `follow-opacity` forced off,
 88.651.
 
+A glass that moves blurs where it is. Each move is set by property, not by an animation's
+clock: the dock's box slid half its height up, and Quick Settings' BoxPointer halfway open
+(scale 0.98 from its top edge, half the arrow's rise up). Over the box the glass left and the
+box it took, on the tile pattern, the frame the move itself draws equals a full redraw of the
+same state by a fresh glass. The surface is unregistered and registered again first, because a
+plain full redraw would draw a kept result again, and so would pass a blur that never moves.
+The dock halfway down intellihide's slide reaches past the screen's bottom edge, and there its
+blur reads pixels no one painted (the last frame's for the live glass, a fresh buffer's for the
+new one): a known gap until 0003 clamps its blit to the stage view.
+
 `shadows_under_glass` checks the `shadows` feature against the glass in the same case, light
 and dark: `glass.js` lays the tile grid under Quick Settings, a popup menu and a dialog and
 reads each box with `framePixels()`, once with the shadows on and once with `shadows` in
@@ -669,7 +685,8 @@ default: `glass-unlock.png` against `fedora-glass-unlock.png` differs by 0 pixel
 `a11y.js`, which opens each Apex surface in turn: the bar, again with two unread
 notifications so the clock shows its dot, the dock, a popup menu, the OSD,
 a banner, Quick Settings and its Wi-Fi menu, the date menu with two notifications, the
-window switcher, a polkit-shaped dialog, the shell's own power-off dialog, Spotlight with
+window switcher, a polkit-shaped dialog, the mount password dialog with its box checked
+(under each accent), the shell's own power-off dialog, Spotlight with
 "disk" typed and its toast, the overview and the app grid. Its targets are the visible
 labels, entries and symbolic icons under the surface, and any Clutter.Text outside a label
 or an entry, as a button's own label: St colours that from the button, and board 34's day
@@ -1107,14 +1124,14 @@ on dispatch and weekly (Tuesdays), never on a pull request, and no check require
 - **libadwaita:** the lane's libadwaita from updates-testing, then
   `tests/libadwaita/radius-test.sh` in its three modes (`--stock`, the rewrite, `--late`).
 - **ptyxis:** the lane's Ptyxis from updates-testing, then as ci.yml runs them
-  `tests/ptyxis/status-test.sh`, `shoot.sh`, `contrast-test.sh`, `palette-test.sh` (on
-  `tests/s2c/agent.sh`'s agent) and `panes-test.sh`.
+  `tests/ptyxis/status-test.sh`, `shoot.sh`, `contrast-test.sh`, `layout-test.sh`,
+  `palette-test.sh` (on `tests/s2c/agent.sh`'s agent) and `panes-test.sh`.
 - **report:** one line in the run's summary, passed/failed for each, `?` where a job gave
   none, then each app's NEVR and its ok/not ok count, and libadwaita's and Ptyxis's NEVR and
   their test scripts passed/failed: `next-point: gnome-shell-51.1-1.fc45.apex1 g2 1954/0
   goldens 30/0 shoot 523/0 | gnome-control-center-51.1-1.fc45.apex1 46/0 |
   nautilus-51.1-1.fc45.apex1 84/0 | libadwaita-1.10.0-2.fc45.apex1 3/0 |
-  ptyxis-50.1-6.fc45.apex1 5/0`.
+  ptyxis-50.1-6.fc45.apex1 6/0`.
 
 g2, signoff, apps, libadwaita and ptyxis install `next-point.sh shim` first, a `dnf5` ahead of
 Fedora's on `PATH`. It adds updates-testing beside each `--repo=updates` and

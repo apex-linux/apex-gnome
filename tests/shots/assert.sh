@@ -54,7 +54,8 @@ readonly A11Y_TEXT_RATIO=4.5
 readonly A11Y_ICON_RATIO=3
 readonly A11Y_ACCENTS=(blue teal green yellow orange red pink purple slate)
 readonly A11Y_SURFACES=(bar barUnread dock popupMenu osd banner quickSettings "${A11Y_ACCENTS[@]/#/quickSettingsAccents.}" wifiMenu wifiMenuConnected dateMenu
-    "${A11Y_ACCENTS[@]/#/dateMenuAccents.}" switcher dialog "${A11Y_ACCENTS[@]/#/dialogAccents.}" endSession screenshot
+    "${A11Y_ACCENTS[@]/#/dateMenuAccents.}" switcher dialog "${A11Y_ACCENTS[@]/#/dialogAccents.}"
+    checkBoxDialog "${A11Y_ACCENTS[@]/#/checkBoxDialogAccents.}" endSession screenshot
     spotlight.popup spotlight.toast overview appGrid barPills.indicatorMenu)
 # The failures still open: upstream's high-contrast sheet, which safe mode keeps as Fedora's.
 readonly A11Y_HC_TOGGLE="upstream HC sheet: Quick Settings' checked toggle, white on its accent (3.15:1), and its menu arrow (2.31:1)"
@@ -1209,6 +1210,14 @@ modal_dialog() {
             | (.b | map(select(.default | not)) | length == 1 and all((.background | colour_is($t.apex_button)) and (.foreground | colour_is($t.apex_fg)) and (.hover.background | colour_is($t.apex_button_hover))))
             and (.b | map(select(.default)) | length == 1 and all((.background | rgba) as $f | ([range(3)] | all(($f[.] - $a[.] * (1 - $k)) | fabs <= 1))
                 and (.foreground | colour_is("#ffffff"))))'
+    "${metric[@]}" 'a check box (the mount password dialog'"'"'s Remember Password) rings its box 2 px in $apex_fg_dim, $apex_fg hovered' \
+        "$d.checkBox" '.label == "Remember Password" and (.unchecked | (.border.top | px_is(2)) and (.borderColor | colour_is($t.apex_fg_dim)) and (.hover.borderColor | colour_is($t.apex_fg)))'
+    "${metric[@]}" 'that ring is at least '"$A11Y_ICON_RATIO"':1 on the dialog'"'"'s fill (WCAG 1.4.11; stock'"'"'s is about 1.5:1)' \
+        "$d.checkBox" ". as \$c | (.unchecked.borderColor | contrast_on(\$c.background)) >= $A11Y_ICON_RATIO"
+    "${metric[@]}" 'checked, the box is the accent shaded $apex_quick_toggle_checked_shade with black, its check in white, unringed' \
+        "{c: $d.checkBox.checked, accent: .topBar.accent}" '(.accent | rgba) as $a | ($t.apex_quick_toggle_checked_shade | rtrimstr("%") | tonumber / 100) as $k
+            | .c | (.background | rgba) as $f | ([range(3)] | all(($f[.] - $a[.] * (1 - $k)) | fabs <= 1)) and (.foreground | colour_is("#ffffff"))
+            and (.borderColor | rgba | .[3] == 0) and (.hover.borderColor | rgba | .[3] == 0)'
     "${metric[@]}" 'the end-session dialog has $apex_end_session_gap between its parts, its title tracked $apex_dialog_title_tracking, its countdown in tabular figures' \
         "$d.endSession" '(.box.spacing | px_is($t.apex_end_session_gap)) and (.contentSpacing | px_is($t.apex_end_session_gap))
             and (.title.tracking - ($t.apex_dialog_title_tracking | px) | fabs < 0.05) and (.description.font.features | test("tnum"))'
@@ -3000,6 +3009,13 @@ glass_manager() {
         'over a checker, the bottom-left corner of the dock, Quick Settings, the calendar, a banner, the OSD, the Spotlight panel and the toast blurs no pixel past its border'"'"'s arc and every pixel in the band inside it, under one glass'
     "${expect_glass[@]}" '.manager.conformance.checked | [.["dock", "quick-settings", "calendar", "banner", "osd", "spotlight", "toast"].corner.capturedMax] | length == 7 and all(type == "number" and . <= 1)' \
         'and a screenshot shows each of those corners as the screen does, to 1/255 a channel'
+    local motion
+    motion=$(report_of "$log" APEXG2-GLASS | jq -r '.manager.motion | to_entries | map("\(.key) \(.value.differingFromFull) of \(.value.pixels) px off") | join(", ")' 2>/dev/null)
+    "${expect_glass[@]}" '.manager.motion | [.dock, .popover] | all(.moved and .enabled and .pixels > 0 and .differingFromFull == 0)' \
+        "a glass that moves blurs where it is: the dock slid half its height up and Quick Settings halfway open, each set by property, draw the frame a fresh glass draws in a full redraw, over the box left and the box taken (${motion:-no report})"
+    known_gap "0003: a glass box past the stage edge blurs pixels no one painted; the fix is 0003 C, budget 310/310" \
+        "${expect_glass[@]}" '.manager.motion.dockPastEdge | .moved and .enabled and .pixels > 0 and .differingFromFull == 0' \
+        "and the dock halfway down intellihide's slide, past the screen's bottom edge, does too"
     "${expect_glass[@]}" "$glass"' .t as $t | .manager.monitorScale as $s | .manager.tile.shown.glass
         | glass($t.apex_tile_preview_blur; $t.apex_tile_preview_saturation; $s) and .cornerRadius == ($t.apex_radius_tile_preview | px) * $s' \
         'the shown tile preview registers its glass at board 22'"'"'s $apex_tile_preview_blur and $apex_tile_preview_saturation, rounded $apex_radius_tile_preview'
