@@ -39,7 +39,7 @@ overlay-split-view > .sidebar-pane {
 }
 
 .apex-sidebar-title {
-  font-size: 14px;
+  font-size: 10.5pt;
   font-weight: 700;
 }
 
@@ -66,7 +66,7 @@ overlay-split-view > .sidebar-pane {
 
 .apex-session .apex-row-title {
   color: var(--apex-fg);
-  font-size: 13.5px;
+  font-size: 10.125pt;
   font-weight: 600;
 }
 
@@ -75,12 +75,12 @@ overlay-split-view > .sidebar-pane {
 }
 
 .apex-session .apex-row-subtitle {
-  font-size: 12px;
+  font-size: 9pt;
   color: var(--apex-dim);
 }
 
 .apex-session .apex-row-when {
-  font-size: 11.5px;
+  font-size: 8.625pt;
   font-feature-settings: "tnum";
   color: var(--apex-dim);
 }
@@ -122,7 +122,7 @@ apex-glyph.needs-you {
 
 .apex-group {
   padding: 18px 10px 6px;
-  font-size: 12px;
+  font-size: 9pt;
   font-weight: 700;
   color: var(--apex-dim);
 }
@@ -132,7 +132,7 @@ apex-glyph.needs-you {
 }
 
 .apex-group .needs-you {
-  font-size: 11.5px;
+  font-size: 8.625pt;
   color: var(--apex-needs-you);
 }
 
@@ -141,14 +141,14 @@ apex-glyph.needs-you {
   border-radius: 6px;
   background-color: var(--apex-btn);
   font-family: "JetBrains Mono", monospace;
-  font-size: 11px;
+  font-size: 8.25pt;
   font-weight: 600;
 }
 
 .apex-sessions-footer {
   padding: 12px 18px 14px;
   border-top: 1px solid var(--apex-border);
-  font-size: 12px;
+  font-size: 9pt;
   font-weight: 600;
   font-feature-settings: "tnum";
   color: var(--apex-dim);
@@ -164,18 +164,18 @@ apex-glyph.needs-you {
 }
 
 .apex-session-title .apex-title {
-  font-size: 14px;
+  font-size: 10.5pt;
   font-weight: 700;
 }
 
 .apex-session-title .apex-path {
-  font-size: 12.5px;
+  font-size: 9.375pt;
   color: var(--apex-dim);
 }
 
 .apex-session-title .apex-tag {
   padding: 2px 8px;
-  font-size: 11.5px;
+  font-size: 8.625pt;
   color: var(--apex-dim);
 }
 
@@ -191,7 +191,7 @@ apex-panes paned > separator {
   border-bottom: 1px solid var(--apex-border);
   background-color: var(--apex-head);
   color: var(--apex-fg);
-  font-size: 12.5px;
+  font-size: 9.375pt;
 }
 
 .apex-pane-header .apex-pane-title {

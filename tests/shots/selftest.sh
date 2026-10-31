@@ -787,11 +787,11 @@ REPORT_OF_LEGIBLE_SURFACES='
         + ([range(4)] | map({key: "indicator\(.)", value: {targets: [$icon + {name: "Chat"}], edge: null}}) | from_entries),
         crowded: $s, indicatorMenu: $s},
     focus: ({name: "Control", focused: true, changed: 900, perimeter: 400, ratio: 4} as $ring
-        | {quickSettings: $ring, dock: ($ring + {changed: 0, ratio: 1}), dialog: ($ring + {ratio: 2.87}),
+        | {quickSettings: $ring, dock: $ring, dialog: ($ring + {ratio: 2.87}),
             spotlight: ($ring + {changed: 164, ratio: 1})} | {backdrop: ., busy: .})}'
 
 # The label picks the backdrop: dark-style's inactive dot passes 3:1 today, default's is the gap.
-# Each label's focus readings at today's pins, Quick Settings' and the dialog's per wallpaper: six gaps.
+# Each label's focus readings at today's pins, Quick Settings' and the dialog's per wallpaper: four gaps.
 declare -Ar A11Y_FOCUS_FIXTURE=([default]='{"quickSettings":[2.37,2.14],"dialog":[4,4]}'
     [default-solid]='{"quickSettings":[1.91,2.14],"dialog":[4,4]}' [dark-style]='{"quickSettings":[4,4],"dialog":[2.87,2.87]}')
 
@@ -836,9 +836,9 @@ test_inactive_dot_gap() {
             not_ok "inactive dot gap: $what fails $want_failures, $want_gaps gap(s) (passed/failed/gaps $passes/$failures/$open_gaps): $(grep -m3 '^FAIL' "$T/a11y.out" | paste -sd'|' -)"
         fi
     done <<'CHANGES'
-0|8|2.86|default's dot at today's 2.86:1, in the bar and with the unread dot
-2|8|2.85|a dot below today's 2.86:1
-2|6|3|the dot at 3:1: the gap must go
+0|6|2.86|default's dot at today's 2.86:1, in the bar and with the unread dot
+2|6|2.85|a dot below today's 2.86:1
+2|4|3|the dot at 3:1: the gap must go
 CHANGES
 }
 
@@ -854,16 +854,16 @@ test_pill_gaps() {
             not_ok "pill gaps: $what fails $want_failures, $want_gaps gap(s) (passed/failed/gaps $passes/$failures/$open_gaps): $(grep -m3 '^FAIL' "$T/a11y.out" | paste -sd'|' -)"
         fi
     done <<'CHANGES'
-0|11|1.62|default-solid's three pill fills at today's ratios, beside its two inactive-dot gaps
-1|11|1.61|the sharing pill's fill below today's 1.62:1
-1|10|3|the sharing pill's fill at 3:1: its gap must go
+0|9|1.62|default-solid's three pill fills at today's ratios, beside its two inactive-dot gaps
+1|9|1.61|the sharing pill's fill below today's 1.62:1
+1|8|3|the sharing pill's fill at 3:1: its gap must go
 CHANGES
 }
 
 test_a11y() {
     local assertions expected change what passes failures open_gaps want
-    # dark-style's six focus gaps today: its dock, Spotlight entry and dialog entry, each per wallpaper.
-    for assertions in a11y_contrast:80:6 a11y_layout:61:0; do
+    # dark-style's four focus gaps today: its Spotlight entry and dialog entry, each per wallpaper.
+    for assertions in a11y_contrast:80:4 a11y_layout:61:0; do
         IFS=: read -r assertions expected gaps <<<"$assertions"
         read -r passes failures open_gaps <<<"$(a11y_run "$assertions")"
         if ((failures == 0 && open_gaps == gaps && passes == expected)); then
@@ -903,7 +903,7 @@ a11y_contrast|1|.barPills.pills.overflow.targets[0].ratio = 4.4|the overflow's +
 a11y_contrast|1|.barPills.indicatorMenu.targets[0].ratio = 3|the Chat app's menu text at 3:1
 a11y_contrast|2|del(.barPills.pills.overflow, .barPills.pills.indicator0, .barPills.pills.indicator1, .barPills.pills.indicator2, .barPills.pills.indicator3)|no app indicators shown
 a11y_contrast|1|.focus.busy.quickSettings += {ratio: 1}|a focus indicator drawn in its surface's own colour over the busy wallpaper
-a11y_contrast|1|.focus.backdrop.dock += {changed: 900, ratio: 3.2}|the dock's focus indicator reaching 3:1 while its gap is pinned
+a11y_contrast|1|.focus.backdrop.dock += {changed: 0, ratio: 1}|a dock item that shows no focus indicator
 a11y_contrast|1|.focus.busy.dialog.ratio = 2.5|the dialog entry's indicator below today's 2.87:1
 a11y_contrast|1|.focus.backdrop.dialog.focused = false|key focus that never lands on the dialog's control
 a11y_contrast|4|.focus.busy = {error: "the wallpaper never changed"}|a busy wallpaper that never showed
