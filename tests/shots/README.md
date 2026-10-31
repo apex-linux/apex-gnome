@@ -1038,24 +1038,32 @@ on dispatch and weekly (Tuesdays), never on a pull request, and no check require
 
 - **lane:** `next-point.sh image` fetches the pinned apex-image and fills its updates-testing
   allowlist with the builds updates-testing moves among gnome-shell, mutter, gdm, gjs, glib2,
-  gnome-session, gsettings-desktop-schemas, gtk4, libadwaita, gnome-control-center and
-  nautilus. Admitting every build would overflow apex-lane's dnf5 arguments. `lane.sh` then builds gnome-shell from that SRPM through
-  `APEX_IMAGE_SRC`, without `APEX_LANE_CACHE`, so it reads and writes no lane cache. The job
-  summary lists what moves.
+  gnome-session, gsettings-desktop-schemas, gtk4, libadwaita, gnome-control-center, nautilus,
+  ptyxis and vte291-gtk4. Admitting every build would overflow apex-lane's dnf5 arguments.
+  `lane.sh` then builds gnome-shell from that SRPM through `APEX_IMAGE_SRC`, without
+  `APEX_LANE_CACHE`, so it reads and writes no lane cache. The job summary lists what moves.
 - **g2:** `patched.sh` runs every case on those RPMs.
 - **signoff:** `signoff.sh --goldens` checks the shell boards against the approved goldens.
 - **apps:** for Settings and Files, the lane's libadwaita and the app from updates-testing,
   installed under the shim, then `tests/control-center/run.sh` and `tests/nautilus/shoot.sh`.
+- **libadwaita:** the lane's libadwaita from updates-testing, then
+  `tests/libadwaita/radius-test.sh` in its three modes (`--stock`, the rewrite, `--late`).
+- **ptyxis:** the lane's Ptyxis from updates-testing, then as ci.yml runs them
+  `tests/ptyxis/status-test.sh`, `shoot.sh`, `contrast-test.sh`, `palette-test.sh` (on
+  `tests/s2c/agent.sh`'s agent) and `panes-test.sh`.
 - **report:** one line in the run's summary, passed/failed for each, `?` where a job gave
-  none, then each app's NEVR and its ok/not ok count: `next-point: gnome-shell-51.1-1.fc45.apex1
-  g2 1954/0 goldens 30/0 shoot 523/0 | gnome-control-center-51.1-1.fc45.apex1 46/0 |
-  nautilus-51.1-1.fc45.apex1 84/0`.
+  none, then each app's NEVR and its ok/not ok count, and libadwaita's and Ptyxis's NEVR and
+  their test scripts passed/failed: `next-point: gnome-shell-51.1-1.fc45.apex1 g2 1954/0
+  goldens 30/0 shoot 523/0 | gnome-control-center-51.1-1.fc45.apex1 46/0 |
+  nautilus-51.1-1.fc45.apex1 84/0 | libadwaita-1.10.0-2.fc45.apex1 3/0 |
+  ptyxis-50.1-6.fc45.apex1 5/0`.
 
-g2, signoff and apps install `next-point.sh shim` first, a `dnf5` ahead of Fedora's on `PATH`.
-It adds updates-testing beside each `--repo=updates` and updates-testing-source beside each
-`--repo=updates-source`, and enables updates-testing for a call that names no repository. So
-the scripts install what GA brings, unchanged. `lane.sh`, `image-args.sh` and every other
-workflow stay as they are, which `.github/scripts/selftest.sh` checks.
+g2, signoff, apps, libadwaita and ptyxis install `next-point.sh shim` first, a `dnf5` ahead of
+Fedora's on `PATH`. It adds updates-testing beside each `--repo=updates` and
+updates-testing-source beside each `--repo=updates-source`, and enables updates-testing for a
+call that names no repository. So the scripts install what GA brings, unchanged. `lane.sh`,
+`image-args.sh` and every other workflow stay as they are, which `.github/scripts/selftest.sh`
+checks.
 
 After F45's GA, next-point keeps watching updates-testing: each point release after it (51.2
 and on) waits there before an updates push. apex-image's admission cut sets `GA_REACHED=1`, or
