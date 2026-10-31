@@ -3179,6 +3179,42 @@ CHANGES
         "$(grep -c '^FAIL default: fontconfig gives JetBrains Mono .*(got {"family":"Noto Sans",' "$T/assertions.out")"
 }
 
+# G2's guard phases run only in the VM: a fake run of the late-failure phases, then the
+# window and second lines crash_guard prints about the guard.
+guard_phase() {
+    local run=$1 name=$2 guard=$3 layer=$4 marker=$5 counter=$6
+    echo 'starting marker gone' >"$run/guard-$name.marker65"
+    printf 'Failed with result core-dump\n%s\n' "$guard" >"$run/guard-$name.journal"
+    printf 'layer-enabled=%s\nguard marker: %s\nguard counter: %s\nstarting marker: No such file\n' \
+        "$layer" "$marker" "$counter" >"$run/guard-$name.state"
+}
+
+guard_lines() {
+    assertion_counts crash_guard "$1" >/dev/null
+    grep -E "^(PASS|FAIL) ($2)" "$T/assertions.out" | cut -d' ' -f1 | paste -sd' ' -
+}
+
+test_crash_guard_counter() {
+    local run=$T/guard-run ran=$'Starting apex-shell-safe.service\nFinished apex-shell-safe.service'
+    local tripped='-rw-r--r-- 1 g2 g2 0 09:41 shell-guard-tripped'
+    local window='window: (apex-shell-safe|and counts|layer-enabled|no guard)'
+    mkdir -p "$run"
+    echo 'OnFailure=apex-shell-safe.service' >"$run/guard.log"
+    echo 'layer-enabled=false' >"$run/guard-trip.state"
+    guard_phase "$run" window "$ran" true 'No such file' 'none 1'
+    guard_phase "$run" second "$ran" false "$tripped" 'cat: shell-guard-trips: No such file or directory'
+    expect_eq "guard: a late failure without ostree= counts none 1 and leaves the layer on" "PASS PASS PASS PASS" \
+        "$(guard_lines "$run" "$window")"
+    expect_eq "guard: a second late failure trips and removes the counter" "PASS PASS PASS PASS PASS" "$(guard_lines "$run" 'second: ')"
+    guard_phase "$run" window "$ran" true 'No such file' '5e1f00.0 1'
+    expect_eq "guard: on a deployment it counts <deployment> 1" "PASS PASS PASS PASS" "$(guard_lines "$run" "$window")"
+    guard_phase "$run" window '' true 'No such file' 'cat: shell-guard-trips: No such file or directory'
+    expect_eq "guard: a guard that did not run, or did not count, fails both" "FAIL FAIL PASS PASS" \
+        "$(guard_lines "$run" "$window")"
+    guard_phase "$run" second "$ran" true 'No such file' 'none 2'
+    expect_eq "guard: a second late failure that does not trip fails" "PASS PASS FAIL FAIL FAIL" "$(guard_lines "$run" 'second: ')"
+}
+
 test_repeat_compare() {
     local out status
     printf '%s\n' '# a comment' 'PASS default: the shell exits 0' 'FAIL motion: the easing (got false)' 'GAP  S1b: dots: 3:1 (got [2.86])' \
@@ -3884,6 +3920,7 @@ test_no_disposed_apex
 test_no_binding_overwritten
 test_no_spurious_allocation
 test_clean_shutdown
+test_crash_guard_counter
 test_repeat_compare
 test_session_defaults
 test_no_disposed_at_shutdown

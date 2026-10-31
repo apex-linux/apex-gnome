@@ -145,7 +145,13 @@ open); idle and dock-pin assert `NORMAL` after `settleDesktop`. No case is run t
 `direct.sh` lists the late ones in `late-PART.txt` (and `patched.sh` in the job summary),
 and `assert.txt` lists the late guard phases.
 
-The crash-guard phases (`guard.sh`): an abort 65 s after start does not trip the guard;
+The crash-guard phases (`guard.sh`): the guard trips on either of two triggers. A failure
+in the shell's first 60 s, while the layer's marker exists, trips at once. A later one
+only counts, in `~/.local/state/apex/shell-guard-trips` (the booted deployment from
+`ostree=`, or `none`, and a count), and the second on the same deployment trips. So an
+abort 65 s after start runs `apex-shell-safe.service`, which counts 1 and leaves the
+layer on; a second such abort trips (`layer-enabled=false`, the agent's marker, the
+counter gone), and the layer is turned back on for the phases after it.
 `abort-after-enable` trips it (the unit fails, `apex-shell-safe.service` runs,
 `layer-enabled=false`, the agent's marker exists); the next start is stock;
 `layer-enabled=true` brings Apex back; `dark-off`: with `prefer-dark`, the probe clicks

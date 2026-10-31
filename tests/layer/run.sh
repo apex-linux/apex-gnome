@@ -11,9 +11,11 @@ REPO=$(cd -- "$HERE/../.." && pwd)
 if [[ -n ${APEX_DESKTOP_SRC:-} ]]; then
     SCHEMA_DIR=$APEX_DESKTOP_SRC/desktop/schemas
     GUARD_UNIT=$APEX_DESKTOP_SRC/desktop/systemd/user/apex-shell-safe.service
+    GUARD_SCRIPT=$APEX_DESKTOP_SRC/desktop/systemd/apex-shell-guard.sh
 else
     SCHEMA_DIR=$HERE/fixtures
     GUARD_UNIT=$HERE/fixtures/apex-shell-safe.service
+    GUARD_SCRIPT=$HERE/fixtures/apex-shell-guard.sh
 fi
 NO_SKIP=${APEX_LAYER_TESTS_NO_SKIP:-0}
 
@@ -114,6 +116,11 @@ awk '/<key name="reduce-transparency"/ { skip = 1 } !skip { print } skip && /<\/
 glib-compile-schemas --strict "$T/noreduce"
 
 readonly CMDLINE_PLAIN='BOOT_IMAGE=(hd0,gpt2)/boot/ostree/apex/vmlinuz root=UUID=0 rw rhgb quiet'
+# The guard counts late failures per deployment, which it reads through ostree='s boot link.
+readonly GUARD_DEPLOYMENT=5e1f00.0
+mkdir -p "$T/ostree-root/ostree/deploy/apex/deploy/$GUARD_DEPLOYMENT" "$T/ostree-root/ostree/boot.1/apex/b007"
+ln -s "../../../deploy/apex/deploy/$GUARD_DEPLOYMENT" "$T/ostree-root/ostree/boot.1/apex/b007/0"
+printf '%s ostree=/ostree/boot.1/apex/b007/0\n' "$CMDLINE_PLAIN" >"$T/cmdline.ostree"
 sandbox=0
 printf '%s\n' "$CMDLINE_PLAIN" >"$T/cmdline.check"
 if command -v bwrap >/dev/null 2>&1 &&
@@ -154,28 +161,30 @@ keybindings_are() {
     if [[ $got == "$2" ]]; then ok "$1"; else not_ok "$1 (the stub saw '$got', expected '$2')"; _show; fi
 }
 
+guard_env() {
+    local dir=$T/$1
+    shift
+    env -i PATH="$PATH" HOME="$T/home" XDG_CONFIG_HOME="$dir/config" XDG_DATA_DIRS="$T/data" \
+        GSETTINGS_BACKEND=keyfile GSETTINGS_SCHEMA_DIR="$T/schemas" "$@"
+}
+guard_layer() { guard_env "$1" gsettings get io.github.apex_linux.Apex.Desktop layer-enabled; }
+
 run_guard_unit_like_systemd() {
-    local dir=$T/$1 key value cond='' line runtime='%t' state='%S'
-    local -a lines=()
+    local dir=$T/$1 key value runtime='%t' state='%S'
+    local -a exec=()
     while IFS='=' read -r key value; do
         value=${value//"$runtime"/$dir/run}
         value=${value//"$state"/$dir/state}
         case $key in
-            ConditionPathExists) cond=$value ;;
             StateDirectory) mkdir -p "$dir/state/$value" ;;
-            ExecStart | ExecStartPost) lines+=("$value") ;;
+            ExecStart) read -ra exec <<<"$value" ;;
         esac
     done < <(grep -E '^[A-Za-z]+=' "$GUARD_UNIT")
-    if [[ -z $cond || ! -e $cond ]]; then
-        printf 'skipped\n'
-        return 0
+    if guard_env "$1" bash "$GUARD_SCRIPT" "${exec[@]:1}" "$T/cmdline.ostree" "$T/ostree-root"; then
+        printf 'acted\n'
+    else
+        printf 'failed (exit %d)\n' "$?"
     fi
-    for line in "${lines[@]}"; do
-        # shellcheck disable=SC2086 # the unit's command lines are plain words
-        env -i PATH="$PATH" HOME="$T/home" XDG_CONFIG_HOME="$dir/config" XDG_DATA_DIRS="$T/data" \
-            GSETTINGS_BACKEND=keyfile GSETTINGS_SCHEMA_DIR="$T/schemas" $line
-    done
-    printf 'acted\n'
 }
 
 probe default "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_PRESS=2
@@ -214,11 +223,20 @@ fact "motion: an ease without parameters passes through" 'motion\.no-params=unde
 fact "motion: the eased hook sets cubic-bezier(.2,.8,.2,1)" 'motion\.curve=0\.2,0\.8 0\.2,1'
 fact "motion: window geometry .3 s, the overview .2 s, popovers .18 s; other roles stock" \
     'motion\.durations=window=300 overview=200 popover=180 unknown=250'
-if [[ $(run_guard_unit_like_systemd default) == skipped ]]; then
-    ok "default: a later shell failure does not trip the guard (no marker)"
+guard_state=$T/default/state/apex
+first=$(run_guard_unit_like_systemd default)
+if [[ $first == acted ]]; then ok "default: a 1st later shell failure runs the guard"; else not_ok "default: a 1st later shell failure runs the guard ($first)"; fi
+if [[ $(cat "$guard_state/shell-guard-trips" 2>/dev/null) == "$GUARD_DEPLOYMENT 1" ]]; then
+    ok "default: which counts it on the booted deployment, shell-guard-trips = $GUARD_DEPLOYMENT 1"
 else
-    not_ok "default: a later shell failure does not trip the guard (no marker)"
+    not_ok "default: which counts it on the booted deployment ($(cat "$guard_state/shell-guard-trips" 2>&1))"
 fi
+if [[ $(guard_layer default) == true && ! -e $guard_state/shell-guard-tripped ]]; then ok "default: and does not trip"; else not_ok "default: and does not trip"; fi
+second=$(run_guard_unit_like_systemd default)
+if [[ $second == acted && $(guard_layer default) == false ]]; then ok "default: a 2nd on the same deployment trips: the layer off"; else not_ok "default: a 2nd on the same deployment trips: the layer off ($second)"; fi
+if [[ -e $guard_state/shell-guard-tripped ]]; then ok "default: the 2nd leaves the agent's marker"; else not_ok "default: the 2nd leaves the agent's marker"; fi
+if [[ ! -e $guard_state/shell-guard-trips ]]; then ok "default: and removes the counter"; else not_ok "default: and removes the counter"; fi
+if [[ ! -e $T/default/run/apex-shell-starting ]]; then ok "default: no layer marker is left"; else not_ok "default: no layer marker is left"; fi
 
 probe envsafe "$CMDLINE_PLAIN" APEX_SHELL_SAFE=1 PROBE_ENABLE=1
 rc_is "APEX_SHELL_SAFE=1: runs" 0
