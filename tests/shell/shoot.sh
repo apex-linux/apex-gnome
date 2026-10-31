@@ -27,12 +27,18 @@ has logind's mock prepare for sleep and resume; lock-motion and lock-reduce-moti
 the lock's opening and closing, without and with Reduce Motion; each greeter case (--mode=gdm) shows the user list,
 then the prompt, and greeter-reduce-motion records each frame between the two. Each polkit case opens the shell's own authentication dialog through the polkit
 component's _onInitiate(), with a stubbed PolkitAgent.Session that PAM never answers, for
-captures and style checks only (pkexec end to end is G4's); polkit-lock and polkit-suspend
+captures and style checks only (pkexec end to end is G4's); each polkit-refused case answers wrongly
+and the session fails as PAM's does (pam_faillock's text first in polkit-refused-faillock), and
+polkit-cancel presses Esc before polkitd answers Details' vendor lookup; polkit-lock and polkit-suspend
 lock the screen, or sleep and resume, under the open dialog, type at the lock, then end the lock,
 and polkit-lock-safe does so in safe mode. date-menu opens the date menu, sends
 the shell's notification daemon one notification, then four more, toggles Do Not Disturb twice
 and clears the list; date-menu-disabled does the same with the layer's notifications off. Both
 run without the search hint, so no notification syncs stock's Clear before panel/clear-sync.js does.
+bar-lock-cycle, with two input sources, describes and captures the bar, locks and unlocks through
+logind's Lock and Unlock, then through the lock's prompt and GDM's success, and does so again after each.
+bar-live does the same across layer-enabled off and on, panel out of and back in disabled-features,
+and a lock from the overview; the layer off must give bar-lock-cycle-safe's stock bar.
 Each end-session case opens the end-session dialog over D-Bus against update1-mock.py's
 Update1 (tests/shots), from up to date through staged and ready-for-reboot to failing Applies.
 check.py asserts the cases' logs and the mock's. The users apex and guest come
@@ -42,6 +48,10 @@ APEX_DESKTOP_SRC, a checkout). Captures and logs land in _build/gnome-shell/shot
 It needs mesa-dri-drivers, dbus-daemon, python3-dbusmock, python3-gobject, gcc,
 accountsservice, polkit, librsvg2-tools, openssl, git-core and the Apex fonts (adwaita-sans-fonts,
 jetbrains-mono-fonts-all). G2's clock.c and fixtures.py (tests/shots) are used as they are.
+The system bus lets root own the services that fixtures.py --names lists for this run, and the
+shells reach them as G2's do. Power profiles and accountsservice stay off, as G2's opt-ins: the
+lane's Quick Settings has no Power Mode (G2 measures it), and the lane lists users from the real
+accounts-daemon.
 EOF
 }
 
@@ -56,7 +66,6 @@ readonly USER_NAME=apex
 readonly GREETER_USER=gdm-greeter
 readonly SHELL_TIMEOUT=120
 readonly CLOCK_LIB=/run/apex-lock-clock.so
-readonly FIXTURE_NAMES=(org.freedesktop.UPower org.freedesktop.NetworkManager org.bluez)
 # fixtures.py's keyboard, at its KEYBOARD_ADDRESS.
 readonly KEYBOARD_PATH=/org/bluez/hci0/dev_DC_2C_26_4B_33_01
 readonly GDM_NAME=org.gnome.DisplayManager
@@ -143,13 +152,15 @@ id "$GREETER_USER" >/dev/null 2>&1 || useradd -r -m -d /run/$GREETER_USER "$GREE
 # tests/nautilus/shoot.sh takes them, but with logind's mock: the shield needs a logind.
 mkdir -p /run/systemd/seats
 mkdir -p /run/dbus /etc/dbus-1 /tmp/.X11-unix && chmod 1777 /tmp/.X11-unix
+mapfile -t fixture_names < <(python3 "$SHOTS/fixtures.py" --names)
 {
     echo '<busconfig><policy user="root">'
-    for name in "${FIXTURE_NAMES[@]}" "$GDM_NAME" "$LOGIND_NAME" "$FPRINT_NAME" "$UPDATE1_NAME"; do
+    for name in "${fixture_names[@]}" "$GDM_NAME" "$LOGIND_NAME" "$FPRINT_NAME" "$UPDATE1_NAME"; do
         printf '<allow own="%s"/><allow send_destination="%s"/>\n' "$name" "$name"
     done
     printf '</policy><policy context="default">'
-    printf '<allow send_destination="%s"/>' "$GDM_NAME" "$LOGIND_NAME" "$FPRINT_NAME" "$UPDATE1_NAME"
+    # The shells run as their users: G2's, as root, reach the fixtures too.
+    printf '<allow send_destination="%s"/>' "${fixture_names[@]}" "$GDM_NAME" "$LOGIND_NAME" "$FPRINT_NAME" "$UPDATE1_NAME"
     printf '</policy></busconfig>\n'
 } >/etc/dbus-1/system-local.conf
 [[ -S /run/dbus/system_bus_socket ]] || dbus-daemon --system --fork || die "no system bus"
@@ -254,6 +265,10 @@ notifications_off="io.github.apex_linux.Apex.Desktop disabled-features ['notific
 hint_shown="io.github.apex_linux.Apex.Desktop search-hint-shown true"
 shoot date-menu "$USER_NAME" user default 'Password:' "$hint_shown" -- APEX_DATE_MENU=1 || status=1
 shoot date-menu-disabled "$USER_NAME" user default 'Password:' "$hint_shown" "$notifications_off" -- APEX_DATE_MENU=1 || status=1
+two_sources="org.gnome.desktop.input-sources sources [('xkb', 'us'), ('xkb', 'fr')]"
+shoot bar-lock-cycle "$USER_NAME" user default 'Password:' "$two_sources" -- APEX_BAR_CYCLE=1 || status=1
+shoot bar-lock-cycle-safe "$USER_NAME" user default 'Password:' "$two_sources" -- APEX_BAR_CYCLE=1 APEX_SHELL_SAFE=1 || status=1
+shoot bar-live "$USER_NAME" user default 'Password:' "$two_sources" -- APEX_BAR_LIVE=1 || status=1
 shoot lock-high-contrast "$USER_NAME" user default 'Password:' "org.gnome.desktop.a11y.interface high-contrast true" || status=1
 shoot lock-large-text "$USER_NAME" user default 'Password:' "org.gnome.desktop.interface text-scaling-factor 1.25" || status=1
 # authselect locks GDM's fingerprint key off; an image with a reader enables the feature.
@@ -270,7 +285,11 @@ for scheme in light dark; do
     color=default
     [[ $scheme == dark ]] && color=prefer-dark
     shoot "polkit-$scheme" "$USER_NAME" user "$color" 'Password:' -- APEX_POLKIT=1 || status=1
+    shoot "polkit-refused-$scheme" "$USER_NAME" user "$color" 'Password:' -- APEX_POLKIT=refuse || status=1
 done
+shoot polkit-refused-fingerprint "$USER_NAME" user default 'Password:' -- APEX_POLKIT=refuse APEX_POLKIT_INFO=fingerprint || status=1
+shoot polkit-refused-faillock "$USER_NAME" user default 'Password:' -- APEX_POLKIT=refuse APEX_POLKIT_ERROR=faillock || status=1
+shoot polkit-cancel "$USER_NAME" user default 'Password:' -- APEX_POLKIT=cancel || status=1
 shoot polkit-fingerprint "$USER_NAME" user default 'Password:' -- APEX_POLKIT=1 APEX_POLKIT_INFO=fingerprint || status=1
 shoot polkit-disabled "$USER_NAME" user default 'Password:' "$polkit_off" -- APEX_POLKIT=1 || status=1
 shoot polkit-lock "$USER_NAME" user default 'Password:' -- APEX_POLKIT=lock || status=1

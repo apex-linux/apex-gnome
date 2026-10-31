@@ -708,7 +708,8 @@ fact "date menu: an empty list hides Clear, as calendar.js's binding would with 
 fact "hot-corner: the corner becomes a reactive 4 x 4 zone at its own position, in scaled px" \
     'hot-corner\.zone=hot-corner reactive=true x=0 y=0 8x8'
 fact "hot-corner: in the chrome, hidden under fullscreen windows" 'chrome\.add=hot-corner trackFullscreen=true'
-count_is "hot-corner: entering it triggers the barrier once, until the pointer leaves it off the barrier" '^probe: hot-corner\.trigger=' 2
+fact "hot-corner: the zone coming back under a resting pointer triggers nothing" 'hot-corner\.after-enter=false'
+count_is "hot-corner: moving in it triggers the barrier once, until the pointer leaves it off the barrier" '^probe: hot-corner\.trigger=' 2
 fact "hot-corner: leaving it while on the barrier keeps the barrier's trigger" 'hot-corner\.after-leave-on-the-barrier=true'
 fact "layer-enabled=false: the dot hooks give stock" 'top-bar\.off\.dots=99 99 99 inactive="stock"'
 fact "layer-enabled=false: the status pill gets every indicator back, in order" "pill\.off=$STOCK_PILL"
@@ -769,6 +770,8 @@ panel_classes_are "disabled-features=['panel']: the bar stays translucent" \
 probe focused-app "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_FOCUSED_APP=1
 has "focused-app: the panel feature enables" 'Apex: feature panel enabled'
 fact "focused-app: its item follows the Activities pill in the left box" 'panel\.add=apex-focused-app at 1 in left'
+fact "focused-app: after Activities in the left box" 'focused-app\.left-box=activities,focused-app'
+fact "focused-app: and again once panel.js has put Activities back at the box's end" 'focused-app\.left-box\.after-session-update=activities,focused-app'
 fact "focused-app: \"Desktop\" while nothing has focus, a label that takes no clicks" \
     'focused-app\.none=Desktop name=Desktop visible=true reactive=false'
 fact "focused-app: the focused app's name" 'focused-app\.files=Files name=Files visible=true reactive=false'
@@ -1096,6 +1099,9 @@ fact "polkit: for a named finger and reader too" "polkit\.info\.swipe-reader=$PO
 fact "polkit: pam_fprintd's other info stays upstream's line" 'polkit\.info\.timed-out=apex-polkit-info visible=true glyph=none'
 fact "polkit: as does another module's" 'polkit\.info\.other-module=apex-polkit-info visible=true glyph=none'
 fact "polkit: and the line goes with upstream's label" 'polkit\.info\.hidden=apex-polkit-info apex-polkit-fingerprint visible=false glyph=auth-fingerprint-symbolic'
+fact "polkit: no error ring until upstream shows its error line" 'polkit\.error\.none=false'
+fact "polkit: the dialog takes the error ring with the line" 'polkit\.error\.shown=true'
+fact "polkit: and drops it when upstream hides the line" 'polkit\.error\.hidden=false'
 fact "polkit: a standard account gets no role" "polkit\.role\.standard=$POLKIT_ON names=Apex/Administrator\(hidden\)"
 fact "polkit: root keeps upstream's \"Administrator\" in the name's place" \
     "polkit\.role\.root=$POLKIT_ON names=Administrator/Administrator\(hidden\)"
