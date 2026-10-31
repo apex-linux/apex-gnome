@@ -42,10 +42,13 @@ esac
 
 # shellcheck source=tests/shots/parts.sh
 . "$(dirname -- "${BASH_SOURCE[0]}")/parts.sh"
+# shellcheck source=tests/shots/backtrace.sh
+. "$(dirname -- "${BASH_SOURCE[0]}")/backtrace.sh"
 readonly SHELL_TIMEOUT=150
 readonly GLASS_STRESS_SECONDS=${G2_GLASS_STRESS_SECONDS:-60}
 readonly EXIT_HUNG=3
 readonly CLOCK_LIB=/run/g2-clock.so
+readonly CRASH_LIB=/run/g2-crash.so
 readonly FRAME_DIR=/run/g2-frame
 readonly G2_CLOCK='2026-09-28 09:41:00'
 G2_CLOCK_EPOCH=$(date -u -d "$G2_CLOCK" +%s)
@@ -98,6 +101,7 @@ gcc -O2 -Wall -Werror -shared -fPIC -o "$CLOCK_LIB" /w/clock.c || { echo "direct
 # ld.so only warns when a preload is missing, and the shells would keep the real clock.
 held=$(env LD_PRELOAD="$CLOCK_LIB" G2_CLOCK_EPOCH="$G2_CLOCK_EPOCH" date -u '+%F %T' 2>&1)
 [[ $held == "$G2_CLOCK" ]] || { echo "direct.sh: $CLOCK_LIB does not hold the clock at $G2_CLOCK: $held" >&2; exit 1; }
+gcc -O2 -Wall -Werror -shared -fPIC -o "$CRASH_LIB" /w/crash.c || { echo "direct.sh: cannot build crash.c" >&2; exit 1; }
 # The glass cases read the frames the shell drew through frame.c (G2Frame-1.gir).
 mkdir -p "$FRAME_DIR"
 # shellcheck disable=SC2046 # pkg-config prints several flags
@@ -122,6 +126,7 @@ run_case() {
         DBUS_SYSTEM_BUS_ADDRESS=unix:path=/run/dbus/system_bus_socket \
         G2_CASE="$name" G2_CAPTURES=/out/captures G2_SETTINGS="$gsettings_triples" \
         G2_SCALE=2 G2_MONITOR=2880x1800 TZ=UTC G2_CLOCK_LIB="$CLOCK_LIB" G2_CLOCK_EPOCH="$G2_CLOCK_EPOCH" \
+        G2_CRASH_LIB="$CRASH_LIB" \
         G2_SURFACE_SCENES="${G2_SURFACE_SCENES:-0}" G2_WAYLAND_DISPLAY=apex-g2 G2_FACETS_DIR="$FACETS_DIR" \
         G2_BACKDROP=facets G2_SOLID_BACKDROP="$SOLID_BACKDROP" "$@" \
         timeout "$limit" dbus-run-session -- bash -c '
@@ -154,12 +159,15 @@ run_case() {
                 "color-scheme=$(gsettings get org.gnome.desktop.interface color-scheme)" \
                 "layer-enabled=$(gsettings get io.github.apex_linux.Apex.Desktop layer-enabled)" \
                 "backdrop=$G2_BACKDROP picture-uri=$(gsettings get org.gnome.desktop.background picture-uri)"
+            # The shell runs from HOME, so a crash leaves its core there for case_backtrace.
+            ulimit -c unlimited 2>/dev/null
             # Only reads of the wall clock stand still: timers and frames keep the real clocks.
-            exec env LD_PRELOAD="$G2_CLOCK_LIB" \
+            exec env LD_PRELOAD="$G2_CLOCK_LIB $G2_CRASH_LIB" \
                 gnome-shell --headless --virtual-monitor "$G2_MONITOR" ${G2_MONITOR2:+--virtual-monitor "$G2_MONITOR2"} \
                 --wayland-display="$G2_WAYLAND_DISPLAY" --automation-script /w/probe.js
         ' >"/out/$name.log" 2>&1
     rc=$?
+    case_backtrace "/out/$name.log" "$rc" "$home" "/out/$name.bt"
     [[ -e $run/apex-shell-starting ]] && left=yes
     RESULT="$name exit=$rc secs=$((SECONDS - start)) marker-after-exit=$left"
     LIMIT=$limit

@@ -120,6 +120,18 @@ clock does not hold. libfaketime cannot do this: it converts every absolute time
 it ran on the wall clock, so mutter's frame timer never fired and no shell started.
 The guard's shells, started by systemd, keep the real clock and have no fixtures.
 
+A shell that dies on a signal leaves a backtrace. `direct.sh` also preloads `crash.c`, whose
+handler writes `APEXG2-CRASH` and the frames (`backtrace_symbols_fd`) into the case's log before
+the default action, so there are frames even where the core goes to a pipe the container cannot
+reach, as on CI's runners. Each case's shell runs with `ulimit -c unlimited`, from its HOME, where
+a core lands under core_pattern `core`. After a signal exit `backtrace.sh`'s `case_backtrace`
+writes `/out/CASE.bt`: those frames, then gdb's `bt` and `thread apply all bt full` of the core
+(gdb installed on demand, symbols from Fedora's debuginfod; the lane's own gnome-shell has none,
+which it says), or the same through `coredumpctl` where core_pattern pipes to systemd-coredump, or
+one line saying why there is none (`no backtrace: no core in … (core_pattern …, ulimit -Hc …)`, `no
+backtrace: gdb missing …`). The core is deleted once read. The shell's `exits` assertion then
+names the crashing thread's frame past the signal trampoline, or that reason, or `no CASE.bt`.
+
 The layer follows `layer-enabled` live in a shell that started with it on
 ([DESIGN.md](https://github.com/apex-linux/apex/blob/main/docs/DESIGN.md#schema-iogithubapex_linuxapexdesktop): the layer reads
 every key live): `false` disables the features, every hook gives stock, and the session
@@ -1034,6 +1046,8 @@ Not asserted here: the volume glyph (the container has no audio server), and wha
 | `direct.sh`, `guard.sh` | containers of the image | the cases and the crash-guard phases |
 | `fixtures.py` | the direct cases' containers | the python-dbusmock services on the system bus |
 | `clock.c` | the direct cases' shells (`LD_PRELOAD`) | the fixed wall clock |
+| `crash.c` | the direct cases' shells (`LD_PRELOAD`) | the frames of a fatal signal, into the case's log |
+| `backtrace.sh` | `direct.sh` | `case_backtrace`: a crashed case's `CASE.bt` |
 | `smoke.sh` | CI's Fedora 45 container | `direct.sh fedora` on Fedora's gnome-shell, and the assertions that need no Apex build |
 | `patched.sh` | a throwaway Fedora 45 container, by hand | the patched shell before a builder VM: rebuilds Fedora's SRPM with this checkout's recipe and `desktop/shell/`, runs `direct.sh main`, and asserts the logs and the top bar (below) |
 | `repeat.sh` | the host, by hand | `patched.sh` N times on one build, each in its own container, then every assertion whose verdict differs between the runs (below) |

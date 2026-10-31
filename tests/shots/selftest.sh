@@ -3210,6 +3210,37 @@ test_shutdown_banner_case() {
 CHANGES
 }
 
+# A shell that died on a signal leaves a backtrace, or one line saying why it has none, and its
+# exit assertion names it; a clean exit leaves nothing.
+test_case_backtrace() {
+    local run=$T/backtrace tools=$T/backtrace-tools tool
+    mkdir -p "$run/core" "$tools"
+    for tool in find sed sort head cat; do ln -sf "$(command -v "$tool")" "$tools/$tool"; done
+    printf '%s\n' 'GNOME Shell-Message: started' 'APEXG2-CRASH gnome-shell[42] SIGSEGV' '/usr/lib64/libst-17.so(+0x1) [0x2]' \
+        'APEXG2-CRASH end' >"$run/x.log"
+    # shellcheck disable=SC2016 # expanded by the inner bash
+    PATH=$tools "$BASH" -c '. "$1/backtrace.sh"; case_backtrace "$2/x.log" 0 "$2/core" "$2/clean.bt"
+        case_backtrace "$2/x.log" 139 "$2/core" "$2/none.bt"; : >"$2/core/core"
+        dnf5() { return 1; }; case_backtrace "$2/x.log" 139 "$2/core" "$2/nogdb.bt"' _ "$HERE" "$run"
+    expect_eq "backtrace: a clean exit writes none" no "$([[ -e $run/clean.bt ]] && echo yes || echo no)"
+    expect_eq "backtrace: crash.c's frames reach it" 1 "$(grep -c '^/usr/lib64/libst-17.so' "$run/none.bt")"
+    expect_eq "backtrace: no core says so" 1 "$(grep -c '^no backtrace: no core in .*/core (core_pattern ' "$run/none.bt")"
+    expect_eq "backtrace: a core without gdb says so" 1 "$(grep -c '^no backtrace: gdb missing' "$run/nogdb.bt")"
+    echo 'x exit=139 secs=4 marker-after-exit=yes' >"$run/results-pr.txt"
+    mv "$run/none.bt" "$run/x.bt"
+    assertion_counts exits "$run" x 0 >/dev/null
+    expect_eq "backtrace: a signal exit's FAIL names why there is none" 1 \
+        "$(grep -c '^FAIL x: the shell exits 0 (got: exit=139 .*; no backtrace: no core in .* (x.bt))$' "$T/assertions.out")"
+    printf '%s\n' 'signal 11, the shell exited 139' '#0  0x1 in __pthread_kill_implementation () at pthread_kill.c:44' \
+        '#4  0x2 in <signal handler called> () at /lib64/libc.so.6' '#5  0x3 in st_widget_get_theme_node () at st-widget.c:1' >"$run/x.bt"
+    assertion_counts exits "$run" x 0 >/dev/null
+    expect_eq "backtrace: a signal exit's FAIL names the frame past the signal trampoline" 1 \
+        "$(grep -c '; #5  0x3 in st_widget_get_theme_node () at st-widget.c:1 (x.bt))$' "$T/assertions.out")"
+    rm "$run/x.bt"
+    assertion_counts exits "$run" x 0 >/dev/null
+    expect_eq "backtrace: a signal exit without one says so" 1 "$(grep -c '; no x.bt)$' "$T/assertions.out")"
+}
+
 readonly SESSION_REPORT='{"settings": {"font-name": "Adwaita Sans 10.125", "document-font-name": "Adwaita Sans 10.125",
     "monospace-font-name": "JetBrains Mono 9.75", "font-hinting": "none", "icon-theme": "Apex"},
   "shell": {"font": "Adwaita Sans 10.125", "iconTheme": "Apex"},
@@ -4076,6 +4107,7 @@ test_dark_style_off
 test_fixtures
 test_glass
 test_shadows_under_glass
+test_case_backtrace
 
 printf '1..%d\n' "$tests"
 ((failed == 0))
