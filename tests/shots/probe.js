@@ -1922,32 +1922,47 @@ function spotlightSections(popup) {
 // A virtual device's events reach the stage through mutter's input thread, which leisure does not
 // wait for. They arrive in the order sent, so an F24 (bound to nothing) tapped after them follows them.
 let sentinelKeyboard = null;
-// While an entry has the input method's focus, every key goes to IBus and comes back to the stage
-// later, in order: the F24 the stage sees first is the one IBus has not answered yet.
-function keysViaInputMethod() {
-    const im = Main.inputMethod;
-    return Boolean(im?._context && im._currentSource && im.currentFocus);
-}
+// While an entry has the input method's focus, IBus takes the keys and the shell sends them on once
+// it answers, in order: when it took the F24, the barrier waits for the copy it sends on too.
+const IBUS_RELEASE_MASK = 1 << 30;
+let lastBarrierViaInputMethod = false;
 
 async function inputDelivered() {
     sentinelKeyboard ??= global.stage.context.get_backend().get_default_seat()
         .create_virtual_device(Clutter.InputDeviceType.KEYBOARD_DEVICE);
-    let filterId = 0, releases = keysViaInputMethod() ? 2 : 1;
-    const seen = new Promise(resolve => {
-        filterId = Clutter.Event.add_filter(global.stage, event => {
-            if (event.type() === Clutter.EventType.KEY_RELEASE && event.get_key_symbol() === Clutter.KEY_F24 &&
-                --releases === 0)
-                resolve(true);
-            return Clutter.EVENT_PROPAGATE;
-        });
+    const context = Main.inputMethod?._context ?? null;
+    let seen = 0, taken = 0, resolve;
+    const delivered = new Promise(r => (resolve = r));
+    if (context) {
+        const process = context.process_key_event_async;
+        context.process_key_event_async = function (keyval, keycode, state, ...rest) {
+            if (keyval === Clutter.KEY_F24 && state & IBUS_RELEASE_MASK)
+                taken++;
+            return process.call(this, keyval, keycode, state, ...rest);
+        };
+    }
+    // The stage's filters see an event as it is queued; its next frame dispatches it, and the input method
+    // takes it then, before that frame's laters run.
+    const filterId = Clutter.Event.add_filter(global.stage, event => {
+        if (event.type() === Clutter.EventType.KEY_RELEASE && event.get_key_symbol() === Clutter.KEY_F24) {
+            seen++;
+            latersRun().then(() => {
+                if (seen >= 1 + taken)
+                    resolve(true);
+            });
+        }
+        return Clutter.EVENT_PROPAGATE;
     });
     sentinelKeyboard.notify_keyval(GLib.get_monotonic_time(), Clutter.KEY_F24, Clutter.KeyState.PRESSED);
     sentinelKeyboard.notify_keyval(GLib.get_monotonic_time(), Clutter.KEY_F24, Clutter.KeyState.RELEASED);
     try {
-        if (!await Promise.race([seen, Scripting.sleep(SETTLE_TIMEOUT_MS).then(() => false)]))
+        if (!await Promise.race([delivered, Scripting.sleep(SETTLE_TIMEOUT_MS).then(() => false)]))
             throw new Error(`a virtual key event did not reach the stage in ${SETTLE_TIMEOUT_MS} ms`);
     } finally {
         Clutter.Event.remove_filter(filterId);
+        if (context)
+            delete context.process_key_event_async;
+        lastBarrierViaInputMethod = taken > 0;
     }
 }
 
@@ -2058,16 +2073,17 @@ async function keysCase() {
     a11yIds.forEach(id => seat.disconnect(id));
     pressed.sentinel = {before, after: state(), a11yChanges};
 
-    // A key typed into an entry has reached it by the time the barrier returns, IBus or not.
-    const entry = new St.Entry({can_focus: true});
+    // A key to an entry, which IBus takes and sends on (it commits printable ones as text instead),
+    // has reached it by the time the barrier returns.
+    const entry = new St.Entry({can_focus: true, text: 'ab'});
     Main.uiGroup.add_child(entry);
     entry.grab_key_focus();
+    entry.clutter_text.set_cursor_position(-1);
     await settle();
-    const viaInputMethod = keysViaInputMethod();
-    keyboard.notify_keyval(GLib.get_monotonic_time(), Clutter.KEY_a, Clutter.KeyState.PRESSED);
-    keyboard.notify_keyval(GLib.get_monotonic_time(), Clutter.KEY_a, Clutter.KeyState.RELEASED);
+    keyboard.notify_keyval(GLib.get_monotonic_time(), Clutter.KEY_BackSpace, Clutter.KeyState.PRESSED);
+    keyboard.notify_keyval(GLib.get_monotonic_time(), Clutter.KEY_BackSpace, Clutter.KeyState.RELEASED);
     await inputDelivered();
-    pressed.entryKey = {viaInputMethod, text: entry.get_text()};
+    pressed.entryKey = {viaInputMethod: lastBarrierViaInputMethod, text: entry.get_text()};
     entry.destroy();
     await settle();
 
