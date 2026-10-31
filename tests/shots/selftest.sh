@@ -3716,6 +3716,55 @@ test_fixtures() {
     kill "${pids[@]}" 2>/dev/null || true
 }
 
+# crash.c must not change how a shell dies or what a healthy one prints: the same exit status,
+# its frames in the log, from a fault, an abort, a stack overflow and gjs's chained handler.
+test_crash_c() {
+    local how want got plain preloaded
+    if ! command -v gcc >/dev/null 2>&1; then
+        skip_or_fail "crash.c: needs gcc"
+        return
+    fi
+    if ! gcc -O2 -Wall -Werror -shared -fPIC -o "$T/crash.so" "$HERE/crash.c" 2>"$T/crash.err"; then
+        not_ok "crash.c: builds with -Wall -Werror ($(head -n 3 "$T/crash.err" | paste -sd'|' -))"
+        return
+    fi
+    ok "crash.c: builds with -Wall -Werror"
+    cat >"$T/crashes.c" <<'C'
+#include <signal.h>
+#include <stdlib.h>
+#include <string.h>
+static int deep(volatile int *p) { return *p; }
+static int overflow(int n) { volatile char pad[4096]; pad[0] = (char)n; return overflow(n + 1) + pad[0]; }
+int main(int argc, char **argv) {
+    if (argc < 2) return 0;
+    if (!strcmp(argv[1], "fault")) return deep((volatile int *)0);
+    if (!strcmp(argv[1], "abort")) abort();
+    return overflow(0);
+}
+C
+    gcc -O0 -o "$T/crashes" "$T/crashes.c"
+    for how in fault abort overflow; do
+        "$T/crashes" "$how" 2>/dev/null
+        want=$?
+        LD_PRELOAD=$T/crash.so "$T/crashes" "$how" 2>"$T/crash.$how"
+        got=$?
+        expect_eq "crash.c: a crash by $how exits as it does without it" "$want" "$got"
+        expect_eq "crash.c: a crash by $how prints its frames" 2 \
+            "$(grep -c '^APEXG2-CRASH crashes\[[0-9]*\] SIG[A-Z]*$\|^APEXG2-CRASH end$' "$T/crash.$how")"
+    done
+    # SpiderMonkey's handler runs before crash.c's and calls it: the signal must still kill.
+    # shellcheck disable=SC2016 # a gjs program
+    LD_PRELOAD=$T/crash.so timeout 20 gjs -c 'const {GLib, Gio} = imports.gi;
+        GLib.spawn_command_line_sync(`kill -SEGV ${new Gio.Credentials().get_unix_pid()}`);' 2>"$T/crash.gjs"
+    expect_eq "crash.c: gjs killed by SIGSEGV dies with 139, not hung" 139 "$?"
+    expect_eq "crash.c: gjs's crash prints its frames" 1 "$(grep -c '^APEXG2-CRASH gjs.*\[[0-9]*\] SIGSEGV$' "$T/crash.gjs")"
+    # shellcheck disable=SC2016 # a gjs program
+    plain=$(gjs -c 'print(imports.gi.GLib.get_user_name()); printerr("to stderr")' 2>&1)
+    # shellcheck disable=SC2016 # a gjs program
+    preloaded=$(LD_PRELOAD=$T/crash.so gjs -c 'print(imports.gi.GLib.get_user_name()); printerr("to stderr")' 2>&1)
+    expect_eq "crash.c: a healthy process prints the same with and without it" "$plain" "$preloaded"
+}
+
 # clock.c must hold the wall clock and leave an absolute monotonic timer alone: libfaketime
 # moved mutter's frame timer, and no headless shell ever finished starting.
 test_clock_c() {
@@ -4108,6 +4157,7 @@ test_fixtures
 test_glass
 test_shadows_under_glass
 test_case_backtrace
+test_crash_c
 
 printf '1..%d\n' "$tests"
 ((failed == 0))
