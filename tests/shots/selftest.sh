@@ -3816,7 +3816,7 @@ REPORTS
 }
 
 # glass_views: two moves and the straddling box exact against a fresh effect, the box within the
-# glass bounds away from the boundary, the seam a known gap.
+# glass bounds away from the boundary, the seam pinned at today's and a known gap.
 test_glass_views() {
     local report failures what change passes fails
     report='{"views": 2, "scale": 2, "boundary": 1440,
@@ -3828,9 +3828,9 @@ test_glass_views() {
     while IFS='|' read -r failures what change; do
         jq -c "$change" <<<"$report" | sed 's/^/APEXG2-GLASS-VIEWS /' >"$T/glass-views.log"
         read -r passes fails <<<"$(assertion_counts glass_views glass-views "$T/glass-views.log")"
-        expect_eq "glass views: $what fails $failures of 3" "$failures" "$fails"
+        expect_eq "glass views: $what fails $failures of 4" "$failures" "$fails"
         if ((failures == 0)); then
-            expect_eq "glass views: $what passes 2 of 3, the 3rd its known gap" 2 "$passes"
+            expect_eq "glass views: $what passes 3 of 4, the 4th its known gap" 3 "$passes"
         fi
     done <<'CHANGES'
 0|both moves exact, the straddling box deterministic and within bounds away from its seam|.
@@ -3838,9 +3838,11 @@ test_glass_views() {
 1|a box moved back that one view never repainted|.back.views = 1
 1|a straddling box that a fresh effect draws otherwise|.straddling.liveDifferingFromFresh = 640
 1|a box off the reference by 9/255 away from the seam|.straddling.live.interiorMax = 9
-1|a seam within the bounds, a gap that holds now|.straddling.live.seamMax = 3.5
+2|a seam within the bounds: off its pin, and a gap that holds now|.straddling.live.seamMax = 3.5
+1|a seam 2/255 wider than its pin|.straddling.live.seamMax = 95.6
+1|a seam 2/255 narrower than its pin, still a gap|.straddling.live.seamMax = 91.5
 1|one view only|.views = 1
-2|no report|del(.views, .straddling, .across, .back)
+3|no report|del(.views, .straddling, .across, .back)
 CHANGES
 }
 

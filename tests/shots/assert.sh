@@ -126,6 +126,10 @@ readonly ALWAYS_LOADED_USER_UNIT=default.target
 readonly GLASS_INTERIOR_MAX=4
 readonly GLASS_EDGE_MAX=12
 readonly GLASS_MEAN_ERROR=1
+# glass-views' seam, 0003's per-view texture over two monitors (15c), pinned at its first run's
+# value: it fails if the seam moves either way, so a change to 0003 shows here first.
+readonly GLASS_VIEWS_SEAM_TODAY=93.58
+readonly GLASS_VIEWS_SEAM_PIN=1
 # Board 22's ring width from its coverage (glass.js ringWidths): 8-bit rounding moves it under 0.05
 # device px; St's inset-shadow ring inside a clear border measures 8 px at its corners against 4.
 readonly TILE_RING_ALLOWANCE=0.25
@@ -2942,6 +2946,8 @@ glass_views() {
         "a glass box moved from one monitor's view to the other's and back draws, in both views' frames, what a fresh effect draws; one over their boundary draws what a fresh effect draws there too" APEXG2-GLASS-VIEWS
     expect_report "$label" "$log" ".straddling.live | .interiorMax <= $GLASS_INTERIOR_MAX and .edgeMax <= $GLASS_EDGE_MAX and .mean <= $GLASS_MEAN_ERROR" \
         "over the boundary, away from it, the box is blur-ref.js's blur within $GLASS_INTERIOR_MAX/255 inside, $GLASS_EDGE_MAX/255 in the ds/2 band, $GLASS_MEAN_ERROR/255 on average (${views:-no report})" APEXG2-GLASS-VIEWS
+    expect_report "$label" "$log" ".straddling.live.seamMax | . - $GLASS_VIEWS_SEAM_TODAY | fabs <= $GLASS_VIEWS_SEAM_PIN" \
+        "within 3 sigma of the boundary the seam is today's, $GLASS_VIEWS_SEAM_TODAY/255 within $GLASS_VIEWS_SEAM_PIN/255 either way" APEXG2-GLASS-VIEWS
     known_gap "0003: fine mode's per-view texture never gets the other view's pixels, a seam over two monitors; not 15b's fix" \
         expect_report "$label" "$log" ".straddling.live.seamMax <= $GLASS_INTERIOR_MAX" \
         "and within 3 sigma of the boundary, too" APEXG2-GLASS-VIEWS
