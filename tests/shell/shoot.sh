@@ -26,7 +26,9 @@ IDLE at lock, as every real lock does, then blanks and wakes with no key; lock-s
 has logind's mock prepare for sleep and resume; each greeter case (--mode=gdm) shows the user list, then the
 prompt. Each polkit case opens the shell's own authentication dialog through the polkit
 component's _onInitiate(), with a stubbed PolkitAgent.Session that PAM never answers, for
-captures and style checks only (pkexec end to end is G4's). date-menu opens the date menu, sends
+captures and style checks only (pkexec end to end is G4's); polkit-lock and polkit-suspend
+lock the screen, or sleep and resume, under the open dialog, type at the lock, then end the lock,
+and polkit-lock-safe does so in safe mode. date-menu opens the date menu, sends
 the shell's notification daemon one notification, then four more, toggles Do Not Disturb twice
 and clears the list; date-menu-disabled does the same with the layer's notifications off.
 Each end-session case opens the end-session dialog over D-Bus against update1-mock.py's
@@ -261,6 +263,9 @@ for scheme in light dark; do
 done
 shoot polkit-fingerprint "$USER_NAME" user default 'Password:' -- APEX_POLKIT=1 APEX_POLKIT_INFO=fingerprint || status=1
 shoot polkit-disabled "$USER_NAME" user default 'Password:' "$polkit_off" -- APEX_POLKIT=1 || status=1
+shoot polkit-lock "$USER_NAME" user default 'Password:' -- APEX_POLKIT=lock || status=1
+shoot polkit-suspend "$USER_NAME" user default 'Password:' -- APEX_POLKIT=suspend || status=1
+shoot polkit-lock-safe "$USER_NAME" user default 'Password:' -- APEX_POLKIT=lock APEX_SHELL_SAFE=1 || status=1
 # The end-session dialog's update card against a fresh Update1 each time: the probe moves it
 # from up to date through staged and ready-for-reboot to an Apply that fails.
 for scheme in light dark; do

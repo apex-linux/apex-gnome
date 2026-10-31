@@ -551,6 +551,40 @@ def near(got, want):
     return abs(got - want) <= 1
 
 
+POLKIT_LOCKED_CASES = {"polkit-lock": (True, False), "polkit-suspend": (True, True), "polkit-lock-safe": (False, False)}
+
+
+def check_polkit_locked(shots, case, apex, sleeps):
+    log, gdm = read(shots, f"{case}.log"), read(shots, f"{case}.gdm.log")
+    f = facts(log)
+    steps = ("polkit", "locked", "typed", "unlocked") + (("asleep",) if sleeps else ())
+    check(f"{case}: every step is reported", all(step in f for step in steps))
+    check(f"{case}: no JS error", "JS ERROR" not in until(log, "unlocked") and "APEXLOCK-ERROR" not in log)
+    if not all(step in f for step in steps):
+        return
+    before = f["polkit"]["polkit"]
+    check(f"{case}: the dialog opens, focused, {'board 13' if apex else 'upstream'}'s",
+          before["opened"] and before["visible"] and before["field"]["focused"]
+          and ("apex-polkit" in (before["classes"] or "")) is apex, json.dumps(before))
+    for step in ("locked", "typed"):
+        d, lock = f[step]["polkit"], f[step]["lock"]
+        check(f"{case}: {step}: locked, the dialog hidden under the lock and still its request's",
+              f[step]["locked"] and not d["visible"] and not d["mapped"] and d["current"], json.dumps(d))
+        check(f"{case}: {step}: the lock is {'the one stage with its prompt' if apex else 'upstream'}'s",
+              ("apex-lock" in lock["classes"].split()) is apex and (not apex or lock["prompt"] is not None),
+              json.dumps({k: lock[k] for k in ("classes", "prompt")}))
+    typed = between(gdm, "locked", "typed")
+    check(f"{case}: the keys typed at the lock answer the lock's question, not the dialog's",
+          any(re.search(rf": AnswerQuery gdm-password \({len(WRONG_ANSWER)} characters\)$", line) for line in typed)
+          and f["typed"]["sessions"] == [{"responses": 0, "cancelled": False}], json.dumps([typed, f["typed"]["sessions"]]))
+    after = f["unlocked"]
+    check(f"{case}: the lock ends on the same dialog, shown again with its request, nothing answered or cancelled",
+          not after["locked"] and after["polkit"]["visible"] and after["polkit"]["opened"] and after["polkit"]["current"]
+          and after["sessions"] == [{"responses": 0, "cancelled": False}], json.dumps(after))
+    check(f"{case}: still {'board 13' if apex else 'upstream'}'s",
+          ("apex-polkit" in (after["polkit"]["classes"] or "")) is apex, after["polkit"]["classes"])
+
+
 def check_polkit(shots, case, want):
     log = read(shots, f"{case}.log")
     f = facts(log)
@@ -712,6 +746,8 @@ def main():
         check_greeter(shots, case)
     for case, want in POLKIT_CASES.items():
         check_polkit(shots, case, want)
+    for case, (apex, sleeps) in POLKIT_LOCKED_CASES.items():
+        check_polkit_locked(shots, case, apex, sleeps)
     check_date_menu(shots, "date-menu", True)
     check_date_menu(shots, "date-menu-disabled", False)
     for case in END_SESSION_CASES:
