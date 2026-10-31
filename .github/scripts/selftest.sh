@@ -89,15 +89,51 @@ signoff_paths() { printf '%s\n' "$@" | "$APEX_ROOT/.github/scripts/signoff-paths
 for f in desktop/shell/data/theme/apex/_input.scss packaging/pkgs/gnome-shell/patches/0010-panel.patch \
     tests/shots/probe.js tests/shots/direct.sh tests/shots/signoff.sh tests/shots/fixtures.py tests/shots/glass.js \
     tests/shell/shoot.sh tests/lib/pins.sh tests/layer/fixtures/io.github.apex_linux.Apex.Desktop.gschema.xml \
-    .github/workflows/signoff.yml; do
+    .github/workflows/signoff.yml desktop/control-center/panels/apex/settings-tiles.json desktop/nautilus/src/apex/apex-count-bar.c \
+    desktop/ptyxis/src/apex/apex-glyph.c packaging/pkgs/gnome-control-center/check.sh packaging/pkgs/nautilus/patches/0001-build.patch \
+    packaging/pkgs/ptyxis/check.sh packaging/pkgs/libadwaita/check.sh tests/control-center/bindings.py tests/nautilus/check.py \
+    tests/ptyxis/fixture.c; do
     check "signoff runs on a pull request changing $f" touches=true "$(signoff_paths README.md "$f")"
 done
 for f in tests/shots/README.md tests/shots/selftest.sh tests/shots/assert.sh tests/shots/stable.sh \
-    packaging/pkgs/nautilus/patches/0001-build.patch desktop/control-center/panels/apex/settings-tiles.json \
+    tests/s2c/radius-test.sh tests/s7/accent-test.sh tests/libadwaita/radius-test.sh tests/laptop/selftest.sh \
     .github/workflows/ci.yml docs/x.md; do
     check "signoff skips a pull request changing only $f" touches=false "$(signoff_paths "$f")"
 done
 check "signoff skips a pull request with no changed path" touches=false "$(signoff_paths)"
+
+# --- next-point.yml: updates-testing beside the scripts' own repositories, apart from the stable lane ---
+printf '#!/bin/sh\necho "$*"\n' >"$TMP/dnf5" && chmod +x "$TMP/dnf5"
+np_dnf5() { NEXT_POINT_DNF5=$TMP/dnf5 "$APEX_ROOT/.github/scripts/next-point.sh" dnf5 "$@"; }
+check "next-point: updates-testing joins --repo=updates" "-y --repo=fedora --repo=updates --repo=updates-testing install x" \
+    "$(np_dnf5 -y --repo=fedora --repo=updates install x)"
+check "next-point: updates-testing-source joins --repo=updates-source" \
+    "-q --repo=fedora-source --repo=updates-source --repo=updates-testing-source download --source gnome-shell" \
+    "$(np_dnf5 -q --repo=fedora-source --repo=updates-source download --source gnome-shell)"
+check "next-point: a call naming no repository enables updates-testing" "--enable-repo=updates-testing -y remove x" \
+    "$(np_dnf5 -y remove x)"
+check "next-point: a call naming only fedora keeps to it" "--repo=fedora install x" "$(np_dnf5 --repo=fedora install x)"
+mkdir -p "$TMP/np-bin"
+check_true "next-point: the shim installs ahead of dnf5 on PATH" \
+    env NEXT_POINT_SHIM="$TMP/np-bin/dnf5" PATH="$TMP/np-bin:$PATH" "$APEX_ROOT/.github/scripts/next-point.sh" shim
+check_false "next-point: a shim that is not the dnf5 on PATH dies" \
+    env NEXT_POINT_SHIM="$TMP/np-bin/dnf5" PATH="/usr/bin:/bin" "$APEX_ROOT/.github/scripts/next-point.sh" shim
+printf '%s\n' '## direct.sh main' '# 1865 passed, 0 failed, 50 known gaps' >"$TMP/np-g2.log"
+printf '%s\n' 'ok - lock-light: a' 'not ok - lock-dark: b' 'ok - greeter: c' 'PASS captures board 12' \
+    '# 2 passed, 0 failed, 0 known gaps' '# 28 passed, 2 failed, 0 known gaps' >"$TMP/np-signoff.log"
+np_counts() { "$APEX_ROOT/.github/scripts/next-point.sh" counts "$@"; }
+check "next-point: counts g2 reads patched.sh's last summary" 1865/0 "$(np_counts g2 "$TMP/np-g2.log")"
+check "next-point: counts goldens reads goldens.sh's, the last" 28/2 "$(np_counts goldens "$TMP/np-signoff.log")"
+check "next-point: counts shoot counts shoot.sh's TAP lines" 2/1 "$(np_counts shoot "$TMP/np-signoff.log")"
+check "next-point: a log without a summary counts ?" "? ?" \
+    "$(np_counts goldens "$TMP/dnf5") $(np_counts shoot "$TMP/np-g2.log")"
+check "next-point: a missing log counts ?" "? ?" "$(np_counts g2 "$TMP/none") $(np_counts shoot "$TMP/none")"
+check "next-point.yml: dispatch and schedule only, no lane cache" "" \
+    "$(grep -nE 'pull_request|push:|actions/cache|APEX_LANE_CACHE' "$APEX_ROOT/.github/workflows/next-point.yml" | grep -vE '^[0-9]+: *#')"
+check "next-point.sh: run by next-point.yml alone" ".github/workflows/next-point.yml" \
+    "$(cd "$APEX_ROOT" && grep -l 'next-point.sh' .github/workflows/*.yml | paste -sd ' ')"
+check "the stable lane names no updates-testing: lane.sh and image-args.sh fetch as before" "" \
+    "$(grep -l 'updates-testing' "$APEX_ROOT/tests/lib/lane.sh" "$APEX_ROOT/tests/lib/image-args.sh")"
 
 if ((FAILS > 0)); then
     die "selftest: $FAILS failure(s)"

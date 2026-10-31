@@ -6,7 +6,7 @@ Asserts each shoot.sh case from its log's APEXLOCK lines and gdm-mock.py's log: 
 boards 20 and 12 show, that no case unlocks, that a wrong answer leaves the screen
 locked, that a GDM refusing to reauthenticate leaves it locked, that the fingerprint
 conversation stops while the screen is blank, that blanking cancels the conversation and waking starts a new one, that
-the key that wakes the screen never answers a prompt, that gnome-session's idle at lock leaves the prompt to blank, that
+the key that wakes the screen never answers a prompt, that gnome-session's idle at lock leaves the prompt to blank, that resume brings back the prompt sleep took down, that
 stock and safe mode keep upstream's lock, and that the greeter runs no Apex JS and no screencast service; what board 13's
 authentication dialog shows, from a stubbed polkit session that is never answered; and board 34's
 date menu: flat cards headed "app · time" with the app's icon, Clear on the right, Do Not Disturb;
@@ -74,7 +74,7 @@ def tokens():
     found = {}
     with open(TOKENS, encoding="utf-8") as f:
         for line in f:
-            m = re.match(r"\$(apex_greeter_\w+):\s*(.+?);", line)
+            m = re.match(r"\$(apex_(?:greeter|lock)_\w+):\s*(.+?);", line)
             if m:
                 found[m.group(1)] = m.group(2).strip("'\"")
     return found
@@ -152,12 +152,29 @@ def check_layout(case, layout, overlay_alpha=None):
           {"date", "time", "avatar", "field", "hint"} <= dict(parts).keys() and not off, json.dumps(layout))
     overlaps = [f"{a}/{b}" for (a, ba), (b, bb) in itertools.pairwise(parts) if ba["y"] + ba["height"] > bb["y"] + 1]
     check(f"{case}: top to bottom, nothing overlaps", not overlaps, ", ".join(overlaps))
+    if overlay_alpha is None and {"avatar", "field", "hint"} <= dict(parts).keys():
+        check_spacing(case, layout)
     got = layout.get("overlay") or ""
     if overlay_alpha is None:
         check(f"{case}: the overlay darkens as $apex_lock_overlay", got == OVERLAY, got)
     else:
         check(f"{case}: high contrast darkens more, to alpha {overlay_alpha:#x}",
               got[:7] == "#000000" and len(got) == 9 and int(got[7:], 16) >= overlay_alpha, got)
+
+
+def check_spacing(case, layout):
+    """Board 20's prompt, top to bottom, as the Apex sheets space it: a GNOME point release's margins fail here by name."""
+    gap = px(tokens()["apex_lock_prompt_gap"])
+    avatar, field, hint, line = layout["avatar"], layout["field"], layout["hint"], layout.get("messageLine")
+    field_end = field["y"] + field["height"]
+    check(f"{case}: the field sits $apex_lock_prompt_gap ({gap:g} px) below the name",
+          abs(field["y"] - avatar["y"] - avatar["height"] - gap) <= 1, json.dumps([avatar, field]))
+    if line:
+        check(f"{case}: upstream's message line starts where the field ends", abs(line["y"] - field_end) <= 1,
+              json.dumps([field, line]))
+    above = line["y"] + line["height"] if line else field_end
+    check(f"{case}: the hint starts where the {'message line' if line else 'field'} ends", abs(hint["y"] - above) <= 1,
+          json.dumps([field, line, hint]))
 
 
 def check_reveal(case, reveal):
@@ -290,6 +307,42 @@ def check_fingerprint(shots, case):
           fingerprint_line(f["wake"], FINGERPRINT_HINT, False), json.dumps(f["wake"]))
 
 
+def check_fingerprint_suspend(shots, case):
+    log, gdm = read(shots, f"{case}.log"), read(shots, f"{case}.gdm.log")
+    f = facts(log)
+    steps = ("opened", "scan-failed", "asleep", "still-asleep", "resumed", "resumed-scan-failed", "end")
+    check(f"{case}: every step is reported", all(step in f for step in steps))
+    if not all(step in f for step in steps):
+        return
+    for step in steps:
+        check(f"{case}: {step}: locked", f[step]["locked"] is True)
+    check(f"{case}: GDM never completes a verification", "VerificationComplete" not in gdm)
+    check(f"{case}: no JS error", "JS ERROR" not in until(log, "end") and "APEXLOCK-ERROR" not in log)
+    check(f"{case}: a failed scan before sleep swaps the line", fingerprint_line(f["scan-failed"], FINGERPRINT_FAILED, True),
+          json.dumps(f["scan-failed"]))
+    before = between(gdm, "scan-failed", "asleep")
+    check(f"{case}: sleep cancels the conversations the reader and the password were in",
+          any(line.endswith(": Cancel") for line in before), json.dumps(before))
+    check(f"{case}: asleep: no prompt", f["asleep"]["prompt"] is None and f["still-asleep"]["prompt"] is None)
+    asleep = between(gdm, "asleep", "still-asleep")
+    check(f"{case}: while asleep, no conversation starts and the reader is left alone", asleep == [], json.dumps(asleep))
+    resumed = between(gdm, "still-asleep", "resumed")
+    opened = [m.group(1) for m in map(re.compile(r"channel (\d+): connected$").match, resumed) if m]
+    live = [c for c in opened if f"channel {c}: Cancel" not in resumed]
+    # Upstream's prompt opens a channel and cancels it before the one it keeps, at wake as at resume.
+    check(f"{case}: resume leaves one channel running the password's and the reader's conversations",
+          len(live) == 1 and all(f"channel {live[0]}: BeginVerificationForUser {service} apex" in resumed
+                                 for service in ("gdm-password", "gdm-fingerprint")), json.dumps(resumed))
+    check(f"{case}: and the line is the reader's again, not the failure from before sleep",
+          fingerprint_line(f["resumed"], FINGERPRINT_HINT, False), json.dumps(f["resumed"]))
+    check(f"{case}: upstream's fingerprint indicator still stands aside", f["resumed"].get("indicator") is False,
+          json.dumps(f["resumed"]))
+    check(f"{case}: a failed scan after resume swaps the line, and the screen stays locked",
+          fingerprint_line(f["resumed-scan-failed"], FINGERPRINT_FAILED, True), json.dumps(f["resumed-scan-failed"]))
+    check(f"{case}: logged as qualify.sh reads it", (log.count("Apex: lock: suspend, prompt torn down"),
+                                                    log.count("Apex: lock: screen on, prompt rebuilt")) == (1, 1))
+
+
 def check_refused(shots, case):
     log = read(shots, f"{case}.log")
     f = facts(log)
@@ -357,6 +410,32 @@ def check_idle(shots, case):
     check(f"{case}: the wake rebuilds it, with a conversation and no key", len(begun) == 1 and
           log.count("Apex: lock: screen on, prompt rebuilt") == 1 and f["woken"]["status"] == VERIFYING and
           (f["woken"]["prompt"] or {}).get("question") == "Enter Password", json.dumps(begun))
+
+
+def check_suspend(shots, case):
+    """logind's PrepareForSleep: the conversation ends before sleep, none runs asleep, and resume brings the prompt back."""
+    log = read(shots, f"{case}.log")
+    gdm = read(shots, f"{case}.gdm.log")
+    f = facts(log)
+    steps = ("locked", "asleep", "still-asleep", "resumed", "end")
+    check(f"{case}: every step is reported", all(s in f for s in steps))
+    if not all(s in f for s in steps):
+        return
+    for step in steps:
+        check(f"{case}: {step}: locked", f[step]["locked"] is True)
+    check(f"{case}: no JS error", "JS ERROR" not in until(log, "end") and "APEXLOCK-ERROR" not in log)
+    check(f"{case}: sleep ends the conversation", f["asleep"]["prompt"] is None and
+          any(line.endswith(": Cancel") for line in between(gdm, "locked", "asleep")), json.dumps(between(gdm, "locked", "asleep")))
+    check(f"{case}: none starts while asleep", not any("BeginVerification" in line for line in between(gdm, "asleep", "still-asleep")),
+          json.dumps(between(gdm, "asleep", "still-asleep")))
+    begun = [line for line in between(gdm, "still-asleep", "resumed")
+             if re.match(r"channel \d+: BeginVerificationForUser gdm-password", line)]
+    check(f"{case}: resume brings the prompt back, with a conversation and no key", len(begun) == 1 and
+          f["resumed"]["status"] == VERIFYING and (f["resumed"]["prompt"] or {}).get("question") == "Enter Password",
+          json.dumps(begun))
+    torn, rebuilt = "Apex: lock: suspend, prompt torn down", "Apex: lock: screen on, prompt rebuilt"
+    check(f"{case}: both logged once, the rebuild as qualify.sh's screen-on line after the teardown",
+          (log.count(torn), log.count(rebuilt)) == (1, 1) and log.index(torn) < log.index(rebuilt))
 
 
 def check_greeter(shots, case):
@@ -470,6 +549,40 @@ def check_end_session(shots, case):
 
 def near(got, want):
     return abs(got - want) <= 1
+
+
+POLKIT_LOCKED_CASES = {"polkit-lock": (True, False), "polkit-suspend": (True, True), "polkit-lock-safe": (False, False)}
+
+
+def check_polkit_locked(shots, case, apex, sleeps):
+    log, gdm = read(shots, f"{case}.log"), read(shots, f"{case}.gdm.log")
+    f = facts(log)
+    steps = ("polkit", "locked", "typed", "unlocked") + (("asleep",) if sleeps else ())
+    check(f"{case}: every step is reported", all(step in f for step in steps))
+    check(f"{case}: no JS error", "JS ERROR" not in until(log, "unlocked") and "APEXLOCK-ERROR" not in log)
+    if not all(step in f for step in steps):
+        return
+    before = f["polkit"]["polkit"]
+    check(f"{case}: the dialog opens, focused, {'board 13' if apex else 'upstream'}'s",
+          before["opened"] and before["visible"] and before["field"]["focused"]
+          and ("apex-polkit" in (before["classes"] or "")) is apex, json.dumps(before))
+    for step in ("locked", "typed"):
+        d, lock = f[step]["polkit"], f[step]["lock"]
+        check(f"{case}: {step}: locked, the dialog hidden under the lock and still its request's",
+              f[step]["locked"] and not d["visible"] and not d["mapped"] and d["current"], json.dumps(d))
+        check(f"{case}: {step}: the lock is {'the one stage with its prompt' if apex else 'upstream'}'s",
+              ("apex-lock" in lock["classes"].split()) is apex and (not apex or lock["prompt"] is not None),
+              json.dumps({k: lock[k] for k in ("classes", "prompt")}))
+    typed = between(gdm, "locked", "typed")
+    check(f"{case}: the keys typed at the lock answer the lock's question, not the dialog's",
+          any(re.search(rf": AnswerQuery gdm-password \({len(WRONG_ANSWER)} characters\)$", line) for line in typed)
+          and f["typed"]["sessions"] == [{"responses": 0, "cancelled": False}], json.dumps([typed, f["typed"]["sessions"]]))
+    after = f["unlocked"]
+    check(f"{case}: the lock ends on the same dialog, shown again with its request, nothing answered or cancelled",
+          not after["locked"] and after["polkit"]["visible"] and after["polkit"]["opened"] and after["polkit"]["current"]
+          and after["sessions"] == [{"responses": 0, "cancelled": False}], json.dumps(after))
+    check(f"{case}: still {'board 13' if apex else 'upstream'}'s",
+          ("apex-polkit" in (after["polkit"]["classes"] or "")) is apex, after["polkit"]["classes"])
 
 
 def check_polkit(shots, case, want):
@@ -626,11 +739,15 @@ def main():
     check_wake_key(shots, "lock-wake-key", torn_down=False)
     check_wake_key(shots, "lock-wake-key-blank", torn_down=True)
     check_idle(shots, "lock-idle")
+    check_suspend(shots, "lock-suspend")
     check_fingerprint(shots, "lock-fingerprint")
+    check_fingerprint_suspend(shots, "lock-fingerprint-suspend")
     for case in GREETER_CASES:
         check_greeter(shots, case)
     for case, want in POLKIT_CASES.items():
         check_polkit(shots, case, want)
+    for case, (apex, sleeps) in POLKIT_LOCKED_CASES.items():
+        check_polkit_locked(shots, case, apex, sleeps)
     check_date_menu(shots, "date-menu", True)
     check_date_menu(shots, "date-menu-disabled", False)
     for case in END_SESSION_CASES:

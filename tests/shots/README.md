@@ -37,7 +37,7 @@ A case that gets no report within `direct.sh`'s timeout stops G2 at once.
 | G1's `image/checks/desktop.sh` | a container of the image | it passes on the image under test, so no text file under `/usr` or `/etc` names `APEX_SHELL_TEST_FAULT` |
 | `direct.sh main` | a container of the image plus `dbus-daemon` (the image has no `dbus-run-session`), `python3-dbusmock` and `gcc` for `clock.c`; `rpm -V` shows the shell's packages unmodified | each case below: one headless shell with a fresh home, dconf and runtime directory, the fixtures on the system bus and the fixed clock (see "Fixtures and the clock") |
 | `direct.sh kernel` | the same, with `apex.safe=1` bound over `/proc/cmdline` | the kernel switch |
-| `direct.sh pr` | CI's `shots-patched` job on a pull request, through `patched.sh` with `PATCHED_PART=pr` on the gnome-shell lane's RPMs | the cases `parts.sh`'s `PR_CASES` names, in `main`'s order (the scenes and every a11y check with their solid-backdrop twins, then the quick dock, indicator, safe-mode and fault cases, `dock-dnd`, `dock-external` and `keys` among them), with their assertions; each listed case must have run and reported (`part_ran`). Before them, `direct.sh fedora` runs only `PR_FEDORA_CASES`, `fedora-light` and `fedora-dark`, so the pull request compares Apex's desktop and safe mode's (`stock-light`, `stock-dark`) with Fedora's (`compare_with_fedora`). A push to `main` and the daily run take `main` with the whole Fedora baseline |
+| `direct.sh pr` | CI's `shots-patched` job on a pull request, through `patched.sh` with `PATCHED_PART=pr` on the gnome-shell lane's RPMs | the cases `parts.sh`'s `PR_CASES` names, in `main`'s order (the scenes and every a11y check with their solid-backdrop twins, then the quick dock, indicator, safe-mode, fault and shutdown cases, `dock-dnd`, `dock-external`, `keys` and `shutdown-banner` among them), with their assertions; each listed case must have run and reported (`part_ran`). Before them, `direct.sh fedora` runs only `PR_FEDORA_CASES`, `fedora-light` and `fedora-dark`, so the pull request compares Apex's desktop and safe mode's (`stock-light`, `stock-dark`) with Fedora's (`compare_with_fedora`). A push to `main` and the daily run take `main` with the whole Fedora baseline |
 | `direct.sh fedora` | the same image with Fedora's own gnome-shell and gnome-shell-common of the tested NVR in place of the Apex build, downloaded from Fedora's repositories; each RPM must report `digests signatures OK` against a keyring that holds Fedora's key alone, so an unsigned RPM fails | the baseline of the captures |
 | `guard.sh` | a container of the image booted with its own systemd; a test user's `systemd --user` with the image's unmodified units | the crash guard, and that neither the user manager nor the shell's unit sets `APEX_SHELL_TEST_FAULT` |
 | `assert.sh` | the builder VM; `compare.js` in a container of the image | everything below |
@@ -66,6 +66,7 @@ The direct cases:
 | `keys` | the capture settings without hot corners, and two input sources (`us`, `fr`) | every key the session relies on, as registered (accelerators from their schemas and apex-desktop's override, action modes as `windowManager.js` keeps them) and then pressed through a virtual keyboard: Super+Space opens Spotlight and leaves the input source alone; Super+Alt+Space switches to the next input source and Shift+Super+Alt+Space back, in every mode; Ctrl+Alt+Tab, in the session, overview, lock, unlock and login modes, lists the dock among its groups and moves the keyboard focus into it; a Super tap opens the overview and Super+A the launcher (the app grid), both in the session and overview modes; no grab is left behind |
 | `fault-configure`, `fault-enable` | `APEX_SHELL_TEST_FAULT` | only the fault feature is off; the `witness` feature after it still enables; the rest of the layer runs, Super+Space included, and the shell survives |
 | `fault-abort` | `abort-after-enable` | SIGABRT (exit 134) with the crash guard's marker left behind |
+| `shutdown-banner` | `G2_SHUTDOWN_BANNER=1` | after the usual reports and the same date-menu cut, a notification for the tray and its banner timeout due 100 ms into a shutdown whose history write is held 300 ms, in which the probe also sends the date menu's three signals: the layer's teardown disables the notifications feature, which clears the tray's banner timeouts before `layout.js` destroys it, so `main.js`'s shutdown loop runs none on the disposed tray, and the cut keeps the signals from the destroyed events section |
 | `fedora-light`, `fedora-dark` | Fedora's build, `prefer-light` or `prefer-dark` | no Apex module; upstream's sheet at its own path, byte for byte the one safe mode loads from `theme/stock/` |
 | `glass`, `fedora-glass` | the capture settings, `G2_GLASS=1` | patch 0003's glass in the frames the shell drew; the stock unlock blur captured in both shells (see "Glass") |
 
@@ -76,7 +77,15 @@ shadow layer destroyed with its relayout queued twice;
 after "Shutting down GNOME Shell", St styles no actor off the stage ("not in the stage"), as a relayout
 queued by the layer's teardown and run in `main.js`'s shutdown loop did to the panel, and no window
 effect reaches the disposed global (`shell_global_get`'s assertion, `G_IS_OBJECT`), as unmanaging a
-still-connected client's window did before patch 0019;
+still-connected client's window did before patch 0019, and nothing touches a disposed object
+("has been already disposed"), as a banner timeout the tray left armed did when that loop ran it after
+`layout.js` had destroyed the tray (upstream gnome-shell 51). Every case but `shutdown-banner` exits
+only once the tray is empty and its timeouts are cleared. That loop also reaches the date menu's
+destroyed events section (upstream as well) whenever the calendar server or the app list signals in
+it, at any time after startup: the event source's `changed` (`dateMenu.js:297`), its
+`notify::has-calendars` (`:326`) and the app list's `installed-changed` (`:322`). So before it exits,
+every case blocks each handler on those three paths; a path that blocks none, as an upstream rename
+would leave it, fails the case (`APEXG2-EXIT`, `exit_cut`). Stock's shell then cannot meet those races;
 St parsed every declaration (no `St-WARNING` naming a line and column of a sheet: St drops
 such a declaration and keeps the cascade's earlier value);
 the wall clock stands at the fixed time and the top bar's clock shows it (`Mon Sep 28`, EN SPACE, `09:41`).
@@ -150,6 +159,30 @@ the Dark Style toggle off, the shell turns light, and afterwards no Apex user un
 active and none, nor an Apex D-Bus service, started (the ROADMAP's "no agent runs");
 the trip again with dconf already running. `direct.sh` and `guard.sh` refuse to run
 outside run.sh's container (`/run/.containerenv`).
+
+## Session defaults
+
+S1b's first exit row, "a new session starts with the Apex theme, Colloid icons, JetBrains Mono
+and the wallpaper", read in the shells that run with apex-desktop installed: the VM's G2
+(`default`, `dark-style`, and `safe-env`, where safe mode keeps the image's fonts and icons) and
+the sign-off shells (above). Every case's probe reports them (`session-defaults.js`,
+`APEXG2-SESSION`); `session_defaults` asserts:
+
+- `org.gnome.desktop.interface`'s `font-name`, `document-font-name`, `monospace-font-name`,
+  `font-hinting` and `icon-theme` are the override's (`parts.sh` keeps their copies, which
+  apex-image's contracts hold equal to apex-desktop's), naming each key that differs;
+- the shell draws with that font and icon theme (`St.Settings`);
+- fontconfig gives Adwaita Sans, with `ss03`, and JetBrains Mono for their families, so a
+  missing JetBrains Mono fails rather than falling back to another monospace font;
+- the bar's clock is drawn in Adwaita Sans, as Pango resolves it;
+- every icon shown in the bar, the dock, the overview's dash and Quick Settings resolves under
+  `/usr/share/icons/Apex/`. Two explicit lists name the only others: `FIXTURE_APPS`, G2's own
+  stub apps, which have no icon and draw GNOME's generic one, and `SHELL_RESOURCE_ICONS`,
+  icons the shell draws from its own resource because board 31 has no glyph of that name
+  (`screenshooter-symbolic`). A failure names each icon, where it showed, its app and the
+  file it resolved to, or "no icon".
+
+The wallpaper is `backdrop_painted`'s (below).
 
 ## The backdrop
 
@@ -687,13 +720,39 @@ with `G2_SURFACE_SCENES=1`, the first two with `G2_SIGNOFF=1`, which opens Text 
 manager) and captures the overview and the real app switcher over them, after the
 scenes that want an empty desktop. The launcher's board is its grid, captured before the
 probe opens a folder. `tests/shell/shoot.sh` shoots the greeter, the lock screen, polkit's
-dialog and the power-off dialog with an update staged. Each board's scene is copied to
-`board-NN-SLUG-light.png` and `-dark.png`, and `signoff.json` records its title, its scene
-and fixture state, the apex-gnome and apex-desktop pins, the layer's features enabled, the
-scale and the monitor. `signoff.sh` itself compares nothing. It fails the run, naming the
-board, when:
+dialog and the power-off dialog with an update staged.
 
-- a scene has no capture;
+The app boards come from their lanes' own shooters, on the lanes' RPMs with the lane's
+libadwaita installed over Fedora's: `tests/control-center/run.sh` (boards 11, 18, 23, 24 and
+26), `tests/nautilus/shoot.sh` (27 to 29, with `APEX_DESKTOP_SRC` at the pinned apex-desktop)
+and `tests/ptyxis/shoot.sh` (32 and 33). A board has one row per scene in `signoff.sh`'s
+`BOARDS`, with the board's number and the slug `BOARD-SLUG-SCENE`: board 11 has the rows
+`11-settings-apex-top` and `11-settings-apex-scrolled`, board 26 `26-update-health-health-failure`
+and `26-update-health-fallback`, and each other app board one, its scene the capture's stem
+(`18-settings-updates-updates`). The fifteen shell boards keep one row each, its slug the
+board's. `signoff.sh --collect G2_RUN SHELL_SHOTS OUT` collects the shell's rows, and each
+`APP=SHOTS` (`control-center`, `nautilus`, `ptyxis`, `symbolic`) adds that source's rows from
+its captures.
+
+Board 31, Apex Symbolic's contact sheet, comes from the pinned apex-desktop's own
+`tools/icons/contact-sheet.sh`: every glyph as GTK 4 draws it, recoloured, at scale 2, light
+and dark, one sheet per scene of its `tools/icons/boards.txt` (`core`, `status`, `actions`,
+`everywhere`, `aliases`), so its rows are `31-symbolic-core` to `31-symbolic-aliases`.
+`signoff.sh` draws them from the Apex theme it installed, after the shell's captures, so the
+shell boards' container stays the one their goldens came from; GTK 4 for Python and Xvfb come
+in only then. A glyph that is missing or draws nothing leaves its scene without a sheet, and
+the collection names that row.
+
+Each row's scene is copied to `board-NN-SLUG-light.png` and `-dark.png`. A row its shooter
+captures light only (an empty dark capture in `BOARDS`; no row is one today) has no dark file,
+and its `scene.dark` and `files.dark` are `null`. `signoff.json` records each row's key
+(`NN-SLUG`), number, slug, title, scene and fixture state, the sources collected, the
+apex-gnome and apex-desktop pins, the layer's features enabled, the scale and the monitor.
+`signoff.sh` itself compares nothing. It fails the run, naming the board (and, for an app
+row, its key), when:
+
+- a scene has no capture. This is the only check on an app row: the next three read the
+  shell's own logs, and the app shooters fail their own job when a scene does not open;
 - the probe's three windows never all reached the overview, or brought a notification (a
   focus mutter refused posts "X is ready", so the probe activates them with a fresh server
   timestamp);
@@ -706,8 +765,18 @@ board, when:
   fixtures' keyboard before any shell starts: with no device, nothing can reach the indicator
   late. G2 keeps the connected keyboard, which its top-bar assertion needs.
 
-The `signoff` workflow uploads the set as `signoff-SHA`, then checks it against the approved
-goldens (below).
+Beside the boards, `signoff.sh --collect` runs one more check line on the same shells:
+G2's `session_defaults` on the `default` and `dark-style` logs, printed as
+`signoff.sh: session defaults: N passed, M failed`, with each failure naming its key or icon
+(below, "Session defaults"). It is a check of its own, outside the board count, and the only
+per-PR job whose shells run with apex-desktop's fonts and icon theme: `shots-patched` installs
+just the shell and two of the override's keys.
+
+In the `signoff` workflow, the shell's job runs `signoff.sh` and passes its G2 run, its
+`shoot.sh` captures and board 31's sheets on. Each app's job builds libadwaita and the app through
+`tests/lib/lane.sh`, restoring `ci.yml`'s `lane-` caches without saving them, and runs the
+shooter. One collect job then runs `signoff.sh --collect` over all of them, checks the set
+against the approved goldens (below) and uploads it as `signoff-SHA`.
 
 ## Approved goldens
 
@@ -715,52 +784,64 @@ The boards the owner approved on the sign-off page are G2's goldens (ADR 0014, t
 They live on the orphan branch `goldens`, so a re-approval never adds images to main's
 history. `tests/shots/goldens.lock` pins the commit G2 compares with. That commit holds:
 
-- `boards/board-NN-light.png` and `-dark.png`, at capture resolution;
-- `manifest.json`, with, per board: its title, slug, scene ids and fixture state, the shots
-  hash, `signoff.json`'s pins, scale and monitor, and the approval record (`status`,
-  `approvedAt`, the decision's `shots`, and its `note`, if any).
+- `boards/board-KEY-light.png` and `-dark.png`, at capture resolution;
+- `manifest.json`, with, per KEY: the board's number, title, slug, scene ids and fixture
+  state, the files, the shots hash, `signoff.json`'s pins, scale and monitor, and the approval
+  record (`status`, `approvedAt`, the decision's `shots`, and its `note`, if any).
+
+A KEY is a row's `NN-SLUG`. The fifteen shell boards approved before the app boards joined are
+keyed by their number alone (`NN`), with their slug recorded: a legacy key stands for a board
+of one row, and the check matches it by number and slug, so those goldens stay as approved.
 
 The shots hash is the page's: sha256 over the light PNG's bytes, then the dark PNG's, first
-12 hex digits.
+12 hex digits. A light-only row hashes its light PNG alone.
+
+The page shows a board as approved only when all its rows are. `goldens.sh` imports and checks
+row by row, so a board of two rows may have one row's golden while the other awaits.
 
 ### Importing after a sign-off
 
 CI never talks to the sign-off page. After the owner decides, the lead:
 
 1. exports the page's decisions as `DECISIONS.json`:
-   `{"boards": {"36": {"status": "approved", "shots": "…", "approvedAt": "…", "note": "…"}}}`;
+   `{"boards": {"11-settings-apex-top": {"status": "approved", "shots": "…", "approvedAt": "…", "note": "…"}}}`,
+   keyed by each row's `NN-SLUG` (a legacy `NN` is valid only for a board of one row);
 2. downloads the run's `signoff-SHA` artifact;
 3. runs `tests/shots/goldens.sh import SIGNOFF_DIR DECISIONS.json`;
 4. pushes the new commit (`git -C _build/goldens push origin HEAD:refs/heads/goldens`), then
    opens a pull request with the `goldens.lock` it moved.
 
-The import takes only the boards whose decision is `approved` with a `shots` hash equal to
-their capture's. It refuses the whole import, naming each board and why, when an approval
-names other captures (a stale approval), a field is unknown or of the wrong type, or no board
-is approved. A board that isn't approved keeps the golden it had, if any. The new commit sits
+The import takes only the rows whose decision is `approved` with a `shots` hash equal to
+their capture's. It refuses the whole import, naming each row and why, when an approval
+names other captures (a stale approval), a key names no row (or a legacy `NN` a board of more
+than one), a field is unknown or of the wrong type, or no row is approved. A board that isn't approved keeps the golden it had, if any. The new commit sits
 on the pinned one, or is the branch's first.
 
 ### The check
 
-`tests/shots/goldens.sh check SIGNOFF_DIR` (or `signoff.sh --goldens`) compares each board
-that has a golden with its capture, light and dark, through `compare.js`. The comparison is
-pixel for pixel outside the masks, as G2's other captures are.
+`tests/shots/goldens.sh check SIGNOFF_DIR` (or `signoff.sh --goldens`) compares each row
+that has a golden with its capture, light and dark (light alone for a light-only row), through
+`compare.js`. The comparison is pixel for pixel outside the masks, as G2's other captures are.
 
-- A board without a golden is reported `AWAIT`: awaiting sign-off, not failed.
-- A board that differs fails, naming the board, the variant, the number of pixels and their
-  box, with a difference image in `SIGNOFF_DIR/goldens-diff/`.
-- A golden for a board the run no longer has fails, and so does a golden whose files don't
-  hash to its manifest.
+- A row without a golden is reported `AWAIT`: awaiting sign-off, not failed.
+- A row that differs fails, naming the board (and the row's key, for a board of more than one
+  row), the variant, the number of pixels and their box, with a difference image in
+  `SIGNOFF_DIR/goldens-diff/`.
+- A golden for a row the run no longer has fails, and so do a golden whose files don't hash
+  to its manifest and one whose variants are not its row's. A golden of a source the run did
+  not collect (`signoff.json`'s `sources`: the shell's alone, say) is out of its scope.
 
-It runs in `signoff.yml`, after the capture:
+It runs in `signoff.yml`'s collect job, after the captures:
 
-- on a push to main that changes the shell, its recipe, `tests/shots`, `tests/shell` or
-  `tests/lib` (apex-desktop's pin);
+- on a push to main that changes the shell or an app (Settings, Files, Terminal), their
+  recipes or libadwaita's, `tests/shots`, `tests/shell`, the apps' tests, `tests/lib` (the
+  pins) or the schema fixture;
 - daily;
 - on dispatch;
-- on a pull request that changes what the captures render: the shell, its recipe, the
-  scenes and fixtures (`tests/shots` but its README, selftest, `assert.sh` and `stable.sh`),
-  `tests/shell`, `tests/lib`, the schema fixture or `signoff.yml`
+- on a pull request that changes what the captures render: the shell and the apps, their
+  recipes and libadwaita's, the scenes and fixtures (`tests/shots` but its README, selftest,
+  `assert.sh` and `stable.sh`), `tests/shell`, the apps' tests, `tests/lib`, the schema fixture
+  or `signoff.yml`
   (`.github/scripts/signoff-paths.sh` decides), and on one labelled `goldens`. A board that
   moves fails before merge, its difference image in the `signoff-SHA` artifact's
   `goldens-diff/`.
@@ -769,8 +850,9 @@ The goldens come from `signoff.sh`'s container, with its RPM and desktop-entry s
 and `shoot.sh`'s mocks. The builder VM's image draws the launcher and the dock from real
 Flatpaks, so the check runs where the goldens were made, not in G2's VM run.
 
-`golden-masks.json` lists the masks, per board, in capture pixels: `{"boards": {"NN":
-[{"name", "x", "y", "width", "height", "why"}]}}`. A mask may cover at most 5 % of a
+`golden-masks.json` lists the masks, per row, in capture pixels: `{"boards": {"NN-SLUG":
+[{"name", "x", "y", "width", "height", "why"}]}}`, where a legacy `NN` stands for a board of one
+row. A mask may cover at most 5 % of a
 capture. It has none. G2's wall clock is fixed, and nothing live is left in a board: the
 fixtures' Wi-Fi scan finishes as a real one does (`RequestScan` moves `LastScan`), so board
 17's menu is captured after the scan, without its spinner. A capture that still holds live
@@ -848,6 +930,7 @@ Not asserted here: the volume glyph (the container has no audio server), and wha
 | `a11y.js` | the shell | the accessibility cases: contrast against what is drawn, and the Large Text layout |
 | `backdrop.js`, `backdrops.sh` | the shell; a throwaway container | whether the pinned backdrop painted, and the Facets it pins rendered where an image has them |
 | `indicators.js`, `sni-items.js` | the shell; gjs | the app-indicator part of `default`, `default-scale1` and `dark-style`, and the StatusNotifierItems it starts |
+| `session-defaults.js` | every case's shell | the fonts and icon theme the session reads, fontconfig's families for them, the clock's drawn family, and the file each shown icon of the bar, dock, dash and Quick Settings resolves to |
 | `idle.js` | the `idle` case's shell | the settled desktop, its paints and relayouts over 10 s, and the counter's control |
 | `glass-load.js`, `load-window.js` | the `glass-load` and `glass-stress` cases' shells; gjs, GTK 4 | ADR 0014's scenarios as work counts, and the client that stands in for a video; `tests/laptop` runs both on the laptop, the client with `measure=` |
 | `frame.c`, `G2Frame-1.gir` | the glass cases' shells | `G2Frame.read()`, a region of the frame the shell drew |
@@ -874,6 +957,35 @@ It also asserts the shell surfaces of the same three cases (below). With
 `-e G2_SURFACE_SCENES=1`, `direct.sh` passes the variable to the shells, and the capture
 cases also save a scene per surface group (`surfaces`, `quick-settings`, `switcher`,
 `dialog`, `datemenu`, `appgrid`), for placing beside the boards.
+
+## The next point release
+
+`next-point.yml` runs GNOME's next point release from Fedora 45's updates-testing before the GA
+push makes it stable, so a break shows while it is still in testing. It is report-only: it runs
+on dispatch and weekly (Tuesdays), never on a pull request, and no check requires it.
+
+- **lane:** `next-point.sh image` fetches the pinned apex-image and fills its updates-testing
+  allowlist with the builds updates-testing moves among gnome-shell, mutter, gdm, gjs, glib2,
+  gnome-session, gsettings-desktop-schemas, gtk4, libadwaita, gnome-control-center and
+  nautilus. Admitting every build would overflow apex-lane's dnf5 arguments. `lane.sh` then builds gnome-shell from that SRPM through
+  `APEX_IMAGE_SRC`, without `APEX_LANE_CACHE`, so it reads and writes no lane cache. The job
+  summary lists what moves.
+- **g2:** `patched.sh` runs every case on those RPMs.
+- **signoff:** `signoff.sh --goldens` checks the shell boards against the approved goldens.
+- **apps:** for Settings and Files, the lane's libadwaita and the app from updates-testing,
+  installed under the shim, then `tests/control-center/run.sh` and `tests/nautilus/shoot.sh`.
+- **report:** one line in the run's summary, passed/failed for each, `?` where a job gave
+  none, then each app's NEVR and its ok/not ok count: `next-point: gnome-shell-51.1-1.fc45.apex1
+  g2 1954/0 goldens 30/0 shoot 523/0 | gnome-control-center-51.1-1.fc45.apex1 46/0 |
+  nautilus-51.1-1.fc45.apex1 84/0`.
+
+g2, signoff and apps install `next-point.sh shim` first, a `dnf5` ahead of Fedora's on `PATH`.
+It adds updates-testing beside each `--repo=updates` and updates-testing-source beside each
+`--repo=updates-source`, and enables updates-testing for a call that names no repository. So
+the scripts install what GA brings, unchanged. `lane.sh`, `image-args.sh` and every other
+workflow stay as they are, which `.github/scripts/selftest.sh` checks. Once apex-image passes
+its admission cut (`GA_REACHED=1`), `next-point.sh image` fails: updates-testing is then no
+longer what a GA push brings.
 
 ## The authentication dialog
 

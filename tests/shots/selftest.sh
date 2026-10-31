@@ -971,6 +971,87 @@ test_goldens() {
     fi
 }
 
+rows_goldens() {
+    GOLDENS_LOCK=$T/rows.lock GOLDENS_WORK=$T/rows-work GOLDENS_URL=$T/no-remote GOLDENS_MASKS=$T/no-masks.json \
+        GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t "$HERE/goldens.sh" "$@" >"$T/goldens.out" 2>&1
+}
+
+# The app boards' rows: a board of two rows, a light-only row and a shell board of one, keyed NN-SLUG.
+test_goldens_rows() {
+    local dir=$T/rows-signoff top fallback rc
+    mkdir -p "$dir"
+    cat >"$T/rows-make.js" <<EOF
+import GLib from 'gi://GLib';
+import * as Png from 'file://$HERE/png.js';
+
+const image = shade => ({width: 40, height: 30, rgba: new Uint8Array(40 * 30 * 4).fill(shade)});
+for (const [name, shade] of [['11-settings-apex-top-light', 210], ['11-settings-apex-top-dark', 50], ['11-settings-apex-scrolled-light', 200],
+    ['11-settings-apex-scrolled-dark', 60], ['26-update-health-fallback-light', 190], ['14-end-session-light', 230], ['14-end-session-dark', 30]])
+    GLib.file_set_contents('$dir/board-' + name + '.png', Png.encode(image(shade)));
+EOF
+    gjs -m "$T/rows-make.js"
+    jq -n --arg cc tests/control-center/run.sh '
+        def row($n; $slug; $title; $source; $dark): {board: $n, key: "\($n)-\($slug)", title: $title, slug: $slug, source: $source, fixture: "f",
+            scene: {light: "l", dark: (if $dark then "d" else null end)},
+            files: {light: "board-\($n)-\($slug)-light.png", dark: (if $dark then "board-\($n)-\($slug)-dark.png" else null end)}};
+        {commit: "c0ffee", pins: {apexGnome: "c0ffee", apexDesktop: "acde"}, scale: 2, monitor: "2880x1800", sources: [$cc, "s"],
+         boards: [row(14; "end-session"; "End session"; "s"; true), row(11; "settings-apex-top"; "Settings: Apex Desktop"; $cc; true),
+                  row(11; "settings-apex-scrolled"; "Settings: Apex Desktop, scrolled"; $cc; true), row(26; "update-health-fallback"; "Update health failure"; $cc; false)]}' \
+        >"$dir/signoff.json"
+    printf '# test\nGOLDENS_REV=\n' >"$T/rows.lock"
+    echo '{"boards": {}}' >"$T/no-masks.json"
+    top=$(cat "$dir/board-11-settings-apex-top-light.png" "$dir/board-11-settings-apex-top-dark.png" | sha256sum | cut -c 1-12)
+    fallback=$(sha256sum <"$dir/board-26-update-health-fallback-light.png" | cut -c 1-12)
+
+    jq -n --arg h "$top" '{boards: {"11": {status: "approved", shots: $h, approvedAt: "2026-10-30T09:41:00Z"}}}' >"$T/rows-legacy.json"
+    if ! rows_goldens import "$dir" "$T/rows-legacy.json" &&
+        grep -q 'board 11: a number alone keys a board of one row; its rows are 11-settings-apex-top, 11-settings-apex-scrolled' "$T/goldens.out" &&
+        grep -qx 'GOLDENS_REV=' "$T/rows.lock"; then
+        ok "goldens import: a legacy number for a board of two rows is refused, naming its rows"
+    else
+        not_ok "goldens import: a legacy number for a board of two rows is refused, naming its rows: $(tail -n 3 "$T/goldens.out")"
+    fi
+    jq -n --arg t "$top" --arg f "$fallback" '{boards: {"11-settings-apex-top": {status: "approved", shots: $t, approvedAt: "2026-10-30T09:41:00Z"},
+        "26-update-health-fallback": {status: "approved", shots: $f, approvedAt: "2026-10-30T09:42:00Z"},
+        "11-settings-apex-scrolled": {status: "changes-requested", shots: "0123456789ab"}}}' >"$T/rows-decisions.json"
+    if rows_goldens import "$dir" "$T/rows-decisions.json" &&
+        [[ $(git -C "$T/rows-work" ls-files | paste -sd' ') == 'boards/board-11-settings-apex-top-dark.png boards/board-11-settings-apex-top-light.png boards/board-26-update-health-fallback-light.png manifest.json' ]] &&
+        jq -e --arg t "$top" --arg f "$fallback" '.boards | keys == ["11-settings-apex-top", "26-update-health-fallback"]
+            and .["11-settings-apex-top"].board == 11 and .["11-settings-apex-top"].shots == $t
+            and (.["26-update-health-fallback"] | .shots == $f and .files == {light: "boards/board-26-update-health-fallback-light.png", dark: null})' \
+            "$T/rows-work/manifest.json" >/dev/null; then
+        ok "goldens import: each approved row by its key, a light-only row hashed on its light capture alone"
+    else
+        not_ok "goldens import: each approved row by its key, a light-only row hashed on its light capture alone: $(tail -n 3 "$T/goldens.out")"
+    fi
+    if rows_goldens check "$dir" "$T/rows-work" &&
+        grep -q '^PASS captures board 11-settings-apex-top (Settings: Apex Desktop), dark: equal' "$T/goldens.out" &&
+        grep -q '^PASS captures board 26 (Update health failure), light: equal' "$T/goldens.out" &&
+        ! grep -q 'board 26 (Update health failure), dark' "$T/goldens.out" &&
+        grep -q '^AWAIT board 11-settings-apex-scrolled (Settings: Apex Desktop, scrolled): no approved golden' "$T/goldens.out" &&
+        grep -q '^AWAIT board 14 (End session): no approved golden' "$T/goldens.out" &&
+        grep -q '^# 2 row(s) awaiting sign-off: 11-settings-apex-scrolled 14-end-session' "$T/goldens.out"; then
+        ok "goldens check: the approved rows pass, a light-only one on light alone; the other rows await sign-off"
+    else
+        not_ok "goldens check: the approved rows pass, a light-only one on light alone; the other rows await sign-off: $(tail -n 4 "$T/goldens.out")"
+    fi
+    jq '.sources = ["s"] | .boards |= map(select(.source == "s"))' "$dir/signoff.json" >"$T/rows-shell.json"
+    cp "$dir/signoff.json" "$T/rows-all.json" && cp "$T/rows-shell.json" "$dir/signoff.json"
+    if rows_goldens check "$dir" "$T/rows-work" && ! grep -q 'no such board' "$T/goldens.out"; then
+        ok "goldens check: an app's goldens are out of scope when the sign-off did not collect that app"
+    else
+        not_ok "goldens check: an app's goldens are out of scope when the sign-off did not collect that app: $(tail -n 3 "$T/goldens.out")"
+    fi
+    jq '.boards |= map(select(.board != 26))' "$T/rows-all.json" >"$dir/signoff.json"
+    rc=0
+    rows_goldens check "$dir" "$T/rows-work" || rc=$?
+    if ((rc == 1)) && grep -q 'board 26-update-health-fallback (Update health failure): a golden, but no such board' "$T/goldens.out"; then
+        ok "goldens check: a golden of a collected app with no row fails"
+    else
+        not_ok "goldens check: a golden of a collected app with no row fails (exit $rc): $(tail -n 3 "$T/goldens.out")"
+    fi
+}
+
 test_signoff_banners() {
     local dir=$T/signoff-banners
     rm -rf "$dir" && cp -r "$1" "$dir"
@@ -1033,6 +1114,16 @@ test_signoff_banners() {
     else
         not_ok "signoff: the sign-off scene's own error fails boards 15 and 35, named: $(tail -n 3 "$T/signoff.out")"
     fi
+    rm -rf "$dir" && cp -r "$1" "$dir"
+    sed -i '/^APEXG2-SESSION /s/"icon-theme":"Apex"}/"icon-theme":"Adwaita"}/' "$dir/g2/dark-style.log"
+    if ! "$HERE/signoff.sh" --collect "$dir/g2" "$dir/shots" "$dir/out" >"$T/signoff.out" 2>&1 &&
+        grep -q '^signoff.sh: session defaults: 11 passed, 1 failed$' "$T/signoff.out" &&
+        grep -q 'dark-style: the session reads .*(icon-theme is "Adwaita", not "Apex")' "$T/signoff.out" &&
+        grep -q '1 session default check(s) failed' "$T/signoff.out"; then
+        ok "signoff: a session default that is not apex-desktop's fails its own check line, naming the key"
+    else
+        not_ok "signoff: a session default that is not apex-desktop's fails its own check line, naming the key: $(tail -n 3 "$T/signoff.out")"
+    fi
 }
 
 test_signoff() {
@@ -1053,6 +1144,7 @@ test_signoff() {
     printf 'Apex: feature panel enabled\nApex: feature dock enabled\nAPEXG2-SIGNOFF {"previews":true}\n%s\n' \
         'APEXG2 {"dock":{"items":[{"kind":"app","name":"Files"},{"kind":"separator"},{"kind":"app","name":"Bazaar"}]}}' >"$dir/g2/default.log"
     echo 'APEXG2-SIGNOFF {"previews":true}' >"$dir/g2/dark-style.late.log"
+    printf 'APEXG2-SESSION %s\n' "$(jq -c . <<<"$SESSION_REPORT")" | tee -a "$dir/g2/default.log" >>"$dir/g2/dark-style.log"
     for scene in "$dir"/g2/captures/*.png; do
         scene=$(basename "$scene")
         case $scene in
@@ -1084,6 +1176,7 @@ test_signoff() {
         not_ok "signoff: fifteen boards, light and dark, and signoff.json from their captures: $(tail -n 3 "$T/signoff.out")"
     fi
     test_signoff_banners "$dir"
+    test_signoff_apps "$dir"
     rm "$dir/g2/captures/dark-style-tile-preview.png"
     if ! "$HERE/signoff.sh" --collect "$dir/g2" "$dir/shots" "$dir/out2" >"$T/signoff.out" 2>&1 &&
         grep -q 'board 22 (Edge tiling), dark: no capture of dark-style-tile-preview' "$T/signoff.out"; then
@@ -1097,6 +1190,87 @@ test_signoff() {
         ok "signoff: sign-off windows missing from the overview fail the run"
     else
         not_ok "signoff: sign-off windows missing from the overview fail the run: $(tail -n 3 "$T/signoff.out")"
+    fi
+}
+
+# The app boards' rows from their shooters' captures, collected with the shell's.
+test_signoff_apps() {
+    local dir=$1 app scene
+    declare -A scenes=([cc]='light dark light-scrolled dark-scrolled updates-light updates-dark appearance-light appearance-dark
+        power-light power-dark updates-health-failure updates-health-failure-dark updates-fallback updates-fallback-dark'
+        [files]='home-light home-dark documents-light documents-dark search-light search-dark'
+        [terminal]='light dark split-light split-dark')
+    for app in cc files terminal; do
+        mkdir -p "$dir/$app"
+        for scene in ${scenes[$app]}; do
+            printf '\x89PNG\r\n\x1a\n' >"$dir/$app/$scene.png"
+        done
+    done
+    if "$HERE/signoff.sh" --collect "$dir/g2" "$dir/shots" "$dir/apps" control-center="$dir/cc" nautilus="$dir/files" ptyxis="$dir/terminal" \
+        >"$T/signoff.out" 2>&1 &&
+        [[ $(find "$dir/apps" -name 'board-*.png' | wc -l) == 54 ]] &&
+        jq -e '(.boards | length) == 27 and (.boards | map(.key) | unique | length) == 27
+            and .sources == ["tests/control-center/run.sh", "tests/nautilus/shoot.sh", "tests/ptyxis/shoot.sh", "tests/shell/shoot.sh", "tests/shots/direct.sh signoff"]
+            and ([.boards[] | select(.board == 11) | .key] == ["11-settings-apex-top", "11-settings-apex-scrolled"])
+            and (.boards[] | select(.key == "11-settings-apex-scrolled") | .scene == {light: "light-scrolled", dark: "dark-scrolled"}
+                and .files.dark == "board-11-settings-apex-scrolled-dark.png")
+            and ([.boards[] | select(.board == 26) | .files.dark] == ["board-26-update-health-health-failure-dark.png", "board-26-update-health-fallback-dark.png"])
+            and (.boards[] | select(.key == "12-greeter") | .files.light == "board-12-greeter-light.png")' \
+            "$dir/apps/signoff.json" >/dev/null; then
+        ok "signoff: the app boards add a row per scene, keyed NN-SLUG, light and dark, beside the fifteen shell boards"
+    else
+        not_ok "signoff: the app boards add a row per scene, keyed NN-SLUG, light and dark, beside the fifteen shell boards: $(tail -n 3 "$T/signoff.out")"
+    fi
+    # No board is light-only today: a copy of signoff.sh whose fallback row has no dark capture stands in for one.
+    mkdir -p "$T/light-only/tests/shots" "$T/light-only/tests/lib"
+    cp "$HERE/../lib/pins.sh" "$T/light-only/tests/lib/"
+    sed 's/|updates-fallback|updates-fallback-dark|/|updates-fallback||/' "$HERE/signoff.sh" >"$T/light-only/tests/shots/signoff.sh"
+    rm "$dir/cc/updates-fallback-dark.png"
+    if bash "$T/light-only/tests/shots/signoff.sh" --collect "$dir/g2" "$dir/shots" "$dir/light-only" control-center="$dir/cc" >"$T/signoff.out" 2>&1 &&
+        [[ -e $dir/light-only/board-26-update-health-fallback-light.png && ! -e $dir/light-only/board-26-update-health-fallback-dark.png ]] &&
+        jq -e '.boards[] | select(.key == "26-update-health-fallback") | .scene.dark == null and .files.dark == null'             "$dir/light-only/signoff.json" >/dev/null; then
+        ok "signoff: a row its shooter captures light only has no dark file, and null for its dark scene and file"
+    else
+        not_ok "signoff: a row its shooter captures light only has no dark file, and null for its dark scene and file: $(tail -n 3 "$T/signoff.out")"
+    fi
+    printf '\x89PNG\r\n\x1a\n' >"$dir/cc/updates-fallback-dark.png"
+    rm "$dir/cc/dark-scrolled.png"
+    if ! "$HERE/signoff.sh" --collect "$dir/g2" "$dir/shots" "$dir/apps2" control-center="$dir/cc" >"$T/signoff.out" 2>&1 &&
+        grep -q 'board 11-settings-apex-scrolled (Settings: Apex Desktop, scrolled), dark: no capture of dark-scrolled (tests/control-center/run.sh)' "$T/signoff.out" &&
+        [[ $(grep -c 'no capture' "$T/signoff.out") == 1 ]]; then
+        ok "signoff: an app scene that did not open fails the run with its row's key, and app rows need no banner record"
+    else
+        not_ok "signoff: an app scene that did not open fails the run with its row's key, and app rows need no banner record: $(tail -n 3 "$T/signoff.out")"
+    fi
+    mkdir -p "$dir/symbolic"
+    for scene in core status actions everywhere aliases; do
+        printf '\x89PNG\r\n\x1a\n' | tee "$dir/symbolic/board-31-symbolic-$scene-light.png" >"$dir/symbolic/board-31-symbolic-$scene-dark.png"
+    done
+    if "$HERE/signoff.sh" --collect "$dir/g2" "$dir/shots" "$dir/symbolic-out" symbolic="$dir/symbolic" >"$T/signoff.out" 2>&1 &&
+        [[ $(find "$dir/symbolic-out" -name 'board-31-*.png' | wc -l) == 10 ]] &&
+        jq -e '(.boards | length) == 20
+            and ([.boards[] | select(.board == 31) | .key] == ["31-symbolic-core", "31-symbolic-status", "31-symbolic-actions",
+                "31-symbolic-everywhere", "31-symbolic-aliases"])
+            and (.boards[] | select(.key == "31-symbolic-aliases") | .files == {light: "board-31-symbolic-aliases-light.png",
+                dark: "board-31-symbolic-aliases-dark.png"} and .title == "Apex Symbolic: contact sheet")
+            and (.sources | index("apex-desktop tools/icons/contact-sheet.sh") != null)' "$dir/symbolic-out/signoff.json" >/dev/null; then
+        ok "signoff: board 31's five scenes from contact-sheet.sh's sheets, a row each, keyed 31-symbolic-SCENE"
+    else
+        not_ok "signoff: board 31's five scenes from contact-sheet.sh's sheets, a row each, keyed 31-symbolic-SCENE: $(tail -n 3 "$T/signoff.out")"
+    fi
+    rm "$dir/symbolic/board-31-symbolic-status-dark.png"
+    if ! "$HERE/signoff.sh" --collect "$dir/g2" "$dir/shots" "$dir/symbolic-out2" symbolic="$dir/symbolic" >"$T/signoff.out" 2>&1 &&
+        grep -q 'board 31-symbolic-status (Apex Symbolic: contact sheet), dark: no capture of board-31-symbolic-status-dark (apex-desktop tools/icons/contact-sheet.sh)' "$T/signoff.out" &&
+        [[ $(grep -c 'no capture' "$T/signoff.out") == 1 ]]; then
+        ok "signoff: a scene contact-sheet.sh did not draw, a glyph of it missing, fails the run with its row's key"
+    else
+        not_ok "signoff: a scene contact-sheet.sh did not draw, a glyph of it missing, fails the run with its row's key: $(tail -n 3 "$T/signoff.out")"
+    fi
+    if ! "$HERE/signoff.sh" --collect "$dir/g2" "$dir/shots" "$dir/apps3" files="$dir/files" >"$T/signoff.out" 2>&1 &&
+        grep -q 'no app source files: one of' "$T/signoff.out"; then
+        ok "signoff: an unknown app source is refused"
+    else
+        not_ok "signoff: an unknown app source is refused: $(tail -n 3 "$T/signoff.out")"
     fi
 }
 
@@ -2849,6 +3023,128 @@ test_clean_shutdown() {
         "GLib-GObject-CRITICAL **: 09:41:00.000: g_object_get: assertion 'G_IS_OBJECT (object)' failed" >"$run/default.log"
     read -r passes failures <<<"$(assertion_counts clean_shutdown default "$run/default.log")"
     expect_eq "shutdown: and so does reading its window manager through NULL" "0/1" "$passes/$failures"
+    local ibus="(ibus-daemon:1240): GLib-GObject-CRITICAL **: 09:41:00.000: g_object_ref: assertion 'G_IS_OBJECT (object)' failed"
+    printf '%s\n' '** Message: 09:41:00.000: Shutting down GNOME Shell' "$ibus" \
+        '(/usr/libexec/xdg-desktop-portal:1311): xdg-desktop-portal-WARNING **: 09:41:00.000: lost the bus' >"$run/default.log"
+    read -r passes failures <<<"$(assertion_counts clean_shutdown default "$run/default.log")"
+    expect_eq "shutdown: ibus-daemon's own CRITICAL as it loses the display is not the shell's" "1/0" "$passes/$failures"
+    expect_eq "shutdown: but prints as a note, as does another process's WARNING" \
+        "# note ibus-daemon: GLib-GObject-CRITICAL **: 09:41:00.000: g_object_ref: assertion 'G_IS_OBJECT (object)' failed|# note xdg-desktop-portal: xdg-desktop-portal-WARNING **: 09:41:00.000: lost the bus" \
+        "$(grep '^# note ' "$T/assertions.out" | paste -sd'|' -)"
+    printf '%s\n' '** Message: 09:41:00.000: Shutting down GNOME Shell' "${ibus/ibus-daemon:1240/gnome-shell:766}" >"$run/default.log"
+    read -r passes failures <<<"$(assertion_counts clean_shutdown default "$run/default.log")"
+    expect_eq "shutdown: the same line from gnome-shell itself fails" "0/1" "$passes/$failures"
+    printf '%s\n' '** Message: 09:41:00.000: Shutting down GNOME Shell' "$ibus" \
+        "Shell-CRITICAL **: 09:41:00.000: shell_global_get: assertion 'the_object' failed" >"$run/default.log"
+    read -r passes failures <<<"$(assertion_counts clean_shutdown default "$run/default.log")"
+    expect_eq "shutdown: and an unprefixed shell_global_get fails after another process's note" "0/1 1" \
+        "$passes/$failures $(grep -c "^FAIL default: at shutdown: shell_global_get: assertion 'the_object' failed$" "$T/assertions.out")"
+}
+
+test_no_disposed_at_shutdown() {
+    local run=$T/disposed-shutdown-run disposed frame passes failures
+    disposed='Gjs-CRITICAL **: 09:41:00.000: Object Gjs_ui_messageTray_MessageTray (0x55e780c0), has been already disposed — impossible to access it.'
+    frame='#0   7ffd b   resource:///org/gnome/shell/ui/messageTray.js:1062 (29fd @ 15)'
+    mkdir -p "$run"
+    printf '%s\n' "$disposed" '== Stack trace for context 0x55 ==' "$frame" '** Message: 09:41:00.000: Shutting down GNOME Shell' >"$run/default.log"
+    read -r passes failures <<<"$(assertion_counts no_disposed_at_shutdown default "$run/default.log")"
+    expect_eq "disposed at shutdown: one before it is another check's" "1/0" "$passes/$failures"
+    printf '%s\n' '** Message: 09:41:00.000: Shutting down GNOME Shell' "$disposed" '== Stack trace for context 0x55 ==' "$frame" >"$run/default.log"
+    read -r passes failures <<<"$(assertion_counts no_disposed_at_shutdown default "$run/default.log")"
+    expect_eq "disposed at shutdown: the tray's banner timeout after it fails, naming the object and the frame" "0/1 1" \
+        "$passes/$failures $(grep -c '^FAIL default: .*touched: Gjs_ui_messageTray_MessageTray at resource:///org/gnome/shell/ui/messageTray.js:1062$' "$T/assertions.out")"
+    echo 'APEXG2 {"probe": true}' >"$run/default.log"
+    printf '%s\n' '** Message: 09:41:00.000: Shutting down GNOME Shell' "$disposed" >"$run/default.late.log"
+    read -r passes failures <<<"$(assertion_counts no_disposed_at_shutdown default "$run/default.log")"
+    expect_eq "disposed at shutdown: and so does one with no stack, in the late first start's log" "0/1 1" \
+        "$passes/$failures $(grep -c '^FAIL default: .*touched: Gjs_ui_messageTray_MessageTray$' "$T/assertions.out")"
+    rm "$run/default.late.log"
+}
+
+readonly EXIT_CUT='{"changed":2,"notify::has-calendars":1,"installed-changed":4}'
+
+test_exit_cut() {
+    local want_pass what report passes failures
+    while IFS='|' read -r want_pass what report; do
+        if [[ -n $report ]]; then printf 'APEXG2-EXIT %s\n' "$report" >"$T/exit.log"; else : >"$T/exit.log"; fi
+        read -r passes failures <<<"$(assertion_counts exit_cut default "$T/exit.log")"
+        expect_eq "exit: $what" "$want_pass/$((1 - want_pass))" "$passes/$failures"
+    done <<CASES
+1|an idle tray and every date-menu path blocked pass|{"tray":true,"cut":$EXIT_CUT}
+0|a banner still up fails|{"tray":false,"cut":$EXIT_CUT}
+0|a path that blocked no handler fails|{"tray":true,"cut":{"changed":2,"notify::has-calendars":0,"installed-changed":4}}
+0|a path missing from the cut fails|{"tray":true,"cut":{"changed":2,"installed-changed":4}}
+0|no report fails|
+CASES
+}
+
+test_shutdown_banner_case() {
+    local run=$T/shutdown-banner passes failures status pending armed cut shutdown what
+    mkdir -p "$run"
+    while IFS='|' read -r failures status pending armed cut shutdown what; do
+        echo "shutdown-banner exit=$status secs=5 marker-after-exit=no" >"$run/results-main.txt"
+        echo "APEXG2-SHUTDOWN-BANNER {\"pending\":$pending,\"armed\":$armed,\"cut\":${cut:-$EXIT_CUT}}" >"$run/shutdown-banner.log"
+        echo "$shutdown" >>"$run/shutdown-banner.log"
+        read -r passes _ <<<"$(assertion_counts shutdown_banner_case "$run")"
+        expect_eq "shutdown-banner: $what fails $failures of 4" "$failures" $((4 - passes))
+    done <<'CHANGES'
+0|0|true|true||** Message: 09:41:00.000: Shutting down GNOME Shell|a notification pending, the timeout armed and the date menu cut as the shell exits
+1|134|true|true||** Message: 09:41:00.000: Shutting down GNOME Shell|the shell aborting in the shutdown loop
+1|0|false|true||** Message: 09:41:00.000: Shutting down GNOME Shell|no notification pending
+1|0|true|false||** Message: 09:41:00.000: Shutting down GNOME Shell|no timeout armed
+1|0|true|true|{"changed":0,"notify::has-calendars":1,"installed-changed":4}|** Message: 09:41:00.000: Shutting down GNOME Shell|a date-menu path with no handler blocked
+1|0|true|true|||a log without the shutdown
+CHANGES
+}
+
+readonly SESSION_REPORT='{"settings": {"font-name": "Adwaita Sans 10.125", "document-font-name": "Adwaita Sans 10.125",
+    "monospace-font-name": "JetBrains Mono 9.75", "font-hinting": "none", "icon-theme": "Apex"},
+  "shell": {"font": "Adwaita Sans 10.125", "iconTheme": "Apex"},
+  "fontconfig": {"sans": {"family": "Adwaita Sans", "file": "/usr/share/fonts/adwaita-sans-fonts/AdwaitaSans-Regular.ttf", "features": ["ss03"]},
+    "mono": {"family": "JetBrains Mono", "file": "/usr/share/fonts/jetbrains-mono-fonts/JetBrainsMono-Regular.otf", "features": []}},
+  "drawn": {"clock": "Adwaita Sans"},
+  "icons": {"bar": [{"icon": "battery-level-80-symbolic", "file": "/usr/share/icons/Apex/symbolic/battery-level-80-symbolic.svg", "app": null}],
+    "dock": [{"icon": "org.gnome.Nautilus", "file": "/usr/share/icons/Apex/scalable/apps/org.gnome.Nautilus.svg", "app": "org.gnome.Nautilus.desktop"},
+      {"icon": "application-x-executable", "file": "/usr/share/icons/Adwaita/scalable/mimetypes/application-x-executable.svg",
+       "app": "io.github.apex_linux.G2Stub1.desktop"}],
+    "dash": null,
+    "quickSettings": [{"icon": ". GThemedIcon screenshooter-symbolic screenshooter",
+      "file": "/org/gnome/shell/icons/scalable/actions/screenshooter-symbolic.svg", "app": null}]}}'
+
+test_session_defaults() {
+    local passes failures change what stubs
+    stubs=$(sed -n "s/^readonly STUB_APPS='\(.*\)'\$/\1/p" "$HERE/direct.sh" | tr ' ' '\n' | sed 's/$/.desktop/' | paste -sd' ' -)
+    # shellcheck disable=SC2016 # expanded by the inner bash
+    expect_eq "session defaults: assert.sh's fixture apps are direct.sh's STUB_APPS" "$stubs" \
+        "$(bash -c '. "$1/assert.sh"; echo "${FIXTURE_APPS[*]}"' _ "$HERE")"
+    while IFS='|' read -r failures change what; do
+        printf 'APEXG2-SESSION %s\n' "$(jq -nc "$SESSION_REPORT | $change")" >"$T/session.log"
+        read -r passes _ <<<"$(assertion_counts session_defaults default "$T/session.log")"
+        expect_eq "session defaults: $what fails $failures of 6" "$failures" $((6 - passes))
+    done <<'CHANGES'
+0|.|apex-desktop's defaults, a fixture app's generic icon and the shell's own screenshooter
+1|.settings["monospace-font-name"] = "DejaVu Sans Mono 10"|another monospace font in the settings
+1|.settings["icon-theme"] = "Adwaita"|another icon theme in the settings
+1|.shell.iconTheme = "Adwaita"|a shell that draws another icon theme
+1|.fontconfig.sans.features = []|Adwaita Sans without ss03
+1|.fontconfig.mono = {family: "DejaVu Sans Mono", file: "/usr/share/fonts/dejavu-sans-mono-fonts/DejaVuSansMono.ttf", features: []}|no JetBrains Mono, so fontconfig falls back
+1|.drawn.clock = "Cantarell"|a clock drawn in another family
+1|.icons.bar[0].file = "/usr/share/icons/Adwaita/symbolic/status/battery-level-80-symbolic.svg"|an Adwaita glyph in the bar
+1|.icons.quickSettings[0].file = null|an icon that resolves nowhere
+1|.icons.dock[0].file = "/usr/share/icons/hicolor/scalable/apps/org.gnome.Nautilus.svg"|an image app's icon from outside Apex
+1|.icons.quickSettings[0].icon = ". GThemedIcon camera-photo-symbolic"|a shell icon that is not on the list
+1|.icons = {bar: [], dock: null, dash: null, quickSettings: []}|no icons reported
+6|{error: "sessionDefaultsReport: no panel"}|a probe error
+CHANGES
+    printf 'APEXG2-SESSION %s\n' "$(jq -nc "$SESSION_REPORT | .icons.bar[0].file = null")" >"$T/session.log"
+    assertion_counts session_defaults default "$T/session.log" >/dev/null
+    expect_eq "session defaults: a failure names the place and the icon" 1 \
+        "$(grep -c '^FAIL default: every icon .* (bar battery-level-80-symbolic: no icon)$' "$T/assertions.out")"
+    printf 'APEXG2-SESSION %s\n' "$(jq -nc "$SESSION_REPORT | .fontconfig.mono = {family: \"Noto Sans\", file: \"NotoSans.ttf\", features: []}")" \
+        >"$T/session.log"
+    assertion_counts session_defaults default "$T/session.log" >/dev/null
+    expect_eq "session defaults: a missing JetBrains Mono names the family fontconfig fell back to" 1 \
+        "$(grep -c '^FAIL default: fontconfig gives JetBrains Mono .*(got {"family":"Noto Sans",' "$T/assertions.out")"
 }
 
 # G2's guard phases run only in the VM: a fake run of the late-failure phases, then the
@@ -3528,6 +3824,7 @@ test_a11y
 test_inactive_dot_gap
 test_signoff
 test_goldens
+test_goldens_rows
 test_date_menu
 test_overview_style
 test_app_grid
@@ -3567,7 +3864,11 @@ test_no_binding_overwritten
 test_no_spurious_allocation
 test_clean_shutdown
 test_crash_guard_counter
+test_session_defaults
+test_no_disposed_at_shutdown
+test_exit_cut
 test_keys_case
+test_shutdown_banner_case
 test_startup_handler_ran
 test_network_rows_centred
 test_pr_assertions
