@@ -35,6 +35,8 @@ and clears the list; date-menu-disabled does the same with the layer's notificat
 run without the search hint, so no notification syncs stock's Clear before panel/clear-sync.js does.
 bar-lock-cycle, with two input sources, describes and captures the bar, locks and unlocks through
 logind's Lock and Unlock, then through the lock's prompt and GDM's success, and does so again after each.
+bar-live does the same across layer-enabled off and on, panel out of and back in disabled-features,
+and a lock from the overview; the layer off must give bar-lock-cycle-safe's stock bar.
 Each end-session case opens the end-session dialog over D-Bus against update1-mock.py's
 Update1 (tests/shots), from up to date through staged and ready-for-reboot to failing Applies.
 check.py asserts the cases' logs and the mock's. The users apex and guest come
@@ -264,6 +266,7 @@ shoot date-menu-disabled "$USER_NAME" user default 'Password:' "$hint_shown" "$n
 two_sources="org.gnome.desktop.input-sources sources [('xkb', 'us'), ('xkb', 'fr')]"
 shoot bar-lock-cycle "$USER_NAME" user default 'Password:' "$two_sources" -- APEX_BAR_CYCLE=1 || status=1
 shoot bar-lock-cycle-safe "$USER_NAME" user default 'Password:' "$two_sources" -- APEX_BAR_CYCLE=1 APEX_SHELL_SAFE=1 || status=1
+shoot bar-live "$USER_NAME" user default 'Password:' "$two_sources" -- APEX_BAR_LIVE=1 || status=1
 shoot lock-high-contrast "$USER_NAME" user default 'Password:' "org.gnome.desktop.a11y.interface high-contrast true" || status=1
 shoot lock-large-text "$USER_NAME" user default 'Password:' "org.gnome.desktop.interface text-scaling-factor 1.25" || status=1
 # authselect locks GDM's fingerprint key off; an image with a reader enables the feature.

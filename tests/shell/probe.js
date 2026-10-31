@@ -862,15 +862,38 @@ function describeBar() {
     const roleOf = c => Object.keys(statusArea).find(role => statusArea[role].container === c) ?? c.name ?? 'unnamed';
     const count = actor => actor.get_children().reduce((n, c) => n + 1 + count(c), 0);
     const boxes = {left: leftBox, center: centerBox, right: rightBox};
+    const qs = statusArea.quickSettings;
+    const fieldOf = c => Object.keys(qs).find(key => qs[key] === c) ?? c.name ?? 'unnamed';
     return {
         ...Object.fromEntries(Object.entries(boxes).map(([side, b]) => [side, b.get_children().map(roleOf)])),
         actors: Object.fromEntries(Object.entries(boxes).map(([side, b]) => [side, count(b)])),
+        parts: {
+            right: rightBox.get_children().map(c => [roleOf(c), count(c)]),
+            indicators: qs?._indicators.get_children().map(c => [fieldOf(c), count(c)]) ?? null,
+        },
         chip: statusArea.keyboard?._container.get_children().map(label => label.text) ?? null,
         clear: statusArea.dateMenu._messageList._clearButton.visible,
         mode: Main.sessionMode.currentMode,
         overview: Main.overview.visible,
         pointer: global.get_pointer().slice(0, 2),
     };
+}
+
+// fixtures.py's Wi-Fi at 90 %: NM's client, then the icon's image, arrive in their own time.
+const NETWORK_ICON = 'network-wireless-signal-excellent-symbolic';
+const NETWORK_WAIT_MS = 20000;
+
+async function settledBar() {
+    const icon = Main.panel.statusArea.quickSettings?._network?._primaryIndicator;
+    const reached = () => icon?.mapped && icon.icon_name === NETWORK_ICON && icon.get_n_children() > 0;
+    for (let waited = 0; !reached(); waited += KEY_MS) {
+        if (waited >= NETWORK_WAIT_MS) {
+            const state = icon && {mapped: icon.mapped, icon: icon.icon_name, children: icon.get_n_children()};
+            throw new Error(`the network indicator never reached the fixture state: ${JSON.stringify(state)}`);
+        }
+        await Scripting.sleep(KEY_MS); // eslint-disable-line no-await-in-loop
+    }
+    return describeBar();
 }
 
 async function captureBar(name) {
@@ -900,14 +923,14 @@ async function shootBarCycle() {
     Main.overview.hide();
     Main.messageTray.getSources().forEach(source => source.destroy());
     await Scripting.sleep(STEP_MS);
-    fact('before', describeBar());
+    fact('before', await settledBar());
     await captureBar('before');
     await emitSessionSignal('Lock');
     await Scripting.sleep(STEP_MS * 2);
     fact('logind-locked', {locked: Main.screenShield.locked, bar: describeBar()});
     await emitSessionSignal('Unlock');
     await Scripting.sleep(SETTLE_MS);
-    fact('after-logind', describeBar());
+    fact('after-logind', await settledBar());
     await captureBar('after-logind');
     Main.screenShield.lock(false);
     await Scripting.sleep(STEP_MS * 2);
@@ -915,8 +938,40 @@ async function shootBarCycle() {
     fact('dialog-locked', {locked, prompt: prompt !== null});
     Main.screenShield.deactivate(false);
     await Scripting.sleep(SETTLE_MS);
-    fact('after-dialog', describeBar());
+    fact('after-dialog', await settledBar());
     await captureBar('after-dialog');
+}
+
+// The bar across the layer's own live changes: layer-enabled off and on, panel out of and back in
+// disabled-features, then a lock from the overview. Each return gives back the first bar.
+async function shootBarLive() {
+    const apex = new Gio.Settings({schema_id: 'io.github.apex_linux.Apex.Desktop'});
+    const step = async (name, change) => {
+        change();
+        await Scripting.sleep(SETTLE_MS);
+        fact(name, await settledBar());
+    };
+    await Scripting.sleep(SETTLE_MS);
+    Main.overview.hide();
+    Main.messageTray.getSources().forEach(source => source.destroy());
+    await Scripting.sleep(STEP_MS);
+    fact('before', await settledBar());
+    await captureBar('before');
+    await step('layer-off', () => apex.set_boolean('layer-enabled', false));
+    await step('layer-on', () => apex.reset('layer-enabled'));
+    await captureBar('layer-on');
+    await step('panel-off', () => apex.set_strv('disabled-features', ['panel']));
+    await step('panel-on', () => apex.reset('disabled-features'));
+    await captureBar('panel-on');
+    Main.overview.show();
+    await Scripting.sleep(STEP_MS * 2);
+    Main.screenShield.lock(false);
+    await Scripting.sleep(STEP_MS * 2);
+    fact('overview-locked', {locked: Main.screenShield.locked});
+    Main.screenShield.deactivate(false);
+    await Scripting.sleep(SETTLE_MS);
+    fact('overview-unlocked', await settledBar());
+    await captureBar('overview-unlocked');
 }
 
 // main.js connects to startup-complete only after importing this module, so a startup that
@@ -945,6 +1000,8 @@ export async function run() {
             await shootDateMenu();
         else if (GLib.getenv('APEX_BAR_CYCLE') === '1')
             await shootBarCycle();
+        else if (GLib.getenv('APEX_BAR_LIVE') === '1')
+            await shootBarLive();
         else if (GLib.getenv('APEX_END_SESSION') === '1')
             await shootEndSession();
         else if (GLib.getenv('APEX_SUSPEND') === '1')
