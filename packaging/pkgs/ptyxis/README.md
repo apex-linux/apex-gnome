@@ -175,12 +175,12 @@ each label's laid-out text over AT-SPI's text extents, and which row and slot (t
 time) it fills. `layout.py` fails a label whose text runs to its box's right edge, as Pango's
 ellipsized text does, two labels of one row or header over each other, and a label outside the
 window. A row's subtitle may end in an ellipsis: the design cuts it (the rpmbuild row's does).
-Nothing is cut, overlapped or outside the window in any of the six. Large Text does not reach the
-sidebar, though: `apex.css` sizes its text in px, which GTK does not scale with the setting, so
-the sidebar widens (176 px to 244 px, as libadwaita sizes it in sp) and its labels stay the size
-they are (a title's text 16 px tall in both). That is a known gap, pending the owner: the test
-fails once the titles grow by 1.15x, so the fix also removes it. It also fails unless its checks
-catch a session's title cut short. CI runs it after `contrast-test.sh`.
+Nothing is cut, overlapped or outside the window in any of the six. `apex.css` sizes its text in
+pt, which GTK scales with the setting, where px stays put: under Large Text the sidebar widens
+(176 px to 244 px, as libadwaita sizes it in sp) and a title's text grows from 16 px to 21 px. At
+1.0 each pt size is its old px size exactly (×0.75), and the captures are byte for byte the same.
+The test fails unless the titles grow by 1.15x, and unless its checks catch a session's title cut
+short. CI runs it after `contrast-test.sh`.
 
 `tests/ptyxis/palette-test.sh` runs the same headless shell. Its automation script,
 `palette-probe.js`, opens a terminal on a user palette with a red background, rewrites
