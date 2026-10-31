@@ -383,6 +383,9 @@ fact "quick-settings: the active network's row is :checked, its lock after the n
 fact "quick-settings: another network's row is not" 'qs\.row\.other=children=icons,label,lock,check icons=signal checked=false lock=2/apex-network-lock label=2'
 fact "quick-settings: a submenu header's subtitle ends the title's row" 'qs\.menu=3,0 x_align=3'
 fact "quick-settings: :checked follows is-active" 'qs\.row\.switched=children=icons,label,lock,check icons=signal checked=false lock=2/apex-network-lock label=2 \| children=icons,label,lock,check icons=signal checked=true lock=2/apex-network-lock label=2'
+fact "quick-settings: a row whose network holds no access point stays hidden when network.js shows it" 'qs\.row\.empty=visible=false'
+fact "quick-settings: and shows once its network takes one" 'qs\.row\.adopted=visible=true'
+fact "quick-settings: layer off: a row it hid shows again, as stock has it" 'qs\.off\.refused=visible=true'
 fact "quick-settings: layer off: the row stock again" 'qs\.off\.row=children=icons,label,check icons=signal,lock checked=false lock=3/none label=0'
 fact "quick-settings: layer off: the subtitle under the title" 'qs\.off\.menu=1,1 x_align=0'
 fact "quick-settings: layer off: :checked no longer follows" 'qs\.off\.row-unfollowed=checked=false'
@@ -456,6 +459,7 @@ fact "disabled-features=['quick-settings']: stock order" \
     'qs\.order=Wi-Fi,VPN,Bluetooth,Power Mode,Night Light,Dark Style,Do Not Disturb,Airplane Mode,Auto Rotate'
 fact "disabled-features=['quick-settings']: Power Mode unlit" 'qs\.power=checked=false classes=none'
 fact "disabled-features=['quick-settings']: stock's name ignores a new best access point" 'qs\.row\.best-ap=names=0'
+fact "disabled-features=['quick-settings']: stock shows a row whose network holds no access point" 'qs\.row\.empty=visible=true'
 fact "disabled-features=['quick-settings']: a network row stays stock" 'qs\.row\.active=children=icons,label,check icons=signal,lock checked=false lock=3/none label=0'
 fact "disabled-features=['quick-settings']: the subtitle stays under the title" 'qs\.menu=1,1 x_align=0'
 
