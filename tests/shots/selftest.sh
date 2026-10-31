@@ -3783,7 +3783,7 @@ CHANGES
 
 # glass.js's reference and frame reader, and glass_frames over reports built for it.
 test_glass() {
-    local line rc=0 passes failures what change
+    local line rc=0 passes failures fails what change
     gjs -m "$HERE/blur-ref-test.js" >"$T/blur-ref.tap" 2>&1 || rc=$?
     while IFS= read -r line; do
         case $line in
@@ -3877,11 +3877,18 @@ CHANGES
                     banner: ($p + {corner: $corner}), osd: ($p + {corner: $corner}), spotlight: ($p + {corner: $corner}),
                     toast: ($p + {corner: $corner, tries: 1}), switcher: ($p + {corner: $corner}), screenshot: ($p + {enabled: false, allocation: [null, null]}),
                     tilePreview: {radius: 80, saturation: 1.6, cornerRadius: 28, enabled: true, fine: true, followOpacity: true, background: true,
-                        allocation: [372, 180], painted: {box: [0, 0, 372, 180], radii: [28, 28, 28, 28]}}}}}}')
+                        allocation: [372, 180], painted: {box: [0, 0, 372, 180], radii: [28, 28, 28, 28]}}}},
+            motion: {dock: {moved: true, enabled: true, covered: true, differingFromFull: 0, pixels: 86136},
+                dockPastEdge: {moved: true, enabled: true, covered: true, differingFromFull: 19672, pixels: 62080},
+                popover: {moved: true, enabled: true, covered: true, differingFromFull: 0, pixels: 316008}}}}')
     while IFS='|' read -r failures what change; do
         jq -c "$change" <<<"$manager" | sed 's/^/APEXG2-GLASS /' >"$T/glass.log"
-        read -r passes _ <<<"$(assertion_counts glass_manager glass "$T/glass.log" light)"
-        expect_eq "glass manager: $what fails $failures of 25" "$failures" $((25 - passes))
+        read -r passes fails <<<"$(assertion_counts glass_manager glass "$T/glass.log" light)"
+        # The dock past the stage edge is a known gap: neither a pass nor a failure while it stays open.
+        expect_eq "glass manager: $what fails $failures of 27" "$failures" "$fails"
+        if ((failures == 0)); then
+            expect_eq "glass manager: $what passes 26 of 27, the 27th its known gap" 26 "$passes"
+        fi
     done <<'CHANGES'
 0|the bar, the dock and the popovers at their tokens, every switch honoured|.
 1|the bar at the popovers' sigma|.manager.glass.panel.radius = 120
@@ -3936,7 +3943,13 @@ CHANGES
 1|a toast blurred by two glass effects|.manager.conformance.checked.toast.corner.glassEffects = 2
 1|a dock corner a screenshot draws otherwise|.manager.conformance.checked.dock.corner.capturedMax = 2
 3|a toast never checked|.manager.conformance.checked.toast = null
-25|no manager|.manager = null
+1|a dock whose blur stays where the slide began|.manager.motion.dock.differingFromFull = 18400
+1|the dock past the edge blurred as on screen, a gap that holds now|.manager.motion.dockPastEdge.differingFromFull = 0
+1|a popover blurred at its open size while it scales|.manager.motion.popover.differingFromFull = 2210
+1|a dock that never moved|.manager.motion.dock.moved = false
+1|a moved popover without its glass|.manager.motion.popover.enabled = false
+1|no motion report|.manager.motion = null
+26|no manager|.manager = null
 CHANGES
 }
 
