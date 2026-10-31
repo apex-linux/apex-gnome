@@ -762,7 +762,8 @@ async function shootDateMenu() {
 function describeBar() {
     const {_leftBox: leftBox, _centerBox: centerBox, _rightBox: rightBox, statusArea} = Main.panel;
     const roleOf = c => Object.keys(statusArea).find(role => statusArea[role].container === c) ?? c.name ?? 'unnamed';
-    const count = actor => actor.get_children().reduce((n, c) => n + 1 + count(c), 0);
+    // An icon's image is a child of its own once loaded: network.js's comes when NM's state lands.
+    const count = actor => actor instanceof St.Icon ? 0 : actor.get_children().reduce((n, c) => n + 1 + count(c), 0);
     const boxes = {left: leftBox, center: centerBox, right: rightBox};
     const qs = statusArea.quickSettings;
     const fieldOf = c => Object.keys(qs).find(key => qs[key] === c) ?? c.name ?? 'unnamed';
