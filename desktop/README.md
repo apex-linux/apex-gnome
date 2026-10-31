@@ -239,9 +239,10 @@ every row and header goes back as stock built it, keeping that state and name, w
 Upstream's `notify::` handlers with no call at creation, audited in gnome-shell 51.0 and 51.1
 (every `connect`/`connectObject` on a `notify::` signal in panel.js, dateMenu.js, calendar.js,
 messageList.js, messageTray.js, quickSettings.js and status/*.js: the same 108 sites in both).
-For 27 a script finds the handler called at the top level of the connect's own method; the
-other 81 were read: 12 forward a derived property (`this.notify`), most are synced on another
-path at creation or act only on a change, and four, in three places, show a user something:
+A first pass flagged 28 whose handler is never called near the connect, read by hand. Of the
+other 80, a script finds the handler called at the top level of the connect's own method for
+27, and 53 were read by hand: 12 forward a derived property (`this.notify`), the rest are synced
+on another path at creation or act only on a change. Three places show a user something:
 
 | Site (51.0 = 51.1) | Handler | At creation |
 |---|---|---|

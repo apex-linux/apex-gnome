@@ -979,9 +979,11 @@ quick_settings_layer() {
             "the Wi-Fi menu's header subtitle ends the title's row, at its end (board 17)"
         expect "$label Quick Settings" "$scenes" "$q.wifiMenu.rows | length > 1 and any(.active) and all(.checked == .active)" \
             "the active network's row, and only it, is :checked"
-        expect "$label Quick Settings" "$scenes" "$q.wifiMenu.rows | length > 1 and all(.accessibleChecked == .active
-            and .accessibleName == \"\\(.ssid), \\(if .secure then \"Secure\" else \"Not secure\" end), Signal strength \\(.strength)%\")" \
-            "each row names its network, security and signal to a screen reader, and only the active one is checked, from the start"
+        expect "$label Quick Settings" "$scenes" "$q.wifiMenu.rows | length > 1 and any(.active) and all(.accessibleChecked == .active)" \
+            "the active network's row, and only it, is checked for a screen reader from the start"
+        expect "$label Quick Settings" "$scenes" \
+            "$q.wifiMenu.rows | length > 1 and all(.accessibleName == \"\\(.ssid), \\(if .secure then \"Secure\" else \"Not secure\" end), Signal strength \\(.strength)%\")" \
+            "each row names its network, security and signal for a screen reader from the start"
         network_rows_centred "$label" "$scenes" "$q.wifiMenu.rows"
         top_bar_metric "$label Quick Settings" "$scenes" "$(tokens_for "$variant")" \
             'a secure network'"'"'s lock follows its name, $apex_quick_menu_lock_size in $apex_fg at $apex_quick_menu_lock_opacity' \
