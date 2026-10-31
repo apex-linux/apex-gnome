@@ -672,8 +672,35 @@ def check_polkit(shots, case, want):
         check(f"{case}: pam_fprintd's prompt is board 13's fingerprint line",
               info["text"] == want["info"] and "apex-polkit-fingerprint" in info["line"] and info["glyph"] == "auth-fingerprint-symbolic",
               json.dumps(info))
+        check_message_row(case, "fingerprint line", info, d, px(tokens()["apex_polkit_body_gap"]))
     else:
         check(f"{case}: no fingerprint line when PAM sends none", info["text"] is None and info["glyph"] is None, json.dumps(info))
+
+
+def error_fg(dark):
+    """$apex_error_fg for the variant, from its if($variant == 'light', LIGHT, DARK)."""
+    with open(TOKENS, encoding="utf-8") as f:
+        m = re.search(r"\$apex_error_fg:\s*if\(\$variant == 'light', (#[0-9a-f]{6}), (#[0-9a-f]{6})\);", f.read())
+    return m.group(2 if dark else 1) if m else None
+
+
+def contrast(fg, bg):
+    def lum(c):
+        rgb = [int(c[i:i + 2], 16) / 255 for i in (1, 3, 5)]
+        r, g, b = [v / 12.92 if v <= 0.03928 else ((v + 0.055) / 1.055) ** 2.4 for v in rgb]
+        return 0.2126 * r + 0.7152 * g + 0.0722 * b
+    hi, lo = sorted((lum(fg), lum(bg)), reverse=True)
+    return (hi + 0.05) / (lo + 0.05)
+
+
+def check_message_row(case, what, line, d, gap):
+    """Board 13's message row: no pill, the row's full width, $apex_polkit_body_gap under the field."""
+    field, row = d["field"], d["row"]
+    check(f"{case}: the {what} has no fill", line["fill"].endswith("00"), json.dumps(line))
+    check(f"{case}: the {what} spans the message row", line["x"] == row["x"] and line["width"] == row["width"],
+          json.dumps([row, line]))
+    check(f"{case}: the {what} sits $apex_polkit_body_gap ({gap:g} px) under the field",
+          abs(line["y"] - field["y"] - field["height"] - gap) <= 1, json.dumps([field, line]))
 
 
 def check_polkit_refused(shots, case, want, t):
@@ -691,15 +718,21 @@ def check_polkit_refused(shots, case, want, t):
           d["entry"] == {"text": "", "reactive": True} and d["field"]["hint"] == "Password" and d["field"]["focused"],
           json.dumps([d["entry"], d["field"]]))
     check(f"{case}: board 13's dialog, shield, header and Details as before the answer",
-          all(d[k] == before[k] for k in ("classes", "shield", "title", "description", "details")) and d["box"]["x"] == before["box"]["x"]
+          all(d[k] == before[k] for k in ("shield", "title", "description", "details")) and d["box"]["x"] == before["box"]["x"]
           and d["box"]["width"] == before["box"]["width"], json.dumps([before, d]))
+    flagged = "apex-polkit-error" in d["classes"].split()
+    check(f"{case}: the dialog is flagged apex-polkit-error {'while' if want['error'] else 'only while'} the error shows",
+          flagged is bool(want["error"]) and "apex-polkit-error" not in before["classes"].split(), json.dumps([before["classes"], d["classes"]]))
     error, info, box, gap = d["error"], d["info"], d["box"], px(t["apex_polkit_body_gap"])
     check(f"{case}: the error line reads {json.dumps(want['error'])}", error["text"] == want["error"], json.dumps(error))
     check(f"{case}: the info line reads {json.dumps(want['info'])}", info["text"] == want["info"], json.dumps(info))
     if want["error"]:
-        field = d["field"]
-        check(f"{case}: the error line sits $apex_polkit_body_gap ({gap:g} px) under the field",
-              abs(error["y"] - field["y"] - field["height"] - gap) <= 1, json.dumps([field, error]))
+        red = error_fg("dark" in case)
+        check_message_row(case, "error line", error, d, gap)
+        check(f"{case}: the error line is $apex_error_fg ({red}), at least 4.5:1 on the dialog",
+              red is not None and error["fg"][:7] == red and contrast(red, d["surface"][:7]) >= 4.5, json.dumps([error, d["surface"]]))
+        check(f"{case}: the field's 2 px inset ring is $apex_error_fg",
+              d["ring"] == {"inset": True, "spread": 2, "color": f"{red}ff"}, json.dumps(d["ring"]))
         check(f"{case}: the error line stays inside the dialog, above Details",
               error["x"] >= box["x"] and error["x"] + error["width"] <= box["x"] + box["width"] + 1
               and error["y"] + error["height"] <= d["details"]["y"] + 1, json.dumps([box, error, d["details"]]))

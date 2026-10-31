@@ -388,6 +388,17 @@ function visibleText(actor) {
     return actor?.mapped && actor.opacity > 0 ? actor.text : null;
 }
 
+// A label's text and fill, as its theme node resolves them.
+function ink(label) {
+    const node = label.get_theme_node();
+    return {fg: color(node.get_foreground_color()), fill: color(node.get_background_color())};
+}
+
+function ring(entry) {
+    const shadow = entry.get_theme_node().get_box_shadow();
+    return shadow ? {inset: shadow.inset, spread: shadow.spread, color: color(shadow.color)} : null;
+}
+
 function describePolkit(dialog) {
     const content = dialog.contentLayout;
     const find = name => content.get_children().find(c => c.has_style_class_name?.(name));
@@ -414,8 +425,11 @@ function describePolkit(dialog) {
             focused: [dialog._passwordEntry, dialog._passwordEntry.clutter_text].includes(global.stage.key_focus),
             focus: global.stage.key_focus?.constructor.name ?? null,
         },
-        info: {...box(line), text: visibleText(info), line: line.style_class, glyph: line.get_children().find(c => c instanceof St.Icon && c.visible)?.icon_name ?? null},
-        error: {...box(dialog._errorMessageLabel), text: visibleText(dialog._errorMessageLabel)},
+        info: {...box(line), ...ink(info), text: visibleText(info), line: line.style_class, glyph: line.get_children().find(c => c instanceof St.Icon && c.visible)?.icon_name ?? null},
+        error: {...box(dialog._errorMessageLabel), ...ink(dialog._errorMessageLabel), text: visibleText(dialog._errorMessageLabel)},
+        row: box(dialog._errorMessageLabel.get_parent()),
+        surface: color(dialog.dialogLayout._dialog.get_theme_node().get_background_color()),
+        ring: ring(dialog._passwordEntry),
         details: details ? {
             ...box(details),
             open: grid.visible,
