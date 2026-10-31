@@ -1080,14 +1080,14 @@ on dispatch and weekly (Tuesdays), never on a pull request, and no check require
 - **libadwaita:** the lane's libadwaita from updates-testing, then
   `tests/libadwaita/radius-test.sh` in its three modes (`--stock`, the rewrite, `--late`).
 - **ptyxis:** the lane's Ptyxis from updates-testing, then as ci.yml runs them
-  `tests/ptyxis/status-test.sh`, `shoot.sh`, `contrast-test.sh`, `palette-test.sh` (on
-  `tests/s2c/agent.sh`'s agent) and `panes-test.sh`.
+  `tests/ptyxis/status-test.sh`, `shoot.sh`, `contrast-test.sh`, `layout-test.sh`,
+  `palette-test.sh` (on `tests/s2c/agent.sh`'s agent) and `panes-test.sh`.
 - **report:** one line in the run's summary, passed/failed for each, `?` where a job gave
   none, then each app's NEVR and its ok/not ok count, and libadwaita's and Ptyxis's NEVR and
   their test scripts passed/failed: `next-point: gnome-shell-51.1-1.fc45.apex1 g2 1954/0
   goldens 30/0 shoot 523/0 | gnome-control-center-51.1-1.fc45.apex1 46/0 |
   nautilus-51.1-1.fc45.apex1 84/0 | libadwaita-1.10.0-2.fc45.apex1 3/0 |
-  ptyxis-50.1-6.fc45.apex1 5/0`.
+  ptyxis-50.1-6.fc45.apex1 6/0`.
 
 g2, signoff, apps, libadwaita and ptyxis install `next-point.sh shim` first, a `dnf5` ahead of
 Fedora's on `PATH`. It adds updates-testing beside each `--repo=updates` and
