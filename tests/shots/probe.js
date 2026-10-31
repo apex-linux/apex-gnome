@@ -1059,27 +1059,38 @@ async function wifiMenuRows(unit) {
         await settle();
         const {_header: header, _headerSubtitle: subtitle} = wifi.menu;
         const meta = header.layout_manager.get_child_meta(header, subtitle);
-        const rows = findAll(wifi.menu.box, a => a.constructor.name === 'NMWirelessNetworkItem');
+        const describeRows = () => findAll(wifi.menu.box, a => a.constructor.name === 'NMWirelessNetworkItem').map(row => {
+            const lock = row._secureIcon;
+            const children = row.get_children();
+            return {
+                ssid: row._label.text,
+                active: row.network.is_active,
+                checked: row.has_style_pseudo_class('checked'),
+                accessibleName: row.accessible_name ?? null,
+                accessibleChecked: row.get_accessible().ref_state_set().contains_state(Atk.StateType.CHECKED),
+                strength: row.network.signal_strength,
+                secure: !!lock.icon_name,
+                lockAfterName: children.indexOf(lock) === children.indexOf(row._label) + 1,
+                box: boxOf(row, unit), label: boxOf(row._label, unit), signal: boxOf(row._signalIcon, unit),
+                lockBox: lock.icon_name ? boxOf(lock, unit) : null,
+                lockSize: lengthOrNull(lock.get_theme_node(), 'icon-size', unit),
+                lockColor: hex(lock.get_theme_node().get_foreground_color()),
+            };
+        });
+        const rows = describeRows();
+        // A scan that loses the active network's access point and finds it again: network.js
+        // rebuilds the row while its network is active.
+        for (const item of wifi._items.values()) {
+            const ap = item._device?.active_access_point;
+            if (ap) {
+                item._removeAccessPoint(ap);
+                item._addAccessPoint(ap);
+            }
+        }
+        await settle();
         return {
             subtitle: {column: meta.left_attach, row: meta.top_attach, xAlign: subtitle.x_align, end: Clutter.ActorAlign.END},
-            rows: rows.map(row => {
-                const lock = row._secureIcon;
-                const children = row.get_children();
-                return {
-                    ssid: row._label.text,
-                    active: row.network.is_active,
-                    checked: row.has_style_pseudo_class('checked'),
-                    accessibleName: row.accessible_name ?? null,
-                    accessibleChecked: row.get_accessible().ref_state_set().contains_state(Atk.StateType.CHECKED),
-                    strength: row.network.signal_strength,
-                    secure: !!lock.icon_name,
-                    lockAfterName: children.indexOf(lock) === children.indexOf(row._label) + 1,
-                    box: boxOf(row, unit), label: boxOf(row._label, unit), signal: boxOf(row._signalIcon, unit),
-                    lockBox: lock.icon_name ? boxOf(lock, unit) : null,
-                    lockSize: lengthOrNull(lock.get_theme_node(), 'icon-size', unit),
-                    lockColor: hex(lock.get_theme_node().get_foreground_color()),
-                };
-            }),
+            rows, rescanned: describeRows(),
         };
     } finally {
         wifi.menu.close(BoxPointer.PopupAnimation.NONE);
