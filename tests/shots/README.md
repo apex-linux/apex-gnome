@@ -192,6 +192,14 @@ the sign-off shells (above). Every case's probe reports them (`session-defaults.
   Disturb's switch glyphs. Each surface passes or fails on its own, naming its board; a surface
   that did not open, or drew no icon, fails too.
 
+What only `tests/shell` shoots, G2 never opens: the lock screen with its top bar (board 20, and
+its fingerprint line), the greeter's user list and prompt (board 12) and polkit's own
+authentication dialog (board 13, and its fingerprint line). The shell probe records the icons
+each step draws (`icons-STEP` facts in `CASE.log`) and `shell_icons` holds them to the same rule
+and lists, one check per step named by its board. `signoff.sh --collect` runs it on the line
+above, where apex-desktop's theme is installed. Without that theme, as in CI's own `tests/shell`
+job, `check.py` reports it "not run: no Apex theme", never a pass.
+
 The wallpaper is `backdrop_painted`'s (below).
 
 ### Open: glyphs board 31 lacks

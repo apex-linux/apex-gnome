@@ -192,7 +192,9 @@ collect() {
     defaults=$(for variant in default dark-style; do
         # shellcheck disable=SC2016 # expanded by the inner bash
         bash -c '. "$1/assert.sh"; session_defaults "$2" "$3"' _ "$HERE" "$variant" "$g2/$variant.log"
-    done)
+    done
+    # shellcheck disable=SC2016 # expanded by the inner bash
+    bash -c '. "$1/assert.sh"; shell_icons shell "$2"' _ "$HERE" "$shots")
     wrong=$(sed -n 's/^FAIL //p' <<<"$defaults")
     echo "signoff.sh: session defaults: $(grep -c '^PASS' <<<"$defaults") passed, $(grep -c '^FAIL' <<<"$defaults") failed"
     [[ -z $wrong ]] || printf 'signoff.sh: session defaults: %s\n' "$wrong" >&2

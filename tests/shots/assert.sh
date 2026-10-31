@@ -361,6 +361,43 @@ icons_not_apex() {
         | "\($where) \($name)\(if $app then " (\($app))" else "" end): \(.file // "no icon")"' 2>&1 | paste -sd';' -
 }
 
+# What only tests/shell shows, case|step|board: the lock with its top bar, the greeter's two pages, polkit's own dialog.
+readonly SHELL_ICON_STEPS=(
+    "lock-light|opened|board 20's lock screen, light"
+    "lock-dark|opened|board 20's lock screen, dark"
+    "lock-fingerprint|opened|board 20's lock screen with the fingerprint line"
+    "greeter-light|list|board 12's user list, light"
+    "greeter-dark|list|board 12's user list, dark"
+    "greeter-light|prompt|board 12's prompt, light"
+    "greeter-dark|prompt|board 12's prompt, dark"
+    "polkit-light|opened|board 13's authentication dialog, light"
+    "polkit-dark|opened|board 13's authentication dialog, dark"
+    "polkit-fingerprint|opened|board 13's dialog with the fingerprint line"
+)
+
+# S1b's rule on tests/shell's own surfaces, from its probe's icons-STEP facts in SHOTS/CASE.log; the theme must be there.
+shell_icons() {
+    local label=$1 shots=$2 entry case step desc r bad
+    for entry in "${SHELL_ICON_STEPS[@]}"; do
+        IFS='|' read -r case step desc <<<"$entry"
+        r=$(sed -n "s/.*APEXLOCK {\"icons-$step\":\(.*\)}\$/\1/p" "$shots/$case.log" 2>/dev/null | head -n 1)
+        if [[ -z $r ]]; then
+            fail "$label: every icon $desc draws resolves through Apex (no icons-$step report in $case.log)"
+        elif [[ $(jq -r '.installed' <<<"$r") != true ]]; then
+            fail "$label: every icon $desc draws resolves through Apex (no Apex theme installed)"
+        elif [[ $(jq '.icons | length' <<<"$r") == 0 ]]; then
+            fail "$label: every icon $desc draws resolves through Apex (it drew no icon)"
+        else
+            bad=$(jq --arg k "$case" '{($k): .icons}' <<<"$r" | icons_not_apex)
+            if [[ -z $bad ]]; then
+                pass "$label: every icon $desc draws resolves through Apex ($(jq '.icons | length' <<<"$r") icons)"
+            else
+                fail "$label: every icon $desc draws resolves through Apex ($bad)"
+            fi
+        fi
+    done
+}
+
 # The surfaces the probe opens after its scenes (probe.js's iconSurfaces), by the boards they draw.
 readonly ICON_SURFACES=(
     "dateMenu|board 34's date menu and notifications"
