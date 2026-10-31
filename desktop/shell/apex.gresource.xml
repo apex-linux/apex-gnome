@@ -48,6 +48,7 @@
     <file alias="glass/derived.js">js/ui/apex/glass/derived.js</file>
     <file alias="lock/feature.js">js/ui/apex/lock/feature.js</file>
     <file alias="lock/stage.js">js/ui/apex/lock/stage.js</file>
+    <file alias="lock/error.js">js/ui/apex/lock/error.js</file>
     <file alias="lock/fingerprint.js">js/ui/apex/lock/fingerprint.js</file>
     <file alias="lock/background.js">js/ui/apex/lock/background.js</file>
     <file alias="lock/question.js">js/ui/apex/lock/question.js</file>

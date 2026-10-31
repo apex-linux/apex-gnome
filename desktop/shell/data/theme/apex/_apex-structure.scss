@@ -35,6 +35,11 @@ $apex_dock_border: $_hc_border;
 // this, high contrast's white text sits on the bright blurred wallpaper.
 .apex-lock-overlay { background-color: $apex_lock_overlay_contrast; }
 
+// High contrast rings the wrong password's field in its own white, not board 20's pink.
+.unlock-dialog.apex-lock.apex-lock-error .login-dialog-prompt-entry {
+  &, &:focus { box-shadow: inset 0 0 0 $apex_entry_focus_ring $apex_lock_fg !important; }
+}
+
 .apex-lock-background { -apex-lock-blur: $apex_lock_blur; -apex-lock-saturation: $apex_lock_saturation / 100%; }
 
 // GNOME 51.1's fixed prompt height, as in _lock.scss.

@@ -118,6 +118,11 @@
   .apex-lock-hint-failed .apex-lock-hint, .apex-lock-hint-failed .apex-lock-hint-glyph { color: $apex_lock_fg; }
 }
 
+// Board 20's wrong password rings the field (lock/error.js); upstream's focus rule is !important.
+.unlock-dialog.apex-lock.apex-lock-error .login-dialog-prompt-entry {
+  &, &:focus { box-shadow: inset 0 0 0 $apex_entry_focus_ring $apex_lock_error_ring !important; }
+}
+
 .apex-lock-overlay { background-color: $apex_lock_overlay; }
 
 .apex-lock-background {

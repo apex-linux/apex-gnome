@@ -192,6 +192,22 @@ def check_reveal(case, reveal):
           abs(icon["y"] + icon["height"] / 2 - centre) <= 1, json.dumps(reveal))
 
 
+def check_error_ring(case, opened, wrong, wake):
+    """Board 20's wrong password rings the field in $apex_lock_error_ring; high contrast's in its own white."""
+    want = "#ffffffff" if case == "lock-high-contrast" else f"{lock_error_ring()}ff"
+    check(f"{case}: no error ring before the wrong answer", not opened.get("errorRing"), json.dumps([opened.get("errorRing"), opened.get("ring")]))
+    check(f"{case}: the wrong answer rings the field: 2 px inset, {want}",
+          wrong.get("errorRing") is True and wrong.get("ring") == {"inset": True, "spread": 2, "color": want},
+          json.dumps([wrong.get("errorRing"), wrong.get("ring")]))
+    check(f"{case}: the prompt rebuilt after blank has no ring", not wake.get("errorRing"), json.dumps([wake.get("errorRing"), wake.get("ring")]))
+
+
+def lock_error_ring():
+    with open(TOKENS, encoding="utf-8") as f:
+        m = re.search(r"^\$apex_lock_error_ring:\s*(#[0-9a-f]{6});", f.read(), re.M)
+    return m.group(1) if m else None
+
+
 def check_lock(shots, case, want):
     log = read(shots, f"{case}.log")
     gdm = read(shots, f"{case}.gdm.log")
@@ -221,6 +237,8 @@ def check_lock(shots, case, want):
           json.dumps(wrong["prompt"]))
     check(f"{case}: the question", (wrong["prompt"] or {}).get("question") == want["question"],
           json.dumps(wrong["prompt"]))
+    if not want["apex"]:
+        check(f"{case}: upstream's lock takes no Apex error ring", not wrong.get("errorRing"), json.dumps(wrong.get("errorRing")))
     if want["apex"]:
         check(f"{case}: one stage", "apex-lock" in opened["classes"].split())
         check(f"{case}: sigma 30, saturation 1.3, no darkening", opened["blur"] == APEX_BLUR, str(opened["blur"]))
@@ -233,6 +251,7 @@ def check_lock(shots, case, want):
         check_layout(case, opened.get("layout") or {}, want.get("overlay_alpha"))
         if want["question"] == "Enter Password":
             check_reveal(case, (opened.get("layout") or {}).get("reveal"))
+        check_error_ring(case, opened, wrong, f["wake"])
         check(f"{case}: blanking takes the prompt down", blank["prompt"] is None, json.dumps(blank["prompt"]))
         if answered:
             check(f"{case}: and cancels its conversation", "Cancel" in calls[answered[0]])

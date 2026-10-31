@@ -124,7 +124,15 @@ function describeLock(dialog) {
             .map(e => e && `radius=${e.radius} brightness=${e.brightness.toFixed(2)} saturation=${e.saturation.toFixed(2)}`)[0] ?? null,
         prompt: describePrompt(dialog._authPrompt),
         layout: describeLayout(dialog, hint),
+        errorRing: dialog.has_style_class_name('apex-lock-error'),
+        ring: dialog._authPrompt ? ring(dialog._authPrompt._entry) : null,
     };
+}
+
+// The entry's box-shadow, as its theme node resolves it.
+function ring(entry) {
+    const shadow = entry.get_theme_node().get_box_shadow();
+    return shadow ? {inset: shadow.inset, spread: shadow.spread, color: color(shadow.color)} : null;
 }
 
 // What the eye reads, top to bottom, in logical pixels; only what is on screen.
@@ -319,6 +327,7 @@ async function shootLock() {
     await type(WRONG_ANSWER);
     await Scripting.sleep(STEP_MS * 2);
     fact('wrong-answer', describeLock(dialog));
+    await capture('wrong-answer');
 
     await setPowerSaveMode(POWER_SAVE_OFF);
     await Scripting.sleep(STEP_MS);

@@ -393,6 +393,8 @@ $apex_lock_overlay: rgba(8, 10, 20, .34);
 $apex_lock_overlay_contrast: rgba(0, 0, 0, .55);
 $apex_lock_date_fg: rgba($apex_lock_fg, .92);
 $apex_lock_glass: rgba(255, 255, 255, .18);
+// Board 20's wrong password: the field's 2 px ring, as the canvas draws it.
+$apex_lock_error_ring: #ff8a8a;
 $apex_lock_glass_border: rgba(255, 255, 255, .25);
 $apex_lock_glass_strong: rgba(255, 255, 255, .22);
 $apex_lock_avatar_border: rgba(255, 255, 255, .35);

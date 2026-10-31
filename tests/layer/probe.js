@@ -1382,6 +1382,7 @@ async function exerciseLock() {
         .map(c => c.text ?? c.name ?? c.children.map(part => part.text ?? '').join('')).join(',');
     fact('lock.prompt-box', promptBoxChildren());
     fact('lock.hint.password', hintState(dialog));
+    fact('lock.ring.password', `${dialog.has_style_class_name('apex-lock-error')}`);
     for (const [label, service, text, error] of [
         ['fingerprint-scan', 'gdm-fingerprint', '(or place finger on reader)', false],
         ['fingerprint-failed', 'gdm-fingerprint', 'Failed to match fingerprint', true],
@@ -1391,12 +1392,25 @@ async function exerciseLock() {
     ]) {
         say(dialog, service, text, error);
         fact(`lock.hint.${label}`, hintState(dialog));
+        fact(`lock.ring.${label}`, `${dialog.has_style_class_name('apex-lock-error')}`);
+    }
+    const ring = () => `${dialog.has_style_class_name('apex-lock-error')}`;
+    say(dialog, 'gdm-password', "Sorry, that didn't work. Please try again.", true);
+    fact('lock.ring.password-again', ring());
+    const message = dialog._authPrompt?._message;
+    if (message) {
+        message.opacity = 0;
+        fact('lock.ring.message-faded', ring());
+        message.opacity = 255;
+        fact('lock.ring.message-back', ring());
     }
     for (const [label, mode] of [['blank', PowerSave.OFF], ['wake', PowerSave.ON],
         ['standby', PowerSave.STANDBY], ['wake-again', PowerSave.ON],
         ['suspend', PowerSave.SUSPEND], ['unsupported', PowerSave.UNSUPPORTED]]) {
         setScreen(mode);
         fact(`lock.${label}`, lockState(dialog));
+        if (label === 'blank')
+            fact('lock.ring.blank', ring());
         if (label === 'wake')
             fact('lock.wake.keys', dialog._authPrompt?.keys ?? 'none');
     }

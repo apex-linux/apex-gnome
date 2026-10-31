@@ -975,6 +975,15 @@ fact "lock: the password's own problem stays in upstream's message line" \
     "lock\.hint\.password-problem=$HINT_FAILED message=true indicator=false"
 fact "lock: the reader's next prompt brings the line back" "lock\.hint\.fingerprint-again=$HINT_SCAN message=false indicator=false"
 fact "lock: a prompt rebuilt after blank starts on the password's hint" "lock\.hint\.after-wake=$HINT_PASSWORD message=true indicator=true"
+fact "lock: no error ring on the password's prompt" 'lock\.ring\.password=false'
+fact "lock: no error ring while the reader scans" 'lock\.ring\.fingerprint-scan=false'
+fact "lock: a failed scan changes the hint, not the field" 'lock\.ring\.fingerprint-failed=false'
+fact "lock: a wrong password rings the field" 'lock\.ring\.password-problem=true'
+fact "lock: the reader's next prompt takes the ring away" 'lock\.ring\.fingerprint-again=false'
+fact "lock: the ring comes with the next wrong password" 'lock\.ring\.password-again=true'
+fact "lock: and goes when upstream fades the message" 'lock\.ring\.message-faded=false'
+fact "lock: and comes back with it" 'lock\.ring\.message-back=true'
+fact "lock: blanking takes the prompt, and its ring, down" 'lock\.ring\.blank=false'
 fact "lock: blanking tears the prompt down and cancels its verifier" 'lock\.blank=page=clock prompt=none cancelled=conversation-1'
 fact "lock: waking builds a new conversation" 'lock\.wake=page=prompt prompt=conversation-2 cancelled=conversation-1'
 fact "lock: and the key that woke the screen cannot answer it" 'lock\.wake\.keys=false'
