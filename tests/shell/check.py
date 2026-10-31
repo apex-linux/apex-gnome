@@ -728,19 +728,20 @@ def check_date_menu(shots, case, apex):
         check_footer(case, "dnd-clicked", once, apex)
 
 
-def check_bar_cycle(shots, case):
+def check_bar_cycle(shots, case, apex):
     log = read(shots, f"{case}.log")
     f = facts(log)
     steps = ("before", "logind-locked", "after-logind", "dialog-locked", "after-dialog")
     for step in steps:
         check(f"{case}: {step} is reported", step in f)
     check(f"{case}: no JS error", "JS ERROR" not in until(log, "after-dialog") and "APEXLOCK-ERROR" not in log)
-    check(f"{case}: the layer loaded", LOAD_WITNESS in log)
+    check(f"{case}: the layer {'loaded' if apex else 'did not load'}", (LOAD_WITNESS in log) == apex)
     if not all(step in f for step in steps):
         return
     before = f["before"]
-    check(f"{case}: before: the user session's bar, with the chip and the search button",
-          before["mode"] == "user" and before["chip"] == ["EN", "FR"] and "apex-search" in before["right"], json.dumps(before))
+    chip, search = (["EN", "FR"], True) if apex else (["en", "fr"], False)
+    check(f"{case}: before: the user session's bar, its chip {'/'.join(chip)}, {'with' if apex else 'without'} the search button",
+          before["mode"] == "user" and before["chip"] == chip and ("apex-search" in before["right"]) == search, json.dumps(before))
     check(f"{case}: logind's Lock locks", f["logind-locked"]["locked"] is True)
     check(f"{case}: the lock's own stage locks with its prompt up",
           f["dialog-locked"]["locked"] is True and f["dialog-locked"]["prompt"] is True, json.dumps(f["dialog-locked"]))
@@ -783,7 +784,8 @@ def main():
         check_polkit_locked(shots, case, apex, sleeps)
     check_date_menu(shots, "date-menu", True)
     check_date_menu(shots, "date-menu-disabled", False)
-    check_bar_cycle(shots, "bar-lock-cycle")
+    check_bar_cycle(shots, "bar-lock-cycle", True)
+    check_bar_cycle(shots, "bar-lock-cycle-safe", False)
     for case in END_SESSION_CASES:
         check_end_session(shots, case)
     return 1 if failed else 0

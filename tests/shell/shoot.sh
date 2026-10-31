@@ -250,6 +250,7 @@ shoot date-menu "$USER_NAME" user default 'Password:' "$hint_shown" -- APEX_DATE
 shoot date-menu-disabled "$USER_NAME" user default 'Password:' "$hint_shown" "$notifications_off" -- APEX_DATE_MENU=1 || status=1
 two_sources="org.gnome.desktop.input-sources sources [('xkb', 'us'), ('xkb', 'fr')]"
 shoot bar-lock-cycle "$USER_NAME" user default 'Password:' "$two_sources" -- APEX_BAR_CYCLE=1 || status=1
+shoot bar-lock-cycle-safe "$USER_NAME" user default 'Password:' "$two_sources" -- APEX_BAR_CYCLE=1 APEX_SHELL_SAFE=1 || status=1
 shoot lock-high-contrast "$USER_NAME" user default 'Password:' "org.gnome.desktop.a11y.interface high-contrast true" || status=1
 shoot lock-large-text "$USER_NAME" user default 'Password:' "org.gnome.desktop.interface text-scaling-factor 1.25" || status=1
 # authselect locks GDM's fingerprint key off; an image with a reader enables the feature.

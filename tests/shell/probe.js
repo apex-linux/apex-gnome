@@ -770,8 +770,7 @@ function describeBar() {
         chip: statusArea.keyboard?._container.get_children().map(label => label.text) ?? null,
         clear: statusArea.dateMenu._messageList._clearButton.visible,
         mode: Main.sessionMode.currentMode,
-        activities: statusArea.activities.get_style_pseudo_class() ?? '',
-        focus: global.stage.key_focus === global.stage ? null : global.stage.key_focus?.constructor.name ?? null,
+        overview: Main.overview.visible,
     };
 }
 
