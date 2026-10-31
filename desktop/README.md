@@ -156,6 +156,11 @@ stock bar when it is disabled:
   `$apex_font_input_chip_size`/`$apex_font_input_chip_weight`, tracked
   `$apex_font_input_chip_tracking`, at least `$apex_input_chip_min_width` wide; stock shows it
   only with two or more sources.
+- `panel/clear-sync.js`: the date menu's Clear follows its placeholder from the start. calendar.js
+  binds the two without `SYNC_CREATE` (51.0 and 51.1), so an empty list showed Clear until a first
+  notification came and went. The part syncs it once on enable, and on disable gives back stock's
+  value unless stock's binding has synced it since. It is the panel's, not the notifications', so
+  the fix holds with `notifications` in disabled-features.
 
 `panel/solid-bar.js` makes the bar solid while `translucent-top-bar` is off (live), or while
 a window on the primary monitor's active workspace is maximised, showing and not the
