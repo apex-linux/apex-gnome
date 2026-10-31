@@ -702,6 +702,7 @@ fact "screen pills: right before the status pill again after panel.js re-adds it
 fact "input chip: an xkb source's short name in capitals, an IBus source's language, not its symbol" 'input-chip=EN,VI'
 fact "input chip: and so after keyboard.js renames one or adds a source" 'input-chip\.changed=EN,VI₂,FR'
 fact "input chip: its short names never ellipsize, whatever Large Text makes of the chip" 'input-chip\.ellipsize=none,none,none'
+fact "date menu: an empty list hides Clear, as calendar.js's binding would with SYNC_CREATE" 'clear=placeholder=true clear=false'
 fact "hot-corner: the corner becomes a reactive 4 x 4 zone at its own position, in scaled px" \
     'hot-corner\.zone=hot-corner reactive=true x=0 y=0 8x8'
 fact "hot-corner: in the chrome, hidden under fullscreen windows" 'chrome\.add=hot-corner trackFullscreen=true'
@@ -715,16 +716,21 @@ fact "layer-enabled=false: so is sharing, named as stock names it" 'sharing\.off
 fact "layer-enabled=false: sharing goes back after the recording" 'right-box\.off=screenRecording,screenSharing,a11y,keyboard,quickSettings,'
 fact "layer-enabled=false: the input chip has stock's names back, the IBus symbol too" 'input-chip\.off=en,Ắ₂,fr'
 fact "layer-enabled=false: and stock's ellipsizing" 'input-chip\.off\.ellipsize=end,end,end'
+fact "layer-enabled=false: Clear as stock left it, shown" 'clear\.off=placeholder=true clear=true'
 fact "layer-enabled=true: the filter again" "pill\.on=$KEPT_PILL"
 fact "layer-enabled=true: the stop squares again" 'recording\.on=square,0:42 hidden=screencast-stop-symbolic name=Stop Screencast'
 fact "layer-enabled=true: and sharing's name" 'sharing\.on=screen-shared-symbolic,square hidden=screencast-stop-symbolic name=Stop screen sharing'
 fact "layer-enabled=true: capitals again" 'input-chip\.on=EN,VI₂,FR'
+fact "layer-enabled=true: Clear hidden again" 'clear\.on=placeholder=true clear=false'
 count_is "both dots restyle at each enable and disable" '^probe: workspace-dot=restyled$' 6
 count_is "the hot corners are rebuilt at each enable and disable" '^probe: hot-corners=rebuilt$' 3
 lacks "top bar: no feature fails or disables uncleanly" 'off for this session|did not disable cleanly|cannot restyle'
 
 probe top-bar-rtl "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_TOP_BAR=1 PROBE_SCALE=1 PROBE_RTL=1
 fact "hot-corner, right to left: the zone lies left of the corner" 'hot-corner\.zone=hot-corner reactive=true x=-4 y=0 4x4'
+
+probe top-bar-clear-synced "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_TOP_BAR=1 PROBE_CLEAR_SYNCED=1
+fact "layer-enabled=false once stock's binding has synced Clear: nothing to restore" 'clear\.off=placeholder=true clear=false'
 
 probe top-bar-disabled "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_TOP_BAR=1 PROBE_DISABLED=panel
 has "disabled-features=['panel']: skips the feature" 'Apex: feature panel is in disabled-features'
@@ -733,6 +739,7 @@ fact "disabled-features=['panel']: the status pill keeps every indicator" "pill=
 fact "disabled-features=['panel']: the recording button stays stock's" 'recording=0:42,screencast-stop-symbolic hidden=none name=Stop Screencast'
 fact "disabled-features=['panel']: sharing stays where panel.js puts it" 'right-box\.after-session-update=screenRecording,screenSharing,a11y,keyboard,indicators,divider,quickSettings,'
 fact "disabled-features=['panel']: the input chip keeps stock's names" 'input-chip\.changed=en,Ắ₂,fr'
+fact "disabled-features=['panel']: Clear stays as stock leaves it" 'clear=placeholder=true clear=true'
 fact "disabled-features=['panel']: the corner stays stock" 'hot-corner\.zone=none reactive=false x=undefined y=undefined undefinedxundefined'
 lacks "disabled-features=['panel']: nothing is rebuilt or restyled" 'hot-corners=rebuilt|workspace-dot=restyled'
 
