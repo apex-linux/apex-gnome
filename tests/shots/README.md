@@ -1023,9 +1023,13 @@ g2, signoff and apps install `next-point.sh shim` first, a `dnf5` ahead of Fedor
 It adds updates-testing beside each `--repo=updates` and updates-testing-source beside each
 `--repo=updates-source`, and enables updates-testing for a call that names no repository. So
 the scripts install what GA brings, unchanged. `lane.sh`, `image-args.sh` and every other
-workflow stay as they are, which `.github/scripts/selftest.sh` checks. Once apex-image passes
-its admission cut (`GA_REACHED=1`), `next-point.sh image` fails: updates-testing is then no
-longer what a GA push brings.
+workflow stay as they are, which `.github/scripts/selftest.sh` checks.
+
+After F45's GA, next-point keeps watching updates-testing: each point release after it (51.2
+and on) waits there before an updates push. apex-image's admission cut sets `GA_REACHED=1`, or
+deletes the ARG, and apex-lane then admits nothing from updates-testing, so `next-point.sh
+image` reopens its own copy (`next-point.sh reopen`): `ARG GA_REACHED=0` again, the ARG added
+if the cut deleted it. The real apex-image and every lane cache stay as they are.
 
 ## The authentication dialog
 
