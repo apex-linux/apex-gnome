@@ -6,7 +6,7 @@
 readonly PR_CASES=(default default-scale1 dark-style high-contrast large-text default-solid
     dark-style-solid high-contrast-solid large-text-solid dock-intellihide dock-intellihide-dark
     dock-one-gpu no-dock no-dock-dark indicators indicators-scale1 indicators-dark stock-light stock-dark safe-env layer-disabled
-    dock-dnd dock-external keys fault-configure fault-enable fault-abort shutdown-banner)
+    dock-dnd dock-external keys input-sources fault-configure fault-enable fault-abort shutdown-banner)
 # direct.sh's fedora part on a pull request: the baselines of the desktop comparison.
 readonly PR_FEDORA_CASES=(fedora-light fedora-dark)
 

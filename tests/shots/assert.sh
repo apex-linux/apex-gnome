@@ -23,8 +23,8 @@ readonly STOCK_SHEETS=resource:///org/gnome/shell/theme/stock
 readonly FEDORA_SHEETS=resource:///org/gnome/shell/theme
 readonly DIRECT_CASES=(default default-scale1 dark-style high-contrast large-text default-solid dark-style-solid high-contrast-solid
     large-text-solid dock-intellihide dock-intellihide-dark dock-one-gpu no-dock no-dock-dark stock-light stock-dark safe-env
-    layer-disabled layer-cycles motion idle dock-pin dock-dnd dock-external keys glass-load glass-stress fault-configure fault-enable fault-abort shutdown-banner
-    kernel-safe
+    layer-disabled layer-cycles motion idle dock-pin dock-dnd dock-external keys input-sources glass-load glass-stress fault-configure fault-enable fault-abort
+    shutdown-banner kernel-safe
     fedora-light fedora-dark glass fedora-glass
     indicators indicators-scale1 indicators-dark)
 readonly DIRECT_PARTS=(main kernel fedora)
@@ -2358,6 +2358,7 @@ direct_cases() {
     dock_dnd_case "$run"
     dock_external_case "$run"
     keys_case "$run"
+    input_sources_case "$run"
     shutdown_banner_case "$run"
 }
 
@@ -2523,6 +2524,47 @@ keys_case() {
     expect keys "$r" '.modals == 0' "and nothing is left holding a grab"
 }
 
+# The input-sources case: the image's us and IBus Telex, per window, under Spotlight's and the
+# input source's keys, in the session and the overview.
+# shellcheck disable=SC2016 # jq programs
+input_sources_case() {
+    local run=$1 f=$1/input-sources.log r error m label
+    local telex='"m17n:vi:telex"' us='{source: "us", engine: "xkb:us::eng"}'
+    exits "$run" input-sources 0
+    no_js_error input-sources "$f"
+    no_apex_failure input-sources "$f"
+    r=$(report_of "$f" APEXG2-INPUT-SOURCES)
+    error=$(jq -r '.error // empty' <<<"$r" 2>/dev/null)
+    if [[ -n $error ]]; then
+        fail "input-sources: ${error%%$'\n'*}"
+        return
+    fi
+    expect input-sources "$r" ".ready and .sources == [{type: \"xkb\", id: \"us\"}, {type: \"ibus\", id: $telex}]
+        and .telexEngine == $telex" "IBus is up, with the image's us and Telex sources"
+    for m in session overview; do
+        label='input-sources'
+        [[ $m == overview ]] && label="input-sources in the overview"
+        expect "$label" "$r" ".$m | (\"$m\" == \"session\" or .visible) and (.start | {source, engine}) == $us
+            and (.superSpace | {spotlight, source, engine}) == {spotlight: true} + $us
+            and (.superSpaceInTelex | {spotlight, source, engine}) == {spotlight: true, source: $telex, engine: $telex}" \
+            "Super+Space opens Spotlight and changes neither the source nor the IBus engine, in us and in Telex"
+        expect "$label" "$r" ".$m | (.superAltSpace | .source == $telex and .engine == $telex)
+            and (.shiftSuperAltSpace | {source, engine}) == $us" \
+            "Super+Alt+Space switches us to Telex, the m17n:vi:telex engine, and Shift+Super+Alt+Space back"
+        expect "$label" "$r" ".$m | .superAltSpace.switcher == [[\"us\", $telex]]
+            and .shiftSuperAltSpace.switcher == [[$telex, \"us\"]]" "each chord shows the input-source switcher, us and Telex"
+        expect "$label" "$r" ".$m.heldSuperAlt | (.held | .shown and .items == [\"us\", $telex] and .selected == $telex
+            and {source, engine} == $us) and (.released | {source, engine}) == {source: $telex, engine: $telex}" \
+            "held, Super+Alt+Space shows the switcher on Telex, and switches only when Super+Alt are released"
+        expect "$label" "$r" ".$m | ([.start, .superSpace, .shiftSuperAltSpace, .heldSuperAlt.held, .back] | all(.chip == \"EN\"))
+            and ([.superAltSpace, .superSpaceInTelex, .heldSuperAlt.released] | all(.chip == \"VI\"))" \
+            "board 39's chip follows the source: EN on us, VI on Telex (its engine's language, not its symbol), EN again"
+    done
+    expect input-sources "$r" ".typed.engine == $telex and .typed.text == \"Việt \"" \
+        "Vieetj and a space, typed into Spotlight under Telex, give \"Việt \""
+    expect input-sources "$r" '.modals == 0' "and nothing is left holding a grab"
+}
+
 # The no-dock case: disabled-features=['dock'], so the overview's own dash is back and the
 # workspace-bottom hook leaves stock's edge.
 no_dock_case() {
@@ -2675,6 +2717,7 @@ patched_assertions() {
     asserted dock-dnd && dock_dnd_case "$run"
     asserted dock-external && dock_external_case "$run"
     asserted keys && keys_case "$run"
+    asserted input-sources && input_sources_case "$run"
     asserted shutdown-banner && shutdown_banner_case "$run"
     asserted fedora-light fedora-dark no-dock no-dock-dark &&
         compare_with_fedora "$run" "$(asserted stock-light stock-dark && echo safe)"

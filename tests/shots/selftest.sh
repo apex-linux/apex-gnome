@@ -3233,6 +3233,53 @@ test_keys_case() {
 CHANGES
 }
 
+readonly INPUT_SOURCES_MODE='{start: {source: "us", engine: "xkb:us::eng", chip: "EN"},
+    superSpace: {spotlight: true, source: "us", engine: "xkb:us::eng", chip: "EN"},
+    superAltSpace: {switcher: [["us", "m17n:vi:telex"]], source: "m17n:vi:telex", engine: "m17n:vi:telex", chip: "VI"},
+    superSpaceInTelex: {spotlight: true, source: "m17n:vi:telex", engine: "m17n:vi:telex", chip: "VI"},
+    shiftSuperAltSpace: {switcher: [["m17n:vi:telex", "us"]], source: "us", engine: "xkb:us::eng", chip: "EN"},
+    heldSuperAlt: {held: {shown: true, items: ["us", "m17n:vi:telex"], selected: "m17n:vi:telex", source: "us",
+        engine: "xkb:us::eng", chip: "EN"}, released: {shown: true, source: "m17n:vi:telex", engine: "m17n:vi:telex", chip: "VI"}},
+    back: {switcher: [["m17n:vi:telex", "us"]], source: "us", engine: "xkb:us::eng", chip: "EN"}}'
+readonly INPUT_SOURCES_REPORT="{ready: true, sources: [{type: \"xkb\", id: \"us\"}, {type: \"ibus\", id: \"m17n:vi:telex\"}],
+    telexEngine: \"m17n:vi:telex\", session: $INPUT_SOURCES_MODE, typed: {engine: \"m17n:vi:telex\", text: \"Việt \"},
+    overview: ({visible: true} + $INPUT_SOURCES_MODE), modals: 0}"
+
+test_input_sources_case() {
+    local run=$T/input-sources passes failures change what
+    mkdir -p "$run"
+    echo 'input-sources exit=0 secs=19 marker-after-exit=no' >"$run/results-main.txt"
+    while IFS='|' read -r failures change what; do
+        printf 'APEXG2-INPUT-SOURCES %s\n' "$(jq -nc "$INPUT_SOURCES_REPORT | $change")" >"$run/input-sources.log"
+        read -r passes _ <<<"$(assertion_counts input_sources_case "$run")"
+        expect_eq "input-sources: $what fails $failures of 16" "$failures" $((16 - passes))
+    done <<'CHANGES'
+0|.|the image's sources under both keys
+1|.ready = false|IBus never ready
+1|.sources[1].id = "m17n:vi:telex-ext"|another IBus engine than the image's Telex
+1|.session.superSpace.engine = "m17n:vi:telex"|Super+Space that also switches the IBus engine
+1|.session.superSpaceInTelex.source = "us"|Super+Space in Telex that switches the source back
+1|.session.superAltSpace.engine = "xkb:us::eng"|Super+Alt+Space that leaves the IBus engine on us
+1|.session.shiftSuperAltSpace.source = "m17n:vi:telex"|a Shift variant that does not go back
+1|.session.superAltSpace.switcher = []|a switch with no switcher shown
+1|.overview.visible = false|an overview that never opened
+1|.overview.superSpace.spotlight = false|Super+Space in the overview that opens nothing
+1|.overview.superAltSpace.source = "us"|Super+Alt+Space in the overview that switches nothing
+1|.overview.shiftSuperAltSpace.switcher = [["us"]]|a backward switcher in the overview without Telex
+1|.typed.text = "Vieetj "|Telex that composes nothing
+1|.session.heldSuperAlt.held.shown = false|a held chord with no switcher shown
+1|.session.heldSuperAlt.held.source = "m17n:vi:telex"|a held chord that switches before the release
+1|.overview.heldSuperAlt.held.selected = "us"|a held switcher highlighting the current source
+1|.overview.heldSuperAlt.released.engine = "xkb:us::eng"|a release that switches nothing
+1|.session.superAltSpace.chip = "EN"|a chip that stays EN on Telex
+1|.overview.superSpaceInTelex.chip = "Ắ"|a Telex chip showing its engine's symbol, not its language
+1|.overview.back.chip = "VI"|a chip that does not come back to EN
+1|.session.heldSuperAlt.released.chip = null|no chip on Telex
+1|.modals = 1|a grab left behind
+13|{error: "inputSourcesReport: no IBus"}|a probe error
+CHANGES
+}
+
 test_no_disposed_apex() {
     local run=$T/disposed-run disposed passes failures
     disposed='Gjs-CRITICAL **: Object St.Widget (0x55e780c0), has been already disposed — impossible to access it.'
@@ -3864,6 +3911,7 @@ test_session_defaults
 test_no_disposed_at_shutdown
 test_exit_cut
 test_keys_case
+test_input_sources_case
 test_shutdown_banner_case
 test_startup_handler_ran
 test_network_rows_centred
