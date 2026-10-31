@@ -324,7 +324,10 @@ apps are, and registers them with the shell's watcher. Every call an item gets l
   glyphs and place in the status pill, whose start narrows for it and widens again once
   nothing is in use; the recording pill's stop square and tabular timer; the sharing
   pill's glyph, square, name and gap to the status pill; the input chip's "EN", font,
-  tracking and minimum width.
+  tracking and minimum width, and each source's chip: an xkb source's short name in
+  capitals, an IBus source's engine language code. The image's sources here are xkb (us, fr):
+  the IBus mapping is checked against a stub in tests/layer; the real engine is #187's case and
+  the VM run.
 
 The captures `<case>-indicators.png`, `<case>-indicators-everything.png`,
 `<case>-indicator-menu.png` and `<case>-indicator-overflow.png` show the bar, the bar in
@@ -655,6 +658,26 @@ WCAG 1.4.11's 3:1 over the light backdrops.
 rounding): a lower one fails. Where it is under 3:1 the dot leaves the plain glyph check for a
 gap line, which fails once the dot reaches 3:1, so the fix also removes the gap.
 
+Board 39's pills are measured on the bar too (`barPills`): with two input sources set for the
+step, the input chip, and, as in `indicators.js`'s "everything", the camera and microphone in
+use, a recording at 0:42 and a share. The chip's and the timer's text want 4.5:1, the share's and
+the privacy group's glyphs 3:1, each over what is drawn behind it, the pill's own fill. A pill
+Apex fills at rest (the recording, the share, the privacy group) is also read against the bar:
+the median of its fill across its middle, clear of the corners, against the bar a pixel or two
+beyond each end, at 3:1 (WCAG 1.4.11). Upstream's high-contrast sheet fills the button instead,
+so there `bar_pills` leaves the edge out. Every text passes; the gaps (`A11Y_PILL_TODAY`, pinned as
+the inactive dot is) are the owner's to decide:
+
+| Case | Part | Today |
+|---|---|---|
+| `default-solid` | the recording pill's `$apex_recording` against the bar | 2.02:1 |
+| `default-solid` | the sharing pill's and the privacy group's `$apex_privacy` against the bar | 1.62:1 |
+| `dark-style-solid` | the recording pill's fill against the bar | 2.13:1 |
+| `dark-style-solid` | the sharing pill's and the privacy group's fill against the bar | 2.65:1 |
+| `high-contrast`, `high-contrast-solid` | upstream's screen-sharing glyph, white on `#ff7800` | 2.54:1 |
+
+Over the Facets every fill holds 3:1: 5.44:1 and 4.38:1 in `default`, 3.14:1 and 3.90:1 in `dark-style`.
+
 The bar is measured the same way over every wallpaper G2 shows it on: the Facets, light in
 `default` and dark in `dark-style`; `#013b88` in the `-solid` twins; and, in `no-dock`
 (`bar_over_fixture`), the overview's fixture gradient, once in the overview and once on the
@@ -919,6 +942,7 @@ Not asserted here: the volume glyph (the container has no audio server), and wha
 | `clock.c` | the direct cases' shells (`LD_PRELOAD`) | the fixed wall clock |
 | `smoke.sh` | CI's Fedora 45 container | `direct.sh fedora` on Fedora's gnome-shell, and the assertions that need no Apex build |
 | `patched.sh` | a throwaway Fedora 45 container, by hand | the patched shell before a builder VM: rebuilds Fedora's SRPM with this checkout's recipe and `desktop/shell/`, runs `direct.sh main`, and asserts the logs and the top bar (below) |
+| `repeat.sh` | the host, by hand | `patched.sh` N times on one build, each in its own container, then every assertion whose verdict differs between the runs (below) |
 | `maximised-window.js` | the `dock-intellihide` and `dock-external` cases' shells (gjs, GTK 4) | one maximised window, which the probe starts and stops |
 | `dock-dnd.js`, `dock-external.js` | the `dock-dnd` and `dock-external` cases' shells | the dock's drags, and the dock and the bar on two monitors |
 | `probe.js` | the shell (`--automation-script`) | prints `APEXG2 {…}` and, for the capture cases, `APEXG2-SCENES {…}` |
@@ -935,6 +959,28 @@ Not asserted here: the volume glyph (the container has no audio server), and wha
 | `glass-load.js`, `load-window.js` | the `glass-load` and `glass-stress` cases' shells; gjs, GTK 4 | ADR 0014's scenarios as work counts, and the client that stands in for a video; `tests/laptop` runs both on the laptop, the client with `measure=` |
 | `frame.c`, `G2Frame-1.gir` | the glass cases' shells | `G2Frame.read()`, a region of the frame the shell drew |
 | `selftest.sh`, `png-test.js`, `blur-ref-test.js` | CI and the host | the tests of the above |
+
+## Run to run
+
+A G2 flake that reaches a gate run costs a whole VM run, so a check that passes once is not
+enough. `tests/shots/repeat.sh N` runs `patched.sh` N times on one build: the first run builds
+the RPMs (or `PATCHED_RPMS=DIR` names them) and the others install them, each in a fresh Fedora 45
+container so no run inherits another's state. Each run is a whole `patched.sh`: Fedora's
+gnome-shell in `direct.sh fedora`, then the lane's in `direct.sh main`. It then prints every
+assertion whose verdict differs, one row each with every run's verdict (`P`, `F`, `G` for a known
+gap, `-` when a run never made it) and the assertion, and a count:
+
+```
+P F P P P  shutdown-banner: nothing touches a disposed object once the shell is shutting down
+repeat: 5 runs, 2033 assertions, 1 differ
+```
+
+It exits 1 when any assertion differs. `repeat.sh compare LOG...` does the same for logs already
+kept. A failure's detail (`(got …)`, `(no report)`, `(no line matches …)`) is cut so it shares its
+pass's row, then one closing parenthesis, which on a pass can say what that run saw (a probe
+`(late)` or `(on time)`): rows compare verdicts. An assertion a run makes twice gets a row per time. A differing row is a race to
+root-cause: make it fail on demand first, then make it impossible. A retry, a longer wait, or a
+rerun on failure hides it until a gate run meets it.
 
 ## The patched shell without a VM
 

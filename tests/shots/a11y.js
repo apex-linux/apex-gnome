@@ -15,6 +15,7 @@ import * as MessageTray from 'resource:///org/gnome/shell/ui/messageTray.js';
 import * as Scripting from 'resource:///org/gnome/shell/ui/scripting.js';
 import * as SwitcherPopup from 'resource:///org/gnome/shell/ui/switcherPopup.js';
 
+import {showInUse} from './indicators.js';
 import * as Png from './png.js';
 
 Gio._promisify(Shell.Screenshot.prototype, 'screenshot_area');
@@ -27,6 +28,9 @@ const SWITCHER_APPS = ['Text Editor', 'Terminal', 'Web', 'Files', 'Settings'];
 export const ACCENTS = ['blue', 'teal', 'green', 'yellow', 'orange', 'red', 'pink', 'purple', 'slate'];
 // The bar's dots draw their background in the bar's ink: glyphs too.
 const DOTS = ['workspace-dot', 'messages-indicator'];
+// Board 39's two input sources, as direct.sh's TWO_SOURCES.
+const TWO_SOURCES = [['xkb', 'us'], ['xkb', 'fr']];
+const CHIP_TIMEOUT_MS = 5000;
 
 function srgb(channel) {
     const c = channel / 255;
@@ -240,6 +244,81 @@ async function surfaceReport(root, settle, unit) {
     return {box: roundedBox(box, unit), targets: targets.map(t => measure(t, image))};
 }
 
+// The pixel at stage point x, y of a capture.
+function pixelAt(image, x, y) {
+    const at = (Math.floor((y - image.y) * image.scale) * image.width + Math.floor((x - image.x) * image.scale)) * 4;
+    return [image.rgba[at], image.rgba[at + 1], image.rgba[at + 2]];
+}
+
+// A filled pill's fill, read across its middle clear of the corners, against the bar a pixel or
+// two beyond each end: the median inside, as a stop square stays drawn there.
+function edgeOf(pill, image) {
+    const box = extents(pill);
+    const radius = pill.get_theme_node().get_border_radius(St.Corner.TOPLEFT);
+    const inside = [];
+    const outside = [];
+    for (let y = box.y + box.height / 4; y < box.y + box.height * 3 / 4; y++) {
+        for (let x = box.x + radius; x < box.x + box.width - radius; x++)
+            inside.push(pixelAt(image, x, y));
+        for (const x of [box.x - 2, box.x - 1, box.x + box.width, box.x + box.width + 1])
+            outside.push(pixelAt(image, x, y));
+    }
+    inside.sort((a, b) => luminance(a) - luminance(b));
+    const fill = inside[Math.floor(inside.length / 2)];
+    const samples = outside.map(bar => ({bar, ratio: ratio(fill, bar)})).sort((a, b) => a.ratio - b.ratio);
+    const worst = samples[Math.floor(samples.length * BACKDROP_PERCENTILE)];
+    return {fill: hex(fill), bar: hex(worst.bar), ratio: Math.round(worst.ratio * 100) / 100};
+}
+
+async function chipShown(keyboard) {
+    for (let waited = 0; waited < CHIP_TIMEOUT_MS && !keyboard.visible; waited += 100)
+        // eslint-disable-next-line no-await-in-loop
+        await Scripting.sleep(100);
+}
+
+// Board 39's pills, the input chip among them: each pill's text and glyphs over its own fill and,
+// for a pill filled at rest, that fill against the bar beside it.
+async function pillsReport(settle, unit) {
+    const {quickSettings, screenRecording, screenSharing, keyboard} = Main.panel.statusArea;
+    const sources = new Gio.Settings({schema_id: 'org.gnome.desktop.input-sources'});
+    const saved = sources.get_value('sources');
+    sources.set_value('sources', new GLib.Variant('a(ss)', TWO_SOURCES));
+    const hideInUse = showInUse();
+    try {
+        await chipShown(keyboard);
+        await settle();
+        const roots = {
+            input: keyboard._container,
+            recording: screenRecording._box,
+            sharing: screenSharing.get_first_child(),
+            privacy: quickSettings.get_first_child().get_children().find(a => a.name === 'apexPrivacyGroup') ?? null,
+        };
+        const found = Object.fromEntries(Object.entries(roots).map(([pill, root]) => [pill, root?.mapped ? targetsOf(root) : []]));
+        const targets = Object.fromEntries(Object.entries(found).map(([pill, list]) =>
+            [pill, list.map(t => snapshot(t, roots[pill], new Map(), unit))]));
+        const inks = Object.values(found).flat().map(t => t.ink);
+        const opacities = inks.map(ink => ink.opacity);
+        inks.forEach(ink => setOpacity(ink, 0));
+        let image;
+        try {
+            await settle();
+            image = await stagePixels(extents(Main.panel));
+        } finally {
+            inks.forEach((ink, i) => setOpacity(ink, opacities[i]));
+        }
+        const pills = Object.fromEntries(Object.entries(roots).map(([pill, root]) => {
+            if (!root?.mapped)
+                return [pill, {error: 'not shown'}];
+            const filled = root.get_theme_node().get_background_color().alpha > 0;
+            return [pill, {targets: targets[pill].map(t => measure(t, image)), edge: filled ? edgeOf(root, image) : null}];
+        }));
+        return {box: roundedBox(extents(Main.panel), unit), pills};
+    } finally {
+        hideInUse();
+        sources.set_value('sources', saved);
+    }
+}
+
 // The bar over whatever the stage draws now, as a11yReport measures it.
 export async function barReport(settle, unit) {
     await settle();
@@ -336,6 +415,8 @@ export async function a11yReport(h) {
     // Unread notifications put the clock's dot on the bar.
     out.barUnread = await withOpen(notifications, source => source.destroy(), () => report(Main.panel));
     lap('bar');
+    out.barPills = await pillsReport(settle, unit);
+    lap('barPills');
     out.dock = await report(h.apexDock());
     lap('dock');
     out.popupMenu = await withOpen(() => h.openPopupMenu(), s => s.close(), s => report(s.root));

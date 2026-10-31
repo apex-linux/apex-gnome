@@ -673,7 +673,8 @@ REPORT_OF_INDICATORS_DRAWN_FROM_TOKENS='
 | {pill: {x: 1190, y: 4, width: ($t.apex_input_chip_min_width | px), height: $h, radius: $r}, text: "EN",
    size: ($t.apex_font_input_chip_size | px), weight: ($t.apex_font_input_chip_weight | tonumber),
    tracking: (($t.apex_font_input_chip_tracking | rtrimstr("em") | num) * ($t.apex_font_input_chip_size | px)), features: "",
-   colour: ($t.apex_bar_fg | hex)} as $input
+   colour: ($t.apex_bar_fg | hex), sources: [{type: "xkb", id: "us", stock: "en", language: null, text: "EN"},
+     {type: "ibus", id: "m17n:vi:telex", stock: "Ắ₂", language: "vi_VN", text: "VI₂"}]} as $input
 | ($t.apex_sharing_icon_size | px) as $si | (1240 - ($t.apex_sharing_margin | px) - $g) as $se
 | ($se - ($t.apex_sharing_padding_end | px) - $ss) as $qx | ($qx - ($t.apex_sharing_gap | px) - $si) as $gx2
 | ($gx2 - ($t.apex_sharing_padding_start | px)) as $sx2
@@ -765,6 +766,7 @@ REPORT_OF_LEGIBLE_SURFACES='
 | ($text + {kind: "dot", name: "workspace-dot", ratio: 16, box: {x: 100, y: 10, width: 6, height: 6}}) as $dot
 | ($dot + {alpha: 0.447, ratio: $inactive}) as $inactiveDot
 | {box: {x: 0, y: 0, width: 200, height: 100}, targets: [$text, $icon]} as $s
+| {fill: "#c01c28", bar: "#f3f3f5", ratio: 5.2} as $edge
 | {textScalingFactor: 1.25, monitor: {x: 0, y: 0, width: 1440, height: 900},
     quickSettingsAccents: (["blue", "teal", "green", "yellow", "orange", "red", "pink", "purple", "slate"] | map({key: ., value: $s}) | from_entries),
     dateMenuAccents: (["blue", "teal", "green", "yellow", "orange", "red", "pink", "purple", "slate"] | map({key: ., value: $s}) | from_entries),
@@ -772,7 +774,10 @@ REPORT_OF_LEGIBLE_SURFACES='
     screenshot: $s,
 
     bar: ($s | .targets += [$dot, $inactiveDot]), barUnread: ($s | .targets += [$dot + {name: "messages-indicator"}, $inactiveDot]), dock: $s, popupMenu: $s, osd: $s, banner: $s, quickSettings: $s, wifiMenu: $s, wifiMenuConnected: $s, dateMenu: $s, switcher: $s,
-    dialog: $s, endSession: $s, spotlight: {popup: $s, toast: $s}, overview: $s, appGrid: $s}'
+    dialog: $s, endSession: $s, spotlight: {popup: $s, toast: $s}, overview: $s, appGrid: $s,
+    barPills: {box: $s.box, pills: {input: {targets: [$text + {name: "EN"}], edge: null},
+        recording: {targets: [$text + {name: "0:42", ink: "#ffffff", backdrop: "#c01c28", ratio: 5.6}], edge: $edge},
+        sharing: {targets: [$icon + {name: "screen-shared-symbolic"}], edge: $edge}, privacy: {targets: [$icon, $icon], edge: $edge}}}}'
 
 # The label picks the backdrop: dark-style's inactive dot passes 3:1 today, default's is the gap.
 a11y_run() {
@@ -800,9 +805,27 @@ test_inactive_dot_gap() {
 CHANGES
 }
 
+# default-solid's pill fills are Apex's known gaps: pinned at today's ratios, and failing once one reaches 3:1.
+test_pill_gaps() {
+    local want_failures want_gaps sharing what passes failures open_gaps edges
+    while IFS='|' read -r want_failures want_gaps sharing what; do
+        edges=".barPills.pills.recording.edge.ratio = 2.02 | .barPills.pills.sharing.edge.ratio = $sharing | .barPills.pills.privacy.edge.ratio = 1.62"
+        read -r passes failures open_gaps <<<"$(a11y_run a11y_contrast "$edges" default-solid 2.22)"
+        if ((failures == want_failures && open_gaps == want_gaps)); then
+            ok "pill gaps: $what fails $want_failures, $want_gaps gap(s)"
+        else
+            not_ok "pill gaps: $what fails $want_failures, $want_gaps gap(s) (passed/failed/gaps $passes/$failures/$open_gaps): $(grep -m3 '^FAIL' "$T/a11y.out" | paste -sd'|' -)"
+        fi
+    done <<'CHANGES'
+0|5|1.62|default-solid's three pill fills at today's ratios, beside its two inactive-dot gaps
+1|5|1.61|the sharing pill's fill below today's 1.62:1
+1|4|3|the sharing pill's fill at 3:1: its gap must go
+CHANGES
+}
+
 test_a11y() {
     local assertions expected change what passes failures open_gaps want
-    for assertions in a11y_contrast:49 a11y_layout:46; do
+    for assertions in a11y_contrast:56 a11y_layout:46; do
         expected=${assertions#*:}
         read -r passes failures open_gaps <<<"$(a11y_run "${assertions%:*}")"
         if ((failures == 0 && open_gaps == 0 && passes == expected)); then
@@ -827,6 +850,13 @@ a11y_contrast|1|.barUnread.targets[2].ratio = 2.9|the clock's unread dot at 2.9:
 a11y_contrast|2|.bar.targets = .bar.targets[:3]|no inactive workspace dot measured
 a11y_contrast|1|.barUnread.targets = .barUnread.targets[:2] + .barUnread.targets[3:]|no unread dot measured
 a11y_contrast|0|.barUnread.targets[2] += {kind: "icon", name: "message-indicator-symbolic"}|high contrast's unread glyph in place of the dot
+a11y_contrast|1|.barPills.pills.recording.targets[0] += {ink: "#c01c28", ratio: 1}|the timer's text in the recording pill's own fill colour
+a11y_contrast|1|.barPills.pills.input.targets[0].ratio = 4.4|the input chip's text at 4.4:1
+a11y_contrast|1|.barPills.pills.privacy.targets[1].ratio = 2.9|a privacy glyph at 2.9:1 over its fill
+a11y_contrast|1|.barPills.pills.sharing.edge.ratio = 2.9|the sharing pill's fill at 2.9:1 against the bar
+a11y_contrast|2|.barPills.pills.privacy = {error: "not shown"}|a pill that never showed
+a11y_contrast|7|del(.barPills)|no pills measured
+a11y_contrast|0|.barPills.pills.recording.targets[0].ratio = 4.5|the timer's text at 4.5:1
 a11y_contrast|1|.wifiMenu.targets[0].ratio = 3|a menu row's text at 3:1
 a11y_contrast|1|.wifiMenuConnected.targets[0].ratio = 4.4|the connected network's name at 4.4:1 over its fill
 a11y_contrast|1|.wifiMenuConnected.targets |= map(. + {kind: "icon"})|a connected row with only its glyphs measured
@@ -1425,7 +1455,7 @@ test_indicators() {
     local variant change what passes failures open_gaps
     for variant in light dark; do
         read -r passes failures open_gaps <<<"$(assert_run indicator_metrics "$variant")"
-        if ((failures == 0 && passes == 30)); then
+        if ((failures == 0 && passes == 31)); then
             ok "indicators ($variant): indicators drawn from the tokens pass all $passes assertions"
         else
             not_ok "indicators ($variant): indicators drawn from the tokens pass (passed/failed/gaps $passes/$failures/$open_gaps): $(grep -m3 '^FAIL' "$T/top-bar.out" | paste -sd'|' -)"
@@ -1458,6 +1488,8 @@ test_indicators() {
 .menu.rows[1].shortcut.colour = "#ffffffff"|a shortcut not dimmed
 .log -= ["Chat Event 5 clicked"]|no clicked event
 .log = .log[:5]|no Activate
+.everything.input.sources[1].text = "Ắ₂"|an IBus chip showing its engine's symbol
+.everything.input.sources[0].text = "en"|an xkb chip in lower case
 .five.overflow.text = "+1"|the wrong overflow count
 .overflowMenu.rows[1].chevron = null|a row without its chevron
 .gone.visible = true|indicators left after the apps quit
@@ -3183,6 +3215,30 @@ test_crash_guard_counter() {
     expect_eq "guard: a second late failure that does not trip fails" "PASS PASS FAIL FAIL FAIL" "$(guard_lines "$run" 'second: ')"
 }
 
+test_repeat_compare() {
+    local out status
+    printf '%s\n' '# a comment' 'PASS default: the shell exits 0' 'FAIL motion: the easing (got false)' 'GAP  S1b: dots: 3:1 (got [2.86])' \
+        'PASS idle: nothing paints' 'PASS idle: nothing paints' >"$T/repeat-1.log"
+    cp "$T/repeat-1.log" "$T/repeat-2.log"
+    out=$("$HERE/repeat.sh" compare "$T/repeat-1.log" "$T/repeat-2.log") && status=0 || status=$?
+    expect_eq "repeat: two identical runs differ nowhere" "0 repeat: 2 runs, 5 assertions, 0 differ" "$status $out"
+    printf '%s\n' 'PASS default: the shell exits 0' 'PASS motion: the easing' 'GAP  S1b: dots: 3:1 (got [2.91])' \
+        'PASS idle: nothing paints' 'FAIL idle: nothing paints (got 3 frames)' >"$T/repeat-2.log"
+    out=$("$HERE/repeat.sh" compare "$T/repeat-1.log" "$T/repeat-2.log") && status=0 || status=$?
+    expect_eq "repeat: a fail and a pass of one assertion share a row, and a twice-made one gets a row per time" \
+        "1 F P  motion: the easing|P F  idle: nothing paints [2]|repeat: 2 runs, 5 assertions, 2 differ" "$status $(paste -sd'|' - <<<"$out")"
+    printf '%s\n' 'PASS default: the probe started (on time)' 'PASS idle: dots at 3:1 (WCAG 1.4.11)' >"$T/repeat-4.log"
+    printf '%s\n' 'PASS default: the probe started (late)' 'FAIL idle: dots at 3:1 (WCAG 1.4.11) (got [2.86])' >"$T/repeat-5.log"
+    out=$("$HERE/repeat.sh" compare "$T/repeat-4.log" "$T/repeat-5.log") && status=0 || status=$?
+    expect_eq "repeat: a pass closing on what its run saw shares a row, and a failure keeps its pass's own parenthesis" \
+        "1 P F  idle: dots at 3:1|repeat: 2 runs, 2 assertions, 1 differ" "$status $(paste -sd'|' - <<<"$out")"
+    printf '%s\n' 'PASS default: the shell exits 0' >"$T/repeat-3.log"
+    out=$({ "$HERE/repeat.sh" compare "$T/repeat-1.log" "$T/repeat-1.log" "$T/repeat-3.log" || :; } | grep -c '^P P -  ')
+    expect_eq "repeat: an assertion a run never made shows -" 2 "$out"
+    "$HERE/repeat.sh" compare "$T/repeat-1.log" >/dev/null 2>&1 && status=0 || status=$?
+    expect_eq "repeat: one log is not a comparison" 2 "$status"
+}
+
 test_no_binding_overwritten() {
     local run=$T/keys-run overwritten passes failures
     overwritten='libmutter-WARNING **: 09:41:00.000: Overwriting existing binding of keysym 20 with keysym 20 (keycode 41).'
@@ -3822,6 +3878,7 @@ test_window_switcher
 test_modal_dialog
 test_a11y
 test_inactive_dot_gap
+test_pill_gaps
 test_signoff
 test_goldens
 test_goldens_rows
@@ -3864,6 +3921,7 @@ test_no_binding_overwritten
 test_no_spurious_allocation
 test_clean_shutdown
 test_crash_guard_counter
+test_repeat_compare
 test_session_defaults
 test_no_disposed_at_shutdown
 test_exit_cut

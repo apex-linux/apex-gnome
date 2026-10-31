@@ -194,10 +194,16 @@ jobs:
           tests/ptyxis/status-test.sh
 
       - name: tests/ptyxis/shoot.sh on the built RPM
+        env:
+          APEX_PTYXIS_TARGETS: "1"
         run: |
           dnf5 -y -q --setopt=install_weak_deps=False --repo=fedora --repo=updates install \
-            gnome-shell mesa-dri-drivers dbus-daemon python3-dbusmock gcc util-linux jq jetbrains-mono-fonts-all adwaita-sans-fonts
+            gnome-shell mesa-dri-drivers dbus-daemon python3-dbusmock gcc util-linux jq jetbrains-mono-fonts-all adwaita-sans-fonts \
+            python3-gobject at-spi2-core
           tests/ptyxis/shoot.sh _build/ptyxis/out
+
+      - name: tests/ptyxis/contrast-test.sh on shoot.sh's captures
+        run: tests/ptyxis/contrast-test.sh
 
       - name: tests/s2c/agent.sh
         run: tests/s2c/agent.sh
@@ -273,6 +279,9 @@ jobs:
 
       - name: tests/libadwaita/radius-test.sh on the built RPM
         run: tests/libadwaita/radius-test.sh _build/libadwaita/out
+
+      - name: tests/libadwaita/radius-test.sh --late, a first login's apex.css
+        run: tests/libadwaita/radius-test.sh --late _build/libadwaita/out
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: failure()
