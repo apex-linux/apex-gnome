@@ -541,9 +541,19 @@ function quickSettingsState(label, quickSettings) {
 }
 
 // NMWirelessNetworkItem's and QuickToggleMenu's actors, as their constructors leave them.
-function networkRow(St, Clutter, active) {
+function networkRow(St, Clutter, active, accessPoints = 1) {
     const row = new St.Widget({name: 'row'});
-    row.network = new St.Widget({is_active: active});
+    row.network = new St.Widget({is_active: active, accessPoints});
+    row.network.hasAccessPoints = () => row.network.accessPoints > 0;
+    // Clutter notifies visible: the stub's plain field does not.
+    let visible = true;
+    Object.defineProperty(row, 'visible', {
+        get: () => visible,
+        set: value => {
+            visible = value;
+            row.emit('notify::visible');
+        },
+    });
     const icons = new St.BoxLayout({name: 'icons'});
     row._secureIcon = new St.Icon({name: 'lock', y_align: Clutter.ActorAlign.END});
     [new St.Icon({name: 'signal'}), row._secureIcon].forEach(i => icons.add_child(i));
@@ -611,17 +621,28 @@ async function exerciseSubmenus(Main) {
     other.network.is_active = true;
     other.network.emit('notify::is-active');
     fact('qs.row.switched', `${rowState(active)} | ${rowState(other)}`);
+    // network.js shows every row after each access point, the one it made for a refused one too.
+    const [empty, refused] = [networkRow(St, Clutter, false, 0), networkRow(St, Clutter, false, 0)];
+    quickSettings.menu.actor.children.push(empty, refused);
+    [empty, refused].forEach(row => Hooks.run('quick-settings-network-item', row));
+    [empty, refused].forEach(row => row.show());
+    fact('qs.row.empty', `visible=${empty.visible}`);
+    empty.network.accessPoints = 1;
+    empty.show();
+    fact('qs.row.adopted', `visible=${empty.visible}`);
     const gone = networkRow(St, Clutter, true);
     Hooks.run('quick-settings-network-item', gone);
     gone.destroy();
     settings.set_boolean('layer-enabled', false);
     await spin(200);
     fact('qs.off.row', rowState(other));
+    fact('qs.off.refused', `visible=${refused.visible}`);
     fact('qs.off.menu', menu.subtitleAt());
     other.network.emit('notify::is-active');
     fact('qs.off.row-unfollowed', `checked=${other.has_style_pseudo_class('checked')}`);
     settings.set_boolean('layer-enabled', true);
     await spin(200);
+    fact('qs.on.refused', `visible=${refused.visible}`);
     fact('qs.on.row', rowState(other));
     fact('qs.on.menu', menu.subtitleAt());
 }
