@@ -299,6 +299,38 @@ badge_icon (const char *state, const CcApexUpdatesHero *hero)
     return "view-refresh-symbolic";
 }
 
+static GtkWidget *
+change_label (const char *text, const char *style, float xalign)
+{
+    GtkWidget *label = gtk_label_new (text);
+
+    gtk_label_set_xalign (GTK_LABEL (label), xalign);
+    gtk_label_set_ellipsize (GTK_LABEL (label), PANGO_ELLIPSIZE_END);
+    gtk_widget_add_css_class (label, style);
+    return label;
+}
+
+/* Board 18: the staged changes as one grid of kind, package and versions, not a row each. */
+static GtkWidget *
+changes_grid (GPtrArray *changes)
+{
+    GtkWidget *grid = gtk_grid_new ();
+
+    gtk_widget_add_css_class (grid, "apex-changes");
+    gtk_grid_set_column_spacing (GTK_GRID (grid), 14);
+    gtk_grid_set_row_spacing (GTK_GRID (grid), 6);
+    for (guint i = 0; i < changes->len; i++) {
+        CcApexUpdatesChange *c = g_ptr_array_index (changes, i);
+        GtkWidget *name = change_label (c->name, "apex-change-name", 0);
+
+        gtk_widget_set_hexpand (name, TRUE);
+        gtk_grid_attach (GTK_GRID (grid), change_label (c->kind, "apex-change-kind", 0), 0, i, 1, 1);
+        gtk_grid_attach (GTK_GRID (grid), name, 1, i, 1, 1);
+        gtk_grid_attach (GTK_GRID (grid), change_label (c->versions, "apex-change-versions", 1), 2, i, 1, 1);
+    }
+    return grid;
+}
+
 static void
 changes_for_cb (GObject *source, GAsyncResult *result, gpointer user_data)
 {
@@ -545,6 +577,7 @@ changes_cb (GObject *source, GAsyncResult *result, gpointer user_data)
     g_autofree char *summary = NULL;
     g_autofree char *built = NULL;
     g_autofree char *subtitle = NULL;
+    GtkWidget *grid;
     guint others = 0;
 
     if (!cc_apex_update1_call_get_changes_finish (CC_APEX_UPDATE1 (source), &changes, result, &error)) {
@@ -578,18 +611,9 @@ changes_cb (GObject *source, GAsyncResult *result, gpointer user_data)
                                     built ? built : "");
     adw_expander_row_set_subtitle (self->changes_row, subtitle);
 
-    for (guint i = 0; i < parsed->len; i++) {
-        CcApexUpdatesChange *c = g_ptr_array_index (parsed, i);
-        GtkWidget *row = adw_action_row_new ();
-        GtkWidget *kind = gtk_label_new (c->kind);
-
-        adw_preferences_row_set_title (ADW_PREFERENCES_ROW (row), c->name);
-        adw_action_row_set_subtitle (ADW_ACTION_ROW (row), c->versions);
-        gtk_widget_add_css_class (kind, "dim-label");
-        adw_action_row_add_suffix (ADW_ACTION_ROW (row), kind);
-        adw_expander_row_add_row (self->changes_row, row);
-        g_ptr_array_add (self->change_rows, row);
-    }
+    grid = changes_grid (parsed);
+    adw_expander_row_add_row (self->changes_row, grid);
+    g_ptr_array_add (self->change_rows, grid);
 }
 
 static void

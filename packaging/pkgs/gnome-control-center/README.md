@@ -162,7 +162,8 @@ and polkit asks in the daemon, never in Settings.
   with the reason the daemon gives, and for every `degraded` one. `holds` is read as
   `a(sstbts)` or, from a daemon before apex-system K4, `a(sstbt)`.
 - **What's New**: `GetChanges` for the staged digest, summed up as its GNOME, Linux and
-  Mesa versions (then other packages), with every change in the expanded row.
+  Mesa versions (then other packages), with every change in the expanded row as one
+  grid of kind, package and versions, the package and versions in monospace.
 - **Versions**: Booted, Staged and Rollback, each as version and short digest in
   monospace and the build date, Staged with a "Checked" pill instead (the daemon keeps a
   staged image only once its signature checks out), and "Kept by Apex: …" with the

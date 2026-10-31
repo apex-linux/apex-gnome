@@ -128,8 +128,19 @@ check "next-point: counts shoot counts shoot.sh's TAP lines" 2/1 "$(np_counts sh
 check "next-point: a log without a summary counts ?" "? ?" \
     "$(np_counts goldens "$TMP/dnf5") $(np_counts shoot "$TMP/np-g2.log")"
 check "next-point: a missing log counts ?" "? ?" "$(np_counts g2 "$TMP/none") $(np_counts shoot "$TMP/none")"
+for cut in "ARG GA_REACHED=0" "ARG GA_REACHED=1" "ARG GA_REACHED=1|FROM x|ARG GA_REACHED" ""; do
+    tr '|' '\n' <<<"ARG REPOS_BASE=https://dl.fedoraproject.org/pub/fedora/linux|$cut|FROM x" >"$TMP/np-Containerfile"
+    "$APEX_ROOT/.github/scripts/next-point.sh" reopen "$TMP/np-Containerfile" 2>/dev/null
+    check "next-point: reopen after '${cut:-the ARG deleted}' gives apex-lane GA_REACHED=0" \
+        "--repos-base https://dl.fedoraproject.org/pub/fedora/linux --ga-reached 0" \
+        "$("$APEX_ROOT/tests/lib/image-args.sh" "$TMP/np-Containerfile" 2>/dev/null | paste -sd ' ')"
+done
+check_false "next-point: reopen of no Containerfile dies" "$APEX_ROOT/.github/scripts/next-point.sh" reopen "$TMP/none"
 check "next-point.yml: dispatch and schedule only, no lane cache" "" \
     "$(grep -nE 'pull_request|push:|actions/cache|APEX_LANE_CACHE' "$APEX_ROOT/.github/workflows/next-point.yml" | grep -vE '^[0-9]+: *#')"
+check "next-point.yml: the report waits on and prints every job's result" "1 1" \
+    "$(grep -c 'needs: \[lane, g2, signoff, apps, libadwaita, ptyxis\]' "$APEX_ROOT/.github/workflows/next-point.yml") \
+$(grep -cE 'app (libadwaita|ptyxis)\)' "$APEX_ROOT/.github/workflows/next-point.yml")"
 check "next-point.sh: run by next-point.yml alone" ".github/workflows/next-point.yml" \
     "$(cd "$APEX_ROOT" && grep -l 'next-point.sh' .github/workflows/*.yml | paste -sd ' ')"
 check "the stable lane names no updates-testing: lane.sh and image-args.sh fetch as before" "" \

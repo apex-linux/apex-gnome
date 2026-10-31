@@ -170,13 +170,45 @@ the sign-off shells (above). Every case's probe reports them (`session-defaults.
   missing JetBrains Mono fails rather than falling back to another monospace font;
 - the bar's clock is drawn in Adwaita Sans, as Pango resolves it;
 - every icon shown in the bar, the dock, the overview's dash and Quick Settings resolves under
-  `/usr/share/icons/Apex/`. Two explicit lists name the only others: `FIXTURE_APPS`, G2's own
-  stub apps, which have no icon and draw GNOME's generic one, and `SHELL_RESOURCE_ICONS`,
-  icons the shell draws from its own resource because board 31 has no glyph of that name
-  (`screenshooter-symbolic`). A failure names each icon, where it showed, its app and the
-  file it resolved to, or "no icon".
+  `/usr/share/icons/Apex/`. Explicit lists, each entry by exact name with its reason, name the
+  only others: `FIXTURE_APPS`, G2's own stub apps, which have no icon and draw GNOME's generic
+  one; `SHELL_RESOURCE_ICONS`, icons the shell draws from its own resource because board 31
+  has no glyph of that name yet (below, "Open"); and `STAND_IN_ICONS`, a stock icon on one
+  surface only (`switcher application-x-executable`, G2's switcher stand-in, and
+  `spotlight drive-harddisk`, a full-colour device icon a search provider returns, which Apex
+  inherits from Adwaita by design). A failure names each icon, where it showed, its app and
+  the file it resolved to, or "no icon";
+- no name on `SHELL_RESOURCE_ICONS` is one Apex Symbolic ships (the probe lists
+  `/usr/share/icons/Apex/symbolic`): once apex-desktop draws a glyph, the pin bump that brings
+  it fails until the name leaves the list, so the list only shrinks;
+- in a case with the scenes (`G2_SCENES=1`: `default` and `dark-style`, in the VM and in
+  sign-off), every other surface G2 opens, by the same rule. After the last capture, so no
+  scene changes, the probe opens each surface with the openers its scenes use (`probe.js`'s
+  `iconSurfaces`), walks its shown icons, and closes it before the next
+  (`APEXG2-SESSION-SURFACES`): board 34's date menu with a notification, the overview (35),
+  the launcher grid (36), Spotlight's results (38), the window switcher (15), board 16's popup
+  menu, OSD and banner, board 13's dialog, the end-session dialog (14) and the screenshot UI
+  (19). The date menu is walked with Show Status Shapes on, the only state that shows Do Not
+  Disturb's switch glyphs. Each surface passes or fails on its own, naming its board; a surface
+  that did not open, or drew no icon, fails too.
 
 The wallpaper is `backdrop_painted`'s (below).
+
+### Open: glyphs board 31 lacks
+
+Names the shell draws from its own resource today, each on `SHELL_RESOURCE_ICONS`.
+apex-desktop#35 ships all nine in Apex Symbolic, seven as aliases of glyphs the boards already
+draw and the switch's two shapes as new ones. They are pending the `APEX_DESKTOP_REV` bump that
+brings it, which then takes them off the list.
+
+| Name | Surface |
+|---|---|
+| `screenshooter-symbolic` | Quick Settings (the screenshot button) |
+| `notification-expand-symbolic` | the date menu (34): a notification's expander |
+| `switch-on-symbolic`, `switch-off-symbolic` | the date menu (34): Do Not Disturb's switch, with Show Status Shapes |
+| `screenshot-ui-area-symbolic`, `screenshot-ui-display-symbolic`, `screenshot-ui-window-symbolic` | the screenshot UI (19): its three capture types |
+| `screenshot-ui-show-pointer-symbolic` | the screenshot UI (19): Show Pointer |
+| `preview-close-symbolic` | the screenshot UI (19): its close button |
 
 ## The backdrop
 
@@ -954,7 +986,7 @@ Not asserted here: the volume glyph (the container has no audio server), and wha
 | `a11y.js` | the shell | the accessibility cases: contrast against what is drawn, and the Large Text layout |
 | `backdrop.js`, `backdrops.sh` | the shell; a throwaway container | whether the pinned backdrop painted, and the Facets it pins rendered where an image has them |
 | `indicators.js`, `sni-items.js` | the shell; gjs | the app-indicator part of `default`, `default-scale1` and `dark-style`, and the StatusNotifierItems it starts |
-| `session-defaults.js` | every case's shell | the fonts and icon theme the session reads, fontconfig's families for them, the clock's drawn family, and the file each shown icon of the bar, dock, dash and Quick Settings resolves to |
+| `session-defaults.js` | every case's shell | the fonts and icon theme the session reads, fontconfig's families for them, the clock's drawn family, and the file each shown icon of the bar, dock, dash and Quick Settings resolves to; with the scenes, the same for every other surface G2 opens |
 | `idle.js` | the `idle` case's shell | the settled desktop, its paints and relayouts over 10 s, and the counter's control |
 | `glass-load.js`, `load-window.js` | the `glass-load` and `glass-stress` cases' shells; gjs, GTK 4 | ADR 0014's scenarios as work counts, and the client that stands in for a video; `tests/laptop` runs both on the laptop, the client with `measure=` |
 | `frame.c`, `G2Frame-1.gir` | the glass cases' shells | `G2Frame.read()`, a region of the frame the shell drew |
@@ -1012,26 +1044,38 @@ on dispatch and weekly (Tuesdays), never on a pull request, and no check require
 
 - **lane:** `next-point.sh image` fetches the pinned apex-image and fills its updates-testing
   allowlist with the builds updates-testing moves among gnome-shell, mutter, gdm, gjs, glib2,
-  gnome-session, gsettings-desktop-schemas, gtk4, libadwaita, gnome-control-center and
-  nautilus. Admitting every build would overflow apex-lane's dnf5 arguments. `lane.sh` then builds gnome-shell from that SRPM through
-  `APEX_IMAGE_SRC`, without `APEX_LANE_CACHE`, so it reads and writes no lane cache. The job
-  summary lists what moves.
+  gnome-session, gsettings-desktop-schemas, gtk4, libadwaita, gnome-control-center, nautilus,
+  ptyxis and vte291-gtk4. Admitting every build would overflow apex-lane's dnf5 arguments.
+  `lane.sh` then builds gnome-shell from that SRPM through `APEX_IMAGE_SRC`, without
+  `APEX_LANE_CACHE`, so it reads and writes no lane cache. The job summary lists what moves.
 - **g2:** `patched.sh` runs every case on those RPMs.
 - **signoff:** `signoff.sh --goldens` checks the shell boards against the approved goldens.
 - **apps:** for Settings and Files, the lane's libadwaita and the app from updates-testing,
   installed under the shim, then `tests/control-center/run.sh` and `tests/nautilus/shoot.sh`.
+- **libadwaita:** the lane's libadwaita from updates-testing, then
+  `tests/libadwaita/radius-test.sh` in its three modes (`--stock`, the rewrite, `--late`).
+- **ptyxis:** the lane's Ptyxis from updates-testing, then as ci.yml runs them
+  `tests/ptyxis/status-test.sh`, `shoot.sh`, `contrast-test.sh`, `palette-test.sh` (on
+  `tests/s2c/agent.sh`'s agent) and `panes-test.sh`.
 - **report:** one line in the run's summary, passed/failed for each, `?` where a job gave
-  none, then each app's NEVR and its ok/not ok count: `next-point: gnome-shell-51.1-1.fc45.apex1
-  g2 1954/0 goldens 30/0 shoot 523/0 | gnome-control-center-51.1-1.fc45.apex1 46/0 |
-  nautilus-51.1-1.fc45.apex1 84/0`.
+  none, then each app's NEVR and its ok/not ok count, and libadwaita's and Ptyxis's NEVR and
+  their test scripts passed/failed: `next-point: gnome-shell-51.1-1.fc45.apex1 g2 1954/0
+  goldens 30/0 shoot 523/0 | gnome-control-center-51.1-1.fc45.apex1 46/0 |
+  nautilus-51.1-1.fc45.apex1 84/0 | libadwaita-1.10.0-2.fc45.apex1 3/0 |
+  ptyxis-50.1-6.fc45.apex1 5/0`.
 
-g2, signoff and apps install `next-point.sh shim` first, a `dnf5` ahead of Fedora's on `PATH`.
-It adds updates-testing beside each `--repo=updates` and updates-testing-source beside each
-`--repo=updates-source`, and enables updates-testing for a call that names no repository. So
-the scripts install what GA brings, unchanged. `lane.sh`, `image-args.sh` and every other
-workflow stay as they are, which `.github/scripts/selftest.sh` checks. Once apex-image passes
-its admission cut (`GA_REACHED=1`), `next-point.sh image` fails: updates-testing is then no
-longer what a GA push brings.
+g2, signoff, apps, libadwaita and ptyxis install `next-point.sh shim` first, a `dnf5` ahead of
+Fedora's on `PATH`. It adds updates-testing beside each `--repo=updates` and
+updates-testing-source beside each `--repo=updates-source`, and enables updates-testing for a
+call that names no repository. So the scripts install what GA brings, unchanged. `lane.sh`,
+`image-args.sh` and every other workflow stay as they are, which `.github/scripts/selftest.sh`
+checks.
+
+After F45's GA, next-point keeps watching updates-testing: each point release after it (51.2
+and on) waits there before an updates push. apex-image's admission cut sets `GA_REACHED=1`, or
+deletes the ARG, and apex-lane then admits nothing from updates-testing, so `next-point.sh
+image` reopens its own copy (`next-point.sh reopen`): `ARG GA_REACHED=0` again, the ARG added
+if the cut deleted it. The real apex-image and every lane cache stay as they are.
 
 ## The authentication dialog
 
