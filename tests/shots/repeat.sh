@@ -45,6 +45,8 @@ compare() {
             text = substr($0, 6)
             if (verdict != "P")
                 sub(/ \((got |no report\)|no line matches ).*$/, "", text)
+            # A pass may close on what this run saw ("(late)", "(on time)"): the verdict is what compares.
+            sub(/ \([^()]*\)$/, "", text)
             # An assertion a run makes twice gets a row per time, so a mixed pair cannot hide.
             if (++times[text] > 1)
                 text = text " [" times[text] "]"

@@ -948,7 +948,8 @@ repeat: 5 runs, 2033 assertions, 1 differ
 
 It exits 1 when any assertion differs. `repeat.sh compare LOG...` does the same for logs already
 kept. A failure's detail (`(got …)`, `(no report)`, `(no line matches …)`) is cut so it shares its
-pass's row, and an assertion a run makes twice gets a row per time. A differing row is a race to
+pass's row, then one closing parenthesis, which on a pass can say what that run saw (a probe
+`(late)` or `(on time)`): rows compare verdicts. An assertion a run makes twice gets a row per time. A differing row is a race to
 root-cause: make it fail on demand first, then make it impossible. A retry, a longer wait, or a
 rerun on failure hides it until a gate run meets it.
 

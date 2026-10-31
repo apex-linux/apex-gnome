@@ -3159,6 +3159,11 @@ test_repeat_compare() {
     out=$("$HERE/repeat.sh" compare "$T/repeat-1.log" "$T/repeat-2.log") && status=0 || status=$?
     expect_eq "repeat: a fail and a pass of one assertion share a row, and a twice-made one gets a row per time" \
         "1 F P  motion: the easing|P F  idle: nothing paints [2]|repeat: 2 runs, 5 assertions, 2 differ" "$status $(paste -sd'|' - <<<"$out")"
+    printf '%s\n' 'PASS default: the probe started (on time)' 'PASS idle: dots at 3:1 (WCAG 1.4.11)' >"$T/repeat-4.log"
+    printf '%s\n' 'PASS default: the probe started (late)' 'FAIL idle: dots at 3:1 (WCAG 1.4.11) (got [2.86])' >"$T/repeat-5.log"
+    out=$("$HERE/repeat.sh" compare "$T/repeat-4.log" "$T/repeat-5.log") && status=0 || status=$?
+    expect_eq "repeat: a pass closing on what its run saw shares a row, and a failure keeps its pass's own parenthesis" \
+        "1 P F  idle: dots at 3:1|repeat: 2 runs, 2 assertions, 1 differ" "$status $(paste -sd'|' - <<<"$out")"
     printf '%s\n' 'PASS default: the shell exits 0' >"$T/repeat-3.log"
     out=$({ "$HERE/repeat.sh" compare "$T/repeat-1.log" "$T/repeat-1.log" "$T/repeat-3.log" || :; } | grep -c '^P P -  ')
     expect_eq "repeat: an assertion a run never made shows -" 2 "$out"
