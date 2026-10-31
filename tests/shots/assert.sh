@@ -137,12 +137,23 @@ result_of() {
 }
 
 exits() {
-    local run=$1 case_name=$2 status=$3
-    if [[ $(result_of "$run" "$case_name") == "exit=$status "* ]]; then
+    local run=$1 case_name=$2 status=$3 got bt=$1/$2.bt where=
+    got=$(result_of "$run" "$case_name")
+    if [[ $got == "exit=$status "* ]]; then
         pass "$case_name: the shell exits $status"
-    else
-        fail "$case_name: the shell exits $status (got: $(result_of "$run" "$case_name"))"
+        return
     fi
+    # A shell that died on a signal names where, from direct.sh's backtrace, or why there is none.
+    if [[ $got =~ ^exit=(129|1[3-9][0-9]|2[0-5][0-9])\  ]]; then
+        # The crashing thread comes first; past the signal trampoline, raise, abort and GLib's
+        # assertion and log frames come before the site that called them.
+        where=$(awk '/<signal handler called>/ { past = 1; next }
+            past && /^#/ && !/ (__pthread_kill[a-z_]*|__GI_raise|raise|__GI_abort|abort|g_assertion_message[a-z_]*|g_log[a-z_]*) \(/ {
+                print; exit }' "$bt" 2>/dev/null)
+        [[ -n $where ]] || where=$(grep -m 1 -E '^#0 |^no backtrace: ' "$bt" 2>/dev/null)
+        where="; ${where:-no ${bt##*/}}${where:+ (${bt##*/})}"
+    fi
+    fail "$case_name: the shell exits $status (got: $got$where)"
 }
 
 no_js_error() {

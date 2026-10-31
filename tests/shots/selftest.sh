@@ -3230,6 +3230,46 @@ test_shutdown_banner_case() {
 CHANGES
 }
 
+# A shell that died on a signal leaves a backtrace, or one line saying why it has none, and its
+# exit assertion names it; a clean exit leaves nothing.
+test_case_backtrace() {
+    local run=$T/backtrace tools=$T/backtrace-tools tool
+    mkdir -p "$run/core" "$tools"
+    for tool in find sed sort head cat cut rm; do ln -sf "$(command -v "$tool")" "$tools/$tool"; done
+    printf '%s\n' 'GNOME Shell-Message: started' 'APEXG2-CRASH gnome-shell[42] SIGSEGV' '/usr/lib64/libst-17.so(+0x1) [0x2]' \
+        'APEXG2-CRASH end' >"$run/x.log"
+    # shellcheck disable=SC2016 # expanded by the inner bash
+    PATH=$tools "$BASH" -c '. "$1/backtrace.sh"; case_backtrace "$2/x.log" 0 "$2/core" "$2/clean.bt"
+        case_backtrace "$2/x.log" 139 "$2/core" "$2/none.bt"; : >"$2/core/core"
+        case_backtrace "$2/x.log" 139 "$2/core" "$2/nogdb.bt"; : >"$2/core/core"
+        case_backtrace "$2/x.log" 134 "$2/core" "$2/expected.bt" 134' _ "$HERE" "$run"
+    expect_eq "backtrace: a clean exit writes none" no "$([[ -e $run/clean.bt ]] && echo yes || echo no)"
+    expect_eq "backtrace: crash.c's frames reach it" 1 "$(grep -c '^/usr/lib64/libst-17.so' "$run/none.bt")"
+    expect_eq "backtrace: no core says so" 1 "$(grep -c '^no backtrace: no core in .*/core (core_pattern ' "$run/none.bt")"
+    expect_eq "backtrace: a core without gdb says so" 1 "$(grep -c '^no backtrace: gdb missing' "$run/nogdb.bt")"
+    expect_eq "backtrace: an expected signal exit writes none and drops its core" "no no" \
+        "$([[ -e $run/expected.bt ]] && echo yes || echo no) $([[ -e $run/core/core ]] && echo yes || echo no)"
+    # The wiring: every case's shell preloads crash.c, and run_case writes its backtrace with the case's expected exit.
+    # shellcheck disable=SC2016 # direct.sh's lines, as written
+    expect_eq "backtrace: direct.sh builds crash.c, preloads it and calls case_backtrace" 4 "$(grep -cF \
+        -e 'gcc -O2 -Wall -Werror -shared -fPIC -o "$CRASH_LIB" /w/crash.c' -e 'G2_CRASH_LIB="$CRASH_LIB"' \
+        -e 'exec env LD_PRELOAD="$G2_CLOCK_LIB $G2_CRASH_LIB"' \
+        -e 'case_backtrace "/out/$name.log" "$rc" "$home" "/out/$name.bt" "$expected"' "$HERE/direct.sh")"
+    echo 'x exit=139 secs=4 marker-after-exit=yes' >"$run/results-pr.txt"
+    mv "$run/none.bt" "$run/x.bt"
+    assertion_counts exits "$run" x 0 >/dev/null
+    expect_eq "backtrace: a signal exit's FAIL names why there is none" 1 \
+        "$(grep -c '^FAIL x: the shell exits 0 (got: exit=139 .*; no backtrace: no core in .* (x.bt))$' "$T/assertions.out")"
+    printf '%s\n' 'signal 11, the shell exited 139' '#0  0x1 in __pthread_kill_implementation () at pthread_kill.c:44' \
+        '#4  0x2 in <signal handler called> () at /lib64/libc.so.6' '#5  0x3 in st_widget_get_theme_node () at st-widget.c:1' >"$run/x.bt"
+    assertion_counts exits "$run" x 0 >/dev/null
+    expect_eq "backtrace: a signal exit's FAIL names the frame past the signal trampoline" 1 \
+        "$(grep -c '; #5  0x3 in st_widget_get_theme_node () at st-widget.c:1 (x.bt))$' "$T/assertions.out")"
+    rm "$run/x.bt"
+    assertion_counts exits "$run" x 0 >/dev/null
+    expect_eq "backtrace: a signal exit without one says so" 1 "$(grep -c '; no x.bt)$' "$T/assertions.out")"
+}
+
 readonly SESSION_REPORT='{"settings": {"font-name": "Adwaita Sans 10.125", "document-font-name": "Adwaita Sans 10.125",
     "monospace-font-name": "JetBrains Mono 9.75", "font-hinting": "none", "icon-theme": "Apex"},
   "shell": {"font": "Adwaita Sans 10.125", "iconTheme": "Apex"},
@@ -3705,6 +3745,85 @@ test_fixtures() {
     kill "${pids[@]}" 2>/dev/null || true
 }
 
+# exit_of ERR CMD...: CMD's exit status, its stderr in ERR, with no core and no shell's crash note.
+exit_of() {
+    # shellcheck disable=SC2016 # expanded by the inner bash
+    bash -c 'ulimit -c 0; "$@" 2>"$0"; echo $?' "$@" 2>/dev/null
+}
+
+# crash.c must not change how a shell dies or what a healthy one prints: the same exit status,
+# its frames in the log, from a fault, an abort, a stack overflow and gjs's chained handler.
+test_crash_c() {
+    local how want got plain preloaded
+    if ! command -v gcc >/dev/null 2>&1; then
+        skip_or_fail "crash.c: needs gcc"
+        return
+    fi
+    if ! gcc -O2 -Wall -Werror -shared -fPIC -o "$T/crash.so" "$HERE/crash.c" 2>"$T/crash.err"; then
+        not_ok "crash.c: builds with -Wall -Werror ($(head -n 3 "$T/crash.err" | paste -sd'|' -))"
+        return
+    fi
+    ok "crash.c: builds with -Wall -Werror"
+    cat >"$T/crashes.c" <<'C'
+#include <pthread.h>
+#include <signal.h>
+#include <stdlib.h>
+#include <string.h>
+static int deep(volatile int *p) { return *p; }
+static int overflow(int n) { volatile char pad[4096]; pad[0] = (char)n; return overflow(n + 1) + pad[0]; }
+static pthread_barrier_t barrier;
+static void *fault(void *unused) { (void)unused; pthread_barrier_wait(&barrier); return (void *)(long)deep((volatile int *)0); }
+int main(int argc, char **argv) {
+    pthread_t threads[8];
+    if (argc < 2) return 0;
+    if (!strcmp(argv[1], "fault")) return deep((volatile int *)0);
+    if (!strcmp(argv[1], "abort")) abort();
+    /* An illegal instruction with no stack to unwind: backtrace() faults under the handler. */
+    if (!strcmp(argv[1], "illbad")) __asm__ volatile("xor %%ebp, %%ebp\n\txor %%esp, %%esp\n\tud2" ::: "memory");
+    if (!strcmp(argv[1], "threads")) {
+        pthread_barrier_init(&barrier, NULL, 8);
+        for (int i = 0; i < 8; i++) pthread_create(&threads[i], NULL, fault, NULL);
+        for (int i = 0; i < 8; i++) pthread_join(threads[i], NULL);
+    }
+    return overflow(0);
+}
+C
+    gcc -O0 -pthread -o "$T/crashes" "$T/crashes.c"
+    for how in fault abort overflow illbad; do
+        [[ $how != illbad || $(uname -m) == x86_64 ]] || continue
+        want=$(exit_of /dev/null "$T/crashes" "$how")
+        got=$(exit_of "$T/crash.$how" env LD_PRELOAD="$T/crash.so" "$T/crashes" "$how")
+        expect_eq "crash.c: a crash by $how exits as it does without it" "$want" "$got"
+        expect_eq "crash.c: a crash by $how names its signal first" 1 "$(grep -c '^APEXG2-CRASH crashes\[[0-9]*\] SIG[A-Z]*$' "$T/crash.$how")"
+        [[ $how == illbad ]] ||
+            expect_eq "crash.c: a crash by $how prints its frames to the end" 1 "$(grep -c '^APEXG2-CRASH end$' "$T/crash.$how")"
+    done
+    # Eight threads that fault at once print one header and one end, never interleaved halves.
+    local lost=0 run
+    for run in 1 2 3 4 5 6 7 8 9 10; do
+        exit_of "$T/crash.threads" env LD_PRELOAD="$T/crash.so" "$T/crashes" threads >/dev/null
+        [[ $(grep -c '^APEXG2-CRASH crashes\[[0-9]*\] SIG\|^APEXG2-CRASH end$' "$T/crash.threads") == 2 ]] || lost=$((lost + 1))
+    done
+    expect_eq "crash.c: eight threads crashing at once print one header and one end, 10 of 10 times" 0 "$lost"
+    # The contract with case_backtrace: every frame crash.c prints reaches the case's BT.
+    mkdir -p "$T/crash-cores"
+    # shellcheck disable=SC2016 # expanded by the inner bash
+    bash -c '. "$1/backtrace.sh"; case_backtrace "$2" 139 "$3" "$4"' _ "$HERE" "$T/crash.fault" "$T/crash-cores" "$T/crash.bt"
+    expect_eq "crash.c: case_backtrace carries every frame crash.c printed" "$(($(wc -l <"$T/crash.fault") - 2))" \
+        "$(grep -cv '^signal \|^APEXG2-CRASH \|^no backtrace' "$T/crash.bt")"
+    # SpiderMonkey's handler runs before crash.c's and calls it: the signal must still kill.
+    # shellcheck disable=SC2016 # a gjs program
+    got=$(exit_of "$T/crash.gjs" env LD_PRELOAD="$T/crash.so" timeout 20 gjs -c 'const {GLib, Gio} = imports.gi;
+        GLib.spawn_command_line_sync(`kill -SEGV ${new Gio.Credentials().get_unix_pid()}`);')
+    expect_eq "crash.c: gjs killed by SIGSEGV dies with 139, not hung" 139 "$got"
+    expect_eq "crash.c: gjs's crash prints its frames" 1 "$(grep -c '^APEXG2-CRASH gjs.*\[[0-9]*\] SIGSEGV$' "$T/crash.gjs")"
+    # shellcheck disable=SC2016 # a gjs program
+    plain=$(gjs -c 'print(imports.gi.GLib.get_user_name()); printerr("to stderr")' 2>&1)
+    # shellcheck disable=SC2016 # a gjs program
+    preloaded=$(LD_PRELOAD=$T/crash.so gjs -c 'print(imports.gi.GLib.get_user_name()); printerr("to stderr")' 2>&1)
+    expect_eq "crash.c: a healthy process prints the same with and without it" "$plain" "$preloaded"
+}
+
 # clock.c must hold the wall clock and leave an absolute monotonic timer alone: libfaketime
 # moved mutter's frame timer, and no headless shell ever finished starting.
 test_clock_c() {
@@ -4096,6 +4215,8 @@ test_dark_style_off
 test_fixtures
 test_glass
 test_shadows_under_glass
+test_case_backtrace
+test_crash_c
 
 printf '1..%d\n' "$tests"
 ((failed == 0))
