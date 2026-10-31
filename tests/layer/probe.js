@@ -1151,6 +1151,27 @@ async function exerciseFocusedApp() {
     report('teardown-then-off');
 }
 
+// The search button's place among the right box's Apex items, at enable and after panel comes
+// back out of disabled-features on its own, when the button is added at the box's start again.
+async function exerciseSearchOrder() {
+    if (GLib.getenv('PROBE_SEARCH_ORDER') !== '1')
+        return;
+    const Main = await import(`file://${shellDir}/js/ui/main.js`);
+    const order = () => Main.panel.rightBox.children.slice(0, 3).map(c => {
+        if (c.name === 'apexIndicators')
+            return 'indicators';
+        if (c.has_style_class_name?.('apex-indicators-divider'))
+            return 'divider';
+        return c === Main.panel.statusArea['apex-search']?.container ? 'search' : c.name;
+    }).join(',');
+    fact('search-order', order());
+    settings.set_strv('disabled-features', ['panel']);
+    await spin(200);
+    settings.set_strv('disabled-features', []);
+    await spin(200);
+    fact('search-order.panel-again', order());
+}
+
 async function exerciseSearchButton() {
     if (GLib.getenv('PROBE_SEARCH_BUTTON') !== '1')
         return;
@@ -2379,6 +2400,7 @@ if (layer && GLib.getenv('PROBE_ENABLE') === '1') {
     await exerciseSolidBar();
     await exerciseFocusedApp();
     await exerciseSearchButton();
+    await exerciseSearchOrder();
     await exerciseMaximisedWindow();
     await exerciseOverview();
     await exerciseDock();

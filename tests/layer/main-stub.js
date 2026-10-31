@@ -429,6 +429,10 @@ export const panel = Object.assign(new StubActor('panel', {glass: PANEL_GLASS, e
             throw new Error(`there is already a status indicator for role ${role}`);
         this.statusArea[role] = indicator;
         indicator.connect('destroy', () => delete this.statusArea[role]);
+        if (boxName === 'right' && GLib.getenv('PROBE_RIGHT_BOX_ADDS') === '1') {
+            rightBox.insert_child_at_index(indicator.container, position);
+            indicator.container._parent = rightBox;
+        }
         fact('panel.add', `${role} at ${position} in ${boxName}`);
         return indicator;
     },
