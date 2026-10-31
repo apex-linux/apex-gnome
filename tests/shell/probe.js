@@ -414,7 +414,7 @@ function describePolkit(dialog) {
             focused: [dialog._passwordEntry, dialog._passwordEntry.clutter_text].includes(global.stage.key_focus),
             focus: global.stage.key_focus?.constructor.name ?? null,
         },
-        info: {text: visibleText(info), line: line.style_class, glyph: line.get_children().find(c => c instanceof St.Icon && c.visible)?.icon_name ?? null},
+        info: {...box(line), text: visibleText(info), line: line.style_class, glyph: line.get_children().find(c => c instanceof St.Icon && c.visible)?.icon_name ?? null},
         error: {...box(dialog._errorMessageLabel), text: visibleText(dialog._errorMessageLabel)},
         details: details ? {
             ...box(details),
