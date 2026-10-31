@@ -53,6 +53,8 @@ async function measure() {
 
     const before = await sample(window);
     const [, contents] = GLib.file_get_contents(GLib.getenv('APEX_CSS_REWRITE'));
+    // A first login: apex-session-agent creates gtk-4.0/ itself, after the app has started.
+    GLib.mkdir_with_parents(GLib.path_get_dirname(GLib.getenv('APEX_CSS_FILE')), 0o755);
     GLib.file_set_contents(GLib.getenv('APEX_CSS_FILE'), contents);
     const start = GLib.get_monotonic_time();
 

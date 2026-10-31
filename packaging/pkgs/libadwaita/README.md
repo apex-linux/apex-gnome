@@ -35,15 +35,19 @@ reads that once, at start.
 The style manager of a display that loads the Adwaita stylesheet also loads `apex.css`
 in a provider at `GTK_STYLE_PROVIDER_PRIORITY_USER + 1`, above the user's `gtk.css`, and
 reloads it from a `GFileMonitor` on `gtk-4.0/` whenever the file is created, replaced,
-moved or removed. A missing file means no provider and no warning. With `GTK_THEME` set,
+moved or removed. A second monitor, on the config directory, re-arms the first when
+`gtk-4.0/` is created or removed and loads the file then. Without it, an app started
+before the first login's `apex.css` (and its `gtk-4.0/`) kept the stock radius: GLib
+watches a missing directory by polling every few seconds and then reports the directory,
+not the file. A missing file means no provider and no warning. With `GTK_THEME` set,
 or Granite present, libadwaita loads no stylesheet of its own, and the patch adds nothing.
 Flatpak apps use their runtime's libadwaita and read the file only at start.
 
 | Patch | Upstream files | Changed lines | Hunks |
 |---|---|---|---|
-| `0001-apex-css` | `src/adw-style-manager.c` | +59 | `APEX_CSS`; the provider and monitor in the struct; `load_apex_css()`, its monitor callback and `watch_apex_css()`; the call in `constructed()`, beside the Adwaita providers; both cleared in `dispose()` |
+| `0001-apex-css` | `src/adw-style-manager.c` | +79 | `APEX_CSS`; the provider and both monitors in the struct; `load_apex_css()`, the monitors' callback, `watch_apex_dir()` and `watch_apex_css()`; the call in `constructed()`, beside the Adwaita providers; all three cleared in `dispose()` |
 
-Budget: at most 80 changed lines in upstream files, in hook hunks only. In use: 59 lines
+Budget: at most 80 changed lines in upstream files, in hook hunks only. In use: 79 lines
 in 1 file. The patch is `git format-patch` output against Fedora's `%prep` tree, with
 `a/` and `b/` prefixes, applied with `-p1` (apex-image's `just pkg-prep libadwaita` and
 `just pkg-export libadwaita`).
@@ -52,7 +56,7 @@ in 1 file. The patch is `git format-patch` output against Fedora's `%prep` tree,
 
 ```bash
 just libadwaita-lane    # podman or docker: apex-lane's container half in fedora:45
-just libadwaita-radius  # Fedora's libadwaita, then the built one, under an open Ptyxis
+just libadwaita-radius  # Fedora's libadwaita, then the built one, under an open Ptyxis, then --late
 ```
 
 `tests/lib/lane.sh libadwaita` runs `apex-lane in-container build libadwaita` as the
