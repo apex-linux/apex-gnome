@@ -787,20 +787,15 @@ REPORT_OF_LEGIBLE_SURFACES='
         + ([range(4)] | map({key: "indicator\(.)", value: {targets: [$icon + {name: "Chat"}], edge: null}}) | from_entries),
         crowded: $s, indicatorMenu: $s},
     focus: ({name: "Control", focused: true, changed: 900, perimeter: 400, ratio: 4} as $ring
-        | {quickSettings: $ring, dock: $ring, dialog: ($ring + {ratio: 2.87}),
+        | {quickSettings: $ring, dock: $ring, dialog: $ring,
             spotlight: ($ring + {changed: 164, ratio: 1})} | {backdrop: ., busy: .})}'
 
 # The label picks the backdrop: dark-style's inactive dot passes 3:1 today, default's is the gap.
-# Each label's focus readings at today's pins, Quick Settings' and the dialog's per wallpaper: four gaps.
-declare -Ar A11Y_FOCUS_FIXTURE=([default]='{"quickSettings":[2.37,2.14],"dialog":[4,4]}'
-    [default-solid]='{"quickSettings":[1.91,2.14],"dialog":[4,4]}' [dark-style]='{"quickSettings":[4,4],"dialog":[2.87,2.87]}')
 
 a11y_run() {
     local assertions=$1 change=${2:-.} label=${3:-dark-style} inactive=${4:-4.24}
     # shellcheck disable=SC2016 # a jq program
-    jq -nc --argjson inactive "$inactive" --argjson today "${A11Y_FOCUS_FIXTURE[$label]}" "$REPORT_OF_LEGIBLE_SURFACES
-        | .focus |= with_entries(.key as \$w | (if \$w == \"busy\" then 1 else 0 end) as \$i
-            | .value.quickSettings.ratio = \$today.quickSettings[\$i] | .value.dialog.ratio = \$today.dialog[\$i]) | $change" |
+    jq -nc --argjson inactive "$inactive" "$REPORT_OF_LEGIBLE_SURFACES | $change" |
         sed 's/^/APEXG2-A11Y /' >"$T/a11y.log"
     # shellcheck disable=SC2016 # expanded by the inner bash
     bash -c '. "$1/assert.sh"; "$2" "$3" "$4" >"$5" 2>&1; summary >>"$5"; echo "$npass $nfail $ngap"' \
@@ -836,9 +831,9 @@ test_inactive_dot_gap() {
             not_ok "inactive dot gap: $what fails $want_failures, $want_gaps gap(s) (passed/failed/gaps $passes/$failures/$open_gaps): $(grep -m3 '^FAIL' "$T/a11y.out" | paste -sd'|' -)"
         fi
     done <<'CHANGES'
-0|6|2.86|default's dot at today's 2.86:1, in the bar and with the unread dot
-2|6|2.85|a dot below today's 2.86:1
-2|4|3|the dot at 3:1: the gap must go
+0|4|2.86|default's dot at today's 2.86:1, in the bar and with the unread dot
+2|4|2.85|a dot below today's 2.86:1
+2|2|3|the dot at 3:1: the gap must go
 CHANGES
 }
 
@@ -854,16 +849,16 @@ test_pill_gaps() {
             not_ok "pill gaps: $what fails $want_failures, $want_gaps gap(s) (passed/failed/gaps $passes/$failures/$open_gaps): $(grep -m3 '^FAIL' "$T/a11y.out" | paste -sd'|' -)"
         fi
     done <<'CHANGES'
-0|9|1.62|default-solid's three pill fills at today's ratios, beside its two inactive-dot gaps
-1|9|1.61|the sharing pill's fill below today's 1.62:1
-1|8|3|the sharing pill's fill at 3:1: its gap must go
+0|7|1.62|default-solid's three pill fills at today's ratios, beside its two inactive-dot gaps
+1|7|1.61|the sharing pill's fill below today's 1.62:1
+1|6|3|the sharing pill's fill at 3:1: its gap must go
 CHANGES
 }
 
 test_a11y() {
     local assertions expected change what passes failures open_gaps want
-    # dark-style's four focus gaps today: its Spotlight entry and dialog entry, each per wallpaper.
-    for assertions in a11y_contrast:77:4 a11y_layout:58:0; do
+    # dark-style's two focus gaps today: its Spotlight entry, per wallpaper.
+    for assertions in a11y_contrast:77:2 a11y_layout:58:0; do
         IFS=: read -r assertions expected gaps <<<"$assertions"
         read -r passes failures open_gaps <<<"$(a11y_run "$assertions")"
         if ((failures == 0 && open_gaps == gaps && passes == expected)); then
@@ -902,7 +897,8 @@ a11y_contrast|1|.barPills.indicatorMenu.targets[0].ratio = 3|the Chat app's menu
 a11y_contrast|2|del(.barPills.pills.overflow, .barPills.pills.indicator0, .barPills.pills.indicator1, .barPills.pills.indicator2, .barPills.pills.indicator3)|no app indicators shown
 a11y_contrast|1|.focus.busy.quickSettings += {ratio: 1}|a focus indicator drawn in its surface's own colour over the busy wallpaper
 a11y_contrast|1|.focus.backdrop.dock += {changed: 0, ratio: 1}|a dock item that shows no focus indicator
-a11y_contrast|1|.focus.busy.dialog.ratio = 2.5|the dialog entry's indicator below today's 2.87:1
+a11y_contrast|1|.focus.busy.dialog.ratio = 2.87|the dialog entry's indicator back at its accent ring's 2.87:1
+a11y_contrast|1|.focus.backdrop.quickSettings.ratio = 2.37|Quick Settings' toggle back at its fill-only 2.37:1
 a11y_contrast|1|.focus.backdrop.dialog.focused = false|key focus that never lands on the dialog's control
 a11y_contrast|4|.focus.busy = {error: "the wallpaper never changed"}|a busy wallpaper that never showed
 a11y_contrast|0|.focus.backdrop.quickSettings.ratio = 3|a focus indicator at 3:1

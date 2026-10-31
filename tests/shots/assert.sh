@@ -2005,12 +2005,8 @@ bar_pills() {
 # focus lands, something changes, and a 1 px line's worth of it changes by 3:1, or it is a pinned gap.
 readonly A11Y_FOCUS_SURFACES=(quickSettings dock dialog spotlight)
 readonly A11Y_FOCUS_GAP="the owner's decision on the focus indicators (2026-10-31)"
-# Today's shortfalls: Spotlight's entry shows no indicator but the caret, so at 1:1 in every
-# case; Quick Settings' toggle in light and the dialog's entry in dark change too little.
-declare -A A11Y_FOCUS_TODAY=([default:backdrop:quickSettings]=2.37 [default:busy:quickSettings]=2.14
-    [default-solid:backdrop:quickSettings]=1.91 [default-solid:busy:quickSettings]=2.14
-    [dark-style:backdrop:dialog]=2.87 [dark-style:busy:dialog]=2.87
-    [dark-style-solid:backdrop:dialog]=2.87 [dark-style-solid:busy:dialog]=2.87)
+# Today's shortfall: Spotlight's entry shows no indicator but the caret, so at 1:1 in every case.
+declare -A A11Y_FOCUS_TODAY=()
 for a11y_case in default dark-style high-contrast default-solid dark-style-solid high-contrast-solid; do
     for a11y_wall in backdrop busy; do
         A11Y_FOCUS_TODAY[$a11y_case:$a11y_wall:spotlight]=1
