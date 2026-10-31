@@ -788,6 +788,21 @@ a11y_run() {
         _ "$HERE" "$assertions" "$label" "$T/a11y.log" "$T/a11y.out"
 }
 
+# A surface that reports an error, or none at all, fails naming why, in both checks.
+test_a11y_surface_errors() {
+    local assertions change want
+    while IFS='|' read -r assertions change want; do
+        a11y_run "$assertions" "$change" >/dev/null
+        expect_eq "accessibility: $assertions names the surface's own failure, $want" 1 \
+            "$(grep -c "^FAIL dark-style accessibility: banner: .* ($want)$" "$T/a11y.out")"
+    done <<'CHANGES'
+a11y_contrast|.banner = {error: "not shown"}|error: not shown
+a11y_layout|.banner = {error: "not shown"}|error: not shown
+a11y_contrast|del(.banner)|not measured
+a11y_layout|.banner.targets = []|no text or glyph found
+CHANGES
+}
+
 # default's inactive dot is Apex's known gap: pinned at 2.86:1, and failing once it reaches 3:1.
 test_inactive_dot_gap() {
     local want_failures want_gaps inactive what passes failures open_gaps
@@ -3893,6 +3908,7 @@ test_window_switcher
 test_modal_dialog
 test_a11y
 test_inactive_dot_gap
+test_a11y_surface_errors
 test_pill_gaps
 test_signoff
 test_goldens
