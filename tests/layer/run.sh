@@ -726,6 +726,10 @@ count_is "both dots restyle at each enable and disable" '^probe: workspace-dot=r
 count_is "the hot corners are rebuilt at each enable and disable" '^probe: hot-corners=rebuilt$' 3
 lacks "top bar: no feature fails or disables uncleanly" 'off for this session|did not disable cleanly|cannot restyle'
 
+probe top-bar-no-inactive-opacity "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_TOP_BAR=1 PROBE_SCALE=2 PROBE_NO_INACTIVE_OPACITY=1
+fact "workspace-dots: a sheet without -apex-inactive-opacity gives stock's inactive dot" \
+    'top-bar\.dots=7 15 22 inactive="stock"'
+
 probe top-bar-rtl "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_TOP_BAR=1 PROBE_SCALE=1 PROBE_RTL=1
 fact "hot-corner, right to left: the zone lies left of the corner" 'hot-corner\.zone=hot-corner reactive=true x=-4 y=0 4x4'
 
