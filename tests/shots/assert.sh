@@ -374,6 +374,8 @@ readonly SHELL_ICON_STEPS=(
     "polkit-light|opened|board 13's authentication dialog, light"
     "polkit-dark|opened|board 13's authentication dialog, dark"
     "polkit-fingerprint|opened|board 13's dialog with the fingerprint line"
+    "polkit-refused-light|refused|board 13's dialog after a wrong password, light"
+    "polkit-refused-dark|refused|board 13's dialog after a wrong password, dark"
 )
 
 # S1b's rule on tests/shell's own surfaces, from its probe's icons-STEP facts in SHOTS/CASE.log; the theme must be there.
