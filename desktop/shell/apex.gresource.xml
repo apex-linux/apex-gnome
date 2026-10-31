@@ -73,6 +73,7 @@
     <file alias="polkit/header.js">js/ui/apex/polkit/header.js</file>
     <file alias="polkit/fingerprint.js">js/ui/apex/polkit/fingerprint.js</file>
     <file alias="polkit/details.js">js/ui/apex/polkit/details.js</file>
+    <file alias="polkit/error.js">js/ui/apex/polkit/error.js</file>
     <file alias="notifications/feature.js">js/ui/apex/notifications/feature.js</file>
   </gresource>
   <gresource prefix="/org/gnome/shell/theme/apex">

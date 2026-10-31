@@ -1148,3 +1148,18 @@ lane's RPMs: they call the shell's own polkit component's `_onInitiate()` with a
 `polkit-fingerprint`) and is never answered. They are for captures and style checks only:
 PAM, polkit-agent-helper-1 and polkitd's verdict never run, and polkitd only describes the
 action. The real `pkexec` path is G4's.
+
+The `polkit-refused` cases answer wrongly, and the stub fails the answer in PAM's order. It
+sends PAM's error text if there is one, then `completed(false)`. That is upstream
+`polkitAgent.js`'s `_onSessionShowError()`, then `_onSessionCompleted()`, which shows
+"Sorry, that didn't work" only when no PAM text is showing, wiggles the field and calls
+`_initiateSession()` again. pam_unix sends no text, so `polkit-refused-light` and
+`polkit-refused-dark` show upstream's line. `polkit-refused-faillock` sends pam_faillock's
+lockout text first, so that text stays. In `polkit-refused-fingerprint`, the retry's
+pam_fprintd prompt replaces the error, as `_onSessionShowInfo()` does.
+
+`polkit-cancel` presses Esc while a stubbed `enumerate_actions()` has not yet answered
+Details' vendor lookup. The request must end dismissed, the session must be cancelled, and
+the lookup must be cancelled with the dialog. G4's `polkit-wrong-password` and
+`polkit-cancel` rows check the same paths against real PAM, polkitd and pkexec, but not the
+dialog's look.

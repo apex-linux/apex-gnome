@@ -1096,6 +1096,9 @@ fact "polkit: for a named finger and reader too" "polkit\.info\.swipe-reader=$PO
 fact "polkit: pam_fprintd's other info stays upstream's line" 'polkit\.info\.timed-out=apex-polkit-info visible=true glyph=none'
 fact "polkit: as does another module's" 'polkit\.info\.other-module=apex-polkit-info visible=true glyph=none'
 fact "polkit: and the line goes with upstream's label" 'polkit\.info\.hidden=apex-polkit-info apex-polkit-fingerprint visible=false glyph=auth-fingerprint-symbolic'
+fact "polkit: no error ring until upstream shows its error line" 'polkit\.error\.none=false'
+fact "polkit: the dialog takes the error ring with the line" 'polkit\.error\.shown=true'
+fact "polkit: and drops it when upstream hides the line" 'polkit\.error\.hidden=false'
 fact "polkit: a standard account gets no role" "polkit\.role\.standard=$POLKIT_ON names=Apex/Administrator\(hidden\)"
 fact "polkit: root keeps upstream's \"Administrator\" in the name's place" \
     "polkit\.role\.root=$POLKIT_ON names=Administrator/Administrator\(hidden\)"
