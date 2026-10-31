@@ -777,8 +777,8 @@ def check_bar_live(shots, case, stock_case):
         return
     before = f["before"]
     def bar(state):
-        return {k: state[k] for k in ("left", "center", "right", "actors", "chip")}
-    check(f"{case}: layer-enabled=false gives {stock_case}'s stock bar: items, actors and chip (Clear below)",
+        return {k: state[k] for k in ("left", "center", "right", "actors", "parts", "chip")}
+    check(f"{case}: layer-enabled=false gives {stock_case}'s stock bar: items, actors by part and chip (Clear below)",
           bar(f["layer-off"]) == bar(stock), json.dumps({"layer-off": bar(f["layer-off"]), "stock": bar(stock)}))
     check(f"{case}: layer-enabled=false: Clear hidden over the empty list, as the notifications feature's disable syncs it",
           f["layer-off"]["clear"] is False, json.dumps(f["layer-off"]["clear"]))

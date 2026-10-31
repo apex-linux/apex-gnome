@@ -764,9 +764,15 @@ function describeBar() {
     const roleOf = c => Object.keys(statusArea).find(role => statusArea[role].container === c) ?? c.name ?? 'unnamed';
     const count = actor => actor.get_children().reduce((n, c) => n + 1 + count(c), 0);
     const boxes = {left: leftBox, center: centerBox, right: rightBox};
+    const qs = statusArea.quickSettings;
+    const fieldOf = c => Object.keys(qs).find(key => qs[key] === c) ?? c.name ?? 'unnamed';
     return {
         ...Object.fromEntries(Object.entries(boxes).map(([side, b]) => [side, b.get_children().map(roleOf)])),
         actors: Object.fromEntries(Object.entries(boxes).map(([side, b]) => [side, count(b)])),
+        parts: {
+            right: rightBox.get_children().map(c => [roleOf(c), count(c)]),
+            indicators: qs?._indicators.get_children().map(c => [fieldOf(c), count(c)]) ?? null,
+        },
         chip: statusArea.keyboard?._container.get_children().map(label => label.text) ?? null,
         clear: statusArea.dateMenu._messageList._clearButton.visible,
         mode: Main.sessionMode.currentMode,
