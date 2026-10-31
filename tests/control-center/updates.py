@@ -3,9 +3,18 @@
 
 import json
 import os
+import re
 import sys
+from pathlib import Path
 
-from ccatspi import Atspi, activate, failures, find_app, finish, wait_for, walk
+import gi
+
+from ccatspi import Atspi, activate, failures, find, find_app, finish, wait_for, walk
+from update1 import LONG_NAME
+
+gi.require_version("Pango", "1.0")
+gi.require_version("PangoCairo", "1.0")
+from gi.repository import Pango, PangoCairo  # noqa: E402
 
 STAGED_DIGEST = "sha256:9e41aa07c3b2d1e0f9a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c80c2b"
 
@@ -71,6 +80,8 @@ AUTOMATIC = {"ready": False, "up-to-date": True}
 
 KINDS = {"upgraded", "downgraded", "added", "removed", "reinstalled"}
 CHANGE_ROWS = 9
+PAGE = Path(__file__).resolve().parents[2] / "desktop/control-center/panels/apex/cc-apex-updates-page.blp"
+CLAMP = int(re.search(r"maximum-size: (\d+);", PAGE.read_text())[1])
 
 
 def extents(node):
@@ -96,14 +107,39 @@ def grid_holds(app):
     starts_line_up = all(len({x for x, _, _, _ in column}) == 1 for column in columns)
     ends_line_up = len({x + w for x, _, w, _ in columns[2]}) == 1
     nothing_overlaps = all(name[0] + name[2] <= versions[0] for _, name, versions in rows)
-    return starts_line_up and ends_line_up and nothing_overlaps
+    # An unellipsized name would not overlap: it would widen the page's clamp past its maximum instead.
+    group = find(app, "What’s New", {Atspi.Role.GROUPING})
+    within_clamp = group is not None and extents(group)[2] <= CLAMP
+    return starts_line_up and ends_line_up and nothing_overlaps and within_clamp
+
+
+# apex.css's .apex-change-name font, laid out unrounded as GTK 4 does; AT-SPI has no natural width.
+def natural_width(text):
+    font = Pango.FontDescription.new()
+    font.set_family("monospace")
+    font.set_weight(Pango.Weight.SEMIBOLD)
+    font.set_absolute_size(11.5 * Pango.SCALE)
+    context = PangoCairo.FontMap.get_default().create_context()
+    context.set_round_glyph_positions(False)
+    layout = Pango.Layout.new(context)
+    layout.set_font_description(font)
+    layout.set_text(text, -1)
+    return layout.get_extents()[1].width / Pango.SCALE
+
+
+def long_name_cut_short(app):
+    label = find(app, LONG_NAME, {Atspi.Role.LABEL})
+    return label is not None and extents(label)[2] < natural_width(LONG_NAME)
 
 
 def check_changes(app):
-    if wait_for("ready: What's New lines up its kinds, packages and versions, the long name cut short",
-                lambda: grid_holds(app)):
+    if wait_for("ready: What's New lines up its kinds, packages and versions, "
+                "the long name cut short within the page", lambda: grid_holds(app)):
         print("ok ready: What's New's grid lines up, and the long package name leaves its versions in place",
               flush=True)
+    if wait_for("ready: the long package name is narrower than its full text", lambda: long_name_cut_short(app)):
+        print(f"ok ready: the long package name gets fewer pixels than its full text needs "
+              f"({natural_width(LONG_NAME):.1f})", flush=True)
 
 
 def texts(app):

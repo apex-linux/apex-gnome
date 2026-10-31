@@ -41,7 +41,7 @@ ROLLBACK = deployment("45.20261001.124", "sha256:b02d5e6f7a8b9c0d1e2f3a4b5c6d7e8
                       pinned=True, **{"pin-reason": "the last version that started cleanly"})
 EMPTY = dbus.Dictionary({}, signature="sv")
 # Long enough that What's New must cut it short; updates.py checks the grid holds.
-LONG_NAME = "rust-tree-sitter-language-pack-devel-documentation-and-examples"
+LONG_NAME = "rust-tree-sitter-language-pack-devel-documentation-and-examples-for-every-grammar"
 CHANGES = [
     ("glibc", "i686", "upgraded", "2.42-3.fc45", "2.42-4.fc45"),
     ("glibc", "x86_64", "upgraded", "2.42-3.fc45", "2.42-4.fc45"),
@@ -162,4 +162,5 @@ def main():
     del service
 
 
-main()
+if __name__ == "__main__":
+    main()
