@@ -3331,6 +3331,7 @@ readonly KEYS_REPORT="{bindings: {
   allModes: $KEYS_ALL_MODES,
   pressed: {sources: [\"us\", \"fr\"], first: \"us\", superSpace: {spotlight: true, source: \"us\"},
     sentinel: {before: {source: \"us\", overview: false, modals: 0}, after: {source: \"us\", overview: false, modals: 0}, a11yChanges: 0},
+    entryKey: {viaInputMethod: true, text: \"a\"},
     superAltSpace: {source: \"fr\"}, shiftSuperAltSpace: {source: \"us\"},
     ctrlAltTab: {groups: [{name: \"Windows\", dock: false}, {name: \"Top Bar\", dock: false}, {name: \"Dash\", dock: true}], dockFocused: true},
     superTap: {overview: true, apps: false}, superA: {overview: true, apps: true}},
@@ -3343,7 +3344,7 @@ test_keys_case() {
     while IFS='|' read -r failures change what; do
         printf 'APEXG2-KEYS %s\n' "$(jq -nc "$KEYS_REPORT | $change")" >"$run/keys.log"
         read -r passes _ <<<"$(assertion_counts keys_case "$run")"
-        expect_eq "keys: $what fails $failures of 14" "$failures" $((14 - passes))
+        expect_eq "keys: $what fails $failures of 15" "$failures" $((15 - passes))
     done <<'CHANGES'
 0|.|the keys as registered and pressed
 1|.bindings.inputSource.accelerators = ["<Super>space", "XF86Keyboard"]|GNOME's input source key, on Spotlight's Super+Space
@@ -3353,6 +3354,8 @@ test_keys_case() {
 1|.pressed.sentinel.after.source = "fr"|a barrier tap that switches the input source
 1|.pressed.sentinel.after.overview = true|a barrier tap that opens the overview
 1|.pressed.sentinel.a11yChanges = 1|a barrier tap that changes the keyboard's a11y state
+1|.pressed.entryKey.text = ""|a barrier that returns before IBus hands the key back
+1|.pressed.entryKey.viaInputMethod = false|an entry key that never went through IBus
 1|.pressed.superSpace.source = "fr"|Super+Space that also switches the input source
 1|.pressed.shiftSuperAltSpace.source = "fr"|a Shift variant that does not go back
 1|.pressed.ctrlAltTab.groups[2].dock = false|Ctrl+Alt+Tab without the dock
@@ -3360,7 +3363,7 @@ test_keys_case() {
 1|.pressed.superTap.overview = false|a Super tap that opens nothing
 1|.pressed.superA.apps = false|Super+A that opens the windows, not the launcher
 1|.modals = 1|a grab left behind
-11|{error: "keysCase: no keyboard"}|a probe error
+12|{error: "keysCase: no keyboard"}|a probe error
 CHANGES
 }
 
