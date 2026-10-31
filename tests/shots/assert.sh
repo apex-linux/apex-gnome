@@ -1030,6 +1030,8 @@ quick_settings_layer() {
         expect "$label Quick Settings" "$scenes" \
             "$q.wifiMenu.refused.adopted | .ssid == \"Apex-Fixed\" and .secure and .strength == 56 and .accessibleName == \"Apex-Fixed, Secure, Signal strength 56%\"" \
             "and the next valid network takes that row, shown and named"
+        expect "$label Quick Settings" "$scenes" "$q.wifiMenu.refused | .removed.shown == .before and .removed.rows == .before" \
+            "and with both access points gone, the network and its row go too"
         network_rows_centred "$label" "$scenes" "$q.wifiMenu.rows"
         top_bar_metric "$label Quick Settings" "$scenes" "$(tokens_for "$variant")" \
             'a secure network'"'"'s lock follows its name, $apex_quick_menu_lock_size in $apex_fg at $apex_quick_menu_lock_opacity' \

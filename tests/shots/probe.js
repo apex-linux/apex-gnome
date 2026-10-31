@@ -1167,13 +1167,22 @@ async function refusedNetworkRows(rows, describe) {
         };
         paths.push(await addAccessPoint(ADOPTED_NETWORK));
         const adopted = await rowFor(rows, ADOPTED_NETWORK.ssid);
-        return {...refused, adopted: adopted ? describe(adopted) : {error: `no row for ${ADOPTED_NETWORK.ssid}`}};
+        refused.adopted = adopted ? describe(adopted) : {error: `no row for ${ADOPTED_NETWORK.ssid}`};
+        // Without access points left, network.js destroys the network and its row.
+        await removeAccessPoints(paths.splice(0));
+        await Scripting.sleep(WIFI_REFUSED_MS);
+        await settle();
+        return {...refused, removed: {shown: shown().length, rows: rows().length}};
     } catch (e) {
         return {error: e.message};
     } finally {
-        for (const path of paths)
-            await nmMock('RemoveAccessPoint', '(ss)', [NM_DEVICE, path]).catch(() => {}); // eslint-disable-line no-await-in-loop
+        await removeAccessPoints(paths);
     }
+}
+
+async function removeAccessPoints(paths) {
+    for (const path of paths)
+        await nmMock('RemoveAccessPoint', '(ss)', [NM_DEVICE, path]).catch(() => {}); // eslint-disable-line no-await-in-loop
 }
 
 // The quick-settings feature: the toggles' order, Power Mode lit, On/Off subtitles; then two
