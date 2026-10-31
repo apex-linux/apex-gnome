@@ -56,7 +56,7 @@ in 1 file. The patch is `git format-patch` output against Fedora's `%prep` tree,
 
 ```bash
 just libadwaita-lane    # podman or docker: apex-lane's container half in fedora:45
-just libadwaita-radius  # Fedora's libadwaita, then the built one, under an open Ptyxis, then --late
+just libadwaita-radius  # --stock, the built RPM's rewrite case, then its --late case, under an open Ptyxis
 ```
 
 `tests/lib/lane.sh libadwaita` runs `apex-lane in-container build libadwaita` as the
@@ -69,4 +69,10 @@ Its automation script, `radius-probe.js`, samples a pixel inside the window's to
 corner and one on the header bar on the same row, rewrites `apex.css` with 0 px through
 `g_file_set_contents()`, and polls. On the built RPM the corner must match the header
 bar within 1 s; with `--stock`, on Fedora's libadwaita, it must still differ after 3 s.
-CI runs both after the lane.
+With `--late`, a first login, Ptyxis starts with no `gtk-4.0/` at all and must be
+stock-rounded; the script then creates `gtk-4.0/` and writes `apex.css` at 0 px, and the
+corner must match within 1 s. No Ptyxis warning or critical may show during `--late` but
+VTE's own `columns >= 1` one, which `--stock` shows too. In every mode the window must
+still be Ptyxis's at the end and the header-bar sample unchanged, so a crashed or closed
+window cannot pass. Each run starts without a `gtk-4.0/`. CI runs `--stock`, the rewrite
+case and `--late` after the lane.

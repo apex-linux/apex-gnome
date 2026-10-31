@@ -81,10 +81,12 @@ result=$(sed -n 's/.*APEXRADIUS //p' "$out/radius.log")
 log "radius-test.sh: $result"
 jq -e '.error == null and .square_before == false' <<<"$result" >/dev/null ||
     die "radius-test.sh: the window was not rounded before the rewrite: $result"
+jq -e '.alive and .reference_steady' <<<"$result" >/dev/null ||
+    die "radius-test.sh: Ptyxis's window is gone or its header bar changed, so the samples prove nothing: $result"
 if ((late)); then
     warnings=$(grep -E '\(ptyxis:[0-9]+\): [A-Za-z-]+-(WARNING|CRITICAL)' "$out/radius.log" |
         awk -v m="$VTE_ZERO_COLUMNS" '!(index($0, "VTE-CRITICAL") && index($0, m))')
-    [[ -z $warnings ]] || die "radius-test.sh --late: Ptyxis warned with no gtk-4.0/apex.css: $warnings"
+    [[ -z $warnings ]] || die "radius-test.sh: Ptyxis warned during --late: $warnings"
     log "radius-test.sh: with no gtk-4.0/ Ptyxis started rounded and warned nothing"
 fi
 if [[ $expect == square ]]; then
