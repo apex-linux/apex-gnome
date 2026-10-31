@@ -14,6 +14,8 @@ import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import * as ModalDialog from 'resource:///org/gnome/shell/ui/modalDialog.js';
 import * as Scripting from 'resource:///org/gnome/shell/ui/scripting.js';
 
+import {iconsOf, shellIconTheme} from '../shots/session-defaults.js';
+
 Gio._promisify(Shell.Screenshot.prototype, 'screenshot_area');
 Gio._promisify(Gio.DBusConnection.prototype, 'call');
 Gio._promisify(Gio.DBusProxy, 'new_for_bus');
@@ -163,8 +165,17 @@ function failScan() {
         'io.github.apex_linux.GdmMock', 'FailScan', null, null, Gio.DBusCallFlags.NONE, -1, null);
 }
 
+// S1b's icon rule on what only this harness shows (tests/shots/assert.sh's shell_icons): with no Apex
+// theme installed, as in CI's own job, the fact says so and check.py reports the check not run.
+function iconFact(step, roots) {
+    const {theme, scale: factor} = shellIconTheme();
+    const installed = GLib.file_test('/usr/share/icons/Apex/index.theme', GLib.FileTest.EXISTS);
+    fact(`icons-${step}`, {installed, icons: roots.flatMap(root => iconsOf(root, theme, factor) ?? [])});
+}
+
 async function shootFingerprint(dialog) {
     fact('opened', describeLock(dialog));
+    iconFact('opened', [dialog, Main.panel]);
     await capture('open');
     await failScan();
     await Scripting.sleep(STEP_MS * 2);
@@ -302,6 +313,7 @@ async function shootLock() {
     }
     const dialog = Main.screenShield._dialog;
     fact('opened', describeLock(dialog));
+    iconFact('opened', [dialog, Main.panel]);
     await capture('open');
 
     await type(WRONG_ANSWER);
@@ -417,6 +429,7 @@ async function openPolkit() {
 async function shootPolkit() {
     const {dialog, sessions} = await openPolkit();
     fact('polkit', describePolkit(dialog));
+    iconFact('opened', [dialog.dialogLayout._dialog]);
     await capture('open');
     fact('polkit-sessions', sessions);
 }
@@ -506,10 +519,12 @@ async function shootGreeter() {
         await Scripting.sleep(SETTLE_MS);
     }
     fact('list', describeGreeter(dialog));
+    iconFact('list', [dialog, Main.panel]);
     await capture('list');
     dialog._userList.getItemFromUserName(GLib.getenv('APEX_USER')).emit('activate');
     await Scripting.sleep(SETTLE_MS);
     fact('prompt', describeGreeter(dialog));
+    iconFact('prompt', [dialog, Main.panel]);
     await capture('prompt');
 }
 

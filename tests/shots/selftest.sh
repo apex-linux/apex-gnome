@@ -1147,13 +1147,47 @@ test_signoff_banners() {
     rm -rf "$dir" && cp -r "$1" "$dir"
     sed -i '/^APEXG2-SESSION /s/"icon-theme":"Apex"}/"icon-theme":"Adwaita"}/' "$dir/g2/dark-style.log"
     if ! "$HERE/signoff.sh" --collect "$dir/g2" "$dir/shots" "$dir/out" >"$T/signoff.out" 2>&1 &&
-        grep -q '^signoff.sh: session defaults: 13 passed, 1 failed$' "$T/signoff.out" &&
+        grep -q '^signoff.sh: session defaults: 23 passed, 1 failed$' "$T/signoff.out" &&
         grep -q 'dark-style: the session reads .*(icon-theme is "Adwaita", not "Apex")' "$T/signoff.out" &&
         grep -q '1 session default check(s) failed' "$T/signoff.out"; then
         ok "signoff: a session default that is not apex-desktop's fails its own check line, naming the key"
     else
         not_ok "signoff: a session default that is not apex-desktop's fails its own check line, naming the key: $(tail -n 3 "$T/signoff.out")"
     fi
+}
+
+# One Apex icon at each step assert.sh's shell_icons reads, in SHOTS/CASE.log.
+shell_icon_facts() {
+    local shots=$1 entry case step
+    # shellcheck disable=SC2016 # expanded by the inner bash
+    while read -r entry; do
+        IFS='|' read -r case step _ <<<"$entry"
+        printf 'APEXLOCK {"icons-%s":{"installed":true,"icons":[{"icon":"view-reveal-symbolic","file":"/usr/share/icons/Apex/symbolic/view-reveal-symbolic.svg","app":null}]}}\n' \
+            "$step" >>"$shots/$case.log"
+    done < <(bash -c '. "$1/assert.sh"; printf "%s\n" "${SHELL_ICON_STEPS[@]}"' _ "$HERE")
+}
+
+test_shell_icons() {
+    local dir=$T/shell-icons passes failures want change what
+    while IFS='|' read -r want change what; do
+        rm -rf "$dir" && mkdir -p "$dir"
+        shell_icon_facts "$dir"
+        [[ $change == . ]] || sed -i "$change" "$dir/lock-light.log"
+        read -r passes failures <<<"$(assertion_counts shell_icons shell "$dir")"
+        expect_eq "shell icons: $what" "$want" "$passes/$failures"
+    done <<'CHANGES'
+10/0|.|an Apex icon at every step of the lock, the greeter and polkit's dialog
+9/1|s/"installed":true/"installed":false/|a lock with no Apex theme installed
+9/1|s/"icons":\[.*\]}}/"icons":[]}}/|a lock that drew no icon
+9/1|s#/usr/share/icons/Apex/symbolic/view-reveal#/usr/share/icons/Adwaita/symbolic/actions/view-reveal#|an Adwaita glyph on the lock
+9/1|s#"file":"[^"]*"#"file":null#|a lock icon that resolves nowhere
+10/0|s#"icon":"view-reveal-symbolic","file":"[^"]*"#"icon":"screenshooter-symbolic","file":"/org/gnome/shell/icons/scalable/actions/screenshooter-symbolic.svg"#|a resource icon on SHELL_RESOURCE_ICONS
+9/1|d|a step that reported nothing
+CHANGES
+    shell_icon_facts "$dir" && sed -i 's#/usr/share/icons/Apex/symbolic/view-reveal#/usr/share/icons/Adwaita/symbolic/actions/view-reveal#' "$dir/polkit-dark.log"
+    assertion_counts shell_icons shell "$dir" >/dev/null
+    expect_eq "shell icons: a failure names the board and the icon" 1 \
+        "$(grep -c "^FAIL shell: every icon board 13's authentication dialog, dark draws resolves through Apex (polkit-dark view-reveal-symbolic: /usr/share/icons/Adwaita/symbolic/actions/view-reveal-symbolic.svg)\$" "$T/assertions.out")"
 }
 
 test_signoff() {
@@ -1193,6 +1227,7 @@ test_signoff() {
             printf 'APEXLOCK {"banner.%s":null}\n' "${scene#*:}" >>"$dir/shots/$(printf "${scene%%:*}" "$variant").log"
         done
     done
+    shell_icon_facts "$dir/shots"
     if "$HERE/signoff.sh" --collect "$dir/g2" "$dir/shots" "$dir/out" >"$T/signoff.out" 2>&1 &&
         [[ $(find "$dir/out" -name 'board-*.png' | wc -l) == 30 ]] &&
         jq -e '(.boards | length) == 15 and .scale == 2 and .features == ["dock", "panel"] and (.pins.apexDesktop | length) == 40
@@ -3895,6 +3930,7 @@ test_a11y
 test_inactive_dot_gap
 test_pill_gaps
 test_signoff
+test_shell_icons
 test_goldens
 test_goldens_rows
 test_date_menu
