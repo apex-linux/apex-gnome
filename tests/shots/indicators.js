@@ -216,9 +216,9 @@ function inputSources(keyboard) {
     }));
 }
 
-// Board 39's "everything": the camera and microphone in use, a recording, a share and two input sources.
-async function everything(unit, settle, capture) {
-    const {quickSettings, screenRecording, screenSharing, keyboard} = Main.panel.statusArea;
+// Board 39's camera and microphone in use, a recording and a share; the function returned hides them.
+export function showInUse() {
+    const {quickSettings, screenRecording, screenSharing} = Main.panel.statusArea;
     const inUse = [quickSettings._camera._indicator, quickSettings._volumeInput._indicator];
     // Without a stream the microphone's icon has no name yet.
     const micName = inUse[1].icon_name;
@@ -227,6 +227,18 @@ async function everything(unit, settle, capture) {
     screenRecording.show();
     screenSharing.show();
     screenRecording._label.text = '0:42';
+    return () => {
+        inUse.forEach(icon => icon.hide());
+        inUse[1].icon_name = micName;
+        screenRecording.hide();
+        screenSharing.hide();
+    };
+}
+
+// Board 39's "everything": the camera and microphone in use, a recording, a share and two input sources.
+async function everything(unit, settle, capture) {
+    const {quickSettings, screenRecording, screenSharing, keyboard} = Main.panel.statusArea;
+    const hideInUse = showInUse();
     await settle();
     const pill = quickSettings.get_first_child();
     const group = pill.get_children().find(a => a.name === 'apexPrivacyGroup') ?? null;
@@ -256,10 +268,7 @@ async function everything(unit, settle, capture) {
         search: boxOf(Main.panel.statusArea[SEARCH_ROLE].get_first_child(), unit),
     };
     report.capture = (await capture('indicators-everything')).file;
-    inUse.forEach(icon => icon.hide());
-    inUse[1].icon_name = micName;
-    screenRecording.hide();
-    screenSharing.hide();
+    hideInUse();
     await settle();
     report.after = {privacy: group?.visible ?? null, paddingLeft: round(pill.get_theme_node().get_padding(St.Side.LEFT) / unit.length)};
     return report;
