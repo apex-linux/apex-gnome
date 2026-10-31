@@ -2635,6 +2635,8 @@ keys_case() {
     expect keys "$r" '.pressed | .sources == ["us", "fr"] and .first == "us"' "two input sources, us first"
     expect keys "$r" '.pressed.sentinel | .before == .after and .a11yChanges == 0' \
         "the input barrier's F24 tap changes nothing: the input source, the overview, the grabs, the keyboard's a11y state"
+    expect keys "$r" '.pressed.entryKey == {viaInputMethod: true, text: "a"}' \
+        "a key typed into an entry, through IBus, has reached it when the input barrier returns"
     expect keys "$r" '.pressed.superSpace == {spotlight: true, source: "us"}' \
         "Super+Space opens Spotlight and leaves the input source alone"
     expect keys "$r" '.pressed | .superAltSpace.source == "fr" and .shiftSuperAltSpace.source == "us"' \
