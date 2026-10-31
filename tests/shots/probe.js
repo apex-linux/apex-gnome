@@ -79,9 +79,9 @@ const SIGNOFF_FOCUS_ORDER = ['org.gnome.Calendar.desktop', 'org.gnome.TextEditor
 const SIGNOFF_QUIET_MS = 1500;
 const SIGNOFF_FOCUS_ATTEMPTS = 3;
 const WIFI_SCAN_MS = 5000;
-// A secured network that appears while the Wi-Fi menu is open (fixtures.py's NM mock).
+// A WPA2 network that appears while the Wi-Fi menu is open (fixtures.py's NM_80211_AP_SEC_WPA2_PSK).
 const LATE_NETWORK = {name: 'apexlate', ssid: 'Apex-Late', address: '02:A5:E0:00:00:09', frequency: 5745, rate: 866700,
-    strength: 64, security: 0x100};
+    strength: 64, security: 0x188};
 const NM_DEVICE = '/org/freedesktop/NetworkManager/Devices/wlan0';
 const TRAY_DRAIN_MS = 3000;
 const SHUTDOWN_HISTORY_DELAY_MS = 300;
