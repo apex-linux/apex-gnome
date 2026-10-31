@@ -499,12 +499,23 @@ function button(b) {
     };
 }
 
+// Board 12's spacing, in logical pixels: the list's rows, then the prompt's avatar, field and message line.
+function describeGreeterLayout(dialog, items) {
+    const prompt = dialog._authPrompt?.visible ? dialog._authPrompt : null;
+    const shown = actor => actor?.mapped ? box(actor) : null;
+    return {
+        rows: dialog._userList.mapped ? items.map(i => box(i)) : [],
+        avatar: shown(prompt?._userWell), field: shown(prompt?._entry), messageLine: shown(prompt?._message),
+    };
+}
+
 function describeGreeter(dialog) {
     const items = [...dialog._userList._items.values()];
     return {
         users: items.map(i => i.user.get_user_name()).join(' '),
         prompt: describePrompt(dialog._authPrompt?.visible ? dialog._authPrompt : null),
         style: describeGreeterStyle(dialog),
+        layout: describeGreeterLayout(dialog, items),
     };
 }
 

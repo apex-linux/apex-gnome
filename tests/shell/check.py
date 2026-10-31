@@ -75,7 +75,7 @@ def tokens():
     found = {}
     with open(TOKENS, encoding="utf-8") as f:
         for line in f:
-            m = re.match(r"\$(apex_(?:greeter|lock)_\w+):\s*(.+?);", line)
+            m = re.match(r"\$(apex_(?:greeter|lock|surface)_\w+):\s*(.+?);", line)
             if m:
                 found[m.group(1)] = m.group(2).strip("'\"")
     return found
@@ -456,6 +456,29 @@ def check_greeter(shots, case):
     check(f"{case}: upstream's avatar icon", prompt.get("avatar") == "avatar-default-symbolic", json.dumps(prompt))
     check_greeter_style(case, f["list"].get("style") or {}, tokens())
     check_back_button(case, (f["prompt"].get("style") or {}).get("back"), tokens())
+    check_greeter_spacing(case, f["list"].get("layout") or {},
+                          {**(f["prompt"].get("layout") or {}), "back": (f["prompt"].get("style") or {}).get("back")}, tokens())
+
+
+def check_greeter_spacing(case, listed, prompt, t):
+    """Board 12's spacing as the Apex sheets set it: a GNOME point release's margins fail here by name."""
+    height, border, gap = px(t["apex_lock_list_item_height"]), px(t["apex_surface_border"]), px(t["apex_lock_prompt_gap"])
+    rows = listed.get("rows") or []
+    check(f"{case}: each user row is $apex_lock_list_item_height ({height:g} px), a separator above all but the first",
+          len(rows) >= 2 and abs(rows[0]["height"] - height) <= 1 and all(abs(r["height"] - height - border) <= 1 for r in rows[1:]),
+          json.dumps(rows))
+    check(f"{case}: the rows follow one another", all(abs(b["y"] - a["y"] - a["height"]) <= 1 for a, b in itertools.pairwise(rows)),
+          json.dumps(rows))
+    avatar, field, line, back = (prompt.get(k) for k in ("avatar", "field", "messageLine", "back"))
+    if not (avatar and field and line and back):
+        check(f"{case}: the prompt's name, field, message line and back button are reported", False, json.dumps(prompt))
+        return
+    check(f"{case}: the field sits $apex_lock_prompt_gap ({gap:g} px) below the name",
+          abs(field["y"] - avatar["y"] - avatar["height"] - gap) <= 1, json.dumps([avatar, field]))
+    check(f"{case}: upstream's message line starts where the field ends", abs(line["y"] - field["y"] - field["height"]) <= 1,
+          json.dumps([field, line]))
+    check(f"{case}: the back button is centred on the field",
+          abs(back["y"] + back["height"] / 2 - field["y"] - field["height"] / 2) <= 1, json.dumps([field, back]))
 
 
 def round_button(b, t):
