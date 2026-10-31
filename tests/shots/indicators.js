@@ -8,6 +8,7 @@ import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import St from 'gi://St';
 
+import * as IBusManager from 'resource:///org/gnome/shell/misc/ibusManager.js';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import * as Scripting from 'resource:///org/gnome/shell/ui/scripting.js';
 
@@ -205,6 +206,16 @@ function filled(actor, unit) {
     return {...boxOf(actor, unit), radius: radiusOf(actor, unit), colour: hex(actor.get_theme_node().get_background_color())};
 }
 
+// Each source's chip beside what keyboard.js names it and, for IBus, its engine's language.
+function inputSources(keyboard) {
+    const ibus = IBusManager.getIBusManager();
+    return keyboard._inputSources.map(is => ({
+        type: is.type, id: is.id, stock: is.shortName,
+        language: is.type === 'ibus' ? ibus.getEngineDesc(is.id)?.get_language() ?? null : null,
+        text: keyboard._indicatorLabels[keyboard._calculateSourceIndicatorIndex(is)]?.text ?? null,
+    }));
+}
+
 // Board 39's "everything": the camera and microphone in use, a recording, a share and two input sources.
 async function everything(unit, settle, capture) {
     const {quickSettings, screenRecording, screenSharing, keyboard} = Main.panel.statusArea;
@@ -234,7 +245,10 @@ async function everything(unit, settle, capture) {
             glyphs: glyphs.map(g => ({...boxOf(g, unit), iconName: g.icon_name, colour: hex(g.get_theme_node().get_foreground_color())})),
         } : null,
         recording: {...filled(screenRecording._box, unit), stop: filled(stop, unit), timer: {...boxOf(timer, unit), ...textOf(timer, unit)}},
-        input: {pill: {...boxOf(keyboard._container, unit), radius: radiusOf(keyboard._container, unit)}, ...textOf(chip, unit)},
+        input: {
+            pill: {...boxOf(keyboard._container, unit), radius: radiusOf(keyboard._container, unit)}, ...textOf(chip, unit),
+            sources: inputSources(keyboard),
+        },
         sharing: {
             ...filled(sharing, unit), name: screenSharing.accessible_name, stop: filled(square, unit), next: boxOf(pill, unit),
             glyph: {...boxOf(shared, unit), iconName: shared.icon_name, colour: hex(shared.get_theme_node().get_foreground_color())},
