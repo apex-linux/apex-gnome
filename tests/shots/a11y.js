@@ -654,6 +654,16 @@ export async function a11yReport(h) {
     if (accents)
         out.dialogAccents = await underEachAccent(() => h.openModalDialog(), d => d.close(), d => d.root);
     lap('dialogAccents');
+    // Checked, the box shows its glyph over the accent's shade.
+    const checkBoxDialog = () => {
+        const opened = h.openMountPasswordDialog();
+        opened.check.checked = true;
+        return opened;
+    };
+    out.checkBoxDialog = await withOpen(checkBoxDialog, d => d.close(), d => report(d.root));
+    if (accents)
+        out.checkBoxDialogAccents = await underEachAccent(checkBoxDialog, d => d.close(), d => d.root);
+    lap('checkBoxDialog');
     out.endSession = await withOpen(() => h.openEndSessionDialog(), d => d?.cancel(), d => report(d?.dialogLayout._dialog));
     lap('endSession');
     out.spotlight = await h.withSpotlight(async (popup, toast) => {
