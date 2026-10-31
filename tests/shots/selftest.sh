@@ -3623,20 +3623,21 @@ test_fixtures() {
     report+='"state": 70, "connectivity": 4}, "keyboard": {"alias": "Keychron K3", "connected": true, "icon": "input-keyboard"}, '
     report+='"gpus": {"hasDualGpu": true, "names": ["AMD Radeon Graphics", "NVIDIA GeForce RTX 3050 Laptop GPU"]}, '
     report+='"powerProfiles": {"active": "balanced", "profiles": ["power-saver", "balanced", "performance"]}, '
-    report+='"accounts": {"user": "/org/freedesktop/Accounts/User0", "appsFiltered": [false, []], "sessionLimit": 0}}'
+    report+='"accounts": {"user": "/org/freedesktop/Accounts/User0", "appsFiltered": [false, []], "sessionLimit": 0}, '
+    report+='"realtime": {"MaxRealtimePriority": 20, "MinNiceLevel": -15, "RTTimeUSecMax": 200000}}'
     fixtures_report "$report"
     read -r passes failures <<<"$(assertion_counts fixtures_on_the_bus "$T/fixtures")"
-    expect_eq "fixtures: what fixtures.py reports passes each part's seven assertions" "21/0" "$passes/$failures"
+    expect_eq "fixtures: what fixtures.py reports passes each part's eight assertions" "24/0" "$passes/$failures"
     report='G2-FIXTURES {"battery": {"percentage": 0.0, "present": false, "onBattery": false}, '
     report+='"wifi": {"primary": "Apex-5G", "ssid": "Apex-5G", "strength": 30, "inRange": ["Apex-5G"], "state": 70, "connectivity": 4}, '
     report+='"keyboard": {"alias": "Keychron K3", "connected": false, "icon": "phone"}, "gpus": {"hasDualGpu": false, "names": ["AMD Radeon Graphics"]}, '
-    report+='"powerProfiles": null, "accounts": {"user": "/org/freedesktop/Accounts/User0", "appsFiltered": [true, ["org.gnome.Nautilus.desktop"]], "sessionLimit": 1}}'
+    report+='"powerProfiles": null, "accounts": {"user": "/org/freedesktop/Accounts/User0", "appsFiltered": [true, ["org.gnome.Nautilus.desktop"]], "sessionLimit": 1}, "realtime": null}'
     fixtures_report "$report"
     read -r passes failures <<<"$(assertion_counts fixtures_on_the_bus "$T/fixtures")"
-    expect_eq "fixtures: no battery, a weak signal, one network in range, a keyboard left unconnected, one GPU, no power-profiles-daemon and a filtering, limiting user fail all seven" "0/21" "$passes/$failures"
+    expect_eq "fixtures: no battery, a weak signal, one network in range, a keyboard left unconnected, one GPU, no power-profiles-daemon and a filtering, limiting user and no RealtimeKit fail all eight" "0/24" "$passes/$failures"
     fixtures_report 'fixtures.py: no owner for org.bluez after 20 s'
     read -r passes failures <<<"$(assertion_counts fixtures_on_the_bus "$T/fixtures")"
-    expect_eq "fixtures: a fixtures.py that failed fails them" "0/21" "$passes/$failures"
+    expect_eq "fixtures: a fixtures.py that failed fails them" "0/24" "$passes/$failures"
 
     command -v dbus-daemon >/dev/null 2>&1 || missing+=(dbus-daemon)
     python3 -c 'import dbusmock' >/dev/null 2>&1 || missing+=(python3-dbusmock)
@@ -3649,11 +3650,11 @@ test_fixtures() {
     start_private_system_bus
     address=$(head -n 1 "$T/bus.address")
     rm -rf "$T/fixtures" && mkdir -p "$T/fixtures"
-    DBUS_SYSTEM_BUS_ADDRESS=$address G2_POWER_PROFILES=1 G2_ACCOUNTS=1 python3 "$HERE/fixtures.py" "$T/fixtures" >"$T/fixtures/fixtures-main.txt" 2>&1 || true
+    DBUS_SYSTEM_BUS_ADDRESS=$address G2_POWER_PROFILES=1 G2_ACCOUNTS=1 G2_REALTIME=1 python3 "$HERE/fixtures.py" "$T/fixtures" >"$T/fixtures/fixtures-main.txt" 2>&1 || true
     cp "$T/fixtures/fixtures-main.txt" "$T/fixtures/fixtures-kernel.txt"
     cp "$T/fixtures/fixtures-main.txt" "$T/fixtures/fixtures-fedora.txt"
     read -r passes failures <<<"$(assertion_counts fixtures_on_the_bus "$T/fixtures")"
-    expect_eq "fixtures: fixtures.py on a private bus passes the fixture assertions" "21/0" "$passes/$failures"
+    expect_eq "fixtures: fixtures.py on a private bus passes the fixture assertions" "24/0" "$passes/$failures"
     write_fixture_reader
     expect_eq "fixtures: libnm, gnome-bluetooth, UPower's display device and switcheroo-control read them as the shell does" \
         '{"wifi":{"id":"Apex-5G","strength":90,"listed":["Apex-5G","Apex-2.4G","Library Guest"],"full":true,"wireless":true,"scanFinishes":true},"battery":{"present":true,"percentage":87},"connectedBluetooth":["Keychron K3"],"hasDualGpu":true}' \

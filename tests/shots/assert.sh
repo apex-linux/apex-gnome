@@ -1804,6 +1804,8 @@ fixtures_on_the_bus() {
             "switcheroo-control: an integrated and a discrete GPU"
         expect "fixtures ($part)" "$fixtures" '.accounts | .appsFiltered == [false, []] and .sessionLimit == 0' \
             "accountsservice: the user's parental controls filter no app and limit no session"
+        expect "fixtures ($part)" "$fixtures" '.realtime == {MaxRealtimePriority: 20, MinNiceLevel: -15, RTTimeUSecMax: 200000}' \
+            "RealtimeKit at rtkit-daemon's defaults, so xdg-desktop-portal starts without waiting on the image's rtkit-daemon"
     done
 }
 
