@@ -1071,6 +1071,17 @@ deletes the ARG, and apex-lane then admits nothing from updates-testing, so `nex
 image` reopens its own copy (`next-point.sh reopen`): `ARG GA_REACHED=0` again, the ARG added
 if the cut deleted it. The real apex-image and every lane cache stay as they are.
 
+Often updates-testing moves none of them, as right after a push: `next-point.sh allowlist`
+then leaves the allowlist empty, apex-lane admits nothing, the lanes build the stable ones, and
+the report line ends `(nothing moves)`. That is not a failure. A query that fails or finds no
+build, on either side, still fails the run with its own message, so an unreachable
+updates-testing never reads as a quiet week.
+
+next-point's lanes number every release `.apex1` (`lane.sh` passes `--n 1`). The builder VM's
+N is the recipe and lane repositories' commit count, so it carries across stock versions:
+`gnome-shell-51.0-1.fc45.apex331` is followed by `51.1-1.fc45.apex33x`, not `.apex1`. Either
+sorts above every build of the version before.
+
 ## The authentication dialog
 
 G2 has no polkit case. `tests/shell/shoot.sh`'s polkit cases capture board 13 from the
