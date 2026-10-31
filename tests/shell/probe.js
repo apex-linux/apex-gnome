@@ -400,7 +400,7 @@ function describePolkit(dialog) {
     };
 }
 
-async function shootPolkit() {
+async function openPolkit() {
     await Scripting.sleep(SETTLE_MS);
     Main.overview.hide();
     await Scripting.sleep(STEP_MS);
@@ -409,10 +409,43 @@ async function shootPolkit() {
     const agent = Main.componentManager._allComponents.polkitAgent;
     agent._onInitiate(agent, POLKIT_ACTION, POLKIT_MESSAGE, '', 'apex-shell-test', [GLib.getenv('APEX_USER')]);
     await Scripting.sleep(SETTLE_MS);
-    const dialog = agent._currentDialog;
+    return {agent, dialog: agent._currentDialog, sessions};
+}
+
+async function shootPolkit() {
+    const {dialog, sessions} = await openPolkit();
     fact('polkit', describePolkit(dialog));
     await capture('open');
     fact('polkit-sessions', sessions);
+}
+
+// Board 13's dialog with the screen locking, or the machine sleeping, under it: upstream hides it
+// while locked and keeps its request. deactivate() stands in for GDM's success, which gdm-mock never gives.
+async function shootPolkitLocked(sleeps) {
+    const {agent, dialog, sessions} = await openPolkit();
+    const describe = () => ({
+        polkit: {...describePolkit(dialog), visible: dialog.visible, mapped: dialog.mapped, current: agent._currentDialog === dialog},
+        sessions, locked: Main.screenShield.locked,
+    });
+    fact('polkit', describe());
+    if (sleeps) {
+        await prepareForSleep(true);
+        await Scripting.sleep(STEP_MS);
+        fact('asleep', describe());
+        await prepareForSleep(false);
+        await Scripting.sleep(STEP_MS * 2);
+    } else {
+        Main.screenShield.lock(false);
+        await Scripting.sleep(STEP_MS * 2);
+    }
+    const lock = () => Main.screenShield._dialog;
+    fact('locked', {...describe(), lock: describeLock(lock())});
+    await type(WRONG_ANSWER);
+    await Scripting.sleep(STEP_MS * 2);
+    fact('typed', {...describe(), lock: describeLock(lock())});
+    Main.screenShield.deactivate(false);
+    await Scripting.sleep(SETTLE_MS);
+    fact('unlocked', describe());
 }
 
 function scale() {
@@ -740,6 +773,8 @@ export async function run() {
             await shootGreeter();
         else if (GLib.getenv('APEX_POLKIT') === '1')
             await shootPolkit();
+        else if (['lock', 'suspend'].includes(GLib.getenv('APEX_POLKIT')))
+            await shootPolkitLocked(GLib.getenv('APEX_POLKIT') === 'suspend');
         else if (GLib.getenv('APEX_DATE_MENU') === '1')
             await shootDateMenu();
         else if (GLib.getenv('APEX_END_SESSION') === '1')
