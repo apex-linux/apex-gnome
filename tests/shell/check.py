@@ -776,9 +776,11 @@ def check_bar_live(shots, case, stock_case):
     if not all(step in f for step in steps) or stock is None:
         return
     before = f["before"]
+    # Not Clear: the notifications feature's disable syncs it to the placeholder, where stock's
+    # unsynced binding (calendar.js:840) still shows it over the empty list.
     def bar(state):
-        return {k: state[k] for k in ("left", "center", "right", "actors", "chip", "clear")}
-    check(f"{case}: layer-enabled=false gives {stock_case}'s stock bar: items, actors, chip and Clear",
+        return {k: state[k] for k in ("left", "center", "right", "actors", "chip")}
+    check(f"{case}: layer-enabled=false gives {stock_case}'s stock bar: items, actors and chip",
           bar(f["layer-off"]) == bar(stock), json.dumps({"layer-off": bar(f["layer-off"]), "stock": bar(stock)}))
     off = f["panel-off"]
     check(f"{case}: panel in disabled-features: stock's panel items, no search button, stock's chip",
