@@ -788,7 +788,6 @@ shortfalls (`A11Y_FOCUS_TODAY`) are the owner's:
 
 | Control | Cases | Today |
 |---|---|---|
-| a dock item | every case | no indicator (1:1) |
 | Spotlight's entry | every case | the caret only (1:1) |
 | Quick Settings' first toggle | `default`, `default-solid` | 2.37:1, 1.91:1; 2.14:1 over the busy wallpaper |
 | the dialog's entry | `dark-style`, `dark-style-solid` | 2.87:1 |
