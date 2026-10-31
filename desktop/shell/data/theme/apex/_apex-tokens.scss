@@ -52,6 +52,7 @@ $apex_dock_fg: if($variant == 'light', #1d1d21, #f4f4f6);
 $apex_dock_dot: if($variant == 'light', rgba(29, 29, 33, .7), rgba(244, 244, 246, .7));
 $apex_dock_label: if($variant == 'light', #f6f6f8, #2a2a2e);
 $apex_dock_label_border: if($variant == 'light', rgba(255, 255, 255, .65), rgba(255, 255, 255, .09));
+$apex_dock_shadow: rgba(0, 0, 0, .18);
 
 $apex_radius_dock: 24px;
 $apex_radius_dock_label: 13px;
