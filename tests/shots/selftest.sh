@@ -673,7 +673,8 @@ REPORT_OF_INDICATORS_DRAWN_FROM_TOKENS='
 | {pill: {x: 1190, y: 4, width: ($t.apex_input_chip_min_width | px), height: $h, radius: $r}, text: "EN",
    size: ($t.apex_font_input_chip_size | px), weight: ($t.apex_font_input_chip_weight | tonumber),
    tracking: (($t.apex_font_input_chip_tracking | rtrimstr("em") | num) * ($t.apex_font_input_chip_size | px)), features: "",
-   colour: ($t.apex_bar_fg | hex)} as $input
+   colour: ($t.apex_bar_fg | hex), sources: [{type: "xkb", id: "us", stock: "en", language: null, text: "EN"},
+     {type: "ibus", id: "m17n:vi:telex", stock: "Ắ₂", language: "vi_VN", text: "VI₂"}]} as $input
 | ($t.apex_sharing_icon_size | px) as $si | (1240 - ($t.apex_sharing_margin | px) - $g) as $se
 | ($se - ($t.apex_sharing_padding_end | px) - $ss) as $qx | ($qx - ($t.apex_sharing_gap | px) - $si) as $gx2
 | ($gx2 - ($t.apex_sharing_padding_start | px)) as $sx2
@@ -1425,7 +1426,7 @@ test_indicators() {
     local variant change what passes failures open_gaps
     for variant in light dark; do
         read -r passes failures open_gaps <<<"$(assert_run indicator_metrics "$variant")"
-        if ((failures == 0 && passes == 30)); then
+        if ((failures == 0 && passes == 31)); then
             ok "indicators ($variant): indicators drawn from the tokens pass all $passes assertions"
         else
             not_ok "indicators ($variant): indicators drawn from the tokens pass (passed/failed/gaps $passes/$failures/$open_gaps): $(grep -m3 '^FAIL' "$T/top-bar.out" | paste -sd'|' -)"
@@ -1458,6 +1459,8 @@ test_indicators() {
 .menu.rows[1].shortcut.colour = "#ffffffff"|a shortcut not dimmed
 .log -= ["Chat Event 5 clicked"]|no clicked event
 .log = .log[:5]|no Activate
+.everything.input.sources[1].text = "Ắ₂"|an IBus chip showing its engine's symbol
+.everything.input.sources[0].text = "en"|an xkb chip in lower case
 .five.overflow.text = "+1"|the wrong overflow count
 .overflowMenu.rows[1].chevron = null|a row without its chevron
 .gone.visible = true|indicators left after the apps quit

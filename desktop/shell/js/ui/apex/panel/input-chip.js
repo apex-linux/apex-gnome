@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 //
 // DESIGN: the input source is a text chip before the status pill, "EN" or "VI" (board 39).
-// keyboard.js writes each source's short name, in lower case, from several places.
+// keyboard.js writes each source's short name from several places: lower case, or an IBus symbol.
 
 import Pango from 'gi://Pango';
 
@@ -14,13 +14,33 @@ let _childAddedId = 0;
 let _sessionId = 0;
 const _labels = new Map();
 
+const SUBSCRIPTS = /[\u2080-\u2089]*$/;
+
+function _sourceOf(label) {
+    return _indicator._inputSources?.find(is =>
+        _indicator._indicatorLabels?.[_indicator._calculateSourceIndicatorIndex(is)] === label);
+}
+
+function _languageOf(is) {
+    const engine = _indicator._inputSourceManager?._ibusManager?.getEngineDesc(is.id);
+    const [code = ''] = engine?.get_language()?.split('_', 1) ?? [];
+    return code.length === 2 || code.length === 3 ? code : null;
+}
+
+// An IBus engine's symbol ("Ắ" for Telex) says how it types, not which language: the chip says that.
+function _chipText(label, text) {
+    const is = _sourceOf(label);
+    const language = is?.type === 'ibus' ? _languageOf(is) : null;
+    return language ? `${language}${text.match(SUBSCRIPTS)[0]}`.toLocaleUpperCase() : text.toLocaleUpperCase();
+}
+
 function _raise(label) {
     const text = label.text ?? '';
-    const upper = text.toLocaleUpperCase();
-    if (upper === text)
+    const chip = _chipText(label, text);
+    if (chip === text)
         return;
     _labels.get(label).stockText = text;
-    label.text = upper;
+    label.text = chip;
 }
 
 // The chip is sized to its label, yet with Large Text the bold, tracked short name can ellipsize

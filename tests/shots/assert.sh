@@ -695,6 +695,10 @@ indicator_metrics() {
     "${metric[@]}" 'two input sources show the chip: "EN" at $apex_font_input_chip_size, weight $apex_font_input_chip_weight, tracked $apex_font_input_chip_tracking' \
         '.everything.input' '.text == "EN" and (.size | px_is($t.apex_font_input_chip_size)) and .weight == ($t.apex_font_input_chip_weight | tonumber)
             and (.tracking - ($t.apex_font_input_chip_tracking | rtrimstr("em") | num) * ($t.apex_font_input_chip_size | px) | fabs < 0.05)'
+    "${metric[@]}" 'each source'"'"'s chip is its short name in capitals, an IBus source'"'"'s its engine'"'"'s language code, never its symbol' \
+        '.everything.input.sources' 'length >= 2 and all(.[]; (.language // "" | split("_")[0]) as $code
+            | .text == (if .type == "ibus" and ($code | length) >= 2 and ($code | length) <= 3
+                then $code + (.stock | capture("(?<s>[₀-₉]*)$").s) else .stock end | ascii_upcase))'
     "${metric[@]}" 'the chip is a $apex_bar_pill_height pill, radius $apex_radius_bar_pill, at least $apex_input_chip_min_width wide' \
         '.everything.input.pill' '(.height | px_is($t.apex_bar_pill_height)) and (.radius | px_is($t.apex_radius_bar_pill)) and .width >= ($t.apex_input_chip_min_width | px) - 0.01'
     "${metric[@]}" 'a share is a $apex_bar_pill_height $apex_privacy pill, radius $apex_radius_bar_pill, named "Stop screen sharing", $apex_sharing_margin + $apex_bar_gap before the status pill' \
