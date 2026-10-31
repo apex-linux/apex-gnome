@@ -100,7 +100,8 @@ Before the first case, `direct.sh` lets root own and call the fixtures' names on
 container's system bus (`/etc/dbus-1/system-local.conf`) and runs `fixtures.py`, which
 starts python-dbusmock's `upower`, `networkmanager` and `bluez5` templates there, a bare
 mock of switcheroo-control and (`G2_ACCOUNTS=1`) one of accountsservice, which have no
-template, and (`G2_POWER_PROFILES=1`) `upower_power_profiles_daemon`. tests/shell's
+template, a bare mock of RealtimeKit (`G2_REALTIME=1`), and (`G2_POWER_PROFILES=1`)
+`upower_power_profiles_daemon`. tests/shell's
 greeter and lock screen run without `G2_ACCOUNTS`, on the real accounts-daemon's users:
 
 | Service | Fixture | The shell shows |
@@ -111,9 +112,12 @@ greeter and lock screen run without `G2_ACCOUNTS`, on the real accounts-daemon's
 | switcheroo-control | the laptop's two GPUs, "AMD Radeon Graphics" the default and "NVIDIA GeForce RTX 3050 Laptop GPU" (`HasDualGpu`); `fixtures.py --gpus 1` leaves the iGPU alone | "Launch Using Discrete Graphics Card" in an app's menu, the dock's included |
 | accountsservice | the user (`FindUserById`) with malcontent's parental controls: no app filtered, no session limit | every app: with malcontent's typelib (the image's `flatpak-libs` brings it), the shell hides all apps until it has read these, and for good if the read fails, which `parental_controls_ready` names in every case |
 | power-profiles-daemon | the Balanced profile, with Power Saver and Performance | the Power Mode toggle, lit at Balanced (the `quick-settings` feature); no glyph in the status pill |
+| RealtimeKit | rtkit-daemon's defaults (`MaxRealtimePriority` 20, `MinNiceLevel` -15, `RTTimeUSecMax` 200000) | nothing: xdg-desktop-portal reads them as it starts. Without it, the system bus activates the image's rtkit-daemon, which cannot start in a container and can stall the portal for the bus's 25 s timeout |
 
 `fixtures-PART.txt` holds what the bus reports afterwards, and `assert.sh` checks it for
-each container. `direct.sh` builds `clock.c` and preloads it into each shell with
+each container. Each case's own session bus then starts xdg-desktop-portal before the shell, as a
+session has it up, and the case stops (exit 97, `G2-PORTAL: ... owned no name`) if the portal owns no
+name within 20 s. `direct.sh` builds `clock.c` and preloads it into each shell with
 `G2_CLOCK_EPOCH` at 2026-09-28 09:41:00 UTC: reads of the wall clock return that time,
 while timers and frames keep the real clocks. It stops before the first case when the
 clock does not hold. libfaketime cannot do this: it converts every absolute timer as if
@@ -1081,6 +1085,25 @@ pass's row, then one closing parenthesis, which on a pass can say what that run 
 `(late)` or `(on time)`): rows compare verdicts. An assertion a run makes twice gets a row per time. A differing row is a race to
 root-cause: make it fail on demand first, then make it impossible. A retry, a longer wait, or a
 rerun on failure hides it until a gate run meets it.
+
+Run one G2 container at a time on a host. With `--network=host`, as repeat.sh and the
+`patched.sh` example run them, containers share the abstract socket namespace: X11's
+`@/tmp/.X11-unix/X0` and dbus-run-session's buses. So a second container's helpers can reach the
+first one's display or bus, and its shells then fail in ways no single run shows (a perf helper
+waiting on a portal that is not its own). run.sh's containers each keep their own network
+namespace, and CI's jobs run on separate runners.
+
+The probe waits on events, never on a fixed time. `settle()` is `waitLeisure` (no `begin_work` held:
+no animation) or its 20 s cap, then a `BEFORE_REDRAW` later of its own (laters run in order, so every
+one queued before it has run), then one painted frame (which runs any later those queued), then more
+frames while any mapped `St.Icon` still waits for its texture (St loads it in a thread, at opacity 0
+until then). Leisure does not see
+a pending GLib timeout, another thread or a virtual device's events, so a step that depends on one
+waits for its effect: `typeInSpotlight` awaits Spotlight's own search (after its 50 ms typing pause),
+the sign-off Alt+Tab waits for the popup to show (after switcherPopup.js's 150 ms delay), and
+`chord()` and `pressKeys()` tap F24, bound to nothing, on another virtual keyboard and wait for it in
+a Clutter event filter: mutter's input thread delivers events in the order sent, so the step's own
+came first.
 
 ## The patched shell without a VM
 

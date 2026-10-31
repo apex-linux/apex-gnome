@@ -1257,9 +1257,9 @@ test_signoff() {
         # shellcheck disable=SC2059 # the scene names carry the variant's %s
         printf '\x89PNG\r\n\x1a\n' | tee "$dir/shots/$(printf "$scene" light).png" >"$dir/shots/$(printf "$scene" dark).png"
     done
-    printf 'Apex: feature panel enabled\nApex: feature dock enabled\nAPEXG2-SIGNOFF {"previews":true}\n%s\n' \
+    printf 'Apex: feature panel enabled\nApex: feature dock enabled\nAPEXG2-SIGNOFF {"previews":true,"altTabShown":true,"altTabUnfocused":true}\n%s\n' \
         'APEXG2 {"dock":{"items":[{"kind":"app","name":"Files"},{"kind":"separator"},{"kind":"app","name":"Bazaar"}]}}' >"$dir/g2/default.log"
-    echo 'APEXG2-SIGNOFF {"previews":true}' >"$dir/g2/dark-style.late.log"
+    echo 'APEXG2-SIGNOFF {"previews":true,"altTabShown":true,"altTabUnfocused":true}' >"$dir/g2/dark-style.late.log"
     printf 'APEXG2-SESSION %s\n' "$(jq -c . <<<"$SESSION_REPORT")" | tee -a "$dir/g2/default.log" >>"$dir/g2/dark-style.log"
     for scene in "$dir"/g2/captures/*.png; do
         scene=$(basename "$scene")
@@ -1307,6 +1307,20 @@ test_signoff() {
         ok "signoff: sign-off windows missing from the overview fail the run"
     else
         not_ok "signoff: sign-off windows missing from the overview fail the run: $(tail -n 3 "$T/signoff.out")"
+    fi
+    echo 'APEXG2-SIGNOFF {"previews":true,"altTabShown":false}' >"$dir/g2/dark-style.late.log"
+    if ! "$HERE/signoff.sh" --collect "$dir/g2" "$dir/shots" "$dir/out4" >"$T/signoff.out" 2>&1 &&
+        grep -q 'board 15, dark-style: the Alt+Tab switcher never showed' "$T/signoff.out"; then
+        ok "signoff: an Alt+Tab switcher that never showed fails board 15"
+    else
+        not_ok "signoff: an Alt+Tab switcher that never showed fails board 15: $(tail -n 3 "$T/signoff.out")"
+    fi
+    echo 'APEXG2-SIGNOFF {"previews":true,"altTabShown":true,"altTabUnfocused":false}' >"$dir/g2/dark-style.late.log"
+    if ! "$HERE/signoff.sh" --collect "$dir/g2" "$dir/shots" "$dir/out5" >"$T/signoff.out" 2>&1 &&
+        grep -q 'board 15, dark-style: the focused window never drew itself unfocused under the switcher' "$T/signoff.out"; then
+        ok "signoff: a focused window that never drew itself unfocused under the switcher fails board 15"
+    else
+        not_ok "signoff: a focused window that never drew itself unfocused under the switcher fails board 15: $(tail -n 3 "$T/signoff.out")"
     fi
 }
 
@@ -3379,6 +3393,8 @@ readonly KEYS_REPORT="{bindings: {
     overlay: {modes: [\"NORMAL\", \"OVERVIEW\"], key: \"Super\"}},
   allModes: $KEYS_ALL_MODES,
   pressed: {sources: [\"us\", \"fr\"], first: \"us\", superSpace: {spotlight: true, source: \"us\"},
+    sentinel: {before: {source: \"us\", overview: false, modals: 0}, after: {source: \"us\", overview: false, modals: 0}, a11yChanges: 0},
+    entryKey: {viaInputMethod: true, text: \"a\"},
     superAltSpace: {source: \"fr\"}, shiftSuperAltSpace: {source: \"us\"},
     ctrlAltTab: {groups: [{name: \"Windows\", dock: false}, {name: \"Top Bar\", dock: false}, {name: \"Dash\", dock: true}], dockFocused: true},
     superTap: {overview: true, apps: false}, superA: {overview: true, apps: true}},
@@ -3391,13 +3407,18 @@ test_keys_case() {
     while IFS='|' read -r failures change what; do
         printf 'APEXG2-KEYS %s\n' "$(jq -nc "$KEYS_REPORT | $change")" >"$run/keys.log"
         read -r passes _ <<<"$(assertion_counts keys_case "$run")"
-        expect_eq "keys: $what fails $failures of 13" "$failures" $((13 - passes))
+        expect_eq "keys: $what fails $failures of 15" "$failures" $((15 - passes))
     done <<'CHANGES'
 0|.|the keys as registered and pressed
 1|.bindings.inputSource.accelerators = ["<Super>space", "XF86Keyboard"]|GNOME's input source key, on Spotlight's Super+Space
 1|.bindings.inputSourceBackward.modes = ["NORMAL"]|a backward input source key in one mode only
 1|.bindings.panels.accelerators = []|no Ctrl+Alt+Tab
 1|.bindings.overlay.key = "Super_R"|another overlay key
+1|.pressed.sentinel.after.source = "fr"|a barrier tap that switches the input source
+1|.pressed.sentinel.after.overview = true|a barrier tap that opens the overview
+1|.pressed.sentinel.a11yChanges = 1|a barrier tap that changes the keyboard's a11y state
+1|.pressed.entryKey.text = ""|a barrier that returns before IBus hands the key back
+1|.pressed.entryKey.viaInputMethod = false|an entry key that never went through IBus
 1|.pressed.superSpace.source = "fr"|Super+Space that also switches the input source
 1|.pressed.shiftSuperAltSpace.source = "fr"|a Shift variant that does not go back
 1|.pressed.ctrlAltTab.groups[2].dock = false|Ctrl+Alt+Tab without the dock
@@ -3405,7 +3426,7 @@ test_keys_case() {
 1|.pressed.superTap.overview = false|a Super tap that opens nothing
 1|.pressed.superA.apps = false|Super+A that opens the windows, not the launcher
 1|.modals = 1|a grab left behind
-10|{error: "keysCase: no keyboard"}|a probe error
+12|{error: "keysCase: no keyboard"}|a probe error
 CHANGES
 }
 
@@ -3665,20 +3686,21 @@ test_fixtures() {
     report+='"state": 70, "connectivity": 4}, "keyboard": {"alias": "Keychron K3", "connected": true, "icon": "input-keyboard"}, '
     report+='"gpus": {"hasDualGpu": true, "names": ["AMD Radeon Graphics", "NVIDIA GeForce RTX 3050 Laptop GPU"]}, '
     report+='"powerProfiles": {"active": "balanced", "profiles": ["power-saver", "balanced", "performance"]}, '
-    report+='"accounts": {"user": "/org/freedesktop/Accounts/User0", "appsFiltered": [false, []], "sessionLimit": 0}}'
+    report+='"accounts": {"user": "/org/freedesktop/Accounts/User0", "appsFiltered": [false, []], "sessionLimit": 0}, '
+    report+='"realtime": {"MaxRealtimePriority": 20, "MinNiceLevel": -15, "RTTimeUSecMax": 200000}}'
     fixtures_report "$report"
     read -r passes failures <<<"$(assertion_counts fixtures_on_the_bus "$T/fixtures")"
-    expect_eq "fixtures: what fixtures.py reports passes each part's seven assertions" "21/0" "$passes/$failures"
+    expect_eq "fixtures: what fixtures.py reports passes each part's eight assertions" "24/0" "$passes/$failures"
     report='G2-FIXTURES {"battery": {"percentage": 0.0, "present": false, "onBattery": false}, '
     report+='"wifi": {"primary": "Apex-5G", "ssid": "Apex-5G", "strength": 30, "inRange": ["Apex-5G"], "state": 70, "connectivity": 4}, '
     report+='"keyboard": {"alias": "Keychron K3", "connected": false, "icon": "phone"}, "gpus": {"hasDualGpu": false, "names": ["AMD Radeon Graphics"]}, '
-    report+='"powerProfiles": null, "accounts": {"user": "/org/freedesktop/Accounts/User0", "appsFiltered": [true, ["org.gnome.Nautilus.desktop"]], "sessionLimit": 1}}'
+    report+='"powerProfiles": null, "accounts": {"user": "/org/freedesktop/Accounts/User0", "appsFiltered": [true, ["org.gnome.Nautilus.desktop"]], "sessionLimit": 1}, "realtime": null}'
     fixtures_report "$report"
     read -r passes failures <<<"$(assertion_counts fixtures_on_the_bus "$T/fixtures")"
-    expect_eq "fixtures: no battery, a weak signal, one network in range, a keyboard left unconnected, one GPU, no power-profiles-daemon and a filtering, limiting user fail all seven" "0/21" "$passes/$failures"
+    expect_eq "fixtures: no battery, a weak signal, one network in range, a keyboard left unconnected, one GPU, no power-profiles-daemon and a filtering, limiting user and no RealtimeKit fail all eight" "0/24" "$passes/$failures"
     fixtures_report 'fixtures.py: no owner for org.bluez after 20 s'
     read -r passes failures <<<"$(assertion_counts fixtures_on_the_bus "$T/fixtures")"
-    expect_eq "fixtures: a fixtures.py that failed fails them" "0/21" "$passes/$failures"
+    expect_eq "fixtures: a fixtures.py that failed fails them" "0/24" "$passes/$failures"
 
     command -v dbus-daemon >/dev/null 2>&1 || missing+=(dbus-daemon)
     python3 -c 'import dbusmock' >/dev/null 2>&1 || missing+=(python3-dbusmock)
@@ -3691,11 +3713,11 @@ test_fixtures() {
     start_private_system_bus
     address=$(head -n 1 "$T/bus.address")
     rm -rf "$T/fixtures" && mkdir -p "$T/fixtures"
-    DBUS_SYSTEM_BUS_ADDRESS=$address G2_POWER_PROFILES=1 G2_ACCOUNTS=1 python3 "$HERE/fixtures.py" "$T/fixtures" >"$T/fixtures/fixtures-main.txt" 2>&1 || true
+    DBUS_SYSTEM_BUS_ADDRESS=$address G2_POWER_PROFILES=1 G2_ACCOUNTS=1 G2_REALTIME=1 python3 "$HERE/fixtures.py" "$T/fixtures" >"$T/fixtures/fixtures-main.txt" 2>&1 || true
     cp "$T/fixtures/fixtures-main.txt" "$T/fixtures/fixtures-kernel.txt"
     cp "$T/fixtures/fixtures-main.txt" "$T/fixtures/fixtures-fedora.txt"
     read -r passes failures <<<"$(assertion_counts fixtures_on_the_bus "$T/fixtures")"
-    expect_eq "fixtures: fixtures.py on a private bus passes the fixture assertions" "21/0" "$passes/$failures"
+    expect_eq "fixtures: fixtures.py on a private bus passes the fixture assertions" "24/0" "$passes/$failures"
     write_fixture_reader
     expect_eq "fixtures: libnm, gnome-bluetooth, UPower's display device and switcheroo-control read them as the shell does" \
         '{"wifi":{"id":"Apex-5G","strength":90,"listed":["Apex-5G","Apex-2.4G","Library Guest"],"full":true,"wireless":true,"scanFinishes":true},"battery":{"present":true,"percentage":87},"connectedBluetooth":["Keychron K3"],"hasDualGpu":true}' \
