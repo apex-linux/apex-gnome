@@ -337,6 +337,208 @@ async function pillsReport(settle, unit, report) {
     }
 }
 
+const FOCUS_MARGIN = 8;
+const FOCUS_CHANGED = 8;
+const BUSY_SIZE = 480;
+const BUSY_STRIPE = 12;
+const WAIT_MS = 5000;
+
+async function until(condition) {
+    for (let waited = 0; waited < WAIT_MS && !condition(); waited += 50)
+        // eslint-disable-next-line no-await-in-loop
+        await Scripting.sleep(50);
+    return condition();
+}
+
+function firstFocusable(root) {
+    const walk = actor => {
+        for (const child of actor.get_children()) {
+            if (child instanceof St.Widget && child.can_focus && child.reactive && child.mapped)
+                return child;
+            const found = walk(child);
+            if (found)
+                return found;
+        }
+        return null;
+    };
+    return root ? walk(root) : null;
+}
+
+// A focus indicator is what key focus changes: the pixels that differ between the control
+// unfocused and focused, wherever it draws them, each read against what it was before.
+async function focusRing(target, settle, unit) {
+    if (!target?.mapped)
+        return {error: 'no focusable control'};
+    global.stage.set_key_focus(null);
+    await settle();
+    const margin = FOCUS_MARGIN * unit.length;
+    const {x, y, width, height} = extents(target);
+    if (![x, y, width, height].every(Number.isFinite))
+        return {error: 'not allocated'};
+    const left = Math.max(0, x - margin), top = Math.max(0, y - margin);
+    const box = {
+        x: left, y: top,
+        width: Math.min(global.stage.width, x + width + margin) - left,
+        height: Math.min(global.stage.height, y + height + margin) - top,
+    };
+    if (box.width < 1 || box.height < 1)
+        return {error: `off the stage at ${Math.round(x)},${Math.round(y)}`};
+    const before = await stagePixels(box);
+    target.grab_key_focus();
+    await settle();
+    const focus = global.stage.get_key_focus();
+    // An entry hands key focus to its own text.
+    const focused = focus === target || target.contains(focus);
+    const after = await stagePixels(box);
+    global.stage.set_key_focus(null);
+    const ratios = [];
+    for (let at = 0; at < after.rgba.length; at += 4) {
+        const was = [before.rgba[at], before.rgba[at + 1], before.rgba[at + 2]];
+        const now = [after.rgba[at], after.rgba[at + 1], after.rgba[at + 2]];
+        if (Math.max(...now.map((v, i) => Math.abs(v - was[i]))) > FOCUS_CHANGED)
+            ratios.push(ratio(now, was));
+    }
+    ratios.sort((a, b) => b - a);
+    // The thinnest indicator WCAG 2.4.13 counts: a 1 px line around the control.
+    const perimeter = Math.round(2 * (width + height) * after.scale);
+    const ringRatio = ratios.length >= perimeter ? ratios[perimeter - 1] : 1;
+    return {
+        name: target.accessible_name || target.constructor.name, focused, changed: ratios.length, perimeter,
+        ratio: Math.round(ringRatio * 100) / 100,
+    };
+}
+
+// A busy wallpaper, fine stripes of black, white and the accents, for the glass under a ring.
+function busyWallpaper() {
+    const colours = [[0, 0, 0], [255, 255, 255], [53, 132, 228], [230, 97, 0], [46, 194, 126], [255, 255, 255]];
+    const rgba = new Uint8Array(BUSY_SIZE * BUSY_SIZE * 4);
+    for (let y = 0; y < BUSY_SIZE; y++) {
+        for (let x = 0; x < BUSY_SIZE; x++) {
+            const [r, g, b] = colours[Math.floor((x + y) / BUSY_STRIPE) % colours.length];
+            rgba.set([r, g, b, 255], (y * BUSY_SIZE + x) * 4);
+        }
+    }
+    const path = GLib.build_filenamev([GLib.get_tmp_dir(), 'apex-g2-busy.png']);
+    GLib.file_set_contents(path, Png.encode({width: BUSY_SIZE, height: BUSY_SIZE, rgba}));
+    return GLib.filename_to_uri(path, null);
+}
+
+// Resolves once every background manager has swapped in a new background and the old ones are gone.
+function swapped() {
+    const managers = Main.layoutManager._bgManagers;
+    let count = 0;
+    const ids = managers.map(m => m.connect('changed', () => count++));
+    return until(() => count >= managers.length && Main.layoutManager._backgroundGroup.get_n_children() === managers.length)
+        .finally(() => ids.forEach((id, i) => managers[i].disconnect(id)));
+}
+
+// The wallpaper set for read, waiting for the swap each way, not for a time.
+async function withWallpaper(uri, read) {
+    const background = new Gio.Settings({schema_id: 'org.gnome.desktop.background'});
+    const saved = ['picture-uri', 'picture-uri-dark', 'picture-options'].map(k => [k, background.get_value(k)]);
+    let swap = swapped();
+    background.set_string('picture-options', 'wallpaper');
+    background.set_string('picture-uri', uri);
+    background.set_string('picture-uri-dark', uri);
+    try {
+        if (!await swap)
+            return {error: 'the wallpaper never changed'};
+        return await read();
+    } finally {
+        swap = swapped();
+        saved.forEach(([key, value]) => background.set_value(key, value));
+        await swap;
+    }
+}
+
+// WCAG 2.4.11 and 1.4.11: a focused control's indicator, on Quick Settings and Spotlight (glass),
+// the dock and a dialog, over the case's backdrop and over a busy wallpaper.
+async function focusReport(h, settle, unit) {
+    const {menu} = Main.panel.statusArea.quickSettings;
+    const surfaces = async () => ({
+        quickSettings: await withOpen(() => menu.open(BoxPointer.PopupAnimation.NONE),
+            () => menu.close(BoxPointer.PopupAnimation.NONE), () => focusRing(firstFocusable(menu.box), settle, unit)),
+        dock: await focusRing(firstFocusable(h.apexDock()), settle, unit),
+        dialog: await withOpen(() => h.openModalDialog(), d => d.close(), d => focusRing(firstFocusable(d.root), settle, unit)),
+        spotlight: await h.withSpotlight(popup => focusRing(firstFocusable(popup.panel), settle, unit)) ?? {error: 'no Spotlight'},
+    });
+    return {backdrop: await surfaces(), busy: await withWallpaper(busyWallpaper(), surfaces)};
+}
+
+const TAB_SLACK = 2;
+
+function focusables(root) {
+    const found = [];
+    const walk = actor => {
+        for (const child of actor.get_children()) {
+            if (child instanceof St.Widget && child.can_focus && child.reactive && child.mapped)
+                found.push(child);
+            walk(child);
+        }
+    };
+    walk(root);
+    return found;
+}
+
+function tap(keyboard, keyval) {
+    keyboard.notify_keyval(GLib.get_monotonic_time(), keyval, Clutter.KeyState.PRESSED);
+    keyboard.notify_keyval(GLib.get_monotonic_time(), keyval, Clutter.KeyState.RELEASED);
+}
+
+// Tab from a surface's first control, past its last: where key focus lands after each press, read
+// once the press has reached the stage and the stage's next frame has handled it, so none is missed.
+async function tabWalk(root, h, keyboard) {
+    const controls = focusables(root);
+    if (!controls.length)
+        return {error: 'no focusable control'};
+    const name = c => c.accessible_name || c.label || c.style_class || c.constructor.name;
+    controls[0].grab_key_focus();
+    const order = [], stuck = [], left = [];
+    for (let press = 1; press <= controls.length + TAB_SLACK; press++) {
+        let moved = false;
+        const id = global.stage.connect('notify::key-focus', () => (moved = true));
+        tap(keyboard, Clutter.KEY_Tab);
+        // eslint-disable-next-line no-await-in-loop
+        await h.inputDelivered();
+        // The stage handles queued events at its next frame.
+        // eslint-disable-next-line no-await-in-loop
+        await h.settle();
+        global.stage.disconnect(id);
+        const focus = global.stage.get_key_focus();
+        const at = controls.findIndex(c => c === focus || c.contains(focus));
+        order.push(at);
+        if (!moved && controls.length > 1)
+            stuck.push(press);
+        if (at < 0)
+            left.push({press, to: focus ? focus.constructor.name : null});
+    }
+    const reached = new Set(order.filter(at => at >= 0));
+    const modals = Main.modalCount;
+    tap(keyboard, Clutter.KEY_Escape);
+    await h.inputDelivered();
+    await h.settle();
+    return {
+        controls: controls.length, order, stuck, left,
+        unreached: controls.filter((_, at) => !reached.has(at)).map(name),
+        wrapped: order.includes(0),
+        escape: {modalsBefore: modals, modalsAfter: Main.modalCount},
+    };
+}
+
+// WCAG 2.1.1 and 2.1.2: Tab reaches every control of Quick Settings, a dialog and Spotlight,
+// never leaves the surface or stops, and Escape closes it.
+async function reachReport(h) {
+    const seat = global.stage.context.get_backend().get_default_seat();
+    const keyboard = seat.create_virtual_device(Clutter.InputDeviceType.KEYBOARD_DEVICE);
+    const {menu} = Main.panel.statusArea.quickSettings;
+    return {
+        quickSettings: await withOpen(() => menu.open(BoxPointer.PopupAnimation.NONE),
+            () => menu.close(BoxPointer.PopupAnimation.NONE), () => tabWalk(menu.box, h, keyboard)),
+        dialog: await withOpen(() => h.openModalDialog(), d => d.close(), d => tabWalk(d.root, h, keyboard)),
+        spotlight: await h.withSpotlight(popup => tabWalk(popup.panel, h, keyboard)) ?? {error: 'no Spotlight'},
+    };
+}
+
 // The bar over whatever the stage draws now, as a11yReport measures it.
 export async function barReport(settle, unit) {
     await settle();
@@ -530,6 +732,10 @@ export async function a11yReport(h) {
         return {popup: await report(popup.panel), toast: await report(await toast())};
     }) ?? {error: 'no Spotlight'};
     lap('spotlight');
+    out.focus = await focusReport(h, settle, unit);
+    lap('focus');
+    out.reach = await reachReport({...h, settle});
+    lap('reach');
     Main.overview.show();
     global.stage.set_key_focus(null);
     out.overview = await report(Main.overview._overview);
