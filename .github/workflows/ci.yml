@@ -194,10 +194,16 @@ jobs:
           tests/ptyxis/status-test.sh
 
       - name: tests/ptyxis/shoot.sh on the built RPM
+        env:
+          APEX_PTYXIS_TARGETS: "1"
         run: |
           dnf5 -y -q --setopt=install_weak_deps=False --repo=fedora --repo=updates install \
-            gnome-shell mesa-dri-drivers dbus-daemon python3-dbusmock gcc util-linux jq jetbrains-mono-fonts-all adwaita-sans-fonts
+            gnome-shell mesa-dri-drivers dbus-daemon python3-dbusmock gcc util-linux jq jetbrains-mono-fonts-all adwaita-sans-fonts \
+            python3-gobject at-spi2-core
           tests/ptyxis/shoot.sh _build/ptyxis/out
+
+      - name: tests/ptyxis/contrast-test.sh on shoot.sh's captures
+        run: tests/ptyxis/contrast-test.sh
 
       - name: tests/s2c/agent.sh
         run: tests/s2c/agent.sh
