@@ -614,10 +614,14 @@ rounded at its border radius, all four corners alike, over the box St paints its
 (`get_background_paint_box` of its allocation). For the dock, Quick Settings, the calendar, a
 banner, the OSD, the Spotlight panel and the toast (the Alt+Tab list as above), a black and white
 checker goes under the surface's bottom-left corner, and that corner square is read with the
-glass on and off: no pixel past the border's arc changes, every pixel in the 4 CSS px band just
-inside it does (no surface's padding lets content in there), and a screenshot of the surface
-equals the screen over the square, pixel for pixel. The toast hides itself after 2 s; a check it
-outlives is read again on a new toast, at most three times.
+glass on and with the surface unregistered: no pixel past the border's arc changes, every pixel
+in the 4 CSS px band just inside it does (no surface's padding lets content in there), the
+surface carries one glass effect, and a screenshot of the surface matches the screen over the
+square to 1/255 a channel (off stage, the dock, the OSD, the Spotlight panel and the toast
+round a few pixels the other way; the others match exactly). The toast hides itself after 2 s;
+a check it outlives is read again on a new toast, at most three times. A banner check first
+dismisses a banner the case did not post, such as the one-time search hint, which never expires
+while no one types and would hold the case's banner back.
 
 `shadows_under_glass` checks the `shadows` feature against the glass in the same case, light
 and dark: `glass.js` lays the tile grid under Quick Settings, a popup menu and a dialog and

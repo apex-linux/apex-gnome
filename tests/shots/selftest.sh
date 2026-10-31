@@ -3806,7 +3806,7 @@ CHANGES
         | {panel: null, dock: null, quickSettings: null, calendar: null, banner: null, blurEffects: []} as $none
         | {radius: 144, saturation: 1.5, enabled: true, fine: true, followOpacity: true, background: false} as $scrim
         | {radius: 52, outside: 560, inside: 2080, ring: 760, square: 2704, blurredOutside: 0, blurredInside: 2080, blurredRing: 760,
-            capturedDiffering: 0} as $corner
+            capturedDiffering: 0, capturedMax: 0, glassEffects: 1} as $corner
         | {manager: {monitorScale: 2, glass: $g, reduceTransparency: ($none + {solidClass: true}), highContrast: ($none + {solidClass: true}),
             disabled: ($none + {solidClass: false}), restored: $g,
             scrims: {overview: $scrim, launcher: ($scrim + {radius: 160, saturation: 1.6}), hidden: ($scrim + {enabled: false}), barOverScrim: $on,
@@ -3888,7 +3888,8 @@ CHANGES
 1|a toast blurred over a box larger than its paint box|.manager.conformance.checked.toast.allocation = [361, 400]
 1|a blur past the Spotlight panel's arc|.manager.conformance.checked.spotlight.corner.blurredOutside = 40
 1|a toast corner left unblurred in the band|.manager.conformance.checked.toast.corner.blurredRing = 700
-1|a dock corner a screenshot draws otherwise|.manager.conformance.checked.dock.corner.capturedDiffering = 200
+1|a toast blurred by two glass effects|.manager.conformance.checked.toast.corner.glassEffects = 2
+1|a dock corner a screenshot draws otherwise|.manager.conformance.checked.dock.corner.capturedMax = 2
 3|a toast never checked|.manager.conformance.checked.toast = null
 25|no manager|.manager = null
 CHANGES

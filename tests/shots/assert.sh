@@ -2896,10 +2896,10 @@ glass_manager() {
         | (.painted.radii | all(. == $r)) and (.allocation[0] == null or .painted.box == [0, 0] + .allocation))' \
         'each rounds its blur at its border radius, all four corners, over the box St paints its background in: the Spotlight panel and the toast too'
     "${expect_glass[@]}" '.manager.conformance.checked | ["dock", "quick-settings", "calendar", "banner", "osd", "spotlight", "toast"] as $rounded
-        | [$rounded[] as $n | .[$n].corner | .radius > 0 and .outside > 0 and .ring > 0 and .blurredOutside == 0 and .blurredRing == .ring] | length == 7 and all' \
-        'over a checker, the bottom-left corner of the dock, Quick Settings, the calendar, a banner, the OSD, the Spotlight panel and the toast blurs no pixel past its border'"'"'s arc and every pixel in the band inside it'
-    "${expect_glass[@]}" '.manager.conformance.checked | [.["dock", "quick-settings", "calendar", "banner", "osd", "spotlight", "toast"].corner.capturedDiffering] | length == 7 and all(. == 0)' \
-        'and a screenshot shows each of those corners as the screen does, pixel for pixel'
+        | [$rounded[] as $n | .[$n].corner | .radius > 0 and .outside > 0 and .ring > 0 and .blurredOutside == 0 and .blurredRing == .ring and .glassEffects == 1] | length == 7 and all' \
+        'over a checker, the bottom-left corner of the dock, Quick Settings, the calendar, a banner, the OSD, the Spotlight panel and the toast blurs no pixel past its border'"'"'s arc and every pixel in the band inside it, under one glass'
+    "${expect_glass[@]}" '.manager.conformance.checked | [.["dock", "quick-settings", "calendar", "banner", "osd", "spotlight", "toast"].corner.capturedMax] | length == 7 and all(type == "number" and . <= 1)' \
+        'and a screenshot shows each of those corners as the screen does, to 1/255 a channel'
     "${expect_glass[@]}" "$glass"' .t as $t | .manager.monitorScale as $s | .manager.tile.shown.glass
         | glass($t.apex_tile_preview_blur; $t.apex_tile_preview_saturation; $s) and .cornerRadius == ($t.apex_radius_tile_preview | px) * $s' \
         'the shown tile preview registers its glass at board 22'"'"'s $apex_tile_preview_blur and $apex_tile_preview_saturation, rounded $apex_radius_tile_preview'

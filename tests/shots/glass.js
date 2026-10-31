@@ -46,6 +46,7 @@ const BACKGROUND_BRIGHTNESS = 0.8;
 const FRAME_TIMEOUT_MS = 2000;
 const LAYOUT_FRAMES = 10;
 const LAYOUT_STEP_MS = 16;
+const BANNER_FRAMES = 120;
 // Left of the overview's workspace, which leaves the scrim bare there.
 const SCRIM_BOX = {x: 24, y: 280, width: 160, height: 160};
 const SCRIM_WINDOW = {x: 60, y: 320, width: 200, height: 120};
@@ -413,15 +414,27 @@ async function withMenuOpen(menu, read) {
     }
 }
 
-async function withBanner(read) {
+// A critical banner stays until dismissed: a normal one hides on its own clock, in a long check too.
+async function withBanner(read, urgency = MessageTray.Urgency.NORMAL) {
+    const tray = Main.messageTray;
+    const {State} = MessageTray;
+    // A banner the case did not post, the one-time search hint, never expires while no one types.
+    if ([State.SHOWING, State.SHOWN].includes(tray._notificationState))
+        tray._notification.destroy();
+    // The tray shows a banner only once the one before it has hidden.
+    // eslint-disable-next-line no-await-in-loop
+    for (let frames = 0; tray._notificationState !== State.HIDDEN && frames < BANNER_FRAMES && await paintedFrame(); frames++)
+        ;
     const source = new MessageTray.Source({title: 'G2 Glass', iconName: 'dialog-information-symbolic'});
-    Main.messageTray.add(source);
-    source.addNotification(new MessageTray.Notification({
-        source, title: 'Glass', body: 'A banner over the desktop.', urgency: MessageTray.Urgency.NORMAL,
-    }));
+    tray.add(source);
+    const notification = new MessageTray.Notification({
+        source, title: 'Glass', body: 'A banner over the desktop.', urgency,
+    });
+    source.addNotification(notification);
     try {
         await Scripting.waitLeisure();
-        return read(await laidOut(Main.messageTray._banner));
+        const banner = tray._banner?.notification === notification ? tray._banner : null;
+        return await read(await laidOut(banner));
     } finally {
         source.destroy();
     }
@@ -554,12 +567,19 @@ async function cornerOf(actor) {
     const [width, height] = actor.get_transformed_size().map(Math.round);
     const scale = actor.get_resource_scale();
     const effect = actor.get_effect(GLASS_EFFECT);
+    if (!effect)
+        return null;
     const radius = effect.corner_radius;
     const ring = CORNER_RING * scale;
+    const Registry = await import('resource:///org/gnome/shell/ui/apex/glass/registry.js');
+    const surface = Registry.surfaces().find(registered => registered.actor === actor);
+    if (!surface)
+        return null;
     const on = await framePixels(actor);
-    effect.enabled = false;
+    // Off by unregistering: the manager puts back an effect taken from a surface it still watches.
+    Registry.unregister(actor);
     const off = await framePixels(actor);
-    effect.enabled = true;
+    Registry.register(actor, surface);
     const captured = await capturedPixels({x, y, width, height});
     const [w, h] = [width * scale, height * scale];
     const masks = {outside: new Uint8Array(w * h), inside: new Uint8Array(w * h), ring: new Uint8Array(w * h), square: new Uint8Array(w * h)};
@@ -579,14 +599,27 @@ async function cornerOf(actor) {
         blurredInside: BlurRef.differing(on.rgba, off.rgba, masks.inside),
         blurredRing: BlurRef.differing(on.rgba, off.rgba, masks.ring),
         capturedDiffering: BlurRef.differing(captured, on.rgba, masks.square),
+        capturedMax: channelMax(captured, on.rgba, masks.square),
+        glassEffects: actor.get_effects().filter(e => e.name === GLASS_EFFECT).length,
     };
+}
+
+function channelMax(a, b, mask) {
+    let max = 0;
+    for (let i = 0; i < a.length; i++) {
+        if (mask[i >> 2])
+            max = Math.max(max, Math.abs(a[i] - b[i]));
+    }
+    return max;
 }
 
 // A shown surface's fit, then its corner over a checker laid under that corner alone.
 async function conformanceOf(actor) {
+    if (!actor?.get_effect(GLASS_EFFECT))
+        return null;
     const [x, y] = actor.get_transformed_position();
     const [, height] = actor.get_transformed_size();
-    const radius = actor.get_effect(GLASS_EFFECT).corner_radius / actor.get_resource_scale();
+    const radius = (actor.get_effect(GLASS_EFFECT)?.corner_radius ?? 0) / actor.get_resource_scale();
     const checker = buildChecker({x: Math.floor(x), y: Math.floor(y + height - radius)}, Math.ceil(radius / CHECKER) + 2);
     try {
         await paintedFrame();
@@ -654,7 +687,7 @@ async function conformanceTests(registered, {derived, tile}) {
         'dock': await conformanceOf(await laidOut(dockBackground())),
         'quick-settings': await withMenuOpen(quickSettings.menu, conformanceOf),
         'calendar': await withMenuOpen(dateMenu.menu, conformanceOf),
-        'banner': await withBanner(conformanceOf),
+        'banner': await withBanner(conformanceOf, MessageTray.Urgency.CRITICAL),
         'osd': await osdConformance(),
         'spotlight': await spotlightConformance(),
         'toast': await toastConformance(),
