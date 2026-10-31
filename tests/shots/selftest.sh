@@ -777,7 +777,10 @@ REPORT_OF_LEGIBLE_SURFACES='
     dialog: $s, endSession: $s, spotlight: {popup: $s, toast: $s}, overview: $s, appGrid: $s,
     barPills: {box: $s.box, pills: {input: {targets: [$text + {name: "EN"}], edge: null},
         recording: {targets: [$text + {name: "0:42", ink: "#ffffff", backdrop: "#c01c28", ratio: 5.6}], edge: $edge},
-        sharing: {targets: [$icon + {name: "screen-shared-symbolic"}], edge: $edge}, privacy: {targets: [$icon, $icon], edge: $edge}}}}'
+        sharing: {targets: [$icon + {name: "screen-shared-symbolic"}], edge: $edge}, privacy: {targets: [$icon, $icon], edge: $edge},
+        overflow: {targets: [$text + {name: "+1"}], edge: null}}
+        + ([range(4)] | map({key: "indicator\(.)", value: {targets: [$icon + {name: "Chat"}], edge: null}}) | from_entries),
+        crowded: $s, indicatorMenu: $s}}'
 
 # The label picks the backdrop: dark-style's inactive dot passes 3:1 today, default's is the gap.
 a11y_run() {
@@ -825,7 +828,7 @@ CHANGES
 
 test_a11y() {
     local assertions expected change what passes failures open_gaps want
-    for assertions in a11y_contrast:56 a11y_layout:46; do
+    for assertions in a11y_contrast:59 a11y_layout:48; do
         expected=${assertions#*:}
         read -r passes failures open_gaps <<<"$(a11y_run "${assertions%:*}")"
         if ((failures == 0 && open_gaps == 0 && passes == expected)); then
@@ -855,8 +858,12 @@ a11y_contrast|1|.barPills.pills.input.targets[0].ratio = 4.4|the input chip's te
 a11y_contrast|1|.barPills.pills.privacy.targets[1].ratio = 2.9|a privacy glyph at 2.9:1 over its fill
 a11y_contrast|1|.barPills.pills.sharing.edge.ratio = 2.9|the sharing pill's fill at 2.9:1 against the bar
 a11y_contrast|2|.barPills.pills.privacy = {error: "not shown"}|a pill that never showed
-a11y_contrast|7|del(.barPills)|no pills measured
+a11y_contrast|10|del(.barPills)|no pills, app indicators or app menu measured
 a11y_contrast|0|.barPills.pills.recording.targets[0].ratio = 4.5|the timer's text at 4.5:1
+a11y_contrast|1|.barPills.pills.indicator2.targets[0] += {ink: "#16161a", ratio: 1}|an app indicator's glyph drawn in the bar's own colour
+a11y_contrast|1|.barPills.pills.overflow.targets[0].ratio = 4.4|the overflow's +1 at 4.4:1
+a11y_contrast|1|.barPills.indicatorMenu.targets[0].ratio = 3|the Chat app's menu text at 3:1
+a11y_contrast|2|del(.barPills.pills.overflow, .barPills.pills.indicator0, .barPills.pills.indicator1, .barPills.pills.indicator2, .barPills.pills.indicator3)|no app indicators shown
 a11y_contrast|1|.wifiMenu.targets[0].ratio = 3|a menu row's text at 3:1
 a11y_contrast|1|.wifiMenuConnected.targets[0].ratio = 4.4|the connected network's name at 4.4:1 over its fill
 a11y_contrast|1|.wifiMenuConnected.targets |= map(. + {kind: "icon"})|a connected row with only its glyphs measured
@@ -876,6 +883,9 @@ a11y_layout|1|.bar.targets[0].ellipsized = true|text cut short
 a11y_layout|1|.dock.targets[0].box.x = 1430|text over the screen's edge
 a11y_layout|1|.osd.targets[0].box.y = 95|text leaving its surface
 a11y_layout|1|.quickSettings.targets += [.quickSettings.targets[0] + {name: "Other"} + {box: {x: 20, y: 10, width: 60, height: 20}}]|overlapping text
+a11y_layout|1|.barPills.crowded.targets += [.barPills.crowded.targets[0] + {name: "EN"} + {box: {x: 30, y: 12, width: 40, height: 18}}]|the input chip over the timer on the crowded bar
+a11y_layout|1|.barPills.crowded.targets[0].ellipsized = true|a crowded bar's text cut short
+a11y_layout|1|.barPills.indicatorMenu.targets[0].box.x = 1430|the app menu's text over the screen's edge
 a11y_layout|1|.textScalingFactor = 1|text at its default size
 a11y_layout|0|.dateMenu.targets += [.dateMenu.targets[0] + {card: 1} + {box: {x: 20, y: 14, width: 60, height: 20}}]|a stacked card's text
 a11y_layout|0|.banner.targets[0] += {ellipsized: true, expandable: true}|a collapsed notification's body
