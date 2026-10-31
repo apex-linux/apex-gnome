@@ -6,7 +6,6 @@
 import Clutter from 'gi://Clutter';
 import Cogl from 'gi://Cogl';
 import Gio from 'gi://Gio';
-import GObject from 'gi://GObject';
 import GLib from 'gi://GLib';
 import Mtk from 'gi://Mtk';
 import Shell from 'gi://Shell';
@@ -18,12 +17,12 @@ import * as MessageTray from 'resource:///org/gnome/shell/ui/messageTray.js';
 import * as ModalDialog from 'resource:///org/gnome/shell/ui/modalDialog.js';
 import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 import * as Scripting from 'resource:///org/gnome/shell/ui/scripting.js';
-import * as SwitcherPopup from 'resource:///org/gnome/shell/ui/switcherPopup.js';
 import * as WindowManager from 'resource:///org/gnome/shell/ui/windowManager.js';
 
 import * as BlurRef from './blur-ref.js';
 import {deviceRect} from './frame-rect.js';
 import * as Png from './png.js';
+import {SWITCHERS, showSwitcher} from './switchers.js';
 
 Gio._promisify(Shell.Screenshot.prototype, 'screenshot_area');
 
@@ -66,8 +65,6 @@ const TILE_RADIUS = 14;
 const TILE_RECT = {x: 162, y: 242, width: 372, height: 180};
 const TILE_GLASS = 'apexTilePreviewGlass';
 const TILE_GLASSED = 'apex-tile-preview-glassed';
-// Board 15's list over a checker of its own, clear of the top bar.
-const CORNER_AT = {x: 200, y: 300};
 const CHECKER = 4;
 const CHECKER_CELLS = 48;
 // The band inside a corner's arc, in CSS px: no surface's padding lets content into it.
@@ -511,36 +508,53 @@ async function scrimTests() {
     }
 }
 
-// switcherPopup.js's popups join uiGroup, then add their list: a stand-in popup of that name does.
-const StandInSwitcherPopup = GObject.registerClass(class GlassTestSwitcherPopup extends St.Widget {});
+async function switchersState() {
+    const state = {};
+    for (const [name, build] of Object.entries(SWITCHERS)) {
+        const popup = showSwitcher(build);
+        let checker = null;
+        try {
+            // eslint-disable-next-line no-await-in-loop
+            await Scripting.waitLeisure();
+            // eslint-disable-next-line no-await-in-loop
+            const list = popup ? await laidOut(popup._switcherList) : null;
+            // Board 15's checker under each list, as the stand-in had: a corner-sized one lets the blur
+            // reach the screen's centre, which a screenshot draws up to 4/255 apart.
+            if (list) {
+                const [x, y] = list.get_transformed_position().map(Math.round);
+                checker = buildChecker({x, y});
+            }
+            // eslint-disable-next-line no-await-in-loop
+            state[name] = list ? await conformanceOf(list) : null;
+        } finally {
+            checker?.destroy();
+            popup?.destroy();
+            // eslint-disable-next-line no-await-in-loop
+            await Scripting.waitLeisure();
+        }
+    }
+    return state;
+}
 
 async function derivedState() {
     const {primaryIndex} = Main.layoutManager;
     Main.osdWindowManager.showOne(primaryIndex, Gio.ThemedIcon.new('audio-volume-medium-symbolic'), null, 0.5);
-    const checker = buildChecker();
-    const popup = new StandInSwitcherPopup({x: CORNER_AT.x, y: CORNER_AT.y});
-    Main.uiGroup.add_child(popup);
-    const list = new SwitcherPopup.SwitcherList(true);
-    list.addItem(new St.Icon({icon_name: 'application-x-executable', icon_size: 96}), null);
-    popup.add_child(list);
     // The closed screenshot UI is unstyled; it would be styled, and blurred, on opening.
     Main.screenshotUI._panel.ensure_style();
+    let state;
     try {
         await Scripting.waitLeisure();
-        return {
+        state = {
             osd: glassOf(await laidOut(Main.osdWindowManager._osdWindows[primaryIndex]._hbox)),
-            switcher: {...glassOf(await laidOut(list)), corner: await cornerOf(list)},
             screenshot: glassOf(Main.screenshotUI._panel),
         };
     } finally {
         Main.osdWindowManager._osdWindows[primaryIndex].cancel();
-        popup.destroy();
-        checker.destroy();
     }
+    return {...state, switchers: await switchersState()};
 }
 
-// Black and white squares under a surface: its blur greys them wherever it reaches, and only there.
-function buildChecker(at = CORNER_AT, cells = CHECKER_CELLS) {
+function buildChecker(at, cells = CHECKER_CELLS) {
     const checker = new St.Widget({x: at.x - CHECKER, y: at.y - CHECKER});
     for (let row = 0; row < cells; row++) {
         for (let column = 0; column < cells; column++) {
@@ -692,7 +706,7 @@ async function conformanceTests(registered, {derived, tile}) {
         'osd': await osdConformance(),
         'spotlight': await spotlightConformance(),
         'toast': await toastConformance(),
-        'switcher': derived.switcher,
+        ...derived.switchers,
         'screenshot': derived.screenshot,
         'tilePreview': tile.shown.glass,
     };

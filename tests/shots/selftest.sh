@@ -778,7 +778,7 @@ REPORT_OF_LEGIBLE_SURFACES='
     checkBoxDialogAccents: (["blue", "teal", "green", "yellow", "orange", "red", "pink", "purple", "slate"] | map({key: ., value: $s}) | from_entries),
     screenshot: $s,
 
-    bar: ($s | .targets += [$dot, $inactiveDot]), barUnread: ($s | .targets += [$dot + {name: "messages-indicator"}, $inactiveDot]), dock: $s, popupMenu: $s, osd: $s, banner: $s, quickSettings: $s, wifiMenu: $s, wifiMenuConnected: $s, dateMenu: $s, switcher: $s,
+    bar: ($s | .targets += [$dot, $inactiveDot]), barUnread: ($s | .targets += [$dot + {name: "messages-indicator"}, $inactiveDot]), dock: $s, popupMenu: $s, osd: $s, banner: $s, quickSettings: $s, wifiMenu: $s, wifiMenuConnected: $s, dateMenu: $s, switcher: $s, inputSourceSwitcher: $s, ctrlAltTabSwitcher: $s, monitorSwitcher: $s,
     dialog: $s, endSession: $s, spotlight: {popup: $s, toast: $s}, overview: $s, appGrid: $s,
     barPills: {box: $s.box, pills: {input: {targets: [$text + {name: "EN"}], edge: null},
         recording: {targets: [$text + {name: "0:42", ink: "#ffffff", backdrop: "#c01c28", ratio: 5.6}], edge: $edge},
@@ -863,7 +863,7 @@ CHANGES
 test_a11y() {
     local assertions expected change what passes failures open_gaps want
     # dark-style's four focus gaps today: its Spotlight entry and dialog entry, each per wallpaper.
-    for assertions in a11y_contrast:77:4 a11y_layout:58:0; do
+    for assertions in a11y_contrast:80:4 a11y_layout:61:0; do
         IFS=: read -r assertions expected gaps <<<"$assertions"
         read -r passes failures open_gaps <<<"$(a11y_run "$assertions")"
         if ((failures == 0 && open_gaps == gaps && passes == expected)); then
@@ -882,6 +882,8 @@ test_a11y() {
     done <<'CHANGES'
 a11y_contrast|1|.bar.targets[0].ratio = 4.4|text at 4.4:1
 a11y_contrast|1|.dock.targets[1].ratio = 2.9|a glyph at 2.9:1
+a11y_contrast|1|.inputSourceSwitcher.targets[0].ratio = 4.4|the held input-source switcher's name at 4.4:1
+a11y_layout|1|.monitorSwitcher = {error: "no monitor-switcher"}|a Super+P switcher that never showed
 a11y_contrast|1|.checkBoxDialogAccents.yellow.targets[1].ratio = 2.9|a checked box's check at 2.9:1 on yellow
 a11y_contrast|2|.bar.targets[3].ratio = 2.9|an inactive workspace dot at 2.9:1, under 3:1 and dark-style's 4.24:1
 a11y_contrast|1|.bar.targets[3].ratio = 4.2|an inactive workspace dot at 4.2:1, under dark-style's 4.24:1
@@ -3912,8 +3914,8 @@ CHANGES
             disabled: ($none + {solidClass: false}), restored: $g,
             scrims: {overview: $scrim, launcher: ($scrim + {radius: 160, saturation: 1.6}), hidden: ($scrim + {enabled: false}), barOverScrim: $on,
                 unforwarded: {changed: 59520, differingFromFull: 42880}, forwarded: {changed: 102400, differingFromFull: 0}},
-            derived: {osd: $p, screenshot: ($p + {enabled: false}),
-                switcher: ($p + {corner: {radius: 52, outside: 560, inside: 2080, square: 2704, blurredOutside: 0, blurredInside: 2080, capturedDiffering: 0}})},
+            derived: {osd: $p, screenshot: ($p + {enabled: false}), switchers: (($p + {corner: $corner}) as $s
+                | {switcher: $s, "input-source-switcher": $s, "ctrl-alt-tab-switcher": $s, "monitor-switcher": $s})},
             emptyBox: {shown: ($scrim + {enabled: false}), hidden: ($scrim + {enabled: false}), shownAgain: ($scrim + {enabled: false}),
                 emptyFrames: 3, laidOut: ($scrim + {frames: 1, allocation: [320, 200]}), zeroHeight: ($scrim + {enabled: false})},
             opacity: {followOpacity: true, fullDiffering: 102400, noneDiffering: 0, half: 1.208},
@@ -3927,12 +3929,14 @@ CHANGES
                 ring: ($ring + {expected: 4, corners: [4.02, 3.98, 4, 4.01], edges: [4, 4, 4, 4]}),
                 reduceTransparency: $ring,
                 highContrast: ($ring + {borders: [0, 0, 0, 0], radius: 0, borderColor: "#00000000", background: "#00000000", previewBackground: "#3584e47f"})},
-            conformance: {registered: ["banner", "calendar", "dock", "osd", "panel", "quick-settings", "scrim-0", "screenshot", "spotlight",
-                    "switcher", "tilePreview", "toast"], unchecked: [],
+            conformance: {registered: ["banner", "calendar", "ctrl-alt-tab-switcher", "dock", "input-source-switcher", "monitor-switcher", "osd",
+                    "panel", "quick-settings", "scrim-0", "screenshot", "spotlight", "switcher", "tilePreview", "toast"], unchecked: [],
                 checked: {panel: $on, "scrim-0": ($scrim + {cornerRadius: 0, allocation: [1440, 900], painted: {box: [0, 0, 1440, 900], radii: [0, 0, 0, 0]}}),
                     dock: ($dock + {corner: $corner}), "quick-settings": ($p + {corner: $corner}), calendar: ($p + {corner: $corner}),
                     banner: ($p + {corner: $corner}), osd: ($p + {corner: $corner}), spotlight: ($p + {corner: $corner}),
-                    toast: ($p + {corner: $corner, tries: 1}), switcher: ($p + {corner: $corner}), screenshot: ($p + {enabled: false, allocation: [null, null]}),
+                    toast: ($p + {corner: $corner, tries: 1}), switcher: ($p + {corner: $corner}), "input-source-switcher": ($p + {corner: $corner}),
+                    "ctrl-alt-tab-switcher": ($p + {corner: $corner}), "monitor-switcher": ($p + {corner: $corner}),
+                    screenshot: ($p + {enabled: false, allocation: [null, null]}),
                     tilePreview: {radius: 80, saturation: 1.6, cornerRadius: 28, enabled: true, fine: true, followOpacity: true, background: true,
                         allocation: [372, 180], painted: {box: [0, 0, 372, 180], radii: [28, 28, 28, 28]}}}},
             motion: {dock: {moved: true, enabled: true, covered: true, differingFromFull: 0, pixels: 86136},
@@ -3963,7 +3967,7 @@ CHANGES
 1|a scrim left on after the overview|.manager.scrims.hidden.enabled = true
 1|a forwarded damage that leaves a stale halo|.manager.scrims.forwarded.differingFromFull = 120
 2|an OSD without glass|.manager.derived.osd = null
-1|an Alt+Tab list at the bar's saturation|.manager.derived.switcher.saturation = 1.6
+1|an Alt+Tab list at the bar's saturation|.manager.derived.switchers.switcher.saturation = 1.6
 2|a tile preview that never registers its glass|.manager.tile.shown.glass = null
 1|a tile preview at the popovers' glass|.manager.tile.shown.glass.radius = 120
 1|a blurred box that includes the clear border|.manager.tile.shown.glassBox = .manager.tile.shown.preview
@@ -3981,13 +3985,17 @@ CHANGES
 1|a glass at opacity 0 that still draws|.manager.opacity.noneDiffering = 3200
 1|a glass that blurs nothing at 255|.manager.opacity.fullDiffering = 0
 1|no opacity report|.manager.opacity = null
-1|an Alt+Tab list's blur rounded twice its border's radius|.manager.derived.switcher.cornerRadius = 104
+1|an Alt+Tab list's blur rounded twice its border's radius|.manager.derived.switchers.switcher.cornerRadius = 104
 1|a banner rounded at one corner only|.manager.glass.banner.painted.radii = [52, 0, 0, 0]
 1|a blur over a box other than the painted background|.manager.glass.banner.painted.box = [0, 8, 360, 392]
 1|a screenshot panel rounded unlike its border|.manager.derived.screenshot.cornerRadius = 40
-1|a corner whose blur reaches past the border's arc|.manager.derived.switcher.corner.blurredOutside = 120
-1|a corner left unblurred inside the arc|.manager.derived.switcher.corner.blurredInside = 1960
-1|a screenshot whose corner is not the screen's|.manager.derived.switcher.corner.capturedDiffering = 640
+1|a corner whose blur reaches past the border's arc|.manager.derived.switchers.switcher.corner.blurredOutside = 120
+1|a corner left unblurred inside the arc|.manager.derived.switchers.switcher.corner.blurredInside = 1960
+1|a screenshot whose corner is not the screen's|.manager.derived.switchers.switcher.corner.capturedDiffering = 640
+1|Ctrl+Alt+Tab's list at the bar's saturation|.manager.derived.switchers["ctrl-alt-tab-switcher"].saturation = 1.6
+1|Super+P's list blurred past its corner's arc|.manager.derived.switchers["monitor-switcher"].corner.blurredOutside = 120
+1|Super+P's corner a screenshot draws 2/255 apart|.manager.derived.switchers["monitor-switcher"].corner.capturedMax = 2
+5|the held input-source switcher tinted but never blurred, as main's name match leaves it|.manager.derived.switchers["input-source-switcher"] = null | .manager.conformance.registered -= ["input-source-switcher"] | .manager.conformance.checked["input-source-switcher"] = null
 1|the inset-shadow ring St thickens at the corners|.manager.tile.ring.corners = [8, 8, 8, 8]
 1|one corner 0.3 px wider|.manager.tile.ring.corners[3] = 4.3
 1|a ring left on the preview, under the class|.manager.tile.ring.previewShadow = true
