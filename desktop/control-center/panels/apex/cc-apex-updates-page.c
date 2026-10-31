@@ -354,20 +354,15 @@ changes_for_cb (GObject *source, GAsyncResult *result, gpointer user_data)
     changes = g_variant_get_child_value (reply, 0);
     parsed = cc_apex_updates_changes (changes);
     group = adw_preferences_group_new ();
-    for (guint i = 0; i < parsed->len; i++) {
-        CcApexUpdatesChange *c = g_ptr_array_index (parsed, i);
-        GtkWidget *row = adw_action_row_new ();
-        GtkWidget *kind = gtk_label_new (c->kind);
+    if (parsed->len > 0) {
+        GtkWidget *row = adw_preferences_row_new ();
 
-        adw_preferences_row_set_use_markup (ADW_PREFERENCES_ROW (row), FALSE);
-        adw_preferences_row_set_title (ADW_PREFERENCES_ROW (row), c->name);
-        adw_action_row_set_subtitle (ADW_ACTION_ROW (row), c->versions);
-        gtk_widget_add_css_class (kind, "dim-label");
-        adw_action_row_add_suffix (ADW_ACTION_ROW (row), kind);
+        gtk_list_box_row_set_activatable (GTK_LIST_BOX_ROW (row), FALSE);
+        gtk_list_box_row_set_child (GTK_LIST_BOX_ROW (row), changes_grid (parsed));
         adw_preferences_group_add (ADW_PREFERENCES_GROUP (group), row);
-    }
-    if (parsed->len == 0)
+    } else {
         adw_preferences_group_set_description (ADW_PREFERENCES_GROUP (group), _("No package changes are known."));
+    }
     page = adw_preferences_page_new ();
     adw_preferences_page_add (ADW_PREFERENCES_PAGE (page), ADW_PREFERENCES_GROUP (group));
     view = adw_toolbar_view_new ();
