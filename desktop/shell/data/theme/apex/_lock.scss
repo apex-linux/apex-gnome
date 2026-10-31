@@ -120,22 +120,29 @@
 
 .apex-lock-overlay { background-color: $apex_lock_overlay; }
 
+.apex-lock-background {
+  -apex-lock-blur: $apex_lock_blur;
+  -apex-lock-saturation: $apex_lock_saturation / 100%;
+}
+
 .apex-lock-stage { spacing: $apex_lock_stage_gap; }
 
 // GNOME 51.1 gives the prompt a fixed 550px and margins round the field and message, which push the hint below
-// the stage; the Apex lock keeps its own spacing. On 51.0 these are upstream's values already.
-.unlock-dialog.apex-lock {
-  .login-dialog-prompt-layout { height: auto; }
+// the stage; the lock and greeter keep board 20's and 12's spacing. On 51.0 these are upstream's values already.
+.unlock-dialog.apex-lock,
+.login-dialog {
   .login-dialog-input-well { margin: 0; }
   .login-dialog-message { margin-top: 0; }
 }
+
+.unlock-dialog.apex-lock .login-dialog-prompt-layout { height: auto; }
 
 .unlock-dialog-clock.apex-lock-clock {
   margin-top: $apex_lock_clock_top;
   spacing: $apex_lock_clock_gap;
 
   .unlock-dialog-clock-date {
-    color: rgba($apex_lock_fg, .92);
+    color: $apex_lock_date_fg;
     font-size: apex-text-size($apex_font_lock_date_size);
     font-weight: $apex_font_lock_date_weight;
   }

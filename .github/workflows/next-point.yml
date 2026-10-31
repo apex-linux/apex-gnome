@@ -23,6 +23,7 @@ jobs:
       contents: read
     outputs:
       shell: ${{ steps.lane.outputs.shell }}
+      moves: ${{ steps.image.outputs.moves }}
     container:
       image: registry.fedoraproject.org/fedora:45@sha256:1e13e11f63e147a40a935c9046c79d53a30b861a3cf05ebb023bb53c562382cb
     steps:
@@ -36,8 +37,10 @@ jobs:
           persist-credentials: false
 
       - name: apex-image admitting updates-testing, and what moves
+        id: image
         run: |
           .github/scripts/next-point.sh image "$PWD/_build/next-point/apex-image"
+          echo "moves=$(grep -c . _build/next-point/apex-image/image/packages/updates-testing-allowlist.txt || :)" >>"$GITHUB_OUTPUT"
           .github/scripts/next-point.sh versions | tee -a "$GITHUB_STEP_SUMMARY"
 
       - name: tests/lib/lane.sh gnome-shell
@@ -275,9 +278,114 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
+  libadwaita:
+    name: tests/libadwaita/radius-test.sh (Fedora 45 with updates-testing, --stock, rewrite, --late)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    container:
+      image: registry.fedoraproject.org/fedora:45@sha256:1e13e11f63e147a40a935c9046c79d53a30b861a3cf05ebb023bb53c562382cb
+    steps:
+      - name: git for the checkout
+        run: >-
+          dnf5 -y --setopt=install_weak_deps=False --repo=fedora --repo=updates install
+          git-core bash coreutils findutils sed grep tar zstd
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: apex-image admitting updates-testing
+        run: .github/scripts/next-point.sh image "$PWD/_build/next-point/apex-image"
+
+      - name: tests/lib/lane.sh libadwaita
+        run: APEX_IMAGE_SRC="$PWD/_build/next-point/apex-image" tests/lib/lane.sh libadwaita
+
+      - name: dnf5 sees updates-testing
+        run: .github/scripts/next-point.sh shim
+
+      - name: tests/libadwaita/radius-test.sh, the three modes
+        run: |
+          dnf5 -y -q --setopt=install_weak_deps=False --repo=fedora --repo=updates install \
+            ptyxis gnome-shell mesa-dri-drivers dbus-daemon python3-dbusmock gcc util-linux jq
+          mkdir -p _build/next-point/counts
+          ok=0 bad=0
+          for mode in --stock _build/libadwaita/out "--late _build/libadwaita/out"; do
+              # shellcheck disable=SC2086 # --late and its RPM directory are two words
+              if tests/libadwaita/radius-test.sh $mode; then ok=$((ok + 1)); else bad=$((bad + 1)); fi
+          done
+          echo "$(rpm -qp --qf '%{name}-%{version}-%{release}' _build/libadwaita/out/libadwaita-[0-9]*.x86_64.rpm) $ok/$bad" \
+            >_build/next-point/counts/libadwaita
+          ((bad == 0))
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: ${{ !cancelled() }}
+        with:
+          name: next-point-count-libadwaita
+          path: _build/next-point/counts/
+          if-no-files-found: ignore
+          retention-days: 7
+
+  ptyxis:
+    name: tests/ptyxis (Fedora 45 with updates-testing, status, shoot, contrast, palette, panes)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    container:
+      image: registry.fedoraproject.org/fedora:45@sha256:1e13e11f63e147a40a935c9046c79d53a30b861a3cf05ebb023bb53c562382cb
+    steps:
+      - name: git for the checkout
+        run: >-
+          dnf5 -y --setopt=install_weak_deps=False --repo=fedora --repo=updates install
+          git-core bash coreutils findutils sed grep tar zstd
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: apex-image admitting updates-testing
+        run: .github/scripts/next-point.sh image "$PWD/_build/next-point/apex-image"
+
+      - name: tests/lib/lane.sh ptyxis
+        run: APEX_IMAGE_SRC="$PWD/_build/next-point/apex-image" tests/lib/lane.sh ptyxis
+
+      - name: dnf5 sees updates-testing
+        run: .github/scripts/next-point.sh shim
+
+      - name: tests/ptyxis, as ci.yml runs them
+        env:
+          APEX_PTYXIS_TESTS_NO_SKIP: "1"
+          APEX_PTYXIS_TARGETS: "1"
+        run: |
+          dnf5 -y -q --setopt=install_weak_deps=False --repo=fedora --repo=updates install \
+            glib2-devel pkgconf-pkg-config gnome-shell mesa-dri-drivers dbus-daemon python3-dbusmock gcc util-linux jq \
+            jetbrains-mono-fonts-all adwaita-sans-fonts python3-gobject at-spi2-core procps-ng
+          mkdir -p _build/next-point/counts
+          ok=0 bad=0
+          run() { if "$@"; then ok=$((ok + 1)); else bad=$((bad + 1)); fi; }
+          run tests/ptyxis/status-test.sh
+          run tests/ptyxis/shoot.sh _build/ptyxis/out
+          run tests/ptyxis/contrast-test.sh
+          tests/s2c/agent.sh
+          run tests/ptyxis/palette-test.sh _build/ptyxis/out _build/s2c/apex-session-agent
+          run tests/ptyxis/panes-test.sh _build/ptyxis/out
+          echo "$(rpm -qp --qf '%{name}-%{version}-%{release}' _build/ptyxis/out/ptyxis-[0-9]*.x86_64.rpm) $ok/$bad" \
+            >_build/next-point/counts/ptyxis
+          ((bad == 0))
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: ${{ !cancelled() }}
+        with:
+          name: next-point-count-ptyxis
+          path: _build/next-point/counts/
+          if-no-files-found: ignore
+          retention-days: 7
+
   report:
     name: next-point's one-line result
-    needs: [lane, g2, signoff, apps]
+    needs: [lane, g2, signoff, apps, libadwaita, ptyxis]
     if: ${{ !cancelled() }}
     runs-on: ubuntu-24.04
     timeout-minutes: 5
@@ -293,11 +401,14 @@ jobs:
       - name: the line, passed/failed for each, ? where a job gave none
         env:
           SHELL_NEVR: ${{ needs.lane.outputs.shell || '?' }}
+          MOVES: ${{ needs.lane.outputs.moves || '?' }}
           G2: ${{ needs.g2.outputs.g2 || '?' }}
           GOLDENS: ${{ needs.signoff.outputs.goldens || '?' }}
           SHOOT: ${{ needs.signoff.outputs.shoot || '?' }}
         run: |
           app() { [[ -s counts/$1 ]] && cat "counts/$1" || echo "$1 ?"; }
           line="next-point: $SHELL_NEVR g2 $G2 goldens $GOLDENS shoot $SHOOT | $(app cc) | $(app files)"
+          line+=" | $(app libadwaita) | $(app ptyxis)"
+          [[ $MOVES != 0 ]] || line+=" (nothing moves)"
           echo "$line"
           printf '%s\n' "\`$line\`" >>"$GITHUB_STEP_SUMMARY"

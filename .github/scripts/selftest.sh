@@ -128,8 +128,35 @@ check "next-point: counts shoot counts shoot.sh's TAP lines" 2/1 "$(np_counts sh
 check "next-point: a log without a summary counts ?" "? ?" \
     "$(np_counts goldens "$TMP/dnf5") $(np_counts shoot "$TMP/np-g2.log")"
 check "next-point: a missing log counts ?" "? ?" "$(np_counts g2 "$TMP/none") $(np_counts shoot "$TMP/none")"
+for cut in "ARG GA_REACHED=0" "ARG GA_REACHED=1" "ARG GA_REACHED=1|FROM x|ARG GA_REACHED" ""; do
+    tr '|' '\n' <<<"ARG REPOS_BASE=https://dl.fedoraproject.org/pub/fedora/linux|$cut|FROM x" >"$TMP/np-Containerfile"
+    "$APEX_ROOT/.github/scripts/next-point.sh" reopen "$TMP/np-Containerfile" 2>/dev/null
+    check "next-point: reopen after '${cut:-the ARG deleted}' gives apex-lane GA_REACHED=0" \
+        "--repos-base https://dl.fedoraproject.org/pub/fedora/linux --ga-reached 0" \
+        "$("$APEX_ROOT/tests/lib/image-args.sh" "$TMP/np-Containerfile" 2>/dev/null | paste -sd ' ')"
+done
+# shellcheck disable=SC2016 # the fake's own script, expanded when it runs
+printf '%s\n' '#!/bin/sh' 'case $NP_FAKE in fail) exit 1 ;; empty) exit 0 ;; esac' \
+    'case " $* " in *" --repo=updates-testing "*) echo "$NP_TESTING" ;; *) echo pkg-1.0-1.fc45 ;; esac' >"$TMP/np-repoquery"
+chmod +x "$TMP/np-repoquery"
+np_allow() {
+    env NEXT_POINT_DNF5="$TMP/np-repoquery" NP_FAKE="$1" NP_TESTING="$2" \
+        "$APEX_ROOT/.github/scripts/next-point.sh" allowlist "$TMP/np-allow" 2>"$TMP/np-allow.err"
+}
+check_true "next-point: allowlist, something moves" np_allow ok pkg-1.1-1.fc45
+check "next-point: allowlist names the moved build" pkg-1.1-1.fc45 "$(sort -u "$TMP/np-allow")"
+check_true "next-point: allowlist, nothing moves, is not a failure" np_allow ok pkg-1.0-1.fc45
+check "next-point: nothing moves leaves the allowlist empty and says so" "0 1" \
+    "$(wc -c <"$TMP/np-allow") $(grep -c '(nothing moves)' "$TMP/np-allow.err")"
+check_false "next-point: allowlist, dnf5 failing, dies" np_allow fail ''
+check "next-point: a failed query says it could not ask" 1 "$(grep -c 'cannot ask' "$TMP/np-allow.err")"
+check_false "next-point: allowlist, dnf5 finding no build, dies" np_allow empty ''
+check_false "next-point: reopen of no Containerfile dies" "$APEX_ROOT/.github/scripts/next-point.sh" reopen "$TMP/none"
 check "next-point.yml: dispatch and schedule only, no lane cache" "" \
     "$(grep -nE 'pull_request|push:|actions/cache|APEX_LANE_CACHE' "$APEX_ROOT/.github/workflows/next-point.yml" | grep -vE '^[0-9]+: *#')"
+check "next-point.yml: the report waits on and prints every job's result" "1 1" \
+    "$(grep -c 'needs: \[lane, g2, signoff, apps, libadwaita, ptyxis\]' "$APEX_ROOT/.github/workflows/next-point.yml") \
+$(grep -cE 'app (libadwaita|ptyxis)\)' "$APEX_ROOT/.github/workflows/next-point.yml")"
 check "next-point.sh: run by next-point.yml alone" ".github/workflows/next-point.yml" \
     "$(cd "$APEX_ROOT" && grep -l 'next-point.sh' .github/workflows/*.yml | paste -sd ' ')"
 check "the stable lane names no updates-testing: lane.sh and image-args.sh fetch as before" "" \

@@ -378,6 +378,7 @@ fact "quick-settings: On or Off under a toggle without a subtitle; a toggle's ow
 fact "quick-settings: Power Mode lit at Balanced, its checked state stock" 'qs\.power=checked=false classes=apex-lit'
 fact "quick-settings: the state follows checked; a subtitle the toggle sets wins" 'qs\.live=dnd=On bluetooth=Headphones'
 fact "quick-settings: once the toggle drops its own, ours follows again" 'qs\.own-subtitle-gone=bluetooth=On'
+fact "quick-settings: a network row's accessible name follows a new best access point's strength" 'qs\.row\.best-ap=names=1'
 fact "quick-settings: the active network's row is :checked, its lock after the name, its name centred on the row" 'qs\.row\.active=children=icons,label,lock,check icons=signal checked=true lock=2/apex-network-lock label=2'
 fact "quick-settings: another network's row is not" 'qs\.row\.other=children=icons,label,lock,check icons=signal checked=false lock=2/apex-network-lock label=2'
 fact "quick-settings: a submenu header's subtitle ends the title's row" 'qs\.menu=3,0 x_align=3'
@@ -454,6 +455,7 @@ has "disabled-features=['quick-settings']: skips the feature" 'Apex: feature qui
 fact "disabled-features=['quick-settings']: stock order" \
     'qs\.order=Wi-Fi,VPN,Bluetooth,Power Mode,Night Light,Dark Style,Do Not Disturb,Airplane Mode,Auto Rotate'
 fact "disabled-features=['quick-settings']: Power Mode unlit" 'qs\.power=checked=false classes=none'
+fact "disabled-features=['quick-settings']: stock's name ignores a new best access point" 'qs\.row\.best-ap=names=0'
 fact "disabled-features=['quick-settings']: a network row stays stock" 'qs\.row\.active=children=icons,label,check icons=signal,lock checked=false lock=3/none label=0'
 fact "disabled-features=['quick-settings']: the subtitle stays under the title" 'qs\.menu=1,1 x_align=0'
 
@@ -785,6 +787,10 @@ lacks "disabled-features=['panel']: no item in the bar" 'panel\.add=apex-focused
 fact "disabled-features=['panel']: nothing follows the focus" 'focused-app\.files=none'
 
 readonly SEARCH_ITEM='Search \(Super\+Space\) pill=apex-search-pill icon=system-search-symbolic'
+probe search-order "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_RIGHT_BOX_ADDS=1 PROBE_SEARCH_ORDER=1
+fact "search-order: the app indicators, their divider, then the search button" 'search-order=indicators,divider,search'
+fact "search-order: and so after panel comes back out of disabled-features on its own" 'search-order\.panel-again=indicators,divider,search'
+
 probe search-button "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_SEARCH_BUTTON=1
 has "search-button: the panel feature enables" 'Apex: feature panel enabled'
 fact "search-button: at the start of the right box" 'panel\.add=apex-search at 0 in right'
@@ -1030,7 +1036,9 @@ fact "lock: a DisplayConfig that never answers leaves the prompt up" \
 fact "lock: so does one that fails" 'lock\.display-config-error=page=prompt prompt=conversation-1 cancelled=none'
 has "lock: and says so" 'Apex: lock: no org\.gnome\.Mutter\.DisplayConfig, so the prompt stays at blank'
 fact "lock: the clock never slides away" 'lock\.clock-progress=0 0 0'
-fact "lock: blur sigma 30 (radius 60), saturation 1.3, no darkening" 'lock\.blur=\{"brightness":1,"radius":60,"saturation":1\.3\}'
+fact "lock: blur sigma 30 (radius 60), saturation 1.3, no darkening, as the sheet sets them" 'lock\.blur=\{"brightness":1,"radius":60,"saturation":1\.3\}'
+fact "lock: a sheet without them keeps upstream's blur" 'lock\.blur\.no-sheet=\{"brightness":0\.65,"radius":90\}'
+has "lock: and says so" 'Apex: lock: the sheet sets no -apex-lock-blur or -apex-lock-saturation, so the lock keeps upstream.s blur'
 fact "lock: PAM's exact \"Password:\" reads \"Enter Password\"" 'lock\.question\."Password:"="Enter Password"'
 fact "lock: \"Password: \" with a space is PAM's question verbatim" 'lock\.question\."Password: "="Password: "'
 fact "lock: other questions verbatim" 'lock\.question\."Verification code:"="Verification code:"'

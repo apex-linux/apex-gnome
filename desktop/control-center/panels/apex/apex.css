@@ -88,6 +88,31 @@ image.apex-tile {
   font-weight: 700;
 }
 
+/* Board 18: What's New lists its changes as a compact grid. */
+.apex-changes {
+  padding: 8px 14px 12px;
+  font-size: 12px;
+}
+
+.apex-changes .apex-change-kind {
+  min-width: 80px;
+  color: alpha(currentColor, 0.62);
+}
+
+.apex-changes .apex-change-name,
+.apex-changes .apex-change-versions {
+  font-family: monospace;
+  font-size: 11.5px;
+}
+
+.apex-changes .apex-change-name {
+  font-weight: 600;
+}
+
+.apex-changes .apex-change-versions {
+  color: alpha(currentColor, 0.62);
+}
+
 /* Board 18: a staged image is kept only once its signature checks out. */
 .apex-checked {
   min-height: 22px;

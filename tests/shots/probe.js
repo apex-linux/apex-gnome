@@ -1082,6 +1082,9 @@ async function wifiMenuRows(unit) {
                     ssid: row._label.text,
                     active: row.network.is_active,
                     checked: row.has_style_pseudo_class('checked'),
+                    accessibleName: row.accessible_name ?? null,
+                    accessibleChecked: row.get_accessible().ref_state_set().contains_state(Atk.StateType.CHECKED),
+                    strength: row.network.signal_strength,
                     secure: !!lock.icon_name,
                     lockAfterName: children.indexOf(lock) === children.indexOf(row._label) + 1,
                     box: boxOf(row, unit), label: boxOf(row._label, unit), signal: boxOf(row._signalIcon, unit),
@@ -3240,6 +3243,84 @@ function keepPerfHelperAwake() {
     });
 }
 
+// The surfaces G2's scenes open, as they open them, for session-defaults.js's icon walk: board 34's date
+// menu, 35, 36, Spotlight's results (38), the switcher (15), board 16's three, 13's dialog, 14 and 19.
+function iconSurfaces() {
+    const overview = async state => {
+        Main.overview.show();
+        await settle();
+        Main.overview.dash.showAppsButton.checked = state === 'apps';
+        return {
+            root: Main.overview._overview,
+            close: () => {
+                Main.overview.dash.showAppsButton.checked = false;
+                Main.overview.hide();
+            },
+        };
+    };
+    return {
+        // Do Not Disturb's switch draws its on and off glyphs only with Show Status Shapes on.
+        dateMenu: () => {
+            const a11y = new Gio.Settings({schema_id: 'org.gnome.desktop.a11y.interface'});
+            const shapes = a11y.get_boolean('show-status-shapes');
+            a11y.set_boolean('show-status-shapes', true);
+            const source = new MessageTray.Source({title: 'G2 Updates', iconName: 'software-update-available-symbolic'});
+            Main.messageTray.add(source);
+            source.addNotification(new MessageTray.Notification({
+                source, title: 'Update ready', body: 'Starts after the next restart.', urgency: MessageTray.Urgency.LOW,
+            }));
+            const {menu} = Main.panel.statusArea.dateMenu;
+            menu.open(BoxPointer.PopupAnimation.NONE);
+            return {
+                root: menu.box,
+                close: () => {
+                    menu.close(BoxPointer.PopupAnimation.NONE);
+                    source.destroy();
+                    a11y.set_boolean('show-status-shapes', shapes);
+                },
+            };
+        },
+        overview: () => overview('windows'),
+        launcher: () => overview('apps'),
+        spotlight: async () => {
+            if ((await apexHooks())?.safe() !== false)
+                return null;
+            const {Popup} = await import('resource:///org/gnome/shell/ui/apex/spotlight/popup.js');
+            const popup = new Popup(spotlightProviders, 0);
+            popup.open();
+            popup.panel.get_children()[0].get_children()[1].set_text('disk');
+            return {root: popup.panel, close: () => popup.destroy()};
+        },
+        switcher: () => {
+            const list = new SwitcherPopup.SwitcherList(true);
+            for (const name of SWITCHER_APPS) {
+                const app = new St.BoxLayout({style_class: 'alt-tab-app', orientation: Clutter.Orientation.VERTICAL});
+                app.add_child(new St.Icon({icon_name: 'application-x-executable', icon_size: SWITCHER_ICON_SIZE}));
+                app.add_child(new St.Label({text: name}));
+                list.addItem(app, app.get_last_child());
+            }
+            Main.uiGroup.add_child(list);
+            return {root: list, close: () => list.destroy()};
+        },
+        surfaces: async () => {
+            const opened = [openPopupMenu(), await openOsd(), openBanner()];
+            return {
+                roots: [opened[0].root, opened[1].root, () => Main.messageTray._banner],
+                close: () => opened.forEach(o => o.close()),
+            };
+        },
+        dialog: () => openPromptDialog({avatar: true}),
+        endSession: async () => {
+            const dialog = await openShellEndSession();
+            return {root: dialog.dialogLayout._dialog, close: () => dialog.cancel()};
+        },
+        screenshot: async () => {
+            await Main.screenshotUI.open();
+            return {root: Main.screenshotUI, close: () => Main.screenshotUI.close(true)};
+        },
+    };
+}
+
 // gnome-shell 51's shutdown destroys the tray, then runs a main loop that fires any banner timeout
 // still armed; every case but shutdown-banner exits with the tray idle, Apex's notifications or not.
 async function drainMessageTray() {
@@ -3539,6 +3620,16 @@ async function runProbe() {
             result = {error: `${e.message}\n${e.stack}`};
         }
         console.log(`APEXG2-DOCK ${JSON.stringify(result)}`);
+    }
+
+    if (GLib.getenv('G2_SCENES') === '1') {
+        let result;
+        try {
+            result = await (await import('./session-defaults.js')).surfaceIconsReport({settle, surfaces: iconSurfaces()});
+        } catch (e) {
+            result = {error: `${e.message}\n${e.stack}`};
+        }
+        console.log(`APEXG2-SESSION-SURFACES ${JSON.stringify(result)}`);
     }
 
     console.log(`APEXG2-MODES ${JSON.stringify({

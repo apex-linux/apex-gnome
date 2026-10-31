@@ -150,7 +150,7 @@ and polkit asks in the daemon, never in Settings.
   `AdwAlertDialog` once per digest when it shows: the failed checks
   (`HealthFailureChecks`), Keep This Version (`AcknowledgeHealthFailure`) and Go Back…
   (`Rollback(true)`) after a failed check; Show Changes (`GetChangesFor` the set-aside
-  digest, listed in a second dialog) and OK (`AcknowledgeHealthFailure`, which clears
+  digest, listed in a second dialog in What's New's grid) and OK (`AcknowledgeHealthFailure`, which clears
   `LastFallback`) after a fallback, whose hero says so too. These three members, and
   `Kept`, come from apex-system K4; the page reads them through a proxy without the
   compiled interface and offers each only when the daemon has it, so the page also runs
@@ -162,7 +162,9 @@ and polkit asks in the daemon, never in Settings.
   with the reason the daemon gives, and for every `degraded` one. `holds` is read as
   `a(sstbts)` or, from a daemon before apex-system K4, `a(sstbt)`.
 - **What's New**: `GetChanges` for the staged digest, summed up as its GNOME, Linux and
-  Mesa versions (then other packages), with every change in the expanded row.
+  Mesa versions (then other packages), with every change in the expanded row as one
+  grid of kind, package and versions, the package and versions in monospace; the kind is
+  Update1's token as a `C_("package change", …)` word, an unknown one as the daemon sent it.
 - **Versions**: Booted, Staged and Rollback, each as version and short digest in
   monospace and the build date, Staged with a "Checked" pill instead (the daemon keeps a
   staged image only once its signature checks out), and "Kept by Apex: …" with the
@@ -321,8 +323,10 @@ bus, and opens `gnome-control-center system software-updates` on its scenarios: 
 update available, one waiting on a gate (on battery: "Update Waiting" and Download
 Anyway), a download under way, a health failure and a fallback (board 26's
 dialog in each, captured dark too as `updates-health-failure-dark` and
-`updates-fallback-dark`), and no service at all. `updates.py` checks each
-state's texts through AT-SPI, that board 26's dialog shows, and presses each button and
+`updates-fallback-dark`; `updates-fallback-changes` captures Show Changes' list, opened by
+`APEX_BEFORE=updates.py show-changes` ahead of the capture), and no service at all. `updates.py` checks each
+state's texts through AT-SPI, that board 26's dialog shows, that What's New's grid and
+Show Changes' line up with the long fixture name cut short, and presses each button and
 the Automatic Downloads switch: `update1.py`'s log must show the method call each makes,
 with its arguments, and the switch must go back when `update1.py` refuses it as polkit
 would.

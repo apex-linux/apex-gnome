@@ -3,9 +3,18 @@
 
 import json
 import os
+import re
 import sys
+from pathlib import Path
 
-from ccatspi import Atspi, activate, failures, find_app, finish, wait_for, walk
+import gi
+
+from ccatspi import Atspi, activate, failures, find, find_app, finish, wait_for, walk
+from update1 import LONG_NAME
+
+gi.require_version("Pango", "1.0")
+gi.require_version("PangoCairo", "1.0")
+from gi.repository import Pango, PangoCairo  # noqa: E402
 
 STAGED_DIGEST = "sha256:9e41aa07c3b2d1e0f9a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c80c2b"
 
@@ -69,6 +78,92 @@ ALERTS = {
 AUTOMATIC = {"ready": False, "up-to-date": True}
 
 
+KINDS = {"upgraded", "downgraded", "added", "removed", "reinstalled"}
+CHANGE_ROWS = 9
+PANEL = Path(__file__).resolve().parents[2] / "desktop/control-center/panels/apex"
+CLAMP = int(re.search(r"maximum-size: (\d+);", (PANEL / "cc-apex-updates-page.blp").read_text())[1])
+DIALOG_WIDTH = int(re.search(r"set_content_width \(dialog, (\d+)\)", (PANEL / "cc-apex-updates-page.c").read_text())[1])
+CHANGES_DIALOG = "Changes in the Set-Aside Version"
+
+
+def extents(node):
+    e = node.get_extents(Atspi.CoordType.WINDOW)
+    return e.x, e.y, e.width, e.height
+
+
+# Board 18's change grid: each row's kind, package and versions, read off the labels sharing a kind's line.
+def change_rows(root):
+    labels = [(n, extents(n)) for n in walk(root) if n.get_role() == Atspi.Role.LABEL and n.get_name()]
+    rows = []
+    for kind, (kx, ky, _, _) in ((n, e) for n, e in labels if n.get_name() in KINDS):
+        line = sorted((e for n, e in labels if abs(e[1] - ky) <= 1 and e[0] >= kx), key=lambda e: e[0])
+        rows.append(line)
+    return rows
+
+
+def grid_holds(root, bound, limit):
+    rows = change_rows(root)
+    if len(rows) != CHANGE_ROWS or any(len(row) != 3 for row in rows):
+        return False
+    columns = list(zip(*rows))
+    starts_line_up = all(len({x for x, _, _, _ in column}) == 1 for column in columns)
+    ends_line_up = len({x + w for x, _, w, _ in columns[2]}) == 1
+    nothing_overlaps = all(name[0] + name[2] <= versions[0] for _, name, versions in rows)
+    # An unellipsized name would not overlap: it would widen the page's clamp, or the dialog, past its width instead.
+    within_bound = bound is not None and extents(bound)[2] <= limit
+    return starts_line_up and ends_line_up and nothing_overlaps and within_bound
+
+
+# apex.css's .apex-change-name font, laid out unrounded as GTK 4 does; AT-SPI has no natural width.
+def natural_width(text):
+    font = Pango.FontDescription.new()
+    font.set_family("monospace")
+    font.set_weight(Pango.Weight.SEMIBOLD)
+    font.set_absolute_size(11.5 * Pango.SCALE)
+    context = PangoCairo.FontMap.get_default().create_context()
+    context.set_round_glyph_positions(False)
+    layout = Pango.Layout.new(context)
+    layout.set_font_description(font)
+    layout.set_text(text, -1)
+    return layout.get_extents()[1].width / Pango.SCALE
+
+
+def long_name_cut_short(root):
+    label = find(root, LONG_NAME, {Atspi.Role.LABEL})
+    return label is not None and extents(label)[2] < natural_width(LONG_NAME)
+
+
+def check_changes(scenario, where, root, bound, limit):
+    if wait_for(f"{scenario}: {where} lines up its kinds, packages and versions, "
+                f"the long name cut short within {limit} px", lambda: grid_holds(root, bound(), limit)):
+        print(f"ok {scenario}: {where}'s grid lines up, and the long package name leaves its versions in place",
+              flush=True)
+    if wait_for(f"{scenario}: the long package name is narrower than its full text",
+                lambda: long_name_cut_short(root)):
+        print(f"ok {scenario}: the long package name gets fewer pixels than its full text needs "
+              f"({natural_width(LONG_NAME):.1f})", flush=True)
+
+
+def dialog(app, title):
+    return find(app, title, {Atspi.Role.DIALOG})
+
+
+# A dialog's own extents cover the whole window, so the grid's width is its group's.
+def enclosing_group(root):
+    node = find(root, LONG_NAME, {Atspi.Role.LABEL}) if root is not None else None
+    while node is not None and node.get_role() != Atspi.Role.GROUPING:
+        node = node.get_parent()
+    return node
+
+
+# APEX_BEFORE for the updates-fallback-changes capture: board 26's Show Changes, pressed, its list up.
+def show_changes(app):
+    if wait_for("show-changes: board 26 offers “Show Changes”", lambda: button(app, "Show Changes") is not None):
+        activate(button(app, "Show Changes"))
+        wait_for(f"show-changes: “{CHANGES_DIALOG}” shows", lambda: dialog(app, CHANGES_DIALOG) is not None)
+    finish()
+
+
 def texts(app):
     return (node.get_name() or "" for node in walk(app))
 
@@ -122,8 +217,12 @@ def main():
     scenario = sys.argv[1]
     log = os.environ.get("APEX_UPDATE1_LOG", "")
     app = find_app()
+    if scenario == "show-changes":
+        show_changes(app)
     for want in EXPECT[scenario]:
         wait_for(f"{scenario}: shows “{want}”", lambda: any(want in t for t in texts(app)))
+    if scenario == "ready":
+        check_changes(scenario, "What's New", app, lambda: find(app, "What’s New", {Atspi.Role.GROUPING}), CLAMP)
     if scenario in ALERTS:
         if wait_for(f"{scenario}: the alert “{ALERTS[scenario]}” shows", lambda: alert(app, ALERTS[scenario])):
             print(f"ok {scenario}: board 26's alert shows", flush=True)
@@ -146,6 +245,9 @@ def main():
     for want in AFTER.get(scenario, []):
         if wait_for(f"{scenario}: then shows “{want}”", lambda: any(want in t for t in texts(app))):
             print(f"ok {scenario}: then shows “{want}”", flush=True)
+    if scenario == "fallback":
+        changes = dialog(app, CHANGES_DIALOG)
+        check_changes(scenario, "Show Changes", changes or app, lambda: enclosing_group(changes), DIALOG_WIDTH)
     finish()
 
 
