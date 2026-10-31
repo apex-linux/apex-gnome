@@ -781,6 +781,23 @@ function describeBar() {
     };
 }
 
+// fixtures.py's Wi-Fi at 90 %: NM's client, then the icon's image, arrive in their own time.
+const NETWORK_ICON = 'network-wireless-signal-excellent-symbolic';
+const NETWORK_WAIT_MS = 20000;
+
+async function settledBar() {
+    const icon = Main.panel.statusArea.quickSettings?._network?._primaryIndicator;
+    const reached = () => icon?.mapped && icon.icon_name === NETWORK_ICON && icon.get_n_children() > 0;
+    for (let waited = 0; !reached(); waited += KEY_MS) {
+        if (waited >= NETWORK_WAIT_MS) {
+            const state = icon && {mapped: icon.mapped, icon: icon.icon_name, children: icon.get_n_children()};
+            throw new Error(`the network indicator never reached the fixture state: ${JSON.stringify(state)}`);
+        }
+        await Scripting.sleep(KEY_MS); // eslint-disable-line no-await-in-loop
+    }
+    return describeBar();
+}
+
 async function captureBar(name) {
     const path = GLib.build_filenamev([GLib.getenv('APEX_SHOTS'), `${GLib.getenv('APEX_SHOT')}-${name}.png`]);
     const stream = Gio.File.new_for_path(path).replace(null, false, Gio.FileCreateFlags.NONE, null);
@@ -808,14 +825,14 @@ async function shootBarCycle() {
     Main.overview.hide();
     Main.messageTray.getSources().forEach(source => source.destroy());
     await Scripting.sleep(STEP_MS);
-    fact('before', describeBar());
+    fact('before', await settledBar());
     await captureBar('before');
     await emitSessionSignal('Lock');
     await Scripting.sleep(STEP_MS * 2);
     fact('logind-locked', {locked: Main.screenShield.locked, bar: describeBar()});
     await emitSessionSignal('Unlock');
     await Scripting.sleep(SETTLE_MS);
-    fact('after-logind', describeBar());
+    fact('after-logind', await settledBar());
     await captureBar('after-logind');
     Main.screenShield.lock(false);
     await Scripting.sleep(STEP_MS * 2);
@@ -823,7 +840,7 @@ async function shootBarCycle() {
     fact('dialog-locked', {locked, prompt: prompt !== null});
     Main.screenShield.deactivate(false);
     await Scripting.sleep(SETTLE_MS);
-    fact('after-dialog', describeBar());
+    fact('after-dialog', await settledBar());
     await captureBar('after-dialog');
 }
 
@@ -834,13 +851,13 @@ async function shootBarLive() {
     const step = async (name, change) => {
         change();
         await Scripting.sleep(SETTLE_MS);
-        fact(name, describeBar());
+        fact(name, await settledBar());
     };
     await Scripting.sleep(SETTLE_MS);
     Main.overview.hide();
     Main.messageTray.getSources().forEach(source => source.destroy());
     await Scripting.sleep(STEP_MS);
-    fact('before', describeBar());
+    fact('before', await settledBar());
     await captureBar('before');
     await step('layer-off', () => apex.set_boolean('layer-enabled', false));
     await step('layer-on', () => apex.reset('layer-enabled'));
@@ -855,7 +872,7 @@ async function shootBarLive() {
     fact('overview-locked', {locked: Main.screenShield.locked});
     Main.screenShield.deactivate(false);
     await Scripting.sleep(SETTLE_MS);
-    fact('overview-unlocked', describeBar());
+    fact('overview-unlocked', await settledBar());
     await captureBar('overview-unlocked');
 }
 
