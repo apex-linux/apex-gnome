@@ -640,6 +640,16 @@ written to the 8-bit frame (½ step); and the reference reads c from B, which ho
 (½ step, carried at 128/255: 64/255). Measured: 1.208 steps; with `follow-opacity` forced off,
 88.651.
 
+A glass that moves blurs where it is. Each move is set by property, not by an animation's
+clock: the dock's box slid half its height up, and Quick Settings' BoxPointer halfway open
+(scale 0.98 from its top edge, half the arrow's rise up). Over the box the glass left and the
+box it took, on the tile pattern, the frame the move itself draws equals a full redraw of the
+same state by a fresh glass. The surface is unregistered and registered again first, because a
+plain full redraw would draw a kept result again, and so would pass a blur that never moves.
+The dock halfway down intellihide's slide reaches past the screen's bottom edge, and there its
+blur reads pixels no one painted (the last frame's for the live glass, a fresh buffer's for the
+new one): a known gap until 0003 clamps its blit to the stage view.
+
 `shadows_under_glass` checks the `shadows` feature against the glass in the same case, light
 and dark: `glass.js` lays the tile grid under Quick Settings, a popup menu and a dialog and
 reads each box with `framePixels()`, once with the shadows on and once with `shadows` in
