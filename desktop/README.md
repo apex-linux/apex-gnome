@@ -163,6 +163,31 @@ stock bar when it is disabled:
   value unless stock's binding has synced it since. It is the panel's, not the notifications', so
   the fix holds with `notifications` in disabled-features.
 
+Upstream's other bindings without `SYNC_CREATE`, audited in gnome-shell 51.0 and 51.1 (every
+`bind_property`/`bind_property_full` under `js/`, the same 23 sites in both). Only calendar.js:840
+shows a user anything; each other target starts at what a sync would give, or an explicit set
+notifies before it shows.
+
+| Site (51.0; 51.1 where it moved) | Binding | At creation |
+|---|---|---|
+| `ui/calendar.js:840` | placeholder `visible` → Clear `visible`, inverted | Clear over an empty list: `panel/clear-sync.js` |
+| `ui/main.js:572` (:559) | the workspaces adjustment | not a site: its flags table has `SYNC_CREATE` |
+| `ui/status/backgroundApps.js:92` | spinner `visible` → close button, inverted | spinner hidden, button shown |
+| `ui/status/network.js:251`, `:254` | section item `name`, `icon-name` → submenu label, icon | bound before either is set |
+| `ui/status/network.js:318`, `:321` | connection item `icon-name` → icon; `radio-mode` → icon `visible` | the icon starts at `!radio_mode` |
+| `ui/status/network.js:1111` | Wi-Fi item `single-device-mode` → `use-submenu`, inverted | the toggle's `_sync` (:1786) sets it as each device is added |
+| `ui/status/network.js:1397` (:1399) | binding group `source` → toggle `title` | the toggle shows only once it has a primary item, which sets the source |
+| `ui/quickSettings.js:371` | toggle `height` → menu constraint `offset` | both 0 |
+| `ui/screenshot.js:1578` | `screencast-in-progress` → area indicator `visible` | both false |
+| `ui/screenshot.js:1769` | shot `checked` ↔ cast `checked`, inverted | true and false |
+| `ui/altTab.js:426` | clone `source` → constraint `source` | both null |
+| `ui/keyboard.js:513` | emoji pager `visible` → swipe `enabled` | both true |
+| `ui/messageList.js:1731` | scroll `value` ↔ internal adjustment | both 0, offset 0 |
+| `ui/swipeTracker.js:396`, `:412`, `:421`, `:424` | `enabled` and `scroll-modifiers` → each gesture | true and 0 on both sides |
+| `gdm/authPrompt.js:293`, `:296` (:294, :297) | auth list `visible`, `opacity` → its title | hidden, 255 |
+| `gdm/loginDialog.js:1135` (:1111) | dialog `opacity` → uiGroup children | unsynced on purpose: the fade follows the dialog |
+| `portalHelper/main.js:77` | secure icon → header `icon-name` | the portal helper app, not the shell |
+
 `panel/solid-bar.js` makes the bar solid while `translucent-top-bar` is off (live), or while
 a window on the primary monitor's active workspace is maximised, showing and not the
 desktop, and the overview is closed. It follows restacking, size changes, minimising,
