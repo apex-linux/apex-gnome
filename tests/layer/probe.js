@@ -1512,6 +1512,9 @@ async function exerciseLock() {
 
     fact('lock.clock-progress', [0, 0.5, 1].map(p => Hooks.value('unlock-clock-progress', p)).join(' '));
     fact('lock.blur', JSON.stringify(Hooks.value('unlock-blur', {brightness: 0.65, radius: 90})));
+    GLib.setenv('PROBE_LOCK_SHEET', 'none', true);
+    fact('lock.blur.no-sheet', JSON.stringify(Hooks.value('unlock-blur', {brightness: 0.65, radius: 90})));
+    GLib.unsetenv('PROBE_LOCK_SHEET');
     for (const question of ['Password:', 'Password: ', 'Verification code:', 'PIN', 'password:']) {
         const stockText = question.startsWith('Password:') ? 'Password' : question.replace(/[:：] *$/, '').trim();
         fact(`lock.question.${JSON.stringify(question)}`, JSON.stringify(Hooks.value('auth-prompt-question', stockText, question)));
