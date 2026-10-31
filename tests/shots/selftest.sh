@@ -780,15 +780,44 @@ REPORT_OF_LEGIBLE_SURFACES='
         sharing: {targets: [$icon + {name: "screen-shared-symbolic"}], edge: $edge}, privacy: {targets: [$icon, $icon], edge: $edge},
         overflow: {targets: [$text + {name: "+1"}], edge: null}}
         + ([range(4)] | map({key: "indicator\(.)", value: {targets: [$icon + {name: "Chat"}], edge: null}}) | from_entries),
-        crowded: $s, indicatorMenu: $s}}'
+        crowded: $s, indicatorMenu: $s},
+    focus: ({name: "Control", focused: true, changed: 900, perimeter: 400, ratio: 4} as $ring
+        | {quickSettings: $ring, dock: ($ring + {changed: 0, ratio: 1}), dialog: ($ring + {ratio: 2.87}),
+            spotlight: ($ring + {changed: 164, ratio: 1})} | {backdrop: ., busy: .})}'
 
 # The label picks the backdrop: dark-style's inactive dot passes 3:1 today, default's is the gap.
+# Each label's focus readings at today's pins, Quick Settings' and the dialog's per wallpaper: six gaps.
+declare -Ar A11Y_FOCUS_FIXTURE=([default]='{"quickSettings":[2.37,2.14],"dialog":[4,4]}'
+    [default-solid]='{"quickSettings":[1.91,2.14],"dialog":[4,4]}' [dark-style]='{"quickSettings":[4,4],"dialog":[2.87,2.87]}')
+
 a11y_run() {
     local assertions=$1 change=${2:-.} label=${3:-dark-style} inactive=${4:-4.24}
-    jq -nc --argjson inactive "$inactive" "$REPORT_OF_LEGIBLE_SURFACES | $change" | sed 's/^/APEXG2-A11Y /' >"$T/a11y.log"
+    # shellcheck disable=SC2016 # a jq program
+    jq -nc --argjson inactive "$inactive" --argjson today "${A11Y_FOCUS_FIXTURE[$label]}" "$REPORT_OF_LEGIBLE_SURFACES
+        | .focus |= with_entries(.key as \$w | (if \$w == \"busy\" then 1 else 0 end) as \$i
+            | .value.quickSettings.ratio = \$today.quickSettings[\$i] | .value.dialog.ratio = \$today.dialog[\$i]) | $change" |
+        sed 's/^/APEXG2-A11Y /' >"$T/a11y.log"
     # shellcheck disable=SC2016 # expanded by the inner bash
     bash -c '. "$1/assert.sh"; "$2" "$3" "$4" >"$5" 2>&1; summary >>"$5"; echo "$npass $nfail $ngap"' \
         _ "$HERE" "$assertions" "$label" "$T/a11y.log" "$T/a11y.out"
+}
+
+# A surface that reports an error, or none at all, fails naming why, in both checks.
+test_a11y_surface_errors() {
+    local assertions change want
+    while IFS='|' read -r assertions change want; do
+        a11y_run "$assertions" "$change" >/dev/null
+        expect_eq "accessibility: $assertions names the surface's own failure, $want" 1 \
+            "$(grep -c "^FAIL dark-style accessibility: banner: .* ($want)$" "$T/a11y.out")"
+    done <<'CHANGES'
+a11y_contrast|.banner = {error: "not shown"}|error: not shown
+a11y_layout|.banner = {error: "not shown"}|error: not shown
+a11y_contrast|del(.banner)|not measured
+a11y_layout|.banner.targets = []|no text or glyph found
+CHANGES
+    a11y_run a11y_layout '.barPills.crowded = {error: "not shown"}' >/dev/null
+    expect_eq "accessibility: a11y_layout names the crowded bar's own failure" 1 \
+        "$(grep -c "^FAIL dark-style accessibility: board 39's crowded bar .* (error: not shown)$" "$T/a11y.out")"
 }
 
 # default's inactive dot is Apex's known gap: pinned at 2.86:1, and failing once it reaches 3:1.
@@ -802,9 +831,9 @@ test_inactive_dot_gap() {
             not_ok "inactive dot gap: $what fails $want_failures, $want_gaps gap(s) (passed/failed/gaps $passes/$failures/$open_gaps): $(grep -m3 '^FAIL' "$T/a11y.out" | paste -sd'|' -)"
         fi
     done <<'CHANGES'
-0|2|2.86|default's dot at today's 2.86:1, in the bar and with the unread dot
-2|2|2.85|a dot below today's 2.86:1
-2|0|3|the dot at 3:1: the gap must go
+0|8|2.86|default's dot at today's 2.86:1, in the bar and with the unread dot
+2|8|2.85|a dot below today's 2.86:1
+2|6|3|the dot at 3:1: the gap must go
 CHANGES
 }
 
@@ -820,21 +849,22 @@ test_pill_gaps() {
             not_ok "pill gaps: $what fails $want_failures, $want_gaps gap(s) (passed/failed/gaps $passes/$failures/$open_gaps): $(grep -m3 '^FAIL' "$T/a11y.out" | paste -sd'|' -)"
         fi
     done <<'CHANGES'
-0|5|1.62|default-solid's three pill fills at today's ratios, beside its two inactive-dot gaps
-1|5|1.61|the sharing pill's fill below today's 1.62:1
-1|4|3|the sharing pill's fill at 3:1: its gap must go
+0|11|1.62|default-solid's three pill fills at today's ratios, beside its two inactive-dot gaps
+1|11|1.61|the sharing pill's fill below today's 1.62:1
+1|10|3|the sharing pill's fill at 3:1: its gap must go
 CHANGES
 }
 
 test_a11y() {
     local assertions expected change what passes failures open_gaps want
-    for assertions in a11y_contrast:59 a11y_layout:48; do
-        expected=${assertions#*:}
-        read -r passes failures open_gaps <<<"$(a11y_run "${assertions%:*}")"
-        if ((failures == 0 && open_gaps == 0 && passes == expected)); then
-            ok "accessibility (${assertions%:*}): legible surfaces pass all $passes assertions"
+    # dark-style's six focus gaps today: its dock, Spotlight entry and dialog entry, each per wallpaper.
+    for assertions in a11y_contrast:67:6 a11y_layout:48:0; do
+        IFS=: read -r assertions expected gaps <<<"$assertions"
+        read -r passes failures open_gaps <<<"$(a11y_run "$assertions")"
+        if ((failures == 0 && open_gaps == gaps && passes == expected)); then
+            ok "accessibility ($assertions): legible surfaces pass all $passes assertions, $gaps known gap(s)"
         else
-            not_ok "accessibility (${assertions%:*}): legible surfaces pass (passed/failed/gaps $passes/$failures/$open_gaps): $(grep -m3 '^FAIL' "$T/a11y.out" | paste -sd'|' -)"
+            not_ok "accessibility ($assertions): legible surfaces pass (passed/failed/gaps $passes/$failures/$open_gaps): $(grep -m3 '^FAIL' "$T/a11y.out" | paste -sd'|' -)"
         fi
     done
     while IFS='|' read -r assertions want change what; do
@@ -864,6 +894,12 @@ a11y_contrast|1|.barPills.pills.indicator2.targets[0] += {ink: "#16161a", ratio:
 a11y_contrast|1|.barPills.pills.overflow.targets[0].ratio = 4.4|the overflow's +1 at 4.4:1
 a11y_contrast|1|.barPills.indicatorMenu.targets[0].ratio = 3|the Chat app's menu text at 3:1
 a11y_contrast|2|del(.barPills.pills.overflow, .barPills.pills.indicator0, .barPills.pills.indicator1, .barPills.pills.indicator2, .barPills.pills.indicator3)|no app indicators shown
+a11y_contrast|1|.focus.busy.quickSettings += {ratio: 1}|a focus indicator drawn in its surface's own colour over the busy wallpaper
+a11y_contrast|1|.focus.backdrop.dock += {changed: 900, ratio: 3.2}|the dock's focus indicator reaching 3:1 while its gap is pinned
+a11y_contrast|1|.focus.busy.dialog.ratio = 2.5|the dialog entry's indicator below today's 2.87:1
+a11y_contrast|1|.focus.backdrop.dialog.focused = false|key focus that never lands on the dialog's control
+a11y_contrast|4|.focus.busy = {error: "the wallpaper never changed"}|a busy wallpaper that never showed
+a11y_contrast|0|.focus.backdrop.quickSettings.ratio = 3|a focus indicator at 3:1
 a11y_contrast|1|.wifiMenu.targets[0].ratio = 3|a menu row's text at 3:1
 a11y_contrast|1|.wifiMenuConnected.targets[0].ratio = 4.4|the connected network's name at 4.4:1 over its fill
 a11y_contrast|1|.wifiMenuConnected.targets |= map(. + {kind: "icon"})|a connected row with only its glyphs measured
@@ -3871,6 +3907,7 @@ CHANGES
                 switcher: ($p + {corner: {radius: 52, outside: 560, inside: 2080, square: 2704, blurredOutside: 0, blurredInside: 2080, capturedDiffering: 0}})},
             emptyBox: {shown: ($scrim + {enabled: false}), hidden: ($scrim + {enabled: false}), shownAgain: ($scrim + {enabled: false}),
                 emptyFrames: 3, laidOut: ($scrim + {frames: 1, allocation: [320, 200]}), zeroHeight: ($scrim + {enabled: false})},
+            opacity: {followOpacity: true, fullDiffering: 102400, noneDiffering: 0, half: 1.208},
             tile: {shown: {scale: 2, inset: 6, preview: {x: 168, y: 224, width: 384, height: 192},
                 glassBox: {x: 174, y: 230, width: 372, height: 180}, inner: {x: 174, y: 230, width: 372, height: 180},
                 glass: {radius: 80, saturation: 1.6, cornerRadius: 28, enabled: true, fine: true, followOpacity: true, background: true,
@@ -3892,7 +3929,7 @@ CHANGES
     while IFS='|' read -r failures what change; do
         jq -c "$change" <<<"$manager" | sed 's/^/APEXG2-GLASS /' >"$T/glass.log"
         read -r passes _ <<<"$(assertion_counts glass_manager glass "$T/glass.log" light)"
-        expect_eq "glass manager: $what fails $failures of 25" "$failures" $((25 - passes))
+        expect_eq "glass manager: $what fails $failures of 26" "$failures" $((26 - passes))
     done <<'CHANGES'
 0|the bar, the dock and the popovers at their tokens, every switch honoured|.
 1|the bar at the popovers' sigma|.manager.glass.panel.radius = 120
@@ -3922,6 +3959,12 @@ CHANGES
 1|an empty actor-mode box that blurs|.manager.emptyBox.shownAgain.enabled = true
 1|an empty box that never drew a frame|.manager.emptyBox.emptyFrames = 0
 1|a laid-out box whose blur never comes on|.manager.emptyBox.laidOut.enabled = false
+1|a glass that keeps its full blur at 128, as with follow-opacity off|.manager.opacity.half = 88.651
+1|a 128 frame two steps off the blend|.manager.opacity.half = 2
+1|a glass without follow-opacity|.manager.opacity.followOpacity = false
+1|a glass at opacity 0 that still draws|.manager.opacity.noneDiffering = 3200
+1|a glass that blurs nothing at 255|.manager.opacity.fullDiffering = 0
+1|no opacity report|.manager.opacity = null
 1|an Alt+Tab list's blur rounded twice its border's radius|.manager.derived.switcher.cornerRadius = 104
 1|a banner rounded at one corner only|.manager.glass.banner.painted.radii = [52, 0, 0, 0]
 1|a blur over a box other than the painted background|.manager.glass.banner.painted.box = [0, 8, 360, 392]
@@ -3947,7 +3990,7 @@ CHANGES
 1|a toast blurred by two glass effects|.manager.conformance.checked.toast.corner.glassEffects = 2
 1|a dock corner a screenshot draws otherwise|.manager.conformance.checked.dock.corner.capturedMax = 2
 3|a toast never checked|.manager.conformance.checked.toast = null
-25|no manager|.manager = null
+26|no manager|.manager = null
 CHANGES
 }
 
@@ -3968,6 +4011,7 @@ test_window_switcher
 test_modal_dialog
 test_a11y
 test_inactive_dot_gap
+test_a11y_surface_errors
 test_pill_gaps
 test_signoff
 test_shell_icons
