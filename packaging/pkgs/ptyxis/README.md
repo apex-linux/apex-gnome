@@ -124,6 +124,34 @@ installed as `claude`, `just`, `cargo`, `rpmbuild`, `ssh` and `git`, prints what
 1, or rings the bell, so every status comes from the real shell integration. CI runs
 it after the lane and keeps the captures as the `ptyxis-shots` artifact.
 
+`tests/ptyxis/contrast-test.sh` checks boards 32 and 33's contrast in those captures. With
+`APEX_PTYXIS_TARGETS=1`, as CI sets it, `probe.js` runs `contrast-atspi.py` once each
+capture is taken: over AT-SPI it lists the sidebar's labels and status glyphs (in a row, the
+selected row, a group heading, the footer), the content header's labels, each pane header's,
+and each pane's terminal, the unfocused pane's marked dimmed. GTK's extents leave out each
+ancestor's padding and margin, so `contrast.py` moves each container's boxes by the one offset
+that holds the most strokes. It takes a target's ground as the colour most of its box is and its ink
+as its strongest strokes as drawn, so a translucent ink, the .62 dim or the unfocused pane's .7
+and .62 are measured as they look. Text wants 4.5:1 and a glyph 3:1 (WCAG 1.4.3, 1.4.11),
+and the footer's needs-you and running glyphs CIELAB L* 10 apart (light 42.6 and 54.9, dark
+74.8 and 54.9), so they differ in lightness and not hue alone. A shortfall is a known gap
+at today's ratio, pending the owner: a lower ratio fails, and so does one that reaches its
+threshold, so the fix also removes the pin. The unfocused pane's output passes (4.73:1 light,
+7.24:1 dark). The gaps:
+
+| Capture | Target | Today |
+|---|---|---|
+| light, split-light | the selected row's dim program and time, on its `--apex-selected` fill | 4.26:1 |
+| light, dark | the selected row's running glyph, the accent on that fill | 2.81:1, 2.70:1 |
+| light, split-light | a group's `toolbox` and `ssh` tags, dim on `--apex-btn` | 4.26:1 |
+| light, split-light | the content header's and the focused pane header's tag | 4.39:1 |
+| split-light, split-dark | the unfocused pane header's path, `--apex-dim` at .7 | 2.68:1, 3.96:1 |
+| split-light, split-dark | the unfocused pane header's tag | 2.53:1, 3.53:1 |
+
+`contrast.py --selftest` measures a drawn label in the foreground and again in its row's
+fill colour, and the test fails unless its checks catch every session name in its row's
+fill. CI runs it after the captures.
+
 `tests/ptyxis/palette-test.sh` runs the same headless shell. Its automation script,
 `palette-probe.js`, opens a terminal on a user palette with a red background, rewrites
 the file with a green one, and samples the terminal's pixels; the test fails unless the
