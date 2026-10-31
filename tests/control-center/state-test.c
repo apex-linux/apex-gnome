@@ -245,6 +245,21 @@ test_changes_without_known_packages (void)
     g_assert_null (cc_apex_updates_changes_summary (none, NULL));
 }
 
+static void
+test_change_kinds (void)
+{
+    g_autoptr(GVariant) changes = g_variant_ref_sink (g_variant_new_parsed (
+        "[('a', 'x86_64', 'added', '', '1-1'), ('b', 'x86_64', 'removed', '1-1', ''),"
+        " ('c', 'x86_64', 'upgraded', '1-1', '2-1'), ('d', 'x86_64', 'downgraded', '2-1', '1-1'),"
+        " ('e', 'x86_64', 'obsoleted', '1-1', '')]"));
+    g_autoptr(GPtrArray) parsed = cc_apex_updates_changes (changes);
+    const char *kinds[] = { "added", "removed", "upgraded", "downgraded", "obsoleted" };
+
+    g_assert_cmpuint (parsed->len, ==, G_N_ELEMENTS (kinds));
+    for (guint i = 0; i < parsed->len; i++)
+        g_assert_cmpstr (((CcApexUpdatesChange *) g_ptr_array_index (parsed, i))->kind, ==, kinds[i]);
+}
+
 /* GetCurrentState as Mutter answers it: a built-in panel at 2880x1800, and an external monitor. */
 #define PANEL_MODES                                                                                                    \
     "[('2880x1800@90.000', 2880, 1800, 90.0, 2.0, [1.0, 2.0], {'is-current': <true>, 'is-preferred': <true>}),"     \
@@ -328,6 +343,7 @@ main (int argc, char **argv)
     g_test_add_func ("/updates/when-and-digest", test_when_and_digest);
     g_test_add_func ("/updates/changes", test_changes);
     g_test_add_func ("/updates/changes-without-known-packages", test_changes_without_known_packages);
+    g_test_add_func ("/updates/change-kinds", test_change_kinds);
     g_test_add_func ("/power/refresh-line", test_refresh_line);
     g_test_add_func ("/power/gpu", test_gpu);
     return g_test_run ();
