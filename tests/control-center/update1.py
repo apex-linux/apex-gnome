@@ -40,6 +40,8 @@ STAGED = deployment("45.20261010.133", "sha256:9e41aa07c3b2d1e0f9a8b7c6d5e4f3a2b
 ROLLBACK = deployment("45.20261001.124", "sha256:b02d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b19c4", 1,
                       pinned=True, **{"pin-reason": "the last version that started cleanly"})
 EMPTY = dbus.Dictionary({}, signature="sv")
+# Long enough that What's New must cut it short; updates.py checks the grid holds.
+LONG_NAME = "rust-tree-sitter-language-pack-devel-documentation-and-examples"
 CHANGES = [
     ("glibc", "i686", "upgraded", "2.42-3.fc45", "2.42-4.fc45"),
     ("glibc", "x86_64", "upgraded", "2.42-3.fc45", "2.42-4.fc45"),
@@ -48,6 +50,7 @@ CHANGES = [
     ("mesa-dri-drivers", "i686", "upgraded", "26.1.0-1.fc45", "26.1.2-1.fc45"),
     ("mesa-dri-drivers", "x86_64", "upgraded", "26.1.0-1.fc45", "26.1.2-1.fc45"),
     ("python3-libdnf5", "x86_64", "added", "", "5.4.6-1.fc45"),
+    (LONG_NAME, "x86_64", "upgraded", "0.25.0-1.fc45", "0.25.1-1.fc45"),
     ("xorg-x11-fonts-misc", "noarch", "removed", "7.5-42.fc45", ""),
 ]
 

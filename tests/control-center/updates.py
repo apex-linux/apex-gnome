@@ -69,6 +69,43 @@ ALERTS = {
 AUTOMATIC = {"ready": False, "up-to-date": True}
 
 
+KINDS = {"upgraded", "downgraded", "added", "removed", "reinstalled"}
+CHANGE_ROWS = 9
+
+
+def extents(node):
+    e = node.get_extents(Atspi.CoordType.WINDOW)
+    return e.x, e.y, e.width, e.height
+
+
+# Board 18's What's New grid: each row's kind, package and versions, read off the labels sharing a kind's line.
+def change_rows(app):
+    labels = [(n, extents(n)) for n in walk(app) if n.get_role() == Atspi.Role.LABEL and n.get_name()]
+    rows = []
+    for kind, (kx, ky, _, _) in ((n, e) for n, e in labels if n.get_name() in KINDS):
+        line = sorted((e for n, e in labels if abs(e[1] - ky) <= 1 and e[0] >= kx), key=lambda e: e[0])
+        rows.append(line)
+    return rows
+
+
+def grid_holds(app):
+    rows = change_rows(app)
+    if len(rows) != CHANGE_ROWS or any(len(row) != 3 for row in rows):
+        return False
+    columns = list(zip(*rows))
+    starts_line_up = all(len({x for x, _, _, _ in column}) == 1 for column in columns)
+    ends_line_up = len({x + w for x, _, w, _ in columns[2]}) == 1
+    nothing_overlaps = all(name[0] + name[2] <= versions[0] for _, name, versions in rows)
+    return starts_line_up and ends_line_up and nothing_overlaps
+
+
+def check_changes(app):
+    if wait_for("ready: What's New lines up its kinds, packages and versions, the long name cut short",
+                lambda: grid_holds(app)):
+        print("ok ready: What's New's grid lines up, and the long package name leaves its versions in place",
+              flush=True)
+
+
 def texts(app):
     return (node.get_name() or "" for node in walk(app))
 
@@ -124,6 +161,8 @@ def main():
     app = find_app()
     for want in EXPECT[scenario]:
         wait_for(f"{scenario}: shows “{want}”", lambda: any(want in t for t in texts(app)))
+    if scenario == "ready":
+        check_changes(app)
     if scenario in ALERTS:
         if wait_for(f"{scenario}: the alert “{ALERTS[scenario]}” shows", lambda: alert(app, ALERTS[scenario])):
             print(f"ok {scenario}: board 26's alert shows", flush=True)
