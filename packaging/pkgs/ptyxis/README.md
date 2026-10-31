@@ -148,6 +148,22 @@ threshold, so the fix also removes the pin. The unfocused pane's output passes (
 | split-light, split-dark | the unfocused pane header's path, `--apex-dim` at .7 | 2.68:1, 3.96:1 |
 | split-light, split-dark | the unfocused pane header's tag | 2.53:1, 3.53:1 |
 
+The four scenes are taken again with `org.gnome.desktop.a11y.interface high-contrast` on
+(`hc-light`, `hc-dark`, `hc-split-light`, `hc-split-dark`), for this test alone: libadwaita
+switches (14,000 to 25,000 pixels change per capture, its borders and outlines), but
+`apex.css` keeps its own colours, so the same targets fall short there and are pinned the same
+way, as the owner's item 10b. One pair moves, in light: libadwaita's dimming of the unfocused pane's
+header greys its path and tag.
+
+| Capture | Target | Today |
+|---|---|---|
+| hc-light, hc-split-light | the selected row's dim program and time | 4.26:1 |
+| hc-light, hc-dark | the selected row's running glyph | 2.81:1, 2.70:1 |
+| hc-light, hc-split-light | a group's `toolbox` and `ssh` tags | 4.26:1 |
+| hc-light, hc-split-light | the content header's and the focused pane header's tag | 4.39:1 |
+| hc-split-light, hc-split-dark | the unfocused pane header's path | 3.07:1, 3.96:1 |
+| hc-split-light, hc-split-dark | the unfocused pane header's tag | 2.95:1, 3.53:1 |
+
 `contrast.py --selftest` measures a drawn label in the foreground and again in its row's
 fill colour, and the test fails unless its checks catch every session name in its row's
 fill. CI runs it after the captures.

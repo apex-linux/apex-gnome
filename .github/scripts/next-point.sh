@@ -21,6 +21,10 @@ usage: .github/scripts/next-point.sh COMMAND
               updates-testing moves, for lane.sh's APEX_IMAGE_SRC: apex-lane then builds from
               updates-testing's SRPM on a buildroot that has them. Every build would overflow
               apex-lane's dnf5 arguments.
+  allowlist FILE
+              the builds of ${WATCHED[*]} that updates-testing moves, one per line, into
+              FILE; none at all ("nothing moves") leaves it empty, and the lanes build the
+              stable ones. A failed or empty query of either side dies instead
   reopen CONTAINERFILE
               sets ARG GA_REACHED=0 in that copy's Containerfile, adding the ARG if the admission
               cut deleted it: next-point keeps watching updates-testing after GA
@@ -54,16 +58,13 @@ dnf5_() {
 }
 
 image() {
-    local dir=$1 moved
+    local dir=$1
     git_() { git -c safe.directory='*' "$@"; }
     [[ -d $dir/.git ]] || git_ init -q "$dir"
     git_ -C "$dir" fetch -q --depth 1 "$APEX_IMAGE_URL" "$APEX_IMAGE_REV" || die "cannot fetch apex-image $APEX_IMAGE_REV"
     git_ -C "$dir" checkout -q --detach -f "$APEX_IMAGE_REV"
     reopen "$dir/image/Containerfile"
-    moved=$(moved)
-    [[ -n $moved ]] || die "updates-testing moves none of ${WATCHED[*]}"
-    printf '%s\n' "$moved" >"$dir/image/packages/updates-testing-allowlist.txt"
-    log "next-point: apex-image $APEX_IMAGE_REV in $dir admits $(paste -sd ' ' <<<"$moved")"
+    allowlist "$dir/image/packages/updates-testing-allowlist.txt"
 }
 
 # After F45's GA apex-image sets GA_REACHED=1 or deletes the ARG, and apex-lane then admits
@@ -85,25 +86,44 @@ shim() {
     [[ $(command -v dnf5) == "$SHIM" ]] || die "$SHIM is not the dnf5 on PATH ($(command -v dnf5))"
 }
 
+# newest PKG REPO...: PKG's newest NEVR there; fails when dnf5 fails or finds none.
 newest() {
-    "$REAL_DNF5" -q repoquery "${@:2}" --latest-limit=1 --arch=x86_64,noarch --qf '%{name}-%{version}-%{release}\n' "$1" 2>/dev/null | tail -n 1
+    local out
+    out=$("$REAL_DNF5" -q repoquery "${@:2}" --latest-limit=1 --arch=x86_64,noarch --qf '%{name}-%{version}-%{release}\n' "$1") ||
+        return 1
+    out=$(tail -n 1 <<<"$out")
+    [[ -n $out ]] && printf '%s\n' "$out"
 }
 
 moved() {
     local p stable testing
     for p in "${WATCHED[@]}"; do
-        stable=$(newest "$p" --repo=fedora --repo=updates)
-        testing=$(newest "$p" --repo=fedora --repo=updates --repo=updates-testing)
-        [[ -z $testing || $testing == "$stable" ]] || printf '%s\n' "$testing"
+        stable=$(newest "$p" --repo=fedora --repo=updates) ||
+            die "cannot ask fedora and updates for $p: dnf5 failed or found no build"
+        testing=$(newest "$p" --repo=fedora --repo=updates --repo=updates-testing) ||
+            die "cannot ask updates-testing for $p: dnf5 failed or found no build"
+        [[ $testing == "$stable" ]] || printf '%s\n' "$testing"
     done
+}
+
+# An empty allowlist is apex-lane's "admit nothing", so the lanes build the stable ones.
+allowlist() {
+    local file=$1 moved
+    moved=$(moved)
+    printf '%s' "${moved:+$moved$'\n'}" >"$file"
+    if [[ -n $moved ]]; then
+        log "next-point: updates-testing moves $(paste -sd ' ' <<<"$moved")"
+    else
+        log "next-point: updates-testing moves none of ${WATCHED[*]} (nothing moves): the lanes build the stable ones"
+    fi
 }
 
 versions() {
     local p stable testing
     printf '| Package | Stable | With updates-testing |\n|---|---|---|\n'
     for p in "${WATCHED[@]}"; do
-        stable=$(newest "$p" --repo=fedora --repo=updates)
-        testing=$(newest "$p" --repo=fedora --repo=updates --repo=updates-testing)
+        stable=$(newest "$p" --repo=fedora --repo=updates) || stable=''
+        testing=$(newest "$p" --repo=fedora --repo=updates --repo=updates-testing) || testing=''
         printf '| %s | %s | %s%s |\n' "$p" "${stable:-none}" "${testing:-none}" "$([[ $stable == "$testing" ]] || echo ' (moves)')"
     done
 }
@@ -123,6 +143,7 @@ case ${1:-} in
     -h | --help) usage; exit 0 ;;
     dnf5) dnf5_ "${@:2}" ;;
     image) (($# == 2)) || { usage >&2; exit 2; }; image "$2" ;;
+    allowlist) (($# == 2)) || { usage >&2; exit 2; }; allowlist "$2" ;;
     reopen) (($# == 2)) || { usage >&2; exit 2; }; reopen "$2" ;;
     shim) shim ;;
     versions) versions ;;

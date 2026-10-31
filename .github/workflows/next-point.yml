@@ -23,6 +23,7 @@ jobs:
       contents: read
     outputs:
       shell: ${{ steps.lane.outputs.shell }}
+      moves: ${{ steps.image.outputs.moves }}
     container:
       image: registry.fedoraproject.org/fedora:45@sha256:1e13e11f63e147a40a935c9046c79d53a30b861a3cf05ebb023bb53c562382cb
     steps:
@@ -36,8 +37,10 @@ jobs:
           persist-credentials: false
 
       - name: apex-image admitting updates-testing, and what moves
+        id: image
         run: |
           .github/scripts/next-point.sh image "$PWD/_build/next-point/apex-image"
+          echo "moves=$(grep -c . _build/next-point/apex-image/image/packages/updates-testing-allowlist.txt || :)" >>"$GITHUB_OUTPUT"
           .github/scripts/next-point.sh versions | tee -a "$GITHUB_STEP_SUMMARY"
 
       - name: tests/lib/lane.sh gnome-shell
@@ -398,6 +401,7 @@ jobs:
       - name: the line, passed/failed for each, ? where a job gave none
         env:
           SHELL_NEVR: ${{ needs.lane.outputs.shell || '?' }}
+          MOVES: ${{ needs.lane.outputs.moves || '?' }}
           G2: ${{ needs.g2.outputs.g2 || '?' }}
           GOLDENS: ${{ needs.signoff.outputs.goldens || '?' }}
           SHOOT: ${{ needs.signoff.outputs.shoot || '?' }}
@@ -405,5 +409,6 @@ jobs:
           app() { [[ -s counts/$1 ]] && cat "counts/$1" || echo "$1 ?"; }
           line="next-point: $SHELL_NEVR g2 $G2 goldens $GOLDENS shoot $SHOOT | $(app cc) | $(app files)"
           line+=" | $(app libadwaita) | $(app ptyxis)"
+          [[ $MOVES != 0 ]] || line+=" (nothing moves)"
           echo "$line"
           printf '%s\n' "\`$line\`" >>"$GITHUB_STEP_SUMMARY"

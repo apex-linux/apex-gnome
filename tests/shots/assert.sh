@@ -55,7 +55,7 @@ readonly A11Y_ICON_RATIO=3
 readonly A11Y_ACCENTS=(blue teal green yellow orange red pink purple slate)
 readonly A11Y_SURFACES=(bar barUnread dock popupMenu osd banner quickSettings "${A11Y_ACCENTS[@]/#/quickSettingsAccents.}" wifiMenu wifiMenuConnected dateMenu
     "${A11Y_ACCENTS[@]/#/dateMenuAccents.}" switcher dialog "${A11Y_ACCENTS[@]/#/dialogAccents.}" endSession screenshot
-    spotlight.popup spotlight.toast overview appGrid)
+    spotlight.popup spotlight.toast overview appGrid barPills.indicatorMenu)
 # The failures still open: upstream's high-contrast sheet, which safe mode keeps as Fedora's.
 readonly A11Y_HC_TOGGLE="upstream HC sheet: Quick Settings' checked toggle, white on its accent (3.15:1), and its menu arrow (2.31:1)"
 declare -A A11Y_GAPS=([high-contrast:quickSettings]=$A11Y_HC_TOGGLE)
@@ -979,6 +979,11 @@ quick_settings_layer() {
             "the Wi-Fi menu's header subtitle ends the title's row, at its end (board 17)"
         expect "$label Quick Settings" "$scenes" "$q.wifiMenu.rows | length > 1 and any(.active) and all(.checked == .active)" \
             "the active network's row, and only it, is :checked"
+        expect "$label Quick Settings" "$scenes" "$q.wifiMenu.rows | length > 1 and any(.active) and all(.accessibleChecked == .active)" \
+            "the active network's row, and only it, is checked for a screen reader"
+        expect "$label Quick Settings" "$scenes" \
+            "$q.wifiMenu.rows | length > 1 and all(.accessibleName == \"\\(.ssid), \\(if .secure then \"Secure\" else \"Not secure\" end), Signal strength \\(.strength)%\")" \
+            "each row names its network, security and its best access point's signal for a screen reader"
         network_rows_centred "$label" "$scenes" "$q.wifiMenu.rows"
         top_bar_metric "$label Quick Settings" "$scenes" "$(tokens_for "$variant")" \
             'a secure network'"'"'s lock follows its name, $apex_quick_menu_lock_size in $apex_fg at $apex_quick_menu_lock_opacity' \
@@ -1898,7 +1903,8 @@ inactive_dot() {
 
 # Board 39's pills: the chip's and the timer's text at 4.5:1, the share's and the privacy group's glyphs
 # at 3:1, and a pill Apex fills against the bar at 3:1; upstream's high-contrast sheet fills the button instead.
-readonly A11Y_PILL_PARTS=(input:text recording:text sharing:icon privacy:icon recording:edge sharing:edge privacy:edge)
+readonly A11Y_PILL_PARTS=(input:text recording:text sharing:icon privacy:icon overflow:text indicators:icon recording:edge sharing:edge
+    privacy:edge)
 readonly A11Y_PILL_GAP="the owner's decision on board 39's pill fills over #013b88 (2026-10-31)"
 readonly A11Y_PILL_HC_GAP="upstream HC sheet: the screen-sharing glyph, white on its #ff7800 fill (2.54:1)"
 # Each part under WCAG AA today, at the report's own rounding: a lower one fails.
@@ -1912,8 +1918,9 @@ pill_ratio() {
     if [[ $part == edge ]]; then
         jq -r --arg p "$pill" '.barPills.pills[$p].edge.ratio // empty' <<<"$report" 2>/dev/null
     else
-        jq -r --arg p "$pill" --arg k "$part" \
-            '[.barPills.pills[$p].targets[]? | select(.kind == $k and (.offscreen | not)) | .ratio] | min // empty' <<<"$report" 2>/dev/null
+        # indicators: every app indicator's pill, indicator0 to indicator3.
+        jq -r --arg p "$pill" --arg k "$part" '[.barPills.pills | to_entries[] | select(.key == $p or ($p == "indicators" and (.key | startswith("indicator"))))
+            | .value.targets[]? | select(.kind == $k and (.offscreen | not)) | .ratio] | min // empty' <<<"$report" 2>/dev/null
     fi
 }
 
@@ -2007,6 +2014,11 @@ a11y_layout() {
             <<<"$report" 2>&1)
         known_gap "${A11Y_GAPS[$label:$s]:-}" a11y_verdict "$label accessibility: $s: no text cut short, off the screen, outside its surface or overlapping" "$problems"
     done
+    problems=$(jq -r --arg path barPills.crowded \
+        ".monitor as \$m | ([$A11Y_SURFACE] | add // []) as \$e | if (\$e | length) > 0 then \$e else (.barPills.crowded | $A11Y_LAYOUT) end | join(\"; \")" \
+        <<<"$report" 2>&1)
+    a11y_verdict "$label accessibility: board 39's crowded bar (chip, recording, share, privacy, five apps): no text cut short, off the screen or overlapping" \
+        "$problems"
 }
 
 # The light and dark captures, high contrast and Large Text, each with its own shell, over the
@@ -2888,6 +2900,18 @@ glass_manager() {
         'over a checker, an Alt+Tab list'"'"'s bottom-left corner blurs no pixel past its border'"'"'s arc and every pixel inside it (board 15)'
     "${expect_glass[@]}" '.manager.derived.switcher.corner.capturedDiffering == 0' \
         'and a screenshot shows that corner as the screen does, pixel for pixel: off stage, the blur maps the stage through the capture'"'"'s viewport'
+    local conformance
+    conformance=$(report_of "$log" APEXG2-GLASS | jq -r '.manager.conformance | "\(.registered | length) registered: \(.registered | join(", "))"' 2>/dev/null)
+    "${expect_glass[@]}" '.manager.conformance | (.registered | length) > 0 and .unchecked == [] and (.registered | all(. as $n | $n | IN(["panel", "dock", "quick-settings", "calendar", "banner", "osd", "spotlight", "toast", "switcher", "screenshot", "tilePreview"][]) or startswith("scrim-")))' \
+        "every surface the glass registry got in the case was checked, each by name, and none unknown to it (${conformance:-no report})"
+    "${expect_glass[@]}" '.manager.conformance.checked | to_entries | all(.value | .cornerRadius as $r
+        | (.painted.radii | all(. == $r)) and (.allocation[0] == null or .painted.box == [0, 0] + .allocation))' \
+        'each rounds its blur at its border radius, all four corners, over the box St paints its background in: the Spotlight panel and the toast too'
+    "${expect_glass[@]}" '.manager.conformance.checked | ["dock", "quick-settings", "calendar", "banner", "osd", "spotlight", "toast"] as $rounded
+        | [$rounded[] as $n | .[$n].corner | .radius > 0 and .outside > 0 and .ring > 0 and .blurredOutside == 0 and .blurredRing == .ring and .glassEffects == 1] | length == 7 and all' \
+        'over a checker, the bottom-left corner of the dock, Quick Settings, the calendar, a banner, the OSD, the Spotlight panel and the toast blurs no pixel past its border'"'"'s arc and every pixel in the band inside it, under one glass'
+    "${expect_glass[@]}" '.manager.conformance.checked | [.["dock", "quick-settings", "calendar", "banner", "osd", "spotlight", "toast"].corner.capturedMax] | length == 7 and all(type == "number" and . <= 1)' \
+        'and a screenshot shows each of those corners as the screen does, to 1/255 a channel'
     "${expect_glass[@]}" "$glass"' .t as $t | .manager.monitorScale as $s | .manager.tile.shown.glass
         | glass($t.apex_tile_preview_blur; $t.apex_tile_preview_saturation; $s) and .cornerRadius == ($t.apex_radius_tile_preview | px) * $s' \
         'the shown tile preview registers its glass at board 22'"'"'s $apex_tile_preview_blur and $apex_tile_preview_saturation, rounded $apex_radius_tile_preview'
