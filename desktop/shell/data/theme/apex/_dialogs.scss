@@ -166,6 +166,16 @@ $_end_session_share: $_end_session_row /
   }
 }
 
+// Board 13's message row: upstream's caption pill, its margin and its centring, gone.
+@mixin apex-polkit-message {
+  margin: 0;
+  padding: 0;
+  border-radius: 0;
+  background-color: transparent;
+  font-size: apex-text-size($apex_font_polkit_hint_size);
+  text-align: left;
+}
+
 .apex-polkit {
   .apex-polkit-icon {
     width: $apex_polkit_icon_size;
@@ -202,7 +212,21 @@ $_end_session_share: $_end_session_row /
     spacing: $apex_polkit_hint_gap;
     color: $apex_fg_dim;
 
-    .prompt-dialog-info-label { color: $apex_fg_dim; font-size: apex-text-size($apex_font_polkit_hint_size); }
+    .prompt-dialog-info-label { @include apex-polkit-message; color: $apex_fg_dim; }
+  }
+
+  // Upstream holds the row with its null label while nothing shows, so it takes the row's height too.
+  .prompt-dialog-null-label { @include apex-polkit-message; }
+
+  // A wrong password takes the hint's row: no glyph, the error colour, and the error ring on the field.
+  .prompt-dialog-error-label {
+    @include apex-polkit-message;
+    padding: 0 $apex_polkit_hint_inset;
+    color: $apex_error_fg;
+  }
+
+  &.apex-polkit-error .prompt-dialog-password-entry {
+    &, &:focus { box-shadow: inset 0 0 0 $apex_entry_focus_ring $apex_error_fg !important; }
   }
 
   .apex-polkit-fingerprint-glyph { icon-size: $apex_polkit_hint_glyph_size; }
