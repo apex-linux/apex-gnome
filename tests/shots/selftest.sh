@@ -777,12 +777,23 @@ REPORT_OF_LEGIBLE_SURFACES='
     dialog: $s, endSession: $s, spotlight: {popup: $s, toast: $s}, overview: $s, appGrid: $s,
     barPills: {box: $s.box, pills: {input: {targets: [$text + {name: "EN"}], edge: null},
         recording: {targets: [$text + {name: "0:42", ink: "#ffffff", backdrop: "#c01c28", ratio: 5.6}], edge: $edge},
-        sharing: {targets: [$icon + {name: "screen-shared-symbolic"}], edge: $edge}, privacy: {targets: [$icon, $icon], edge: $edge}}}}'
+        sharing: {targets: [$icon + {name: "screen-shared-symbolic"}], edge: $edge}, privacy: {targets: [$icon, $icon], edge: $edge}}},
+    focus: ({name: "Control", focused: true, changed: 900, perimeter: 400, ratio: 4} as $ring
+        | {quickSettings: $ring, dock: ($ring + {changed: 0, ratio: 1}), dialog: ($ring + {ratio: 2.87}),
+            spotlight: ($ring + {changed: 164, ratio: 1})} | {backdrop: ., busy: .})}'
 
 # The label picks the backdrop: dark-style's inactive dot passes 3:1 today, default's is the gap.
+# Each label's focus readings at today's pins, Quick Settings' and the dialog's per wallpaper: six gaps.
+declare -Ar A11Y_FOCUS_FIXTURE=([default]='{"quickSettings":[2.37,2.14],"dialog":[4,4]}'
+    [default-solid]='{"quickSettings":[1.91,2.14],"dialog":[4,4]}' [dark-style]='{"quickSettings":[4,4],"dialog":[2.87,2.87]}')
+
 a11y_run() {
     local assertions=$1 change=${2:-.} label=${3:-dark-style} inactive=${4:-4.24}
-    jq -nc --argjson inactive "$inactive" "$REPORT_OF_LEGIBLE_SURFACES | $change" | sed 's/^/APEXG2-A11Y /' >"$T/a11y.log"
+    # shellcheck disable=SC2016 # a jq program
+    jq -nc --argjson inactive "$inactive" --argjson today "${A11Y_FOCUS_FIXTURE[$label]}" "$REPORT_OF_LEGIBLE_SURFACES
+        | .focus |= with_entries(.key as \$w | (if \$w == \"busy\" then 1 else 0 end) as \$i
+            | .value.quickSettings.ratio = \$today.quickSettings[\$i] | .value.dialog.ratio = \$today.dialog[\$i]) | $change" |
+        sed 's/^/APEXG2-A11Y /' >"$T/a11y.log"
     # shellcheck disable=SC2016 # expanded by the inner bash
     bash -c '. "$1/assert.sh"; "$2" "$3" "$4" >"$5" 2>&1; summary >>"$5"; echo "$npass $nfail $ngap"' \
         _ "$HERE" "$assertions" "$label" "$T/a11y.log" "$T/a11y.out"
@@ -799,9 +810,9 @@ test_inactive_dot_gap() {
             not_ok "inactive dot gap: $what fails $want_failures, $want_gaps gap(s) (passed/failed/gaps $passes/$failures/$open_gaps): $(grep -m3 '^FAIL' "$T/a11y.out" | paste -sd'|' -)"
         fi
     done <<'CHANGES'
-0|2|2.86|default's dot at today's 2.86:1, in the bar and with the unread dot
-2|2|2.85|a dot below today's 2.86:1
-2|0|3|the dot at 3:1: the gap must go
+0|8|2.86|default's dot at today's 2.86:1, in the bar and with the unread dot
+2|8|2.85|a dot below today's 2.86:1
+2|6|3|the dot at 3:1: the gap must go
 CHANGES
 }
 
@@ -817,21 +828,22 @@ test_pill_gaps() {
             not_ok "pill gaps: $what fails $want_failures, $want_gaps gap(s) (passed/failed/gaps $passes/$failures/$open_gaps): $(grep -m3 '^FAIL' "$T/a11y.out" | paste -sd'|' -)"
         fi
     done <<'CHANGES'
-0|5|1.62|default-solid's three pill fills at today's ratios, beside its two inactive-dot gaps
-1|5|1.61|the sharing pill's fill below today's 1.62:1
-1|4|3|the sharing pill's fill at 3:1: its gap must go
+0|11|1.62|default-solid's three pill fills at today's ratios, beside its two inactive-dot gaps
+1|11|1.61|the sharing pill's fill below today's 1.62:1
+1|10|3|the sharing pill's fill at 3:1: its gap must go
 CHANGES
 }
 
 test_a11y() {
     local assertions expected change what passes failures open_gaps want
-    for assertions in a11y_contrast:56 a11y_layout:46; do
-        expected=${assertions#*:}
-        read -r passes failures open_gaps <<<"$(a11y_run "${assertions%:*}")"
-        if ((failures == 0 && open_gaps == 0 && passes == expected)); then
-            ok "accessibility (${assertions%:*}): legible surfaces pass all $passes assertions"
+    # dark-style's six focus gaps today: its dock, Spotlight entry and dialog entry, each per wallpaper.
+    for assertions in a11y_contrast:64:6 a11y_layout:46:0; do
+        IFS=: read -r assertions expected gaps <<<"$assertions"
+        read -r passes failures open_gaps <<<"$(a11y_run "$assertions")"
+        if ((failures == 0 && open_gaps == gaps && passes == expected)); then
+            ok "accessibility ($assertions): legible surfaces pass all $passes assertions, $gaps known gap(s)"
         else
-            not_ok "accessibility (${assertions%:*}): legible surfaces pass (passed/failed/gaps $passes/$failures/$open_gaps): $(grep -m3 '^FAIL' "$T/a11y.out" | paste -sd'|' -)"
+            not_ok "accessibility ($assertions): legible surfaces pass (passed/failed/gaps $passes/$failures/$open_gaps): $(grep -m3 '^FAIL' "$T/a11y.out" | paste -sd'|' -)"
         fi
     done
     while IFS='|' read -r assertions want change what; do
@@ -857,6 +869,12 @@ a11y_contrast|1|.barPills.pills.sharing.edge.ratio = 2.9|the sharing pill's fill
 a11y_contrast|2|.barPills.pills.privacy = {error: "not shown"}|a pill that never showed
 a11y_contrast|7|del(.barPills)|no pills measured
 a11y_contrast|0|.barPills.pills.recording.targets[0].ratio = 4.5|the timer's text at 4.5:1
+a11y_contrast|1|.focus.busy.quickSettings += {ratio: 1}|a focus indicator drawn in its surface's own colour over the busy wallpaper
+a11y_contrast|1|.focus.backdrop.dock += {changed: 900, ratio: 3.2}|the dock's focus indicator reaching 3:1 while its gap is pinned
+a11y_contrast|1|.focus.busy.dialog.ratio = 2.5|the dialog entry's indicator below today's 2.87:1
+a11y_contrast|1|.focus.backdrop.dialog.focused = false|key focus that never lands on the dialog's control
+a11y_contrast|4|.focus.busy = {error: "the wallpaper never changed"}|a busy wallpaper that never showed
+a11y_contrast|0|.focus.backdrop.quickSettings.ratio = 3|a focus indicator at 3:1
 a11y_contrast|1|.wifiMenu.targets[0].ratio = 3|a menu row's text at 3:1
 a11y_contrast|1|.wifiMenuConnected.targets[0].ratio = 4.4|the connected network's name at 4.4:1 over its fill
 a11y_contrast|1|.wifiMenuConnected.targets |= map(. + {kind: "icon"})|a connected row with only its glyphs measured

@@ -1948,6 +1948,52 @@ bar_pills() {
     done
 }
 
+# Each control's focus indicator over the case's backdrop and a busy wallpaper (WCAG 2.4.11, 1.4.11): key
+# focus lands, something changes, and a 1 px line's worth of it changes by 3:1, or it is a pinned gap.
+readonly A11Y_FOCUS_SURFACES=(quickSettings dock dialog spotlight)
+readonly A11Y_FOCUS_GAP="the owner's decision on the focus indicators (2026-10-31)"
+# Today's shortfalls: the dock and Spotlight's entry show no indicator but the caret, so at 1:1 in
+# every case; Quick Settings' toggle in light and the dialog's entry in dark change too little.
+declare -A A11Y_FOCUS_TODAY=([default:backdrop:quickSettings]=2.37 [default:busy:quickSettings]=2.14
+    [default-solid:backdrop:quickSettings]=1.91 [default-solid:busy:quickSettings]=2.14
+    [dark-style:backdrop:dialog]=2.87 [dark-style:busy:dialog]=2.87
+    [dark-style-solid:backdrop:dialog]=2.87 [dark-style-solid:busy:dialog]=2.87)
+for a11y_case in default dark-style high-contrast default-solid dark-style-solid high-contrast-solid; do
+    for a11y_wall in backdrop busy; do
+        A11Y_FOCUS_TODAY[$a11y_case:$a11y_wall:dock]=1
+        A11Y_FOCUS_TODAY[$a11y_case:$a11y_wall:spotlight]=1
+    done
+done
+unset a11y_case a11y_wall
+readonly A11Y_FOCUS_TODAY
+
+focus_rings() {
+    local label=$1 report=$2 w s r worst today desc
+    for w in backdrop busy; do
+        for s in "${A11Y_FOCUS_SURFACES[@]}"; do
+            r=$(jq -c --arg w "$w" --arg s "$s" '.focus[$w] as $f | if $f.error then {error: $f.error} else ($f[$s] // {error: "not measured"}) end' \
+                <<<"$report" 2>/dev/null)
+            desc="$label accessibility: focus over the $w: $s's indicator changes by $A11Y_ICON_RATIO:1"
+            if [[ -z $r ]] || jq -e '.error' <<<"$r" >/dev/null; then
+                fail "$desc ($(jq -r '.error // "not measured"' <<<"${r:-{\}}" 2>/dev/null))"
+                continue
+            fi
+            if ! jq -e '.focused' <<<"$r" >/dev/null; then
+                fail "$desc (key focus did not land on $(jq -r .name <<<"$r"))"
+                continue
+            fi
+            worst=$(jq -r .ratio <<<"$r")
+            today=${A11Y_FOCUS_TODAY[$label:$w:$s]:-}
+            if [[ -z $today ]]; then
+                pill_verdict "$desc" "$worst" "$A11Y_ICON_RATIO"
+                continue
+            fi
+            pill_verdict "$label accessibility: focus over the $w: $s's indicator is at least today's $today:1" "$worst" "$today"
+            known_gap "$A11Y_FOCUS_GAP" pill_verdict "$desc" "$worst" "$A11Y_ICON_RATIO"
+        done
+    done
+}
+
 # The text below 4.5:1 and the glyphs and dots below 3:1 in a report's surface at path; with gapdot
 # true, the inactive workspace dots are left to inactive_dot.
 a11y_low_contrast() {
@@ -1974,6 +2020,7 @@ a11y_contrast() {
         inactive_dot "$label" "$report" "$s" "$label"
     done
     bar_pills "$label" "$report"
+    focus_rings "$label" "$report"
     expect "$label accessibility" "$report" '.wifiMenuConnected.targets | any(.kind == "text" and (.inactive | not))' \
         "the connected network's name is measured over its row's own fill"
     expect "$label accessibility" "$report" '(.bar.targets | map(select(.kind == "dot" and .name == "workspace-dot")) | length >= 2)
