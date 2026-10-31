@@ -188,8 +188,9 @@ Super+Space is its key. Hovered, it shows the tooltip "Search (Super+Space)" bel
 
 `panel/search-hint.js` posts "Press Super+Space to search" once per user (ROADMAP S1b), as
 a stock transient notification, at the first enable of the panel outside the lock screen,
-and sets `search-hint-shown`. A schema without that key means no hint, logged once; the
-rest of the panel runs.
+and sets `search-hint-shown`. Under Do Not Disturb (`show-banners` false) it posts nothing
+and leaves the key alone: it waits for banners to come back on, unlocked, and then posts once.
+A schema without that key means no hint, logged once; the rest of the panel runs.
 
 `motion/feature.js` gives the shell DESIGN's one curve, `cubic-bezier(.2,.8,.2,1)`
 (ROADMAP S3c). Every ease passes through `environment.js`, where patch 0016's `ease` hook

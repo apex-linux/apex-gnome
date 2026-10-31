@@ -901,6 +901,14 @@ probe search-hint-nokey "$CMDLINE_PLAIN" GSETTINGS_SCHEMA_DIR="$T/nohint" PROBE_
 count_is "search hint: a schema without search-hint-shown shows none" "$SEARCH_HINT" 0
 count_is "search hint: and says so once" 'has no key search-hint-shown: no search hint' 1
 has "search hint: the rest of the panel runs" 'Apex: feature panel enabled'
+probe search-hint-dnd "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_BANNERS_OFF=1
+fact "search hint: not under Do Not Disturb, and search-hint-shown stays false" 'search-hint.dnd=notifies=0 shown=false'
+fact "search hint: banners back on while locked still show none" 'search-hint.locked=notifies=0 shown=false'
+fact "search hint: banners back on, unlocked, show it once" 'search-hint.banners-on=notifies=1 shown=true'
+fact "search hint: and only once" 'search-hint.again=notifies=1 shown=true'
+count_is "search hint: once in the whole run" "$SEARCH_HINT" 1
+probe search-hint-dnd-disabled "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_BANNERS_OFF=1 PROBE_HINT_DISABLE=1
+fact "search hint: banners on after the panel's disable show none" 'search-hint.after-disable=notifies=0 shown=false'
 
 # Only GDM unlocks, after PAM succeeds: no Apex file may name a route to it.
 readonly UNLOCK_ROUTES=("deactivate(" "emit('unlock'" "Unlock" "_onVerificationComplete" "finish(")

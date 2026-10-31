@@ -2303,6 +2303,40 @@ async function exerciseIntellihide() {
     windows.pop();
 }
 
+// PROBE_BANNERS_OFF: Do Not Disturb at enable, then banners back on while locked, after a
+// layer-enabled=false (PROBE_HINT_DISABLE), and unlocked; each step's notifies and the key.
+async function exerciseSearchHint() {
+    if (GLib.getenv('PROBE_BANNERS_OFF') !== '1')
+        return;
+    const banners = new Gio.Settings({schema_id: 'org.gnome.desktop.notifications'});
+    const state = label => fact(`search-hint.${label}`,
+        `notifies=${mainModule.notifies} shown=${settings.get_boolean('search-hint-shown')}`);
+    const turnOn = async () => {
+        banners.set_boolean('show-banners', false);
+        await spin(50);
+        banners.set_boolean('show-banners', true);
+        await spin(50);
+    };
+    state('dnd');
+    if (GLib.getenv('PROBE_HINT_DISABLE') === '1') {
+        settings.set_boolean('layer-enabled', false);
+        await spin(200);
+        await turnOn();
+        state('after-disable');
+        settings.set_boolean('layer-enabled', true);
+        await spin(200);
+        return;
+    }
+    mainModule.sessionMode.lock(true);
+    await turnOn();
+    state('locked');
+    mainModule.sessionMode.lock(false);
+    await turnOn();
+    state('banners-on');
+    await turnOn();
+    state('again');
+}
+
 async function switchLayer() {
     const cycles = Number(GLib.getenv('PROBE_SWITCH') ?? '0');
     for (let cycle = 1; cycle <= cycles; cycle++) {
@@ -2333,6 +2367,8 @@ globalThis.PROBE_FAVOURITES = ['Files', 'Web'];
 if (layer && GLib.getenv('PROBE_ENABLE') === '1') {
     if (GLib.getenv('PROBE_LOCKED') === '1')
         (await import(`file://${shellDir}/js/ui/main.js`)).sessionMode.isLocked = true;
+    if (GLib.getenv('PROBE_BANNERS_OFF') === '1')
+        new Gio.Settings({schema_id: 'org.gnome.desktop.notifications'}).set_boolean('show-banners', false);
     layer.enable();
     const marker = GLib.build_filenamev([GLib.get_user_runtime_dir(), 'apex-shell-starting']);
     fact('starting-file', GLib.file_test(marker, GLib.FileTest.EXISTS));
@@ -2350,6 +2386,7 @@ if (layer && GLib.getenv('PROBE_ENABLE') === '1') {
         fact('survived', `${waitSeconds}s`);
     }
     mainModule = await import(`file://${shellDir}/js/ui/main.js`);
+    await exerciseSearchHint();
     await pressToggleSpotlight();
     overviewSearchWithoutSpotlight();
     await exerciseLock();
