@@ -135,6 +135,35 @@ check "next-point.sh: run by next-point.yml alone" ".github/workflows/next-point
 check "the stable lane names no updates-testing: lane.sh and image-args.sh fetch as before" "" \
     "$(grep -l 'updates-testing' "$APEX_ROOT/tests/lib/lane.sh" "$APEX_ROOT/tests/lib/image-args.sh")"
 
+# --- lint/tokens.sh: colours stay in _apex-tokens.scss, and every token is used ---------------
+TK=$TMP/tokens
+TAB=$'\t'
+mkdir -p "$TK/root/theme"
+tokens_case() {
+    printf '%s\n' "\$apex_fg: #1d1d21;" "\$apex_dim: .5;" "\$apex_spare: 1px;" >"$TK/root/theme/_apex-tokens.scss"
+    printf '%s\n' "#panel { color: \$apex_fg; }" ".a { color: rgba(\$apex_fg, \$apex_dim); }" "$@" >"$TK/root/theme/_x.scss"
+    printf '%s\n' "\`\$apex_spare\` in the README only" >"$TK/root/README.md"
+}
+tokens_allow() { printf '%s\n' "\$apex_spare${TAB}unused, for the test" "$@" >"$TK/allow"; }
+tokens_run() { APEX_TOKENS_THEME="$TK/root/theme" APEX_TOKENS_ROOT="$TK/root" APEX_TOKENS_ALLOW="$TK/allow" "$APEX_ROOT/lint/tokens.sh"; }
+tokens_case
+tokens_allow
+check_true "tokens: tokens only, an id selector and an allowed unused token pass" tokens_run
+printf '' >"$TK/allow"
+check_false "tokens: a token used only in a README is unused" tokens_run
+tokens_allow
+for bad in '.b { color: #fff; }' '.b { box-shadow: 0 1px 2px rgba(0, 0, 0, .2); }' ".b { color: rgba(\$apex_fg, .9); }" \
+    '.b { color: rgb(1, 2, 3); }'; do
+    tokens_case "$bad"
+    check_false "tokens: '$bad' is a colour literal" tokens_run
+done
+tokens_case ".b { color: transparentize(\$apex_fg, 1 - \$apex_dim); }" '.c { color: #fff; } // #000 in a comment'
+tokens_allow "_x.scss:4${TAB}the white, for the test"
+check_true "tokens: an allowed FILE:LINE passes, a comment and a token-only expression do not count" tokens_run
+tokens_allow "_x.scss:4${TAB}the white, for the test" "_x.scss:9${TAB}gone"
+check_false "tokens: a stale entry fails" tokens_run
+check_true "tokens: the repository's theme passes with lint/tokens.allow" "$APEX_ROOT/lint/tokens.sh"
+
 if ((FAILS > 0)); then
     die "selftest: $FAILS failure(s)"
 fi
