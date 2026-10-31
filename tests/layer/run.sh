@@ -787,6 +787,10 @@ lacks "disabled-features=['panel']: no item in the bar" 'panel\.add=apex-focused
 fact "disabled-features=['panel']: nothing follows the focus" 'focused-app\.files=none'
 
 readonly SEARCH_ITEM='Search \(Super\+Space\) pill=apex-search-pill icon=system-search-symbolic'
+probe search-order "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_RIGHT_BOX_ADDS=1 PROBE_SEARCH_ORDER=1
+fact "search-order: the app indicators, their divider, then the search button" 'search-order=indicators,divider,search'
+fact "search-order: and so after panel comes back out of disabled-features on its own" 'search-order\.panel-again=indicators,divider,search'
+
 probe search-button "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_SEARCH_BUTTON=1
 has "search-button: the panel feature enables" 'Apex: feature panel enabled'
 fact "search-button: at the start of the right box" 'panel\.add=apex-search at 0 in right'
