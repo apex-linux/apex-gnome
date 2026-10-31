@@ -802,6 +802,24 @@ a11y_run() {
         _ "$HERE" "$assertions" "$label" "$T/a11y.log" "$T/a11y.out"
 }
 
+# A surface that reports an error, or none at all, fails naming why, in both checks.
+test_a11y_surface_errors() {
+    local assertions change want
+    while IFS='|' read -r assertions change want; do
+        a11y_run "$assertions" "$change" >/dev/null
+        expect_eq "accessibility: $assertions names the surface's own failure, $want" 1 \
+            "$(grep -c "^FAIL dark-style accessibility: banner: .* ($want)$" "$T/a11y.out")"
+    done <<'CHANGES'
+a11y_contrast|.banner = {error: "not shown"}|error: not shown
+a11y_layout|.banner = {error: "not shown"}|error: not shown
+a11y_contrast|del(.banner)|not measured
+a11y_layout|.banner.targets = []|no text or glyph found
+CHANGES
+    a11y_run a11y_layout '.barPills.crowded = {error: "not shown"}' >/dev/null
+    expect_eq "accessibility: a11y_layout names the crowded bar's own failure" 1 \
+        "$(grep -c "^FAIL dark-style accessibility: board 39's crowded bar .* (error: not shown)$" "$T/a11y.out")"
+}
+
 # default's inactive dot is Apex's known gap: pinned at 2.86:1, and failing once it reaches 3:1.
 test_inactive_dot_gap() {
     local want_failures want_gaps inactive what passes failures open_gaps
@@ -3878,6 +3896,7 @@ CHANGES
                 switcher: ($p + {corner: {radius: 52, outside: 560, inside: 2080, square: 2704, blurredOutside: 0, blurredInside: 2080, capturedDiffering: 0}})},
             emptyBox: {shown: ($scrim + {enabled: false}), hidden: ($scrim + {enabled: false}), shownAgain: ($scrim + {enabled: false}),
                 emptyFrames: 3, laidOut: ($scrim + {frames: 1, allocation: [320, 200]}), zeroHeight: ($scrim + {enabled: false})},
+            opacity: {followOpacity: true, fullDiffering: 102400, noneDiffering: 0, half: 1.208},
             tile: {shown: {scale: 2, inset: 6, preview: {x: 168, y: 224, width: 384, height: 192},
                 glassBox: {x: 174, y: 230, width: 372, height: 180}, inner: {x: 174, y: 230, width: 372, height: 180},
                 glass: {radius: 80, saturation: 1.6, cornerRadius: 28, enabled: true, fine: true, followOpacity: true, background: true,
@@ -3899,7 +3918,7 @@ CHANGES
     while IFS='|' read -r failures what change; do
         jq -c "$change" <<<"$manager" | sed 's/^/APEXG2-GLASS /' >"$T/glass.log"
         read -r passes _ <<<"$(assertion_counts glass_manager glass "$T/glass.log" light)"
-        expect_eq "glass manager: $what fails $failures of 25" "$failures" $((25 - passes))
+        expect_eq "glass manager: $what fails $failures of 26" "$failures" $((26 - passes))
     done <<'CHANGES'
 0|the bar, the dock and the popovers at their tokens, every switch honoured|.
 1|the bar at the popovers' sigma|.manager.glass.panel.radius = 120
@@ -3929,6 +3948,12 @@ CHANGES
 1|an empty actor-mode box that blurs|.manager.emptyBox.shownAgain.enabled = true
 1|an empty box that never drew a frame|.manager.emptyBox.emptyFrames = 0
 1|a laid-out box whose blur never comes on|.manager.emptyBox.laidOut.enabled = false
+1|a glass that keeps its full blur at 128, as with follow-opacity off|.manager.opacity.half = 88.651
+1|a 128 frame two steps off the blend|.manager.opacity.half = 2
+1|a glass without follow-opacity|.manager.opacity.followOpacity = false
+1|a glass at opacity 0 that still draws|.manager.opacity.noneDiffering = 3200
+1|a glass that blurs nothing at 255|.manager.opacity.fullDiffering = 0
+1|no opacity report|.manager.opacity = null
 1|an Alt+Tab list's blur rounded twice its border's radius|.manager.derived.switcher.cornerRadius = 104
 1|a banner rounded at one corner only|.manager.glass.banner.painted.radii = [52, 0, 0, 0]
 1|a blur over a box other than the painted background|.manager.glass.banner.painted.box = [0, 8, 360, 392]
@@ -3954,7 +3979,7 @@ CHANGES
 1|a toast blurred by two glass effects|.manager.conformance.checked.toast.corner.glassEffects = 2
 1|a dock corner a screenshot draws otherwise|.manager.conformance.checked.dock.corner.capturedMax = 2
 3|a toast never checked|.manager.conformance.checked.toast = null
-25|no manager|.manager = null
+26|no manager|.manager = null
 CHANGES
 }
 
@@ -3975,6 +4000,7 @@ test_window_switcher
 test_modal_dialog
 test_a11y
 test_inactive_dot_gap
+test_a11y_surface_errors
 test_pill_gaps
 test_signoff
 test_shell_icons

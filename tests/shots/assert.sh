@@ -2042,7 +2042,7 @@ focus_rings() {
 a11y_low_contrast() {
     local report=$1 path=$2 gapdot=${3:-false}
     jq -r --arg path "$path" --argjson text "$A11Y_TEXT_RATIO" --argjson icon "$A11Y_ICON_RATIO" --argjson gapdot "$gapdot" \
-        "[$A11Y_SURFACE] as \$e | if (\$e | length) > 0 then \$e else (getpath(\$path | split(\".\")) | $A11Y_LOW_CONTRAST) end | join(\"; \")" \
+        "([$A11Y_SURFACE] | add // []) as \$e | if (\$e | length) > 0 then \$e else (getpath(\$path | split(\".\")) | $A11Y_LOW_CONTRAST) end | join(\"; \")" \
         <<<"$report" 2>&1
 }
 
@@ -2093,12 +2093,12 @@ a11y_layout() {
     expect "$label accessibility" "$report" '.textScalingFactor == 1.25' "text-scaling-factor is 1.25"
     for s in "${A11Y_SURFACES[@]}"; do
         problems=$(jq -r --arg path "$s" \
-            ".monitor as \$m | [$A11Y_SURFACE] as \$e | if (\$e | length) > 0 then \$e else (getpath(\$path | split(\".\")) | $A11Y_LAYOUT) end | join(\"; \")" \
+            ".monitor as \$m | ([$A11Y_SURFACE] | add // []) as \$e | if (\$e | length) > 0 then \$e else (getpath(\$path | split(\".\")) | $A11Y_LAYOUT) end | join(\"; \")" \
             <<<"$report" 2>&1)
         known_gap "${A11Y_GAPS[$label:$s]:-}" a11y_verdict "$label accessibility: $s: no text cut short, off the screen, outside its surface or overlapping" "$problems"
     done
     problems=$(jq -r --arg path barPills.crowded \
-        ".monitor as \$m | [$A11Y_SURFACE] as \$e | if (\$e | length) > 0 then \$e else (.barPills.crowded | $A11Y_LAYOUT) end | join(\"; \")" \
+        ".monitor as \$m | ([$A11Y_SURFACE] | add // []) as \$e | if (\$e | length) > 0 then \$e else (.barPills.crowded | $A11Y_LAYOUT) end | join(\"; \")" \
         <<<"$report" 2>&1)
     a11y_verdict "$label accessibility: board 39's crowded bar (chip, recording, share, privacy, five apps): no text cut short, off the screen or overlapping" \
         "$problems"
@@ -2970,6 +2970,10 @@ glass_manager() {
     empty=$(report_of "$log" APEXG2-GLASS | jq -r '.manager.emptyBox | "\(.emptyFrames) empty frames; laid out \(.laidOut.allocation | join("x")) after \(.laidOut.frames) frames, \(if .laidOut.enabled then "on" else "off" end)"' 2>/dev/null)
     "${expect_glass[@]}" '.manager.emptyBox | ([.shown, .hidden, .shownAgain] | all(.enabled | not)) and .emptyFrames == 3 and .laidOut.enabled and (.zeroHeight.enabled | not)' \
         "an actor-mode surface with an empty box draws a frame shown, hidden and shown again without blurring, blurs once laid out, and pauses at zero height (${empty:-no report})"
+    local opacity
+    opacity=$(report_of "$log" APEXG2-GLASS | jq -r '.manager.opacity | "\(.half) steps off at 128"' 2>/dev/null)
+    "${expect_glass[@]}" '.manager.opacity | .followOpacity and .fullDiffering > 0 and .noneDiffering == 0 and .half <= 1.251' \
+        "a glass follows its surface's opacity: at 128 the frame is the blur at 128/255 over the pattern within 1 + 64/255 steps, at 0 the pattern alone (${opacity:-no report})"
     "${expect_glass[@]}" "$glass"' .t as $t | .manager.monitorScale as $s | .manager.derived
         | (.osd | glass($t.apex_panel_blur; $t.apex_panel_saturation; $s)) and (.switcher | glass($t.apex_panel_blur; $t.apex_panel_saturation; $s))
         and (.screenshot | .radius == 2 * ($t.apex_panel_blur | px) * $s and .fine and (.enabled | not))' \
