@@ -1257,9 +1257,9 @@ test_signoff() {
         # shellcheck disable=SC2059 # the scene names carry the variant's %s
         printf '\x89PNG\r\n\x1a\n' | tee "$dir/shots/$(printf "$scene" light).png" >"$dir/shots/$(printf "$scene" dark).png"
     done
-    printf 'Apex: feature panel enabled\nApex: feature dock enabled\nAPEXG2-SIGNOFF {"previews":true,"altTabShown":true}\n%s\n' \
+    printf 'Apex: feature panel enabled\nApex: feature dock enabled\nAPEXG2-SIGNOFF {"previews":true,"altTabShown":true,"altTabUnfocused":true}\n%s\n' \
         'APEXG2 {"dock":{"items":[{"kind":"app","name":"Files"},{"kind":"separator"},{"kind":"app","name":"Bazaar"}]}}' >"$dir/g2/default.log"
-    echo 'APEXG2-SIGNOFF {"previews":true,"altTabShown":true}' >"$dir/g2/dark-style.late.log"
+    echo 'APEXG2-SIGNOFF {"previews":true,"altTabShown":true,"altTabUnfocused":true}' >"$dir/g2/dark-style.late.log"
     printf 'APEXG2-SESSION %s\n' "$(jq -c . <<<"$SESSION_REPORT")" | tee -a "$dir/g2/default.log" >>"$dir/g2/dark-style.log"
     for scene in "$dir"/g2/captures/*.png; do
         scene=$(basename "$scene")
@@ -1314,6 +1314,13 @@ test_signoff() {
         ok "signoff: an Alt+Tab switcher that never showed fails board 15"
     else
         not_ok "signoff: an Alt+Tab switcher that never showed fails board 15: $(tail -n 3 "$T/signoff.out")"
+    fi
+    echo 'APEXG2-SIGNOFF {"previews":true,"altTabShown":true,"altTabUnfocused":false}' >"$dir/g2/dark-style.late.log"
+    if ! "$HERE/signoff.sh" --collect "$dir/g2" "$dir/shots" "$dir/out5" >"$T/signoff.out" 2>&1 &&
+        grep -q 'board 15, dark-style: the focused window never drew itself unfocused under the switcher' "$T/signoff.out"; then
+        ok "signoff: a focused window that never drew itself unfocused under the switcher fails board 15"
+    else
+        not_ok "signoff: a focused window that never drew itself unfocused under the switcher fails board 15: $(tail -n 3 "$T/signoff.out")"
     fi
 }
 

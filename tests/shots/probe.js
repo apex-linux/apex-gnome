@@ -76,6 +76,8 @@ const SIGNOFF_APPS = [['gnome-text-editor', '--new-window'], ['gnome-calendar'],
 const SIGNOFF_WINDOWS_MS = 30000;
 const SIGNOFF_FOCUS_ORDER = ['org.gnome.Calendar.desktop', 'org.gnome.TextEditor.desktop', 'org.gnome.Ptyxis.desktop'];
 const SIGNOFF_QUIET_MS = 1500;
+// Well inside the 1.5 s after which a switcher with no modifier held activates its selection.
+const SWITCHER_UNFOCUSED_MS = 1000;
 const SIGNOFF_FOCUS_ATTEMPTS = 3;
 const WIFI_SCAN_MS = 5000;
 const TRAY_DRAIN_MS = 3000;
@@ -3128,11 +3130,19 @@ async function signoffWindows() {
     await settle();
     const {AppSwitcherPopup} = await import('resource:///org/gnome/shell/ui/altTab.js');
     const popup = new AppSwitcherPopup();
+    // The switcher's grab takes the keyboard from the focused window, which then draws itself unfocused
+    // (a hollow terminal caret): the capture shows that state, not whichever frame came first.
+    const focused = global.display.focus_window?.get_compositor_private() ?? null;
+    let unfocusedDrawn = !focused;
+    const damagedId = focused?.connect('damaged', () => (unfocusedDrawn = true));
     // No modifier mask: nothing held down, so the popup stays until it is destroyed.
     popup.show(false, 'switch-applications', 0);
     // switcherPopup.js shows it after POPUP_DELAY_TIMEOUT, a GLib timeout that leisure does not wait for.
     const altTabShown = await until(() => popup.opacity === 255, 3000);
     shadowsBuilt.altTab = Registry ? await layersBuilt(Registry, shadowedSurfaces(Registry, popup)) : null;
+    const altTabUnfocused = await until(() => unfocusedDrawn, SWITCHER_UNFOCUSED_MS);
+    if (damagedId)
+        focused.disconnect(damagedId);
     await settle();
     keepOrder("the switcher's");
     const altTab = withoutBytes(await capture('signoff-alt-tab', [], {switcher: popup._items.map(item => item.app.get_id())}));
@@ -3140,7 +3150,7 @@ async function signoffWindows() {
     await settle();
     drawn.destroy();
     return {
-        shown, previews, apps: appsShown(), overview: overview.file, altTab: altTab.file, altTabShown, shadowsBuilt,
+        shown, previews, apps: appsShown(), overview: overview.file, altTab: altTab.file, altTabShown, altTabUnfocused, shadowsBuilt,
         loaded, quiet, focusAttempts, pointerPlaced, notified, drawn: drawn.report(),
         atOverview: {pointer: [pointerX, pointerY], panelStates: Object.fromEntries(panelStates)},
     };
