@@ -24,7 +24,8 @@ export function addRow(item) {
     if (_rows.has(item) || !icons || !item._label)
         return;
     const entry = {lock, icons, yAlign: lock.y_align, labelYAlign: item._label.y_align};
-    // A new best access point changes the strength but notifies only icon-name (network.js:994).
+    // Stock names the row before its first access point is in, and a new best access point
+    // changes the strength notifying only icon-name (network.js:994): the name kept 0 %.
     entry.ids = [[item.network, item.network.connect('notify::is-active', () => _followActive(item))],
         [item.network, item.network.connect('notify::icon-name', () => item._updateAccessibleName())],
         [item, item.connect('destroy', () => _forgetRow(item))]];
@@ -36,9 +37,6 @@ export function addRow(item) {
     // network.js leaves the name filling the row, its text at the top of board 17's taller rows.
     item._label.y_align = Clutter.ActorAlign.CENTER;
     _followActive(item);
-    // network.js sets the row's checked state and accessible name only on a change (51.0, 51.1).
-    item._isActiveChanged();
-    item._updateAccessibleName();
 }
 
 function _forgetRow(item) {

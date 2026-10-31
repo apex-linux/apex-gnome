@@ -550,7 +550,6 @@ function networkRow(St, Clutter, active) {
     row._label = new St.Label({name: 'label', y_align: Clutter.ActorAlign.FILL});
     [icons, row._label, new St.Icon({name: 'check'})].forEach(c => row.add_child(c));
     row.accessibleNames = 0;
-    row._isActiveChanged = () => (row.accessibleChecked = row.network.is_active);
     row._updateAccessibleName = () => row.accessibleNames++;
     return row;
 }
@@ -602,9 +601,8 @@ async function exerciseSubmenus(Main) {
     Hooks.run('quick-settings-network-item', active);
     Hooks.run('quick-settings-network-item', other);
     Hooks.run('quick-settings-toggle-menu', menu);
-    fact('qs.row.a11y', [active, other].map(r => `checked=${r.accessibleChecked} names=${r.accessibleNames}`).join(' | '));
     active.network.emit('notify::icon-name');
-    fact('qs.row.a11y.best-ap', `names=${active.accessibleNames}`);
+    fact('qs.row.best-ap', `names=${active.accessibleNames}`);
     fact('qs.row.active', rowState(active));
     fact('qs.row.other', rowState(other));
     fact('qs.menu', menu.subtitleAt());

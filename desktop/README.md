@@ -230,13 +230,12 @@ constructor. A submenu header's subtitle moves to the end of the title's row. A 
 network's row is `:checked` while its network is active, from the start (stock's
 `_isActiveChanged` runs only on a change), and its lock moves from the signal icon's box to
 after the name, styled `apex-network-lock` (`$apex_quick_menu_lock_size` in `$apex_fg` at
-`$apex_quick_menu_lock_opacity`). Each row also gets stock's accessible state and name from
-the start, and its name again whenever the network's icon changes: network.js sets `CHECKED`
-and "name, Secure, Signal strength N%" only on a change, and a new best access point changes
-the strength without saying so, so a screen reader heard a fresh submenu's rows unnamed, then
-at 0 %, and the connected one unchecked.
+`$apex_quick_menu_lock_opacity`). Each row's accessible name, stock's
+"name, Secure, Signal strength N%", follows the network's icon too: stock names the row before
+its first access point is in, and a new best access point changes the strength notifying only
+`icon-name`, so a screen reader heard every row at "Signal strength 0%".
 Menus and rows built before the feature enabled are found in Quick Settings' tree. Disabled,
-every row and header goes back as stock built it, keeping that state and name, which are stock's.
+every row and header goes back as stock built it.
 
 Upstream's `notify::` handlers with no call at creation, audited in gnome-shell 51.0 and 51.1
 (every `connect`/`connectObject` on a `notify::` signal in panel.js, dateMenu.js, calendar.js,
@@ -244,12 +243,13 @@ messageList.js, messageTray.js, quickSettings.js and status/*.js: the same 108 s
 A first pass flagged 28 whose handler is never called near the connect, read by hand. Of the
 other 80, a script finds the handler called at the top level of the connect's own method for
 27, and 53 were read by hand: 12 forward a derived property (`this.notify`), the rest are synced
-on another path at creation or act only on a change. Three places show a user something:
+on another path at creation or act only on a change: the Wi-Fi row's `is-active` (network.js:1043)
+among them, as the row is built around an empty network whose first access point notifies it.
+Two places show a user something:
 
 | Site (51.0 = 51.1) | Handler | At creation |
 |---|---|---|
-| `ui/status/network.js:1043` | Wi-Fi row `is-active` → `_isActiveChanged` (ATK `CHECKED`) | the connected network not checked for a screen reader: `quick-settings/submenu.js` |
-| `ui/status/network.js:1044`, `:1045` | Wi-Fi row `secure`, `signal-strength` → `_updateAccessibleName` | the rows unnamed for a screen reader; and `_updateBestAp` (:994) changes the strength notifying only `icon-name`, so a name built before the best access point says 0 %: `quick-settings/submenu.js` names the row at once and again on `icon-name` |
+| `ui/status/network.js:1044`, `:1045` | Wi-Fi row `secure`, `signal-strength` → `_updateAccessibleName` | the row is named on `secure`, before its first access point is in, and `_updateBestAp` (:994) then changes the strength notifying only `icon-name`: "Signal strength 0%" for a screen reader until that access point's own strength changes. `quick-settings/submenu.js` names the row again on `icon-name` |
 | `ui/status/system.js:231` | each action's `visible` → ShutdownItem `_sync` | a Power Off button over an empty menu when every action is unavailable (lockdown); Apex ships none, so unfixed: a kiosk configuration would need it |
 
 `end-session/feature.js` follows board 14 once patch 0018's `end-session-buttons` hook says
