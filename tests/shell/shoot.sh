@@ -41,6 +41,9 @@ APEX_DESKTOP_SRC, a checkout). Captures and logs land in _build/gnome-shell/shot
 It needs mesa-dri-drivers, dbus-daemon, python3-dbusmock, python3-gobject, gcc,
 accountsservice, polkit, librsvg2-tools, openssl, git-core and the Apex fonts (adwaita-sans-fonts,
 jetbrains-mono-fonts-all). G2's clock.c and fixtures.py (tests/shots) are used as they are.
+The system bus lets root own the services that fixtures.py --names lists for this run. Power
+profiles and accountsservice stay off, as G2's opt-ins: the lane's Quick Settings has no Power
+Mode (G2 measures it), and the lane lists users from the real accounts-daemon.
 EOF
 }
 
