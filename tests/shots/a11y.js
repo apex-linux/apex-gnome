@@ -526,7 +526,7 @@ export async function a11yReport(h) {
     out.endSession = await withOpen(() => h.openEndSessionDialog(), d => d?.cancel(), d => report(d?.dialogLayout._dialog));
     lap('endSession');
     out.spotlight = await h.withSpotlight(async (popup, toast) => {
-        popup.panel.get_children()[0].get_children()[1].set_text('disk');
+        await h.typeInSpotlight(popup, 'disk');
         return {popup: await report(popup.panel), toast: await report(await toast())};
     }) ?? {error: 'no Spotlight'};
     lap('spotlight');

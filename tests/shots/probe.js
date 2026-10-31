@@ -3288,7 +3288,7 @@ function iconSurfaces() {
             const {Popup} = await import('resource:///org/gnome/shell/ui/apex/spotlight/popup.js');
             const popup = new Popup(spotlightProviders, 0);
             popup.open();
-            popup.panel.get_children()[0].get_children()[1].set_text('disk');
+            await typeInSpotlight(popup, 'disk');
             return {root: popup.panel, close: () => popup.destroy()};
         },
         switcher: () => {
@@ -3452,7 +3452,7 @@ async function runProbe() {
             const A11y = await import('./a11y.js');
             result = await A11y.a11yReport({
                 settle, unit: cssUnit(), apexDock, findDescendant, openPopupMenu, openOsd, openBanner,
-                openModalDialog: () => openPromptDialog({avatar: true}), openEndSessionDialog: openShellEndSession, withSpotlight,
+                openModalDialog: () => openPromptDialog({avatar: true}), openEndSessionDialog: openShellEndSession, withSpotlight, typeInSpotlight,
             });
         } catch (e) {
             result = {error: `${e.message}\n${e.stack}`};
