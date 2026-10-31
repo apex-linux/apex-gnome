@@ -69,6 +69,7 @@ The direct cases:
 | `shutdown-banner` | `G2_SHUTDOWN_BANNER=1` | after the usual reports and the same date-menu cut, a notification for the tray and its banner timeout due 100 ms into a shutdown whose history write is held 300 ms, in which the probe also sends the date menu's three signals: the layer's teardown disables the notifications feature, which clears the tray's banner timeouts before `layout.js` destroys it, so `main.js`'s shutdown loop runs none on the disposed tray, and the cut keeps the signals from the destroyed events section |
 | `fedora-light`, `fedora-dark` | Fedora's build, `prefer-light` or `prefer-dark` | no Apex module; upstream's sheet at its own path, byte for byte the one safe mode loads from `theme/stock/` |
 | `glass`, `fedora-glass` | the capture settings, `G2_GLASS=1` | patch 0003's glass in the frames the shell drew; the stock unlock blur captured in both shells (see "Glass") |
+| `glass-scale1` | as `glass`, at scale 1 on 1440x900 (`G2_SCALE=1`), as the desktop VM runs | the same glass assertions, every bound read at that scale (see "Glass") |
 
 Every case: the probe ran (so the static import graph loaded), from `startup-complete`, and no `JS ERROR`;
 no key binding overwrites another (mutter's "Overwriting existing binding" warning);
@@ -604,6 +605,19 @@ damages the tile alone:
 
 `blur-ref.js` is a clamp-to-edge Gaussian at full resolution, CSS `saturate()` and the
 rounded box's coverage, over the box alone; `blur-ref-test.js` tests it in `selftest.sh`.
+
+`glass-scale1` runs the same case at scale 1, the desktop VM's, against the same references
+computed there: σ, the downscale and every box in device px are the scale-1 ones. The
+tolerances above hold at both scales, by the blur's own choice of downscale: `fine` picks the
+smallest ds with σ / ds ≤ 4, which is 48 / 16 at scale 2 and 24 / 8 at scale 1, so σ, ds, the
+tiles and the box all halve together and the box filter's error against the Gaussian is the
+same problem at half the size. Only the edge band, ds/2, narrows with ds (8 px to 4). The ring
+of the corner check is 4 CSS px (4 device px at scale 1), the tile ring's allowance 0.25 device
+px at both (8-bit rounding, not the grid), and the opacity bound 1 + 64/255 holds per channel at
+any scale. Measured at scale 1 against scale 2: inside 2.89/255 against 3.2, along the edges
+10.53 against 11.67, on average 0.77 against 0.75; screenshots of the corners exact (0) against
+1/255; the opacity blend 1.208 steps at both. The dock past the stage edge, the known gap,
+reads 5033 px off at scale 1.
 In the same case the glass manager (`js/ui/apex/glass/`) is read on the live shell, light:
 `glass_manager` asserts that the bar's blur is `$apex_bar_blur` at `$apex_bar_saturation`,
 and Quick Settings', the calendar's (each opened) and a banner's `$apex_panel_blur` at
