@@ -54,7 +54,7 @@ done
 # Spotlight's providers: upstream's app search and remote providers, faked.
 cp "$HERE"/stubs/appDisplay.js "$HERE"/stubs/remoteSearch.js "$HERE"/stubs/searchProviders.js "$T/shell/js/ui/"
 mkdir -p "$T/shell/js/misc"
-cp "$HERE/stubs/systemActions.js" "$T/shell/js/misc/"
+cp "$HERE/stubs/systemActions.js" "$HERE/stubs/loginManager.js" "$T/shell/js/misc/"
 cp "$HERE"/stubs/St.js "$HERE"/stubs/Clutter.js "$HERE"/stubs/Shell.js "$HERE"/stubs/Meta.js "$HERE"/stubs/Graphene.js "$HERE"/stubs/Mtk.js "$HERE"/stubs/Pango.js \
     "$HERE"/stubs/GdkPixbuf.js "$HERE"/stubs/Polkit.js "$HERE"/stubs/AccountsService.js "$T/"
 # The shadow cutout and the indicators' mask are GObject subclasses of Clutter.ShaderEffect, which the stubs cannot be.
@@ -480,6 +480,10 @@ fact "notifications: a click turns Do Not Disturb off" 'nf\.dnd-click=show-banne
 fact "notifications: the month on the left, both chevrons on the right" 'nf\.calendar=header=month,back,forward align=1 class=true'
 fact "notifications: every day keeps a dot under its number, in an St.Label that takes the day's colour" \
     'nf\.days=Label:27/apex-event-dot Label:28/apex-event-dot Label:29/apex-event-dot own-text=false'
+fact "notifications: layer off: the tray's banner timeouts run as stock's" 'nf\.off\.tray=none'
+fact "notifications: layer back on: still stock's while the session runs" 'nf\.on\.tray=none'
+fact "notifications: at logout the teardown clears them, so gnome-shell's shutdown loop cannot run them on the destroyed tray" \
+    'nf\.teardown\.tray=banner:0,left'
 fact "notifications: layer off: stock's header" 'nf\.off\.calendar=header=back,month,forward align=2 class=false'
 fact "notifications: layer off: stock's day buttons, each with its own text again" 'nf\.off\.days=ButtonText:27 ButtonText:28 ButtonText:29 own-text=true'
 fact "notifications: layer back on: the header and dots again" 'nf\.on\.calendar=header=month,back,forward align=1 class=true'
@@ -695,9 +699,10 @@ fact "screen pills: sharing moves from after the recording to after the input so
     'right-box=screenRecording,a11y,keyboard,screenSharing,indicators,divider,quickSettings,'
 fact "screen pills: right before the status pill again after panel.js re-adds its items" \
     'right-box\.after-session-update=screenRecording,a11y,keyboard,indicators,divider,screenSharing,quickSettings,'
-fact "input chip: the sources' short names in capitals" 'input-chip=EN,VI'
+fact "input chip: an xkb source's short name in capitals, an IBus source's language, not its symbol" 'input-chip=EN,VI'
 fact "input chip: and so after keyboard.js renames one or adds a source" 'input-chip\.changed=EN,VI₂,FR'
 fact "input chip: its short names never ellipsize, whatever Large Text makes of the chip" 'input-chip\.ellipsize=none,none,none'
+fact "date menu: an empty list hides Clear, as calendar.js's binding would with SYNC_CREATE" 'clear=placeholder=true clear=false'
 fact "hot-corner: the corner becomes a reactive 4 x 4 zone at its own position, in scaled px" \
     'hot-corner\.zone=hot-corner reactive=true x=0 y=0 8x8'
 fact "hot-corner: in the chrome, hidden under fullscreen windows" 'chrome\.add=hot-corner trackFullscreen=true'
@@ -709,12 +714,14 @@ fact "layer-enabled=false: no privacy group, and the pill's start is stock" 'pri
 fact "layer-enabled=false: the recording button is stock's, timer then glyph" 'recording\.off=0:42,screencast-stop-symbolic hidden=none name=Stop Screencast'
 fact "layer-enabled=false: so is sharing, named as stock names it" 'sharing\.off=screen-shared-symbolic,screencast-stop-symbolic hidden=none name=Stop Screen Sharing'
 fact "layer-enabled=false: sharing goes back after the recording" 'right-box\.off=screenRecording,screenSharing,a11y,keyboard,quickSettings,'
-fact "layer-enabled=false: the input chip has stock's names back" 'input-chip\.off=en,vi₂,fr'
+fact "layer-enabled=false: the input chip has stock's names back, the IBus symbol too" 'input-chip\.off=en,Ắ₂,fr'
 fact "layer-enabled=false: and stock's ellipsizing" 'input-chip\.off\.ellipsize=end,end,end'
+fact "layer-enabled=false: Clear as stock left it, shown" 'clear\.off=placeholder=true clear=true'
 fact "layer-enabled=true: the filter again" "pill\.on=$KEPT_PILL"
 fact "layer-enabled=true: the stop squares again" 'recording\.on=square,0:42 hidden=screencast-stop-symbolic name=Stop Screencast'
 fact "layer-enabled=true: and sharing's name" 'sharing\.on=screen-shared-symbolic,square hidden=screencast-stop-symbolic name=Stop screen sharing'
 fact "layer-enabled=true: capitals again" 'input-chip\.on=EN,VI₂,FR'
+fact "layer-enabled=true: Clear hidden again" 'clear\.on=placeholder=true clear=false'
 count_is "both dots restyle at each enable and disable" '^probe: workspace-dot=restyled$' 6
 count_is "the hot corners are rebuilt at each enable and disable" '^probe: hot-corners=rebuilt$' 3
 lacks "top bar: no feature fails or disables uncleanly" 'off for this session|did not disable cleanly|cannot restyle'
@@ -722,13 +729,17 @@ lacks "top bar: no feature fails or disables uncleanly" 'off for this session|di
 probe top-bar-rtl "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_TOP_BAR=1 PROBE_SCALE=1 PROBE_RTL=1
 fact "hot-corner, right to left: the zone lies left of the corner" 'hot-corner\.zone=hot-corner reactive=true x=-4 y=0 4x4'
 
+probe top-bar-clear-synced "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_TOP_BAR=1 PROBE_CLEAR_SYNCED=1
+fact "layer-enabled=false once stock's binding has synced Clear: nothing to restore" 'clear\.off=placeholder=true clear=false'
+
 probe top-bar-disabled "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_TOP_BAR=1 PROBE_DISABLED=panel
 has "disabled-features=['panel']: skips the feature" 'Apex: feature panel is in disabled-features'
 fact "disabled-features=['panel']: the dot hooks give stock" 'top-bar\.dots=99 99 99 inactive="stock"'
 fact "disabled-features=['panel']: the status pill keeps every indicator" "pill=$STOCK_PILL"
 fact "disabled-features=['panel']: the recording button stays stock's" 'recording=0:42,screencast-stop-symbolic hidden=none name=Stop Screencast'
 fact "disabled-features=['panel']: sharing stays where panel.js puts it" 'right-box\.after-session-update=screenRecording,screenSharing,a11y,keyboard,indicators,divider,quickSettings,'
-fact "disabled-features=['panel']: the input chip keeps stock's names" 'input-chip\.changed=en,vi₂,fr'
+fact "disabled-features=['panel']: the input chip keeps stock's names" 'input-chip\.changed=en,Ắ₂,fr'
+fact "disabled-features=['panel']: Clear stays as stock leaves it" 'clear=placeholder=true clear=true'
 fact "disabled-features=['panel']: the corner stays stock" 'hot-corner\.zone=none reactive=false x=undefined y=undefined undefinedxundefined'
 lacks "disabled-features=['panel']: nothing is rebuilt or restyled" 'hot-corners=rebuilt|workspace-dot=restyled'
 
@@ -936,6 +947,8 @@ lock_is_stock() {
     fact "$why: and opens on the clock, with no conversation" 'lock\.open=page=none prompt=none cancelled=none'
     fact "$why: blanking touches nothing" 'lock\.blank=page=none prompt=none cancelled=none'
     fact "$why: going idle cancels as upstream's does" 'lock\.idle-cancel=true'
+    fact "$why: upstream lays out the stack" 'lock\.stack-box\.900=-1\.\.-1'
+    fact "$why: so does preparing for sleep" 'lock\.sleep-cancel=true true'
     fact "$why: upstream's blur" 'lock\.blur=\{"brightness":0\.65,"radius":90\}'
     fact "$why: the clock slides away as upstream's" 'lock\.clock-progress=0 0\.5 1'
     fact "$why: upstream's \"Password\"" 'lock\.question\."Password:"="Password"'
@@ -973,7 +986,8 @@ fact "lock: suspend is blank too" 'lock\.suspend=page=clock prompt=none cancelle
 fact "lock: a display without power saving keeps a prompt" \
     'lock\.unsupported=page=prompt prompt=conversation-4 cancelled=conversation-1,conversation-2,conversation-3'
 count_is "lock: each teardown is logged once, for the VM tests" '^.*Apex: lock: screen blank, prompt torn down$' 6
-count_is "lock: each rebuild too" '^.*Apex: lock: screen on, prompt rebuilt$' 5
+count_is "lock: each rebuild too, at resume as at wake" '^.*Apex: lock: screen on, prompt rebuilt$' 8
+count_is "lock: each teardown for sleep is logged once" '^.*Apex: lock: suspend, prompt torn down$' 2
 fact "lock: the hint stays after the rebuilt prompt" 'lock\.prompt-box\.after-wake=conversation-4,Press Enter to unlock'
 fact "lock: locked while blank, the first conversation ends as DisplayConfig answers" \
     'lock\.open-blank=page=clock prompt=none cancelled=conversation-1'
@@ -994,6 +1008,31 @@ fact "lock: blank tears it down" 'lock\.idle\.blank=page=clock prompt=none cance
 fact "lock: and the wake rebuilds it" 'lock\.idle\.wake=page=prompt prompt=conversation-2 cancelled=conversation-1'
 fact "lock: idle with no unlock dialog keeps upstream's cancel, and nothing throws" 'lock\.idle-cancel\.unlocked=true'
 fact "lock: so does a dialog the lock did not set up" 'lock\.idle-cancel\.other-dialog=true'
+fact "lock: at 900 px the stack's box is 51.0's: a tenth of the way down, to the bottom" 'lock\.stack-box\.900=90\.\.900'
+fact "lock: at 1080 px too" 'lock\.stack-box\.1080=108\.\.1080'
+fact "lock: at 1440 px too" 'lock\.stack-box\.1440=144\.\.1440'
+fact "lock: the stack asks for the stage's height, as 51.0's did, so the notifications get none of it" \
+    'lock\.stack-height\.900=810'
+fact "lock: and at 1440 px" 'lock\.stack-height\.1440=1296'
+fact "lock: a stack the lock did not set up keeps upstream's box" 'lock\.stack-box\.other=-1\.\.-1'
+fact "lock: preparing for sleep with no unlock dialog, or one the lock did not set up, cancels as upstream's does" \
+    'lock\.sleep-cancel=true true'
+fact "lock: preparing for sleep takes the lock's prompt down, which ends its conversation, and owes it" \
+    'lock\.sleep=page=clock prompt=none cancelled=conversation-1'
+fact "lock: a wake while the machine goes to sleep builds nothing" \
+    'lock\.sleep\.wake=page=clock prompt=none cancelled=conversation-1'
+fact "lock: resume with the screen on rebuilds it" 'lock\.resume=page=prompt prompt=conversation-2 cancelled=conversation-1'
+fact "lock: and it takes keys once PAM asks" 'lock\.resume\.keys=false'
+fact "lock: a failed scan before sleep does not outlive it: the rebuilt prompt starts on the password's hint" \
+    "lock\.hint\.after-resume=$HINT_PASSWORD message=true indicator=true"
+fact "lock: and the reader's prompt on it is board 20's line again" \
+    "lock\.hint\.after-resume\.scan=$HINT_SCAN message=false indicator=false"
+fact "lock: resume with the screen blank builds nothing" \
+    'lock\.resume-blank=page=clock prompt=none cancelled=conversation-1,conversation-2'
+fact "lock: the wake after it does" 'lock\.resume-blank\.wake=page=prompt prompt=conversation-3 cancelled=conversation-1,conversation-2'
+fact "lock: a lock taken as the machine goes to sleep starts no conversation" \
+    'lock\.locked-for-sleep=page=none prompt=none cancelled=none'
+fact "lock: and its prompt comes at resume" 'lock\.locked-for-sleep\.resume=page=prompt prompt=conversation-1 cancelled=none'
 fact "lock: a DisplayConfig that never answers leaves the prompt up" \
     'lock\.display-config-silent=page=prompt prompt=conversation-1 cancelled=none'
 fact "lock: so does one that fails" 'lock\.display-config-error=page=prompt prompt=conversation-1 cancelled=none'

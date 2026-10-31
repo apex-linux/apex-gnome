@@ -48,7 +48,6 @@ struct _CcApexUpdatesPage {
     AdwActionRow *running_row;
     GtkLabel *running_built;
     AdwActionRow *staged_row;
-    GtkLabel *staged_built;
     AdwActionRow *rollback_row;
     AdwPreferencesGroup *versions_group;
     GtkButton *rollback_button;
@@ -616,15 +615,16 @@ set_deployment (AdwActionRow *row, GtkLabel *built_label, GVariant *dict)
     g_autofree char *built = cc_apex_updates_built (dict_timestamp (dict, "timestamp"));
 
     const char *pin_reason = dict_string (dict, "pin-reason");
+    g_autofree char *mono = g_markup_printf_escaped ("<span font_family=\"monospace\">%s</span>", line ? line : "");
     g_autofree char *subtitle = NULL;
 
     if (pin_reason && *pin_reason) {
         g_autofree char *escaped = g_markup_escape_text (pin_reason, -1);
 
-        subtitle = g_strdup_printf (_("%s\nKept by Apex: %s"), line ? line : "", escaped);
+        subtitle = g_strdup_printf (_("%s\nKept by Apex: %s"), mono, escaped);
     }
     gtk_widget_set_visible (GTK_WIDGET (row), !dict_is_empty (dict));
-    adw_action_row_set_subtitle (row, subtitle ? subtitle : line ? line : "");
+    adw_action_row_set_subtitle (row, subtitle ? subtitle : mono);
     if (built_label)
         gtk_label_set_label (built_label, built ? built : "");
 }
@@ -726,7 +726,7 @@ refresh (CcApexUpdatesPage *self)
     refresh_changes (self, staged);
 
     set_deployment (self->running_row, self->running_built, booted);
-    set_deployment (self->staged_row, self->staged_built, staged);
+    set_deployment (self->staged_row, NULL, staged);
     set_deployment (self->rollback_row, NULL, rollback);
     refresh_kept (self);
     gtk_widget_set_sensitive (GTK_WIDGET (self->rollback_button),
@@ -876,7 +876,6 @@ cc_apex_updates_page_class_init (CcApexUpdatesPageClass *klass)
     gtk_widget_class_bind_template_child (widget_class, CcApexUpdatesPage, running_row);
     gtk_widget_class_bind_template_child (widget_class, CcApexUpdatesPage, running_built);
     gtk_widget_class_bind_template_child (widget_class, CcApexUpdatesPage, staged_row);
-    gtk_widget_class_bind_template_child (widget_class, CcApexUpdatesPage, staged_built);
     gtk_widget_class_bind_template_child (widget_class, CcApexUpdatesPage, rollback_row);
     gtk_widget_class_bind_template_child (widget_class, CcApexUpdatesPage, versions_group);
     gtk_widget_class_bind_template_child (widget_class, CcApexUpdatesPage, rollback_button);

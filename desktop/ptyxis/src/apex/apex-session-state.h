@@ -17,6 +17,13 @@ typedef enum
 
 #define APEX_EXIT_UNKNOWN (-1)
 
+typedef enum
+{
+  APEX_SHELL_PRECMD   = 1 << 0,
+  APEX_SHELL_PREEXEC  = 1 << 1,
+  APEX_SHELL_POSTEXEC = 1 << 2,
+} ApexShellMarks;
+
 typedef struct
 {
   ApexStatus  base;
@@ -39,6 +46,10 @@ gboolean    apex_session_state_command   (ApexSessionState *state,
 gboolean    apex_session_state_postexec  (ApexSessionState *state,
                                           int               exit_code);
 gboolean    apex_session_state_precmd    (ApexSessionState *state,
+                                          gint64            now);
+gboolean    apex_session_state_shell     (ApexSessionState *state,
+                                          ApexShellMarks    marks,
+                                          int               exit_code,
                                           gint64            now);
 gboolean    apex_session_state_bell      (ApexSessionState *state,
                                           gboolean          focused,

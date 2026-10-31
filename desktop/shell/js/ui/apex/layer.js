@@ -148,11 +148,11 @@ function _enableFeature(name) {
     }
 }
 
-function _disableFeature(name) {
+function _disableFeature(name, teardown = false) {
     if (!_enabled.delete(name))
         return;
     try {
-        _features.get(name).disable?.();
+        _features.get(name).disable?.({teardown});
     } catch (e) {
         console.error(`Apex: feature ${name} did not disable cleanly: ${e}`);
     }
@@ -164,10 +164,10 @@ function _enableFeatures() {
     _on = true;
 }
 
-function _disableFeatures() {
+function _disableFeatures(teardown = false) {
     _on = false;
     for (const name of [..._names].reverse())
-        _disableFeature(name);
+        _disableFeature(name, teardown);
 }
 
 // Only _sync recomputes the session mode's colour scheme and makes main.js reload its
@@ -206,7 +206,7 @@ function _queueFollowSettings() {
 async function _disableAtTeardown() {
     const Main = await import('../main.js');
     Main.layoutManager.uiGroup.connect('destroy', () => {
-        _disableFeatures();
+        _disableFeatures(true);
         // Their relayouts run now, while the stage holds the panel, not in that loop once it has left.
         global.stage.get_allocation_box();
     });

@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 name: signoff
 
-# The owner's sign-off captures (tests/shots/signoff.sh), checked against the approved goldens.
+# The owner's sign-off captures, the shell's and the apps', checked against the approved goldens.
 # A pull request runs it when it changes what the captures render (signoff-paths.sh) or is labelled goldens.
 on:
   workflow_dispatch: {}
@@ -9,10 +9,21 @@ on:
     branches: [main]
     paths:
       - desktop/shell/**
+      - desktop/control-center/**
+      - desktop/nautilus/**
+      - desktop/ptyxis/**
       - packaging/pkgs/gnome-shell/**
+      - packaging/pkgs/gnome-control-center/**
+      - packaging/pkgs/nautilus/**
+      - packaging/pkgs/ptyxis/**
+      - packaging/pkgs/libadwaita/**
       - tests/shots/**
       - tests/shell/**
       - tests/lib/**
+      - tests/control-center/**
+      - tests/nautilus/**
+      - tests/ptyxis/**
+      - tests/layer/fixtures/**
       - .github/workflows/signoff.yml
   pull_request:
     types: [opened, synchronize, reopened, labeled]
@@ -49,7 +60,7 @@ jobs:
         run: git diff --name-only "$BASE...$HEAD" | .github/scripts/signoff-paths.sh >>"$GITHUB_OUTPUT"
 
   signoff:
-    name: tests/shots/signoff.sh (Fedora 45, every shell board, light and dark, against the goldens)
+    name: tests/shots/signoff.sh (Fedora 45, every shell board and board 31, light and dark)
     needs: rendered
     # Another label on a pull request neither starts a run nor, through the job's group, cancels one.
     if: >-
@@ -98,15 +109,16 @@ jobs:
         id: capture
         run: tests/shots/signoff.sh _build/gnome-shell/out _build/signoff
 
-      - name: tests/shots/goldens.sh check
-        run: tests/shots/goldens.sh check _build/signoff
-
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: ${{ !cancelled() && steps.capture.outcome == 'success' }}
         with:
-          name: signoff-${{ github.sha }}
-          path: _build/signoff/
+          name: signoff-shell-${{ github.sha }}
+          path: |
+            _build/signoff-work/g2/run/
+            _build/signoff-work/symbolic/
+            _build/gnome-shell/shots/
           if-no-files-found: error
+          retention-days: 3
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: failure()
@@ -116,3 +128,172 @@ jobs:
             _build/signoff-work/g2/run/
             _build/gnome-shell/shots/
           if-no-files-found: ignore
+
+  apps:
+    name: ${{ matrix.shoot }} (Fedora 45, the ${{ matrix.app }} boards, light and dark)
+    needs: rendered
+    if: >-
+      !cancelled() && needs.rendered.result != 'failure'
+      && (github.event_name != 'pull_request'
+          || (github.event.action != 'labeled' && needs.rendered.outputs.touches == 'true')
+          || (contains(github.event.pull_request.labels.*.name, 'goldens')
+              && (github.event.action != 'labeled' || github.event.label.name == 'goldens')))
+    concurrency:
+      group: signoff-${{ matrix.app }}-${{ github.event.pull_request.number || github.ref }}
+      cancel-in-progress: true
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    permissions:
+      contents: read
+    container:
+      image: registry.fedoraproject.org/fedora:45@sha256:1e13e11f63e147a40a935c9046c79d53a30b861a3cf05ebb023bb53c562382cb
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - app: control-center
+            pkg: gnome-control-center
+            shoot: tests/control-center/run.sh
+            shots: _build/control-center/shots
+            packages: >-
+              gnome-shell mesa-dri-drivers dbus-daemon python3-dbusmock python3-gobject at-spi2-core gcc util-linux
+              adwaita-sans-fonts python3-dbus systemd gnome-backgrounds umockdev
+          - app: nautilus
+            pkg: nautilus
+            shoot: tests/nautilus/shoot.sh
+            shots: _build/nautilus/shots
+            packages: >-
+              gnome-shell mesa-dri-drivers dbus-daemon python3-dbusmock gcc util-linux at-spi2-core python3-gobject
+              inkscape glycin-thumbnailer adwaita-sans-fonts jetbrains-mono-fonts-all
+          - app: ptyxis
+            pkg: ptyxis
+            shoot: tests/ptyxis/shoot.sh
+            shots: _build/ptyxis/shots
+            packages: >-
+              gnome-shell mesa-dri-drivers dbus-daemon python3-dbusmock gcc util-linux jq jetbrains-mono-fonts-all
+              adwaita-sans-fonts
+    steps:
+      - name: git for the checkout and the Source1 archive
+        run: >-
+          dnf5 -y --setopt=install_weak_deps=False --repo=fedora --repo=updates install
+          git-core bash coreutils findutils sed grep tar zstd
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Both lanes' builds share the cache's directory, each under builds/PKG; ci.yml alone saves them.
+      - uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+        with:
+          path: _build/lane-cache
+          key: lane-libadwaita-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: lane-libadwaita-
+
+      - uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+        with:
+          path: _build/lane-cache
+          key: lane-${{ matrix.pkg }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: lane-${{ matrix.pkg }}-
+
+      - name: tests/lib/lane.sh libadwaita
+        env:
+          APEX_LANE_CACHE: _build/lane-cache
+        run: tests/lib/lane.sh libadwaita
+
+      - name: tests/lib/lane.sh ${{ matrix.pkg }}
+        env:
+          APEX_LANE_CACHE: _build/lane-cache
+          PKG: ${{ matrix.pkg }}
+        run: tests/lib/lane.sh "$PKG"
+
+      - name: the shooter's packages, then the lane's libadwaita over Fedora's
+        env:
+          PACKAGES: ${{ matrix.packages }}
+        run: |
+          read -ra packages <<<"$PACKAGES"
+          dnf5 -y -q --setopt=install_weak_deps=False --repo=fedora --repo=updates install "${packages[@]}"
+          # A lane that built rather than reused its cache left Fedora's libadwaita-devel, which pins Fedora's libadwaita.
+          if rpm -q libadwaita-devel >/dev/null; then
+              dnf5 -y -q --setopt=clean_requirements_on_remove=False remove libadwaita-devel
+          fi
+          dnf5 -y -q --setopt=install_weak_deps=False --repo=fedora --repo=updates install _build/libadwaita/out/libadwaita-[0-9]*.x86_64.rpm
+          rpm -q libadwaita | grep -q '\.apex'
+
+      # Without it, nautilus's shoot.sh captures with its own apex-desktop rather than the pinned one.
+      - name: apex-desktop at tests/lib/pins.sh's APEX_DESKTOP_REV
+        if: matrix.app == 'nautilus'
+        run: |
+          . tests/lib/pins.sh
+          git init -q _build/apex-desktop
+          git -C _build/apex-desktop fetch -q --depth 1 "$APEX_DESKTOP_URL" "$APEX_DESKTOP_REV"
+          git -C _build/apex-desktop checkout -q --detach FETCH_HEAD
+          echo "APEX_DESKTOP_SRC=$PWD/_build/apex-desktop" >>"$GITHUB_ENV"
+
+      - name: ${{ matrix.shoot }} on the lane's RPMs
+        env:
+          SHOOT: ${{ matrix.shoot }}
+          PKG: ${{ matrix.pkg }}
+        run: '"$SHOOT" "_build/$PKG/out"'
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: ${{ !cancelled() }}
+        with:
+          name: signoff-${{ matrix.app }}-${{ github.sha }}
+          path: ${{ matrix.shots }}/
+          if-no-files-found: error
+          retention-days: 3
+
+  collect:
+    name: tests/shots/signoff.sh --collect (every board, light and dark, against the goldens)
+    needs: [signoff, apps]
+    # Once any capture job runs, this one runs too, so a skipped or failed one fails the sign-off.
+    if: ${{ !cancelled() && (needs.signoff.result != 'skipped' || needs.apps.result != 'skipped') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    container:
+      image: registry.fedoraproject.org/fedora:45@sha256:1e13e11f63e147a40a935c9046c79d53a30b861a3cf05ebb023bb53c562382cb
+    steps:
+      - name: the shell's and every app's captures
+        env:
+          SHELL_RESULT: ${{ needs.signoff.result }}
+          APPS_RESULT: ${{ needs.apps.result }}
+        run: |
+          [[ $SHELL_RESULT == success && $APPS_RESULT == success ]] ||
+              { echo "::error::the shell's capture job: $SHELL_RESULT; the apps' capture jobs: $APPS_RESULT"; exit 1; }
+
+      - name: jq, git and gjs for the collection and compare.js
+        run: >-
+          dnf5 -y --setopt=install_weak_deps=False --repo=fedora --repo=updates install
+          git-core bash coreutils findutils sed grep jq gjs
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: signoff-*-${{ github.sha }}
+          path: _build/signoff-sources
+
+      - name: tests/shots/signoff.sh --collect
+        id: capture
+        env:
+          SOURCES: _build/signoff-sources
+          SHA: ${{ github.sha }}
+        run: >-
+          tests/shots/signoff.sh --collect "$SOURCES/signoff-shell-$SHA/signoff-work/g2/run"
+          "$SOURCES/signoff-shell-$SHA/gnome-shell/shots" _build/signoff
+          "control-center=$SOURCES/signoff-control-center-$SHA" "nautilus=$SOURCES/signoff-nautilus-$SHA"
+          "ptyxis=$SOURCES/signoff-ptyxis-$SHA" "symbolic=$SOURCES/signoff-shell-$SHA/signoff-work/symbolic"
+
+      - name: tests/shots/goldens.sh check
+        run: tests/shots/goldens.sh check _build/signoff
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: ${{ !cancelled() && steps.capture.outcome == 'success' }}
+        with:
+          name: signoff-${{ github.sha }}
+          path: _build/signoff/
+          if-no-files-found: error

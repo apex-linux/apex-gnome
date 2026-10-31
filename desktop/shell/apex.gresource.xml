@@ -30,6 +30,7 @@
     <file alias="panel/privacy-group.js">js/ui/apex/panel/privacy-group.js</file>
     <file alias="panel/screen-pills.js">js/ui/apex/panel/screen-pills.js</file>
     <file alias="panel/input-chip.js">js/ui/apex/panel/input-chip.js</file>
+    <file alias="panel/clear-sync.js">js/ui/apex/panel/clear-sync.js</file>
     <file alias="dock/feature.js">js/ui/apex/dock/feature.js</file>
     <file alias="dock/dock.js">js/ui/apex/dock/dock.js</file>
     <file alias="dock/trash.js">js/ui/apex/dock/trash.js</file>

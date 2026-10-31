@@ -4,6 +4,7 @@ import Atk from 'gi://Atk';
 import Clutter from 'gi://Clutter';
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
+import GObject from 'gi://GObject';
 import Graphene from 'gi://Graphene';
 import Meta from 'gi://Meta';
 import Mtk from 'gi://Mtk';
@@ -77,6 +78,9 @@ const SIGNOFF_FOCUS_ORDER = ['org.gnome.Calendar.desktop', 'org.gnome.TextEditor
 const SIGNOFF_QUIET_MS = 1500;
 const SIGNOFF_FOCUS_ATTEMPTS = 3;
 const WIFI_SCAN_MS = 5000;
+const TRAY_DRAIN_MS = 3000;
+const SHUTDOWN_HISTORY_DELAY_MS = 300;
+const SHUTDOWN_BANNER_TIMEOUT_MS = 100;
 const AVATAR_SIZE = 32;
 const OVERVIEW_WINDOWS = 3;
 const FIXTURE_WALLPAPER = {width: 160, height: 100};
@@ -3169,6 +3173,56 @@ function keepPerfHelperAwake() {
     });
 }
 
+// gnome-shell 51's shutdown destroys the tray, then runs a main loop that fires any banner timeout
+// still armed; every case but shutdown-banner exits with the tray idle, Apex's notifications or not.
+async function drainMessageTray() {
+    dropStartupNotifications();
+    const idle = await until(() => Main.messageTray._banner === null, TRAY_DRAIN_MS);
+    Main.messageTray._updateNotificationTimeout(0);
+    Main.messageTray._resetNotificationLeftTimeout();
+    return idle;
+}
+
+// That loop also reaches the date menu's destroyed events section whenever the calendar server or the app
+// list signals in it: the event source's changes (dateMenu.js:297), its HasCalendars (:326), the apps (:322).
+const DATE_MENU_SIGNALS = [['source', 'changed'], ['source', 'notify', 'has-calendars'], ['apps', 'installed-changed']];
+
+function dateMenuSources() {
+    return {source: Main.panel.statusArea.dateMenu._eventSource, apps: Shell.AppSystem.get_default()};
+}
+
+// Every case blocks each handler on those paths before the shell exits, so none can run in that loop.
+function cutDateMenu() {
+    const objects = dateMenuSources();
+    return Object.fromEntries(DATE_MENU_SIGNALS.map(([object, signalId, detail]) => [
+        detail ? `${signalId}::${detail}` : signalId,
+        GObject.signal_handlers_block_matched(objects[object], detail ? {signalId, detail} : {signalId}),
+    ]));
+}
+
+// The races made certain: the tray's timeout due in a slowed shutdown loop, each date-menu signal sent in it.
+// The shell exits here, not after scripting.js's helper round trip, which could outlast the timeout.
+async function shutdownWithBanner() {
+    const cut = cutDateMenu();
+    Main.notify('G2 banner', 'shown as the shell exits');
+    await settle();
+    const {source, apps} = dateMenuSources();
+    const writeHistory = Main.timeLimitsManager.shutdown.bind(Main.timeLimitsManager);
+    Main.timeLimitsManager.shutdown = async () => {
+        await Scripting.sleep(SHUTDOWN_HISTORY_DELAY_MS);
+        source.emit('changed');
+        source.notify('has-calendars');
+        apps.emit('installed-changed');
+        await writeHistory();
+    };
+    Main.messageTray._updateNotificationTimeout(SHUTDOWN_BANNER_TIMEOUT_MS);
+    const tray = Main.messageTray;
+    console.log(`APEXG2-SHUTDOWN-BANNER ${JSON.stringify({
+        pending: tray._banner !== null || tray._notificationQueue.length > 0, armed: tray._notificationTimeoutId !== 0, cut,
+    })}`);
+    global.context.terminate();
+}
+
 export async function run() {
     actionModeAtRun = actionModeName();
     const pingId = keepPerfHelperAwake();
@@ -3177,6 +3231,10 @@ export async function run() {
     } finally {
         GLib.source_remove(pingId);
     }
+    if (GLib.getenv('G2_SHUTDOWN_BANNER') === '1')
+        await shutdownWithBanner();
+    else
+        console.log(`APEXG2-EXIT ${JSON.stringify({tray: await drainMessageTray(), cut: cutDateMenu()})}`);
 }
 
 async function runProbe() {
@@ -3189,6 +3247,13 @@ async function runProbe() {
         backdrop = {error: `${e.message}\n${e.stack}`};
     }
     console.log(`APEXG2-BACKDROP ${JSON.stringify(backdrop)}`);
+    let defaults;
+    try {
+        defaults = (await import('./session-defaults.js')).sessionDefaultsReport({apexDock});
+    } catch (e) {
+        defaults = {error: `${e.message}\n${e.stack}`};
+    }
+    console.log(`APEXG2-SESSION ${JSON.stringify(defaults)}`);
 
     if (GLib.getenv('G2_SCENES') === '1') {
         let result;

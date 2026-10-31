@@ -3,6 +3,7 @@
 // DESIGN's top bar, one feature for disabled-features ('panel'): each part provides its
 // own hooks and restores the stock bar when it is disabled.
 
+import * as ClearSync from './clear-sync.js';
 import * as FocusedApp from './focused-app.js';
 import * as HotCorner from './hot-corner.js';
 import * as InputChip from './input-chip.js';
@@ -14,7 +15,7 @@ import * as StatusPill from './status-pill.js';
 import * as WorkspaceDots from './workspace-dots.js';
 
 const PARTS = [WorkspaceDots, HotCorner, StatusPill, SolidBar, FocusedApp,
-    SearchButton, SearchHint, ScreenPills, InputChip];
+    SearchButton, SearchHint, ScreenPills, InputChip, ClearSync];
 
 export function configure(featureName) {
     for (const part of PARTS)

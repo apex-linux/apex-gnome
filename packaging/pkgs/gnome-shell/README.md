@@ -42,7 +42,7 @@ Fedora's gnome-shell SRPM, rebuilt with the Apex layer inside it
 | `0012-message-list` | `js/ui/messageList.js`, `js/ui/calendar.js` | +11 −1 | behaviour hooks once a message header, a message and a notification group are built (the header's glyph and parts, the message's source, the group's cover and header) and once the calendar's message list has its footer (the footer, Clear and the placeholder) and once its month header and each day button are built (the month on the left, the event dot); value hooks over a message's icon and over whether a group counts as expanded, so a flat group never asks `MessageView` to expand it |
 | `0013-overview` | `js/ui/windowPreview.js`, `js/ui/workspace.js`, `js/ui/workspaceThumbnail.js`, `js/ui/searchController.js`, `js/ui/overviewControls.js` | +22 −9 | value hooks over a window title's initial visibility and over the actors the overlay fades (always-visible titles); a behaviour hook once a workspace is built (no background card, the empty label); value hooks over a row's chrome and the bottom edge the last row's captions may reach (room for the always-visible captions, clear of the dock); value hooks over the thumbnails' maximum scale and the dynamic-workspace threshold, and a behaviour hook once a thumbnail is built (the wallpaper in it); a behaviour hook when text arrives in the search entry or it takes the key focus (Spotlight takes the overview's search); a value hook over the height of the app grid's workspace strip (0, so the launcher takes its space) |
 | `0014-dash` | `js/ui/dash.js` | +3 −2 | value hooks over the Show Apps icon's name and over whether a dash puts its separator between the favourites and the running apps, for ApexDock |
-| `0015-lock` | `js/ui/unlockDialog.js`, `js/ui/screenShield.js`, `js/gdm/authPrompt.js`, `js/ui/userWidget.js` | +22 −14 | value hooks over the unlock blur and the clock's slide; a behaviour hook once the unlock dialog is built (the single stage, its hint, the prompt following the screen); a value hook over whether the session going idle cancels the dialog's conversation (the prompt the layer manages stays until the screen blanks); a value hook over the prompt's question, given PAM's own; a value hook over the avatar without a picture. Unlocking stays upstream's: no hook is on its path |
+| `0015-lock` | `js/ui/unlockDialog.js`, `js/ui/screenShield.js`, `js/gdm/authPrompt.js`, `js/ui/userWidget.js` | +25 −16 | value hooks over the unlock blur and the clock's slide; a value hook over the stack's box in `UnlockDialogLayout` (the stage keeps 51.0's layout where 51.1 centres the stack on its clock and prompt); a behaviour hook once the unlock dialog is built (the single stage, its hint, the prompt following the screen); a value hook over whether the session going idle cancels the dialog's conversation (the prompt the layer manages stays until the screen blanks); one over whether preparing for sleep cancels it (the layer takes its prompt down itself and brings it back after resume); a value hook over the prompt's question, given PAM's own; a value hook over the avatar without a picture. Unlocking stays upstream's: no hook is on its path |
 | `0016-motion` | `js/ui/environment.js`, `js/ui/windowManager.js`, `js/ui/overviewControls.js`, `js/ui/boxpointer.js` | +17 −10 | a value hook over every ease's parameters in `_easeActor` and `_easeAnimatableProperty` (the curve's mode) and a behaviour hook once their transitions exist (its control points); a `motion-duration` value hook at the window size change's two eases, the overview's four state transitions and a popover's open and close; `adjustAnimationTime` still applies after them (`overviewControls.js`'s import comes with 0013, which applies first) |
 | `0017-polkit` | `js/ui/components/polkitAgent.js` | +2 | a behaviour hook once the authentication dialog is built (board 13: the shield, the user's role, Details with the action and its vendor, the fingerprint line for pam_fprintd's prompt). Its session, the answers and polkit's verdict stay upstream's: no hook is on their path |
 | `0018-end-session` | `js/ui/endSessionDialog.js` | +2 | a behaviour hook once the end-session dialog has added its buttons, given the dialog and its content (the end-session feature: stock's icon, Restart in the power-off dialog, the theme's gap and widths) |
@@ -50,13 +50,20 @@ Fedora's gnome-shell SRPM, rebuilt with the Apex layer inside it
 | `0020-screencast-greeter` | `js/ui/screenshot.js` | +3 −1 | not a hook: an upstream bug fix, dropped once upstream has it. `ScreenshotUI` creates its screencast proxy in every session mode, so D-Bus starts `org.gnome.Shell.Screencast` in the greeter and in initial setup, which cannot screencast; there it initialises GStreamer and GTK, and rebuilds GStreamer's plugin registry on every greeter start, the greeter's home being on gdm's tmpfs. Where the mode has no `allowScreencast`, the proxy no longer auto-starts the service |
 
 Budget (ADR 0014): at most 450 changed lines of hook hunks in at most 33 upstream files.
-In use: 262 lines in 31 files, 95 of them 0019's and 0020's upstream fixes. The C budget for `shell-blur-effect.{c,h}` (310 lines): 310
+In use: 267 lines in 31 files, 95 of them 0019's and 0020's upstream fixes. The C budget for `shell-blur-effect.{c,h}` (310 lines): 310
 lines, all in 0003-blur.
 
 The patches are `git format-patch` output against Fedora's `%prep` tree (upstream
 51.0 plus Fedora's patch): `From:`, `Subject:`, a message that says what the hunks hook,
 then the diff with `a/` and `b/` prefixes, applied with `-p1`. Write them with
 `just pkg-export`, never by hand.
+
+Fedora updates absorbed:
+
+- 2026-10-30, GNOME 51.1 (FEDORA-2026-2812a1754d, F45 `updates-testing`, request stable):
+  every patch applies at fuzz 0 to `gnome-shell-51.1-1.fc45` as well as `51.0-1.fc45`, and
+  the lane builds it with the whole update in the buildroot (`mutter-devel` 51.1 meets the
+  pin). 51.1 carries neither 0019 nor 0020. No patch changed.
 
 ## Changing a patch or rebasing
 
