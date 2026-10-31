@@ -54,7 +54,8 @@ readonly A11Y_TEXT_RATIO=4.5
 readonly A11Y_ICON_RATIO=3
 readonly A11Y_ACCENTS=(blue teal green yellow orange red pink purple slate)
 readonly A11Y_SURFACES=(bar barUnread dock popupMenu osd banner quickSettings "${A11Y_ACCENTS[@]/#/quickSettingsAccents.}" wifiMenu wifiMenuConnected dateMenu
-    "${A11Y_ACCENTS[@]/#/dateMenuAccents.}" switcher dialog "${A11Y_ACCENTS[@]/#/dialogAccents.}" endSession screenshot
+    "${A11Y_ACCENTS[@]/#/dateMenuAccents.}" switcher dialog "${A11Y_ACCENTS[@]/#/dialogAccents.}"
+    checkBoxDialog "${A11Y_ACCENTS[@]/#/checkBoxDialogAccents.}" endSession screenshot
     spotlight.popup spotlight.toast overview appGrid barPills.indicatorMenu)
 # The failures still open: upstream's high-contrast sheet, which safe mode keeps as Fedora's.
 readonly A11Y_HC_TOGGLE="upstream HC sheet: Quick Settings' checked toggle, white on its accent (3.15:1), and its menu arrow (2.31:1)"
@@ -1209,6 +1210,14 @@ modal_dialog() {
             | (.b | map(select(.default | not)) | length == 1 and all((.background | colour_is($t.apex_button)) and (.foreground | colour_is($t.apex_fg)) and (.hover.background | colour_is($t.apex_button_hover))))
             and (.b | map(select(.default)) | length == 1 and all((.background | rgba) as $f | ([range(3)] | all(($f[.] - $a[.] * (1 - $k)) | fabs <= 1))
                 and (.foreground | colour_is("#ffffff"))))'
+    "${metric[@]}" 'a check box (the mount password dialog'"'"'s Remember Password) rings its box 2 px in $apex_fg_dim, $apex_fg hovered' \
+        "$d.checkBox" '.label == "Remember Password" and (.unchecked | (.border.top | px_is(2)) and (.borderColor | colour_is($t.apex_fg_dim)) and (.hover.borderColor | colour_is($t.apex_fg)))'
+    "${metric[@]}" 'that ring is at least '"$A11Y_ICON_RATIO"':1 on the dialog'"'"'s fill (WCAG 1.4.11; stock'"'"'s is about 1.5:1)' \
+        "$d.checkBox" ". as \$c | (.unchecked.borderColor | contrast_on(\$c.background)) >= $A11Y_ICON_RATIO"
+    "${metric[@]}" 'checked, the box is the accent shaded $apex_quick_toggle_checked_shade with black, its check in white, unringed' \
+        "{c: $d.checkBox.checked, accent: .topBar.accent}" '(.accent | rgba) as $a | ($t.apex_quick_toggle_checked_shade | rtrimstr("%") | tonumber / 100) as $k
+            | .c | (.background | rgba) as $f | ([range(3)] | all(($f[.] - $a[.] * (1 - $k)) | fabs <= 1)) and (.foreground | colour_is("#ffffff"))
+            and (.borderColor | rgba | .[3] == 0) and (.hover.borderColor | rgba | .[3] == 0)'
     "${metric[@]}" 'the end-session dialog has $apex_end_session_gap between its parts, its title tracked $apex_dialog_title_tracking, its countdown in tabular figures' \
         "$d.endSession" '(.box.spacing | px_is($t.apex_end_session_gap)) and (.contentSpacing | px_is($t.apex_end_session_gap))
             and (.title.tracking - ($t.apex_dialog_title_tracking | px) | fabs < 0.05) and (.description.font.features | test("tnum"))'

@@ -19,6 +19,7 @@ import * as ModalDialog from 'resource:///org/gnome/shell/ui/modalDialog.js';
 import * as OverviewControls from 'resource:///org/gnome/shell/ui/overviewControls.js';
 import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 import * as Scripting from 'resource:///org/gnome/shell/ui/scripting.js';
+import * as ShellMountOperation from 'resource:///org/gnome/shell/ui/shellMountOperation.js';
 import * as Slider from 'resource:///org/gnome/shell/ui/slider.js';
 import * as SwitcherPopup from 'resource:///org/gnome/shell/ui/switcherPopup.js';
 import * as UserWidget from 'resource:///org/gnome/shell/ui/userWidget.js';
@@ -1443,6 +1444,39 @@ async function modalDialog(unit) {
     }
 }
 
+// The mount password dialog, as a mount's ask-password opens it: its Remember Password is a check box.
+function openMountPasswordDialog() {
+    const operation = new ShellMountOperation.ShellMountOperation({get_drive: () => null});
+    operation.mountOp.emit('ask-password', 'Password Required\nEnter the password for the G2 share', 'apex', 'WORKGROUP',
+        Gio.AskPasswordFlags.NEED_PASSWORD | Gio.AskPasswordFlags.SAVING_SUPPORTED);
+    const dialog = operation._dialog;
+    return {
+        root: dialog.dialogLayout._dialog,
+        check: dialog._rememberChoice,
+        close: () => operation.close(),
+    };
+}
+
+async function checkBoxDialog(unit) {
+    const opened = openMountPasswordDialog();
+    const {check} = opened;
+    const state = checked => {
+        check.checked = checked;
+        return {
+            ...styleOf(check._check, unit),
+            hover: underPseudoClass(check, 'hover', () => ({borderColor: hex(check._check.get_theme_node().get_border_color(St.Side.TOP))})),
+        };
+    };
+    try {
+        await settle();
+        global.stage.set_key_focus(null);
+        return {background: styleOf(opened.root, unit).background, label: check.getLabelActor().text, unchecked: state(false), checked: state(true)};
+    } finally {
+        opened.close();
+        await settle();
+    }
+}
+
 // The calendar's day buttons, and the colour each one's number is drawn in, which St gives a
 // Clutter.Text only as the button's own child.
 function calendarDays(calendar, unit) {
@@ -2480,7 +2514,10 @@ async function scenes() {
         surfaces.idleRepaints = await idleRepaints();
     }
     surfaces.switcher = await windowSwitcher(unit);
-    surfaces.dialog = {...await modalDialog(unit), endSession: await endSessionDialog(unit), updateCard: await updateCard(unit)};
+    surfaces.dialog = {
+        ...await modalDialog(unit), endSession: await endSessionDialog(unit), updateCard: await updateCard(unit),
+        checkBox: await checkBoxDialog(unit),
+    };
     surfaces.dateMenu = await calendarMenu(unit);
     surfaces.notificationsLayer = await notificationsLayer(unit);
     surfaces.derived = derivedSurfaces(unit);
@@ -3386,6 +3423,7 @@ async function runProbe() {
             result = await A11y.a11yReport({
                 settle, unit: cssUnit(), apexDock, findDescendant, openPopupMenu, openOsd, openBanner,
                 openModalDialog: () => openPromptDialog({avatar: true}), openEndSessionDialog: openShellEndSession, withSpotlight,
+                openMountPasswordDialog,
             });
         } catch (e) {
             result = {error: `${e.message}\n${e.stack}`};

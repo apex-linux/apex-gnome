@@ -353,6 +353,9 @@ REPORT_OF_A_DIALOG_DRAWN_FROM_TOKENS='
             background: "#3584e4ff", knob: {width: ($t.apex_update_switch_knob | px)}, opacity: 1, focusable: true, a11ySensitive: true},
         buttons: ["Cancel", "Restart & Update"]}
         | {staged: ., ready: (.toggle += {sensitive: false, opacity: ($t.apex_update_switch_insensitive_opacity | tonumber), focusable: false, a11ySensitive: false})}),
+    checkBox: {background: ($t.apex_panel_solid | hex), label: "Remember Password",
+        unchecked: {border: {top: 2}, borderColor: ($t.apex_fg_dim | hex), hover: {borderColor: ($t.apex_fg | hex)}},
+        checked: {background: "#2863abff", foreground: "#ffffffff", borderColor: "#00000000", hover: {borderColor: "#00000000"}}},
     contentSpacing: ($t.apex_dialog_gap | px), textSpacing: ($t.apex_dialog_text_gap | px),
     title: {font: {size: ($t.apex_font_dialog_title_size | px), weight: ($t.apex_font_heading_weight | tonumber)}},
     description: {font: {size: ($t.apex_font_size | px)}, foreground: ($t.apex_fg_dim | hex)},
@@ -771,6 +774,8 @@ REPORT_OF_LEGIBLE_SURFACES='
     quickSettingsAccents: (["blue", "teal", "green", "yellow", "orange", "red", "pink", "purple", "slate"] | map({key: ., value: $s}) | from_entries),
     dateMenuAccents: (["blue", "teal", "green", "yellow", "orange", "red", "pink", "purple", "slate"] | map({key: ., value: $s}) | from_entries),
     dialogAccents: (["blue", "teal", "green", "yellow", "orange", "red", "pink", "purple", "slate"] | map({key: ., value: $s}) | from_entries),
+    checkBoxDialog: $s,
+    checkBoxDialogAccents: (["blue", "teal", "green", "yellow", "orange", "red", "pink", "purple", "slate"] | map({key: ., value: $s}) | from_entries),
     screenshot: $s,
 
     bar: ($s | .targets += [$dot, $inactiveDot]), barUnread: ($s | .targets += [$dot + {name: "messages-indicator"}, $inactiveDot]), dock: $s, popupMenu: $s, osd: $s, banner: $s, quickSettings: $s, wifiMenu: $s, wifiMenuConnected: $s, dateMenu: $s, switcher: $s,
@@ -858,7 +863,7 @@ CHANGES
 test_a11y() {
     local assertions expected change what passes failures open_gaps want
     # dark-style's six focus gaps today: its dock, Spotlight entry and dialog entry, each per wallpaper.
-    for assertions in a11y_contrast:67:6 a11y_layout:48:0; do
+    for assertions in a11y_contrast:77:6 a11y_layout:58:0; do
         IFS=: read -r assertions expected gaps <<<"$assertions"
         read -r passes failures open_gaps <<<"$(a11y_run "$assertions")"
         if ((failures == 0 && open_gaps == gaps && passes == expected)); then
@@ -877,6 +882,7 @@ test_a11y() {
     done <<'CHANGES'
 a11y_contrast|1|.bar.targets[0].ratio = 4.4|text at 4.4:1
 a11y_contrast|1|.dock.targets[1].ratio = 2.9|a glyph at 2.9:1
+a11y_contrast|1|.checkBoxDialogAccents.yellow.targets[1].ratio = 2.9|a checked box's check at 2.9:1 on yellow
 a11y_contrast|2|.bar.targets[3].ratio = 2.9|an inactive workspace dot at 2.9:1, under 3:1 and dark-style's 4.24:1
 a11y_contrast|1|.bar.targets[3].ratio = 4.2|an inactive workspace dot at 4.2:1, under dark-style's 4.24:1
 a11y_contrast|1|.barUnread.targets[2].ratio = 2.9|the clock's unread dot at 2.9:1
@@ -1716,7 +1722,7 @@ test_modal_dialog() {
     local variant change what passes failures open_gaps
     for variant in light dark; do
         read -r passes failures open_gaps <<<"$(assert_run modal_dialog "$variant")"
-        if ((failures == 0 && open_gaps == 0 && passes == 17)); then
+        if ((failures == 0 && open_gaps == 0 && passes == 20)); then
             ok "modal dialog ($variant): drawn from the tokens it passes all $passes assertions"
         else
             not_ok "modal dialog ($variant): drawn from the tokens it passes (passed/failed/gaps $passes/$failures/$open_gaps): $(grep -m3 '^FAIL' "$T/top-bar.out" | paste -sd'|' -)"
@@ -1738,6 +1744,9 @@ test_modal_dialog() {
 .surfaces.dialog.endSession.box.width = 384|upstream's 24em end-session dialog
 .surfaces.dialog.endSession.contentSpacing = 18|the plain dialog gap in the end-session dialog
 .surfaces.dialog.endSession.title.tracking = 0|an untracked end-session title
+.surfaces.dialog.checkBox.unchecked.hover.borderColor = "#00000033"|stock's darker ring on hover
+.surfaces.dialog.checkBox.checked.background = "#3584e4ff"|the raw accent under a checked box's white check
+.surfaces.dialog.checkBox.checked.borderColor = "#3584e4ff"|a ring left on a checked box
 .surfaces.dialog.endSession.description.font.features = null|a countdown in proportional figures
 .surfaces.dialog.endSession.buttons[2].background = "#ebebedff"|a plain Power Off button
 .surfaces.dialog.endSession.buttons[2].hover.background = "#c01c28ff"|a Power Off button without hover feedback
@@ -1763,6 +1772,17 @@ del(.surfaces.dialog.endSession.buttons[1])|stock's row, without Restart
 .surfaces.dialog.updateCard.ready.toggle.focusable = true|a ready-for-reboot switch that takes focus
 .surfaces.dialog.updateCard.ready.toggle.a11ySensitive = true|a ready-for-reboot switch announced as available
 CHANGES
+    local ring
+    for variant in light:000000 dark:ffffff; do
+        ring=${variant#*:}
+        variant=${variant%:*}
+        read -r passes failures open_gaps <<<"$(assert_run modal_dialog "$variant" ".surfaces.dialog.checkBox.unchecked.borderColor = \"#${ring}26\"")"
+        if ((failures == 2)); then
+            ok "modal dialog ($variant): stock's ring, #$ring at .15, fails its token and 3:1"
+        else
+            not_ok "modal dialog ($variant): stock's ring, #$ring at .15, fails its token and 3:1 (passed/failed/gaps $passes/$failures/$open_gaps)"
+        fi
+    done
 }
 
 test_date_menu() {
