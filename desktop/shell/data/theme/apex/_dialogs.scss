@@ -203,6 +203,9 @@ $_end_session_share: $_end_session_row /
     .prompt-dialog-info-label { @include apex-polkit-message; color: $apex_fg_dim; }
   }
 
+  // Upstream holds the row with its null label while nothing shows, so it takes the row's height too.
+  .prompt-dialog-null-label { @include apex-polkit-message; }
+
   // A wrong password takes the hint's row: no glyph, the error colour, and the error ring on the field.
   .prompt-dialog-error-label {
     @include apex-polkit-message;
