@@ -138,6 +138,9 @@ done
 check_false "next-point: reopen of no Containerfile dies" "$APEX_ROOT/.github/scripts/next-point.sh" reopen "$TMP/none"
 check "next-point.yml: dispatch and schedule only, no lane cache" "" \
     "$(grep -nE 'pull_request|push:|actions/cache|APEX_LANE_CACHE' "$APEX_ROOT/.github/workflows/next-point.yml" | grep -vE '^[0-9]+: *#')"
+check "next-point.yml: the report waits on and prints every job's result" "1 1" \
+    "$(grep -c 'needs: \[lane, g2, signoff, apps, libadwaita, ptyxis\]' "$APEX_ROOT/.github/workflows/next-point.yml") \
+$(grep -cE 'app (libadwaita|ptyxis)\)' "$APEX_ROOT/.github/workflows/next-point.yml")"
 check "next-point.sh: run by next-point.yml alone" ".github/workflows/next-point.yml" \
     "$(cd "$APEX_ROOT" && grep -l 'next-point.sh' .github/workflows/*.yml | paste -sd ' ')"
 check "the stable lane names no updates-testing: lane.sh and image-args.sh fetch as before" "" \
