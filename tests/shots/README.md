@@ -622,7 +622,11 @@ popovers' `$apex_panel_blur` and `$apex_panel_saturation`. The switchers are `sw
 shown as its keybinding shows it with no modifier held: an Alt+Tab list in a stand-in of
 `switcherPopup.js`'s class, the held Super+Alt+Space switcher with two sources, Ctrl+Alt+Tab over
 the bar's focus group, and Super+P's (through `SwitcherPopup`'s own `show()`, as one monitor
-cannot switch). `glass/derived.js` matches them by class, so each registers under its own name.
+cannot switch), each list over board 15's checker from its top-left corner (a corner-sized one
+lets the blur reach the screen's centre, which a screenshot draws up to 4/255 apart). Alt+Tab's
+corner, captured, matches the screen pixel for pixel; the other three to 1/255 a channel, as the
+popovers' do (Super+P's rounds one pixel). `glass/derived.js` matches them by class, so each
+registers under its own name.
 
 Every glass surface conforms, checked from the registry rather than a list: `glass.js` records
 every surface the glass registry gets during the case (the shell's, not its own `emptyTest` and

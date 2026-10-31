@@ -2996,8 +2996,9 @@ glass_manager() {
         'every glass rounds its blur at its border radius, all four corners, over the box St paints its background in: the bar, the dock, Quick Settings, the calendar, a banner, the OSD, each switcher'"'"'s list and the tile preview; the screenshot panel'"'"'s corners too'
     "${expect_glass[@]}" '[.manager.derived.switchers[].corner] | length == 4 and all(.radius > 0 and .outside > 0 and .inside > 0 and .blurredOutside == 0 and .blurredInside == .inside)' \
         'over a checker, each switcher list'"'"'s bottom-left corner blurs no pixel past its border'"'"'s arc and every pixel inside it (board 15)'
-    "${expect_glass[@]}" '[.manager.derived.switchers[].corner.capturedDiffering] | length == 4 and all(. == 0)' \
-        'and a screenshot shows each of those corners as the screen does, pixel for pixel: off stage, the blur maps the stage through the capture'"'"'s viewport'
+    "${expect_glass[@]}" '.manager.derived.switchers | (.switcher.corner.capturedDiffering == 0)
+        and ([.["input-source-switcher", "ctrl-alt-tab-switcher", "monitor-switcher"].corner.capturedMax] | length == 3 and all(type == "number" and . <= 1))' \
+        'and a screenshot shows those corners as the screen does: Alt+Tab'"'"'s pixel for pixel (off stage, the blur maps the stage through the capture'"'"'s viewport), the other three to 1/255 a channel, as the popovers'"'"''
     local conformance
     conformance=$(report_of "$log" APEXG2-GLASS | jq -r '.manager.conformance | "\(.registered | length) registered: \(.registered | join(", "))"' 2>/dev/null)
     "${expect_glass[@]}" '.manager.conformance | (.registered | length) > 0 and .unchecked == [] and (.registered | all(. as $n | $n | IN(["panel", "dock", "quick-settings", "calendar", "banner", "osd", "spotlight", "toast", "switcher", "input-source-switcher",

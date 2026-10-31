@@ -512,12 +512,22 @@ async function switchersState() {
     const state = {};
     for (const [name, build] of Object.entries(SWITCHERS)) {
         const popup = showSwitcher(build);
+        let checker = null;
         try {
             // eslint-disable-next-line no-await-in-loop
             await Scripting.waitLeisure();
             // eslint-disable-next-line no-await-in-loop
-            state[name] = popup ? await conformanceOf(await laidOut(popup._switcherList)) : null;
+            const list = popup ? await laidOut(popup._switcherList) : null;
+            // Board 15's checker under each list, as the stand-in had: a corner-sized one lets the blur
+            // reach the screen's centre, which a screenshot draws up to 4/255 apart.
+            if (list) {
+                const [x, y] = list.get_transformed_position().map(Math.round);
+                checker = buildChecker({x, y});
+            }
+            // eslint-disable-next-line no-await-in-loop
+            state[name] = list ? await conformanceOf(list) : null;
         } finally {
+            checker?.destroy();
             popup?.destroy();
             // eslint-disable-next-line no-await-in-loop
             await Scripting.waitLeisure();
