@@ -3716,6 +3716,12 @@ test_fixtures() {
     kill "${pids[@]}" 2>/dev/null || true
 }
 
+# exit_of ERR CMD...: CMD's exit status, its stderr in ERR, with no core and no shell's crash note.
+exit_of() {
+    # shellcheck disable=SC2016 # expanded by the inner bash
+    bash -c 'ulimit -c 0; "$@" 2>"$0"; echo $?' "$@" 2>/dev/null
+}
+
 # crash.c must not change how a shell dies or what a healthy one prints: the same exit status,
 # its frames in the log, from a fault, an abort, a stack overflow and gjs's chained handler.
 test_crash_c() {
@@ -3744,19 +3750,17 @@ int main(int argc, char **argv) {
 C
     gcc -O0 -o "$T/crashes" "$T/crashes.c"
     for how in fault abort overflow; do
-        "$T/crashes" "$how" 2>/dev/null
-        want=$?
-        LD_PRELOAD=$T/crash.so "$T/crashes" "$how" 2>"$T/crash.$how"
-        got=$?
+        want=$(exit_of /dev/null "$T/crashes" "$how")
+        got=$(exit_of "$T/crash.$how" env LD_PRELOAD="$T/crash.so" "$T/crashes" "$how")
         expect_eq "crash.c: a crash by $how exits as it does without it" "$want" "$got"
         expect_eq "crash.c: a crash by $how prints its frames" 2 \
             "$(grep -c '^APEXG2-CRASH crashes\[[0-9]*\] SIG[A-Z]*$\|^APEXG2-CRASH end$' "$T/crash.$how")"
     done
     # SpiderMonkey's handler runs before crash.c's and calls it: the signal must still kill.
     # shellcheck disable=SC2016 # a gjs program
-    LD_PRELOAD=$T/crash.so timeout 20 gjs -c 'const {GLib, Gio} = imports.gi;
-        GLib.spawn_command_line_sync(`kill -SEGV ${new Gio.Credentials().get_unix_pid()}`);' 2>"$T/crash.gjs"
-    expect_eq "crash.c: gjs killed by SIGSEGV dies with 139, not hung" 139 "$?"
+    got=$(exit_of "$T/crash.gjs" env LD_PRELOAD="$T/crash.so" timeout 20 gjs -c 'const {GLib, Gio} = imports.gi;
+        GLib.spawn_command_line_sync(`kill -SEGV ${new Gio.Credentials().get_unix_pid()}`);')
+    expect_eq "crash.c: gjs killed by SIGSEGV dies with 139, not hung" 139 "$got"
     expect_eq "crash.c: gjs's crash prints its frames" 1 "$(grep -c '^APEXG2-CRASH gjs.*\[[0-9]*\] SIGSEGV$' "$T/crash.gjs")"
     # shellcheck disable=SC2016 # a gjs program
     plain=$(gjs -c 'print(imports.gi.GLib.get_user_name()); printerr("to stderr")' 2>&1)
