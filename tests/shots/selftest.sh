@@ -3083,6 +3083,23 @@ test_parental_controls_ready() {
     expect_eq "parental controls: one in the late first start fails too" "0/1" "$passes/$failures"
 }
 
+test_settings_portal_served() {
+    local run=$T/portal-run missing passes failures
+    missing='(/usr/libexec/xdg-desktop-portal:17133): xdg-desktop-portal-WARNING **: 13:14:42.241: Not providing Settings portal: No working backend'
+    mkdir -p "$run"
+    echo 'APEXG2 {"probe": true}' >"$run/signoff.log"
+    read -r passes failures <<<"$(assertion_counts settings_portal_served signoff "$run/signoff.log")"
+    expect_eq "settings portal: a log without the warning passes" "1/0" "$passes/$failures"
+    echo "$missing" >>"$run/signoff.log"
+    read -r passes failures <<<"$(assertion_counts settings_portal_served signoff "$run/signoff.log")"
+    expect_eq "settings portal: a portal with no Settings backend fails, naming it" "0/1 1" \
+        "$passes/$failures $(grep -c 'serves no Settings interface: Not providing Settings portal: No working backend$' "$T/assertions.out")"
+    echo 'APEXG2 {"probe": true}' >"$run/signoff.log"
+    echo "$missing" >"$run/signoff.late.log"
+    read -r passes failures <<<"$(assertion_counts settings_portal_served signoff "$run/signoff.log")"
+    expect_eq "settings portal: one in the late first start fails too" "0/1" "$passes/$failures"
+}
+
 test_no_st_css_warning() {
     local run=$T/st-css-run warning passes failures
     warning="(gnome-shell:42): St-WARNING **: 09:41:00.000: Ignoring length property that isn't a number at line 4217, col 16"
@@ -4095,6 +4112,7 @@ test_part_ran
 test_no_nan_allocation
 test_no_st_css_warning
 test_parental_controls_ready
+test_settings_portal_served
 test_no_disposed_apex
 test_no_binding_overwritten
 test_no_spurious_allocation

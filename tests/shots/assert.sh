@@ -167,6 +167,18 @@ parental_controls_ready() {
     fi
 }
 
+# GTK apps read the session's fonts and scaling through the portal's Settings interface; a portal started
+# with no display has no backend for it, and the sign-off part's windows then open at other sizes.
+settings_portal_served() {
+    local label=$1 log=$2 found
+    found=$(grep -ahm1 'Not providing Settings portal' "$log" "${log%.log}.late.log" 2>/dev/null | head -n 1)
+    if [[ -z $found ]]; then
+        pass "$label: xdg-desktop-portal serves the Settings interface, or never started"
+    else
+        fail "$label: xdg-desktop-portal serves no Settings interface: ${found#*WARNING \*\*: [0-9:.]* }"
+    fi
+}
+
 # St drops a declaration it cannot parse with a warning naming the sheet's line, and keeps the cascade's earlier value.
 no_st_css_warning() {
     local label=$1 log=$2 found
@@ -2329,6 +2341,7 @@ direct_cases() {
         no_nan_allocation "$c" "$f"
         no_st_css_warning "$c" "$f"
         parental_controls_ready "$c" "$f"
+        settings_portal_served "$c" "$f"
         no_disposed_apex "$c" "$f"
         no_binding_overwritten "$c" "$f"
         no_spurious_allocation "$c" "$f"
@@ -2776,6 +2789,7 @@ patched_assertions() {
         [[ -e $run/$c.log ]] && no_nan_allocation "$c" "$run/$c.log"
         [[ -e $run/$c.log ]] && no_st_css_warning "$c" "$run/$c.log"
         [[ -e $run/$c.log ]] && parental_controls_ready "$c" "$run/$c.log"
+        [[ -e $run/$c.log ]] && settings_portal_served "$c" "$run/$c.log"
         [[ -e $run/$c.log ]] && no_disposed_apex "$c" "$run/$c.log"
         [[ -e $run/$c.log ]] && no_binding_overwritten "$c" "$run/$c.log"
         [[ -e $run/$c.log ]] && no_spurious_allocation "$c" "$run/$c.log"

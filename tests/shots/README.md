@@ -115,9 +115,7 @@ greeter and lock screen run without `G2_ACCOUNTS`, on the real accounts-daemon's
 | RealtimeKit | rtkit-daemon's defaults (`MaxRealtimePriority` 20, `MinNiceLevel` -15, `RTTimeUSecMax` 200000) | nothing: xdg-desktop-portal reads them as it starts. Without it, the system bus activates the image's rtkit-daemon, which cannot start in a container and can stall the portal for the bus's 25 s timeout |
 
 `fixtures-PART.txt` holds what the bus reports afterwards, and `assert.sh` checks it for
-each container. Each case's own session bus then starts xdg-desktop-portal before the shell, as a
-session has it up, and the case stops (exit 97, `G2-PORTAL: ... owned no name`) if the portal owns no
-name within 20 s. `direct.sh` builds `clock.c` and preloads it into each shell with
+each container. `direct.sh` builds `clock.c` and preloads it into each shell with
 `G2_CLOCK_EPOCH` at 2026-09-28 09:41:00 UTC: reads of the wall clock return that time,
 while timers and frames keep the real clocks. It stops before the first case when the
 clock does not hold. libfaketime cannot do this: it converts every absolute timer as if
