@@ -39,8 +39,7 @@ $_item_bottom: $apex_dock_dot_gap + $apex_dock_dot_size;
       .overview-icon { background-color: transparent; box-shadow: none; }
     }
 
-    // The icon fills its box, over an inset ring: this one sits in the gap between the items. Its
-    // radius is the grid's focused tile scaled to the icon, the nearest token to 11-12 px.
+    // The icon covers an inset ring: this one fills the gap between items, rounded as the grid's tile.
     &:focus .overview-icon {
       border-radius: $apex_radius_bar_pill;
       box-shadow: 0 0 0 $apex_entry_focus_ring $apex_dock_fg !important;
