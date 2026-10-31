@@ -1193,7 +1193,7 @@ test_signoff_banners() {
     rm -rf "$dir" && cp -r "$1" "$dir"
     sed -i '/^APEXG2-SESSION /s/"icon-theme":"Apex"}/"icon-theme":"Adwaita"}/' "$dir/g2/dark-style.log"
     if ! "$HERE/signoff.sh" --collect "$dir/g2" "$dir/shots" "$dir/out" >"$T/signoff.out" 2>&1 &&
-        grep -q '^signoff.sh: session defaults: 23 passed, 1 failed$' "$T/signoff.out" &&
+        grep -q '^signoff.sh: session defaults: 25 passed, 1 failed$' "$T/signoff.out" &&
         grep -q 'dark-style: the session reads .*(icon-theme is "Adwaita", not "Apex")' "$T/signoff.out" &&
         grep -q '1 session default check(s) failed' "$T/signoff.out"; then
         ok "signoff: a session default that is not apex-desktop's fails its own check line, naming the key"
@@ -1222,13 +1222,13 @@ test_shell_icons() {
         read -r passes failures <<<"$(assertion_counts shell_icons shell "$dir")"
         expect_eq "shell icons: $what" "$want" "$passes/$failures"
     done <<'CHANGES'
-10/0|.|an Apex icon at every step of the lock, the greeter and polkit's dialog
-9/1|s/"installed":true/"installed":false/|a lock with no Apex theme installed
-9/1|s/"icons":\[.*\]}}/"icons":[]}}/|a lock that drew no icon
-9/1|s#/usr/share/icons/Apex/symbolic/view-reveal#/usr/share/icons/Adwaita/symbolic/actions/view-reveal#|an Adwaita glyph on the lock
-9/1|s#"file":"[^"]*"#"file":null#|a lock icon that resolves nowhere
-10/0|s#"icon":"view-reveal-symbolic","file":"[^"]*"#"icon":"screenshooter-symbolic","file":"/org/gnome/shell/icons/scalable/actions/screenshooter-symbolic.svg"#|a resource icon on SHELL_RESOURCE_ICONS
-9/1|d|a step that reported nothing
+12/0|.|an Apex icon at every step of the lock, the greeter and polkit's dialog
+11/1|s/"installed":true/"installed":false/|a lock with no Apex theme installed
+11/1|s/"icons":\[.*\]}}/"icons":[]}}/|a lock that drew no icon
+11/1|s#/usr/share/icons/Apex/symbolic/view-reveal#/usr/share/icons/Adwaita/symbolic/actions/view-reveal#|an Adwaita glyph on the lock
+11/1|s#"file":"[^"]*"#"file":null#|a lock icon that resolves nowhere
+12/0|s#"icon":"view-reveal-symbolic","file":"[^"]*"#"icon":"screenshooter-symbolic","file":"/org/gnome/shell/icons/scalable/actions/screenshooter-symbolic.svg"#|a resource icon on SHELL_RESOURCE_ICONS
+11/1|d|a step that reported nothing
 CHANGES
     shell_icon_facts "$dir" && sed -i 's#/usr/share/icons/Apex/symbolic/view-reveal#/usr/share/icons/Adwaita/symbolic/actions/view-reveal#' "$dir/polkit-dark.log"
     assertion_counts shell_icons shell "$dir" >/dev/null
