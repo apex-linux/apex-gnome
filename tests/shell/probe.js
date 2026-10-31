@@ -12,6 +12,7 @@ import St from 'gi://St';
 
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import * as ModalDialog from 'resource:///org/gnome/shell/ui/modalDialog.js';
+import * as Overview from 'resource:///org/gnome/shell/ui/overview.js';
 import * as Scripting from 'resource:///org/gnome/shell/ui/scripting.js';
 
 import {iconsOf, shellIconTheme} from '../shots/session-defaults.js';
@@ -337,6 +338,52 @@ async function shootLock() {
     fact('end', {locked: Main.screenShield.locked});
 }
 
+// Every actor under ROOT that a translation or a scale moves, by class.
+function moved(root) {
+    const found = [];
+    const walk = actor => {
+        if (actor !== root && (actor.translation_x || actor.translation_y || actor.scale_x !== 1 || actor.scale_y !== 1))
+            found.push(`${actor.constructor.name}.${actor.style_class ?? ''}`);
+        actor.get_children().forEach(walk);
+    };
+    if (root)
+        walk(root);
+    return [...new Set(found)];
+}
+
+// One sample per frame the stage paints, in ms from the call, until the returned stop().
+function sampleFrames(sample) {
+    const frames = [];
+    const start = GLib.get_monotonic_time();
+    const id = global.stage.connect('after-paint', () =>
+        frames.push({t: Math.round((GLib.get_monotonic_time() - start) / 1000), ...sample()}));
+    return () => {
+        global.stage.disconnect(id);
+        return frames;
+    };
+}
+
+function motionSettings() {
+    return {reduced: St.Settings.get().reducedMotion === St.ReducedMotion.REDUCE, duration: Overview.ANIMATION_TIME};
+}
+
+// Reduce Motion: upstream fades the lock's curtain instead of sliding it, and nothing under it moves.
+async function shootMotion() {
+    await Scripting.sleep(SETTLE_MS);
+    fact('motion', motionSettings());
+    const shield = Main.screenShield;
+    const curtain = () => ({ty: shield._lockDialogGroup.translation_y, opacity: shield._lockDialogGroup.opacity,
+        moved: moved(shield._lockDialogGroup)});
+    let stop = sampleFrames(curtain);
+    shield.lock(true);
+    await Scripting.sleep(STEP_MS);
+    fact('opening', stop());
+    stop = sampleFrames(curtain);
+    shield.deactivate(true);
+    await Scripting.sleep(STEP_MS);
+    fact('closing', stop());
+}
+
 // What polkit-agent-helper-1 would send, without the helper: PAM never runs, so nothing the
 // dialog does can authorise. Its answers are only counted.
 function stubSession(sessions, info) {
@@ -532,8 +579,11 @@ async function shootGreeter() {
     fact('list', describeGreeter(dialog));
     iconFact('list', [dialog, Main.panel]);
     await capture('list');
+    const stop = GLib.getenv('APEX_MOTION') ? sampleFrames(() => ({moved: moved(dialog)})) : null;
     dialog._userList.getItemFromUserName(GLib.getenv('APEX_USER')).emit('activate');
     await Scripting.sleep(SETTLE_MS);
+    if (stop)
+        fact('motion', {...motionSettings(), frames: stop()});
     fact('prompt', describeGreeter(dialog));
     iconFact('prompt', [dialog, Main.panel]);
     await capture('prompt');
@@ -803,6 +853,8 @@ export async function run() {
             await shootPolkit();
         else if (['lock', 'suspend'].includes(GLib.getenv('APEX_POLKIT')))
             await shootPolkitLocked(GLib.getenv('APEX_POLKIT') === 'suspend');
+        else if (GLib.getenv('APEX_MOTION') === 'lock')
+            await shootMotion();
         else if (GLib.getenv('APEX_DATE_MENU') === '1')
             await shootDateMenu();
         else if (GLib.getenv('APEX_END_SESSION') === '1')

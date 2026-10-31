@@ -23,8 +23,9 @@ case locks, answers wrongly (lock-fingerprint fails a scan), blanks and wakes th
 but lock-wake-key: after Esc and a blank, a Return that arrives after the wake, and
 lock-wake-key-blank the same, locked while blank; lock-idle sends gnome-session's
 IDLE at lock, as every real lock does, then blanks and wakes with no key; lock-suspend
-has logind's mock prepare for sleep and resume; each greeter case (--mode=gdm) shows the user list, then the
-prompt. Each polkit case opens the shell's own authentication dialog through the polkit
+has logind's mock prepare for sleep and resume; lock-motion and lock-reduce-motion record every frame of
+the lock's opening and closing, without and with Reduce Motion; each greeter case (--mode=gdm) shows the user list,
+then the prompt, and greeter-reduce-motion records each frame between the two. Each polkit case opens the shell's own authentication dialog through the polkit
 component's _onInitiate(), with a stubbed PolkitAgent.Session that PAM never answers, for
 captures and style checks only (pkexec end to end is G4's); polkit-lock and polkit-suspend
 lock the screen, or sleep and resume, under the open dialog, type at the lock, then end the lock,
@@ -242,6 +243,10 @@ shoot lock-wake-key "$USER_NAME" user default 'Password:' -- APEX_WAKE_KEY=clock
 shoot lock-wake-key-blank "$USER_NAME" user default 'Password:' -- APEX_WAKE_KEY=locked-blank || status=1
 shoot lock-idle "$USER_NAME" user default 'Password:' -- APEX_IDLE=1 || status=1
 shoot lock-suspend "$USER_NAME" user default 'Password:' -- APEX_SUSPEND=1 || status=1
+reduce_motion="org.gnome.desktop.a11y.interface reduced-motion 'reduce'"
+shoot lock-motion "$USER_NAME" user default 'Password:' -- APEX_MOTION=lock || status=1
+shoot lock-reduce-motion "$USER_NAME" user default 'Password:' "$reduce_motion" -- APEX_MOTION=lock || status=1
+shoot greeter-reduce-motion "$GREETER_USER" gdm default 'Password:' "$reduce_motion" -- GDM_GREETER_TEST=1 APEX_MOTION=greeter || status=1
 notifications_off="io.github.apex_linux.Apex.Desktop disabled-features ['notifications']"
 hint_shown="io.github.apex_linux.Apex.Desktop search-hint-shown true"
 shoot date-menu "$USER_NAME" user default 'Password:' "$hint_shown" -- APEX_DATE_MENU=1 || status=1

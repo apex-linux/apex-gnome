@@ -667,6 +667,54 @@ def check_polkit(shots, case, want):
         check(f"{case}: no fingerprint line when PAM sends none", info["text"] is None and info["glyph"] is None, json.dumps(info))
 
 
+def still(frames):
+    """No frame slides the curtain or moves an actor under it."""
+    return all(f.get("ty", 0) == 0 and not f["moved"] for f in frames)
+
+
+def check_motion(shots, case, reduced):
+    """Board 20 opening and closing, a frame at a time: with Reduce Motion the curtain fades and nothing moves."""
+    log = read(shots, f"{case}.log")
+    f = facts(log)
+    check(f"{case}: the lock's frames are reported", all(k in f for k in ("motion", "opening", "closing")))
+    check(f"{case}: no JS error", "JS ERROR" not in log and "APEXLOCK-ERROR" not in log)
+    if not all(k in f for k in ("motion", "opening", "closing")):
+        return
+    settings, opening, closing = f["motion"], f["opening"], f["closing"]
+    check(f"{case}: Reduce Motion is {'on' if reduced else 'off'}", settings["reduced"] is reduced, json.dumps(settings))
+    check(f"{case}: frames painted while it opens and closes", len(opening) >= 2 and len(closing) >= 2,
+          json.dumps([len(opening), len(closing)]))
+    if not reduced:
+        check(f"{case}: without Reduce Motion the curtain slides, so the sampler sees motion",
+              not still(opening) and not still(closing), json.dumps([opening[:3], closing[:3]]))
+        return
+    duration = settings["duration"]
+    check(f"{case}: opening, the curtain never slides and nothing under it moves", still(opening), json.dumps(opening))
+    check(f"{case}: closing, the curtain never slides and nothing under it moves", still(closing), json.dumps(closing))
+    fading = [g for g in opening if g["opacity"] < 255]
+    shown = next((g for g in opening if g["opacity"] == 255), None)
+    gaps = [b["t"] - a["t"] for a, b in itertools.pairwise(opening)]
+    frame = max(gaps) if gaps else 0
+    check(f"{case}: the curtain fades in, reaching full opacity within upstream's {duration} ms and one frame",
+          bool(fading) and shown is not None and shown["t"] - fading[0]["t"] <= duration + frame,
+          json.dumps({"fading": fading[:1], "shown": shown, "frame": frame}))
+    check(f"{case}: closing, the curtain fades out", any(g["opacity"] < 255 for g in closing), json.dumps(closing))
+
+
+def check_greeter_motion(shots, case):
+    """Board 12 from the list to the prompt with Reduce Motion: nothing in the dialog moves."""
+    log = read(shots, f"{case}.log")
+    f = facts(log)
+    check(f"{case}: the greeter's frames are reported", "motion" in f)
+    check(f"{case}: no JS error", "JS ERROR" not in log and "APEXLOCK-ERROR" not in log)
+    if "motion" not in f:
+        return
+    m = f["motion"]
+    check(f"{case}: Reduce Motion is on", m["reduced"] is True, json.dumps({k: m[k] for k in ("reduced", "duration")}))
+    check(f"{case}: frames painted between the list and the prompt", len(m["frames"]) >= 2, json.dumps(len(m["frames"])))
+    check(f"{case}: from the list to the prompt, nothing in the dialog moves", still(m["frames"]), json.dumps(m["frames"]))
+
+
 DND_LABEL = "Do Not Disturb"
 ICON_SIZE = 32
 MESSAGE_GAP = 8  # $apex_message_gap
@@ -785,6 +833,9 @@ def main():
     check_fingerprint_suspend(shots, "lock-fingerprint-suspend")
     for case in GREETER_CASES:
         check_greeter(shots, case)
+    check_motion(shots, "lock-motion", reduced=False)
+    check_motion(shots, "lock-reduce-motion", reduced=True)
+    check_greeter_motion(shots, "greeter-reduce-motion")
     for case, want in POLKIT_CASES.items():
         check_polkit(shots, case, want)
     for case, (apex, sleeps) in POLKIT_LOCKED_CASES.items():
