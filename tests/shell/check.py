@@ -667,52 +667,64 @@ def check_polkit(shots, case, want):
         check(f"{case}: no fingerprint line when PAM sends none", info["text"] is None and info["glyph"] is None, json.dumps(info))
 
 
-def still(frames):
-    """No frame slides the curtain or moves an actor under it."""
-    return all(f.get("ty", 0) == 0 and not f["moved"] for f in frames)
+MOVES = ("translation-x", "translation-y", "scale-x", "scale-y")
+
+
+def moving(samples):
+    """Every translation or scale transition the samples caught, once each."""
+    found = {(t["actor"], t["property"], t["from"], t["to"]) for m in samples for t in m["transitions"] if t["property"] in MOVES}
+    return sorted(found)
+
+
+def fades(samples, start, end):
+    """The curtain's own opacity transitions, from START to END."""
+    return [t for m in samples for t in m["transitions"]
+            if t["actor"] == "root" and t["property"] == "opacity" and t["from"] == start and t["to"] == end]
 
 
 def check_motion(shots, case, reduced):
-    """Board 20 opening and closing, a frame at a time: with Reduce Motion the curtain fades and nothing moves."""
+    """Board 20 opening and closing, from the transitions it runs: with Reduce Motion the curtain fades and nothing moves."""
     log = read(shots, f"{case}.log")
     f = facts(log)
-    check(f"{case}: the lock's frames are reported", all(k in f for k in ("motion", "opening", "closing")))
+    check(f"{case}: the lock's transitions are reported", all(k in f for k in ("motion", "opening", "closing")))
     check(f"{case}: no JS error", "JS ERROR" not in log and "APEXLOCK-ERROR" not in log)
     if not all(k in f for k in ("motion", "opening", "closing")):
         return
     settings, opening, closing = f["motion"], f["opening"], f["closing"]
-    check(f"{case}: Reduce Motion is {'on' if reduced else 'off'}", settings["reduced"] is reduced, json.dumps(settings))
-    check(f"{case}: frames painted while it opens and closes", len(opening) >= 2 and len(closing) >= 2,
-          json.dumps([len(opening), len(closing)]))
+    check(f"{case}: Reduce Motion is {'on' if reduced else 'off'}, animations on", settings["reduced"] is reduced and settings["animations"],
+          json.dumps(settings))
     if not reduced:
-        check(f"{case}: without Reduce Motion the curtain slides, so the sampler sees motion",
-              not still(opening) and not still(closing), json.dumps([opening[:3], closing[:3]]))
+        check(f"{case}: without Reduce Motion the curtain slides in and out, so the sampler sees motion",
+              any(m[:2] == ("root", "translation-y") for m in moving(opening))
+              and any(m[:2] == ("root", "translation-y") for m in moving(closing)), json.dumps([moving(opening), moving(closing)]))
         return
     duration = settings["duration"]
-    check(f"{case}: opening, the curtain never slides and nothing under it moves", still(opening), json.dumps(opening))
-    check(f"{case}: closing, the curtain never slides and nothing under it moves", still(closing), json.dumps(closing))
-    fading = [g for g in opening if g["opacity"] < 255]
-    shown = next((g for g in opening if g["opacity"] == 255), None)
-    gaps = [b["t"] - a["t"] for a, b in itertools.pairwise(opening)]
-    frame = max(gaps) if gaps else 0
-    check(f"{case}: the curtain fades in, reaching full opacity within upstream's {duration} ms and one frame",
-          bool(fading) and shown is not None and shown["t"] - fading[0]["t"] <= duration + frame,
-          json.dumps({"fading": fading[:1], "shown": shown, "frame": frame}))
-    check(f"{case}: closing, the curtain fades out", any(g["opacity"] < 255 for g in closing), json.dumps(closing))
+    check(f"{case}: opening, nothing slides or scales, the curtain included", not moving(opening), json.dumps(moving(opening)))
+    check(f"{case}: closing, nothing slides or scales, the curtain included", not moving(closing), json.dumps(moving(closing)))
+    fade_in = fades(opening, 0, 255)
+    check(f"{case}: the curtain fades in over upstream's {duration} ms", bool(fade_in) and all(t["duration"] == duration for t in fade_in),
+          json.dumps(fade_in or opening))
+    check(f"{case}: and is fully opaque, never slid, once the fade ends",
+          opening[-1]["opacity"] == 255 and opening[-1]["ty"] == 0 and not opening[-1]["transitions"], json.dumps(opening[-1]))
+    fade_out = fades(closing, 255, 0)
+    check(f"{case}: closing, the curtain fades out over upstream's {duration} ms",
+          bool(fade_out) and all(t["duration"] == duration for t in fade_out), json.dumps(fade_out or closing))
 
 
 def check_greeter_motion(shots, case):
-    """Board 12 from the list to the prompt with Reduce Motion: nothing in the dialog moves."""
+    """Board 12 from the list to the prompt with Reduce Motion: nothing in the dialog slides or scales."""
     log = read(shots, f"{case}.log")
     f = facts(log)
-    check(f"{case}: the greeter's frames are reported", "motion" in f)
+    check(f"{case}: the greeter's transitions are reported", "motion" in f)
     check(f"{case}: no JS error", "JS ERROR" not in log and "APEXLOCK-ERROR" not in log)
     if "motion" not in f:
         return
     m = f["motion"]
-    check(f"{case}: Reduce Motion is on", m["reduced"] is True, json.dumps({k: m[k] for k in ("reduced", "duration")}))
-    check(f"{case}: frames painted between the list and the prompt", len(m["frames"]) >= 2, json.dumps(len(m["frames"])))
-    check(f"{case}: from the list to the prompt, nothing in the dialog moves", still(m["frames"]), json.dumps(m["frames"]))
+    check(f"{case}: Reduce Motion is on, animations on", m["reduced"] is True and m["animations"],
+          json.dumps({k: m[k] for k in ("reduced", "duration", "uninhibited", "animations")}))
+    faded = sorted({t["actor"] for s in m["samples"] for t in s["transitions"] if t["property"] == "opacity"})
+    check(f"{case}: the sampler catches the prompt's own fades", any("login-dialog-prompt-layout" in a for a in faded), json.dumps(faded))
+    check(f"{case}: from the list to the prompt, nothing slides or scales", not moving(m["samples"]), json.dumps(moving(m["samples"])))
 
 
 DND_LABEL = "Do Not Disturb"

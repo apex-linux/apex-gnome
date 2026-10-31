@@ -243,10 +243,13 @@ shoot lock-wake-key "$USER_NAME" user default 'Password:' -- APEX_WAKE_KEY=clock
 shoot lock-wake-key-blank "$USER_NAME" user default 'Password:' -- APEX_WAKE_KEY=locked-blank || status=1
 shoot lock-idle "$USER_NAME" user default 'Password:' -- APEX_IDLE=1 || status=1
 shoot lock-suspend "$USER_NAME" user default 'Password:' -- APEX_SUSPEND=1 || status=1
+# The captures turn animations off; motion is only seen with them on, as a real session has them.
+animations="org.gnome.desktop.interface enable-animations true"
 reduce_motion="org.gnome.desktop.a11y.interface reduced-motion 'reduce'"
-shoot lock-motion "$USER_NAME" user default 'Password:' -- APEX_MOTION=lock || status=1
-shoot lock-reduce-motion "$USER_NAME" user default 'Password:' "$reduce_motion" -- APEX_MOTION=lock || status=1
-shoot greeter-reduce-motion "$GREETER_USER" gdm default 'Password:' "$reduce_motion" -- GDM_GREETER_TEST=1 APEX_MOTION=greeter || status=1
+shoot lock-motion "$USER_NAME" user default 'Password:' "$animations" -- APEX_MOTION=lock || status=1
+shoot lock-reduce-motion "$USER_NAME" user default 'Password:' "$animations" "$reduce_motion" -- APEX_MOTION=lock || status=1
+shoot greeter-reduce-motion "$GREETER_USER" gdm default 'Password:' "$animations" "$reduce_motion" -- GDM_GREETER_TEST=1 \
+    APEX_MOTION=greeter || status=1
 notifications_off="io.github.apex_linux.Apex.Desktop disabled-features ['notifications']"
 hint_shown="io.github.apex_linux.Apex.Desktop search-hint-shown true"
 shoot date-menu "$USER_NAME" user default 'Password:' "$hint_shown" -- APEX_DATE_MENU=1 || status=1

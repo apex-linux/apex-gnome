@@ -338,33 +338,54 @@ async function shootLock() {
     fact('end', {locked: Main.screenShield.locked});
 }
 
-// Every actor under ROOT that a translation or a scale moves, by class.
-function moved(root) {
+const MOTION_PROPERTIES = ['translation-x', 'translation-y', 'scale-x', 'scale-y', 'opacity'];
+const MOTION_POLL_MS = 10;
+
+// The transitions running on ROOT and every actor under it: what eases, from where to where, for how long.
+function transitionsUnder(root) {
     const found = [];
     const walk = actor => {
-        if (actor !== root && (actor.translation_x || actor.translation_y || actor.scale_x !== 1 || actor.scale_y !== 1))
-            found.push(`${actor.constructor.name}.${actor.style_class ?? ''}`);
+        for (const property of MOTION_PROPERTIES) {
+            const transition = actor.get_transition(property) ?? actor.get_transition(property.replace('-', '_'));
+            const interval = transition?.get_interval?.();
+            if (interval) {
+                found.push({
+                    actor: actor === root ? 'root' : `${actor.constructor.name}.${actor.style_class ?? ''}`, property,
+                    from: interval.peek_initial_value(), to: interval.peek_final_value(), duration: transition.get_duration(),
+                });
+            }
+        }
         actor.get_children().forEach(walk);
     };
     if (root)
         walk(root);
-    return [...new Set(found)];
+    return found;
 }
 
-// One sample per frame the stage paints, in ms from the call, until the returned stop().
-function sampleFrames(sample) {
-    const frames = [];
+// A sample every MOTION_POLL_MS, in ms from the call, until the returned stop(): transitions run whether or not a frame paints.
+function sampleMotion(sample) {
+    const samples = [];
     const start = GLib.get_monotonic_time();
-    const id = global.stage.connect('after-paint', () =>
-        frames.push({t: Math.round((GLib.get_monotonic_time() - start) / 1000), ...sample()}));
+    const id = GLib.timeout_add(GLib.PRIORITY_DEFAULT, MOTION_POLL_MS, () => {
+        samples.push({t: Math.round((GLib.get_monotonic_time() - start) / 1000), ...sample()});
+        return GLib.SOURCE_CONTINUE;
+    });
     return () => {
-        global.stage.disconnect(id);
-        return frames;
+        GLib.source_remove(id);
+        return samples.filter(m => m.transitions.length).concat(samples.slice(-1));
     };
 }
 
+// main.js inhibits animations without hardware-accelerated rendering, as the headless shell has; G2's motion case lifts it too.
 function motionSettings() {
-    return {reduced: St.Settings.get().reducedMotion === St.ReducedMotion.REDUCE, duration: Overview.ANIMATION_TIME};
+    const settings = St.Settings.get();
+    const uninhibited = !settings.enable_animations;
+    if (uninhibited)
+        settings.uninhibit_animations();
+    return {
+        reduced: settings.reducedMotion === St.ReducedMotion.REDUCE, duration: Overview.ANIMATION_TIME,
+        uninhibited, animations: settings.enable_animations,
+    };
 }
 
 // Reduce Motion: upstream fades the lock's curtain instead of sliding it, and nothing under it moves.
@@ -372,13 +393,13 @@ async function shootMotion() {
     await Scripting.sleep(SETTLE_MS);
     fact('motion', motionSettings());
     const shield = Main.screenShield;
-    const curtain = () => ({ty: shield._lockDialogGroup.translation_y, opacity: shield._lockDialogGroup.opacity,
-        moved: moved(shield._lockDialogGroup)});
-    let stop = sampleFrames(curtain);
+    const group = shield._lockDialogGroup;
+    const curtain = () => ({ty: group.translation_y, opacity: group.opacity, transitions: transitionsUnder(group)});
+    let stop = sampleMotion(curtain);
     shield.lock(true);
     await Scripting.sleep(STEP_MS);
     fact('opening', stop());
-    stop = sampleFrames(curtain);
+    stop = sampleMotion(curtain);
     shield.deactivate(true);
     await Scripting.sleep(STEP_MS);
     fact('closing', stop());
@@ -579,11 +600,12 @@ async function shootGreeter() {
     fact('list', describeGreeter(dialog));
     iconFact('list', [dialog, Main.panel]);
     await capture('list');
-    const stop = GLib.getenv('APEX_MOTION') ? sampleFrames(() => ({moved: moved(dialog)})) : null;
+    const settings = GLib.getenv('APEX_MOTION') ? motionSettings() : null;
+    const stop = settings ? sampleMotion(() => ({transitions: transitionsUnder(dialog)})) : null;
     dialog._userList.getItemFromUserName(GLib.getenv('APEX_USER')).emit('activate');
     await Scripting.sleep(SETTLE_MS);
     if (stop)
-        fact('motion', {...motionSettings(), frames: stop()});
+        fact('motion', {...settings, samples: stop()});
     fact('prompt', describeGreeter(dialog));
     iconFact('prompt', [dialog, Main.panel]);
     await capture('prompt');
