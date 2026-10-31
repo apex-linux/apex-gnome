@@ -16,7 +16,7 @@ $_item_bottom: $apex_dock_dot_gap + $apex_dock_dot_size;
     background-color: $apex_dock;
     border: 1px solid $apex_dock_border;
     border-radius: $apex_radius_dock;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, .18);
+    box-shadow: 0 10px 30px $apex_dock_shadow;
     padding: ($apex_dock_padding_top - 1px) ($apex_dock_padding_x - $apex_dock_gap / 2 - 1px)
       ($apex_dock_padding_bottom + $_item_bottom - 1px);
   }
