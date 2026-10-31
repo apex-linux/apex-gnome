@@ -52,6 +52,7 @@ const SCRIM_BOX = {x: 24, y: 280, width: 160, height: 160};
 const SCRIM_WINDOW = {x: 60, y: 320, width: 200, height: 120};
 const APEX_SCHEMA = 'io.github.apex_linux.Apex.Desktop';
 const GLASS_EFFECT = 'apex-glass';
+const HALF_OPACITY = 128;
 const CLIP_TRIES = 5;
 const SOLID_STYLE_CLASS = 'apex-solid';
 const SHADOW_RIM = 2;
@@ -72,7 +73,7 @@ const CHECKER_CELLS = 48;
 // The band inside a corner's arc, in CSS px: no surface's padding lets content into it.
 const CORNER_RING = 4;
 // Surfaces glass.js itself registers to test the manager, not the shell's.
-const TEST_SURFACES = ['emptyTest'];
+const TEST_SURFACES = ['emptyTest', 'opacityTest'];
 const TOAST_TRIES = 3;
 
 function colourOf(column, row, generation = 0) {
@@ -1163,6 +1164,48 @@ async function motionTests() {
     return {dock, dockPastEdge, popover};
 }
 
+// follow-opacity in pixels: a glass at HALF_OPACITY over the pattern draws that share of its blur
+// over the rest of the pattern, as the frames at 255 and at 0 show them; at 0 the pattern alone.
+async function opacityTests() {
+    const Registry = await import('resource:///org/gnome/shell/ui/apex/glass/registry.js');
+    const group = new St.Widget();
+    Main.uiGroup.add_child(group);
+    const tiles = buildPattern(group);
+    const glass = new St.Widget({...BOX, style_class: 'apex-glass-scrim'});
+    group.add_child(glass);
+    Registry.register(glass, {name: 'opacityTest'});
+    try {
+        await laidOut(glass);
+        const pattern = patternUnder(tiles, glass.get_resource_scale());
+        const read = async opacity => {
+            glass.opacity = opacity;
+            return (await framePixels(glass)).rgba;
+        };
+        const full = await read(255);
+        const half = await read(HALF_OPACITY);
+        const none = await read(0);
+        return {
+            followOpacity: glass.get_effect(GLASS_EFFECT)?.follow_opacity ?? null,
+            fullDiffering: BlurRef.differing(full, pattern),
+            noneDiffering: BlurRef.differing(none, pattern),
+            half: blendError(half, full, none, HALF_OPACITY),
+        };
+    } finally {
+        Registry.unregister(glass);
+        group.destroy();
+    }
+}
+
+// The largest distance, in channel steps, of a frame from top over bottom at opacity / 255.
+function blendError(frame, top, bottom, opacity) {
+    let max = 0;
+    for (let i = 0; i < frame.length; i++) {
+        if (i % 4 !== 3)
+            max = Math.max(max, Math.abs(frame[i] - (top[i] * opacity + bottom[i] * (255 - opacity)) / 255));
+    }
+    return Math.round(max * 1000) / 1000;
+}
+
 async function managerTests() {
     const apex = new Gio.Settings({schema_id: APEX_SCHEMA});
     const a11y = new Gio.Settings({schema_id: 'org.gnome.desktop.a11y.interface'});
@@ -1178,6 +1221,7 @@ async function managerTests() {
             derived: await derivedState(),
             tile: await tilePreviewTests(),
             emptyBox: await emptyBoxTests(),
+            opacity: await opacityTests(),
         };
         report.conformance = await conformanceTests(registered, report);
         report.motion = await motionTests();
