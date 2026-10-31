@@ -46,6 +46,7 @@ const BACKGROUND_BRIGHTNESS = 0.8;
 const FRAME_TIMEOUT_MS = 2000;
 const LAYOUT_FRAMES = 10;
 const LAYOUT_STEP_MS = 16;
+const BANNER_FRAMES = 120;
 // Left of the overview's workspace, which leaves the scrim bare there.
 const SCRIM_BOX = {x: 24, y: 280, width: 160, height: 160};
 const SCRIM_WINDOW = {x: 60, y: 320, width: 200, height: 120};
@@ -68,6 +69,11 @@ const TILE_GLASSED = 'apex-tile-preview-glassed';
 const CORNER_AT = {x: 200, y: 300};
 const CHECKER = 4;
 const CHECKER_CELLS = 48;
+// The band inside a corner's arc, in CSS px: no surface's padding lets content into it.
+const CORNER_RING = 4;
+// Surfaces glass.js itself registers to test the manager, not the shell's.
+const TEST_SURFACES = ['emptyTest'];
+const TOAST_TRIES = 3;
 
 function colourOf(column, row, generation = 0) {
     return PALETTE[(column * 7 + row * 5 + generation) % PALETTE.length];
@@ -408,15 +414,27 @@ async function withMenuOpen(menu, read) {
     }
 }
 
-async function withBanner(read) {
+// A critical banner stays until dismissed: a normal one hides on its own clock, in a long check too.
+async function withBanner(read, urgency = MessageTray.Urgency.NORMAL) {
+    const tray = Main.messageTray;
+    const {State} = MessageTray;
+    // A banner the case did not post, the one-time search hint, never expires while no one types.
+    if ([State.SHOWING, State.SHOWN].includes(tray._notificationState))
+        tray._notification.destroy();
+    // The tray shows a banner only once the one before it has hidden.
+    // eslint-disable-next-line no-await-in-loop
+    for (let frames = 0; tray._notificationState !== State.HIDDEN && frames < BANNER_FRAMES && await paintedFrame(); frames++)
+        ;
     const source = new MessageTray.Source({title: 'G2 Glass', iconName: 'dialog-information-symbolic'});
-    Main.messageTray.add(source);
-    source.addNotification(new MessageTray.Notification({
-        source, title: 'Glass', body: 'A banner over the desktop.', urgency: MessageTray.Urgency.NORMAL,
-    }));
+    tray.add(source);
+    const notification = new MessageTray.Notification({
+        source, title: 'Glass', body: 'A banner over the desktop.', urgency,
+    });
+    source.addNotification(notification);
     try {
         await Scripting.waitLeisure();
-        return read(await laidOut(Main.messageTray._banner));
+        const banner = tray._banner?.notification === notification ? tray._banner : null;
+        return await read(await laidOut(banner));
     } finally {
         source.destroy();
     }
@@ -520,11 +538,11 @@ async function derivedState() {
     }
 }
 
-// Black and white squares under the list: its blur greys them wherever it reaches, and only there.
-function buildChecker() {
-    const checker = new St.Widget({x: CORNER_AT.x - CHECKER, y: CORNER_AT.y - CHECKER});
-    for (let row = 0; row < CHECKER_CELLS; row++) {
-        for (let column = 0; column < CHECKER_CELLS; column++) {
+// Black and white squares under a surface: its blur greys them wherever it reaches, and only there.
+function buildChecker(at = CORNER_AT, cells = CHECKER_CELLS) {
+    const checker = new St.Widget({x: at.x - CHECKER, y: at.y - CHECKER});
+    for (let row = 0; row < cells; row++) {
+        for (let column = 0; column < cells; column++) {
             checker.add_child(new St.Widget({
                 x: column * CHECKER, y: row * CHECKER, width: CHECKER, height: CHECKER,
                 style: `background-color: ${(row + column) % 2 ? 'black' : 'white'};`,
@@ -542,36 +560,143 @@ async function capturedPixels({x, y, width, height}) {
     return Png.decode(stream.steal_as_bytes().get_data()).rgba;
 }
 
-// The list's bottom-left corner square, as the screen shows it with its glass and without, and as
+// A surface's bottom-left corner square, as the screen shows it with its glass and without, and as
 // a screenshot captures it: past the border's arc nothing blurs, inside it everything does.
-async function cornerOf(list) {
-    const [x, y] = list.get_transformed_position().map(Math.round);
-    const [width, height] = list.get_transformed_size().map(Math.round);
-    const scale = list.get_resource_scale();
-    const effect = list.get_effect(GLASS_EFFECT);
+async function cornerOf(actor) {
+    const [x, y] = actor.get_transformed_position().map(Math.round);
+    const [width, height] = actor.get_transformed_size().map(Math.round);
+    const scale = actor.get_resource_scale();
+    const effect = actor.get_effect(GLASS_EFFECT);
+    if (!effect)
+        return null;
     const radius = effect.corner_radius;
-    const on = await framePixels(list);
-    effect.enabled = false;
-    const off = await framePixels(list);
-    effect.enabled = true;
+    const ring = CORNER_RING * scale;
+    const Registry = await import('resource:///org/gnome/shell/ui/apex/glass/registry.js');
+    const surface = Registry.surfaces().find(registered => registered.actor === actor);
+    if (!surface)
+        return null;
+    const on = await framePixels(actor);
+    // Off by unregistering: the manager puts back an effect taken from a surface it still watches.
+    Registry.unregister(actor);
+    const off = await framePixels(actor);
+    Registry.register(actor, surface);
     const captured = await capturedPixels({x, y, width, height});
     const [w, h] = [width * scale, height * scale];
-    const masks = {outside: new Uint8Array(w * h), inside: new Uint8Array(w * h), square: new Uint8Array(w * h)};
+    const masks = {outside: new Uint8Array(w * h), inside: new Uint8Array(w * h), ring: new Uint8Array(w * h), square: new Uint8Array(w * h)};
     for (let py = h - radius; py < h; py++) {
         for (let px = 0; px < radius; px++) {
             const d = Math.hypot(radius - px - 0.5, py + 0.5 - (h - radius));
             masks.square[py * w + px] = 1;
             masks.outside[py * w + px] = d > radius + 1 ? 1 : 0;
             masks.inside[py * w + px] = d < radius - 1 ? 1 : 0;
+            masks.ring[py * w + px] = d < radius - 1 && d > radius - 1 - ring ? 1 : 0;
         }
     }
     const count = mask => mask.reduce((sum, bit) => sum + bit, 0);
     return {
-        radius, outside: count(masks.outside), inside: count(masks.inside), square: count(masks.square),
+        radius, outside: count(masks.outside), inside: count(masks.inside), ring: count(masks.ring), square: count(masks.square),
         blurredOutside: BlurRef.differing(on.rgba, off.rgba, masks.outside),
         blurredInside: BlurRef.differing(on.rgba, off.rgba, masks.inside),
+        blurredRing: BlurRef.differing(on.rgba, off.rgba, masks.ring),
         capturedDiffering: BlurRef.differing(captured, on.rgba, masks.square),
+        capturedMax: channelMax(captured, on.rgba, masks.square),
+        glassEffects: actor.get_effects().filter(e => e.name === GLASS_EFFECT).length,
     };
+}
+
+function channelMax(a, b, mask) {
+    let max = 0;
+    for (let i = 0; i < a.length; i++) {
+        if (mask[i >> 2])
+            max = Math.max(max, Math.abs(a[i] - b[i]));
+    }
+    return max;
+}
+
+// A shown surface's fit, then its corner over a checker laid under that corner alone.
+async function conformanceOf(actor) {
+    if (!actor?.get_effect(GLASS_EFFECT))
+        return null;
+    const [x, y] = actor.get_transformed_position();
+    const [, height] = actor.get_transformed_size();
+    const radius = (actor.get_effect(GLASS_EFFECT)?.corner_radius ?? 0) / actor.get_resource_scale();
+    const checker = buildChecker({x: Math.floor(x), y: Math.floor(y + height - radius)}, Math.ceil(radius / CHECKER) + 2);
+    try {
+        await paintedFrame();
+        return {...glassOf(actor), corner: await cornerOf(actor)};
+    } finally {
+        checker.destroy();
+    }
+}
+
+// The toast hides itself after 2 s: a check it outlives is read again on a new toast.
+async function toastConformance() {
+    const Toast = await import('resource:///org/gnome/shell/ui/apex/spotlight/toast.js');
+    let result = null;
+    for (let tries = 1; tries <= TOAST_TRIES && !result; tries++) {
+        Toast.show('G2');
+        const pill = Toast.current().get_first_child();
+        // eslint-disable-next-line no-await-in-loop
+        const read = await laidOut(pill).then(conformanceOf).catch(() => null);
+        if (read && Toast.current()?.get_first_child() === pill)
+            result = {...read, tries};
+    }
+    Toast.hide();
+    return result;
+}
+
+async function spotlightConformance() {
+    const Spotlight = await import('resource:///org/gnome/shell/ui/apex/spotlight/feature.js');
+    const popup = Spotlight.popup();
+    if (!popup)
+        return null;
+    popup.open();
+    try {
+        await Scripting.waitLeisure();
+        return await conformanceOf(await laidOut(popup.panel));
+    } finally {
+        popup.close();
+        await Scripting.waitLeisure();
+    }
+}
+
+async function osdConformance() {
+    const {primaryIndex} = Main.layoutManager;
+    Main.osdWindowManager.showOne(primaryIndex, Gio.ThemedIcon.new('audio-volume-medium-symbolic'), null, 0.5);
+    try {
+        await Scripting.waitLeisure();
+        return await conformanceOf(await laidOut(Main.osdWindowManager._osdWindows[primaryIndex]._hbox));
+    } finally {
+        Main.osdWindowManager._osdWindows[primaryIndex].cancel();
+    }
+}
+
+// Every surface the registry got in the case, against the ones checked: a surface a later slice
+// registers fails by name until the case checks it.
+async function conformanceTests(registered, {derived, tile}) {
+    const {quickSettings, dateMenu} = Main.panel.statusArea;
+    Main.overview.show();
+    await Scripting.waitLeisure();
+    const scrims = Object.fromEntries(Main.uiGroup.get_children().filter(a => a.name === 'apexGlassScrim')
+        .map((scrim, index) => [`scrim-${index}`, glassOf(scrim)]));
+    Main.overview.hide();
+    await Scripting.waitLeisure();
+    const checked = {
+        panel: glassOf(Main.panel),
+        ...scrims,
+        'dock': await conformanceOf(await laidOut(dockBackground())),
+        'quick-settings': await withMenuOpen(quickSettings.menu, conformanceOf),
+        'calendar': await withMenuOpen(dateMenu.menu, conformanceOf),
+        'banner': await withBanner(conformanceOf, MessageTray.Urgency.CRITICAL),
+        'osd': await osdConformance(),
+        'spotlight': await spotlightConformance(),
+        'toast': await toastConformance(),
+        'switcher': derived.switcher,
+        'screenshot': derived.screenshot,
+        'tilePreview': tile.shown.glass,
+    };
+    const names = [...registered].filter(name => !TEST_SURFACES.includes(name)).sort();
+    return {registered: names, checked, unchecked: names.filter(name => !checked[name])};
 }
 
 // The pixels the rounded box covers fully, a band in from its edges: no shadow layer reaches them.
@@ -955,18 +1080,28 @@ async function managerTests() {
     const apex = new Gio.Settings({schema_id: APEX_SCHEMA});
     const a11y = new Gio.Settings({schema_id: 'org.gnome.desktop.a11y.interface'});
     const primary = Main.layoutManager.primaryMonitor;
-    return {
-        monitorScale: global.display.get_monitor_scale(primary.index),
-        glass: await surfacesState(),
-        scrims: await scrimTests(),
-        derived: await derivedState(),
-        tile: await tilePreviewTests(),
-        emptyBox: await emptyBoxTests(),
-        reduceTransparency: await withSetting(apex, 'reduce-transparency', new GLib.Variant('b', true), surfacesState),
-        highContrast: await withSetting(a11y, 'high-contrast', new GLib.Variant('b', true), surfacesState),
-        disabled: await withSetting(apex, 'disabled-features', new GLib.Variant('as', ['glass']), surfacesState),
-        restored: await surfacesState(),
-    };
+    const Registry = await import('resource:///org/gnome/shell/ui/apex/glass/registry.js');
+    const registered = new Set(Registry.surfaces().map(surface => surface.name));
+    const stopListening = Registry.listen({added: surface => registered.add(surface.name), removed: () => {}});
+    try {
+        const report = {
+            monitorScale: global.display.get_monitor_scale(primary.index),
+            glass: await surfacesState(),
+            scrims: await scrimTests(),
+            derived: await derivedState(),
+            tile: await tilePreviewTests(),
+            emptyBox: await emptyBoxTests(),
+        };
+        report.conformance = await conformanceTests(registered, report);
+        return Object.assign(report, {
+            reduceTransparency: await withSetting(apex, 'reduce-transparency', new GLib.Variant('b', true), surfacesState),
+            highContrast: await withSetting(a11y, 'high-contrast', new GLib.Variant('b', true), surfacesState),
+            disabled: await withSetting(apex, 'disabled-features', new GLib.Variant('as', ['glass']), surfacesState),
+            restored: await surfacesState(),
+        });
+    } finally {
+        stopListening();
+    }
 }
 
 export async function glassReport() {
