@@ -1788,6 +1788,8 @@ fixtures_on_the_bus() {
     local run=$1 part fixtures
     local -a parts=("${@:2}")
     ((${#parts[@]})) || parts=("${DIRECT_PARTS[@]}")
+    # lanes.sh's main part started the fixtures once per lane.
+    [[ ! -e $run/fixtures-main-quiet.txt ]] || mapfile -t parts < <(printf '%s\n' "${parts[@]}" | sed 's/^main$/main-quiet\nmain-stress\nmain-timed/')
     for part in "${parts[@]}"; do
         fixtures=$(report_of "$run/fixtures-$part.txt" G2-FIXTURES)
         expect "fixtures ($part)" "$fixtures" ".battery | .present and .onBattery and .percentage == $BATTERY_PERCENT" \

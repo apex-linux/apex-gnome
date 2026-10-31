@@ -3299,6 +3299,44 @@ test_repeat_compare() {
     expect_eq "repeat: one log is not a comparison" 2 "$status"
 }
 
+# Each case of "$@" in lanes.sh's lanes, unless it is in exactly one of them; then the cases
+# the lanes name that are no direct case. The lists are parts.sh's, or LANES_* in the environment.
+lanes_misfiled() {
+    # shellcheck disable=SC2016 # expanded by the inner bash
+    bash -c '. "$1/assert.sh"; shift
+        read -ra stress <<<"${LANES_STRESS:-${STRESS_CASES[*]}}"
+        read -ra timed <<<"${LANES_TIMED:-${TIMED_CASES[*]}}"
+        read -ra quiet <<<"${LANES_QUIET:-${QUIET_CASES[*]}}"
+        for c in "$@"; do
+            lanes=()
+            [[ " ${stress[*]} " != *" $c "* ]] || lanes+=(stress)
+            [[ " ${timed[*]} " != *" $c "* ]] || lanes+=(timed)
+            [[ " ${quiet[*]} " != *" $c "* ]] || lanes+=(quiet)
+            ((${#lanes[@]} == 1)) || echo "$c: ${lanes[*]:-no lane}"
+        done
+        for c in "${stress[@]}" "${timed[@]}" "${quiet[@]}"; do
+            [[ " ${DIRECT_CASES[*]} " == *" $c "* ]] || echo "$c: no direct case"
+        done' _ "$HERE" "$@"
+}
+
+test_lanes() {
+    local cases
+    cases=$(bash -c '. "$1/assert.sh"; echo "${DIRECT_CASES[*]}"' _ "$HERE")
+    # shellcheck disable=SC2086 # the case names split on spaces
+    expect_eq "lanes: every direct case is in exactly one lane, and every case a lane names is a direct case" \
+        "" "$(lanes_misfiled $cases)"
+    # shellcheck disable=SC2086
+    expect_eq "lanes: a new case no lane names fails, named" "g2-new: no lane" "$(lanes_misfiled $cases g2-new)"
+    # shellcheck disable=SC2086
+    expect_eq "lanes: a time-relative case in the quiet lane, beside glass-stress, fails, named" "idle: timed quiet" \
+        "$(LANES_QUIET="idle $(bash -c '. "$1/assert.sh"; echo "${QUIET_CASES[*]}"' _ "$HERE")" lanes_misfiled $cases)"
+    # shellcheck disable=SC2086
+    expect_eq "lanes: a lane naming a case direct.sh does not run fails, named" "g2-gone: no direct case" \
+        "$(LANES_TIMED="g2-gone $(bash -c '. "$1/assert.sh"; echo "${TIMED_CASES[*]}"' _ "$HERE")" lanes_misfiled $cases)"
+    expect_eq "lanes: lanes.sh runs only the stress and quiet lanes before the timed one" \
+        "stress quiet timed" "$(grep -oE '^lane (stress|quiet|timed)' "$HERE/lanes.sh" | cut -d' ' -f2 | paste -sd' ')"
+}
+
 test_no_binding_overwritten() {
     local run=$T/keys-run overwritten passes failures
     overwritten='libmutter-WARNING **: 09:41:00.000: Overwriting existing binding of keysym 20 with keysym 20 (keycode 41).'
@@ -4006,6 +4044,7 @@ test_session_surface_icons
 test_no_disposed_at_shutdown
 test_exit_cut
 test_keys_case
+test_lanes
 test_shutdown_banner_case
 test_startup_handler_ran
 test_network_rows_centred

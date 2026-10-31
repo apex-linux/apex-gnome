@@ -35,12 +35,23 @@ A case that gets no report within `direct.sh`'s timeout stops G2 at once.
 | Step | Where | Asserts |
 |---|---|---|
 | G1's `image/checks/desktop.sh` | a container of the image | it passes on the image under test, so no text file under `/usr` or `/etc` names `APEX_SHELL_TEST_FAULT` |
-| `direct.sh main` | a container of the image plus `dbus-daemon` (the image has no `dbus-run-session`), `python3-dbusmock` and `gcc` for `clock.c`; `rpm -V` shows the shell's packages unmodified | each case below: one headless shell with a fresh home, dconf and runtime directory, the fixtures on the system bus and the fixed clock (see "Fixtures and the clock") |
+| `direct.sh main`, through `lanes.sh` | a container of the image plus `dbus-daemon` (the image has no `dbus-run-session`), `python3-dbusmock` and `gcc` for `clock.c`; `rpm -V` shows the shell's packages unmodified | each case below: one headless shell with a fresh home, dconf and runtime directory, the fixtures on the system bus and the fixed clock (see "Fixtures and the clock") |
 | `direct.sh kernel` | the same, with `apex.safe=1` bound over `/proc/cmdline` | the kernel switch |
 | `direct.sh pr` | CI's `shots-patched` job on a pull request, through `patched.sh` with `PATCHED_PART=pr` on the gnome-shell lane's RPMs | the cases `parts.sh`'s `PR_CASES` names, in `main`'s order (the scenes and every a11y check with their solid-backdrop twins, then the quick dock, indicator, safe-mode, fault and shutdown cases, `dock-dnd`, `dock-external`, `keys` and `shutdown-banner` among them), with their assertions; each listed case must have run and reported (`part_ran`). Before them, `direct.sh fedora` runs only `PR_FEDORA_CASES`, `fedora-light` and `fedora-dark`, so the pull request compares Apex's desktop and safe mode's (`stock-light`, `stock-dark`) with Fedora's (`compare_with_fedora`). A push to `main` and the daily run take `main` with the whole Fedora baseline |
 | `direct.sh fedora` | the same image with Fedora's own gnome-shell and gnome-shell-common of the tested NVR in place of the Apex build, downloaded from Fedora's repositories; each RPM must report `digests signatures OK` against a keyring that holds Fedora's key alone, so an unsigned RPM fails | the baseline of the captures |
 | `guard.sh` | a container of the image booted with its own systemd; a test user's `systemd --user` with the image's unmodified units | the crash guard, and that neither the user manager nor the shell's unit sets `APEX_SHELL_TEST_FAULT` |
 | `assert.sh` | the builder VM; `compare.js` in a container of the image | everything below |
+
+The VM runs the main part through `lanes.sh`. glass-stress, G2's heaviest load at 2 × 300 s,
+runs beside the cases that read no elapsed time and count no frames, each lane with llvmpipe on half
+the cores (`LP_NUM_THREADS`). The cases that do read time or count frames then run alone on every
+core, so none ever runs beside glass-stress. `parts.sh` names each case's lane once:
+`STRESS_CASES`, `QUIET_CASES` or `TIMED_CASES`, and the selftest fails a case in no lane or in two.
+Each lane is a `direct.sh main` with `G2_LANE` set, with its own system bus and fixtures at
+`/run/dbus-LANE`. Every fixture a case changes, it changes back in the same case: the power
+profile, update1's state and dock-one-gpu's GPUs. So a lane's fresh fixtures leave no case reading
+another's state. glass-stress asserts only frame by frame (no black, stale or unequal frame, no
+missed re-blur), never a rate.
 
 The direct cases:
 
@@ -999,6 +1010,7 @@ Not asserted here: the volume glyph (the container has no audio server), and wha
 | `clock.c` | the direct cases' shells (`LD_PRELOAD`) | the fixed wall clock |
 | `smoke.sh` | CI's Fedora 45 container | `direct.sh fedora` on Fedora's gnome-shell, and the assertions that need no Apex build |
 | `patched.sh` | a throwaway Fedora 45 container, by hand | the patched shell before a builder VM: rebuilds Fedora's SRPM with this checkout's recipe and `desktop/shell/`, runs `direct.sh main`, and asserts the logs and the top bar (below) |
+| `lanes.sh` | `direct.sh main`'s container, from `run.sh`, and `patched.sh` with `PATCHED_LANES=1` | `direct.sh main` in lanes: glass-stress beside the quiet cases, each on half the cores, then the timed cases alone (see "What one run does") |
 | `repeat.sh` | the host, by hand | `patched.sh` N times on one build, each in its own container, then every assertion whose verdict differs between the runs (below) |
 | `maximised-window.js` | the `dock-intellihide` and `dock-external` cases' shells (gjs, GTK 4) | one maximised window, which the probe starts and stops |
 | `dock-dnd.js`, `dock-external.js` | the `dock-dnd` and `dock-external` cases' shells | the dock's drags, and the dock and the bar on two monitors |

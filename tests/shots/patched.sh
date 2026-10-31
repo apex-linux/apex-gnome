@@ -22,6 +22,7 @@ blur. A probe imported after startup is counted in the log and the job summary. 
   PATCHED_PART=pr       direct.sh's pr part (CI's cases for a pull request) and the fedora part's
                         fedora-light and fedora-dark; only those cases' assertions, and each of
                         them must have run and reported
+  PATCHED_LANES=1    the main part through lanes.sh, as run.sh runs it in the VM
 
   docker run --rm --network=host -v "$PWD:/src:ro" registry.fedoraproject.org/fedora:45 \
       /src/tests/shots/patched.sh
@@ -196,7 +197,11 @@ part=${PATCHED_PART:-main}
 [[ $part == main || $part == pr ]] || die "PATCHED_PART is signoff, pr or unset, not $part"
 step "direct.sh $part"
 rc=0
-bash /w/direct.sh "$part" || rc=$?
+if [[ $part == main && ${PATCHED_LANES:-} == 1 ]]; then
+    bash /w/lanes.sh || rc=$?
+else
+    bash /w/direct.sh "$part" || rc=$?
+fi
 echo "# direct.sh $part: exit $rc"
 for p in fedora "$part"; do
     [[ -f $run/late-$p.txt ]] || continue

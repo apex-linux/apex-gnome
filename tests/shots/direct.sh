@@ -29,6 +29,10 @@ gi-compile-repository.
   kernel   the apex.safe=1 case (run.sh binds a fixture over /proc/cmdline)
   fedora   the captures of Fedora's own gnome-shell build (run.sh's baseline image)
   signoff  main's capture and indicator cases with every scene saved (signoff.sh)
+
+G2_LANE=stress|quiet|timed runs only main's cases in parts.sh's STRESS_CASES, QUIET_CASES or
+TIMED_CASES, with PART-LANE in its /out files, a system bus of its own at /run/dbus-LANE and
+/run/g2-LANE-* for its clock and frame libraries: lanes.sh runs the three at once.
 EOF
 }
 
@@ -36,6 +40,12 @@ case ${1:-} in
     main | pr | kernel | fedora | signoff) part=$1 ;;
     -h | --help) usage; exit 0 ;;
     *) usage >&2; exit 2 ;;
+esac
+lane=${G2_LANE:-}
+case $lane in
+    '') out_part=$part ;;
+    stress | quiet | timed) [[ $part == main ]] || { echo "direct.sh: G2_LANE is for the main part" >&2; exit 2; }; out_part=$part-$lane ;;
+    *) echo "direct.sh: G2_LANE is stress, quiet or timed, not $lane" >&2; exit 2 ;;
 esac
 # It stops logind's seats and changes /run as root: never outside a throwaway container.
 [[ -e /run/.containerenv || -e /.dockerenv ]] || { echo "direct.sh: only inside run.sh's or smoke.sh's container" >&2; exit 2; }
@@ -45,8 +55,9 @@ esac
 readonly SHELL_TIMEOUT=150
 readonly GLASS_STRESS_SECONDS=${G2_GLASS_STRESS_SECONDS:-60}
 readonly EXIT_HUNG=3
-readonly CLOCK_LIB=/run/g2-clock.so
-readonly FRAME_DIR=/run/g2-frame
+readonly CLOCK_LIB=/run/g2${lane:+-$lane}-clock.so
+readonly FRAME_DIR=/run/g2${lane:+-$lane}-frame
+readonly SYSTEM_BUS=/run/dbus${lane:+-$lane}/system_bus_socket
 readonly G2_CLOCK='2026-09-28 09:41:00'
 G2_CLOCK_EPOCH=$(date -u -d "$G2_CLOCK" +%s)
 readonly G2_CLOCK_EPOCH
@@ -75,12 +86,13 @@ for variant in light dark; do
     [[ -s $FACETS_DIR/apex-facets-$variant.png ]] ||
         { echo "direct.sh: no Facets backdrop at $FACETS_DIR/apex-facets-$variant.png (tests/shots/backdrops.sh puts it there)" >&2; exit 1; }
 done
-cat /proc/cmdline >"/out/cmdline-$part.txt"
+cat /proc/cmdline >"/out/cmdline-$out_part.txt"
 # gnome-shell's loginManager.js takes its dummy manager only when /run/systemd/seats is
 # missing, and timeLimitsManager.js needs a system bus.
 rm -rf /run/systemd/seats
-mkdir -p /run/dbus
-# system.conf includes this file last: root may own the fixtures' names and call them.
+mkdir -p "${SYSTEM_BUS%/*}"
+# system.conf includes this file last: root may own the fixtures' names and call them. A lane
+# beside this one may be starting its bus, so the file is replaced whole.
 mkdir -p /etc/dbus-1
 {
     echo '<busconfig><policy user="root">'
@@ -88,11 +100,12 @@ mkdir -p /etc/dbus-1
         printf '<allow own="%s"/><allow send_destination="%s"/>\n' "$name" "$name"
     done
     echo '</policy></busconfig>'
-} >/etc/dbus-1/system-local.conf
-dbus-daemon --system --fork || echo "no system bus"
-mkdir -p "/out/fixtures-$part"
-G2_POWER_PROFILES=1 G2_ACCOUNTS=1 python3 /w/fixtures.py "/out/fixtures-$part" >"/out/fixtures-$part.txt" 2>&1 || echo "fixtures.py: exit $?"
-setsid python3 /w/update1-mock.py "/out/update1-$part.log" >"/out/update1-$part.out" 2>&1 </dev/null &
+} >"/etc/dbus-1/system-local.conf.$$" && mv -f "/etc/dbus-1/system-local.conf.$$" /etc/dbus-1/system-local.conf
+dbus-daemon --system --fork --nopidfile --address="unix:path=$SYSTEM_BUS" || echo "no system bus"
+export DBUS_SYSTEM_BUS_ADDRESS=unix:path=$SYSTEM_BUS
+mkdir -p "/out/fixtures-$out_part"
+G2_POWER_PROFILES=1 G2_ACCOUNTS=1 python3 /w/fixtures.py "/out/fixtures-$out_part" >"/out/fixtures-$out_part.txt" 2>&1 || echo "fixtures.py: exit $?"
+setsid python3 /w/update1-mock.py "/out/update1-$out_part.log" >"/out/update1-$out_part.out" 2>&1 </dev/null &
 mkdir -p /tmp/.X11-unix && chmod 1777 /tmp/.X11-unix
 gcc -O2 -Wall -Werror -shared -fPIC -o "$CLOCK_LIB" /w/clock.c || { echo "direct.sh: cannot build clock.c" >&2; exit 1; }
 # ld.so only warns when a preload is missing, and the shells would keep the real clock.
@@ -119,11 +132,11 @@ run_case() {
     chmod 700 "$run"
     # shellcheck disable=SC2016 # expanded by the case's own bash
     env -i HOME="$home" PATH=/usr/bin:/usr/sbin XDG_RUNTIME_DIR="$run" LANG=C.UTF-8 \
-        DBUS_SYSTEM_BUS_ADDRESS=unix:path=/run/dbus/system_bus_socket \
+        DBUS_SYSTEM_BUS_ADDRESS="$DBUS_SYSTEM_BUS_ADDRESS" \
         G2_CASE="$name" G2_CAPTURES=/out/captures G2_SETTINGS="$gsettings_triples" \
         G2_SCALE=2 G2_MONITOR=2880x1800 TZ=UTC G2_CLOCK_LIB="$CLOCK_LIB" G2_CLOCK_EPOCH="$G2_CLOCK_EPOCH" \
         G2_SURFACE_SCENES="${G2_SURFACE_SCENES:-0}" G2_WAYLAND_DISPLAY=apex-g2 G2_FACETS_DIR="$FACETS_DIR" \
-        G2_BACKDROP=facets G2_SOLID_BACKDROP="$SOLID_BACKDROP" "$@" \
+        G2_BACKDROP=facets G2_SOLID_BACKDROP="$SOLID_BACKDROP" ${LP_NUM_THREADS:+LP_NUM_THREADS="$LP_NUM_THREADS"} "$@" \
         timeout "$limit" dbus-run-session -- bash -c '
             set -u
             for app in ${G2_STUB_APPS:-}; do
@@ -166,24 +179,34 @@ run_case() {
     echo "== $name: exit $rc, marker after exit: $left"
 }
 
+in_lane() {
+    case $lane in
+        '') return 0 ;;
+        stress) [[ " ${STRESS_CASES[*]} " == *" $1 "* ]] ;;
+        quiet) [[ " ${QUIET_CASES[*]} " == *" $1 "* ]] ;;
+        timed) [[ " ${TIMED_CASES[*]} " == *" $1 "* ]] ;;
+    esac
+}
+
 run_and_record_case() {
     local name=$1
+    in_lane "$name" || return
     [[ $part == pr && " ${PR_CASES[*]} " != *" $name "* ]] && return
     [[ $part == fedora && ${G2_PR:-} == 1 && " ${PR_FEDORA_CASES[*]} " != *" $name "* ]] && return
     run_case "$@"
     if grep -q 'APEXG2-LATE' "/out/$name.log"; then
         echo "== $name: the probe was imported after startup, and emitted startup-complete again"
-        printf '%s\n' "$name" >>"/out/late-$part.txt"
+        printf '%s\n' "$name" >>"/out/late-$out_part.txt"
     fi
-    printf '%s\n' "$RESULT" >>"/out/results-$part.txt"
+    printf '%s\n' "$RESULT" >>"/out/results-$out_part.txt"
     if [[ $RESULT == "$name exit=124 "* ]]; then
         echo "== $name: no report within $LIMIT s; the shell hung, and the cases after it would wait as long"
         exit "$EXIT_HUNG"
     fi
 }
 
-: >"/out/results-$part.txt"
-: >"/out/late-$part.txt"
+: >"/out/results-$out_part.txt"
+: >"/out/late-$out_part.txt"
 case $part in
     kernel)
         run_and_record_case kernel-safe ''
@@ -216,9 +239,11 @@ run_and_record_case large-text-solid "$CAPTURE_SETTINGS;org.gnome.desktop.interf
 # The headless pointer starts at 0,0, in the hot corner, which its first motion would trip.
 run_and_record_case dock-intellihide "$CAPTURE_SETTINGS;$NO_HOT_CORNER" G2_DOCK=1
 run_and_record_case dock-intellihide-dark "$CAPTURE_SETTINGS;$NO_HOT_CORNER;org.gnome.desktop.interface color-scheme prefer-dark" G2_DOCK=1
-python3 /w/fixtures.py --gpus 1 >"/out/fixtures-one-gpu.txt" 2>&1 || echo "fixtures.py --gpus 1: exit $?"
-run_and_record_case dock-one-gpu "$CAPTURE_SETTINGS" G2_ONE_GPU=1
-python3 /w/fixtures.py --gpus 2 >>"/out/fixtures-one-gpu.txt" 2>&1 || echo "fixtures.py --gpus 2: exit $?"
+if in_lane dock-one-gpu; then
+    python3 /w/fixtures.py --gpus 1 >"/out/fixtures-one-gpu.txt" 2>&1 || echo "fixtures.py --gpus 1: exit $?"
+    run_and_record_case dock-one-gpu "$CAPTURE_SETTINGS" G2_ONE_GPU=1
+    python3 /w/fixtures.py --gpus 2 >>"/out/fixtures-one-gpu.txt" 2>&1 || echo "fixtures.py --gpus 2: exit $?"
+fi
 # The overview without the dock: its windows' bottom row keeps stock's bottom edge.
 run_and_record_case no-dock "$CAPTURE_SETTINGS;io.github.apex_linux.Apex.Desktop disabled-features ['dock']" G2_DESKTOP=1 G2_OVERVIEW_WINDOWS=1
 run_and_record_case no-dock-dark "$CAPTURE_SETTINGS;$DARK;io.github.apex_linux.Apex.Desktop disabled-features ['dock']" G2_DESKTOP=1 G2_OVERVIEW_WINDOWS=1

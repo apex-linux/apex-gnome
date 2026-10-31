@@ -186,7 +186,7 @@ one_run() {
     log "${out##*/}: the direct cases"
     sudo podman run --rm --name "$name-direct" "$NO_SELINUX_LABELS" -v "$HERE:/w:ro,z" -v "$out:/out:z" \
         --env G2_GLASS_STRESS_SECONDS="${G2_GLASS_STRESS_SECONDS:-$VM_GLASS_STRESS_SECONDS}" \
-        --entrypoint /bin/bash "$BUS_IMAGE" /w/direct.sh main 2>&1 | tee "$out/direct-main.txt" ||
+        --entrypoint /bin/bash "$BUS_IMAGE" /w/lanes.sh 2>&1 | tee "$out/direct-main.txt" ||
         direct_failed main "$out" $?
 
     log "${out##*/}: apex.safe=1 on the kernel command line (a fixture bound over /proc/cmdline)"
