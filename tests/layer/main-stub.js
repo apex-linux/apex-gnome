@@ -262,6 +262,8 @@ const QUICK_SETTINGS_INDICATORS = ['_remoteAccess', '_camera', '_volumeInput', '
 const PRIVACY_INDICATORS = ['_remoteAccess', '_camera', '_volumeInput', '_location'];
 
 const rightBox = box([{name: 'a11y'}, {name: 'keyboard'}]);
+const activitiesContainer = {name: 'activities', get_parent: () => leftBox};
+const leftBox = box([activitiesContainer]);
 
 // remoteAccess.js's screen-recording and screen-sharing buttons, where panel.js puts them,
 // and keyboard.js's input-source labels.
@@ -429,6 +431,8 @@ export const panel = Object.assign(new StubActor('panel', {glass: PANEL_GLASS, e
             throw new Error(`there is already a status indicator for role ${role}`);
         this.statusArea[role] = indicator;
         indicator.connect('destroy', () => delete this.statusArea[role]);
+        if (boxName === 'left')
+            leftBox.insert_child_at_index(indicator.container, position);
         fact('panel.add', `${role} at ${position} in ${boxName}`);
         return indicator;
     },
@@ -441,9 +445,11 @@ export const panel = Object.assign(new StubActor('panel', {glass: PANEL_GLASS, e
             this.menus = this.menus.filter(m => m !== menu);
         },
     },
+    leftBox,
     rightBox,
     statusArea: {
         activities: {
+            container: activitiesContainer,
             get_first_child: () => ({get_children: () => [0, 1].map(() => workspaceDot)}),
         },
         quickSettings: newQuickSettings(),

@@ -1119,6 +1119,14 @@ async function exerciseFocusedApp() {
             : 'none');
     };
     report('none');
+    const leftBoxOrder = () => Main.panel.leftBox.children.map(c => c.name ?? (c.child?.accessible_name && 'focused-app')).join(',');
+    fact('focused-app.left-box', leftBoxOrder());
+    // panel.js puts its own items back at the box's end at each session-mode change.
+    const activities = Main.panel.statusArea.activities.container;
+    Main.panel.leftBox.remove_child(activities);
+    Main.panel.leftBox.insert_child_at_index(activities, Main.panel.leftBox.children.length);
+    Main.sessionMode.lock(false);
+    fact('focused-app.left-box.after-session-update', leftBoxOrder());
     tracker.focus({get_name: () => 'Files'});
     report('files');
     tracker.focus(null);

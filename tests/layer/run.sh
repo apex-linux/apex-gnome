@@ -767,6 +767,8 @@ panel_classes_are "disabled-features=['panel']: the bar stays translucent" \
 probe focused-app "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_FOCUSED_APP=1
 has "focused-app: the panel feature enables" 'Apex: feature panel enabled'
 fact "focused-app: its item follows the Activities pill in the left box" 'panel\.add=apex-focused-app at 1 in left'
+fact "focused-app: after Activities in the left box" 'focused-app\.left-box=activities,focused-app'
+fact "focused-app: and again once panel.js has put Activities back at the box's end" 'focused-app\.left-box\.after-session-update=activities,focused-app'
 fact "focused-app: \"Desktop\" while nothing has focus, a label that takes no clicks" \
     'focused-app\.none=Desktop name=Desktop visible=true reactive=false'
 fact "focused-app: the focused app's name" 'focused-app\.files=Files name=Files visible=true reactive=false'
