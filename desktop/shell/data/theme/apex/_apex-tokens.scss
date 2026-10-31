@@ -218,6 +218,8 @@ $apex_dialog_title_tracking: -.2px;
 $apex_destructive: #c01c28;
 $apex_destructive_hover: #a51d2d;
 $apex_destructive_fg: #ffffff;
+// Board 13's wrong password: Adwaita's error pair, 5.66:1 light and 5.63:1 dark on $apex_panel_solid.
+$apex_error_fg: if($variant == 'light', #c01c28, #ff7b63);
 // The end-session feature's icon circle and its power-off row: Cancel, Restart, Power Off.
 $apex_end_session_icon_size: 56px;
 $apex_end_session_icon_glyph_size: 26px;
