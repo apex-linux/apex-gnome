@@ -280,10 +280,31 @@ below fails its case when it gives up:
   through AT-SPI and calls one blank only while it matches the card colour in the gap
   beside it, so a one-colour wallpaper such as VNC counts once painted.
 
-Open item: `appearance-light-scrolled` and `appearance-dark-scrolled` vary by 1 in a
-channel value from one Settings process to the next, in the Appearance note's line only
-("… has a light and a dark version and follows the style.") and still within a run. The
-cause is under investigation, so those two are not for approval until it is closed.
+Open item: `appearance-light-scrolled` and `appearance-dark-scrolled` vary from one
+Settings process to the next in 1 to 4 pixels of the Appearance note's line ("… has a
+light and a dark version and follows the style."), each by 1 in a channel value. Those two
+are not for approval until it is closed. What is known:
+
+- Not the page. The scrollbar stands at 467.0 of 467.0 and the note at (401, 690, 572×16)
+  in every run, and each frame is still for 5 s. llvmpipe's threads are not it either:
+  `LP_NUM_THREADS=1` spreads the same way.
+- The thumbnails are. With only Amber's entry in gnome-background-properties, 10 runs of
+  10 are byte for byte the same; with all 25, 6 runs give 5 different captures. GTK's GPU
+  renderer (gsk/gpu, GTK 4.24.1) packs glyphs and small textures into one atlas, so the
+  note's glyphs land where the thumbnails, decoded in a different order each run, left
+  room, and sample a shade apart. `GSK_CACHE_TIMEOUT` moves the spread without closing it
+  (default: 5 captures in 6 runs; -1: 4 in 8; 0: 2 in 6).
+- Not fixable from the harness so far: holding the scroll until all 25 thumbnails are
+  painted, with the note out of view, before it first draws, still gave 2 captures in 2
+  runs, as the thumbnails' own places in the atlas already differ.
+
+An upstream report for GTK, not filed (that is the owner's call): "GSK GPU renderer: glyph
+rendering depends on atlas placement. Under llvmpipe, the same text drawn at the same
+whole-pixel position differs by 1 in a channel value in a few antialiased pixels,
+depending on where the glyph cache placed the glyphs, which depends on the order earlier
+textures were uploaded. Reproduce: gnome-control-center 51 Appearance at scale 2 in a
+headless gnome-shell, scroll to the end, capture twice from fresh processes. Expected:
+identical pixels. GSK_CACHE_TIMEOUT changes how often it happens."
 
 For one case the run also installs apex-desktop's `desktop/keybindings/60-apex.xml` in
 `/usr/share/gnome-control-center/keybindings/` and its `90_apex.gschema.override`, from

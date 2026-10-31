@@ -170,13 +170,45 @@ the sign-off shells (above). Every case's probe reports them (`session-defaults.
   missing JetBrains Mono fails rather than falling back to another monospace font;
 - the bar's clock is drawn in Adwaita Sans, as Pango resolves it;
 - every icon shown in the bar, the dock, the overview's dash and Quick Settings resolves under
-  `/usr/share/icons/Apex/`. Two explicit lists name the only others: `FIXTURE_APPS`, G2's own
-  stub apps, which have no icon and draw GNOME's generic one, and `SHELL_RESOURCE_ICONS`,
-  icons the shell draws from its own resource because board 31 has no glyph of that name
-  (`screenshooter-symbolic`). A failure names each icon, where it showed, its app and the
-  file it resolved to, or "no icon".
+  `/usr/share/icons/Apex/`. Explicit lists, each entry by exact name with its reason, name the
+  only others: `FIXTURE_APPS`, G2's own stub apps, which have no icon and draw GNOME's generic
+  one; `SHELL_RESOURCE_ICONS`, icons the shell draws from its own resource because board 31
+  has no glyph of that name yet (below, "Open"); and `STAND_IN_ICONS`, a stock icon on one
+  surface only (`switcher application-x-executable`, G2's switcher stand-in, and
+  `spotlight drive-harddisk`, a full-colour device icon a search provider returns, which Apex
+  inherits from Adwaita by design). A failure names each icon, where it showed, its app and
+  the file it resolved to, or "no icon";
+- no name on `SHELL_RESOURCE_ICONS` is one Apex Symbolic ships (the probe lists
+  `/usr/share/icons/Apex/symbolic`): once apex-desktop draws a glyph, the pin bump that brings
+  it fails until the name leaves the list, so the list only shrinks;
+- in a case with the scenes (`G2_SCENES=1`: `default` and `dark-style`, in the VM and in
+  sign-off), every other surface G2 opens, by the same rule. After the last capture, so no
+  scene changes, the probe opens each surface with the openers its scenes use (`probe.js`'s
+  `iconSurfaces`), walks its shown icons, and closes it before the next
+  (`APEXG2-SESSION-SURFACES`): board 34's date menu with a notification, the overview (35),
+  the launcher grid (36), Spotlight's results (38), the window switcher (15), board 16's popup
+  menu, OSD and banner, board 13's dialog, the end-session dialog (14) and the screenshot UI
+  (19). The date menu is walked with Show Status Shapes on, the only state that shows Do Not
+  Disturb's switch glyphs. Each surface passes or fails on its own, naming its board; a surface
+  that did not open, or drew no icon, fails too.
 
 The wallpaper is `backdrop_painted`'s (below).
+
+### Open: glyphs board 31 lacks
+
+Names the shell draws from its own resource today, each on `SHELL_RESOURCE_ICONS`.
+apex-desktop#35 ships all nine in Apex Symbolic, seven as aliases of glyphs the boards already
+draw and the switch's two shapes as new ones. They are pending the `APEX_DESKTOP_REV` bump that
+brings it, which then takes them off the list.
+
+| Name | Surface |
+|---|---|
+| `screenshooter-symbolic` | Quick Settings (the screenshot button) |
+| `notification-expand-symbolic` | the date menu (34): a notification's expander |
+| `switch-on-symbolic`, `switch-off-symbolic` | the date menu (34): Do Not Disturb's switch, with Show Status Shapes |
+| `screenshot-ui-area-symbolic`, `screenshot-ui-display-symbolic`, `screenshot-ui-window-symbolic` | the screenshot UI (19): its three capture types |
+| `screenshot-ui-show-pointer-symbolic` | the screenshot UI (19): Show Pointer |
+| `preview-close-symbolic` | the screenshot UI (19): its close button |
 
 ## The backdrop
 
@@ -319,7 +351,9 @@ apps are, and registers them with the shell's watcher. Every call an item gets l
   nothing is in use; the recording pill's stop square and tabular timer; the sharing
   pill's glyph, square, name and gap to the status pill; the input chip's "EN", font,
   tracking and minimum width, and each source's chip: an xkb source's short name in
-  capitals, an IBus source's engine language code.
+  capitals, an IBus source's engine language code. The image's sources here are xkb (us, fr):
+  the IBus mapping is checked against a stub in tests/layer; the real engine is #187's case and
+  the VM run.
 
 The captures `<case>-indicators.png`, `<case>-indicators-everything.png`,
 `<case>-indicator-menu.png` and `<case>-indicator-overflow.png` show the bar, the bar in
@@ -650,6 +684,26 @@ WCAG 1.4.11's 3:1 over the light backdrops.
 rounding): a lower one fails. Where it is under 3:1 the dot leaves the plain glyph check for a
 gap line, which fails once the dot reaches 3:1, so the fix also removes the gap.
 
+Board 39's pills are measured on the bar too (`barPills`): with two input sources set for the
+step, the input chip, and, as in `indicators.js`'s "everything", the camera and microphone in
+use, a recording at 0:42 and a share. The chip's and the timer's text want 4.5:1, the share's and
+the privacy group's glyphs 3:1, each over what is drawn behind it, the pill's own fill. A pill
+Apex fills at rest (the recording, the share, the privacy group) is also read against the bar:
+the median of its fill across its middle, clear of the corners, against the bar a pixel or two
+beyond each end, at 3:1 (WCAG 1.4.11). Upstream's high-contrast sheet fills the button instead,
+so there `bar_pills` leaves the edge out. Every text passes; the gaps (`A11Y_PILL_TODAY`, pinned as
+the inactive dot is) are the owner's to decide:
+
+| Case | Part | Today |
+|---|---|---|
+| `default-solid` | the recording pill's `$apex_recording` against the bar | 2.02:1 |
+| `default-solid` | the sharing pill's and the privacy group's `$apex_privacy` against the bar | 1.62:1 |
+| `dark-style-solid` | the recording pill's fill against the bar | 2.13:1 |
+| `dark-style-solid` | the sharing pill's and the privacy group's fill against the bar | 2.65:1 |
+| `high-contrast`, `high-contrast-solid` | upstream's screen-sharing glyph, white on `#ff7800` | 2.54:1 |
+
+Over the Facets every fill holds 3:1: 5.44:1 and 4.38:1 in `default`, 3.14:1 and 3.90:1 in `dark-style`.
+
 The bar is measured the same way over every wallpaper G2 shows it on: the Facets, light in
 `default` and dark in `dark-style`; `#013b88` in the `-solid` twins; and, in `no-dock`
 (`bar_over_fixture`), the overview's fixture gradient, once in the overview and once on the
@@ -914,6 +968,7 @@ Not asserted here: the volume glyph (the container has no audio server), and wha
 | `clock.c` | the direct cases' shells (`LD_PRELOAD`) | the fixed wall clock |
 | `smoke.sh` | CI's Fedora 45 container | `direct.sh fedora` on Fedora's gnome-shell, and the assertions that need no Apex build |
 | `patched.sh` | a throwaway Fedora 45 container, by hand | the patched shell before a builder VM: rebuilds Fedora's SRPM with this checkout's recipe and `desktop/shell/`, runs `direct.sh main`, and asserts the logs and the top bar (below) |
+| `repeat.sh` | the host, by hand | `patched.sh` N times on one build, each in its own container, then every assertion whose verdict differs between the runs (below) |
 | `maximised-window.js` | the `dock-intellihide` and `dock-external` cases' shells (gjs, GTK 4) | one maximised window, which the probe starts and stops |
 | `dock-dnd.js`, `dock-external.js` | the `dock-dnd` and `dock-external` cases' shells | the dock's drags, and the dock and the bar on two monitors |
 | `probe.js` | the shell (`--automation-script`) | prints `APEXG2 {…}` and, for the capture cases, `APEXG2-SCENES {…}` |
@@ -925,11 +980,33 @@ Not asserted here: the volume glyph (the container has no audio server), and wha
 | `a11y.js` | the shell | the accessibility cases: contrast against what is drawn, and the Large Text layout |
 | `backdrop.js`, `backdrops.sh` | the shell; a throwaway container | whether the pinned backdrop painted, and the Facets it pins rendered where an image has them |
 | `indicators.js`, `sni-items.js` | the shell; gjs | the app-indicator part of `default`, `default-scale1` and `dark-style`, and the StatusNotifierItems it starts |
-| `session-defaults.js` | every case's shell | the fonts and icon theme the session reads, fontconfig's families for them, the clock's drawn family, and the file each shown icon of the bar, dock, dash and Quick Settings resolves to |
+| `session-defaults.js` | every case's shell | the fonts and icon theme the session reads, fontconfig's families for them, the clock's drawn family, and the file each shown icon of the bar, dock, dash and Quick Settings resolves to; with the scenes, the same for every other surface G2 opens |
 | `idle.js` | the `idle` case's shell | the settled desktop, its paints and relayouts over 10 s, and the counter's control |
 | `glass-load.js`, `load-window.js` | the `glass-load` and `glass-stress` cases' shells; gjs, GTK 4 | ADR 0014's scenarios as work counts, and the client that stands in for a video; `tests/laptop` runs both on the laptop, the client with `measure=` |
 | `frame.c`, `G2Frame-1.gir` | the glass cases' shells | `G2Frame.read()`, a region of the frame the shell drew |
 | `selftest.sh`, `png-test.js`, `blur-ref-test.js` | CI and the host | the tests of the above |
+
+## Run to run
+
+A G2 flake that reaches a gate run costs a whole VM run, so a check that passes once is not
+enough. `tests/shots/repeat.sh N` runs `patched.sh` N times on one build: the first run builds
+the RPMs (or `PATCHED_RPMS=DIR` names them) and the others install them, each in a fresh Fedora 45
+container so no run inherits another's state. Each run is a whole `patched.sh`: Fedora's
+gnome-shell in `direct.sh fedora`, then the lane's in `direct.sh main`. It then prints every
+assertion whose verdict differs, one row each with every run's verdict (`P`, `F`, `G` for a known
+gap, `-` when a run never made it) and the assertion, and a count:
+
+```
+P F P P P  shutdown-banner: nothing touches a disposed object once the shell is shutting down
+repeat: 5 runs, 2033 assertions, 1 differ
+```
+
+It exits 1 when any assertion differs. `repeat.sh compare LOG...` does the same for logs already
+kept. A failure's detail (`(got …)`, `(no report)`, `(no line matches …)`) is cut so it shares its
+pass's row, then one closing parenthesis, which on a pass can say what that run saw (a probe
+`(late)` or `(on time)`): rows compare verdicts. An assertion a run makes twice gets a row per time. A differing row is a race to
+root-cause: make it fail on demand first, then make it impossible. A retry, a longer wait, or a
+rerun on failure hides it until a gate run meets it.
 
 ## The patched shell without a VM
 

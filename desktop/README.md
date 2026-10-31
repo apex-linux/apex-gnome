@@ -31,7 +31,7 @@ directory with `git archive` and unpacks it at the top of Fedora's gnome-shell t
 | `js/ui/apex/windows.js` | whether a window on the primary monitor is maximised, and the signals that change it: the solid bar and the dock's intellihide |
 | `js/ui/apex/indicators/` | the app indicators of S2a (below): `watcher.js` (the StatusNotifierWatcher and host), `item.js`, `icon.js` and `mask.js` (the glyph), `dbusmenu.js` (the menus), `indicator.js` (one button) and `bar.js` (their place and the overflow) |
 | `js/ui/apex/fault/feature.js` | the fault-injection feature: loaded only when `APEX_SHELL_TEST_FAULT` names a phase, it fails in that phase (below) |
-| `data/theme/apex/_apex-tokens.scss` | the design tokens as SCSS variables, imported after upstream's `_colors` |
+| `data/theme/apex/_apex-tokens.scss` | the design tokens as SCSS variables, imported after upstream's `_colors`. `lint/tokens.sh` (run by `lint/theme.sh`) fails on a colour literal in another Apex sheet (a `#hex`, or an `rgb()`/`rgba()` with a number rather than tokens alone) and on a token nothing uses; `lint/tokens.allow` lists the exceptions by `FILE:LINE` or `$token`, with why and whose, and a stale entry fails |
 | `data/theme/apex/_apex.scss` | the Apex sheet, imported last by the light and dark entry files: its marker, `_apex-base.scss` and the partials |
 | `data/theme/apex/_glass.scss` | each glass surface's `-apex-glass-blur` and `-apex-glass-saturation`, from the tokens of ADR 0014's table, and the solid tints under `.apex-solid` |
 | `data/theme/apex/_top-bar.scss` | the top bar over upstream's panel, in the user session and the overview. Its text sizes are in pt (`apex-text-size`), so Large Text grows the text and nothing else: the bar, the pills and the glyphs keep SPEC's px sizes, where upstream sizes the bar in em. The unread-notification dot is `$apex_bar_fg` until S1b brings the wallpaper SPEC's accent dot was drawn over; over Fedora's wallpaper the light bar hides an accent dot. G2 asserts both ([tests/shots](../tests/shots/README.md)) |
@@ -157,6 +157,11 @@ stock bar when it is disabled:
   `$apex_font_input_chip_size`/`$apex_font_input_chip_weight`, tracked
   `$apex_font_input_chip_tracking`, at least `$apex_input_chip_min_width` wide; stock shows it
   only with two or more sources.
+- `panel/clear-sync.js`: the date menu's Clear follows its placeholder from the start. calendar.js
+  binds the two without `SYNC_CREATE` (51.0 and 51.1), so an empty list showed Clear until a first
+  notification came and went. The part syncs it once on enable, and on disable gives back stock's
+  value unless stock's binding has synced it since. It is the panel's, not the notifications', so
+  the fix holds with `notifications` in disabled-features.
 
 `panel/solid-bar.js` makes the bar solid while `translucent-top-bar` is off (live), or while
 a window on the primary monitor's active workspace is maximised, showing and not the

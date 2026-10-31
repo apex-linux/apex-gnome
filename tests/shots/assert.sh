@@ -270,8 +270,27 @@ exit_cut() {
 
 # G2's fixture apps (direct.sh's STUB_APPS) have no icon of their own: GNOME draws its generic one.
 readonly FIXTURE_APPS=(io.github.apex_linux.G2Stub1.desktop io.github.apex_linux.G2Stub2.desktop io.github.apex_linux.G2Stub3.desktop)
-# Icons the shell draws from its own resource because Apex Symbolic (board 31) draws none of that name.
-readonly SHELL_RESOURCE_ICONS=(screenshooter-symbolic)
+# Icons the shell draws from its own resource because Apex Symbolic (board 31) draws none of that name yet: each
+# is one apex-desktop#35 ships, and leaves this list when APEX_DESKTOP_REV reaches it (surface_icons fails it then).
+readonly SHELL_RESOURCE_ICONS=(
+    screenshooter-symbolic
+    notification-expand-symbolic
+    switch-on-symbolic
+    switch-off-symbolic
+    screenshot-ui-area-symbolic
+    screenshot-ui-display-symbolic
+    screenshot-ui-window-symbolic
+    screenshot-ui-show-pointer-symbolic
+    preview-close-symbolic
+)
+# Stock icons a surface legitimately draws, "surface name" by exact name, never a pattern.
+readonly STAND_IN_ICONS=(
+    # G2's switcher stand-in (probe.js's windowSwitcher) gives its items GNOME's generic app icon.
+    'switcher application-x-executable'
+    # A full-colour device icon a search provider returns: Apex draws symbolic glyphs, Colloid app icons and
+    # boards 27-29's places and mimetypes, and inherits Adwaita's devices by design (Inherits=Adwaita,hicolor).
+    'spotlight drive-harddisk'
+)
 
 # expect, but a failure quotes DETAIL, what the shell had, rather than the condition's false.
 expect_named() {
@@ -311,19 +330,72 @@ session_defaults() {
     expect_named "$label" "$r" '.fontconfig.mono.family == "JetBrains Mono"' .fontconfig.mono \
         "fontconfig gives JetBrains Mono for its family, not a fallback"
     expect_named "$label" "$r" '.drawn.clock == "Adwaita Sans"' .drawn.clock "the bar's clock is drawn in Adwaita Sans"
-    bad=$(jq -r --argjson fixtures "$(printf '%s\n' "${FIXTURE_APPS[@]}" | jq -R . | jq -sc .)" \
-        --argjson resource "$(printf '%s\n' "${SHELL_RESOURCE_ICONS[@]}" | jq -R . | jq -sc .)" '
-        .icons | to_entries[] | .key as $where | (.value // [])[]
-        | (.icon | if startswith(". GThemedIcon ") then split(" ")[2] else . end) as $name
-        | select((.file // "" | startswith("/usr/share/icons/Apex/")) | not)
-        | select(((.file // "" | startswith("/org/gnome/shell/icons/")) and ($resource | index($name))) | not)
-        | .app as $app | select($app == null or ($fixtures | index($app) | not))
-        | "\($where) \($name)\(if $app then " (\($app))" else "" end): \(.file // "no icon")"' <<<"$r" 2>&1 | paste -sd';' -)
+    bad=$(jq '.icons' <<<"$r" 2>/dev/null | icons_not_apex)
     if [[ -n $r && -z $bad && $(jq '[.icons[] // [] | length] | add' <<<"$r") -gt 0 ]]; then
         pass "$label: every icon the bar, the dock, the dash and Quick Settings draw resolves through Apex"
     else
         fail "$label: every icon the bar, the dock, the dash and Quick Settings draw resolves through Apex (${bad:-no icons reported})"
     fi
+    bad=$(jq -r --argjson resource "$(printf '%s\n' "${SHELL_RESOURCE_ICONS[@]}" | jq -R . | jq -sc .)" \
+        '[.apexSymbolic // [] | .[] | select(. as $n | $resource | index($n))] | join(", ")' <<<"$r" 2>/dev/null)
+    if [[ -n $r && $(jq '.apexSymbolic // [] | length' <<<"$r") -gt 0 && -z $bad ]]; then
+        pass "$label: no icon listed as the shell's own (SHELL_RESOURCE_ICONS) is one Apex Symbolic ships"
+    else
+        [[ -n $bad ]] && bad="listed as shell-only, but /usr/share/icons/Apex has it: $bad"
+        fail "$label: no icon listed as the shell's own (SHELL_RESOURCE_ICONS) is one Apex Symbolic ships (${bad:-no Apex Symbolic glyphs reported})"
+    fi
+    grep -q 'APEXG2-SCENES ' "$log" 2>/dev/null && surface_icons "$label" "$log"
+}
+
+# Each icon of an object of surfaces that resolves neither under Apex nor to a listed exception, as "where name: file".
+icons_not_apex() {
+    jq -r --argjson fixtures "$(printf '%s\n' "${FIXTURE_APPS[@]}" | jq -R . | jq -sc .)" \
+        --argjson resource "$(printf '%s\n' "${SHELL_RESOURCE_ICONS[@]}" | jq -R . | jq -sc .)" \
+        --argjson standIn "$(printf '%s\n' "${STAND_IN_ICONS[@]}" | jq -R . | jq -sc .)" '
+        to_entries[] | .key as $where | (.value // [])[]
+        | (.icon | if startswith(". GThemedIcon ") then split(" ")[2] else . end) as $name
+        | select((.file // "" | startswith("/usr/share/icons/Apex/")) | not)
+        | select($standIn | index("\($where) \($name)") | not)
+        | select(((.file // "" | startswith("/org/gnome/shell/icons/")) and ($resource | index($name))) | not)
+        | .app as $app | select($app == null or ($fixtures | index($app) | not))
+        | "\($where) \($name)\(if $app then " (\($app))" else "" end): \(.file // "no icon")"' 2>&1 | paste -sd';' -
+}
+
+# The surfaces the probe opens after its scenes (probe.js's iconSurfaces), by the boards they draw.
+readonly ICON_SURFACES=(
+    "dateMenu|board 34's date menu and notifications"
+    "overview|board 35's overview"
+    "launcher|board 36's launcher grid"
+    "spotlight|board 38's Spotlight results"
+    "switcher|board 15's window switcher"
+    "surfaces|board 16's popup menu, OSD and banner"
+    "dialog|board 13's dialog"
+    "endSession|board 14's end-session dialog"
+    "screenshot|board 19's screenshot UI"
+)
+
+# S1b's exit row over every surface G2 opens: each draws icons, and every one resolves as session_defaults' rule says.
+surface_icons() {
+    local label=$1 log=$2 r entry key desc got bad
+    r=$(report_of "$log" APEXG2-SESSION-SURFACES)
+    if [[ -z $r || -n $(jq -r '.error // empty' <<<"$r" 2>/dev/null) ]]; then
+        fail "$label: the probe walks the icons of every surface it opens (${r:+$(jq -r '.error' <<<"$r" | head -n 1)}${r:-no report})"
+        return
+    fi
+    for entry in "${ICON_SURFACES[@]}"; do
+        key=${entry%%|*} desc=${entry#*|}
+        got=$(jq -c --arg k "$key" '.[$k]' <<<"$r")
+        if [[ $got == null || $(jq -r 'if type == "array" then length else 0 end' <<<"$got") == 0 ]]; then
+            fail "$label: $desc draws icons for the walk (got $(jq -c '.' <<<"$got" | head -c 200))"
+            continue
+        fi
+        bad=$(jq --arg k "$key" '{($k): .[$k]}' <<<"$r" | icons_not_apex)
+        if [[ -z $bad ]]; then
+            pass "$label: every icon $desc draws resolves through Apex ($(jq length <<<"$got") icons)"
+        else
+            fail "$label: every icon $desc draws resolves through Apex ($bad)"
+        fi
+    done
 }
 
 # Mutter warns when two bindings claim one key: the second silently takes it from the first.
@@ -1824,6 +1896,58 @@ inactive_dot() {
         "$dots" "length > 0 and all(. >= $A11Y_ICON_RATIO)"
 }
 
+# Board 39's pills: the chip's and the timer's text at 4.5:1, the share's and the privacy group's glyphs
+# at 3:1, and a pill Apex fills against the bar at 3:1; upstream's high-contrast sheet fills the button instead.
+readonly A11Y_PILL_PARTS=(input:text recording:text sharing:icon privacy:icon recording:edge sharing:edge privacy:edge)
+readonly A11Y_PILL_GAP="the owner's decision on board 39's pill fills over #013b88 (2026-10-31)"
+readonly A11Y_PILL_HC_GAP="upstream HC sheet: the screen-sharing glyph, white on its #ff7800 fill (2.54:1)"
+# Each part under WCAG AA today, at the report's own rounding: a lower one fails.
+declare -Ar A11Y_PILL_TODAY=([default-solid:recording:edge]=2.02 [default-solid:sharing:edge]=1.62 [default-solid:privacy:edge]=1.62
+    [dark-style-solid:recording:edge]=2.13 [dark-style-solid:sharing:edge]=2.65 [dark-style-solid:privacy:edge]=2.65
+    [high-contrast:sharing:icon]=2.54 [high-contrast-solid:sharing:icon]=2.54)
+
+# A pill part's worst ratio in an APEXG2-A11Y report, or nothing when it was not measured.
+pill_ratio() {
+    local report=$1 pill=${2%:*} part=${2#*:}
+    if [[ $part == edge ]]; then
+        jq -r --arg p "$pill" '.barPills.pills[$p].edge.ratio // empty' <<<"$report" 2>/dev/null
+    else
+        jq -r --arg p "$pill" --arg k "$part" \
+            '[.barPills.pills[$p].targets[]? | select(.kind == $k and (.offscreen | not)) | .ratio] | min // empty' <<<"$report" 2>/dev/null
+    fi
+}
+
+pill_verdict() {
+    local desc=$1 worst=$2 threshold=$3
+    if jq -en "$worst >= $threshold" >/dev/null; then pass "$desc"; else fail "$desc ($worst:1)"; fi
+}
+
+# Each pill part at its threshold, or, pinned, at least today's ratio and still a gap.
+bar_pills() {
+    local label=$1 report=$2 p worst threshold today desc gap=$A11Y_PILL_GAP
+    local -A part_desc=([text]="text over what is drawn behind it" [icon]="glyphs over its fill" [edge]="fill against the bar beside it")
+    local -A part_noun=([text]=text [icon]=glyphs [edge]=fill)
+    [[ $label == high-contrast* ]] && gap=$A11Y_PILL_HC_GAP
+    for p in "${A11Y_PILL_PARTS[@]}"; do
+        [[ $label == high-contrast* && $p == *:edge ]] && continue
+        threshold=$A11Y_ICON_RATIO
+        [[ $p == *:text ]] && threshold=$A11Y_TEXT_RATIO
+        desc="$label accessibility: barPills: the ${p%:*} pill's ${part_desc[${p#*:}]} at $threshold:1"
+        worst=$(pill_ratio "$report" "$p")
+        if [[ -z $worst ]]; then
+            fail "$desc (not measured)"
+            continue
+        fi
+        today=${A11Y_PILL_TODAY[$label:$p]:-}
+        if [[ -z $today ]]; then
+            pill_verdict "$desc" "$worst" "$threshold"
+            continue
+        fi
+        pill_verdict "$label accessibility: barPills: the ${p%:*} pill's ${part_noun[${p#*:}]} is at least today's $today:1" "$worst" "$today"
+        known_gap "$gap" pill_verdict "$desc" "$worst" "$threshold"
+    done
+}
+
 # The text below 4.5:1 and the glyphs and dots below 3:1 in a report's surface at path; with gapdot
 # true, the inactive workspace dots are left to inactive_dot.
 a11y_low_contrast() {
@@ -1849,6 +1973,7 @@ a11y_contrast() {
     for s in bar barUnread; do
         inactive_dot "$label" "$report" "$s" "$label"
     done
+    bar_pills "$label" "$report"
     expect "$label accessibility" "$report" '.wifiMenuConnected.targets | any(.kind == "text" and (.inactive | not))' \
         "the connected network's name is measured over its row's own fill"
     expect "$label accessibility" "$report" '(.bar.targets | map(select(.kind == "dot" and .name == "workspace-dot")) | length >= 2)

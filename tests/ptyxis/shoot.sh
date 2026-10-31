@@ -19,7 +19,8 @@ lane's built RPMs (_build/ptyxis/out); without it the installed ptyxis is captur
 user '$USER_NAME' opens the sessions of the design canvas's board 32, typed into the
 terminals by a virtual keyboard, so the statuses come from bash's shell integration
 (vte.sh); the split captures add board 33's right split of apex-gnome. The captures and
-logs land in _build/ptyxis/shots/.
+logs land in _build/ptyxis/shots/. With APEX_PTYXIS_TARGETS=1 each capture also writes
+contrast-test.sh's targets, read over AT-SPI (python3-gobject, at-spi2-core).
 
 It needs gnome-shell, mesa-dri-drivers, dbus-daemon, python3-dbusmock, gcc, util-linux and
 the Apex fonts (jetbrains-mono-fonts-all, adwaita-sans-fonts). G2's clock.c and fixtures.py
@@ -64,12 +65,14 @@ PROMPT_COMMAND=(__apex_postexec "${PROMPT_COMMAND[@]}" apex_fixture_toolbox)
 EOF
 chown -R "$USER_NAME:" "$home"
 headless_bus "$out"
+atspi=$out/contrast-atspi.py
+install -m 644 "$PTYXIS_TESTS/contrast-atspi.py" "$atspi"
 
 shoot() {
     local name=$1 scene=$2 scheme=$3 style=$4
     headless_run "$out/$name.log" "$PTYXIS_TESTS/probe.js" "$SHELL_TIMEOUT" \
         "org.gnome.desktop.interface color-scheme '$scheme'"$'\n'"org.gnome.Ptyxis interface-style '$style'" \
-        APEX_SHOTS="$out" APEX_SHOT="$name" APEX_SCENE="$scene"
+        APEX_SHOTS="$out" APEX_SHOT="$name" APEX_SCENE="$scene" ${APEX_PTYXIS_TARGETS:+APEX_SHOT_ATSPI="$atspi"}
     log "shoot.sh: $name: exit $?"
     grep -q 'APEXPTYXIS ' "$out/$name.log" && [[ -s $out/$name.png ]]
 }

@@ -120,6 +120,11 @@
 
 .apex-lock-overlay { background-color: $apex_lock_overlay; }
 
+.apex-lock-background {
+  -apex-lock-blur: $apex_lock_blur;
+  -apex-lock-saturation: $apex_lock_saturation / 100%;
+}
+
 .apex-lock-stage { spacing: $apex_lock_stage_gap; }
 
 // GNOME 51.1 gives the prompt a fixed 550px and margins round the field and message, which push the hint below
@@ -135,7 +140,7 @@
   spacing: $apex_lock_clock_gap;
 
   .unlock-dialog-clock-date {
-    color: rgba($apex_lock_fg, .92);
+    color: $apex_lock_date_fg;
     font-size: apex-text-size($apex_font_lock_date_size);
     font-weight: $apex_font_lock_date_weight;
   }

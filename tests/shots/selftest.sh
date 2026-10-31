@@ -766,6 +766,7 @@ REPORT_OF_LEGIBLE_SURFACES='
 | ($text + {kind: "dot", name: "workspace-dot", ratio: 16, box: {x: 100, y: 10, width: 6, height: 6}}) as $dot
 | ($dot + {alpha: 0.447, ratio: $inactive}) as $inactiveDot
 | {box: {x: 0, y: 0, width: 200, height: 100}, targets: [$text, $icon]} as $s
+| {fill: "#c01c28", bar: "#f3f3f5", ratio: 5.2} as $edge
 | {textScalingFactor: 1.25, monitor: {x: 0, y: 0, width: 1440, height: 900},
     quickSettingsAccents: (["blue", "teal", "green", "yellow", "orange", "red", "pink", "purple", "slate"] | map({key: ., value: $s}) | from_entries),
     dateMenuAccents: (["blue", "teal", "green", "yellow", "orange", "red", "pink", "purple", "slate"] | map({key: ., value: $s}) | from_entries),
@@ -773,7 +774,10 @@ REPORT_OF_LEGIBLE_SURFACES='
     screenshot: $s,
 
     bar: ($s | .targets += [$dot, $inactiveDot]), barUnread: ($s | .targets += [$dot + {name: "messages-indicator"}, $inactiveDot]), dock: $s, popupMenu: $s, osd: $s, banner: $s, quickSettings: $s, wifiMenu: $s, wifiMenuConnected: $s, dateMenu: $s, switcher: $s,
-    dialog: $s, endSession: $s, spotlight: {popup: $s, toast: $s}, overview: $s, appGrid: $s}'
+    dialog: $s, endSession: $s, spotlight: {popup: $s, toast: $s}, overview: $s, appGrid: $s,
+    barPills: {box: $s.box, pills: {input: {targets: [$text + {name: "EN"}], edge: null},
+        recording: {targets: [$text + {name: "0:42", ink: "#ffffff", backdrop: "#c01c28", ratio: 5.6}], edge: $edge},
+        sharing: {targets: [$icon + {name: "screen-shared-symbolic"}], edge: $edge}, privacy: {targets: [$icon, $icon], edge: $edge}}}}'
 
 # The label picks the backdrop: dark-style's inactive dot passes 3:1 today, default's is the gap.
 a11y_run() {
@@ -801,9 +805,27 @@ test_inactive_dot_gap() {
 CHANGES
 }
 
+# default-solid's pill fills are Apex's known gaps: pinned at today's ratios, and failing once one reaches 3:1.
+test_pill_gaps() {
+    local want_failures want_gaps sharing what passes failures open_gaps edges
+    while IFS='|' read -r want_failures want_gaps sharing what; do
+        edges=".barPills.pills.recording.edge.ratio = 2.02 | .barPills.pills.sharing.edge.ratio = $sharing | .barPills.pills.privacy.edge.ratio = 1.62"
+        read -r passes failures open_gaps <<<"$(a11y_run a11y_contrast "$edges" default-solid 2.22)"
+        if ((failures == want_failures && open_gaps == want_gaps)); then
+            ok "pill gaps: $what fails $want_failures, $want_gaps gap(s)"
+        else
+            not_ok "pill gaps: $what fails $want_failures, $want_gaps gap(s) (passed/failed/gaps $passes/$failures/$open_gaps): $(grep -m3 '^FAIL' "$T/a11y.out" | paste -sd'|' -)"
+        fi
+    done <<'CHANGES'
+0|5|1.62|default-solid's three pill fills at today's ratios, beside its two inactive-dot gaps
+1|5|1.61|the sharing pill's fill below today's 1.62:1
+1|4|3|the sharing pill's fill at 3:1: its gap must go
+CHANGES
+}
+
 test_a11y() {
     local assertions expected change what passes failures open_gaps want
-    for assertions in a11y_contrast:49 a11y_layout:46; do
+    for assertions in a11y_contrast:56 a11y_layout:46; do
         expected=${assertions#*:}
         read -r passes failures open_gaps <<<"$(a11y_run "${assertions%:*}")"
         if ((failures == 0 && open_gaps == 0 && passes == expected)); then
@@ -828,6 +850,13 @@ a11y_contrast|1|.barUnread.targets[2].ratio = 2.9|the clock's unread dot at 2.9:
 a11y_contrast|2|.bar.targets = .bar.targets[:3]|no inactive workspace dot measured
 a11y_contrast|1|.barUnread.targets = .barUnread.targets[:2] + .barUnread.targets[3:]|no unread dot measured
 a11y_contrast|0|.barUnread.targets[2] += {kind: "icon", name: "message-indicator-symbolic"}|high contrast's unread glyph in place of the dot
+a11y_contrast|1|.barPills.pills.recording.targets[0] += {ink: "#c01c28", ratio: 1}|the timer's text in the recording pill's own fill colour
+a11y_contrast|1|.barPills.pills.input.targets[0].ratio = 4.4|the input chip's text at 4.4:1
+a11y_contrast|1|.barPills.pills.privacy.targets[1].ratio = 2.9|a privacy glyph at 2.9:1 over its fill
+a11y_contrast|1|.barPills.pills.sharing.edge.ratio = 2.9|the sharing pill's fill at 2.9:1 against the bar
+a11y_contrast|2|.barPills.pills.privacy = {error: "not shown"}|a pill that never showed
+a11y_contrast|7|del(.barPills)|no pills measured
+a11y_contrast|0|.barPills.pills.recording.targets[0].ratio = 4.5|the timer's text at 4.5:1
 a11y_contrast|1|.wifiMenu.targets[0].ratio = 3|a menu row's text at 3:1
 a11y_contrast|1|.wifiMenuConnected.targets[0].ratio = 4.4|the connected network's name at 4.4:1 over its fill
 a11y_contrast|1|.wifiMenuConnected.targets |= map(. + {kind: "icon"})|a connected row with only its glyphs measured
@@ -1118,7 +1147,7 @@ test_signoff_banners() {
     rm -rf "$dir" && cp -r "$1" "$dir"
     sed -i '/^APEXG2-SESSION /s/"icon-theme":"Apex"}/"icon-theme":"Adwaita"}/' "$dir/g2/dark-style.log"
     if ! "$HERE/signoff.sh" --collect "$dir/g2" "$dir/shots" "$dir/out" >"$T/signoff.out" 2>&1 &&
-        grep -q '^signoff.sh: session defaults: 11 passed, 1 failed$' "$T/signoff.out" &&
+        grep -q '^signoff.sh: session defaults: 13 passed, 1 failed$' "$T/signoff.out" &&
         grep -q 'dark-style: the session reads .*(icon-theme is "Adwaita", not "Apex")' "$T/signoff.out" &&
         grep -q '1 session default check(s) failed' "$T/signoff.out"; then
         ok "signoff: a session default that is not apex-desktop's fails its own check line, naming the key"
@@ -3103,6 +3132,7 @@ CHANGES
 readonly SESSION_REPORT='{"settings": {"font-name": "Adwaita Sans 10.125", "document-font-name": "Adwaita Sans 10.125",
     "monospace-font-name": "JetBrains Mono 9.75", "font-hinting": "none", "icon-theme": "Apex"},
   "shell": {"font": "Adwaita Sans 10.125", "iconTheme": "Apex"},
+  "apexSymbolic": ["battery-level-80-symbolic", "pan-end-symbolic", "window-close-symbolic"],
   "fontconfig": {"sans": {"family": "Adwaita Sans", "file": "/usr/share/fonts/adwaita-sans-fonts/AdwaitaSans-Regular.ttf", "features": ["ss03"]},
     "mono": {"family": "JetBrains Mono", "file": "/usr/share/fonts/jetbrains-mono-fonts/JetBrainsMono-Regular.otf", "features": []}},
   "drawn": {"clock": "Adwaita Sans"},
@@ -3123,7 +3153,7 @@ test_session_defaults() {
     while IFS='|' read -r failures change what; do
         printf 'APEXG2-SESSION %s\n' "$(jq -nc "$SESSION_REPORT | $change")" >"$T/session.log"
         read -r passes _ <<<"$(assertion_counts session_defaults default "$T/session.log")"
-        expect_eq "session defaults: $what fails $failures of 6" "$failures" $((6 - passes))
+        expect_eq "session defaults: $what fails $failures of 7" "$failures" $((7 - passes))
     done <<'CHANGES'
 0|.|apex-desktop's defaults, a fixture app's generic icon and the shell's own screenshooter
 1|.settings["monospace-font-name"] = "DejaVu Sans Mono 10"|another monospace font in the settings
@@ -3137,7 +3167,9 @@ test_session_defaults() {
 1|.icons.dock[0].file = "/usr/share/icons/hicolor/scalable/apps/org.gnome.Nautilus.svg"|an image app's icon from outside Apex
 1|.icons.quickSettings[0].icon = ". GThemedIcon camera-photo-symbolic"|a shell icon that is not on the list
 1|.icons = {bar: [], dock: null, dash: null, quickSettings: []}|no icons reported
-6|{error: "sessionDefaultsReport: no panel"}|a probe error
+1|.apexSymbolic = ["battery-level-80-symbolic", "screenshooter-symbolic"]|an icon listed as the shell's own that Apex now ships
+1|.apexSymbolic = []|no Apex Symbolic glyphs reported
+7|{error: "sessionDefaultsReport: no panel"}|a probe error
 CHANGES
     printf 'APEXG2-SESSION %s\n' "$(jq -nc "$SESSION_REPORT | .icons.bar[0].file = null")" >"$T/session.log"
     assertion_counts session_defaults default "$T/session.log" >/dev/null
@@ -3148,6 +3180,78 @@ CHANGES
     assertion_counts session_defaults default "$T/session.log" >/dev/null
     expect_eq "session defaults: a missing JetBrains Mono names the family fontconfig fell back to" 1 \
         "$(grep -c '^FAIL default: fontconfig gives JetBrains Mono .*(got {"family":"Noto Sans",' "$T/assertions.out")"
+    printf 'APEXG2-SESSION %s\n' "$(jq -nc "$SESSION_REPORT | .apexSymbolic += [\"switch-on-symbolic\"]")" >"$T/session.log"
+    assertion_counts session_defaults default "$T/session.log" >/dev/null
+    expect_eq "session defaults: a listed icon Apex ships is named, so it leaves the list" 1 \
+        "$(grep -c '^FAIL default: no icon listed .*(listed as shell-only, but /usr/share/icons/Apex has it: switch-on-symbolic)$' "$T/assertions.out")"
+}
+
+# One icon per surface probe.js's iconSurfaces opens, each resolved under Apex.
+readonly SURFACES_REPORT='{
+  "dateMenu": [{"icon": "software-update-available-symbolic", "file": "/usr/share/icons/Apex/symbolic/software-update-available-symbolic.svg", "app": null}],
+  "overview": [{"icon": "view-app-grid-symbolic", "file": "/usr/share/icons/Apex/symbolic/view-app-grid-symbolic.svg", "app": null}],
+  "launcher": [{"icon": "org.gnome.Nautilus", "file": "/usr/share/icons/Apex/scalable/apps/org.gnome.Nautilus.svg", "app": "org.gnome.Nautilus.desktop"}],
+  "spotlight": [{"icon": "edit-find-symbolic", "file": "/usr/share/icons/Apex/symbolic/edit-find-symbolic.svg", "app": null}],
+  "switcher": [{"icon": "application-x-executable", "file": "/usr/share/icons/Apex/scalable/mimetypes/application-x-executable.svg", "app": null}],
+  "surfaces": [{"icon": "user-home-symbolic", "file": "/usr/share/icons/Apex/symbolic/user-home-symbolic.svg", "app": null}],
+  "dialog": [{"icon": "dialog-password-symbolic", "file": "/usr/share/icons/Apex/symbolic/dialog-password-symbolic.svg", "app": null}],
+  "endSession": [{"icon": "system-shutdown-symbolic", "file": "/usr/share/icons/Apex/symbolic/system-shutdown-symbolic.svg", "app": null}],
+  "screenshot": [{"icon": ". GThemedIcon screenshooter-symbolic screenshooter",
+    "file": "/org/gnome/shell/icons/scalable/actions/screenshooter-symbolic.svg", "app": null}]}'
+
+test_session_surface_icons() {
+    local passes failures want change what scenes
+    while IFS='|' read -r want scenes change what; do
+        { printf 'APEXG2-SESSION %s\n' "$(jq -nc "$SESSION_REPORT")"
+          [[ $scenes == 1 ]] && printf 'APEXG2-SCENES {}\n'
+          [[ $change == - ]] || printf 'APEXG2-SESSION-SURFACES %s\n' "$(jq -nc "$SURFACES_REPORT | $change")"; } >"$T/surfaces.log"
+        read -r passes failures <<<"$(assertion_counts session_defaults default "$T/surfaces.log")"
+        expect_eq "surface icons: $what" "$want" "$passes/$failures"
+    done <<'CHANGES'
+16/0|1|.|every surface's icons through Apex, the shell's own screenshooter on the list
+15/1|1|.dateMenu[0].file = "/usr/share/icons/Adwaita/symbolic/status/software-update-available-symbolic.svg"|an Adwaita glyph in the date menu
+15/1|1|.dialog[0].file = null|a dialog icon that resolves nowhere
+15/1|1|.switcher[0] = {icon: "org.gnome.Nautilus", file: "/usr/share/icons/hicolor/scalable/apps/org.gnome.Nautilus.svg", app: null}|a hicolor app icon in the switcher
+16/0|1|.switcher[0].file = "/usr/share/icons/Adwaita/scalable/mimetypes/application-x-executable.svg"|the switcher stand-in's generic app icon, from Adwaita, on its list
+16/0|1|.spotlight += [{icon: "drive-harddisk", file: "/usr/share/icons/Adwaita/scalable/devices/drive-harddisk.svg", app: null}]|a search provider's full-colour device icon in Spotlight, on its list
+15/1|1|.dateMenu += [{icon: "drive-harddisk", file: "/usr/share/icons/Adwaita/scalable/devices/drive-harddisk.svg", app: null}]|that device icon on another surface
+15/1|1|.screenshot[0].icon = ". GThemedIcon camera-photo-symbolic"|a resource icon that is not on the list
+15/1|1|.spotlight = null|a surface that never opened
+15/1|1|.endSession = []|a surface that drew no icon
+15/1|1|.screenshot = {error: "no screenshot UI"}|a surface whose opener threw
+7/1|1|{error: "surfaceIconsReport: no stage"}|a walk that failed
+7/1|1|-|scenes with no walk reported
+7/0|0|-|a case without scenes, which opens no surface
+CHANGES
+    { printf 'APEXG2-SESSION %s\nAPEXG2-SCENES {}\n' "$(jq -nc "$SESSION_REPORT")"
+      printf 'APEXG2-SESSION-SURFACES %s\n' "$(jq -nc "$SURFACES_REPORT | .dateMenu[0].file = null")"; } >"$T/surfaces.log"
+    assertion_counts session_defaults default "$T/surfaces.log" >/dev/null
+    expect_eq "surface icons: a failure names the board, the surface and the icon" 1 \
+        "$(grep -c "^FAIL default: every icon board 34's date menu and notifications draws resolves through Apex (dateMenu software-update-available-symbolic: no icon)\$" "$T/assertions.out")"
+}
+
+test_repeat_compare() {
+    local out status
+    printf '%s\n' '# a comment' 'PASS default: the shell exits 0' 'FAIL motion: the easing (got false)' 'GAP  S1b: dots: 3:1 (got [2.86])' \
+        'PASS idle: nothing paints' 'PASS idle: nothing paints' >"$T/repeat-1.log"
+    cp "$T/repeat-1.log" "$T/repeat-2.log"
+    out=$("$HERE/repeat.sh" compare "$T/repeat-1.log" "$T/repeat-2.log") && status=0 || status=$?
+    expect_eq "repeat: two identical runs differ nowhere" "0 repeat: 2 runs, 5 assertions, 0 differ" "$status $out"
+    printf '%s\n' 'PASS default: the shell exits 0' 'PASS motion: the easing' 'GAP  S1b: dots: 3:1 (got [2.91])' \
+        'PASS idle: nothing paints' 'FAIL idle: nothing paints (got 3 frames)' >"$T/repeat-2.log"
+    out=$("$HERE/repeat.sh" compare "$T/repeat-1.log" "$T/repeat-2.log") && status=0 || status=$?
+    expect_eq "repeat: a fail and a pass of one assertion share a row, and a twice-made one gets a row per time" \
+        "1 F P  motion: the easing|P F  idle: nothing paints [2]|repeat: 2 runs, 5 assertions, 2 differ" "$status $(paste -sd'|' - <<<"$out")"
+    printf '%s\n' 'PASS default: the probe started (on time)' 'PASS idle: dots at 3:1 (WCAG 1.4.11)' >"$T/repeat-4.log"
+    printf '%s\n' 'PASS default: the probe started (late)' 'FAIL idle: dots at 3:1 (WCAG 1.4.11) (got [2.86])' >"$T/repeat-5.log"
+    out=$("$HERE/repeat.sh" compare "$T/repeat-4.log" "$T/repeat-5.log") && status=0 || status=$?
+    expect_eq "repeat: a pass closing on what its run saw shares a row, and a failure keeps its pass's own parenthesis" \
+        "1 P F  idle: dots at 3:1|repeat: 2 runs, 2 assertions, 1 differ" "$status $(paste -sd'|' - <<<"$out")"
+    printf '%s\n' 'PASS default: the shell exits 0' >"$T/repeat-3.log"
+    out=$({ "$HERE/repeat.sh" compare "$T/repeat-1.log" "$T/repeat-1.log" "$T/repeat-3.log" || :; } | grep -c '^P P -  ')
+    expect_eq "repeat: an assertion a run never made shows -" 2 "$out"
+    "$HERE/repeat.sh" compare "$T/repeat-1.log" >/dev/null 2>&1 && status=0 || status=$?
+    expect_eq "repeat: one log is not a comparison" 2 "$status"
 }
 
 test_no_binding_overwritten() {
@@ -3789,6 +3893,7 @@ test_window_switcher
 test_modal_dialog
 test_a11y
 test_inactive_dot_gap
+test_pill_gaps
 test_signoff
 test_goldens
 test_goldens_rows
@@ -3830,7 +3935,9 @@ test_no_disposed_apex
 test_no_binding_overwritten
 test_no_spurious_allocation
 test_clean_shutdown
+test_repeat_compare
 test_session_defaults
+test_session_surface_icons
 test_no_disposed_at_shutdown
 test_exit_cut
 test_keys_case
