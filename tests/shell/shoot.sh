@@ -41,9 +41,10 @@ APEX_DESKTOP_SRC, a checkout). Captures and logs land in _build/gnome-shell/shot
 It needs mesa-dri-drivers, dbus-daemon, python3-dbusmock, python3-gobject, gcc,
 accountsservice, polkit, librsvg2-tools, openssl, git-core and the Apex fonts (adwaita-sans-fonts,
 jetbrains-mono-fonts-all). G2's clock.c and fixtures.py (tests/shots) are used as they are.
-The system bus lets root own the services that fixtures.py --names lists for this run. Power
-profiles and accountsservice stay off, as G2's opt-ins: the lane's Quick Settings has no Power
-Mode (G2 measures it), and the lane lists users from the real accounts-daemon.
+The system bus lets root own the services that fixtures.py --names lists for this run, and the
+shells reach them as G2's do. Power profiles and accountsservice stay off, as G2's opt-ins: the
+lane's Quick Settings has no Power Mode (G2 measures it), and the lane lists users from the real
+accounts-daemon.
 EOF
 }
 
@@ -151,7 +152,8 @@ mapfile -t fixture_names < <(python3 "$SHOTS/fixtures.py" --names)
         printf '<allow own="%s"/><allow send_destination="%s"/>\n' "$name" "$name"
     done
     printf '</policy><policy context="default">'
-    printf '<allow send_destination="%s"/>' "$GDM_NAME" "$LOGIND_NAME" "$FPRINT_NAME" "$UPDATE1_NAME"
+    # The shells run as their users: G2's, as root, reach the fixtures too.
+    printf '<allow send_destination="%s"/>' "${fixture_names[@]}" "$GDM_NAME" "$LOGIND_NAME" "$FPRINT_NAME" "$UPDATE1_NAME"
     printf '</policy></busconfig>\n'
 } >/etc/dbus-1/system-local.conf
 [[ -S /run/dbus/system_bus_socket ]] || dbus-daemon --system --fork || die "no system bus"
