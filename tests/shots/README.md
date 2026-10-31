@@ -615,9 +615,9 @@ OSD shown, an Alt+Tab list in a stand-in popup and the screenshot panel (styled 
 each carry the popovers' `$apex_panel_blur` and `$apex_panel_saturation`.
 
 Every glass surface conforms, checked from the registry rather than a list: `glass.js` records
-every surface the glass registry gets during the case (the shell's, not its own `emptyTest`),
-and a surface the case never checked fails by name, as does one the assertions do not know, so
-a surface a later slice registers is caught until the case checks it. Each surface's blur is
+every surface the glass registry gets during the case (the shell's, not its own `emptyTest` and
+`opacityTest`), and a surface the case never checked fails by name, as does one the assertions
+do not know, so a surface a later slice registers is caught until the case checks it. Each surface's blur is
 rounded at its border radius, all four corners alike, over the box St paints its background in
 (`get_background_paint_box` of its allocation). For the dock, Quick Settings, the calendar, a
 banner, the OSD, the Spotlight panel and the toast (the Alt+Tab list as above), a black and white
@@ -630,6 +630,15 @@ round a few pixels the other way; the others match exactly). The toast hides its
 a check it outlives is read again on a new toast, at most three times. A banner check first
 dismisses a banner the case did not post, such as the one-time search hint, which never expires
 while no one types and would hold the case's banner back.
+
+Opacity-following is measured in pixels: a scrim-styled glass the case registers over the tile
+pattern is read at opacity 255 (B), 128 (H) and 0 (D). D equals the pattern, pixel for pixel,
+and B differs from it. Every channel of H lies within 1 + 64/255 steps of (128·B + 127·D) / 255,
+the blend 0003's `follow-opacity` asks for. The bound is three roundings: the blurred colour
+c, multiplied by 128/255, is converted to 8 bits before blending (½ step); the blend's sum is
+written to the 8-bit frame (½ step); and the reference reads c from B, which holds c rounded
+(½ step, carried at 128/255: 64/255). Measured: 1.208 steps; with `follow-opacity` forced off,
+88.651.
 
 `shadows_under_glass` checks the `shadows` feature against the glass in the same case, light
 and dark: `glass.js` lays the tile grid under Quick Settings, a popup menu and a dialog and
