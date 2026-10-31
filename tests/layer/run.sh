@@ -389,6 +389,7 @@ fact "quick-settings: layer off: a row it hid shows again, as stock has it" 'qs\
 fact "quick-settings: layer off: the row stock again" 'qs\.off\.row=children=icons,label,check icons=signal,lock checked=false lock=3/none label=0'
 fact "quick-settings: layer off: the subtitle under the title" 'qs\.off\.menu=1,1 x_align=0'
 fact "quick-settings: layer off: :checked no longer follows" 'qs\.off\.row-unfollowed=checked=false'
+fact "quick-settings: layer back on: a row still without an access point hides again" 'qs\.on\.refused=visible=false'
 fact "quick-settings: layer back on: rows and menus built before it change again" 'qs\.on\.row=children=icons,label,lock,check icons=signal checked=true lock=2/apex-network-lock label=2'
 fact "quick-settings: layer back on: the subtitle on the title's row" 'qs\.on\.menu=3,0 x_align=3'
 fact "quick-settings: layer off: stock order" \

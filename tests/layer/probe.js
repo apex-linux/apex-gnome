@@ -642,6 +642,7 @@ async function exerciseSubmenus(Main) {
     fact('qs.off.row-unfollowed', `checked=${other.has_style_pseudo_class('checked')}`);
     settings.set_boolean('layer-enabled', true);
     await spin(200);
+    fact('qs.on.refused', `visible=${refused.visible}`);
     fact('qs.on.row', rowState(other));
     fact('qs.on.menu', menu.subtitleAt());
 }
