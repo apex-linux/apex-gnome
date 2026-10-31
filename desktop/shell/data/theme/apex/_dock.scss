@@ -40,7 +40,7 @@ $_item_bottom: $apex_dock_dot_gap + $apex_dock_dot_size;
     }
 
     // The icon fills its box, over an inset ring: this one sits in the gap between the items.
-    &:focus .overview-icon { box-shadow: 0 0 0 $apex_entry_focus_ring $apex_accent !important; }
+    &:focus .overview-icon { box-shadow: 0 0 0 $apex_entry_focus_ring $apex_dock_fg !important; }
   }
 
   .show-apps-icon {
