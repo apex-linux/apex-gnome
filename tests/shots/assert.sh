@@ -25,7 +25,7 @@ readonly DIRECT_CASES=(default default-scale1 dark-style high-contrast large-tex
     large-text-solid dock-intellihide dock-intellihide-dark dock-one-gpu no-dock no-dock-dark stock-light stock-dark safe-env
     layer-disabled layer-cycles motion idle dock-pin dock-dnd dock-external keys glass-load glass-stress fault-configure fault-enable fault-abort shutdown-banner
     kernel-safe
-    fedora-light fedora-dark glass fedora-glass
+    fedora-light fedora-dark glass glass-views fedora-glass
     indicators indicators-scale1 indicators-dark)
 readonly DIRECT_PARTS=(main kernel fedora)
 readonly CAPTURE_CASES=(default default-scale1 dark-style stock-light stock-dark fedora-light fedora-dark)
@@ -2527,6 +2527,7 @@ direct_cases() {
     glass_frames glass "$run/glass.log"
     shadows_under_glass glass "$run/glass.log"
     glass_manager glass "$run/glass.log" light
+    glass_views glass-views "$run/glass-views.log"
     glass_unlock_vs_fedora "$run"
     indicator_cases "$run"
     one_gpu_case "$run"
@@ -2844,6 +2845,8 @@ patched_assertions() {
     asserted glass && glass_frames glass "$run/glass.log"
     asserted glass && shadows_under_glass glass "$run/glass.log"
     asserted glass && glass_manager glass "$run/glass.log" light
+    asserted glass-views && no_js_error glass-views "$run/glass-views.log"
+    asserted glass-views && glass_views glass-views "$run/glass-views.log"
     asserted glass fedora-glass && glass_unlock_vs_fedora "$run"
     asserted indicators indicators-scale1 indicators-dark && indicator_cases "$run"
     asserted dock-one-gpu && one_gpu_case "$run"
@@ -2930,6 +2933,20 @@ glass_frames() {
 }
 
 # shellcheck disable=SC2016 # jq programs
+# The glass-views case: patch 0003's glass on two stage views, as glass-views.js reads each one.
+glass_views() {
+    local label=$1 log=$2 views
+    views=$(report_of "$log" APEXG2-GLASS-VIEWS | jq -r '.straddling.live | "seam \(.seamMax)/255; away from it \(.interiorMax) inside, \(.edgeMax) at the edges, \(.mean) on average"' 2>/dev/null)
+    expect_report "$label" "$log" '.views == 2 and ([.across, .back] | all(.views == 2 and .pixels > 0 and .differingFromFresh == 0))
+        and (.straddling | .views == 2 and .liveDifferingFromFresh == 0)' \
+        "a glass box moved from one monitor's view to the other's and back draws, in both views' frames, what a fresh effect draws; one over their boundary draws what a fresh effect draws there too" APEXG2-GLASS-VIEWS
+    expect_report "$label" "$log" ".straddling.live | .interiorMax <= $GLASS_INTERIOR_MAX and .edgeMax <= $GLASS_EDGE_MAX and .mean <= $GLASS_MEAN_ERROR" \
+        "over the boundary, away from it, the box is blur-ref.js's blur within $GLASS_INTERIOR_MAX/255 inside, $GLASS_EDGE_MAX/255 in the ds/2 band, $GLASS_MEAN_ERROR/255 on average (${views:-no report})" APEXG2-GLASS-VIEWS
+    known_gap "0003: fine mode's per-view texture never gets the other view's pixels, a seam over two monitors; not 15b's fix" \
+        expect_report "$label" "$log" ".straddling.live.seamMax <= $GLASS_INTERIOR_MAX" \
+        "and within 3 sigma of the boundary, too" APEXG2-GLASS-VIEWS
+}
+
 shadows_under_glass() {
     local label=$1 log=$2 all='[.shadows.light, .shadows.dark | .quickSettings, .popupMenu, .dialog]'
     expect_report "$label" "$log" "$all | length == 6 and all(.covered and .sameSize and .interiorDiffering == 0)" \

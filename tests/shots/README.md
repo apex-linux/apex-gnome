@@ -69,6 +69,7 @@ The direct cases:
 | `shutdown-banner` | `G2_SHUTDOWN_BANNER=1` | after the usual reports and the same date-menu cut, a notification for the tray and its banner timeout due 100 ms into a shutdown whose history write is held 300 ms, in which the probe also sends the date menu's three signals: the layer's teardown disables the notifications feature, which clears the tray's banner timeouts before `layout.js` destroys it, so `main.js`'s shutdown loop runs none on the disposed tray, and the cut keeps the signals from the destroyed events section |
 | `fedora-light`, `fedora-dark` | Fedora's build, `prefer-light` or `prefer-dark` | no Apex module; upstream's sheet at its own path, byte for byte the one safe mode loads from `theme/stock/` |
 | `glass`, `fedora-glass` | the capture settings, `G2_GLASS=1` | patch 0003's glass in the frames the shell drew; the stock unlock blur captured in both shells (see "Glass") |
+| `glass-views` | the capture settings and a second virtual monitor, 1920x1080, right of the panel, both at scale 2 (`G2_MONITOR2`), `G2_GLASS_VIEWS=1` | `glass-views.js`: patch 0003's glass on two stage views, each read from its own framebuffer (see "Glass") |
 
 Every case: the probe ran (so the static import graph loaded), from `startup-complete`, and no `JS ERROR`;
 no key binding overwrites another (mutter's "Overwriting existing binding" warning);
@@ -604,6 +605,18 @@ damages the tile alone:
 
 `blur-ref.js` is a clamp-to-edge Gaussian at full resolution, CSS `saturate()` and the
 rounded box's coverage, over the box alone; `blur-ref-test.js` tests it in `selftest.sh`.
+
+`glass-views` puts the same glass (σ 24, saturation 1.6, corners 18, `fine`) on two monitors,
+two stage views with a framebuffer each, and reads each view's part of a box from its own.
+A box moved from the left view to the right one and back draws, in both views' frames, what a
+fresh effect draws there: the blur follows it from view to view. A box over the boundary draws
+what a fresh effect draws too, and away from the boundary it is `blur-ref.js`'s blur within the
+bounds above. Within 3 σ of the boundary it is not: `fine` keeps its last result per stage view,
+each in a texture of its own that only that view's blit fills, so each half blurs without the
+other view's pixels and the halves meet at a seam, up to 93.58/255 off the reference. Stock's
+effect has one texture that every view fills its part of, so it shows the seam only in a new
+effect's first frame (77/255) and then 1.28/255. The seam is a known gap, and not the one the
+edge fix (15b) closes: that fix makes the pixels past the stage defined, not the other view's.
 In the same case the glass manager (`js/ui/apex/glass/`) is read on the live shell, light:
 `glass_manager` asserts that the bar's blur is `$apex_bar_blur` at `$apex_bar_saturation`,
 and Quick Settings', the calendar's (each opened) and a banner's `$apex_panel_blur` at
