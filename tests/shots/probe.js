@@ -1172,6 +1172,26 @@ function layerReport(Registry, surface, unit) {
     });
 }
 
+// registry.js builds a surface's layers a later after it maps (a ModalDialog's a later after that), then shows them.
+const LAYERS_BUILT_TIMEOUT_MS = 3000;
+async function layersBuilt(Registry, surfaces) {
+    const built = await until(() => surfaces.every(surface => {
+        const layers = Registry.layersOf(surface);
+        return layers.length > 0 && layers.every(layer => layer.mapped);
+    }), LAYERS_BUILT_TIMEOUT_MS);
+    await settle();
+    return built;
+}
+
+// What shadows/feature.js registers under root: each St widget whose style draws a layer, not below it.
+function shadowedSurfaces(Registry, root) {
+    if (root instanceof St.Widget && root.get_stage() && root.get_theme_node().get_shadow(Registry.LAYER_PROPERTIES[0]))
+        return [root];
+    return root.get_children().flatMap(child => shadowedSurfaces(Registry, child));
+}
+
+const windowPreviews = actor => actor.get_children().flatMap(c => c.window_container !== undefined ? [c] : windowPreviews(c));
+
 async function shadowLayers(unit) {
     const Registry = await import(SHADOW_REGISTRY);
     const result = {};
@@ -1179,7 +1199,7 @@ async function shadowLayers(unit) {
         ['dateMenu', Main.panel.statusArea.dateMenu.menu]]) {
         menu.open(BoxPointer.PopupAnimation.NONE);
         // eslint-disable-next-line no-await-in-loop
-        await settle();
+        await layersBuilt(Registry, [menu.box]);
         result[name] = layerReport(Registry, menu.box, unit);
         menu.close(BoxPointer.PopupAnimation.NONE);
         // eslint-disable-next-line no-await-in-loop
@@ -1195,7 +1215,7 @@ async function shadowLayers(unit) {
     for (let opening = 0; opening < 2; opening++) {
         popup.open(BoxPointer.PopupAnimation.NONE);
         // eslint-disable-next-line no-await-in-loop
-        await settle();
+        await layersBuilt(Registry, [popup.box]);
         result.popupMenu = layerReport(Registry, popup.box, unit);
         if (opening === 0) {
             popup.close(BoxPointer.PopupAnimation.NONE);
@@ -1210,8 +1230,8 @@ async function shadowLayers(unit) {
     const dialog = new ModalDialog.ModalDialog();
     dialog.contentLayout.add_child(new St.Label({text: 'Shadow'}));
     dialog.open();
-    await settle();
     const surface = dialog.dialogLayout._dialog;
+    await layersBuilt(Registry, [surface]);
     result.dialog = layerReport(Registry, surface, unit)
         .map((layer, i) => ({...layer, besideBox: Registry.layersOf(surface)[i].get_parent() === surface.get_parent()}));
     dialog.close();
@@ -2757,8 +2777,8 @@ async function previewShadows() {
     const unit = cssUnit();
     Main.overview.show();
     await settle();
-    const find = actor => actor.get_children().flatMap(c => c.window_container !== undefined ? [c] : find(c));
-    const previews = find(Main.layoutManager.overviewGroup).map(preview => ({
+    await layersBuilt(Registry, windowPreviews(Main.layoutManager.overviewGroup));
+    const previews = windowPreviews(Main.layoutManager.overviewGroup).map(preview => ({
         styled: preview.has_style_class_name('apex-window-preview'),
         layers: Registry.layersOf(preview).map(layer => ({
             shown: layer.mapped,
@@ -3035,6 +3055,8 @@ async function signoffWindows() {
     // A window still mapping joins the overview's workspace late: wait for its preview.
     const previews = await until(() => countDescendants(Main.layoutManager.overviewGroup,
         a => a.constructor.name === 'WindowPreview' && a.mapped) >= SIGNOFF_APPS.length, SIGNOFF_WINDOWS_MS);
+    const Registry = await apexModule(SHADOW_REGISTRY).catch(() => null);
+    const shadowsBuilt = {overview: Registry ? await layersBuilt(Registry, windowPreviews(Main.layoutManager.overviewGroup)) : null};
     await settle();
     await windowsRedrawn("the overview's");
     global.stage.set_key_focus(null);
@@ -3052,6 +3074,7 @@ async function signoffWindows() {
     popup.show(false, 'switch-applications', 0);
     // switcherPopup.js shows it after POPUP_DELAY_TIMEOUT, a GLib timeout that leisure does not wait for.
     const altTabShown = await until(() => popup.opacity === 255, 3000);
+    shadowsBuilt.altTab = Registry ? await layersBuilt(Registry, shadowedSurfaces(Registry, popup)) : null;
     await settle();
     keepOrder("the switcher's");
     const altTab = withoutBytes(await capture('signoff-alt-tab', [], {switcher: popup._items.map(item => item.app.get_id())}));
@@ -3059,7 +3082,7 @@ async function signoffWindows() {
     await settle();
     drawn.destroy();
     return {
-        shown, previews, apps: appsShown(), overview: overview.file, altTab: altTab.file, altTabShown,
+        shown, previews, apps: appsShown(), overview: overview.file, altTab: altTab.file, altTabShown, shadowsBuilt,
         loaded, quiet, focusAttempts, pointerPlaced, notified, drawn: drawn.report(),
         atOverview: {pointer: [pointerX, pointerY], panelStates: Object.fromEntries(panelStates)},
     };
