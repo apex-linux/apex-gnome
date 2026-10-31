@@ -121,16 +121,23 @@ it ran on the wall clock, so mutter's frame timer never fired and no shell start
 The guard's shells, started by systemd, keep the real clock and have no fixtures.
 
 A shell that dies on a signal leaves a backtrace. `direct.sh` also preloads `crash.c`, whose
-handler writes `APEXG2-CRASH` and the frames (`backtrace_symbols_fd`) into the case's log before
-the default action, so there are frames even where the core goes to a pipe the container cannot
-reach, as on CI's runners. Each case's shell runs with `ulimit -c unlimited`, from its HOME, where
-a core lands under core_pattern `core`. After a signal exit `backtrace.sh`'s `case_backtrace`
-writes `/out/CASE.bt`: those frames, then gdb's `bt` and `thread apply all bt full` of the core
-(gdb installed on demand, symbols from Fedora's debuginfod; the lane's own gnome-shell has none,
-which it says), or the same through `coredumpctl` where core_pattern pipes to systemd-coredump, or
-one line saying why there is none (`no backtrace: no core in … (core_pattern …, ulimit -Hc …)`, `no
-backtrace: gdb missing …`). The core is deleted once read. The shell's `exits` assertion then
-names the crashing thread's frame past the signal trampoline, or that reason, or `no CASE.bt`.
+handler writes `APEXG2-CRASH` and the signal, then the frames (`backtrace_symbols_fd`), into the
+case's log before it passes the signal on: to the handler it replaced, if there was one, or to the
+default action, so the exit status stays what it would be without it. The first signal decides: a
+fault in the unwinder, or another thread's crash, raises that one. It covers SIGSEGV, SIGBUS and
+SIGILL; gnome-shell's `main.c` replaces its SIGABRT and SIGFPE handler with its own (gjs's stack
+dump), so an abort or a failed `g_assert` leaves that dump and no frames. Its alternate stack is the
+main thread's alone: a stack overflow in another thread prints nothing. There are frames even where
+the core goes to a pipe the container cannot reach, as on CI's runners. Each case's shell runs with
+`ulimit -c unlimited`, from its HOME, where a core lands under core_pattern `core`. After a signal
+exit the case does not expect (`G2_EXPECT_EXIT`, 134 for `fault-abort`), `backtrace.sh`'s
+`case_backtrace` writes `/out/CASE.bt`: those frames, then gdb's `bt` and `thread apply all bt full`
+of the core, gdb installed on demand and symbols from Fedora's debuginfod, in one 120 s budget (the
+lane's own gnome-shell has no debuginfo, which it says), or one line saying why there is none (`no
+backtrace: no core in … (core_pattern …, ulimit -Hc …)`, `no backtrace: gdb missing …`). The core is
+deleted once read, or at once when the exit was expected. The shell's `exits` assertion then names
+the crashing thread's frame past the signal trampoline (past `raise`, `abort` and GLib's assertion
+and log frames), or that reason, or `no CASE.bt`.
 
 The layer follows `layer-enabled` live in a shell that started with it on
 ([DESIGN.md](https://github.com/apex-linux/apex/blob/main/docs/DESIGN.md#schema-iogithubapex_linuxapexdesktop): the layer reads

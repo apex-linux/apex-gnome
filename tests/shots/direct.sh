@@ -112,10 +112,11 @@ if ! gcc -O2 -Wall -Werror -shared -fPIC $(pkg-config --cflags glib-2.0) -o "$FR
 fi
 
 run_case() {
-    local name=$1 gsettings_triples=$2 limit=$SHELL_TIMEOUT arg
+    local name=$1 gsettings_triples=$2 limit=$SHELL_TIMEOUT expected=0 arg secs
     shift 2
     for arg in "$@"; do
         [[ $arg == G2_TIMEOUT=* ]] && limit=${arg#G2_TIMEOUT=}
+        [[ $arg == G2_EXPECT_EXIT=* ]] && expected=${arg#G2_EXPECT_EXIT=}
     done
     local home=/tmp/g2/$name/home run=/tmp/g2/$name/run start=$SECONDS rc left=no
     rm -rf "/tmp/g2/$name"
@@ -167,9 +168,10 @@ run_case() {
                 --wayland-display="$G2_WAYLAND_DISPLAY" --automation-script /w/probe.js
         ' >"/out/$name.log" 2>&1
     rc=$?
-    case_backtrace "/out/$name.log" "$rc" "$home" "/out/$name.bt"
+    secs=$((SECONDS - start))
+    case_backtrace "/out/$name.log" "$rc" "$home" "/out/$name.bt" "$expected"
     [[ -e $run/apex-shell-starting ]] && left=yes
-    RESULT="$name exit=$rc secs=$((SECONDS - start)) marker-after-exit=$left"
+    RESULT="$name exit=$rc secs=$secs marker-after-exit=$left"
     LIMIT=$limit
     echo "== $name: exit $rc, marker after exit: $left"
 }
@@ -252,6 +254,6 @@ run_and_record_case dock-external "$CAPTURE_SETTINGS;$NO_HOT_CORNER" G2_DOCK_EXT
 run_and_record_case keys "$CAPTURE_SETTINGS;$NO_HOT_CORNER;$TWO_SOURCES" G2_KEYS=1
 run_and_record_case fault-configure '' APEX_SHELL_TEST_FAULT=configure
 run_and_record_case fault-enable '' APEX_SHELL_TEST_FAULT=enable PROBE_WAIT=10
-run_and_record_case fault-abort '' APEX_SHELL_TEST_FAULT=abort-after-enable PROBE_WAIT=20
+run_and_record_case fault-abort '' APEX_SHELL_TEST_FAULT=abort-after-enable PROBE_WAIT=20 G2_EXPECT_EXIT=134
 run_and_record_case shutdown-banner '' G2_SHUTDOWN_BANNER=1
 run_and_record_case glass "$CAPTURE_SETTINGS" G2_GLASS=1 GI_TYPELIB_PATH="$FRAME_DIR"
