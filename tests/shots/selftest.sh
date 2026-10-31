@@ -3147,6 +3147,25 @@ CHANGES
         "$(grep -c '^FAIL default: fontconfig gives JetBrains Mono .*(got {"family":"Noto Sans",' "$T/assertions.out")"
 }
 
+test_repeat_compare() {
+    local out status
+    printf '%s\n' '# a comment' 'PASS default: the shell exits 0' 'FAIL motion: the easing (got false)' 'GAP  S1b: dots: 3:1 (got [2.86])' \
+        'PASS idle: nothing paints' 'PASS idle: nothing paints' >"$T/repeat-1.log"
+    cp "$T/repeat-1.log" "$T/repeat-2.log"
+    out=$("$HERE/repeat.sh" compare "$T/repeat-1.log" "$T/repeat-2.log") && status=0 || status=$?
+    expect_eq "repeat: two identical runs differ nowhere" "0 repeat: 2 runs, 5 assertions, 0 differ" "$status $out"
+    printf '%s\n' 'PASS default: the shell exits 0' 'PASS motion: the easing' 'GAP  S1b: dots: 3:1 (got [2.91])' \
+        'PASS idle: nothing paints' 'FAIL idle: nothing paints (got 3 frames)' >"$T/repeat-2.log"
+    out=$("$HERE/repeat.sh" compare "$T/repeat-1.log" "$T/repeat-2.log") && status=0 || status=$?
+    expect_eq "repeat: a fail and a pass of one assertion share a row, and a twice-made one gets a row per time" \
+        "1 F P  motion: the easing|P F  idle: nothing paints [2]|repeat: 2 runs, 5 assertions, 2 differ" "$status $(paste -sd'|' - <<<"$out")"
+    printf '%s\n' 'PASS default: the shell exits 0' >"$T/repeat-3.log"
+    out=$({ "$HERE/repeat.sh" compare "$T/repeat-1.log" "$T/repeat-1.log" "$T/repeat-3.log" || :; } | grep -c '^P P -  ')
+    expect_eq "repeat: an assertion a run never made shows -" 2 "$out"
+    "$HERE/repeat.sh" compare "$T/repeat-1.log" >/dev/null 2>&1 && status=0 || status=$?
+    expect_eq "repeat: one log is not a comparison" 2 "$status"
+}
+
 test_no_binding_overwritten() {
     local run=$T/keys-run overwritten passes failures
     overwritten='libmutter-WARNING **: 09:41:00.000: Overwriting existing binding of keysym 20 with keysym 20 (keycode 41).'
@@ -3827,6 +3846,7 @@ test_no_disposed_apex
 test_no_binding_overwritten
 test_no_spurious_allocation
 test_clean_shutdown
+test_repeat_compare
 test_session_defaults
 test_no_disposed_at_shutdown
 test_exit_cut

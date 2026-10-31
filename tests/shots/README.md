@@ -913,6 +913,7 @@ Not asserted here: the volume glyph (the container has no audio server), and wha
 | `clock.c` | the direct cases' shells (`LD_PRELOAD`) | the fixed wall clock |
 | `smoke.sh` | CI's Fedora 45 container | `direct.sh fedora` on Fedora's gnome-shell, and the assertions that need no Apex build |
 | `patched.sh` | a throwaway Fedora 45 container, by hand | the patched shell before a builder VM: rebuilds Fedora's SRPM with this checkout's recipe and `desktop/shell/`, runs `direct.sh main`, and asserts the logs and the top bar (below) |
+| `repeat.sh` | the host, by hand | `patched.sh` N times on one build, each in its own container, then every assertion whose verdict differs between the runs (below) |
 | `maximised-window.js` | the `dock-intellihide` and `dock-external` cases' shells (gjs, GTK 4) | one maximised window, which the probe starts and stops |
 | `dock-dnd.js`, `dock-external.js` | the `dock-dnd` and `dock-external` cases' shells | the dock's drags, and the dock and the bar on two monitors |
 | `probe.js` | the shell (`--automation-script`) | prints `APEXG2 {…}` and, for the capture cases, `APEXG2-SCENES {…}` |
@@ -929,6 +930,27 @@ Not asserted here: the volume glyph (the container has no audio server), and wha
 | `glass-load.js`, `load-window.js` | the `glass-load` and `glass-stress` cases' shells; gjs, GTK 4 | ADR 0014's scenarios as work counts, and the client that stands in for a video; `tests/laptop` runs both on the laptop, the client with `measure=` |
 | `frame.c`, `G2Frame-1.gir` | the glass cases' shells | `G2Frame.read()`, a region of the frame the shell drew |
 | `selftest.sh`, `png-test.js`, `blur-ref-test.js` | CI and the host | the tests of the above |
+
+## Run to run
+
+A G2 flake that reaches a gate run costs a whole VM run, so a check that passes once is not
+enough. `tests/shots/repeat.sh N` runs `patched.sh` N times on one build: the first run builds
+the RPMs (or `PATCHED_RPMS=DIR` names them) and the others install them, each in a fresh Fedora 45
+container so no run inherits another's state. Each run is a whole `patched.sh`: Fedora's
+gnome-shell in `direct.sh fedora`, then the lane's in `direct.sh main`. It then prints every
+assertion whose verdict differs, one row each with every run's verdict (`P`, `F`, `G` for a known
+gap, `-` when a run never made it) and the assertion, and a count:
+
+```
+P F P P P  shutdown-banner: nothing touches a disposed object once the shell is shutting down
+repeat: 5 runs, 2033 assertions, 1 differ
+```
+
+It exits 1 when any assertion differs. `repeat.sh compare LOG...` does the same for logs already
+kept. A failure's detail (`(got …)`, `(no report)`, `(no line matches …)`) is cut so it shares its
+pass's row, and an assertion a run makes twice gets a row per time. A differing row is a race to
+root-cause: make it fail on demand first, then make it impossible. A retry, a longer wait, or a
+rerun on failure hides it until a gate run meets it.
 
 ## The patched shell without a VM
 
