@@ -43,6 +43,7 @@ esac
 # shellcheck source=tests/shots/parts.sh
 . "$(dirname -- "${BASH_SOURCE[0]}")/parts.sh"
 readonly SHELL_TIMEOUT=150
+readonly PORTAL_TIMEOUT_S=20
 readonly GLASS_STRESS_SECONDS=${G2_GLASS_STRESS_SECONDS:-60}
 readonly EXIT_HUNG=3
 readonly CLOCK_LIB=/run/g2-clock.so
@@ -51,7 +52,7 @@ readonly G2_CLOCK='2026-09-28 09:41:00'
 G2_CLOCK_EPOCH=$(date -u -d "$G2_CLOCK" +%s)
 readonly G2_CLOCK_EPOCH
 readonly FIXTURE_NAMES=(org.freedesktop.UPower org.freedesktop.NetworkManager org.bluez net.hadess.SwitcherooControl
-    org.freedesktop.UPower.PowerProfiles io.github.apex_linux.Apex.Update1)
+    org.freedesktop.UPower.PowerProfiles io.github.apex_linux.Apex.Update1 org.freedesktop.RealtimeKit1)
 # Two fixed workspaces: stock widens the active workspace dot by a factor that depends on
 # the count. A 24-hour clock: in 12 hours a one-digit hour adds a figure space.
 readonly NO_HOT_CORNER='org.gnome.desktop.interface enable-hot-corners false'
@@ -91,7 +92,7 @@ mkdir -p /etc/dbus-1
 } >/etc/dbus-1/system-local.conf
 dbus-daemon --system --fork || echo "no system bus"
 mkdir -p "/out/fixtures-$part"
-G2_POWER_PROFILES=1 G2_ACCOUNTS=1 python3 /w/fixtures.py "/out/fixtures-$part" >"/out/fixtures-$part.txt" 2>&1 || echo "fixtures.py: exit $?"
+G2_POWER_PROFILES=1 G2_ACCOUNTS=1 G2_REALTIME=1 python3 /w/fixtures.py "/out/fixtures-$part" >"/out/fixtures-$part.txt" 2>&1 || echo "fixtures.py: exit $?"
 setsid python3 /w/update1-mock.py "/out/update1-$part.log" >"/out/update1-$part.out" 2>&1 </dev/null &
 mkdir -p /tmp/.X11-unix && chmod 1777 /tmp/.X11-unix
 gcc -O2 -Wall -Werror -shared -fPIC -o "$CLOCK_LIB" /w/clock.c || { echo "direct.sh: cannot build clock.c" >&2; exit 1; }
@@ -123,7 +124,7 @@ run_case() {
         G2_CASE="$name" G2_CAPTURES=/out/captures G2_SETTINGS="$gsettings_triples" \
         G2_SCALE=2 G2_MONITOR=2880x1800 TZ=UTC G2_CLOCK_LIB="$CLOCK_LIB" G2_CLOCK_EPOCH="$G2_CLOCK_EPOCH" \
         G2_SURFACE_SCENES="${G2_SURFACE_SCENES:-0}" G2_WAYLAND_DISPLAY=apex-g2 G2_FACETS_DIR="$FACETS_DIR" \
-        G2_BACKDROP=facets G2_SOLID_BACKDROP="$SOLID_BACKDROP" "$@" \
+        G2_BACKDROP=facets G2_SOLID_BACKDROP="$SOLID_BACKDROP" G2_PORTAL_TIMEOUT_S="$PORTAL_TIMEOUT_S" "$@" \
         timeout "$limit" dbus-run-session -- bash -c '
             set -u
             for app in ${G2_STUB_APPS:-}; do
@@ -154,6 +155,13 @@ run_case() {
                 "color-scheme=$(gsettings get org.gnome.desktop.interface color-scheme)" \
                 "layer-enabled=$(gsettings get io.github.apex_linux.Apex.Desktop layer-enabled)" \
                 "backdrop=$G2_BACKDROP picture-uri=$(gsettings get org.gnome.desktop.background picture-uri)"
+            # GTK helpers start xdg-desktop-portal on first use; one still starting when the probe ends holds
+            # the exit of the perf helper. As in a session, the portal is up before the shell.
+            portal_start=$SECONDS
+            gdbus call --session --timeout "$G2_PORTAL_TIMEOUT_S" --dest org.freedesktop.DBus --object-path /org/freedesktop/DBus \
+                --method org.freedesktop.DBus.StartServiceByName org.freedesktop.portal.Desktop 0 >/dev/null ||
+                { echo "G2-PORTAL: org.freedesktop.portal.Desktop owned no name in $G2_PORTAL_TIMEOUT_S s"; exit 97; }
+            echo "G2-PORTAL up after $((SECONDS - portal_start)) s"
             # Only reads of the wall clock stand still: timers and frames keep the real clocks.
             exec env LD_PRELOAD="$G2_CLOCK_LIB" \
                 gnome-shell --headless --virtual-monitor "$G2_MONITOR" ${G2_MONITOR2:+--virtual-monitor "$G2_MONITOR2"} \

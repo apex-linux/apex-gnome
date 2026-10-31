@@ -1804,6 +1804,8 @@ fixtures_on_the_bus() {
             "switcheroo-control: an integrated and a discrete GPU"
         expect "fixtures ($part)" "$fixtures" '.accounts | .appsFiltered == [false, []] and .sessionLimit == 0' \
             "accountsservice: the user's parental controls filter no app and limit no session"
+        expect "fixtures ($part)" "$fixtures" '.realtime == {MaxRealtimePriority: 20, MinNiceLevel: -15, RTTimeUSecMax: 200000}' \
+            "RealtimeKit at rtkit-daemon's defaults, so xdg-desktop-portal starts without waiting on the image's rtkit-daemon"
     done
 }
 
@@ -2716,6 +2718,8 @@ keys_case() {
     expect keys "$r" '.pressed | .sources == ["us", "fr"] and .first == "us"' "two input sources, us first"
     expect keys "$r" '.pressed.sentinel | .before == .after and .a11yChanges == 0' \
         "the input barrier's F24 tap changes nothing: the input source, the overview, the grabs, the keyboard's a11y state"
+    expect keys "$r" '.pressed.entryKey == {viaInputMethod: true, text: "a"}' \
+        "a key typed into an entry, through IBus, has reached it when the input barrier returns"
     expect keys "$r" '.pressed.superSpace == {spotlight: true, source: "us"}' \
         "Super+Space opens Spotlight and leaves the input source alone"
     expect keys "$r" '.pressed | .superAltSpace.source == "fr" and .shiftSuperAltSpace.source == "us"' \

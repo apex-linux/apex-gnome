@@ -571,13 +571,25 @@ async function settle() {
         }),
         Scripting.sleep(SETTLE_TIMEOUT_MS),
     ]);
-    // Leisure can come while a queued relayout still waits for the frame clock.
+    // Leisure can come while a queued relayout still waits for the frame clock, and with laters queued:
+    // one queued now runs after them, and the frame painted then runs any they queued in turn.
+    await latersRun();
     await paintedFrame();
     const deadline = GLib.get_monotonic_time() + SETTLE_TIMEOUT_MS * 1000;
     while (iconLoading(global.stage) && GLib.get_monotonic_time() < deadline)
         // eslint-disable-next-line no-await-in-loop
         await paintedFrame();
     return idle;
+}
+
+function latersRun() {
+    return new Promise(resolve => {
+        global.compositor.get_laters().add(Meta.LaterType.BEFORE_REDRAW, () => {
+            resolve();
+            return GLib.SOURCE_REMOVE;
+        });
+        global.stage.queue_redraw();
+    });
 }
 
 // St loads an icon's texture in a thread, which leisure does not wait for: until then it is at opacity 0.
@@ -1160,6 +1172,26 @@ function layerReport(Registry, surface, unit) {
     });
 }
 
+// registry.js builds a surface's layers a later after it maps (a ModalDialog's a later after that), then shows them.
+const LAYERS_BUILT_TIMEOUT_MS = 3000;
+async function layersBuilt(Registry, surfaces) {
+    const built = await until(() => surfaces.every(surface => {
+        const layers = Registry.layersOf(surface);
+        return layers.length > 0 && layers.every(layer => layer.mapped);
+    }), LAYERS_BUILT_TIMEOUT_MS);
+    await settle();
+    return built;
+}
+
+// What shadows/feature.js registers under root: each St widget whose style draws a layer, not below it.
+function shadowedSurfaces(Registry, root) {
+    if (root instanceof St.Widget && root.get_stage() && root.get_theme_node().get_shadow(Registry.LAYER_PROPERTIES[0]))
+        return [root];
+    return root.get_children().flatMap(child => shadowedSurfaces(Registry, child));
+}
+
+const windowPreviews = actor => actor.get_children().flatMap(c => c.window_container !== undefined ? [c] : windowPreviews(c));
+
 async function shadowLayers(unit) {
     const Registry = await import(SHADOW_REGISTRY);
     const result = {};
@@ -1167,7 +1199,7 @@ async function shadowLayers(unit) {
         ['dateMenu', Main.panel.statusArea.dateMenu.menu]]) {
         menu.open(BoxPointer.PopupAnimation.NONE);
         // eslint-disable-next-line no-await-in-loop
-        await settle();
+        await layersBuilt(Registry, [menu.box]);
         result[name] = layerReport(Registry, menu.box, unit);
         menu.close(BoxPointer.PopupAnimation.NONE);
         // eslint-disable-next-line no-await-in-loop
@@ -1183,7 +1215,7 @@ async function shadowLayers(unit) {
     for (let opening = 0; opening < 2; opening++) {
         popup.open(BoxPointer.PopupAnimation.NONE);
         // eslint-disable-next-line no-await-in-loop
-        await settle();
+        await layersBuilt(Registry, [popup.box]);
         result.popupMenu = layerReport(Registry, popup.box, unit);
         if (opening === 0) {
             popup.close(BoxPointer.PopupAnimation.NONE);
@@ -1198,8 +1230,8 @@ async function shadowLayers(unit) {
     const dialog = new ModalDialog.ModalDialog();
     dialog.contentLayout.add_child(new St.Label({text: 'Shadow'}));
     dialog.open();
-    await settle();
     const surface = dialog.dialogLayout._dialog;
+    await layersBuilt(Registry, [surface]);
     result.dialog = layerReport(Registry, surface, unit)
         .map((layer, i) => ({...layer, besideBox: Registry.layersOf(surface)[i].get_parent() === surface.get_parent()}));
     dialog.close();
@@ -1854,13 +1886,21 @@ function spotlightSections(popup) {
 // A virtual device's events reach the stage through mutter's input thread, which leisure does not
 // wait for. They arrive in the order sent, so an F24 (bound to nothing) tapped after them follows them.
 let sentinelKeyboard = null;
+// While an entry has the input method's focus, every key goes to IBus and comes back to the stage
+// later, in order: the F24 the stage sees first is the one IBus has not answered yet.
+function keysViaInputMethod() {
+    const im = Main.inputMethod;
+    return Boolean(im?._context && im._currentSource && im.currentFocus);
+}
+
 async function inputDelivered() {
     sentinelKeyboard ??= global.stage.context.get_backend().get_default_seat()
         .create_virtual_device(Clutter.InputDeviceType.KEYBOARD_DEVICE);
-    let filterId = 0;
+    let filterId = 0, releases = keysViaInputMethod() ? 2 : 1;
     const seen = new Promise(resolve => {
         filterId = Clutter.Event.add_filter(global.stage, event => {
-            if (event.type() === Clutter.EventType.KEY_RELEASE && event.get_key_symbol() === Clutter.KEY_F24)
+            if (event.type() === Clutter.EventType.KEY_RELEASE && event.get_key_symbol() === Clutter.KEY_F24 &&
+                --releases === 0)
                 resolve(true);
             return Clutter.EVENT_PROPAGATE;
         });
@@ -1981,6 +2021,19 @@ async function keysCase() {
     await settle();
     a11yIds.forEach(id => seat.disconnect(id));
     pressed.sentinel = {before, after: state(), a11yChanges};
+
+    // A key typed into an entry has reached it by the time the barrier returns, IBus or not.
+    const entry = new St.Entry({can_focus: true});
+    Main.uiGroup.add_child(entry);
+    entry.grab_key_focus();
+    await settle();
+    const viaInputMethod = keysViaInputMethod();
+    keyboard.notify_keyval(GLib.get_monotonic_time(), Clutter.KEY_a, Clutter.KeyState.PRESSED);
+    keyboard.notify_keyval(GLib.get_monotonic_time(), Clutter.KEY_a, Clutter.KeyState.RELEASED);
+    await inputDelivered();
+    pressed.entryKey = {viaInputMethod, text: entry.get_text()};
+    entry.destroy();
+    await settle();
 
     await chord(keyboard, [Clutter.KEY_Super_L], Clutter.KEY_space);
     pressed.superSpace = {spotlight: spotlight?.isOpen ?? null, source: source()};
@@ -2745,8 +2798,8 @@ async function previewShadows() {
     const unit = cssUnit();
     Main.overview.show();
     await settle();
-    const find = actor => actor.get_children().flatMap(c => c.window_container !== undefined ? [c] : find(c));
-    const previews = find(Main.layoutManager.overviewGroup).map(preview => ({
+    await layersBuilt(Registry, windowPreviews(Main.layoutManager.overviewGroup));
+    const previews = windowPreviews(Main.layoutManager.overviewGroup).map(preview => ({
         styled: preview.has_style_class_name('apex-window-preview'),
         layers: Registry.layersOf(preview).map(layer => ({
             shown: layer.mapped,
@@ -3023,6 +3076,8 @@ async function signoffWindows() {
     // A window still mapping joins the overview's workspace late: wait for its preview.
     const previews = await until(() => countDescendants(Main.layoutManager.overviewGroup,
         a => a.constructor.name === 'WindowPreview' && a.mapped) >= SIGNOFF_APPS.length, SIGNOFF_WINDOWS_MS);
+    const Registry = await apexModule(SHADOW_REGISTRY).catch(() => null);
+    const shadowsBuilt = {overview: Registry ? await layersBuilt(Registry, windowPreviews(Main.layoutManager.overviewGroup)) : null};
     await settle();
     await windowsRedrawn("the overview's");
     global.stage.set_key_focus(null);
@@ -3040,6 +3095,7 @@ async function signoffWindows() {
     popup.show(false, 'switch-applications', 0);
     // switcherPopup.js shows it after POPUP_DELAY_TIMEOUT, a GLib timeout that leisure does not wait for.
     const altTabShown = await until(() => popup.opacity === 255, 3000);
+    shadowsBuilt.altTab = Registry ? await layersBuilt(Registry, shadowedSurfaces(Registry, popup)) : null;
     await settle();
     keepOrder("the switcher's");
     const altTab = withoutBytes(await capture('signoff-alt-tab', [], {switcher: popup._items.map(item => item.app.get_id())}));
@@ -3047,7 +3103,7 @@ async function signoffWindows() {
     await settle();
     drawn.destroy();
     return {
-        shown, previews, apps: appsShown(), overview: overview.file, altTab: altTab.file, altTabShown,
+        shown, previews, apps: appsShown(), overview: overview.file, altTab: altTab.file, altTabShown, shadowsBuilt,
         loaded, quiet, focusAttempts, pointerPlaced, notified, drawn: drawn.report(),
         atOverview: {pointer: [pointerX, pointerY], panelStates: Object.fromEntries(panelStates)},
     };
