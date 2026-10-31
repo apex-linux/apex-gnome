@@ -8,6 +8,7 @@ import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import St from 'gi://St';
 
+import * as IBusManager from 'resource:///org/gnome/shell/misc/ibusManager.js';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import * as Scripting from 'resource:///org/gnome/shell/ui/scripting.js';
 
@@ -205,9 +206,19 @@ function filled(actor, unit) {
     return {...boxOf(actor, unit), radius: radiusOf(actor, unit), colour: hex(actor.get_theme_node().get_background_color())};
 }
 
-// Board 39's "everything": the camera and microphone in use, a recording, a share and two input sources.
-async function everything(unit, settle, capture) {
-    const {quickSettings, screenRecording, screenSharing, keyboard} = Main.panel.statusArea;
+// Each source's chip beside what keyboard.js names it and, for IBus, its engine's language.
+function inputSources(keyboard) {
+    const ibus = IBusManager.getIBusManager();
+    return keyboard._inputSources.map(is => ({
+        type: is.type, id: is.id, stock: is.shortName,
+        language: is.type === 'ibus' ? ibus.getEngineDesc(is.id)?.get_language() ?? null : null,
+        text: keyboard._indicatorLabels[keyboard._calculateSourceIndicatorIndex(is)]?.text ?? null,
+    }));
+}
+
+// Board 39's camera and microphone in use, a recording and a share; the function returned hides them.
+export function showInUse() {
+    const {quickSettings, screenRecording, screenSharing} = Main.panel.statusArea;
     const inUse = [quickSettings._camera._indicator, quickSettings._volumeInput._indicator];
     // Without a stream the microphone's icon has no name yet.
     const micName = inUse[1].icon_name;
@@ -216,6 +227,18 @@ async function everything(unit, settle, capture) {
     screenRecording.show();
     screenSharing.show();
     screenRecording._label.text = '0:42';
+    return () => {
+        inUse.forEach(icon => icon.hide());
+        inUse[1].icon_name = micName;
+        screenRecording.hide();
+        screenSharing.hide();
+    };
+}
+
+// Board 39's "everything": the camera and microphone in use, a recording, a share and two input sources.
+async function everything(unit, settle, capture) {
+    const {quickSettings, screenRecording, screenSharing, keyboard} = Main.panel.statusArea;
+    const hideInUse = showInUse();
     await settle();
     const pill = quickSettings.get_first_child();
     const group = pill.get_children().find(a => a.name === 'apexPrivacyGroup') ?? null;
@@ -234,7 +257,10 @@ async function everything(unit, settle, capture) {
             glyphs: glyphs.map(g => ({...boxOf(g, unit), iconName: g.icon_name, colour: hex(g.get_theme_node().get_foreground_color())})),
         } : null,
         recording: {...filled(screenRecording._box, unit), stop: filled(stop, unit), timer: {...boxOf(timer, unit), ...textOf(timer, unit)}},
-        input: {pill: {...boxOf(keyboard._container, unit), radius: radiusOf(keyboard._container, unit)}, ...textOf(chip, unit)},
+        input: {
+            pill: {...boxOf(keyboard._container, unit), radius: radiusOf(keyboard._container, unit)}, ...textOf(chip, unit),
+            sources: inputSources(keyboard),
+        },
         sharing: {
             ...filled(sharing, unit), name: screenSharing.accessible_name, stop: filled(square, unit), next: boxOf(pill, unit),
             glyph: {...boxOf(shared, unit), iconName: shared.icon_name, colour: hex(shared.get_theme_node().get_foreground_color())},
@@ -242,10 +268,7 @@ async function everything(unit, settle, capture) {
         search: boxOf(Main.panel.statusArea[SEARCH_ROLE].get_first_child(), unit),
     };
     report.capture = (await capture('indicators-everything')).file;
-    inUse.forEach(icon => icon.hide());
-    inUse[1].icon_name = micName;
-    screenRecording.hide();
-    screenSharing.hide();
+    hideInUse();
     await settle();
     report.after = {privacy: group?.visible ?? null, paddingLeft: round(pill.get_theme_node().get_padding(St.Side.LEFT) / unit.length)};
     return report;

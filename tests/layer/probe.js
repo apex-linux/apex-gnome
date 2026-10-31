@@ -461,6 +461,16 @@ function inputChipEllipsize({_container: container}) {
     return container.get_children().map(label => ['none', 'start', 'middle', 'end'][label.clutter_text.ellipsize]).join(',');
 }
 
+function clearState({_messageList: list}) {
+    return `placeholder=${list._placeholder.visible} clear=${list._clearButton.visible}`;
+}
+
+// What calendar.js's binding does once the placeholder changes.
+function setPlaceholder({_messageList: list}, visible) {
+    list._placeholder.visible = visible;
+    list._clearButton.visible = !visible;
+}
+
 function newHotCorner() {
     const signalHandlers = {};
     let triggers = 0;
@@ -1033,9 +1043,10 @@ async function exerciseTopBar() {
     Main.sessionMode.lock(false);
     fact('right-box.after-session-update', rightBoxOrder(Main));
     fact('input-chip', inputChipTexts(keyboard));
+    fact('clear', clearState(Main.panel.statusArea.dateMenu));
     // keyboard.js renames a label for an IBus input mode, and adds one for a new source.
     const [, vietnamese] = keyboard._container.get_children();
-    vietnamese.text = 'vi₂';
+    vietnamese.text = 'Ắ₂';
     vietnamese.emit('notify::text');
     const french = new St.Label({text: 'fr'});
     keyboard._container.add_child(french);
@@ -1058,6 +1069,11 @@ async function exerciseTopBar() {
         corner.handlers['enter-event']();
     }
 
+    if (GLib.getenv('PROBE_CLEAR_SYNCED') === '1') {
+        setPlaceholder(Main.panel.statusArea.dateMenu, false);
+        setPlaceholder(Main.panel.statusArea.dateMenu, true);
+    }
+
     settings.set_boolean('layer-enabled', false);
     await spin(200);
     topBarHooks('top-bar.off');
@@ -1068,12 +1084,14 @@ async function exerciseTopBar() {
     fact('right-box.off', rightBoxOrder(Main));
     fact('input-chip.off', inputChipTexts(keyboard));
     fact('input-chip.off.ellipsize', inputChipEllipsize(keyboard));
+    fact('clear.off', clearState(Main.panel.statusArea.dateMenu));
     settings.set_boolean('layer-enabled', true);
     await spin(200);
     fact('pill.on', pillNames(quickSettings));
     fact('recording.on', screenParts(screenRecording));
     fact('sharing.on', screenParts(screenSharing));
     fact('input-chip.on', inputChipTexts(keyboard));
+    fact('clear.on', clearState(Main.panel.statusArea.dateMenu));
 }
 
 async function exerciseSolidBar() {

@@ -74,7 +74,7 @@ def tokens():
     found = {}
     with open(TOKENS, encoding="utf-8") as f:
         for line in f:
-            m = re.match(r"\$(apex_greeter_\w+):\s*(.+?);", line)
+            m = re.match(r"\$(apex_(?:greeter|lock)_\w+):\s*(.+?);", line)
             if m:
                 found[m.group(1)] = m.group(2).strip("'\"")
     return found
@@ -152,12 +152,29 @@ def check_layout(case, layout, overlay_alpha=None):
           {"date", "time", "avatar", "field", "hint"} <= dict(parts).keys() and not off, json.dumps(layout))
     overlaps = [f"{a}/{b}" for (a, ba), (b, bb) in itertools.pairwise(parts) if ba["y"] + ba["height"] > bb["y"] + 1]
     check(f"{case}: top to bottom, nothing overlaps", not overlaps, ", ".join(overlaps))
+    if overlay_alpha is None and {"avatar", "field", "hint"} <= dict(parts).keys():
+        check_spacing(case, layout)
     got = layout.get("overlay") or ""
     if overlay_alpha is None:
         check(f"{case}: the overlay darkens as $apex_lock_overlay", got == OVERLAY, got)
     else:
         check(f"{case}: high contrast darkens more, to alpha {overlay_alpha:#x}",
               got[:7] == "#000000" and len(got) == 9 and int(got[7:], 16) >= overlay_alpha, got)
+
+
+def check_spacing(case, layout):
+    """Board 20's prompt, top to bottom, as the Apex sheets space it: a GNOME point release's margins fail here by name."""
+    gap = px(tokens()["apex_lock_prompt_gap"])
+    avatar, field, hint, line = layout["avatar"], layout["field"], layout["hint"], layout.get("messageLine")
+    field_end = field["y"] + field["height"]
+    check(f"{case}: the field sits $apex_lock_prompt_gap ({gap:g} px) below the name",
+          abs(field["y"] - avatar["y"] - avatar["height"] - gap) <= 1, json.dumps([avatar, field]))
+    if line:
+        check(f"{case}: upstream's message line starts where the field ends", abs(line["y"] - field_end) <= 1,
+              json.dumps([field, line]))
+    above = line["y"] + line["height"] if line else field_end
+    check(f"{case}: the hint starts where the {'message line' if line else 'field'} ends", abs(hint["y"] - above) <= 1,
+          json.dumps([field, line, hint]))
 
 
 def check_reveal(case, reveal):
@@ -534,6 +551,40 @@ def near(got, want):
     return abs(got - want) <= 1
 
 
+POLKIT_LOCKED_CASES = {"polkit-lock": (True, False), "polkit-suspend": (True, True), "polkit-lock-safe": (False, False)}
+
+
+def check_polkit_locked(shots, case, apex, sleeps):
+    log, gdm = read(shots, f"{case}.log"), read(shots, f"{case}.gdm.log")
+    f = facts(log)
+    steps = ("polkit", "locked", "typed", "unlocked") + (("asleep",) if sleeps else ())
+    check(f"{case}: every step is reported", all(step in f for step in steps))
+    check(f"{case}: no JS error", "JS ERROR" not in until(log, "unlocked") and "APEXLOCK-ERROR" not in log)
+    if not all(step in f for step in steps):
+        return
+    before = f["polkit"]["polkit"]
+    check(f"{case}: the dialog opens, focused, {'board 13' if apex else 'upstream'}'s",
+          before["opened"] and before["visible"] and before["field"]["focused"]
+          and ("apex-polkit" in (before["classes"] or "")) is apex, json.dumps(before))
+    for step in ("locked", "typed"):
+        d, lock = f[step]["polkit"], f[step]["lock"]
+        check(f"{case}: {step}: locked, the dialog hidden under the lock and still its request's",
+              f[step]["locked"] and not d["visible"] and not d["mapped"] and d["current"], json.dumps(d))
+        check(f"{case}: {step}: the lock is {'the one stage with its prompt' if apex else 'upstream'}'s",
+              ("apex-lock" in lock["classes"].split()) is apex and (not apex or lock["prompt"] is not None),
+              json.dumps({k: lock[k] for k in ("classes", "prompt")}))
+    typed = between(gdm, "locked", "typed")
+    check(f"{case}: the keys typed at the lock answer the lock's question, not the dialog's",
+          any(re.search(rf": AnswerQuery gdm-password \({len(WRONG_ANSWER)} characters\)$", line) for line in typed)
+          and f["typed"]["sessions"] == [{"responses": 0, "cancelled": False}], json.dumps([typed, f["typed"]["sessions"]]))
+    after = f["unlocked"]
+    check(f"{case}: the lock ends on the same dialog, shown again with its request, nothing answered or cancelled",
+          not after["locked"] and after["polkit"]["visible"] and after["polkit"]["opened"] and after["polkit"]["current"]
+          and after["sessions"] == [{"responses": 0, "cancelled": False}], json.dumps(after))
+    check(f"{case}: still {'board 13' if apex else 'upstream'}'s",
+          ("apex-polkit" in (after["polkit"]["classes"] or "")) is apex, after["polkit"]["classes"])
+
+
 def check_polkit(shots, case, want):
     log = read(shots, f"{case}.log")
     f = facts(log)
@@ -695,6 +746,8 @@ def main():
         check_greeter(shots, case)
     for case, want in POLKIT_CASES.items():
         check_polkit(shots, case, want)
+    for case, (apex, sleeps) in POLKIT_LOCKED_CASES.items():
+        check_polkit_locked(shots, case, apex, sleeps)
     check_date_menu(shots, "date-menu", True)
     check_date_menu(shots, "date-menu-disabled", False)
     for case in END_SESSION_CASES:
