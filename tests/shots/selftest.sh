@@ -1171,9 +1171,9 @@ test_signoff() {
         # shellcheck disable=SC2059 # the scene names carry the variant's %s
         printf '\x89PNG\r\n\x1a\n' | tee "$dir/shots/$(printf "$scene" light).png" >"$dir/shots/$(printf "$scene" dark).png"
     done
-    printf 'Apex: feature panel enabled\nApex: feature dock enabled\nAPEXG2-SIGNOFF {"previews":true}\n%s\n' \
+    printf 'Apex: feature panel enabled\nApex: feature dock enabled\nAPEXG2-SIGNOFF {"previews":true,"altTabShown":true}\n%s\n' \
         'APEXG2 {"dock":{"items":[{"kind":"app","name":"Files"},{"kind":"separator"},{"kind":"app","name":"Bazaar"}]}}' >"$dir/g2/default.log"
-    echo 'APEXG2-SIGNOFF {"previews":true}' >"$dir/g2/dark-style.late.log"
+    echo 'APEXG2-SIGNOFF {"previews":true,"altTabShown":true}' >"$dir/g2/dark-style.late.log"
     printf 'APEXG2-SESSION %s\n' "$(jq -c . <<<"$SESSION_REPORT")" | tee -a "$dir/g2/default.log" >>"$dir/g2/dark-style.log"
     for scene in "$dir"/g2/captures/*.png; do
         scene=$(basename "$scene")
@@ -1220,6 +1220,13 @@ test_signoff() {
         ok "signoff: sign-off windows missing from the overview fail the run"
     else
         not_ok "signoff: sign-off windows missing from the overview fail the run: $(tail -n 3 "$T/signoff.out")"
+    fi
+    echo 'APEXG2-SIGNOFF {"previews":true,"altTabShown":false}' >"$dir/g2/dark-style.late.log"
+    if ! "$HERE/signoff.sh" --collect "$dir/g2" "$dir/shots" "$dir/out4" >"$T/signoff.out" 2>&1 &&
+        grep -q 'board 15, dark-style: the Alt+Tab switcher never showed' "$T/signoff.out"; then
+        ok "signoff: an Alt+Tab switcher that never showed fails board 15"
+    else
+        not_ok "signoff: an Alt+Tab switcher that never showed fails board 15: $(tail -n 3 "$T/signoff.out")"
     fi
 }
 
@@ -3227,6 +3234,7 @@ readonly KEYS_REPORT="{bindings: {
     overlay: {modes: [\"NORMAL\", \"OVERVIEW\"], key: \"Super\"}},
   allModes: $KEYS_ALL_MODES,
   pressed: {sources: [\"us\", \"fr\"], first: \"us\", superSpace: {spotlight: true, source: \"us\"},
+    sentinel: {before: {source: \"us\", overview: false, modals: 0}, after: {source: \"us\", overview: false, modals: 0}, a11yChanges: 0},
     superAltSpace: {source: \"fr\"}, shiftSuperAltSpace: {source: \"us\"},
     ctrlAltTab: {groups: [{name: \"Windows\", dock: false}, {name: \"Top Bar\", dock: false}, {name: \"Dash\", dock: true}], dockFocused: true},
     superTap: {overview: true, apps: false}, superA: {overview: true, apps: true}},
@@ -3239,13 +3247,16 @@ test_keys_case() {
     while IFS='|' read -r failures change what; do
         printf 'APEXG2-KEYS %s\n' "$(jq -nc "$KEYS_REPORT | $change")" >"$run/keys.log"
         read -r passes _ <<<"$(assertion_counts keys_case "$run")"
-        expect_eq "keys: $what fails $failures of 13" "$failures" $((13 - passes))
+        expect_eq "keys: $what fails $failures of 14" "$failures" $((14 - passes))
     done <<'CHANGES'
 0|.|the keys as registered and pressed
 1|.bindings.inputSource.accelerators = ["<Super>space", "XF86Keyboard"]|GNOME's input source key, on Spotlight's Super+Space
 1|.bindings.inputSourceBackward.modes = ["NORMAL"]|a backward input source key in one mode only
 1|.bindings.panels.accelerators = []|no Ctrl+Alt+Tab
 1|.bindings.overlay.key = "Super_R"|another overlay key
+1|.pressed.sentinel.after.source = "fr"|a barrier tap that switches the input source
+1|.pressed.sentinel.after.overview = true|a barrier tap that opens the overview
+1|.pressed.sentinel.a11yChanges = 1|a barrier tap that changes the keyboard's a11y state
 1|.pressed.superSpace.source = "fr"|Super+Space that also switches the input source
 1|.pressed.shiftSuperAltSpace.source = "fr"|a Shift variant that does not go back
 1|.pressed.ctrlAltTab.groups[2].dock = false|Ctrl+Alt+Tab without the dock
@@ -3253,7 +3264,7 @@ test_keys_case() {
 1|.pressed.superTap.overview = false|a Super tap that opens nothing
 1|.pressed.superA.apps = false|Super+A that opens the windows, not the launcher
 1|.modals = 1|a grab left behind
-10|{error: "keysCase: no keyboard"}|a probe error
+11|{error: "keysCase: no keyboard"}|a probe error
 CHANGES
 }
 

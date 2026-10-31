@@ -25,7 +25,7 @@ import * as UserWidget from 'resource:///org/gnome/shell/ui/userWidget.js';
 import * as WindowManager from 'resource:///org/gnome/shell/ui/windowManager.js';
 import * as WorkspaceThumbnail from 'resource:///org/gnome/shell/ui/workspaceThumbnail.js';
 
-import {barReport, textColour} from './a11y.js';
+import {barReport, paintedFrame, textColour} from './a11y.js';
 import {actionModeName} from './idle.js';
 import * as Png from './png.js';
 
@@ -44,7 +44,6 @@ const CRASH_GUARD_MARKER = 'apex-shell-starting';
 // Well before APEX_SHELL_TEST_FAULT=abort-after-enable aborts the shell (5 s after enable).
 const REPORT_AFTER_MS = 1500;
 const SETTLE_TIMEOUT_MS = 20000;
-const SETTLE_EXTRA_MS = 500;
 const PERF_HELPER_PING_S = 10;
 const DEFERRED_WORK_TIMEOUT_MS = 21000;
 const OSD_SETTLE_TIMEOUT_MS = 3000;
@@ -572,8 +571,22 @@ async function settle() {
         }),
         Scripting.sleep(SETTLE_TIMEOUT_MS),
     ]);
-    await Scripting.sleep(SETTLE_EXTRA_MS);
+    // Leisure can come while a queued relayout still waits for the frame clock.
+    await paintedFrame();
+    const deadline = GLib.get_monotonic_time() + SETTLE_TIMEOUT_MS * 1000;
+    while (iconLoading(global.stage) && GLib.get_monotonic_time() < deadline)
+        // eslint-disable-next-line no-await-in-loop
+        await paintedFrame();
     return idle;
+}
+
+// St loads an icon's texture in a thread, which leisure does not wait for: until then it is at opacity 0.
+function iconLoading(actor) {
+    if (!actor.mapped)
+        return false;
+    if (actor instanceof St.Icon && actor.get_first_child()?.opacity === 0)
+        return true;
+    return actor.get_children().some(iconLoading);
 }
 
 function captureBox(actor, scale) {
@@ -1674,9 +1687,25 @@ function glassOf(actor, unit) {
     };
 }
 
-async function spotlightScene(popup, name, text) {
-    popup.panel.get_children()[0].get_children()[1].set_text(text);
+// Spotlight searches after a typing pause, a GLib timeout that leisure does not wait for.
+async function typeInSpotlight(popup, text) {
+    const entry = popup.panel.get_children()[0].get_children()[1];
+    if (entry.get_text() !== text) {
+        const runSearch = popup._runSearch;
+        const searched = new Promise(resolve => {
+            popup._runSearch = typed => {
+                popup._runSearch = runSearch;
+                return runSearch.call(popup, typed).finally(resolve);
+            };
+        });
+        entry.set_text(text);
+        await searched;
+    }
     await settle();
+}
+
+async function spotlightScene(popup, name, text) {
+    await typeInSpotlight(popup, text);
     global.stage.set_key_focus(null);
     const scene = name && GLib.getenv('G2_SURFACE_SCENES') === '1' ? await capture(`spotlight-${name}`) : null;
     if (scene)
@@ -1819,6 +1848,30 @@ function spotlightSections(popup) {
     };
 }
 
+// A virtual device's events reach the stage through mutter's input thread, which leisure does not
+// wait for. They arrive in the order sent, so an F24 (bound to nothing) tapped after them follows them.
+let sentinelKeyboard = null;
+async function inputDelivered() {
+    sentinelKeyboard ??= global.stage.context.get_backend().get_default_seat()
+        .create_virtual_device(Clutter.InputDeviceType.KEYBOARD_DEVICE);
+    let filterId = 0;
+    const seen = new Promise(resolve => {
+        filterId = Clutter.Event.add_filter(global.stage, event => {
+            if (event.type() === Clutter.EventType.KEY_RELEASE && event.get_key_symbol() === Clutter.KEY_F24)
+                resolve(true);
+            return Clutter.EVENT_PROPAGATE;
+        });
+    });
+    sentinelKeyboard.notify_keyval(GLib.get_monotonic_time(), Clutter.KEY_F24, Clutter.KeyState.PRESSED);
+    sentinelKeyboard.notify_keyval(GLib.get_monotonic_time(), Clutter.KEY_F24, Clutter.KeyState.RELEASED);
+    try {
+        if (!await Promise.race([seen, Scripting.sleep(SETTLE_TIMEOUT_MS).then(() => false)]))
+            throw new Error(`a virtual key event did not reach the stage in ${SETTLE_TIMEOUT_MS} ms`);
+    } finally {
+        Clutter.Event.remove_filter(filterId);
+    }
+}
+
 async function pressKeys(keyboard, keyval, times) {
     for (let i = 0; i < times; i++) {
         keyboard.notify_keyval(GLib.get_monotonic_time(), keyval, Clutter.KeyState.PRESSED);
@@ -1826,6 +1879,7 @@ async function pressKeys(keyboard, keyval, times) {
         // eslint-disable-next-line no-await-in-loop
         await Scripting.sleep(20);
     }
+    await inputDelivered();
     await settle();
 }
 
@@ -1889,6 +1943,7 @@ async function chord(keyboard, modifiers, keyval) {
         keyboard.notify_keyval(at(), keyval, Clutter.KeyState.RELEASED);
     }
     [...modifiers].reverse().forEach(m => keyboard.notify_keyval(at(), m, Clutter.KeyState.RELEASED));
+    await inputDelivered();
     await settle();
 }
 
@@ -1912,6 +1967,17 @@ async function keysCase() {
     const seat = global.stage.context.get_backend().get_default_seat();
     const keyboard = seat.create_virtual_device(Clutter.InputDeviceType.KEYBOARD_DEVICE);
     const pressed = {sources: Object.values(sources.inputSources).map(s => s.id), first: source()};
+
+    // The barrier's own tap, alone on the idle desktop, must leave everything as it was.
+    const state = () => ({source: source(), overview: Main.overview.visible, modals: Main.modalCount});
+    const a11ySignals = ['kbd-a11y-flags-changed', 'kbd-a11y-mods-state-changed'];
+    let a11yChanges = 0;
+    const a11yIds = a11ySignals.map(signal => seat.connect(signal, () => a11yChanges++));
+    const before = state();
+    await inputDelivered();
+    await settle();
+    a11yIds.forEach(id => seat.disconnect(id));
+    pressed.sentinel = {before, after: state(), a11yChanges};
 
     await chord(keyboard, [Clutter.KEY_Super_L], Clutter.KEY_space);
     pressed.superSpace = {spotlight: spotlight?.isOpen ?? null, source: source()};
@@ -1965,8 +2031,7 @@ async function withSpotlight(read) {
     popup.open();
     try {
         return await read(popup, async () => {
-            popup.panel.get_children()[0].get_children()[1].set_text('2880 / 1.5');
-            await settle();
+            await typeInSpotlight(popup, '2880 / 1.5');
             popup.activateSelected();
             await settle();
             return Toast.current()?.get_first_child() ?? null;
@@ -2970,6 +3035,8 @@ async function signoffWindows() {
     const popup = new AppSwitcherPopup();
     // No modifier mask: nothing held down, so the popup stays until it is destroyed.
     popup.show(false, 'switch-applications', 0);
+    // switcherPopup.js shows it after POPUP_DELAY_TIMEOUT, a GLib timeout that leisure does not wait for.
+    const altTabShown = await until(() => popup.opacity === 255, 3000);
     await settle();
     keepOrder("the switcher's");
     const altTab = withoutBytes(await capture('signoff-alt-tab', [], {switcher: popup._items.map(item => item.app.get_id())}));
@@ -2977,7 +3044,7 @@ async function signoffWindows() {
     await settle();
     drawn.destroy();
     return {
-        shown, previews, apps: appsShown(), overview: overview.file, altTab: altTab.file,
+        shown, previews, apps: appsShown(), overview: overview.file, altTab: altTab.file, altTabShown,
         loaded, quiet, focusAttempts, pointerPlaced, notified, drawn: drawn.report(),
         atOverview: {pointer: [pointerX, pointerY], panelStates: Object.fromEntries(panelStates)},
     };

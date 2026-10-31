@@ -976,6 +976,16 @@ pass's row, then one closing parenthesis, which on a pass can say what that run 
 root-cause: make it fail on demand first, then make it impossible. A retry, a longer wait, or a
 rerun on failure hides it until a gate run meets it.
 
+The probe waits on events, never on a fixed time. `settle()` is `waitLeisure` (no `begin_work` held:
+no animation) or its 20 s cap, then one painted frame, then more frames while any mapped `St.Icon`
+still waits for its texture (St loads it in a thread, at opacity 0 until then). Leisure does not see
+a pending GLib timeout, another thread or a virtual device's events, so a step that depends on one
+waits for its effect: `typeInSpotlight` awaits Spotlight's own search (after its 50 ms typing pause),
+the sign-off Alt+Tab waits for the popup to show (after switcherPopup.js's 150 ms delay), and
+`chord()` and `pressKeys()` tap F24, bound to nothing, on another virtual keyboard and wait for it in
+a Clutter event filter: mutter's input thread delivers events in the order sent, so the step's own
+came first.
+
 ## The patched shell without a VM
 
 `patched.sh` checks a change to the series or the layer in minutes, before `just vm-image`:

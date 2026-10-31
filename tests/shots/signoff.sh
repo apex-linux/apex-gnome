@@ -184,6 +184,9 @@ collect() {
         { cat "$g2/$variant.log" "$g2/$variant.late.log" 2>/dev/null || :; } | sed -n 's/.*APEXG2-SIGNOFF //p' |
             jq -se 'any(.previews == true)' >/dev/null ||
             missing+=("boards 15 and 35, $variant: the sign-off windows never all showed in the overview")
+        { cat "$g2/$variant.log" "$g2/$variant.late.log" 2>/dev/null || :; } | sed -n 's/.*APEXG2-SIGNOFF //p' |
+            jq -se 'any(.altTabShown == true)' >/dev/null ||
+            missing+=("board 15, $variant: the Alt+Tab switcher never showed")
         scene=$(sed -n 's/.*APEXG2-SIGNOFF //p' "$g2/$variant.log" 2>/dev/null | jq -r '.error // empty' 2>/dev/null | head -n 1)
         [[ -z $scene ]] || missing+=("boards 15 and 35, $variant: $scene")
     done
