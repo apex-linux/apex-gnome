@@ -762,6 +762,16 @@ shortfalls (`A11Y_FOCUS_TODAY`) are the owner's:
 | Quick Settings' first toggle | `default`, `default-solid` | 2.37:1, 1.91:1; 2.14:1 over the busy wallpaper |
 | the dialog's entry | `dark-style`, `dark-style-solid` | 2.87:1 |
 
+So is reaching every control by Tab (`reach`, WCAG 2.1.1 and 2.1.2). In Quick Settings, the
+polkit-shaped dialog and Spotlight, the probe focuses the first control and presses Tab past the
+last with a virtual keyboard. After each press it waits for `inputDelivered()`'s F24 sentinel,
+which proves the press reached the stage, and then a painted frame, since the stage handles its
+queued events at its next frame; key focus is read after both, never after a time. `tab_walks`
+wants each press to move focus to the next control and from the last back to the first, never to
+stop or leave the surface, and Escape to close it. Quick Settings' ten controls and the dialog's
+entry, Cancel and Authenticate pass in every case; Spotlight's entry is its one control. The dock
+joins once its focus ring lands.
+
 The bar is measured the same way over every wallpaper G2 shows it on: the Facets, light in
 `default` and dark in `dark-style`; `#013b88` in the `-solid` twins; and, in `no-dock`
 (`bar_over_fixture`), the overview's fixture gradient, once in the overview and once on the

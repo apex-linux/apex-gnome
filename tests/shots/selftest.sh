@@ -783,7 +783,11 @@ REPORT_OF_LEGIBLE_SURFACES='
         crowded: $s, indicatorMenu: $s},
     focus: ({name: "Control", focused: true, changed: 900, perimeter: 400, ratio: 4} as $ring
         | {quickSettings: $ring, dock: ($ring + {changed: 0, ratio: 1}), dialog: ($ring + {ratio: 2.87}),
-            spotlight: ($ring + {changed: 164, ratio: 1})} | {backdrop: ., busy: .})}'
+            spotlight: ($ring + {changed: 164, ratio: 1})} | {backdrop: ., busy: .}),
+    reach: ({controls: 3, order: [1, 2, 0, 1, 2], stuck: [], left: [], unreached: [], wrapped: true,
+        escape: {modalsBefore: 1, modalsAfter: 0}} as $walk
+        | {quickSettings: ($walk + {controls: 4, order: [1, 2, 3, 0, 1, 2]}), dialog: $walk,
+            spotlight: ($walk + {controls: 1, order: [0, 0, 0]})})}'
 
 # The label picks the backdrop: dark-style's inactive dot passes 3:1 today, default's is the gap.
 # Each label's focus readings at today's pins, Quick Settings' and the dialog's per wallpaper: six gaps.
@@ -858,7 +862,7 @@ CHANGES
 test_a11y() {
     local assertions expected change what passes failures open_gaps want
     # dark-style's six focus gaps today: its dock, Spotlight entry and dialog entry, each per wallpaper.
-    for assertions in a11y_contrast:67:6 a11y_layout:48:0; do
+    for assertions in a11y_contrast:76:6 a11y_layout:48:0; do
         IFS=: read -r assertions expected gaps <<<"$assertions"
         read -r passes failures open_gaps <<<"$(a11y_run "$assertions")"
         if ((failures == 0 && open_gaps == gaps && passes == expected)); then
@@ -900,6 +904,11 @@ a11y_contrast|1|.focus.busy.dialog.ratio = 2.5|the dialog entry's indicator belo
 a11y_contrast|1|.focus.backdrop.dialog.focused = false|key focus that never lands on the dialog's control
 a11y_contrast|4|.focus.busy = {error: "the wallpaper never changed"}|a busy wallpaper that never showed
 a11y_contrast|0|.focus.backdrop.quickSettings.ratio = 3|a focus indicator at 3:1
+a11y_contrast|1|.reach.dialog += {order: [2, 0, 2, 0, 2], unreached: ["Cancel"]}|a dialog button Tab skips
+a11y_contrast|2|.reach.quickSettings += {order: [1, 1, 1, 1, 1, 1], stuck: [2, 3, 4, 5, 6], unreached: ["Wi-Fi", "Dark Style"]}|Tab that stops on a Quick Settings control
+a11y_contrast|2|.reach.dialog += {order: [1, 2, -1, 1, 2], left: [{press: 3, to: "Clutter_Actor"}]}|Tab that leaves the dialog
+a11y_contrast|1|.reach.spotlight.escape.modalsAfter = 1|Escape that leaves Spotlight open
+a11y_contrast|3|del(.reach)|no Tab walk reported
 a11y_contrast|1|.wifiMenu.targets[0].ratio = 3|a menu row's text at 3:1
 a11y_contrast|1|.wifiMenuConnected.targets[0].ratio = 4.4|the connected network's name at 4.4:1 over its fill
 a11y_contrast|1|.wifiMenuConnected.targets |= map(. + {kind: "icon"})|a connected row with only its glyphs measured

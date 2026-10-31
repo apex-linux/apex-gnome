@@ -1393,7 +1393,7 @@ function promptDialog() {
     content.add_child(entry);
     dialog.contentLayout.add_child(content);
     const buttons = [
-        dialog.addButton({label: 'Cancel', action: () => {}, key: Clutter.KEY_Escape}),
+        dialog.addButton({label: 'Cancel', action: () => dialog.close(), key: Clutter.KEY_Escape}),
         dialog.addButton({label: 'Authenticate', action: () => {}, default: true}),
     ];
     return {dialog, content, entry, buttons};
@@ -3453,6 +3453,7 @@ async function runProbe() {
             result = await A11y.a11yReport({
                 settle, unit: cssUnit(), apexDock, findDescendant, openPopupMenu, openOsd, openBanner,
                 openModalDialog: () => openPromptDialog({avatar: true}), openEndSessionDialog: openShellEndSession, withSpotlight, typeInSpotlight,
+                inputDelivered,
             });
         } catch (e) {
             result = {error: `${e.message}\n${e.stack}`};

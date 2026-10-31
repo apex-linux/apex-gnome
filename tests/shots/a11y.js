@@ -465,6 +465,80 @@ async function focusReport(h, settle, unit) {
     return {backdrop: await surfaces(), busy: await withWallpaper(busyWallpaper(), surfaces)};
 }
 
+const TAB_SLACK = 2;
+
+function focusables(root) {
+    const found = [];
+    const walk = actor => {
+        for (const child of actor.get_children()) {
+            if (child instanceof St.Widget && child.can_focus && child.reactive && child.mapped)
+                found.push(child);
+            walk(child);
+        }
+    };
+    walk(root);
+    return found;
+}
+
+function tap(keyboard, keyval) {
+    keyboard.notify_keyval(GLib.get_monotonic_time(), keyval, Clutter.KeyState.PRESSED);
+    keyboard.notify_keyval(GLib.get_monotonic_time(), keyval, Clutter.KeyState.RELEASED);
+}
+
+// Tab from a surface's first control, past its last: where key focus lands after each press, read
+// once the press has reached the stage and the stage's next frame has handled it, so none is missed.
+async function tabWalk(root, h, keyboard) {
+    const controls = focusables(root);
+    if (!controls.length)
+        return {error: 'no focusable control'};
+    const name = c => c.accessible_name || c.label || c.style_class || c.constructor.name;
+    controls[0].grab_key_focus();
+    const order = [], stuck = [], left = [];
+    for (let press = 1; press <= controls.length + TAB_SLACK; press++) {
+        let moved = false;
+        const id = global.stage.connect('notify::key-focus', () => (moved = true));
+        tap(keyboard, Clutter.KEY_Tab);
+        // eslint-disable-next-line no-await-in-loop
+        await h.inputDelivered();
+        // The stage handles queued events at its next frame.
+        // eslint-disable-next-line no-await-in-loop
+        await h.settle();
+        global.stage.disconnect(id);
+        const focus = global.stage.get_key_focus();
+        const at = controls.findIndex(c => c === focus || c.contains(focus));
+        order.push(at);
+        if (!moved && controls.length > 1)
+            stuck.push(press);
+        if (at < 0)
+            left.push({press, to: focus ? focus.constructor.name : null});
+    }
+    const reached = new Set(order.filter(at => at >= 0));
+    const modals = Main.modalCount;
+    tap(keyboard, Clutter.KEY_Escape);
+    await h.inputDelivered();
+    await h.settle();
+    return {
+        controls: controls.length, order, stuck, left,
+        unreached: controls.filter((_, at) => !reached.has(at)).map(name),
+        wrapped: order.includes(0),
+        escape: {modalsBefore: modals, modalsAfter: Main.modalCount},
+    };
+}
+
+// WCAG 2.1.1 and 2.1.2: Tab reaches every control of Quick Settings, a dialog and Spotlight,
+// never leaves the surface or stops, and Escape closes it.
+async function reachReport(h) {
+    const seat = global.stage.context.get_backend().get_default_seat();
+    const keyboard = seat.create_virtual_device(Clutter.InputDeviceType.KEYBOARD_DEVICE);
+    const {menu} = Main.panel.statusArea.quickSettings;
+    return {
+        quickSettings: await withOpen(() => menu.open(BoxPointer.PopupAnimation.NONE),
+            () => menu.close(BoxPointer.PopupAnimation.NONE), () => tabWalk(menu.box, h, keyboard)),
+        dialog: await withOpen(() => h.openModalDialog(), d => d.close(), d => tabWalk(d.root, h, keyboard)),
+        spotlight: await h.withSpotlight(popup => tabWalk(popup.panel, h, keyboard)) ?? {error: 'no Spotlight'},
+    };
+}
+
 // The bar over whatever the stage draws now, as a11yReport measures it.
 export async function barReport(settle, unit) {
     await settle();
@@ -660,6 +734,8 @@ export async function a11yReport(h) {
     lap('spotlight');
     out.focus = await focusReport(h, settle, unit);
     lap('focus');
+    out.reach = await reachReport({...h, settle});
+    lap('reach');
     Main.overview.show();
     global.stage.set_key_focus(null);
     out.overview = await report(Main.overview._overview);

@@ -2038,6 +2038,39 @@ focus_rings() {
     done
 }
 
+# Tab through Quick Settings, a dialog and Spotlight (WCAG 2.1.1, 2.1.2): each press moves key focus
+# to the next control, back to the first after the last, never out of the surface; Escape closes it.
+readonly A11Y_REACH_SURFACES=(quickSettings dialog spotlight)
+tab_walks() {
+    local label=$1 report=$2 s r off
+    for s in "${A11Y_REACH_SURFACES[@]}"; do
+        r=$(jq -c --arg s "$s" '.reach[$s] // {error: "not measured"}' <<<"$report" 2>/dev/null)
+        if [[ -z $r ]] || jq -e '.error' <<<"$r" >/dev/null; then
+            fail "$label accessibility: Tab through $s ($(jq -r '.error // "not measured"' <<<"${r:-{\}}" 2>/dev/null))"
+            continue
+        fi
+        # shellcheck disable=SC2016 # a jq program
+        off=$(jq -r '.controls as $n | [.order | to_entries[] | select(.value != (.key + 1) % $n)
+            | "press \(.key + 1) on \(.value)"] + (.unreached | map("\(.) never reached")) | join(", ")' <<<"$r")
+        if [[ -z $off ]]; then
+            pass "$label accessibility: Tab moves through $s's $(jq .controls <<<"$r") control(s) in turn and wraps"
+        else
+            fail "$label accessibility: Tab moves through $s's controls in turn and wraps ($off)"
+        fi
+        off=$(jq -r '(.stuck | map("press \(.) moved nothing")) + (.left | map("press \(.press) left for \(.to)")) | join(", ")' <<<"$r")
+        if [[ -z $off ]]; then
+            pass "$label accessibility: Tab in $s never stops or leaves it"
+        else
+            fail "$label accessibility: Tab in $s never stops or leaves it ($off)"
+        fi
+        if jq -e '.escape.modalsAfter < .escape.modalsBefore' <<<"$r" >/dev/null; then
+            pass "$label accessibility: Escape closes $s"
+        else
+            fail "$label accessibility: Escape closes $s (modals $(jq -r '"\(.escape.modalsBefore) to \(.escape.modalsAfter)"' <<<"$r"))"
+        fi
+    done
+}
+
 # The text below 4.5:1 and the glyphs and dots below 3:1 in a report's surface at path; with gapdot
 # true, the inactive workspace dots are left to inactive_dot.
 a11y_low_contrast() {
@@ -2065,6 +2098,7 @@ a11y_contrast() {
     done
     bar_pills "$label" "$report"
     focus_rings "$label" "$report"
+    tab_walks "$label" "$report"
     expect "$label accessibility" "$report" '.wifiMenuConnected.targets | any(.kind == "text" and (.inactive | not))' \
         "the connected network's name is measured over its row's own fill"
     expect "$label accessibility" "$report" '(.bar.targets | map(select(.kind == "dot" and .name == "workspace-dot")) | length >= 2)
