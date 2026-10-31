@@ -8,7 +8,8 @@ locked, that a GDM refusing to reauthenticate leaves it locked, that the fingerp
 conversation stops while the screen is blank, that blanking cancels the conversation and waking starts a new one, that
 the key that wakes the screen never answers a prompt, that gnome-session's idle at lock leaves the prompt to blank, that resume brings back the prompt sleep took down, that
 stock and safe mode keep upstream's lock, and that the greeter runs no Apex JS and no screencast service; what board 13's
-authentication dialog shows, from a stubbed polkit session that is never answered; and board 34's
+authentication dialog shows, from a stubbed polkit session that is never answered or that refuses an answer, and that
+Esc dismisses it; and board 34's
 date menu: flat cards headed "app · time" with the app's icon, Clear on the right, Do Not Disturb;
 and what the end-session dialog's update card does with update1-mock.py's Apply.
 Prints one line per assertion and exits 1 when one fails.
@@ -51,6 +52,14 @@ POLKIT_CASES = {
     "polkit-fingerprint": {"apex": True, "info": "Place your finger on the fingerprint reader"},
     "polkit-disabled": {"apex": False, "info": None},
 }
+# Per refused case: the error line after the wrong answer, and the info line the retry shows.
+POLKIT_UPSTREAM_ERROR = "Sorry, that didn’t work. Please try again."
+POLKIT_REFUSED_CASES = {
+    "polkit-refused-light": {"error": POLKIT_UPSTREAM_ERROR, "info": None},
+    "polkit-refused-dark": {"error": POLKIT_UPSTREAM_ERROR, "info": None},
+    "polkit-refused-fingerprint": {"error": None, "info": "Place your finger on the fingerprint reader"},
+    "polkit-refused-faillock": {"error": "The account is locked due to 3 failed logins.", "info": None},
+}
 POLKIT_ACTION = "io.github.apex-linux.apex.update.rollback"
 POLKIT_MESSAGE = "Booting the previous version of Apex at the next restart needs an administrator password."
 POLKIT_TITLE = "Authentication Required"
@@ -75,7 +84,7 @@ def tokens():
     found = {}
     with open(TOKENS, encoding="utf-8") as f:
         for line in f:
-            m = re.match(r"\$(apex_(?:greeter|lock|surface)_\w+):\s*(.+?);", line)
+            m = re.match(r"\$(apex_(?:greeter|lock|polkit|surface)_\w+):\s*(.+?);", line)
             if m:
                 found[m.group(1)] = m.group(2).strip("'\"")
     return found
@@ -667,6 +676,53 @@ def check_polkit(shots, case, want):
         check(f"{case}: no fingerprint line when PAM sends none", info["text"] is None and info["glyph"] is None, json.dumps(info))
 
 
+def check_polkit_refused(shots, case, want, t):
+    """Board 13 after a wrong answer: upstream's error line in the Apex dialog, and a fresh question."""
+    log = read(shots, f"{case}.log")
+    f = facts(log)
+    check(f"{case}: the dialog before and after the wrong answer is reported", all(k in f for k in ("polkit", "refused", "polkit-sessions")))
+    check(f"{case}: no JS error", "JS ERROR" not in log and "APEXLOCK-ERROR" not in log)
+    if not all(k in f for k in ("polkit", "refused", "polkit-sessions")):
+        return
+    before, d, sessions = f["polkit"], f["refused"], f["polkit-sessions"]
+    check(f"{case}: one wrong answer, then upstream asks again in a new session",
+          sessions == [{"responses": 1, "cancelled": False}, {"responses": 0, "cancelled": False}], json.dumps(sessions))
+    check(f"{case}: the field is cleared and asks again, focused",
+          d["entry"] == {"text": "", "reactive": True} and d["field"]["hint"] == "Password" and d["field"]["focused"],
+          json.dumps([d["entry"], d["field"]]))
+    check(f"{case}: board 13's dialog, shield, header and Details as before the answer",
+          all(d[k] == before[k] for k in ("classes", "shield", "title", "description", "details")) and d["box"]["x"] == before["box"]["x"]
+          and d["box"]["width"] == before["box"]["width"], json.dumps([before, d]))
+    error, info, box, gap = d["error"], d["info"], d["box"], px(t["apex_polkit_body_gap"])
+    check(f"{case}: the error line reads {json.dumps(want['error'])}", error["text"] == want["error"], json.dumps(error))
+    check(f"{case}: the info line reads {json.dumps(want['info'])}", info["text"] == want["info"], json.dumps(info))
+    if want["error"]:
+        field = d["field"]
+        check(f"{case}: the error line sits $apex_polkit_body_gap ({gap:g} px) under the field",
+              abs(error["y"] - field["y"] - field["height"] - gap) <= 1, json.dumps([field, error]))
+        check(f"{case}: the error line stays inside the dialog, above Details",
+              error["x"] >= box["x"] and error["x"] + error["width"] <= box["x"] + box["width"] + 1
+              and error["y"] + error["height"] <= d["details"]["y"] + 1, json.dumps([box, error, d["details"]]))
+
+
+def check_polkit_cancel(shots, case):
+    """Esc on board 13 before polkitd answers the vendor lookup: the request is dismissed and the lookup ends."""
+    log = read(shots, f"{case}.log")
+    f = facts(log)
+    check(f"{case}: the dialog and the cancel are reported", "polkit" in f and "cancelled" in f)
+    check(f"{case}: no JS error, no vendor warning",
+          "JS ERROR" not in log and "APEXLOCK-ERROR" not in log and "Apex: polkit: no vendor" not in log)
+    if "polkit" not in f or "cancelled" not in f:
+        return
+    d, c = f["polkit"], f["cancelled"]
+    check(f"{case}: Esc came while the vendor lookup was pending",
+          (d["details"] or {}).get("rows") == [["Action", POLKIT_ACTION]], json.dumps(d["details"]))
+    check(f"{case}: Esc dismisses the request and closes the dialog", c["done"] is True and not c["current"], json.dumps(c))
+    check(f"{case}: the one session is cancelled, never answered", c["sessions"] == [{"responses": 0, "cancelled": True}],
+          json.dumps(c["sessions"]))
+    check(f"{case}: the vendor lookup is cancelled with the dialog", c["lookups"] == [{"cancelled": True}], json.dumps(c["lookups"]))
+
+
 DND_LABEL = "Do Not Disturb"
 ICON_SIZE = 32
 MESSAGE_GAP = 8  # $apex_message_gap
@@ -787,6 +843,9 @@ def main():
         check_greeter(shots, case)
     for case, want in POLKIT_CASES.items():
         check_polkit(shots, case, want)
+    for case, want in POLKIT_REFUSED_CASES.items():
+        check_polkit_refused(shots, case, want, tokens())
+    check_polkit_cancel(shots, "polkit-cancel")
     for case, (apex, sleeps) in POLKIT_LOCKED_CASES.items():
         check_polkit_locked(shots, case, apex, sleeps)
     check_date_menu(shots, "date-menu", True)

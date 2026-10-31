@@ -26,7 +26,9 @@ IDLE at lock, as every real lock does, then blanks and wakes with no key; lock-s
 has logind's mock prepare for sleep and resume; each greeter case (--mode=gdm) shows the user list, then the
 prompt. Each polkit case opens the shell's own authentication dialog through the polkit
 component's _onInitiate(), with a stubbed PolkitAgent.Session that PAM never answers, for
-captures and style checks only (pkexec end to end is G4's); polkit-lock and polkit-suspend
+captures and style checks only (pkexec end to end is G4's); each polkit-refused case answers wrongly
+and the session fails as PAM's does (pam_faillock's text first in polkit-refused-faillock), and
+polkit-cancel presses Esc before polkitd answers Details' vendor lookup; polkit-lock and polkit-suspend
 lock the screen, or sleep and resume, under the open dialog, type at the lock, then end the lock,
 and polkit-lock-safe does so in safe mode. date-menu opens the date menu, sends
 the shell's notification daemon one notification, then four more, toggles Do Not Disturb twice
@@ -262,7 +264,11 @@ for scheme in light dark; do
     color=default
     [[ $scheme == dark ]] && color=prefer-dark
     shoot "polkit-$scheme" "$USER_NAME" user "$color" 'Password:' -- APEX_POLKIT=1 || status=1
+    shoot "polkit-refused-$scheme" "$USER_NAME" user "$color" 'Password:' -- APEX_POLKIT=refuse || status=1
 done
+shoot polkit-refused-fingerprint "$USER_NAME" user default 'Password:' -- APEX_POLKIT=refuse APEX_POLKIT_INFO=fingerprint || status=1
+shoot polkit-refused-faillock "$USER_NAME" user default 'Password:' -- APEX_POLKIT=refuse APEX_POLKIT_ERROR=faillock || status=1
+shoot polkit-cancel "$USER_NAME" user default 'Password:' -- APEX_POLKIT=cancel || status=1
 shoot polkit-fingerprint "$USER_NAME" user default 'Password:' -- APEX_POLKIT=1 APEX_POLKIT_INFO=fingerprint || status=1
 shoot polkit-disabled "$USER_NAME" user default 'Password:' "$polkit_off" -- APEX_POLKIT=1 || status=1
 shoot polkit-lock "$USER_NAME" user default 'Password:' -- APEX_POLKIT=lock || status=1

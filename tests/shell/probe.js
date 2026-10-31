@@ -6,6 +6,7 @@ import Clutter from 'gi://Clutter';
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import GObject from 'gi://GObject';
+import Polkit from 'gi://Polkit';
 import PolkitAgent from 'gi://PolkitAgent';
 import Shell from 'gi://Shell';
 import St from 'gi://St';
@@ -35,6 +36,7 @@ const POINTER_NUDGE = 4;
 const POLKIT_ACTION = 'io.github.apex-linux.apex.update.rollback';
 const POLKIT_MESSAGE = 'Booting the previous version of Apex at the next restart needs an administrator password.';
 const PAM_FPRINTD_PROMPT = 'Place your finger on the fingerprint reader';
+const PAM_FAILLOCK_ERROR = 'The account is locked due to 3 failed logins.';
 
 let keyboard;
 let pointer;
@@ -338,8 +340,8 @@ async function shootLock() {
 }
 
 // What polkit-agent-helper-1 would send, without the helper: PAM never runs, so nothing the
-// dialog does can authorise. Its answers are only counted.
-function stubSession(sessions, info) {
+// dialog does can authorise. With refuse, an answer fails as PAM's does: its error text if any, then completed(false).
+function stubSession(sessions, info, refuse = null) {
     return GObject.registerClass({
         Properties: {
             'identity': GObject.ParamSpec.object('identity', null, null,
@@ -366,6 +368,14 @@ function stubSession(sessions, info) {
 
         response() {
             sessions.at(-1).responses++;
+            if (!refuse)
+                return;
+            GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
+                if (refuse.error)
+                    this.emit('show-error', refuse.error);
+                this.emit('completed', false);
+                return GLib.SOURCE_REMOVE;
+            });
         }
 
         cancel() {
@@ -405,6 +415,7 @@ function describePolkit(dialog) {
             focus: global.stage.key_focus?.constructor.name ?? null,
         },
         info: {text: visibleText(info), line: line.style_class, glyph: line.get_children().find(c => c instanceof St.Icon && c.visible)?.icon_name ?? null},
+        error: {...box(dialog._errorMessageLabel), text: visibleText(dialog._errorMessageLabel)},
         details: details ? {
             ...box(details),
             open: grid.visible,
@@ -414,16 +425,48 @@ function describePolkit(dialog) {
     };
 }
 
-async function openPolkit() {
+async function openPolkit(refuse = null, settle = SETTLE_MS) {
     await Scripting.sleep(SETTLE_MS);
     Main.overview.hide();
     await Scripting.sleep(STEP_MS);
     const sessions = [];
-    PolkitAgent.Session = stubSession(sessions, GLib.getenv('APEX_POLKIT_INFO') === 'fingerprint' ? PAM_FPRINTD_PROMPT : null);
+    PolkitAgent.Session = stubSession(sessions, GLib.getenv('APEX_POLKIT_INFO') === 'fingerprint' ? PAM_FPRINTD_PROMPT : null, refuse);
     const agent = Main.componentManager._allComponents.polkitAgent;
     agent._onInitiate(agent, POLKIT_ACTION, POLKIT_MESSAGE, '', 'apex-shell-test', [GLib.getenv('APEX_USER')]);
-    await Scripting.sleep(SETTLE_MS);
+    await Scripting.sleep(settle);
     return {agent, dialog: agent._currentDialog, sessions};
+}
+
+// Board 13 after a wrong password: upstream's _onSessionCompleted(false) shows its error, or keeps PAM's, then asks again.
+async function shootPolkitRefused() {
+    const {dialog, sessions} = await openPolkit({error: GLib.getenv('APEX_POLKIT_ERROR') === 'faillock' ? PAM_FAILLOCK_ERROR : null});
+    fact('polkit', describePolkit(dialog));
+    await type(WRONG_ANSWER);
+    await Scripting.sleep(STEP_MS);
+    fact('refused', {...describePolkit(dialog), entry: {text: dialog._passwordEntry.text, reactive: dialog._passwordEntry.reactive}});
+    iconFact('refused', [dialog.dialogLayout._dialog]);
+    await capture('refused');
+    fact('polkit-sessions', sessions);
+}
+
+// Esc while polkitd has not yet answered Details' vendor lookup: the dialog ends its session and the lookup.
+async function shootPolkitCancel() {
+    const lookups = [];
+    Polkit.Authority.prototype.enumerate_actions = function (cancellable) {
+        const lookup = {cancelled: false};
+        lookups.push(lookup);
+        return new Promise((resolve, reject) => cancellable.connect('cancelled', () => {
+            lookup.cancelled = true;
+            reject(new GLib.Error(Gio.IOErrorEnum, Gio.IOErrorEnum.CANCELLED, 'cancelled'));
+        }));
+    };
+    const {agent, dialog, sessions} = await openPolkit(null, STEP_MS);
+    fact('polkit', describePolkit(dialog));
+    let done = null;
+    dialog.connect('done', (_d, dismissed) => (done = dismissed));
+    tap(Clutter.KEY_Escape);
+    await Scripting.sleep(SETTLE_MS);
+    fact('cancelled', {done, current: agent._currentDialog === dialog, sessions, lookups});
 }
 
 async function shootPolkit() {
@@ -801,6 +844,10 @@ export async function run() {
             await shootGreeter();
         else if (GLib.getenv('APEX_POLKIT') === '1')
             await shootPolkit();
+        else if (GLib.getenv('APEX_POLKIT') === 'refuse')
+            await shootPolkitRefused();
+        else if (GLib.getenv('APEX_POLKIT') === 'cancel')
+            await shootPolkitCancel();
         else if (['lock', 'suspend'].includes(GLib.getenv('APEX_POLKIT')))
             await shootPolkitLocked(GLib.getenv('APEX_POLKIT') === 'suspend');
         else if (GLib.getenv('APEX_DATE_MENU') === '1')
