@@ -353,6 +353,9 @@ REPORT_OF_A_DIALOG_DRAWN_FROM_TOKENS='
             background: "#3584e4ff", knob: {width: ($t.apex_update_switch_knob | px)}, opacity: 1, focusable: true, a11ySensitive: true},
         buttons: ["Cancel", "Restart & Update"]}
         | {staged: ., ready: (.toggle += {sensitive: false, opacity: ($t.apex_update_switch_insensitive_opacity | tonumber), focusable: false, a11ySensitive: false})}),
+    checkBox: {background: ($t.apex_panel_solid | hex), label: "Remember Password",
+        unchecked: {border: {top: 2}, borderColor: ($t.apex_fg_dim | hex), hover: {borderColor: ($t.apex_fg | hex)}},
+        checked: {background: "#2863abff", foreground: "#ffffffff", borderColor: "#00000000", hover: {borderColor: "#00000000"}}},
     contentSpacing: ($t.apex_dialog_gap | px), textSpacing: ($t.apex_dialog_text_gap | px),
     title: {font: {size: ($t.apex_font_dialog_title_size | px), weight: ($t.apex_font_heading_weight | tonumber)}},
     description: {font: {size: ($t.apex_font_size | px)}, foreground: ($t.apex_fg_dim | hex)},
@@ -766,22 +769,60 @@ REPORT_OF_LEGIBLE_SURFACES='
 | ($text + {kind: "dot", name: "workspace-dot", ratio: 16, box: {x: 100, y: 10, width: 6, height: 6}}) as $dot
 | ($dot + {alpha: 0.447, ratio: $inactive}) as $inactiveDot
 | {box: {x: 0, y: 0, width: 200, height: 100}, targets: [$text, $icon]} as $s
+| {fill: "#c01c28", bar: "#f3f3f5", ratio: 5.2} as $edge
 | {textScalingFactor: 1.25, monitor: {x: 0, y: 0, width: 1440, height: 900},
     quickSettingsAccents: (["blue", "teal", "green", "yellow", "orange", "red", "pink", "purple", "slate"] | map({key: ., value: $s}) | from_entries),
     dateMenuAccents: (["blue", "teal", "green", "yellow", "orange", "red", "pink", "purple", "slate"] | map({key: ., value: $s}) | from_entries),
     dialogAccents: (["blue", "teal", "green", "yellow", "orange", "red", "pink", "purple", "slate"] | map({key: ., value: $s}) | from_entries),
+    checkBoxDialog: $s,
+    checkBoxDialogAccents: (["blue", "teal", "green", "yellow", "orange", "red", "pink", "purple", "slate"] | map({key: ., value: $s}) | from_entries),
     screenshot: $s,
 
     bar: ($s | .targets += [$dot, $inactiveDot]), barUnread: ($s | .targets += [$dot + {name: "messages-indicator"}, $inactiveDot]), dock: $s, popupMenu: $s, osd: $s, banner: $s, quickSettings: $s, wifiMenu: $s, wifiMenuConnected: $s, dateMenu: $s, switcher: $s,
-    dialog: $s, endSession: $s, spotlight: {popup: $s, toast: $s}, overview: $s, appGrid: $s}'
+    dialog: $s, endSession: $s, spotlight: {popup: $s, toast: $s}, overview: $s, appGrid: $s,
+    barPills: {box: $s.box, pills: {input: {targets: [$text + {name: "EN"}], edge: null},
+        recording: {targets: [$text + {name: "0:42", ink: "#ffffff", backdrop: "#c01c28", ratio: 5.6}], edge: $edge},
+        sharing: {targets: [$icon + {name: "screen-shared-symbolic"}], edge: $edge}, privacy: {targets: [$icon, $icon], edge: $edge},
+        overflow: {targets: [$text + {name: "+1"}], edge: null}}
+        + ([range(4)] | map({key: "indicator\(.)", value: {targets: [$icon + {name: "Chat"}], edge: null}}) | from_entries),
+        crowded: $s, indicatorMenu: $s},
+    focus: ({name: "Control", focused: true, changed: 900, perimeter: 400, ratio: 4} as $ring
+        | {quickSettings: $ring, dock: $ring, dialog: ($ring + {ratio: 2.87}),
+            spotlight: ($ring + {changed: 164, ratio: 1})} | {backdrop: ., busy: .})}'
 
 # The label picks the backdrop: dark-style's inactive dot passes 3:1 today, default's is the gap.
+# Each label's focus readings at today's pins, Quick Settings' and the dialog's per wallpaper: four gaps.
+declare -Ar A11Y_FOCUS_FIXTURE=([default]='{"quickSettings":[2.37,2.14],"dialog":[4,4]}'
+    [default-solid]='{"quickSettings":[1.91,2.14],"dialog":[4,4]}' [dark-style]='{"quickSettings":[4,4],"dialog":[2.87,2.87]}')
+
 a11y_run() {
     local assertions=$1 change=${2:-.} label=${3:-dark-style} inactive=${4:-4.24}
-    jq -nc --argjson inactive "$inactive" "$REPORT_OF_LEGIBLE_SURFACES | $change" | sed 's/^/APEXG2-A11Y /' >"$T/a11y.log"
+    # shellcheck disable=SC2016 # a jq program
+    jq -nc --argjson inactive "$inactive" --argjson today "${A11Y_FOCUS_FIXTURE[$label]}" "$REPORT_OF_LEGIBLE_SURFACES
+        | .focus |= with_entries(.key as \$w | (if \$w == \"busy\" then 1 else 0 end) as \$i
+            | .value.quickSettings.ratio = \$today.quickSettings[\$i] | .value.dialog.ratio = \$today.dialog[\$i]) | $change" |
+        sed 's/^/APEXG2-A11Y /' >"$T/a11y.log"
     # shellcheck disable=SC2016 # expanded by the inner bash
     bash -c '. "$1/assert.sh"; "$2" "$3" "$4" >"$5" 2>&1; summary >>"$5"; echo "$npass $nfail $ngap"' \
         _ "$HERE" "$assertions" "$label" "$T/a11y.log" "$T/a11y.out"
+}
+
+# A surface that reports an error, or none at all, fails naming why, in both checks.
+test_a11y_surface_errors() {
+    local assertions change want
+    while IFS='|' read -r assertions change want; do
+        a11y_run "$assertions" "$change" >/dev/null
+        expect_eq "accessibility: $assertions names the surface's own failure, $want" 1 \
+            "$(grep -c "^FAIL dark-style accessibility: banner: .* ($want)$" "$T/a11y.out")"
+    done <<'CHANGES'
+a11y_contrast|.banner = {error: "not shown"}|error: not shown
+a11y_layout|.banner = {error: "not shown"}|error: not shown
+a11y_contrast|del(.banner)|not measured
+a11y_layout|.banner.targets = []|no text or glyph found
+CHANGES
+    a11y_run a11y_layout '.barPills.crowded = {error: "not shown"}' >/dev/null
+    expect_eq "accessibility: a11y_layout names the crowded bar's own failure" 1 \
+        "$(grep -c "^FAIL dark-style accessibility: board 39's crowded bar .* (error: not shown)$" "$T/a11y.out")"
 }
 
 # default's inactive dot is Apex's known gap: pinned at 2.86:1, and failing once it reaches 3:1.
@@ -795,21 +836,40 @@ test_inactive_dot_gap() {
             not_ok "inactive dot gap: $what fails $want_failures, $want_gaps gap(s) (passed/failed/gaps $passes/$failures/$open_gaps): $(grep -m3 '^FAIL' "$T/a11y.out" | paste -sd'|' -)"
         fi
     done <<'CHANGES'
-0|2|2.86|default's dot at today's 2.86:1, in the bar and with the unread dot
-2|2|2.85|a dot below today's 2.86:1
-2|0|3|the dot at 3:1: the gap must go
+0|6|2.86|default's dot at today's 2.86:1, in the bar and with the unread dot
+2|6|2.85|a dot below today's 2.86:1
+2|4|3|the dot at 3:1: the gap must go
+CHANGES
+}
+
+# default-solid's pill fills are Apex's known gaps: pinned at today's ratios, and failing once one reaches 3:1.
+test_pill_gaps() {
+    local want_failures want_gaps sharing what passes failures open_gaps edges
+    while IFS='|' read -r want_failures want_gaps sharing what; do
+        edges=".barPills.pills.recording.edge.ratio = 2.02 | .barPills.pills.sharing.edge.ratio = $sharing | .barPills.pills.privacy.edge.ratio = 1.62"
+        read -r passes failures open_gaps <<<"$(a11y_run a11y_contrast "$edges" default-solid 2.22)"
+        if ((failures == want_failures && open_gaps == want_gaps)); then
+            ok "pill gaps: $what fails $want_failures, $want_gaps gap(s)"
+        else
+            not_ok "pill gaps: $what fails $want_failures, $want_gaps gap(s) (passed/failed/gaps $passes/$failures/$open_gaps): $(grep -m3 '^FAIL' "$T/a11y.out" | paste -sd'|' -)"
+        fi
+    done <<'CHANGES'
+0|9|1.62|default-solid's three pill fills at today's ratios, beside its two inactive-dot gaps
+1|9|1.61|the sharing pill's fill below today's 1.62:1
+1|8|3|the sharing pill's fill at 3:1: its gap must go
 CHANGES
 }
 
 test_a11y() {
     local assertions expected change what passes failures open_gaps want
-    for assertions in a11y_contrast:49 a11y_layout:46; do
-        expected=${assertions#*:}
-        read -r passes failures open_gaps <<<"$(a11y_run "${assertions%:*}")"
-        if ((failures == 0 && open_gaps == 0 && passes == expected)); then
-            ok "accessibility (${assertions%:*}): legible surfaces pass all $passes assertions"
+    # dark-style's four focus gaps today: its Spotlight entry and dialog entry, each per wallpaper.
+    for assertions in a11y_contrast:77:4 a11y_layout:58:0; do
+        IFS=: read -r assertions expected gaps <<<"$assertions"
+        read -r passes failures open_gaps <<<"$(a11y_run "$assertions")"
+        if ((failures == 0 && open_gaps == gaps && passes == expected)); then
+            ok "accessibility ($assertions): legible surfaces pass all $passes assertions, $gaps known gap(s)"
         else
-            not_ok "accessibility (${assertions%:*}): legible surfaces pass (passed/failed/gaps $passes/$failures/$open_gaps): $(grep -m3 '^FAIL' "$T/a11y.out" | paste -sd'|' -)"
+            not_ok "accessibility ($assertions): legible surfaces pass (passed/failed/gaps $passes/$failures/$open_gaps): $(grep -m3 '^FAIL' "$T/a11y.out" | paste -sd'|' -)"
         fi
     done
     while IFS='|' read -r assertions want change what; do
@@ -822,12 +882,30 @@ test_a11y() {
     done <<'CHANGES'
 a11y_contrast|1|.bar.targets[0].ratio = 4.4|text at 4.4:1
 a11y_contrast|1|.dock.targets[1].ratio = 2.9|a glyph at 2.9:1
+a11y_contrast|1|.checkBoxDialogAccents.yellow.targets[1].ratio = 2.9|a checked box's check at 2.9:1 on yellow
 a11y_contrast|2|.bar.targets[3].ratio = 2.9|an inactive workspace dot at 2.9:1, under 3:1 and dark-style's 4.24:1
 a11y_contrast|1|.bar.targets[3].ratio = 4.2|an inactive workspace dot at 4.2:1, under dark-style's 4.24:1
 a11y_contrast|1|.barUnread.targets[2].ratio = 2.9|the clock's unread dot at 2.9:1
 a11y_contrast|2|.bar.targets = .bar.targets[:3]|no inactive workspace dot measured
 a11y_contrast|1|.barUnread.targets = .barUnread.targets[:2] + .barUnread.targets[3:]|no unread dot measured
 a11y_contrast|0|.barUnread.targets[2] += {kind: "icon", name: "message-indicator-symbolic"}|high contrast's unread glyph in place of the dot
+a11y_contrast|1|.barPills.pills.recording.targets[0] += {ink: "#c01c28", ratio: 1}|the timer's text in the recording pill's own fill colour
+a11y_contrast|1|.barPills.pills.input.targets[0].ratio = 4.4|the input chip's text at 4.4:1
+a11y_contrast|1|.barPills.pills.privacy.targets[1].ratio = 2.9|a privacy glyph at 2.9:1 over its fill
+a11y_contrast|1|.barPills.pills.sharing.edge.ratio = 2.9|the sharing pill's fill at 2.9:1 against the bar
+a11y_contrast|2|.barPills.pills.privacy = {error: "not shown"}|a pill that never showed
+a11y_contrast|10|del(.barPills)|no pills, app indicators or app menu measured
+a11y_contrast|0|.barPills.pills.recording.targets[0].ratio = 4.5|the timer's text at 4.5:1
+a11y_contrast|1|.barPills.pills.indicator2.targets[0] += {ink: "#16161a", ratio: 1}|an app indicator's glyph drawn in the bar's own colour
+a11y_contrast|1|.barPills.pills.overflow.targets[0].ratio = 4.4|the overflow's +1 at 4.4:1
+a11y_contrast|1|.barPills.indicatorMenu.targets[0].ratio = 3|the Chat app's menu text at 3:1
+a11y_contrast|2|del(.barPills.pills.overflow, .barPills.pills.indicator0, .barPills.pills.indicator1, .barPills.pills.indicator2, .barPills.pills.indicator3)|no app indicators shown
+a11y_contrast|1|.focus.busy.quickSettings += {ratio: 1}|a focus indicator drawn in its surface's own colour over the busy wallpaper
+a11y_contrast|1|.focus.backdrop.dock += {changed: 0, ratio: 1}|a dock item that shows no focus indicator
+a11y_contrast|1|.focus.busy.dialog.ratio = 2.5|the dialog entry's indicator below today's 2.87:1
+a11y_contrast|1|.focus.backdrop.dialog.focused = false|key focus that never lands on the dialog's control
+a11y_contrast|4|.focus.busy = {error: "the wallpaper never changed"}|a busy wallpaper that never showed
+a11y_contrast|0|.focus.backdrop.quickSettings.ratio = 3|a focus indicator at 3:1
 a11y_contrast|1|.wifiMenu.targets[0].ratio = 3|a menu row's text at 3:1
 a11y_contrast|1|.wifiMenuConnected.targets[0].ratio = 4.4|the connected network's name at 4.4:1 over its fill
 a11y_contrast|1|.wifiMenuConnected.targets |= map(. + {kind: "icon"})|a connected row with only its glyphs measured
@@ -847,6 +925,9 @@ a11y_layout|1|.bar.targets[0].ellipsized = true|text cut short
 a11y_layout|1|.dock.targets[0].box.x = 1430|text over the screen's edge
 a11y_layout|1|.osd.targets[0].box.y = 95|text leaving its surface
 a11y_layout|1|.quickSettings.targets += [.quickSettings.targets[0] + {name: "Other"} + {box: {x: 20, y: 10, width: 60, height: 20}}]|overlapping text
+a11y_layout|1|.barPills.crowded.targets += [.barPills.crowded.targets[0] + {name: "EN"} + {box: {x: 30, y: 12, width: 40, height: 18}}]|the input chip over the timer on the crowded bar
+a11y_layout|1|.barPills.crowded.targets[0].ellipsized = true|a crowded bar's text cut short
+a11y_layout|1|.barPills.indicatorMenu.targets[0].box.x = 1430|the app menu's text over the screen's edge
 a11y_layout|1|.textScalingFactor = 1|text at its default size
 a11y_layout|0|.dateMenu.targets += [.dateMenu.targets[0] + {card: 1} + {box: {x: 20, y: 14, width: 60, height: 20}}]|a stacked card's text
 a11y_layout|0|.banner.targets[0] += {ellipsized: true, expandable: true}|a collapsed notification's body
@@ -1118,13 +1199,47 @@ test_signoff_banners() {
     rm -rf "$dir" && cp -r "$1" "$dir"
     sed -i '/^APEXG2-SESSION /s/"icon-theme":"Apex"}/"icon-theme":"Adwaita"}/' "$dir/g2/dark-style.log"
     if ! "$HERE/signoff.sh" --collect "$dir/g2" "$dir/shots" "$dir/out" >"$T/signoff.out" 2>&1 &&
-        grep -q '^signoff.sh: session defaults: 11 passed, 1 failed$' "$T/signoff.out" &&
+        grep -q '^signoff.sh: session defaults: 23 passed, 1 failed$' "$T/signoff.out" &&
         grep -q 'dark-style: the session reads .*(icon-theme is "Adwaita", not "Apex")' "$T/signoff.out" &&
         grep -q '1 session default check(s) failed' "$T/signoff.out"; then
         ok "signoff: a session default that is not apex-desktop's fails its own check line, naming the key"
     else
         not_ok "signoff: a session default that is not apex-desktop's fails its own check line, naming the key: $(tail -n 3 "$T/signoff.out")"
     fi
+}
+
+# One Apex icon at each step assert.sh's shell_icons reads, in SHOTS/CASE.log.
+shell_icon_facts() {
+    local shots=$1 entry case step
+    # shellcheck disable=SC2016 # expanded by the inner bash
+    while read -r entry; do
+        IFS='|' read -r case step _ <<<"$entry"
+        printf 'APEXLOCK {"icons-%s":{"installed":true,"icons":[{"icon":"view-reveal-symbolic","file":"/usr/share/icons/Apex/symbolic/view-reveal-symbolic.svg","app":null}]}}\n' \
+            "$step" >>"$shots/$case.log"
+    done < <(bash -c '. "$1/assert.sh"; printf "%s\n" "${SHELL_ICON_STEPS[@]}"' _ "$HERE")
+}
+
+test_shell_icons() {
+    local dir=$T/shell-icons passes failures want change what
+    while IFS='|' read -r want change what; do
+        rm -rf "$dir" && mkdir -p "$dir"
+        shell_icon_facts "$dir"
+        [[ $change == . ]] || sed -i "$change" "$dir/lock-light.log"
+        read -r passes failures <<<"$(assertion_counts shell_icons shell "$dir")"
+        expect_eq "shell icons: $what" "$want" "$passes/$failures"
+    done <<'CHANGES'
+10/0|.|an Apex icon at every step of the lock, the greeter and polkit's dialog
+9/1|s/"installed":true/"installed":false/|a lock with no Apex theme installed
+9/1|s/"icons":\[.*\]}}/"icons":[]}}/|a lock that drew no icon
+9/1|s#/usr/share/icons/Apex/symbolic/view-reveal#/usr/share/icons/Adwaita/symbolic/actions/view-reveal#|an Adwaita glyph on the lock
+9/1|s#"file":"[^"]*"#"file":null#|a lock icon that resolves nowhere
+10/0|s#"icon":"view-reveal-symbolic","file":"[^"]*"#"icon":"screenshooter-symbolic","file":"/org/gnome/shell/icons/scalable/actions/screenshooter-symbolic.svg"#|a resource icon on SHELL_RESOURCE_ICONS
+9/1|d|a step that reported nothing
+CHANGES
+    shell_icon_facts "$dir" && sed -i 's#/usr/share/icons/Apex/symbolic/view-reveal#/usr/share/icons/Adwaita/symbolic/actions/view-reveal#' "$dir/polkit-dark.log"
+    assertion_counts shell_icons shell "$dir" >/dev/null
+    expect_eq "shell icons: a failure names the board and the icon" 1 \
+        "$(grep -c "^FAIL shell: every icon board 13's authentication dialog, dark draws resolves through Apex (polkit-dark view-reveal-symbolic: /usr/share/icons/Adwaita/symbolic/actions/view-reveal-symbolic.svg)\$" "$T/assertions.out")"
 }
 
 test_signoff() {
@@ -1164,6 +1279,7 @@ test_signoff() {
             printf 'APEXLOCK {"banner.%s":null}\n' "${scene#*:}" >>"$dir/shots/$(printf "${scene%%:*}" "$variant").log"
         done
     done
+    shell_icon_facts "$dir/shots"
     if "$HERE/signoff.sh" --collect "$dir/g2" "$dir/shots" "$dir/out" >"$T/signoff.out" 2>&1 &&
         [[ $(find "$dir/out" -name 'board-*.png' | wc -l) == 30 ]] &&
         jq -e '(.boards | length) == 15 and .scale == 2 and .features == ["dock", "panel"] and (.pins.apexDesktop | length) == 40
@@ -1198,7 +1314,7 @@ test_signoff() {
 test_signoff_apps() {
     local dir=$1 app scene
     declare -A scenes=([cc]='light dark light-scrolled dark-scrolled updates-light updates-dark appearance-light appearance-dark
-        power-light power-dark updates-health-failure updates-health-failure-dark updates-fallback updates-fallback-dark'
+        power-light power-dark updates-health-failure updates-health-failure-dark updates-fallback updates-fallback-dark updates-fallback-changes'
         [files]='home-light home-dark documents-light documents-dark search-light search-dark'
         [terminal]='light dark split-light split-dark')
     for app in cc files terminal; do
@@ -1209,20 +1325,20 @@ test_signoff_apps() {
     done
     if "$HERE/signoff.sh" --collect "$dir/g2" "$dir/shots" "$dir/apps" control-center="$dir/cc" nautilus="$dir/files" ptyxis="$dir/terminal" \
         >"$T/signoff.out" 2>&1 &&
-        [[ $(find "$dir/apps" -name 'board-*.png' | wc -l) == 54 ]] &&
-        jq -e '(.boards | length) == 27 and (.boards | map(.key) | unique | length) == 27
+        [[ $(find "$dir/apps" -name 'board-*.png' | wc -l) == 55 ]] &&
+        jq -e '(.boards | length) == 28 and (.boards | map(.key) | unique | length) == 28
             and .sources == ["tests/control-center/run.sh", "tests/nautilus/shoot.sh", "tests/ptyxis/shoot.sh", "tests/shell/shoot.sh", "tests/shots/direct.sh signoff"]
             and ([.boards[] | select(.board == 11) | .key] == ["11-settings-apex-top", "11-settings-apex-scrolled"])
             and (.boards[] | select(.key == "11-settings-apex-scrolled") | .scene == {light: "light-scrolled", dark: "dark-scrolled"}
                 and .files.dark == "board-11-settings-apex-scrolled-dark.png")
-            and ([.boards[] | select(.board == 26) | .files.dark] == ["board-26-update-health-health-failure-dark.png", "board-26-update-health-fallback-dark.png"])
+            and ([.boards[] | select(.board == 26) | .files.dark] == ["board-26-update-health-health-failure-dark.png", "board-26-update-health-fallback-dark.png", null])
             and (.boards[] | select(.key == "12-greeter") | .files.light == "board-12-greeter-light.png")' \
             "$dir/apps/signoff.json" >/dev/null; then
         ok "signoff: the app boards add a row per scene, keyed NN-SLUG, light and dark, beside the fifteen shell boards"
     else
         not_ok "signoff: the app boards add a row per scene, keyed NN-SLUG, light and dark, beside the fifteen shell boards: $(tail -n 3 "$T/signoff.out")"
     fi
-    # No board is light-only today: a copy of signoff.sh whose fallback row has no dark capture stands in for one.
+    # A copy of signoff.sh whose fallback row has no dark capture: a row made light-only, its dark file gone too.
     mkdir -p "$T/light-only/tests/shots" "$T/light-only/tests/lib"
     cp "$HERE/../lib/pins.sh" "$T/light-only/tests/lib/"
     sed 's/|updates-fallback|updates-fallback-dark|/|updates-fallback||/' "$HERE/signoff.sh" >"$T/light-only/tests/shots/signoff.sh"
@@ -1606,7 +1722,7 @@ test_modal_dialog() {
     local variant change what passes failures open_gaps
     for variant in light dark; do
         read -r passes failures open_gaps <<<"$(assert_run modal_dialog "$variant")"
-        if ((failures == 0 && open_gaps == 0 && passes == 17)); then
+        if ((failures == 0 && open_gaps == 0 && passes == 20)); then
             ok "modal dialog ($variant): drawn from the tokens it passes all $passes assertions"
         else
             not_ok "modal dialog ($variant): drawn from the tokens it passes (passed/failed/gaps $passes/$failures/$open_gaps): $(grep -m3 '^FAIL' "$T/top-bar.out" | paste -sd'|' -)"
@@ -1628,6 +1744,9 @@ test_modal_dialog() {
 .surfaces.dialog.endSession.box.width = 384|upstream's 24em end-session dialog
 .surfaces.dialog.endSession.contentSpacing = 18|the plain dialog gap in the end-session dialog
 .surfaces.dialog.endSession.title.tracking = 0|an untracked end-session title
+.surfaces.dialog.checkBox.unchecked.hover.borderColor = "#00000033"|stock's darker ring on hover
+.surfaces.dialog.checkBox.checked.background = "#3584e4ff"|the raw accent under a checked box's white check
+.surfaces.dialog.checkBox.checked.borderColor = "#3584e4ff"|a ring left on a checked box
 .surfaces.dialog.endSession.description.font.features = null|a countdown in proportional figures
 .surfaces.dialog.endSession.buttons[2].background = "#ebebedff"|a plain Power Off button
 .surfaces.dialog.endSession.buttons[2].hover.background = "#c01c28ff"|a Power Off button without hover feedback
@@ -1653,6 +1772,17 @@ del(.surfaces.dialog.endSession.buttons[1])|stock's row, without Restart
 .surfaces.dialog.updateCard.ready.toggle.focusable = true|a ready-for-reboot switch that takes focus
 .surfaces.dialog.updateCard.ready.toggle.a11ySensitive = true|a ready-for-reboot switch announced as available
 CHANGES
+    local ring
+    for variant in light:000000 dark:ffffff; do
+        ring=${variant#*:}
+        variant=${variant%:*}
+        read -r passes failures open_gaps <<<"$(assert_run modal_dialog "$variant" ".surfaces.dialog.checkBox.unchecked.borderColor = \"#${ring}26\"")"
+        if ((failures == 2)); then
+            ok "modal dialog ($variant): stock's ring, #$ring at .15, fails its token and 3:1"
+        else
+            not_ok "modal dialog ($variant): stock's ring, #$ring at .15, fails its token and 3:1 (passed/failed/gaps $passes/$failures/$open_gaps)"
+        fi
+    done
 }
 
 test_date_menu() {
@@ -3103,6 +3233,7 @@ CHANGES
 readonly SESSION_REPORT='{"settings": {"font-name": "Adwaita Sans 10.125", "document-font-name": "Adwaita Sans 10.125",
     "monospace-font-name": "JetBrains Mono 9.75", "font-hinting": "none", "icon-theme": "Apex"},
   "shell": {"font": "Adwaita Sans 10.125", "iconTheme": "Apex"},
+  "apexSymbolic": ["battery-level-80-symbolic", "pan-end-symbolic", "window-close-symbolic"],
   "fontconfig": {"sans": {"family": "Adwaita Sans", "file": "/usr/share/fonts/adwaita-sans-fonts/AdwaitaSans-Regular.ttf", "features": ["ss03"]},
     "mono": {"family": "JetBrains Mono", "file": "/usr/share/fonts/jetbrains-mono-fonts/JetBrainsMono-Regular.otf", "features": []}},
   "drawn": {"clock": "Adwaita Sans"},
@@ -3123,7 +3254,7 @@ test_session_defaults() {
     while IFS='|' read -r failures change what; do
         printf 'APEXG2-SESSION %s\n' "$(jq -nc "$SESSION_REPORT | $change")" >"$T/session.log"
         read -r passes _ <<<"$(assertion_counts session_defaults default "$T/session.log")"
-        expect_eq "session defaults: $what fails $failures of 6" "$failures" $((6 - passes))
+        expect_eq "session defaults: $what fails $failures of 7" "$failures" $((7 - passes))
     done <<'CHANGES'
 0|.|apex-desktop's defaults, a fixture app's generic icon and the shell's own screenshooter
 1|.settings["monospace-font-name"] = "DejaVu Sans Mono 10"|another monospace font in the settings
@@ -3137,7 +3268,9 @@ test_session_defaults() {
 1|.icons.dock[0].file = "/usr/share/icons/hicolor/scalable/apps/org.gnome.Nautilus.svg"|an image app's icon from outside Apex
 1|.icons.quickSettings[0].icon = ". GThemedIcon camera-photo-symbolic"|a shell icon that is not on the list
 1|.icons = {bar: [], dock: null, dash: null, quickSettings: []}|no icons reported
-6|{error: "sessionDefaultsReport: no panel"}|a probe error
+1|.apexSymbolic = ["battery-level-80-symbolic", "screenshooter-symbolic"]|an icon listed as the shell's own that Apex now ships
+1|.apexSymbolic = []|no Apex Symbolic glyphs reported
+7|{error: "sessionDefaultsReport: no panel"}|a probe error
 CHANGES
     printf 'APEXG2-SESSION %s\n' "$(jq -nc "$SESSION_REPORT | .icons.bar[0].file = null")" >"$T/session.log"
     assertion_counts session_defaults default "$T/session.log" >/dev/null
@@ -3148,6 +3281,78 @@ CHANGES
     assertion_counts session_defaults default "$T/session.log" >/dev/null
     expect_eq "session defaults: a missing JetBrains Mono names the family fontconfig fell back to" 1 \
         "$(grep -c '^FAIL default: fontconfig gives JetBrains Mono .*(got {"family":"Noto Sans",' "$T/assertions.out")"
+    printf 'APEXG2-SESSION %s\n' "$(jq -nc "$SESSION_REPORT | .apexSymbolic += [\"switch-on-symbolic\"]")" >"$T/session.log"
+    assertion_counts session_defaults default "$T/session.log" >/dev/null
+    expect_eq "session defaults: a listed icon Apex ships is named, so it leaves the list" 1 \
+        "$(grep -c '^FAIL default: no icon listed .*(listed as shell-only, but /usr/share/icons/Apex has it: switch-on-symbolic)$' "$T/assertions.out")"
+}
+
+# One icon per surface probe.js's iconSurfaces opens, each resolved under Apex.
+readonly SURFACES_REPORT='{
+  "dateMenu": [{"icon": "software-update-available-symbolic", "file": "/usr/share/icons/Apex/symbolic/software-update-available-symbolic.svg", "app": null}],
+  "overview": [{"icon": "view-app-grid-symbolic", "file": "/usr/share/icons/Apex/symbolic/view-app-grid-symbolic.svg", "app": null}],
+  "launcher": [{"icon": "org.gnome.Nautilus", "file": "/usr/share/icons/Apex/scalable/apps/org.gnome.Nautilus.svg", "app": "org.gnome.Nautilus.desktop"}],
+  "spotlight": [{"icon": "edit-find-symbolic", "file": "/usr/share/icons/Apex/symbolic/edit-find-symbolic.svg", "app": null}],
+  "switcher": [{"icon": "application-x-executable", "file": "/usr/share/icons/Apex/scalable/mimetypes/application-x-executable.svg", "app": null}],
+  "surfaces": [{"icon": "user-home-symbolic", "file": "/usr/share/icons/Apex/symbolic/user-home-symbolic.svg", "app": null}],
+  "dialog": [{"icon": "dialog-password-symbolic", "file": "/usr/share/icons/Apex/symbolic/dialog-password-symbolic.svg", "app": null}],
+  "endSession": [{"icon": "system-shutdown-symbolic", "file": "/usr/share/icons/Apex/symbolic/system-shutdown-symbolic.svg", "app": null}],
+  "screenshot": [{"icon": ". GThemedIcon screenshooter-symbolic screenshooter",
+    "file": "/org/gnome/shell/icons/scalable/actions/screenshooter-symbolic.svg", "app": null}]}'
+
+test_session_surface_icons() {
+    local passes failures want change what scenes
+    while IFS='|' read -r want scenes change what; do
+        { printf 'APEXG2-SESSION %s\n' "$(jq -nc "$SESSION_REPORT")"
+          [[ $scenes == 1 ]] && printf 'APEXG2-SCENES {}\n'
+          [[ $change == - ]] || printf 'APEXG2-SESSION-SURFACES %s\n' "$(jq -nc "$SURFACES_REPORT | $change")"; } >"$T/surfaces.log"
+        read -r passes failures <<<"$(assertion_counts session_defaults default "$T/surfaces.log")"
+        expect_eq "surface icons: $what" "$want" "$passes/$failures"
+    done <<'CHANGES'
+16/0|1|.|every surface's icons through Apex, the shell's own screenshooter on the list
+15/1|1|.dateMenu[0].file = "/usr/share/icons/Adwaita/symbolic/status/software-update-available-symbolic.svg"|an Adwaita glyph in the date menu
+15/1|1|.dialog[0].file = null|a dialog icon that resolves nowhere
+15/1|1|.switcher[0] = {icon: "org.gnome.Nautilus", file: "/usr/share/icons/hicolor/scalable/apps/org.gnome.Nautilus.svg", app: null}|a hicolor app icon in the switcher
+16/0|1|.switcher[0].file = "/usr/share/icons/Adwaita/scalable/mimetypes/application-x-executable.svg"|the switcher stand-in's generic app icon, from Adwaita, on its list
+16/0|1|.spotlight += [{icon: "drive-harddisk", file: "/usr/share/icons/Adwaita/scalable/devices/drive-harddisk.svg", app: null}]|a search provider's full-colour device icon in Spotlight, on its list
+15/1|1|.dateMenu += [{icon: "drive-harddisk", file: "/usr/share/icons/Adwaita/scalable/devices/drive-harddisk.svg", app: null}]|that device icon on another surface
+15/1|1|.screenshot[0].icon = ". GThemedIcon camera-photo-symbolic"|a resource icon that is not on the list
+15/1|1|.spotlight = null|a surface that never opened
+15/1|1|.endSession = []|a surface that drew no icon
+15/1|1|.screenshot = {error: "no screenshot UI"}|a surface whose opener threw
+7/1|1|{error: "surfaceIconsReport: no stage"}|a walk that failed
+7/1|1|-|scenes with no walk reported
+7/0|0|-|a case without scenes, which opens no surface
+CHANGES
+    { printf 'APEXG2-SESSION %s\nAPEXG2-SCENES {}\n' "$(jq -nc "$SESSION_REPORT")"
+      printf 'APEXG2-SESSION-SURFACES %s\n' "$(jq -nc "$SURFACES_REPORT | .dateMenu[0].file = null")"; } >"$T/surfaces.log"
+    assertion_counts session_defaults default "$T/surfaces.log" >/dev/null
+    expect_eq "surface icons: a failure names the board, the surface and the icon" 1 \
+        "$(grep -c "^FAIL default: every icon board 34's date menu and notifications draws resolves through Apex (dateMenu software-update-available-symbolic: no icon)\$" "$T/assertions.out")"
+}
+
+test_repeat_compare() {
+    local out status
+    printf '%s\n' '# a comment' 'PASS default: the shell exits 0' 'FAIL motion: the easing (got false)' 'GAP  S1b: dots: 3:1 (got [2.86])' \
+        'PASS idle: nothing paints' 'PASS idle: nothing paints' >"$T/repeat-1.log"
+    cp "$T/repeat-1.log" "$T/repeat-2.log"
+    out=$("$HERE/repeat.sh" compare "$T/repeat-1.log" "$T/repeat-2.log") && status=0 || status=$?
+    expect_eq "repeat: two identical runs differ nowhere" "0 repeat: 2 runs, 5 assertions, 0 differ" "$status $out"
+    printf '%s\n' 'PASS default: the shell exits 0' 'PASS motion: the easing' 'GAP  S1b: dots: 3:1 (got [2.91])' \
+        'PASS idle: nothing paints' 'FAIL idle: nothing paints (got 3 frames)' >"$T/repeat-2.log"
+    out=$("$HERE/repeat.sh" compare "$T/repeat-1.log" "$T/repeat-2.log") && status=0 || status=$?
+    expect_eq "repeat: a fail and a pass of one assertion share a row, and a twice-made one gets a row per time" \
+        "1 F P  motion: the easing|P F  idle: nothing paints [2]|repeat: 2 runs, 5 assertions, 2 differ" "$status $(paste -sd'|' - <<<"$out")"
+    printf '%s\n' 'PASS default: the probe started (on time)' 'PASS idle: dots at 3:1 (WCAG 1.4.11)' >"$T/repeat-4.log"
+    printf '%s\n' 'PASS default: the probe started (late)' 'FAIL idle: dots at 3:1 (WCAG 1.4.11) (got [2.86])' >"$T/repeat-5.log"
+    out=$("$HERE/repeat.sh" compare "$T/repeat-4.log" "$T/repeat-5.log") && status=0 || status=$?
+    expect_eq "repeat: a pass closing on what its run saw shares a row, and a failure keeps its pass's own parenthesis" \
+        "1 P F  idle: dots at 3:1|repeat: 2 runs, 2 assertions, 1 differ" "$status $(paste -sd'|' - <<<"$out")"
+    printf '%s\n' 'PASS default: the shell exits 0' >"$T/repeat-3.log"
+    out=$({ "$HERE/repeat.sh" compare "$T/repeat-1.log" "$T/repeat-1.log" "$T/repeat-3.log" || :; } | grep -c '^P P -  ')
+    expect_eq "repeat: an assertion a run never made shows -" 2 "$out"
+    "$HERE/repeat.sh" compare "$T/repeat-1.log" >/dev/null 2>&1 && status=0 || status=$?
+    expect_eq "repeat: one log is not a comparison" 2 "$status"
 }
 
 test_no_binding_overwritten() {
@@ -3293,7 +3498,7 @@ test_pr_assertions() {
         "$(grep -c "^FAIL default: main.js's startup-complete handler ran 0 times, not once" "$T/assertions.out")"
     # shellcheck disable=SC2016 # expanded by the inner bash
     expect_eq "parts: main asserts every case, pr only its own" "0 1 0" \
-        "$(bash -c '. "$1/assert.sh"; part=main; asserted glass; a=$?; part=pr; asserted glass; b=$?; asserted default; echo "$a $b $?"' _ "$HERE")"
+        "$(bash -c '. "$1/assert.sh"; part=main; asserted glass-load; a=$?; part=pr; asserted glass-load; b=$?; asserted default; echo "$a $b $?"' _ "$HERE")"
 }
 
 test_one_gpu() {
@@ -3634,7 +3839,7 @@ CHANGES
 
 # glass.js's reference and frame reader, and glass_frames over reports built for it.
 test_glass() {
-    local line rc=0 passes failures what change
+    local line rc=0 passes failures fails what change
     gjs -m "$HERE/blur-ref-test.js" >"$T/blur-ref.tap" 2>&1 || rc=$?
     while IFS= read -r line; do
         case $line in
@@ -3701,6 +3906,8 @@ CHANGES
         | {panel: $on, dock: $dock, quickSettings: $p, calendar: $p, banner: $p, blurEffects: ["panel"], solidClass: false} as $g
         | {panel: null, dock: null, quickSettings: null, calendar: null, banner: null, blurEffects: []} as $none
         | {radius: 144, saturation: 1.5, enabled: true, fine: true, followOpacity: true, background: false} as $scrim
+        | {radius: 52, outside: 560, inside: 2080, ring: 760, square: 2704, blurredOutside: 0, blurredInside: 2080, blurredRing: 760,
+            capturedDiffering: 0, capturedMax: 0, glassEffects: 1} as $corner
         | {manager: {monitorScale: 2, glass: $g, reduceTransparency: ($none + {solidClass: true}), highContrast: ($none + {solidClass: true}),
             disabled: ($none + {solidClass: false}), restored: $g,
             scrims: {overview: $scrim, launcher: ($scrim + {radius: 160, saturation: 1.6}), hidden: ($scrim + {enabled: false}), barOverScrim: $on,
@@ -3709,6 +3916,7 @@ CHANGES
                 switcher: ($p + {corner: {radius: 52, outside: 560, inside: 2080, square: 2704, blurredOutside: 0, blurredInside: 2080, capturedDiffering: 0}})},
             emptyBox: {shown: ($scrim + {enabled: false}), hidden: ($scrim + {enabled: false}), shownAgain: ($scrim + {enabled: false}),
                 emptyFrames: 3, laidOut: ($scrim + {frames: 1, allocation: [320, 200]}), zeroHeight: ($scrim + {enabled: false})},
+            opacity: {followOpacity: true, fullDiffering: 102400, noneDiffering: 0, half: 1.208},
             tile: {shown: {scale: 2, inset: 6, preview: {x: 168, y: 224, width: 384, height: 192},
                 glassBox: {x: 174, y: 230, width: 372, height: 180}, inner: {x: 174, y: 230, width: 372, height: 180},
                 glass: {radius: 80, saturation: 1.6, cornerRadius: 28, enabled: true, fine: true, followOpacity: true, background: true,
@@ -3718,11 +3926,26 @@ CHANGES
                 hidden: {glass: null, visible: false, differing: 0},
                 ring: ($ring + {expected: 4, corners: [4.02, 3.98, 4, 4.01], edges: [4, 4, 4, 4]}),
                 reduceTransparency: $ring,
-                highContrast: ($ring + {borders: [0, 0, 0, 0], radius: 0, borderColor: "#00000000", background: "#00000000", previewBackground: "#3584e47f"})}}}')
+                highContrast: ($ring + {borders: [0, 0, 0, 0], radius: 0, borderColor: "#00000000", background: "#00000000", previewBackground: "#3584e47f"})},
+            conformance: {registered: ["banner", "calendar", "dock", "osd", "panel", "quick-settings", "scrim-0", "screenshot", "spotlight",
+                    "switcher", "tilePreview", "toast"], unchecked: [],
+                checked: {panel: $on, "scrim-0": ($scrim + {cornerRadius: 0, allocation: [1440, 900], painted: {box: [0, 0, 1440, 900], radii: [0, 0, 0, 0]}}),
+                    dock: ($dock + {corner: $corner}), "quick-settings": ($p + {corner: $corner}), calendar: ($p + {corner: $corner}),
+                    banner: ($p + {corner: $corner}), osd: ($p + {corner: $corner}), spotlight: ($p + {corner: $corner}),
+                    toast: ($p + {corner: $corner, tries: 1}), switcher: ($p + {corner: $corner}), screenshot: ($p + {enabled: false, allocation: [null, null]}),
+                    tilePreview: {radius: 80, saturation: 1.6, cornerRadius: 28, enabled: true, fine: true, followOpacity: true, background: true,
+                        allocation: [372, 180], painted: {box: [0, 0, 372, 180], radii: [28, 28, 28, 28]}}}},
+            motion: {dock: {moved: true, enabled: true, covered: true, differingFromFull: 0, pixels: 86136},
+                dockPastEdge: {moved: true, enabled: true, covered: true, differingFromFull: 19672, pixels: 62080},
+                popover: {moved: true, enabled: true, covered: true, differingFromFull: 0, pixels: 316008}}}}')
     while IFS='|' read -r failures what change; do
         jq -c "$change" <<<"$manager" | sed 's/^/APEXG2-GLASS /' >"$T/glass.log"
-        read -r passes _ <<<"$(assertion_counts glass_manager glass "$T/glass.log" light)"
-        expect_eq "glass manager: $what fails $failures of 21" "$failures" $((21 - passes))
+        read -r passes fails <<<"$(assertion_counts glass_manager glass "$T/glass.log" light)"
+        # The dock past the stage edge is a known gap: neither a pass nor a failure while it stays open.
+        expect_eq "glass manager: $what fails $failures of 28" "$failures" "$fails"
+        if ((failures == 0)); then
+            expect_eq "glass manager: $what passes 27 of 28, the 28th its known gap" 27 "$passes"
+        fi
     done <<'CHANGES'
 0|the bar, the dock and the popovers at their tokens, every switch honoured|.
 1|the bar at the popovers' sigma|.manager.glass.panel.radius = 120
@@ -3752,6 +3975,12 @@ CHANGES
 1|an empty actor-mode box that blurs|.manager.emptyBox.shownAgain.enabled = true
 1|an empty box that never drew a frame|.manager.emptyBox.emptyFrames = 0
 1|a laid-out box whose blur never comes on|.manager.emptyBox.laidOut.enabled = false
+1|a glass that keeps its full blur at 128, as with follow-opacity off|.manager.opacity.half = 88.651
+1|a 128 frame two steps off the blend|.manager.opacity.half = 2
+1|a glass without follow-opacity|.manager.opacity.followOpacity = false
+1|a glass at opacity 0 that still draws|.manager.opacity.noneDiffering = 3200
+1|a glass that blurs nothing at 255|.manager.opacity.fullDiffering = 0
+1|no opacity report|.manager.opacity = null
 1|an Alt+Tab list's blur rounded twice its border's radius|.manager.derived.switcher.cornerRadius = 104
 1|a banner rounded at one corner only|.manager.glass.banner.painted.radii = [52, 0, 0, 0]
 1|a blur over a box other than the painted background|.manager.glass.banner.painted.box = [0, 8, 360, 392]
@@ -3768,7 +3997,22 @@ CHANGES
 1|Reduce Transparency that drops the glass actor, ring and all|.manager.tile.reduceTransparency.mapped = false
 1|high contrast that drops the class|.manager.tile.highContrast.glassed = false
 1|a glass actor that paints a ring over upstream's high-contrast preview|.manager.tile.highContrast.borders = [2, 2, 2, 2]
-21|no manager|.manager = null
+1|a surface a later slice registers that the case never reached|.manager.conformance += {registered: (.manager.conformance.registered + ["notifications"]), unchecked: ["notifications"]}
+1|a checked surface the assertions do not know|.manager.conformance.registered += ["notifications"]
+1|a Spotlight panel rounded one px off its border|.manager.conformance.checked.spotlight.cornerRadius = 51
+1|a toast blurred over a box larger than its paint box|.manager.conformance.checked.toast.allocation = [361, 400]
+1|a blur past the Spotlight panel's arc|.manager.conformance.checked.spotlight.corner.blurredOutside = 40
+1|a toast corner left unblurred in the band|.manager.conformance.checked.toast.corner.blurredRing = 700
+1|a toast blurred by two glass effects|.manager.conformance.checked.toast.corner.glassEffects = 2
+1|a dock corner a screenshot draws otherwise|.manager.conformance.checked.dock.corner.capturedMax = 2
+3|a toast never checked|.manager.conformance.checked.toast = null
+1|a dock whose blur stays where the slide began|.manager.motion.dock.differingFromFull = 18400
+1|the dock past the edge blurred as on screen, a gap that holds now|.manager.motion.dockPastEdge.differingFromFull = 0
+1|a popover blurred at its open size while it scales|.manager.motion.popover.differingFromFull = 2210
+1|a dock that never moved|.manager.motion.dock.moved = false
+1|a moved popover without its glass|.manager.motion.popover.enabled = false
+1|no motion report|.manager.motion = null
+27|no manager|.manager = null
 CHANGES
 }
 
@@ -3789,7 +4033,10 @@ test_window_switcher
 test_modal_dialog
 test_a11y
 test_inactive_dot_gap
+test_a11y_surface_errors
+test_pill_gaps
 test_signoff
+test_shell_icons
 test_goldens
 test_goldens_rows
 test_date_menu
@@ -3830,7 +4077,9 @@ test_no_disposed_apex
 test_no_binding_overwritten
 test_no_spurious_allocation
 test_clean_shutdown
+test_repeat_compare
 test_session_defaults
+test_session_surface_icons
 test_no_disposed_at_shutdown
 test_exit_cut
 test_keys_case

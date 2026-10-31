@@ -429,6 +429,10 @@ export const panel = Object.assign(new StubActor('panel', {glass: PANEL_GLASS, e
             throw new Error(`there is already a status indicator for role ${role}`);
         this.statusArea[role] = indicator;
         indicator.connect('destroy', () => delete this.statusArea[role]);
+        if (boxName === 'right' && GLib.getenv('PROBE_RIGHT_BOX_ADDS') === '1') {
+            rightBox.insert_child_at_index(indicator.container, position);
+            indicator.container._parent = rightBox;
+        }
         fact('panel.add', `${role} at ${position} in ${boxName}`);
         return indicator;
     },
@@ -452,7 +456,12 @@ export const panel = Object.assign(new StubActor('panel', {glass: PANEL_GLASS, e
         screenSharing: newScreenButton('screenSharing', 'Stop Screen Sharing', 1,
             [new St.Icon({icon_name: 'screen-shared-symbolic'}), new St.Icon({icon_name: 'screencast-stop-symbolic'})]),
         keyboard: newInputSources(),
-        dateMenu: {menu: {box: new StubActor('calendar', {glass: POPOVER_GLASS, extents: [354, 40, 732, 468], parent: boxPointer})}},
+        // calendar.js's message list as built: its placeholder shows, and Clear, never synced, too.
+        // Labels, the stub's actors that notify visible as GObjects do.
+        dateMenu: {
+            menu: {box: new StubActor('calendar', {glass: POPOVER_GLASS, extents: [354, 40, 732, 468], parent: boxPointer})},
+            _messageList: {_clearButton: new St.Label(), _placeholder: new St.Label()},
+        },
     },
 });
 

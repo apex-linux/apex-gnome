@@ -25,7 +25,7 @@ readonly DIRECT_CASES=(default default-scale1 dark-style high-contrast large-tex
     large-text-solid dock-intellihide dock-intellihide-dark dock-one-gpu no-dock no-dock-dark stock-light stock-dark safe-env
     layer-disabled layer-cycles motion idle dock-pin dock-dnd dock-external keys glass-load glass-stress fault-configure fault-enable fault-abort shutdown-banner
     kernel-safe
-    fedora-light fedora-dark glass fedora-glass
+    fedora-light fedora-dark glass glass-scale1 fedora-glass
     indicators indicators-scale1 indicators-dark)
 readonly DIRECT_PARTS=(main kernel fedora)
 readonly CAPTURE_CASES=(default default-scale1 dark-style stock-light stock-dark fedora-light fedora-dark)
@@ -54,8 +54,9 @@ readonly A11Y_TEXT_RATIO=4.5
 readonly A11Y_ICON_RATIO=3
 readonly A11Y_ACCENTS=(blue teal green yellow orange red pink purple slate)
 readonly A11Y_SURFACES=(bar barUnread dock popupMenu osd banner quickSettings "${A11Y_ACCENTS[@]/#/quickSettingsAccents.}" wifiMenu wifiMenuConnected dateMenu
-    "${A11Y_ACCENTS[@]/#/dateMenuAccents.}" switcher dialog "${A11Y_ACCENTS[@]/#/dialogAccents.}" endSession screenshot
-    spotlight.popup spotlight.toast overview appGrid)
+    "${A11Y_ACCENTS[@]/#/dateMenuAccents.}" switcher dialog "${A11Y_ACCENTS[@]/#/dialogAccents.}"
+    checkBoxDialog "${A11Y_ACCENTS[@]/#/checkBoxDialogAccents.}" endSession screenshot
+    spotlight.popup spotlight.toast overview appGrid barPills.indicatorMenu)
 # The failures still open: upstream's high-contrast sheet, which safe mode keeps as Fedora's.
 readonly A11Y_HC_TOGGLE="upstream HC sheet: Quick Settings' checked toggle, white on its accent (3.15:1), and its menu arrow (2.31:1)"
 declare -A A11Y_GAPS=([high-contrast:quickSettings]=$A11Y_HC_TOGGLE)
@@ -270,8 +271,27 @@ exit_cut() {
 
 # G2's fixture apps (direct.sh's STUB_APPS) have no icon of their own: GNOME draws its generic one.
 readonly FIXTURE_APPS=(io.github.apex_linux.G2Stub1.desktop io.github.apex_linux.G2Stub2.desktop io.github.apex_linux.G2Stub3.desktop)
-# Icons the shell draws from its own resource because Apex Symbolic (board 31) draws none of that name.
-readonly SHELL_RESOURCE_ICONS=(screenshooter-symbolic)
+# Icons the shell draws from its own resource because Apex Symbolic (board 31) draws none of that name yet: each
+# is one apex-desktop#35 ships, and leaves this list when APEX_DESKTOP_REV reaches it (surface_icons fails it then).
+readonly SHELL_RESOURCE_ICONS=(
+    screenshooter-symbolic
+    notification-expand-symbolic
+    switch-on-symbolic
+    switch-off-symbolic
+    screenshot-ui-area-symbolic
+    screenshot-ui-display-symbolic
+    screenshot-ui-window-symbolic
+    screenshot-ui-show-pointer-symbolic
+    preview-close-symbolic
+)
+# Stock icons a surface legitimately draws, "surface name" by exact name, never a pattern.
+readonly STAND_IN_ICONS=(
+    # G2's switcher stand-in (probe.js's windowSwitcher) gives its items GNOME's generic app icon.
+    'switcher application-x-executable'
+    # A full-colour device icon a search provider returns: Apex draws symbolic glyphs, Colloid app icons and
+    # boards 27-29's places and mimetypes, and inherits Adwaita's devices by design (Inherits=Adwaita,hicolor).
+    'spotlight drive-harddisk'
+)
 
 # expect, but a failure quotes DETAIL, what the shell had, rather than the condition's false.
 expect_named() {
@@ -311,19 +331,109 @@ session_defaults() {
     expect_named "$label" "$r" '.fontconfig.mono.family == "JetBrains Mono"' .fontconfig.mono \
         "fontconfig gives JetBrains Mono for its family, not a fallback"
     expect_named "$label" "$r" '.drawn.clock == "Adwaita Sans"' .drawn.clock "the bar's clock is drawn in Adwaita Sans"
-    bad=$(jq -r --argjson fixtures "$(printf '%s\n' "${FIXTURE_APPS[@]}" | jq -R . | jq -sc .)" \
-        --argjson resource "$(printf '%s\n' "${SHELL_RESOURCE_ICONS[@]}" | jq -R . | jq -sc .)" '
-        .icons | to_entries[] | .key as $where | (.value // [])[]
-        | (.icon | if startswith(". GThemedIcon ") then split(" ")[2] else . end) as $name
-        | select((.file // "" | startswith("/usr/share/icons/Apex/")) | not)
-        | select(((.file // "" | startswith("/org/gnome/shell/icons/")) and ($resource | index($name))) | not)
-        | .app as $app | select($app == null or ($fixtures | index($app) | not))
-        | "\($where) \($name)\(if $app then " (\($app))" else "" end): \(.file // "no icon")"' <<<"$r" 2>&1 | paste -sd';' -)
+    bad=$(jq '.icons' <<<"$r" 2>/dev/null | icons_not_apex)
     if [[ -n $r && -z $bad && $(jq '[.icons[] // [] | length] | add' <<<"$r") -gt 0 ]]; then
         pass "$label: every icon the bar, the dock, the dash and Quick Settings draw resolves through Apex"
     else
         fail "$label: every icon the bar, the dock, the dash and Quick Settings draw resolves through Apex (${bad:-no icons reported})"
     fi
+    bad=$(jq -r --argjson resource "$(printf '%s\n' "${SHELL_RESOURCE_ICONS[@]}" | jq -R . | jq -sc .)" \
+        '[.apexSymbolic // [] | .[] | select(. as $n | $resource | index($n))] | join(", ")' <<<"$r" 2>/dev/null)
+    if [[ -n $r && $(jq '.apexSymbolic // [] | length' <<<"$r") -gt 0 && -z $bad ]]; then
+        pass "$label: no icon listed as the shell's own (SHELL_RESOURCE_ICONS) is one Apex Symbolic ships"
+    else
+        [[ -n $bad ]] && bad="listed as shell-only, but /usr/share/icons/Apex has it: $bad"
+        fail "$label: no icon listed as the shell's own (SHELL_RESOURCE_ICONS) is one Apex Symbolic ships (${bad:-no Apex Symbolic glyphs reported})"
+    fi
+    grep -q 'APEXG2-SCENES ' "$log" 2>/dev/null && surface_icons "$label" "$log"
+}
+
+# Each icon of an object of surfaces that resolves neither under Apex nor to a listed exception, as "where name: file".
+icons_not_apex() {
+    jq -r --argjson fixtures "$(printf '%s\n' "${FIXTURE_APPS[@]}" | jq -R . | jq -sc .)" \
+        --argjson resource "$(printf '%s\n' "${SHELL_RESOURCE_ICONS[@]}" | jq -R . | jq -sc .)" \
+        --argjson standIn "$(printf '%s\n' "${STAND_IN_ICONS[@]}" | jq -R . | jq -sc .)" '
+        to_entries[] | .key as $where | (.value // [])[]
+        | (.icon | if startswith(". GThemedIcon ") then split(" ")[2] else . end) as $name
+        | select((.file // "" | startswith("/usr/share/icons/Apex/")) | not)
+        | select($standIn | index("\($where) \($name)") | not)
+        | select(((.file // "" | startswith("/org/gnome/shell/icons/")) and ($resource | index($name))) | not)
+        | .app as $app | select($app == null or ($fixtures | index($app) | not))
+        | "\($where) \($name)\(if $app then " (\($app))" else "" end): \(.file // "no icon")"' 2>&1 | paste -sd';' -
+}
+
+# What only tests/shell shows, case|step|board: the lock with its top bar, the greeter's two pages, polkit's own dialog.
+readonly SHELL_ICON_STEPS=(
+    "lock-light|opened|board 20's lock screen, light"
+    "lock-dark|opened|board 20's lock screen, dark"
+    "lock-fingerprint|opened|board 20's lock screen with the fingerprint line"
+    "greeter-light|list|board 12's user list, light"
+    "greeter-dark|list|board 12's user list, dark"
+    "greeter-light|prompt|board 12's prompt, light"
+    "greeter-dark|prompt|board 12's prompt, dark"
+    "polkit-light|opened|board 13's authentication dialog, light"
+    "polkit-dark|opened|board 13's authentication dialog, dark"
+    "polkit-fingerprint|opened|board 13's dialog with the fingerprint line"
+)
+
+# S1b's rule on tests/shell's own surfaces, from its probe's icons-STEP facts in SHOTS/CASE.log; the theme must be there.
+shell_icons() {
+    local label=$1 shots=$2 entry case step desc r bad
+    for entry in "${SHELL_ICON_STEPS[@]}"; do
+        IFS='|' read -r case step desc <<<"$entry"
+        r=$(sed -n "s/.*APEXLOCK {\"icons-$step\":\(.*\)}\$/\1/p" "$shots/$case.log" 2>/dev/null | head -n 1)
+        if [[ -z $r ]]; then
+            fail "$label: every icon $desc draws resolves through Apex (no icons-$step report in $case.log)"
+        elif [[ $(jq -r '.installed' <<<"$r") != true ]]; then
+            fail "$label: every icon $desc draws resolves through Apex (no Apex theme installed)"
+        elif [[ $(jq '.icons | length' <<<"$r") == 0 ]]; then
+            fail "$label: every icon $desc draws resolves through Apex (it drew no icon)"
+        else
+            bad=$(jq --arg k "$case" '{($k): .icons}' <<<"$r" | icons_not_apex)
+            if [[ -z $bad ]]; then
+                pass "$label: every icon $desc draws resolves through Apex ($(jq '.icons | length' <<<"$r") icons)"
+            else
+                fail "$label: every icon $desc draws resolves through Apex ($bad)"
+            fi
+        fi
+    done
+}
+
+# The surfaces the probe opens after its scenes (probe.js's iconSurfaces), by the boards they draw.
+readonly ICON_SURFACES=(
+    "dateMenu|board 34's date menu and notifications"
+    "overview|board 35's overview"
+    "launcher|board 36's launcher grid"
+    "spotlight|board 38's Spotlight results"
+    "switcher|board 15's window switcher"
+    "surfaces|board 16's popup menu, OSD and banner"
+    "dialog|board 13's dialog"
+    "endSession|board 14's end-session dialog"
+    "screenshot|board 19's screenshot UI"
+)
+
+# S1b's exit row over every surface G2 opens: each draws icons, and every one resolves as session_defaults' rule says.
+surface_icons() {
+    local label=$1 log=$2 r entry key desc got bad
+    r=$(report_of "$log" APEXG2-SESSION-SURFACES)
+    if [[ -z $r || -n $(jq -r '.error // empty' <<<"$r" 2>/dev/null) ]]; then
+        fail "$label: the probe walks the icons of every surface it opens (${r:+$(jq -r '.error' <<<"$r" | head -n 1)}${r:-no report})"
+        return
+    fi
+    for entry in "${ICON_SURFACES[@]}"; do
+        key=${entry%%|*} desc=${entry#*|}
+        got=$(jq -c --arg k "$key" '.[$k]' <<<"$r")
+        if [[ $got == null || $(jq -r 'if type == "array" then length else 0 end' <<<"$got") == 0 ]]; then
+            fail "$label: $desc draws icons for the walk (got $(jq -c '.' <<<"$got" | head -c 200))"
+            continue
+        fi
+        bad=$(jq --arg k "$key" '{($k): .[$k]}' <<<"$r" | icons_not_apex)
+        if [[ -z $bad ]]; then
+            pass "$label: every icon $desc draws resolves through Apex ($(jq length <<<"$got") icons)"
+        else
+            fail "$label: every icon $desc draws resolves through Apex ($bad)"
+        fi
+    done
 }
 
 # Mutter warns when two bindings claim one key: the second silently takes it from the first.
@@ -907,6 +1017,11 @@ quick_settings_layer() {
             "the Wi-Fi menu's header subtitle ends the title's row, at its end (board 17)"
         expect "$label Quick Settings" "$scenes" "$q.wifiMenu.rows | length > 1 and any(.active) and all(.checked == .active)" \
             "the active network's row, and only it, is :checked"
+        expect "$label Quick Settings" "$scenes" "$q.wifiMenu.rows | length > 1 and any(.active) and all(.accessibleChecked == .active)" \
+            "the active network's row, and only it, is checked for a screen reader"
+        expect "$label Quick Settings" "$scenes" \
+            "$q.wifiMenu.rows | length > 1 and all(.accessibleName == \"\\(.ssid), \\(if .secure then \"Secure\" else \"Not secure\" end), Signal strength \\(.strength)%\")" \
+            "each row names its network, security and its best access point's signal for a screen reader"
         network_rows_centred "$label" "$scenes" "$q.wifiMenu.rows"
         top_bar_metric "$label Quick Settings" "$scenes" "$(tokens_for "$variant")" \
             'a secure network'"'"'s lock follows its name, $apex_quick_menu_lock_size in $apex_fg at $apex_quick_menu_lock_opacity' \
@@ -1095,6 +1210,14 @@ modal_dialog() {
             | (.b | map(select(.default | not)) | length == 1 and all((.background | colour_is($t.apex_button)) and (.foreground | colour_is($t.apex_fg)) and (.hover.background | colour_is($t.apex_button_hover))))
             and (.b | map(select(.default)) | length == 1 and all((.background | rgba) as $f | ([range(3)] | all(($f[.] - $a[.] * (1 - $k)) | fabs <= 1))
                 and (.foreground | colour_is("#ffffff"))))'
+    "${metric[@]}" 'a check box (the mount password dialog'"'"'s Remember Password) rings its box 2 px in $apex_fg_dim, $apex_fg hovered' \
+        "$d.checkBox" '.label == "Remember Password" and (.unchecked | (.border.top | px_is(2)) and (.borderColor | colour_is($t.apex_fg_dim)) and (.hover.borderColor | colour_is($t.apex_fg)))'
+    "${metric[@]}" 'that ring is at least '"$A11Y_ICON_RATIO"':1 on the dialog'"'"'s fill (WCAG 1.4.11; stock'"'"'s is about 1.5:1)' \
+        "$d.checkBox" ". as \$c | (.unchecked.borderColor | contrast_on(\$c.background)) >= $A11Y_ICON_RATIO"
+    "${metric[@]}" 'checked, the box is the accent shaded $apex_quick_toggle_checked_shade with black, its check in white, unringed' \
+        "{c: $d.checkBox.checked, accent: .topBar.accent}" '(.accent | rgba) as $a | ($t.apex_quick_toggle_checked_shade | rtrimstr("%") | tonumber / 100) as $k
+            | .c | (.background | rgba) as $f | ([range(3)] | all(($f[.] - $a[.] * (1 - $k)) | fabs <= 1)) and (.foreground | colour_is("#ffffff"))
+            and (.borderColor | rgba | .[3] == 0) and (.hover.borderColor | rgba | .[3] == 0)'
     "${metric[@]}" 'the end-session dialog has $apex_end_session_gap between its parts, its title tracked $apex_dialog_title_tracking, its countdown in tabular figures' \
         "$d.endSession" '(.box.spacing | px_is($t.apex_end_session_gap)) and (.contentSpacing | px_is($t.apex_end_session_gap))
             and (.title.tracking - ($t.apex_dialog_title_tracking | px) | fabs < 0.05) and (.description.font.features | test("tnum"))'
@@ -1824,12 +1947,111 @@ inactive_dot() {
         "$dots" "length > 0 and all(. >= $A11Y_ICON_RATIO)"
 }
 
+# Board 39's pills: the chip's and the timer's text at 4.5:1, the share's and the privacy group's glyphs
+# at 3:1, and a pill Apex fills against the bar at 3:1; upstream's high-contrast sheet fills the button instead.
+readonly A11Y_PILL_PARTS=(input:text recording:text sharing:icon privacy:icon overflow:text indicators:icon recording:edge sharing:edge
+    privacy:edge)
+readonly A11Y_PILL_GAP="the owner's decision on board 39's pill fills over #013b88 (2026-10-31)"
+readonly A11Y_PILL_HC_GAP="upstream HC sheet: the screen-sharing glyph, white on its #ff7800 fill (2.54:1)"
+# Each part under WCAG AA today, at the report's own rounding: a lower one fails.
+declare -Ar A11Y_PILL_TODAY=([default-solid:recording:edge]=2.02 [default-solid:sharing:edge]=1.62 [default-solid:privacy:edge]=1.62
+    [dark-style-solid:recording:edge]=2.13 [dark-style-solid:sharing:edge]=2.65 [dark-style-solid:privacy:edge]=2.65
+    [high-contrast:sharing:icon]=2.54 [high-contrast-solid:sharing:icon]=2.54)
+
+# A pill part's worst ratio in an APEXG2-A11Y report, or nothing when it was not measured.
+pill_ratio() {
+    local report=$1 pill=${2%:*} part=${2#*:}
+    if [[ $part == edge ]]; then
+        jq -r --arg p "$pill" '.barPills.pills[$p].edge.ratio // empty' <<<"$report" 2>/dev/null
+    else
+        # indicators: every app indicator's pill, indicator0 to indicator3.
+        jq -r --arg p "$pill" --arg k "$part" '[.barPills.pills | to_entries[] | select(.key == $p or ($p == "indicators" and (.key | startswith("indicator"))))
+            | .value.targets[]? | select(.kind == $k and (.offscreen | not)) | .ratio] | min // empty' <<<"$report" 2>/dev/null
+    fi
+}
+
+pill_verdict() {
+    local desc=$1 worst=$2 threshold=$3
+    if jq -en "$worst >= $threshold" >/dev/null; then pass "$desc"; else fail "$desc ($worst:1)"; fi
+}
+
+# Each pill part at its threshold, or, pinned, at least today's ratio and still a gap.
+bar_pills() {
+    local label=$1 report=$2 p worst threshold today desc gap=$A11Y_PILL_GAP
+    local -A part_desc=([text]="text over what is drawn behind it" [icon]="glyphs over its fill" [edge]="fill against the bar beside it")
+    local -A part_noun=([text]=text [icon]=glyphs [edge]=fill)
+    [[ $label == high-contrast* ]] && gap=$A11Y_PILL_HC_GAP
+    for p in "${A11Y_PILL_PARTS[@]}"; do
+        [[ $label == high-contrast* && $p == *:edge ]] && continue
+        threshold=$A11Y_ICON_RATIO
+        [[ $p == *:text ]] && threshold=$A11Y_TEXT_RATIO
+        desc="$label accessibility: barPills: the ${p%:*} pill's ${part_desc[${p#*:}]} at $threshold:1"
+        worst=$(pill_ratio "$report" "$p")
+        if [[ -z $worst ]]; then
+            fail "$desc (not measured)"
+            continue
+        fi
+        today=${A11Y_PILL_TODAY[$label:$p]:-}
+        if [[ -z $today ]]; then
+            pill_verdict "$desc" "$worst" "$threshold"
+            continue
+        fi
+        pill_verdict "$label accessibility: barPills: the ${p%:*} pill's ${part_noun[${p#*:}]} is at least today's $today:1" "$worst" "$today"
+        known_gap "$gap" pill_verdict "$desc" "$worst" "$threshold"
+    done
+}
+
+# Each control's focus indicator over the case's backdrop and a busy wallpaper (WCAG 2.4.11, 1.4.11): key
+# focus lands, something changes, and a 1 px line's worth of it changes by 3:1, or it is a pinned gap.
+readonly A11Y_FOCUS_SURFACES=(quickSettings dock dialog spotlight)
+readonly A11Y_FOCUS_GAP="the owner's decision on the focus indicators (2026-10-31)"
+# Today's shortfalls: Spotlight's entry shows no indicator but the caret, so at 1:1 in every
+# case; Quick Settings' toggle in light and the dialog's entry in dark change too little.
+declare -A A11Y_FOCUS_TODAY=([default:backdrop:quickSettings]=2.37 [default:busy:quickSettings]=2.14
+    [default-solid:backdrop:quickSettings]=1.91 [default-solid:busy:quickSettings]=2.14
+    [dark-style:backdrop:dialog]=2.87 [dark-style:busy:dialog]=2.87
+    [dark-style-solid:backdrop:dialog]=2.87 [dark-style-solid:busy:dialog]=2.87)
+for a11y_case in default dark-style high-contrast default-solid dark-style-solid high-contrast-solid; do
+    for a11y_wall in backdrop busy; do
+        A11Y_FOCUS_TODAY[$a11y_case:$a11y_wall:spotlight]=1
+    done
+done
+unset a11y_case a11y_wall
+readonly A11Y_FOCUS_TODAY
+
+focus_rings() {
+    local label=$1 report=$2 w s r worst today desc
+    for w in backdrop busy; do
+        for s in "${A11Y_FOCUS_SURFACES[@]}"; do
+            r=$(jq -c --arg w "$w" --arg s "$s" '.focus[$w] as $f | if $f.error then {error: $f.error} else ($f[$s] // {error: "not measured"}) end' \
+                <<<"$report" 2>/dev/null)
+            desc="$label accessibility: focus over the $w: $s's indicator changes by $A11Y_ICON_RATIO:1"
+            if [[ -z $r ]] || jq -e '.error' <<<"$r" >/dev/null; then
+                fail "$desc ($(jq -r '.error // "not measured"' <<<"${r:-{\}}" 2>/dev/null))"
+                continue
+            fi
+            if ! jq -e '.focused' <<<"$r" >/dev/null; then
+                fail "$desc (key focus did not land on $(jq -r .name <<<"$r"))"
+                continue
+            fi
+            worst=$(jq -r .ratio <<<"$r")
+            today=${A11Y_FOCUS_TODAY[$label:$w:$s]:-}
+            if [[ -z $today ]]; then
+                pill_verdict "$desc" "$worst" "$A11Y_ICON_RATIO"
+                continue
+            fi
+            pill_verdict "$label accessibility: focus over the $w: $s's indicator is at least today's $today:1" "$worst" "$today"
+            known_gap "$A11Y_FOCUS_GAP" pill_verdict "$desc" "$worst" "$A11Y_ICON_RATIO"
+        done
+    done
+}
+
 # The text below 4.5:1 and the glyphs and dots below 3:1 in a report's surface at path; with gapdot
 # true, the inactive workspace dots are left to inactive_dot.
 a11y_low_contrast() {
     local report=$1 path=$2 gapdot=${3:-false}
     jq -r --arg path "$path" --argjson text "$A11Y_TEXT_RATIO" --argjson icon "$A11Y_ICON_RATIO" --argjson gapdot "$gapdot" \
-        "[$A11Y_SURFACE] as \$e | if (\$e | length) > 0 then \$e else (getpath(\$path | split(\".\")) | $A11Y_LOW_CONTRAST) end | join(\"; \")" \
+        "([$A11Y_SURFACE] | add // []) as \$e | if (\$e | length) > 0 then \$e else (getpath(\$path | split(\".\")) | $A11Y_LOW_CONTRAST) end | join(\"; \")" \
         <<<"$report" 2>&1
 }
 
@@ -1849,6 +2071,8 @@ a11y_contrast() {
     for s in bar barUnread; do
         inactive_dot "$label" "$report" "$s" "$label"
     done
+    bar_pills "$label" "$report"
+    focus_rings "$label" "$report"
     expect "$label accessibility" "$report" '.wifiMenuConnected.targets | any(.kind == "text" and (.inactive | not))' \
         "the connected network's name is measured over its row's own fill"
     expect "$label accessibility" "$report" '(.bar.targets | map(select(.kind == "dot" and .name == "workspace-dot")) | length >= 2)
@@ -1878,10 +2102,15 @@ a11y_layout() {
     expect "$label accessibility" "$report" '.textScalingFactor == 1.25' "text-scaling-factor is 1.25"
     for s in "${A11Y_SURFACES[@]}"; do
         problems=$(jq -r --arg path "$s" \
-            ".monitor as \$m | [$A11Y_SURFACE] as \$e | if (\$e | length) > 0 then \$e else (getpath(\$path | split(\".\")) | $A11Y_LAYOUT) end | join(\"; \")" \
+            ".monitor as \$m | ([$A11Y_SURFACE] | add // []) as \$e | if (\$e | length) > 0 then \$e else (getpath(\$path | split(\".\")) | $A11Y_LAYOUT) end | join(\"; \")" \
             <<<"$report" 2>&1)
         known_gap "${A11Y_GAPS[$label:$s]:-}" a11y_verdict "$label accessibility: $s: no text cut short, off the screen, outside its surface or overlapping" "$problems"
     done
+    problems=$(jq -r --arg path barPills.crowded \
+        ".monitor as \$m | ([$A11Y_SURFACE] | add // []) as \$e | if (\$e | length) > 0 then \$e else (.barPills.crowded | $A11Y_LAYOUT) end | join(\"; \")" \
+        <<<"$report" 2>&1)
+    a11y_verdict "$label accessibility: board 39's crowded bar (chip, recording, share, privacy, five apps): no text cut short, off the screen or overlapping" \
+        "$problems"
 }
 
 # The light and dark captures, high contrast and Large Text, each with its own shell, over the
@@ -2298,6 +2527,9 @@ direct_cases() {
     glass_frames glass "$run/glass.log"
     shadows_under_glass glass "$run/glass.log"
     glass_manager glass "$run/glass.log" light
+    glass_frames glass-scale1 "$run/glass-scale1.log"
+    shadows_under_glass glass-scale1 "$run/glass-scale1.log"
+    glass_manager glass-scale1 "$run/glass-scale1.log" light
     glass_unlock_vs_fedora "$run"
     indicator_cases "$run"
     one_gpu_case "$run"
@@ -2615,6 +2847,10 @@ patched_assertions() {
     asserted glass && glass_frames glass "$run/glass.log"
     asserted glass && shadows_under_glass glass "$run/glass.log"
     asserted glass && glass_manager glass "$run/glass.log" light
+    asserted glass-scale1 && no_js_error glass-scale1 "$run/glass-scale1.log"
+    asserted glass-scale1 && glass_frames glass-scale1 "$run/glass-scale1.log"
+    asserted glass-scale1 && shadows_under_glass glass-scale1 "$run/glass-scale1.log"
+    asserted glass-scale1 && glass_manager glass-scale1 "$run/glass-scale1.log" light
     asserted glass fedora-glass && glass_unlock_vs_fedora "$run"
     asserted indicators indicators-scale1 indicators-dark && indicator_cases "$run"
     asserted dock-one-gpu && one_gpu_case "$run"
@@ -2750,6 +2986,10 @@ glass_manager() {
     empty=$(report_of "$log" APEXG2-GLASS | jq -r '.manager.emptyBox | "\(.emptyFrames) empty frames; laid out \(.laidOut.allocation | join("x")) after \(.laidOut.frames) frames, \(if .laidOut.enabled then "on" else "off" end)"' 2>/dev/null)
     "${expect_glass[@]}" '.manager.emptyBox | ([.shown, .hidden, .shownAgain] | all(.enabled | not)) and .emptyFrames == 3 and .laidOut.enabled and (.zeroHeight.enabled | not)' \
         "an actor-mode surface with an empty box draws a frame shown, hidden and shown again without blurring, blurs once laid out, and pauses at zero height (${empty:-no report})"
+    local opacity
+    opacity=$(report_of "$log" APEXG2-GLASS | jq -r '.manager.opacity | "\(.half) steps off at 128"' 2>/dev/null)
+    "${expect_glass[@]}" '.manager.opacity | .followOpacity and .fullDiffering > 0 and .noneDiffering == 0 and .half <= 1.251' \
+        "a glass follows its surface's opacity: at 128 the frame is the blur at 128/255 over the pattern within 1 + 64/255 steps, at 0 the pattern alone (${opacity:-no report})"
     "${expect_glass[@]}" "$glass"' .t as $t | .manager.monitorScale as $s | .manager.derived
         | (.osd | glass($t.apex_panel_blur; $t.apex_panel_saturation; $s)) and (.switcher | glass($t.apex_panel_blur; $t.apex_panel_saturation; $s))
         and (.screenshot | .radius == 2 * ($t.apex_panel_blur | px) * $s and .fine and (.enabled | not))' \
@@ -2763,6 +3003,25 @@ glass_manager() {
         'over a checker, an Alt+Tab list'"'"'s bottom-left corner blurs no pixel past its border'"'"'s arc and every pixel inside it (board 15)'
     "${expect_glass[@]}" '.manager.derived.switcher.corner.capturedDiffering == 0' \
         'and a screenshot shows that corner as the screen does, pixel for pixel: off stage, the blur maps the stage through the capture'"'"'s viewport'
+    local conformance
+    conformance=$(report_of "$log" APEXG2-GLASS | jq -r '.manager.conformance | "\(.registered | length) registered: \(.registered | join(", "))"' 2>/dev/null)
+    "${expect_glass[@]}" '.manager.conformance | (.registered | length) > 0 and .unchecked == [] and (.registered | all(. as $n | $n | IN(["panel", "dock", "quick-settings", "calendar", "banner", "osd", "spotlight", "toast", "switcher", "screenshot", "tilePreview"][]) or startswith("scrim-")))' \
+        "every surface the glass registry got in the case was checked, each by name, and none unknown to it (${conformance:-no report})"
+    "${expect_glass[@]}" '.manager.conformance.checked | to_entries | all(.value | .cornerRadius as $r
+        | (.painted.radii | all(. == $r)) and (.allocation[0] == null or .painted.box == [0, 0] + .allocation))' \
+        'each rounds its blur at its border radius, all four corners, over the box St paints its background in: the Spotlight panel and the toast too'
+    "${expect_glass[@]}" '.manager.conformance.checked | ["dock", "quick-settings", "calendar", "banner", "osd", "spotlight", "toast"] as $rounded
+        | [$rounded[] as $n | .[$n].corner | .radius > 0 and .outside > 0 and .ring > 0 and .blurredOutside == 0 and .blurredRing == .ring and .glassEffects == 1] | length == 7 and all' \
+        'over a checker, the bottom-left corner of the dock, Quick Settings, the calendar, a banner, the OSD, the Spotlight panel and the toast blurs no pixel past its border'"'"'s arc and every pixel in the band inside it, under one glass'
+    "${expect_glass[@]}" '.manager.conformance.checked | [.["dock", "quick-settings", "calendar", "banner", "osd", "spotlight", "toast"].corner.capturedMax] | length == 7 and all(type == "number" and . <= 1)' \
+        'and a screenshot shows each of those corners as the screen does, to 1/255 a channel'
+    local motion
+    motion=$(report_of "$log" APEXG2-GLASS | jq -r '.manager.motion | to_entries | map("\(.key) \(.value.differingFromFull) of \(.value.pixels) px off") | join(", ")' 2>/dev/null)
+    "${expect_glass[@]}" '.manager.motion | [.dock, .popover] | all(.moved and .enabled and .pixels > 0 and .differingFromFull == 0)' \
+        "a glass that moves blurs where it is: the dock slid half its height up and Quick Settings halfway open, each set by property, draw the frame a fresh glass draws in a full redraw, over the box left and the box taken (${motion:-no report})"
+    known_gap "0003: a glass box past the stage edge blurs pixels no one painted; the fix is 0003 C, budget 310/310" \
+        "${expect_glass[@]}" '.manager.motion.dockPastEdge | .moved and .enabled and .pixels > 0 and .differingFromFull == 0' \
+        "and the dock halfway down intellihide's slide, past the screen's bottom edge, does too"
     "${expect_glass[@]}" "$glass"' .t as $t | .manager.monitorScale as $s | .manager.tile.shown.glass
         | glass($t.apex_tile_preview_blur; $t.apex_tile_preview_saturation; $s) and .cornerRadius == ($t.apex_radius_tile_preview | px) * $s' \
         'the shown tile preview registers its glass at board 22'"'"'s $apex_tile_preview_blur and $apex_tile_preview_saturation, rounded $apex_radius_tile_preview'

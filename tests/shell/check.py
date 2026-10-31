@@ -18,6 +18,7 @@ import itertools
 import json
 import os
 import re
+import subprocess
 import sys
 
 DATE = "Wednesday October 21"
@@ -74,7 +75,7 @@ def tokens():
     found = {}
     with open(TOKENS, encoding="utf-8") as f:
         for line in f:
-            m = re.match(r"\$(apex_(?:greeter|lock)_\w+):\s*(.+?);", line)
+            m = re.match(r"\$(apex_(?:greeter|lock|surface)_\w+):\s*(.+?);", line)
             if m:
                 found[m.group(1)] = m.group(2).strip("'\"")
     return found
@@ -455,6 +456,29 @@ def check_greeter(shots, case):
     check(f"{case}: upstream's avatar icon", prompt.get("avatar") == "avatar-default-symbolic", json.dumps(prompt))
     check_greeter_style(case, f["list"].get("style") or {}, tokens())
     check_back_button(case, (f["prompt"].get("style") or {}).get("back"), tokens())
+    check_greeter_spacing(case, f["list"].get("layout") or {},
+                          {**(f["prompt"].get("layout") or {}), "back": (f["prompt"].get("style") or {}).get("back")}, tokens())
+
+
+def check_greeter_spacing(case, listed, prompt, t):
+    """Board 12's spacing as the Apex sheets set it: a GNOME point release's margins fail here by name."""
+    height, border, gap = px(t["apex_lock_list_item_height"]), px(t["apex_surface_border"]), px(t["apex_lock_prompt_gap"])
+    rows = listed.get("rows") or []
+    check(f"{case}: each user row is $apex_lock_list_item_height ({height:g} px), a separator above all but the first",
+          len(rows) >= 2 and abs(rows[0]["height"] - height) <= 1 and all(abs(r["height"] - height - border) <= 1 for r in rows[1:]),
+          json.dumps(rows))
+    check(f"{case}: the rows follow one another", all(abs(b["y"] - a["y"] - a["height"]) <= 1 for a, b in itertools.pairwise(rows)),
+          json.dumps(rows))
+    avatar, field, line, back = (prompt.get(k) for k in ("avatar", "field", "messageLine", "back"))
+    if not (avatar and field and line and back):
+        check(f"{case}: the prompt's name, field, message line and back button are reported", False, json.dumps(prompt))
+        return
+    check(f"{case}: the field sits $apex_lock_prompt_gap ({gap:g} px) below the name",
+          abs(field["y"] - avatar["y"] - avatar["height"] - gap) <= 1, json.dumps([avatar, field]))
+    check(f"{case}: upstream's message line starts where the field ends", abs(line["y"] - field["y"] - field["height"]) <= 1,
+          json.dumps([field, line]))
+    check(f"{case}: the back button is centred on the field",
+          abs(back["y"] + back["height"] / 2 - field["y"] - field["height"] / 2) <= 1, json.dumps([field, back]))
 
 
 def round_button(b, t):
@@ -643,6 +667,66 @@ def check_polkit(shots, case, want):
         check(f"{case}: no fingerprint line when PAM sends none", info["text"] is None and info["glyph"] is None, json.dumps(info))
 
 
+MOVES = ("translation-x", "translation-y", "scale-x", "scale-y")
+
+
+def moving(samples):
+    """Every translation or scale transition the samples caught, once each."""
+    found = {(t["actor"], t["property"], t["from"], t["to"]) for m in samples for t in m["transitions"] if t["property"] in MOVES}
+    return sorted(found)
+
+
+def fades(samples, start, end):
+    """The curtain's own opacity transitions, from START to END."""
+    return [t for m in samples for t in m["transitions"]
+            if t["actor"] == "root" and t["property"] == "opacity" and t["from"] == start and t["to"] == end]
+
+
+def check_motion(shots, case, reduced):
+    """Board 20 opening and closing, from the transitions it runs: with Reduce Motion the curtain fades and nothing moves."""
+    log = read(shots, f"{case}.log")
+    f = facts(log)
+    check(f"{case}: the lock's transitions are reported", all(k in f for k in ("motion", "opening", "closing")))
+    check(f"{case}: no JS error", "JS ERROR" not in log and "APEXLOCK-ERROR" not in log)
+    if not all(k in f for k in ("motion", "opening", "closing")):
+        return
+    settings, opening, closing = f["motion"], f["opening"], f["closing"]
+    check(f"{case}: Reduce Motion is {'on' if reduced else 'off'}, animations on", settings["reduced"] is reduced and settings["animations"],
+          json.dumps(settings))
+    if not reduced:
+        check(f"{case}: without Reduce Motion the curtain slides in and out, so the sampler sees motion",
+              any(m[:2] == ("root", "translation-y") for m in moving(opening))
+              and any(m[:2] == ("root", "translation-y") for m in moving(closing)), json.dumps([moving(opening), moving(closing)]))
+        return
+    duration = settings["duration"]
+    check(f"{case}: opening, nothing slides or scales, the curtain included", not moving(opening), json.dumps(moving(opening)))
+    check(f"{case}: closing, nothing slides or scales, the curtain included", not moving(closing), json.dumps(moving(closing)))
+    fade_in = fades(opening, 0, 255)
+    check(f"{case}: the curtain fades in over upstream's {duration} ms", bool(fade_in) and all(t["duration"] == duration for t in fade_in),
+          json.dumps(fade_in or opening))
+    check(f"{case}: and is fully opaque, never slid, once the fade ends",
+          opening[-1]["opacity"] == 255 and opening[-1]["ty"] == 0 and not opening[-1]["transitions"], json.dumps(opening[-1]))
+    fade_out = fades(closing, 255, 0)
+    check(f"{case}: closing, the curtain fades out over upstream's {duration} ms",
+          bool(fade_out) and all(t["duration"] == duration for t in fade_out), json.dumps(fade_out or closing))
+
+
+def check_greeter_motion(shots, case):
+    """Board 12 from the list to the prompt with Reduce Motion: nothing in the dialog slides or scales."""
+    log = read(shots, f"{case}.log")
+    f = facts(log)
+    check(f"{case}: the greeter's transitions are reported", "motion" in f)
+    check(f"{case}: no JS error", "JS ERROR" not in log and "APEXLOCK-ERROR" not in log)
+    if "motion" not in f:
+        return
+    m = f["motion"]
+    check(f"{case}: Reduce Motion is on, animations on", m["reduced"] is True and m["animations"],
+          json.dumps({k: m[k] for k in ("reduced", "duration", "uninhibited", "animations")}))
+    faded = sorted({t["actor"] for s in m["samples"] for t in s["transitions"] if t["property"] == "opacity"})
+    check(f"{case}: the sampler catches the prompt's own fades", any("login-dialog-prompt-layout" in a for a in faded), json.dumps(faded))
+    check(f"{case}: from the list to the prompt, nothing slides or scales", not moving(m["samples"]), json.dumps(moving(m["samples"])))
+
+
 DND_LABEL = "Do Not Disturb"
 ICON_SIZE = 32
 MESSAGE_GAP = 8  # $apex_message_gap
@@ -728,6 +812,22 @@ def check_date_menu(shots, case, apex):
         check_footer(case, "dnd-clicked", once, apex)
 
 
+ASSERT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../shots/assert.sh")
+
+
+def check_icons(shots):
+    """S1b's icon rule, by tests/shots/assert.sh's shell_icons and its lists; not run without the Apex theme."""
+    opened = facts(read(shots, "lock-light.log")).get("icons-opened") or {}
+    if opened.get("installed") is not True:
+        print("not run - icons: no Apex theme installed (/usr/share/icons/Apex); signoff.sh runs this check")
+        return
+    out = subprocess.run(["bash", "-c", '. "$1"; shell_icons shell "$2"', "_", ASSERT, shots],
+                         capture_output=True, text=True, check=False).stdout
+    for line in out.splitlines():
+        if line.startswith(("PASS ", "FAIL ")):
+            check(line[5:], line.startswith("PASS "))
+
+
 def main():
     if len(sys.argv) != 2:
         print(__doc__, file=sys.stderr)
@@ -741,9 +841,13 @@ def main():
     check_idle(shots, "lock-idle")
     check_suspend(shots, "lock-suspend")
     check_fingerprint(shots, "lock-fingerprint")
+    check_icons(shots)
     check_fingerprint_suspend(shots, "lock-fingerprint-suspend")
     for case in GREETER_CASES:
         check_greeter(shots, case)
+    check_motion(shots, "lock-motion", reduced=False)
+    check_motion(shots, "lock-reduce-motion", reduced=True)
+    check_greeter_motion(shots, "greeter-reduce-motion")
     for case, want in POLKIT_CASES.items():
         check_polkit(shots, case, want)
     for case, (apex, sleeps) in POLKIT_LOCKED_CASES.items():

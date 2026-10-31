@@ -62,7 +62,7 @@ run_case() {
         APEX_SHOTS="$out" APEX_SHOT="$name" ADW_DEBUG_COLOR_SCHEME="$scheme" "$@"
     log "run.sh: $name: exit $?"
     grep -q 'APEXCC ' "$out/$name.log" && [[ -s $out/$name.png ]] || return 1
-    ! grep -q '"check":false\|"ready":false' "$out/$name.log"
+    ! grep -q '"check":false\|"ready":false\|"before":false' "$out/$name.log"
 }
 
 status=0
@@ -117,6 +117,7 @@ done
 for scenario in health-failure fallback; do
     update_case "$scenario" "updates-$scenario-dark" prefer-dark || status=1
 done
+update_case fallback updates-fallback-changes default "APEX_BEFORE=updates.py show-changes" || status=1
 headless_update1_stop
 grep -h '^ok \|^FAIL \|APEXCC-' "$out"/*.log || true
 ((status == 0)) || die "run.sh: a case failed; see ${out#"$APEX_ROOT/"}/*.log"

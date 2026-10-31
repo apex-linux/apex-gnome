@@ -33,7 +33,9 @@ $apex_dock_border: $_hc_border;
 
 // The lock blurs without darkening and leaves that to its overlay (lock/stage.js): without
 // this, high contrast's white text sits on the bright blurred wallpaper.
-.apex-lock-overlay { background-color: rgba(0, 0, 0, .55); }
+.apex-lock-overlay { background-color: $apex_lock_overlay_contrast; }
+
+.apex-lock-background { -apex-lock-blur: $apex_lock_blur; -apex-lock-saturation: $apex_lock_saturation / 100%; }
 
 // GNOME 51.1's fixed prompt height, as in _lock.scss.
 .unlock-dialog.apex-lock .login-dialog-prompt-layout { height: auto; }

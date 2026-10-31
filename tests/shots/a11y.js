@@ -15,6 +15,7 @@ import * as MessageTray from 'resource:///org/gnome/shell/ui/messageTray.js';
 import * as Scripting from 'resource:///org/gnome/shell/ui/scripting.js';
 import * as SwitcherPopup from 'resource:///org/gnome/shell/ui/switcherPopup.js';
 
+import {showInUse, showItems} from './indicators.js';
 import * as Png from './png.js';
 
 Gio._promisify(Shell.Screenshot.prototype, 'screenshot_area');
@@ -27,6 +28,9 @@ const SWITCHER_APPS = ['Text Editor', 'Terminal', 'Web', 'Files', 'Settings'];
 export const ACCENTS = ['blue', 'teal', 'green', 'yellow', 'orange', 'red', 'pink', 'purple', 'slate'];
 // The bar's dots draw their background in the bar's ink: glyphs too.
 const DOTS = ['workspace-dot', 'messages-indicator'];
+// Board 39's two input sources, as direct.sh's TWO_SOURCES.
+const TWO_SOURCES = [['xkb', 'us'], ['xkb', 'fr']];
+const CHIP_TIMEOUT_MS = 5000;
 
 function srgb(channel) {
     const c = channel / 255;
@@ -240,6 +244,227 @@ async function surfaceReport(root, settle, unit) {
     return {box: roundedBox(box, unit), targets: targets.map(t => measure(t, image))};
 }
 
+// The pixel at stage point x, y of a capture.
+function pixelAt(image, x, y) {
+    const at = (Math.floor((y - image.y) * image.scale) * image.width + Math.floor((x - image.x) * image.scale)) * 4;
+    return [image.rgba[at], image.rgba[at + 1], image.rgba[at + 2]];
+}
+
+// A filled pill's fill, read across its middle clear of the corners, against the bar a pixel or
+// two beyond each end: the median inside, as a stop square stays drawn there.
+function edgeOf(pill, image) {
+    const box = extents(pill);
+    const radius = pill.get_theme_node().get_border_radius(St.Corner.TOPLEFT);
+    const inside = [];
+    const outside = [];
+    for (let y = box.y + box.height / 4; y < box.y + box.height * 3 / 4; y++) {
+        for (let x = box.x + radius; x < box.x + box.width - radius; x++)
+            inside.push(pixelAt(image, x, y));
+        for (const x of [box.x - 2, box.x - 1, box.x + box.width, box.x + box.width + 1])
+            outside.push(pixelAt(image, x, y));
+    }
+    inside.sort((a, b) => luminance(a) - luminance(b));
+    const fill = inside[Math.floor(inside.length / 2)];
+    const samples = outside.map(bar => ({bar, ratio: ratio(fill, bar)})).sort((a, b) => a.ratio - b.ratio);
+    const worst = samples[Math.floor(samples.length * BACKDROP_PERCENTILE)];
+    return {fill: hex(fill), bar: hex(worst.bar), ratio: Math.round(worst.ratio * 100) / 100};
+}
+
+async function chipShown(keyboard) {
+    for (let waited = 0; waited < CHIP_TIMEOUT_MS && !keyboard.visible; waited += 100)
+        // eslint-disable-next-line no-await-in-loop
+        await Scripting.sleep(100);
+}
+
+// An app indicator draws its icon as a mask in the bar's ink, symbolic or not: a glyph.
+function indicatorTargets(pill) {
+    const glyph = pill.get_first_child();
+    return glyph?.mapped ? [{actor: glyph, kind: 'icon', ink: glyph, name: pill.get_parent().accessible_name}] : [];
+}
+
+// Board 39's bar with everything on it, sni-items.js's apps and the overflow too: each pill over its
+// fill, a filled pill against the bar, the whole bar for Large Text's layout and the Chat app's menu.
+async function pillsReport(settle, unit, report) {
+    const {quickSettings, screenRecording, screenSharing, keyboard} = Main.panel.statusArea;
+    const sources = new Gio.Settings({schema_id: 'org.gnome.desktop.input-sources'});
+    const saved = sources.get_value('sources');
+    sources.set_value('sources', new GLib.Variant('a(ss)', TWO_SOURCES));
+    const hideInUse = showInUse();
+    const items = await showItems();
+    try {
+        await chipShown(keyboard);
+        await settle();
+        const roots = {
+            input: keyboard._container,
+            recording: screenRecording._box,
+            sharing: screenSharing.get_first_child(),
+            privacy: quickSettings.get_first_child().get_children().find(a => a.name === 'apexPrivacyGroup') ?? null,
+            overflow: items.overflow,
+            ...Object.fromEntries(items.pills.map((pill, i) => [`indicator${i}`, pill])),
+        };
+        const targetsIn = (pill, root) => {
+            if (!root?.mapped)
+                return [];
+            return pill.startsWith('indicator') ? indicatorTargets(root) : targetsOf(root);
+        };
+        const found = Object.fromEntries(Object.entries(roots).map(([pill, root]) => [pill, targetsIn(pill, root)]));
+        const targets = Object.fromEntries(Object.entries(found).map(([pill, list]) =>
+            [pill, list.map(t => snapshot(t, roots[pill], new Map(), unit))]));
+        const inks = Object.values(found).flat().map(t => t.ink);
+        const opacities = inks.map(ink => ink.opacity);
+        inks.forEach(ink => setOpacity(ink, 0));
+        let image;
+        try {
+            await settle();
+            image = await stagePixels(extents(Main.panel));
+        } finally {
+            inks.forEach((ink, i) => setOpacity(ink, opacities[i]));
+        }
+        const pills = Object.fromEntries(Object.entries(roots).map(([pill, root]) => {
+            if (!root?.mapped)
+                return [pill, {error: 'not shown'}];
+            const filled = root.get_theme_node().get_background_color().alpha > 0;
+            return [pill, {targets: targets[pill].map(t => measure(t, image)), edge: filled ? edgeOf(root, image) : null}];
+        }));
+        const crowded = await report(Main.panel);
+        const indicatorMenu = await withOpen(() => items.openMenu(), menu => menu?.close(), menu => menu ? report(menu.box)
+            : {error: 'no menu'});
+        return {box: roundedBox(extents(Main.panel), unit), pills, crowded, indicatorMenu};
+    } finally {
+        await items.end();
+        hideInUse();
+        sources.set_value('sources', saved);
+    }
+}
+
+const FOCUS_MARGIN = 8;
+const FOCUS_CHANGED = 8;
+const BUSY_SIZE = 480;
+const BUSY_STRIPE = 12;
+const WAIT_MS = 5000;
+
+async function until(condition) {
+    for (let waited = 0; waited < WAIT_MS && !condition(); waited += 50)
+        // eslint-disable-next-line no-await-in-loop
+        await Scripting.sleep(50);
+    return condition();
+}
+
+function firstFocusable(root) {
+    const walk = actor => {
+        for (const child of actor.get_children()) {
+            if (child instanceof St.Widget && child.can_focus && child.reactive && child.mapped)
+                return child;
+            const found = walk(child);
+            if (found)
+                return found;
+        }
+        return null;
+    };
+    return root ? walk(root) : null;
+}
+
+// A focus indicator is what key focus changes: the pixels that differ between the control
+// unfocused and focused, wherever it draws them, each read against what it was before.
+async function focusRing(target, settle, unit) {
+    if (!target?.mapped)
+        return {error: 'no focusable control'};
+    global.stage.set_key_focus(null);
+    await settle();
+    const margin = FOCUS_MARGIN * unit.length;
+    const {x, y, width, height} = extents(target);
+    if (![x, y, width, height].every(Number.isFinite))
+        return {error: 'not allocated'};
+    const left = Math.max(0, x - margin), top = Math.max(0, y - margin);
+    const box = {
+        x: left, y: top,
+        width: Math.min(global.stage.width, x + width + margin) - left,
+        height: Math.min(global.stage.height, y + height + margin) - top,
+    };
+    if (box.width < 1 || box.height < 1)
+        return {error: `off the stage at ${Math.round(x)},${Math.round(y)}`};
+    const before = await stagePixels(box);
+    target.grab_key_focus();
+    await settle();
+    const focus = global.stage.get_key_focus();
+    // An entry hands key focus to its own text.
+    const focused = focus === target || target.contains(focus);
+    const after = await stagePixels(box);
+    global.stage.set_key_focus(null);
+    const ratios = [];
+    for (let at = 0; at < after.rgba.length; at += 4) {
+        const was = [before.rgba[at], before.rgba[at + 1], before.rgba[at + 2]];
+        const now = [after.rgba[at], after.rgba[at + 1], after.rgba[at + 2]];
+        if (Math.max(...now.map((v, i) => Math.abs(v - was[i]))) > FOCUS_CHANGED)
+            ratios.push(ratio(now, was));
+    }
+    ratios.sort((a, b) => b - a);
+    // The thinnest indicator WCAG 2.4.13 counts: a 1 px line around the control.
+    const perimeter = Math.round(2 * (width + height) * after.scale);
+    const ringRatio = ratios.length >= perimeter ? ratios[perimeter - 1] : 1;
+    return {
+        name: target.accessible_name || target.constructor.name, focused, changed: ratios.length, perimeter,
+        ratio: Math.round(ringRatio * 100) / 100,
+    };
+}
+
+// A busy wallpaper, fine stripes of black, white and the accents, for the glass under a ring.
+function busyWallpaper() {
+    const colours = [[0, 0, 0], [255, 255, 255], [53, 132, 228], [230, 97, 0], [46, 194, 126], [255, 255, 255]];
+    const rgba = new Uint8Array(BUSY_SIZE * BUSY_SIZE * 4);
+    for (let y = 0; y < BUSY_SIZE; y++) {
+        for (let x = 0; x < BUSY_SIZE; x++) {
+            const [r, g, b] = colours[Math.floor((x + y) / BUSY_STRIPE) % colours.length];
+            rgba.set([r, g, b, 255], (y * BUSY_SIZE + x) * 4);
+        }
+    }
+    const path = GLib.build_filenamev([GLib.get_tmp_dir(), 'apex-g2-busy.png']);
+    GLib.file_set_contents(path, Png.encode({width: BUSY_SIZE, height: BUSY_SIZE, rgba}));
+    return GLib.filename_to_uri(path, null);
+}
+
+// Resolves once every background manager has swapped in a new background and the old ones are gone.
+function swapped() {
+    const managers = Main.layoutManager._bgManagers;
+    let count = 0;
+    const ids = managers.map(m => m.connect('changed', () => count++));
+    return until(() => count >= managers.length && Main.layoutManager._backgroundGroup.get_n_children() === managers.length)
+        .finally(() => ids.forEach((id, i) => managers[i].disconnect(id)));
+}
+
+// The wallpaper set for read, waiting for the swap each way, not for a time.
+async function withWallpaper(uri, read) {
+    const background = new Gio.Settings({schema_id: 'org.gnome.desktop.background'});
+    const saved = ['picture-uri', 'picture-uri-dark', 'picture-options'].map(k => [k, background.get_value(k)]);
+    let swap = swapped();
+    background.set_string('picture-options', 'wallpaper');
+    background.set_string('picture-uri', uri);
+    background.set_string('picture-uri-dark', uri);
+    try {
+        if (!await swap)
+            return {error: 'the wallpaper never changed'};
+        return await read();
+    } finally {
+        swap = swapped();
+        saved.forEach(([key, value]) => background.set_value(key, value));
+        await swap;
+    }
+}
+
+// WCAG 2.4.11 and 1.4.11: a focused control's indicator, on Quick Settings and Spotlight (glass),
+// the dock and a dialog, over the case's backdrop and over a busy wallpaper.
+async function focusReport(h, settle, unit) {
+    const {menu} = Main.panel.statusArea.quickSettings;
+    const surfaces = async () => ({
+        quickSettings: await withOpen(() => menu.open(BoxPointer.PopupAnimation.NONE),
+            () => menu.close(BoxPointer.PopupAnimation.NONE), () => focusRing(firstFocusable(menu.box), settle, unit)),
+        dock: await focusRing(firstFocusable(h.apexDock()), settle, unit),
+        dialog: await withOpen(() => h.openModalDialog(), d => d.close(), d => focusRing(firstFocusable(d.root), settle, unit)),
+        spotlight: await h.withSpotlight(popup => focusRing(firstFocusable(popup.panel), settle, unit)) ?? {error: 'no Spotlight'},
+    });
+    return {backdrop: await surfaces(), busy: await withWallpaper(busyWallpaper(), surfaces)};
+}
+
 // The bar over whatever the stage draws now, as a11yReport measures it.
 export async function barReport(settle, unit) {
     await settle();
@@ -336,6 +561,8 @@ export async function a11yReport(h) {
     // Unread notifications put the clock's dot on the bar.
     out.barUnread = await withOpen(notifications, source => source.destroy(), () => report(Main.panel));
     lap('bar');
+    out.barPills = await pillsReport(settle, unit, report);
+    lap('barPills');
     out.dock = await report(h.apexDock());
     lap('dock');
     out.popupMenu = await withOpen(() => h.openPopupMenu(), s => s.close(), s => report(s.root));
@@ -420,6 +647,16 @@ export async function a11yReport(h) {
     if (accents)
         out.dialogAccents = await underEachAccent(() => h.openModalDialog(), d => d.close(), d => d.root);
     lap('dialogAccents');
+    // Checked, the box shows its glyph over the accent's shade.
+    const checkBoxDialog = () => {
+        const opened = h.openMountPasswordDialog();
+        opened.check.checked = true;
+        return opened;
+    };
+    out.checkBoxDialog = await withOpen(checkBoxDialog, d => d.close(), d => report(d.root));
+    if (accents)
+        out.checkBoxDialogAccents = await underEachAccent(checkBoxDialog, d => d.close(), d => d.root);
+    lap('checkBoxDialog');
     out.endSession = await withOpen(() => h.openEndSessionDialog(), d => d?.cancel(), d => report(d?.dialogLayout._dialog));
     lap('endSession');
     out.spotlight = await h.withSpotlight(async (popup, toast) => {
@@ -427,6 +664,8 @@ export async function a11yReport(h) {
         return {popup: await report(popup.panel), toast: await report(await toast())};
     }) ?? {error: 'no Spotlight'};
     lap('spotlight');
+    out.focus = await focusReport(h, settle, unit);
+    lap('focus');
     Main.overview.show();
     global.stage.set_key_focus(null);
     out.overview = await report(Main.overview._overview);

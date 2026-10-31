@@ -12,7 +12,10 @@ import St from 'gi://St';
 
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import * as ModalDialog from 'resource:///org/gnome/shell/ui/modalDialog.js';
+import * as Overview from 'resource:///org/gnome/shell/ui/overview.js';
 import * as Scripting from 'resource:///org/gnome/shell/ui/scripting.js';
+
+import {iconsOf, shellIconTheme} from '../shots/session-defaults.js';
 
 Gio._promisify(Shell.Screenshot.prototype, 'screenshot_area');
 Gio._promisify(Gio.DBusConnection.prototype, 'call');
@@ -163,8 +166,17 @@ function failScan() {
         'io.github.apex_linux.GdmMock', 'FailScan', null, null, Gio.DBusCallFlags.NONE, -1, null);
 }
 
+// S1b's icon rule on what only this harness shows (tests/shots/assert.sh's shell_icons): with no Apex
+// theme installed, as in CI's own job, the fact says so and check.py reports the check not run.
+function iconFact(step, roots) {
+    const {theme, scale: factor} = shellIconTheme();
+    const installed = GLib.file_test('/usr/share/icons/Apex/index.theme', GLib.FileTest.EXISTS);
+    fact(`icons-${step}`, {installed, icons: roots.flatMap(root => iconsOf(root, theme, factor) ?? [])});
+}
+
 async function shootFingerprint(dialog) {
     fact('opened', describeLock(dialog));
+    iconFact('opened', [dialog, Main.panel]);
     await capture('open');
     await failScan();
     await Scripting.sleep(STEP_MS * 2);
@@ -302,6 +314,7 @@ async function shootLock() {
     }
     const dialog = Main.screenShield._dialog;
     fact('opened', describeLock(dialog));
+    iconFact('opened', [dialog, Main.panel]);
     await capture('open');
 
     await type(WRONG_ANSWER);
@@ -323,6 +336,73 @@ async function shootLock() {
     fact('key-after-escape', describeLock(dialog));
     await Scripting.sleep(SETTLE_MS);
     fact('end', {locked: Main.screenShield.locked});
+}
+
+const MOTION_PROPERTIES = ['translation-x', 'translation-y', 'scale-x', 'scale-y', 'opacity'];
+const MOTION_POLL_MS = 10;
+
+// The transitions running on ROOT and every actor under it: what eases, from where to where, for how long.
+function transitionsUnder(root) {
+    const found = [];
+    const walk = actor => {
+        for (const property of MOTION_PROPERTIES) {
+            const transition = actor.get_transition(property) ?? actor.get_transition(property.replace('-', '_'));
+            const interval = transition?.get_interval?.();
+            if (interval) {
+                found.push({
+                    actor: actor === root ? 'root' : `${actor.constructor.name}.${actor.style_class ?? ''}`, property,
+                    from: interval.peek_initial_value(), to: interval.peek_final_value(), duration: transition.get_duration(),
+                });
+            }
+        }
+        actor.get_children().forEach(walk);
+    };
+    if (root)
+        walk(root);
+    return found;
+}
+
+// A sample every MOTION_POLL_MS, in ms from the call, until the returned stop(): transitions run whether or not a frame paints.
+function sampleMotion(sample) {
+    const samples = [];
+    const start = GLib.get_monotonic_time();
+    const id = GLib.timeout_add(GLib.PRIORITY_DEFAULT, MOTION_POLL_MS, () => {
+        samples.push({t: Math.round((GLib.get_monotonic_time() - start) / 1000), ...sample()});
+        return GLib.SOURCE_CONTINUE;
+    });
+    return () => {
+        GLib.source_remove(id);
+        return samples.filter(m => m.transitions.length).concat(samples.slice(-1));
+    };
+}
+
+// main.js inhibits animations without hardware-accelerated rendering, as the headless shell has; G2's motion case lifts it too.
+function motionSettings() {
+    const settings = St.Settings.get();
+    const uninhibited = !settings.enable_animations;
+    if (uninhibited)
+        settings.uninhibit_animations();
+    return {
+        reduced: settings.reducedMotion === St.ReducedMotion.REDUCE, duration: Overview.ANIMATION_TIME,
+        uninhibited, animations: settings.enable_animations,
+    };
+}
+
+// Reduce Motion: upstream fades the lock's curtain instead of sliding it, and nothing under it moves.
+async function shootMotion() {
+    await Scripting.sleep(SETTLE_MS);
+    fact('motion', motionSettings());
+    const shield = Main.screenShield;
+    const group = shield._lockDialogGroup;
+    const curtain = () => ({ty: group.translation_y, opacity: group.opacity, transitions: transitionsUnder(group)});
+    let stop = sampleMotion(curtain);
+    shield.lock(true);
+    await Scripting.sleep(STEP_MS);
+    fact('opening', stop());
+    stop = sampleMotion(curtain);
+    shield.deactivate(true);
+    await Scripting.sleep(STEP_MS);
+    fact('closing', stop());
 }
 
 // What polkit-agent-helper-1 would send, without the helper: PAM never runs, so nothing the
@@ -417,6 +497,7 @@ async function openPolkit() {
 async function shootPolkit() {
     const {dialog, sessions} = await openPolkit();
     fact('polkit', describePolkit(dialog));
+    iconFact('opened', [dialog.dialogLayout._dialog]);
     await capture('open');
     fact('polkit-sessions', sessions);
 }
@@ -486,12 +567,23 @@ function button(b) {
     };
 }
 
+// Board 12's spacing, in logical pixels: the list's rows, then the prompt's avatar, field and message line.
+function describeGreeterLayout(dialog, items) {
+    const prompt = dialog._authPrompt?.visible ? dialog._authPrompt : null;
+    const shown = actor => actor?.mapped ? box(actor) : null;
+    return {
+        rows: dialog._userList.mapped ? items.map(i => box(i)) : [],
+        avatar: shown(prompt?._userWell), field: shown(prompt?._entry), messageLine: shown(prompt?._message),
+    };
+}
+
 function describeGreeter(dialog) {
     const items = [...dialog._userList._items.values()];
     return {
         users: items.map(i => i.user.get_user_name()).join(' '),
         prompt: describePrompt(dialog._authPrompt?.visible ? dialog._authPrompt : null),
         style: describeGreeterStyle(dialog),
+        layout: describeGreeterLayout(dialog, items),
     };
 }
 
@@ -506,10 +598,16 @@ async function shootGreeter() {
         await Scripting.sleep(SETTLE_MS);
     }
     fact('list', describeGreeter(dialog));
+    iconFact('list', [dialog, Main.panel]);
     await capture('list');
+    const settings = GLib.getenv('APEX_MOTION') ? motionSettings() : null;
+    const stop = settings ? sampleMotion(() => ({transitions: transitionsUnder(dialog)})) : null;
     dialog._userList.getItemFromUserName(GLib.getenv('APEX_USER')).emit('activate');
     await Scripting.sleep(SETTLE_MS);
+    if (stop)
+        fact('motion', {...settings, samples: stop()});
     fact('prompt', describeGreeter(dialog));
+    iconFact('prompt', [dialog, Main.panel]);
     await capture('prompt');
 }
 
@@ -777,6 +875,8 @@ export async function run() {
             await shootPolkit();
         else if (['lock', 'suspend'].includes(GLib.getenv('APEX_POLKIT')))
             await shootPolkitLocked(GLib.getenv('APEX_POLKIT') === 'suspend');
+        else if (GLib.getenv('APEX_MOTION') === 'lock')
+            await shootMotion();
         else if (GLib.getenv('APEX_DATE_MENU') === '1')
             await shootDateMenu();
         else if (GLib.getenv('APEX_END_SESSION') === '1')

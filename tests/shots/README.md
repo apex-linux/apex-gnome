@@ -37,7 +37,7 @@ A case that gets no report within `direct.sh`'s timeout stops G2 at once.
 | G1's `image/checks/desktop.sh` | a container of the image | it passes on the image under test, so no text file under `/usr` or `/etc` names `APEX_SHELL_TEST_FAULT` |
 | `direct.sh main` | a container of the image plus `dbus-daemon` (the image has no `dbus-run-session`), `python3-dbusmock` and `gcc` for `clock.c`; `rpm -V` shows the shell's packages unmodified | each case below: one headless shell with a fresh home, dconf and runtime directory, the fixtures on the system bus and the fixed clock (see "Fixtures and the clock") |
 | `direct.sh kernel` | the same, with `apex.safe=1` bound over `/proc/cmdline` | the kernel switch |
-| `direct.sh pr` | CI's `shots-patched` job on a pull request, through `patched.sh` with `PATCHED_PART=pr` on the gnome-shell lane's RPMs | the cases `parts.sh`'s `PR_CASES` names, in `main`'s order (the scenes and every a11y check with their solid-backdrop twins, then the quick dock, indicator, safe-mode, fault and shutdown cases, `dock-dnd`, `dock-external`, `keys` and `shutdown-banner` among them), with their assertions; each listed case must have run and reported (`part_ran`). Before them, `direct.sh fedora` runs only `PR_FEDORA_CASES`, `fedora-light` and `fedora-dark`, so the pull request compares Apex's desktop and safe mode's (`stock-light`, `stock-dark`) with Fedora's (`compare_with_fedora`). A push to `main` and the daily run take `main` with the whole Fedora baseline |
+| `direct.sh pr` | CI's `shots-patched` job on a pull request, through `patched.sh` with `PATCHED_PART=pr` on the gnome-shell lane's RPMs | the cases `parts.sh`'s `PR_CASES` names, in `main`'s order (the scenes and every a11y check with their solid-backdrop twins, then the quick dock, indicator, safe-mode, fault and shutdown cases, `dock-dnd`, `dock-external`, `keys` and `shutdown-banner` among them, and the glass cases `glass` and `glass-scale1`), with their assertions; each listed case must have run and reported (`part_ran`). Before them, `direct.sh fedora` runs only `PR_FEDORA_CASES`, `fedora-light` and `fedora-dark`, so the pull request compares Apex's desktop and safe mode's (`stock-light`, `stock-dark`) with Fedora's (`compare_with_fedora`). A push to `main` and the daily run take `main` with the whole Fedora baseline |
 | `direct.sh fedora` | the same image with Fedora's own gnome-shell and gnome-shell-common of the tested NVR in place of the Apex build, downloaded from Fedora's repositories; each RPM must report `digests signatures OK` against a keyring that holds Fedora's key alone, so an unsigned RPM fails | the baseline of the captures |
 | `guard.sh` | a container of the image booted with its own systemd; a test user's `systemd --user` with the image's unmodified units | the crash guard, and that neither the user manager nor the shell's unit sets `APEX_SHELL_TEST_FAULT` |
 | `assert.sh` | the builder VM; `compare.js` in a container of the image | everything below |
@@ -69,6 +69,7 @@ The direct cases:
 | `shutdown-banner` | `G2_SHUTDOWN_BANNER=1` | after the usual reports and the same date-menu cut, a notification for the tray and its banner timeout due 100 ms into a shutdown whose history write is held 300 ms, in which the probe also sends the date menu's three signals: the layer's teardown disables the notifications feature, which clears the tray's banner timeouts before `layout.js` destroys it, so `main.js`'s shutdown loop runs none on the disposed tray, and the cut keeps the signals from the destroyed events section |
 | `fedora-light`, `fedora-dark` | Fedora's build, `prefer-light` or `prefer-dark` | no Apex module; upstream's sheet at its own path, byte for byte the one safe mode loads from `theme/stock/` |
 | `glass`, `fedora-glass` | the capture settings, `G2_GLASS=1` | patch 0003's glass in the frames the shell drew; the stock unlock blur captured in both shells (see "Glass") |
+| `glass-scale1` | as `glass`, at scale 1 on 1440x900 (`G2_SCALE=1`), as the desktop VM runs | the same glass assertions, every bound read at that scale (see "Glass") |
 
 Every case: the probe ran (so the static import graph loaded), from `startup-complete`, and no `JS ERROR`;
 no key binding overwrites another (mutter's "Overwriting existing binding" warning);
@@ -170,13 +171,53 @@ the sign-off shells (above). Every case's probe reports them (`session-defaults.
   missing JetBrains Mono fails rather than falling back to another monospace font;
 - the bar's clock is drawn in Adwaita Sans, as Pango resolves it;
 - every icon shown in the bar, the dock, the overview's dash and Quick Settings resolves under
-  `/usr/share/icons/Apex/`. Two explicit lists name the only others: `FIXTURE_APPS`, G2's own
-  stub apps, which have no icon and draw GNOME's generic one, and `SHELL_RESOURCE_ICONS`,
-  icons the shell draws from its own resource because board 31 has no glyph of that name
-  (`screenshooter-symbolic`). A failure names each icon, where it showed, its app and the
-  file it resolved to, or "no icon".
+  `/usr/share/icons/Apex/`. Explicit lists, each entry by exact name with its reason, name the
+  only others: `FIXTURE_APPS`, G2's own stub apps, which have no icon and draw GNOME's generic
+  one; `SHELL_RESOURCE_ICONS`, icons the shell draws from its own resource because board 31
+  has no glyph of that name yet (below, "Open"); and `STAND_IN_ICONS`, a stock icon on one
+  surface only (`switcher application-x-executable`, G2's switcher stand-in, and
+  `spotlight drive-harddisk`, a full-colour device icon a search provider returns, which Apex
+  inherits from Adwaita by design). A failure names each icon, where it showed, its app and
+  the file it resolved to, or "no icon";
+- no name on `SHELL_RESOURCE_ICONS` is one Apex Symbolic ships (the probe lists
+  `/usr/share/icons/Apex/symbolic`): once apex-desktop draws a glyph, the pin bump that brings
+  it fails until the name leaves the list, so the list only shrinks;
+- in a case with the scenes (`G2_SCENES=1`: `default` and `dark-style`, in the VM and in
+  sign-off), every other surface G2 opens, by the same rule. After the last capture, so no
+  scene changes, the probe opens each surface with the openers its scenes use (`probe.js`'s
+  `iconSurfaces`), walks its shown icons, and closes it before the next
+  (`APEXG2-SESSION-SURFACES`): board 34's date menu with a notification, the overview (35),
+  the launcher grid (36), Spotlight's results (38), the window switcher (15), board 16's popup
+  menu, OSD and banner, board 13's dialog, the end-session dialog (14) and the screenshot UI
+  (19). The date menu is walked with Show Status Shapes on, the only state that shows Do Not
+  Disturb's switch glyphs. Each surface passes or fails on its own, naming its board; a surface
+  that did not open, or drew no icon, fails too.
+
+What only `tests/shell` shoots, G2 never opens: the lock screen with its top bar (board 20, and
+its fingerprint line), the greeter's user list and prompt (board 12) and polkit's own
+authentication dialog (board 13, and its fingerprint line). The shell probe records the icons
+each step draws (`icons-STEP` facts in `CASE.log`) and `shell_icons` holds them to the same rule
+and lists, one check per step named by its board. `signoff.sh --collect` runs it on the line
+above, where apex-desktop's theme is installed. Without that theme, as in CI's own `tests/shell`
+job, `check.py` reports it "not run: no Apex theme", never a pass.
 
 The wallpaper is `backdrop_painted`'s (below).
+
+### Open: glyphs board 31 lacks
+
+Names the shell draws from its own resource today, each on `SHELL_RESOURCE_ICONS`.
+apex-desktop#35 ships all nine in Apex Symbolic, seven as aliases of glyphs the boards already
+draw and the switch's two shapes as new ones. They are pending the `APEX_DESKTOP_REV` bump that
+brings it, which then takes them off the list.
+
+| Name | Surface |
+|---|---|
+| `screenshooter-symbolic` | Quick Settings (the screenshot button) |
+| `notification-expand-symbolic` | the date menu (34): a notification's expander |
+| `switch-on-symbolic`, `switch-off-symbolic` | the date menu (34): Do Not Disturb's switch, with Show Status Shapes |
+| `screenshot-ui-area-symbolic`, `screenshot-ui-display-symbolic`, `screenshot-ui-window-symbolic` | the screenshot UI (19): its three capture types |
+| `screenshot-ui-show-pointer-symbolic` | the screenshot UI (19): Show Pointer |
+| `preview-close-symbolic` | the screenshot UI (19): its close button |
 
 ## The backdrop
 
@@ -319,7 +360,9 @@ apps are, and registers them with the shell's watcher. Every call an item gets l
   nothing is in use; the recording pill's stop square and tabular timer; the sharing
   pill's glyph, square, name and gap to the status pill; the input chip's "EN", font,
   tracking and minimum width, and each source's chip: an xkb source's short name in
-  capitals, an IBus source's engine language code.
+  capitals, an IBus source's engine language code. The image's sources here are xkb (us, fr):
+  the IBus mapping is checked against a stub in tests/layer; the real engine is #187's case and
+  the VM run.
 
 The captures `<case>-indicators.png`, `<case>-indicators-everything.png`,
 `<case>-indicator-menu.png` and `<case>-indicator-overflow.png` show the bar, the bar in
@@ -370,6 +413,12 @@ Last, with `update1-mock.py` (python-dbusmock's Update1, started by `direct.sh`)
 update card: its place under the text, inset, radius, gap, fill and ring, the icon, the
 title and the versions, the switch (on, sensitive only when staged) and Restart's label,
 capturing `end-session-update` and `end-session-ready`.
+Then a mount's `ask-password`, through `shellMountOperation.js` as a mount asks it, opens the
+password dialog with its Remember Password check box: unchecked, its 2 px ring is
+`$apex_fg_dim` (`$apex_fg` hovered) and at least 3:1 on the dialog's fill, where stock's black
+or white at .15 is about 1.5:1; checked, the box is the accent shaded
+`$apex_quick_toggle_checked_shade`, the check white and the ring gone. The keyring prompt and
+the portal's access dialog take the same rule.
 
 `date_menu` runs in the same cases. The probe posts two low-urgency notifications (no
 banner), opens the calendar menu at the fixed date, captures it with
@@ -556,6 +605,19 @@ damages the tile alone:
 
 `blur-ref.js` is a clamp-to-edge Gaussian at full resolution, CSS `saturate()` and the
 rounded box's coverage, over the box alone; `blur-ref-test.js` tests it in `selftest.sh`.
+
+`glass-scale1` runs the same case at scale 1, the desktop VM's, against the same references
+computed there: σ, the downscale and every box in device px are the scale-1 ones. The
+tolerances above hold at both scales, by the blur's own choice of downscale: `fine` picks the
+smallest ds with σ / ds ≤ 4, which is 48 / 16 at scale 2 and 24 / 8 at scale 1, so σ, ds, the
+tiles and the box all halve together and the box filter's error against the Gaussian is the
+same problem at half the size. Only the edge band, ds/2, narrows with ds (8 px to 4). The ring
+of the corner check is 4 CSS px (4 device px at scale 1), the tile ring's allowance 0.25 device
+px at both (8-bit rounding, not the grid), and the opacity bound 1 + 64/255 holds per channel at
+any scale. Measured at scale 1 against scale 2: inside 2.89/255 against 3.2, along the edges
+10.53 against 11.67, on average 0.77 against 0.75; screenshots of the corners exact (0) against
+1/255; the opacity blend 1.208 steps at both. The dock past the stage edge, the known gap,
+reads 5033 px off at scale 1.
 In the same case the glass manager (`js/ui/apex/glass/`) is read on the live shell, light:
 `glass_manager` asserts that the bar's blur is `$apex_bar_blur` at `$apex_bar_saturation`,
 and Quick Settings', the calendar's (each opened) and a banner's `$apex_panel_blur` at
@@ -571,6 +633,42 @@ changes colour under the scrim: with the damage forwarded as the manager forward
 window's, the frame equals a full redraw; without, the blur's halo stays stale (the control). The derived glass: an
 OSD shown, an Alt+Tab list in a stand-in popup and the screenshot panel (styled while closed)
 each carry the popovers' `$apex_panel_blur` and `$apex_panel_saturation`.
+
+Every glass surface conforms, checked from the registry rather than a list: `glass.js` records
+every surface the glass registry gets during the case (the shell's, not its own `emptyTest` and
+`opacityTest`), and a surface the case never checked fails by name, as does one the assertions
+do not know, so a surface a later slice registers is caught until the case checks it. Each surface's blur is
+rounded at its border radius, all four corners alike, over the box St paints its background in
+(`get_background_paint_box` of its allocation). For the dock, Quick Settings, the calendar, a
+banner, the OSD, the Spotlight panel and the toast (the Alt+Tab list as above), a black and white
+checker goes under the surface's bottom-left corner, and that corner square is read with the
+glass on and with the surface unregistered: no pixel past the border's arc changes, every pixel
+in the 4 CSS px band just inside it does (no surface's padding lets content in there), the
+surface carries one glass effect, and a screenshot of the surface matches the screen over the
+square to 1/255 a channel (off stage, the dock, the OSD, the Spotlight panel and the toast
+round a few pixels the other way; the others match exactly). The toast hides itself after 2 s;
+a check it outlives is read again on a new toast, at most three times. A banner check first
+dismisses a banner the case did not post, such as the one-time search hint, which never expires
+while no one types and would hold the case's banner back.
+
+Opacity-following is measured in pixels: a scrim-styled glass the case registers over the tile
+pattern is read at opacity 255 (B), 128 (H) and 0 (D). D equals the pattern, pixel for pixel,
+and B differs from it. Every channel of H lies within 1 + 64/255 steps of (128·B + 127·D) / 255,
+the blend 0003's `follow-opacity` asks for. The bound is three roundings: the blurred colour
+c, multiplied by 128/255, is converted to 8 bits before blending (½ step); the blend's sum is
+written to the 8-bit frame (½ step); and the reference reads c from B, which holds c rounded
+(½ step, carried at 128/255: 64/255). Measured: 1.208 steps; with `follow-opacity` forced off,
+88.651.
+
+A glass that moves blurs where it is. Each move is set by property, not by an animation's
+clock: the dock's box slid half its height up, and Quick Settings' BoxPointer halfway open
+(scale 0.98 from its top edge, half the arrow's rise up). Over the box the glass left and the
+box it took, on the tile pattern, the frame the move itself draws equals a full redraw of the
+same state by a fresh glass. The surface is unregistered and registered again first, because a
+plain full redraw would draw a kept result again, and so would pass a blur that never moves.
+The dock halfway down intellihide's slide reaches past the screen's bottom edge, and there its
+blur reads pixels no one painted (the last frame's for the live glass, a fresh buffer's for the
+new one): a known gap until 0003 clamps its blit to the stage view.
 
 `shadows_under_glass` checks the `shadows` feature against the glass in the same case, light
 and dark: `glass.js` lays the tile grid under Quick Settings, a popup menu and a dialog and
@@ -601,7 +699,8 @@ default: `glass-unlock.png` against `fedora-glass-unlock.png` differs by 0 pixel
 `a11y.js`, which opens each Apex surface in turn: the bar, again with two unread
 notifications so the clock shows its dot, the dock, a popup menu, the OSD,
 a banner, Quick Settings and its Wi-Fi menu, the date menu with two notifications, the
-window switcher, a polkit-shaped dialog, the shell's own power-off dialog, Spotlight with
+window switcher, a polkit-shaped dialog, the mount password dialog with its box checked
+(under each accent), the shell's own power-off dialog, Spotlight with
 "disk" typed and its toast, the overview and the app grid. Its targets are the visible
 labels, entries and symbolic icons under the surface, and any Clutter.Text outside a label
 or an entry, as a button's own label: St colours that from the button, and board 34's day
@@ -649,6 +748,49 @@ WCAG 1.4.11's 3:1 over the light backdrops.
 `inactive_dot` pins each backdrop's ratio (`A11Y_INACTIVE_DOT_TODAY`, at the report's own
 rounding): a lower one fails. Where it is under 3:1 the dot leaves the plain glyph check for a
 gap line, which fails once the dot reaches 3:1, so the fix also removes the gap.
+
+Board 39's pills are measured on the bar too (`barPills`): with two input sources set for the
+step, the input chip, and, as in `indicators.js`'s "everything", the camera and microphone in
+use, a recording at 0:42 and a share. The chip's and the timer's text want 4.5:1, the share's and
+the privacy group's glyphs 3:1, each over what is drawn behind it, the pill's own fill. A pill
+Apex fills at rest (the recording, the share, the privacy group) is also read against the bar:
+the median of its fill across its middle, clear of the corners, against the bar a pixel or two
+beyond each end, at 3:1 (WCAG 1.4.11). Upstream's high-contrast sheet fills the button instead,
+so there `bar_pills` leaves the edge out. sni-items.js's five apps join them, the fifth behind the
+overflow: each app's glyph, drawn as a mask in the bar's ink, wants 3:1 and the overflow's count
+4.5:1. With everything on the bar it is one surface too (`barPills.crowded`), which `a11y_layout`
+wants whole at Large Text, none of its text cut short, off the screen or over another's. The Chat
+app's menu (`barPills.indicatorMenu`) is measured as the other surfaces are. Its right click waits
+for each step, not a time: the hot corner off, so the new pointer's first motion is not held at 0,0
+by its barrier, then the pointer over the button, then the menu open on it. Every text passes; the gaps (`A11Y_PILL_TODAY`, pinned as
+the inactive dot is) are the owner's to decide:
+
+| Case | Part | Today |
+|---|---|---|
+| `default-solid` | the recording pill's `$apex_recording` against the bar | 2.02:1 |
+| `default-solid` | the sharing pill's and the privacy group's `$apex_privacy` against the bar | 1.62:1 |
+| `dark-style-solid` | the recording pill's fill against the bar | 2.13:1 |
+| `dark-style-solid` | the sharing pill's and the privacy group's fill against the bar | 2.65:1 |
+| `high-contrast`, `high-contrast-solid` | upstream's screen-sharing glyph, white on `#ff7800` | 2.54:1 |
+
+Over the Facets every fill holds 3:1: 5.44:1 and 4.38:1 in `default`, 3.14:1 and 3.90:1 in `dark-style`.
+
+Key focus is measured too (`focus`, WCAG 2.4.11 and 1.4.11). On the first focusable control of
+Quick Settings, the dock, the polkit-shaped dialog and Spotlight, the probe reads the stage with
+nothing focused and again with that control focused, each after the shell's idle and a painted
+frame. The indicator is whatever changed, wherever the control draws it. A 1 px line around the
+control's own box must change by 3:1: the pixel at that count, among the changed pixels sorted by
+how far each moved from its unfocused self. Each control is read twice, over the case's backdrop
+and over a busy wallpaper (fine stripes of black, white and accents), so glass shows the ring
+over a real blurred backdrop. The probe sets that wallpaper only for the step and waits for the
+background to swap each way. `focus_rings` wants focus to land and the 3:1 line; today's
+shortfalls (`A11Y_FOCUS_TODAY`) are the owner's:
+
+| Control | Cases | Today |
+|---|---|---|
+| Spotlight's entry | every case | the caret only (1:1) |
+| Quick Settings' first toggle | `default`, `default-solid` | 2.37:1, 1.91:1; 2.14:1 over the busy wallpaper |
+| the dialog's entry | `dark-style`, `dark-style-solid` | 2.87:1 |
 
 The bar is measured the same way over every wallpaper G2 shows it on: the Facets, light in
 `default` and dark in `dark-style`; `#013b88` in the `-solid` twins; and, in `no-dock`
@@ -914,6 +1056,7 @@ Not asserted here: the volume glyph (the container has no audio server), and wha
 | `clock.c` | the direct cases' shells (`LD_PRELOAD`) | the fixed wall clock |
 | `smoke.sh` | CI's Fedora 45 container | `direct.sh fedora` on Fedora's gnome-shell, and the assertions that need no Apex build |
 | `patched.sh` | a throwaway Fedora 45 container, by hand | the patched shell before a builder VM: rebuilds Fedora's SRPM with this checkout's recipe and `desktop/shell/`, runs `direct.sh main`, and asserts the logs and the top bar (below) |
+| `repeat.sh` | the host, by hand | `patched.sh` N times on one build, each in its own container, then every assertion whose verdict differs between the runs (below) |
 | `maximised-window.js` | the `dock-intellihide` and `dock-external` cases' shells (gjs, GTK 4) | one maximised window, which the probe starts and stops |
 | `dock-dnd.js`, `dock-external.js` | the `dock-dnd` and `dock-external` cases' shells | the dock's drags, and the dock and the bar on two monitors |
 | `probe.js` | the shell (`--automation-script`) | prints `APEXG2 {…}` and, for the capture cases, `APEXG2-SCENES {…}` |
@@ -925,11 +1068,33 @@ Not asserted here: the volume glyph (the container has no audio server), and wha
 | `a11y.js` | the shell | the accessibility cases: contrast against what is drawn, and the Large Text layout |
 | `backdrop.js`, `backdrops.sh` | the shell; a throwaway container | whether the pinned backdrop painted, and the Facets it pins rendered where an image has them |
 | `indicators.js`, `sni-items.js` | the shell; gjs | the app-indicator part of `default`, `default-scale1` and `dark-style`, and the StatusNotifierItems it starts |
-| `session-defaults.js` | every case's shell | the fonts and icon theme the session reads, fontconfig's families for them, the clock's drawn family, and the file each shown icon of the bar, dock, dash and Quick Settings resolves to |
+| `session-defaults.js` | every case's shell | the fonts and icon theme the session reads, fontconfig's families for them, the clock's drawn family, and the file each shown icon of the bar, dock, dash and Quick Settings resolves to; with the scenes, the same for every other surface G2 opens |
 | `idle.js` | the `idle` case's shell | the settled desktop, its paints and relayouts over 10 s, and the counter's control |
 | `glass-load.js`, `load-window.js` | the `glass-load` and `glass-stress` cases' shells; gjs, GTK 4 | ADR 0014's scenarios as work counts, and the client that stands in for a video; `tests/laptop` runs both on the laptop, the client with `measure=` |
 | `frame.c`, `G2Frame-1.gir` | the glass cases' shells | `G2Frame.read()`, a region of the frame the shell drew |
 | `selftest.sh`, `png-test.js`, `blur-ref-test.js` | CI and the host | the tests of the above |
+
+## Run to run
+
+A G2 flake that reaches a gate run costs a whole VM run, so a check that passes once is not
+enough. `tests/shots/repeat.sh N` runs `patched.sh` N times on one build: the first run builds
+the RPMs (or `PATCHED_RPMS=DIR` names them) and the others install them, each in a fresh Fedora 45
+container so no run inherits another's state. Each run is a whole `patched.sh`: Fedora's
+gnome-shell in `direct.sh fedora`, then the lane's in `direct.sh main`. It then prints every
+assertion whose verdict differs, one row each with every run's verdict (`P`, `F`, `G` for a known
+gap, `-` when a run never made it) and the assertion, and a count:
+
+```
+P F P P P  shutdown-banner: nothing touches a disposed object once the shell is shutting down
+repeat: 5 runs, 2033 assertions, 1 differ
+```
+
+It exits 1 when any assertion differs. `repeat.sh compare LOG...` does the same for logs already
+kept. A failure's detail (`(got …)`, `(no report)`, `(no line matches …)`) is cut so it shares its
+pass's row, then one closing parenthesis, which on a pass can say what that run saw (a probe
+`(late)` or `(on time)`): rows compare verdicts. An assertion a run makes twice gets a row per time. A differing row is a race to
+root-cause: make it fail on demand first, then make it impossible. A retry, a longer wait, or a
+rerun on failure hides it until a gate run meets it.
 
 ## The patched shell without a VM
 
@@ -961,26 +1126,49 @@ on dispatch and weekly (Tuesdays), never on a pull request, and no check require
 
 - **lane:** `next-point.sh image` fetches the pinned apex-image and fills its updates-testing
   allowlist with the builds updates-testing moves among gnome-shell, mutter, gdm, gjs, glib2,
-  gnome-session, gsettings-desktop-schemas, gtk4, libadwaita, gnome-control-center and
-  nautilus. Admitting every build would overflow apex-lane's dnf5 arguments. `lane.sh` then builds gnome-shell from that SRPM through
-  `APEX_IMAGE_SRC`, without `APEX_LANE_CACHE`, so it reads and writes no lane cache. The job
-  summary lists what moves.
+  gnome-session, gsettings-desktop-schemas, gtk4, libadwaita, gnome-control-center, nautilus,
+  ptyxis and vte291-gtk4. Admitting every build would overflow apex-lane's dnf5 arguments.
+  `lane.sh` then builds gnome-shell from that SRPM through `APEX_IMAGE_SRC`, without
+  `APEX_LANE_CACHE`, so it reads and writes no lane cache. The job summary lists what moves.
 - **g2:** `patched.sh` runs every case on those RPMs.
 - **signoff:** `signoff.sh --goldens` checks the shell boards against the approved goldens.
 - **apps:** for Settings and Files, the lane's libadwaita and the app from updates-testing,
   installed under the shim, then `tests/control-center/run.sh` and `tests/nautilus/shoot.sh`.
+- **libadwaita:** the lane's libadwaita from updates-testing, then
+  `tests/libadwaita/radius-test.sh` in its three modes (`--stock`, the rewrite, `--late`).
+- **ptyxis:** the lane's Ptyxis from updates-testing, then as ci.yml runs them
+  `tests/ptyxis/status-test.sh`, `shoot.sh`, `contrast-test.sh`, `layout-test.sh`,
+  `palette-test.sh` (on `tests/s2c/agent.sh`'s agent) and `panes-test.sh`.
 - **report:** one line in the run's summary, passed/failed for each, `?` where a job gave
-  none, then each app's NEVR and its ok/not ok count: `next-point: gnome-shell-51.1-1.fc45.apex1
-  g2 1954/0 goldens 30/0 shoot 523/0 | gnome-control-center-51.1-1.fc45.apex1 46/0 |
-  nautilus-51.1-1.fc45.apex1 84/0`.
+  none, then each app's NEVR and its ok/not ok count, and libadwaita's and Ptyxis's NEVR and
+  their test scripts passed/failed: `next-point: gnome-shell-51.1-1.fc45.apex1 g2 1954/0
+  goldens 30/0 shoot 523/0 | gnome-control-center-51.1-1.fc45.apex1 46/0 |
+  nautilus-51.1-1.fc45.apex1 84/0 | libadwaita-1.10.0-2.fc45.apex1 3/0 |
+  ptyxis-50.1-6.fc45.apex1 6/0`.
 
-g2, signoff and apps install `next-point.sh shim` first, a `dnf5` ahead of Fedora's on `PATH`.
-It adds updates-testing beside each `--repo=updates` and updates-testing-source beside each
-`--repo=updates-source`, and enables updates-testing for a call that names no repository. So
-the scripts install what GA brings, unchanged. `lane.sh`, `image-args.sh` and every other
-workflow stay as they are, which `.github/scripts/selftest.sh` checks. Once apex-image passes
-its admission cut (`GA_REACHED=1`), `next-point.sh image` fails: updates-testing is then no
-longer what a GA push brings.
+g2, signoff, apps, libadwaita and ptyxis install `next-point.sh shim` first, a `dnf5` ahead of
+Fedora's on `PATH`. It adds updates-testing beside each `--repo=updates` and
+updates-testing-source beside each `--repo=updates-source`, and enables updates-testing for a
+call that names no repository. So the scripts install what GA brings, unchanged. `lane.sh`,
+`image-args.sh` and every other workflow stay as they are, which `.github/scripts/selftest.sh`
+checks.
+
+After F45's GA, next-point keeps watching updates-testing: each point release after it (51.2
+and on) waits there before an updates push. apex-image's admission cut sets `GA_REACHED=1`, or
+deletes the ARG, and apex-lane then admits nothing from updates-testing, so `next-point.sh
+image` reopens its own copy (`next-point.sh reopen`): `ARG GA_REACHED=0` again, the ARG added
+if the cut deleted it. The real apex-image and every lane cache stay as they are.
+
+Often updates-testing moves none of them, as right after a push: `next-point.sh allowlist`
+then leaves the allowlist empty, apex-lane admits nothing, the lanes build the stable ones, and
+the report line ends `(nothing moves)`. That is not a failure. A query that fails or finds no
+build, on either side, still fails the run with its own message, so an unreachable
+updates-testing never reads as a quiet week.
+
+next-point's lanes number every release `.apex1` (`lane.sh` passes `--n 1`). The builder VM's
+N is the recipe and lane repositories' commit count, so it carries across stock versions:
+`gnome-shell-51.0-1.fc45.apex331` is followed by `51.1-1.fc45.apex33x`, not `.apex1`. Either
+sorts above every build of the version before.
 
 ## The authentication dialog
 
