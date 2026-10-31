@@ -1,3 +1,2 @@
 # lint/tokens.sh's exceptions to the token rule: FILE:LINE (in desktop/shell/data/theme/apex) or $token,
 # a tab, then why and whose. Each is a no-visual-change move into _apex-tokens.scss for its holder.
-_dock.scss:19	the dock's box-shadow rgba(0, 0, 0, .18) (dock, 01Hwes)
