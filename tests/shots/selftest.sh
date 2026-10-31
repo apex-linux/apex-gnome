@@ -3201,11 +3201,14 @@ test_keys_case() {
 CHANGES
 }
 
-readonly INPUT_SOURCES_MODE='{start: {source: "us", engine: "xkb:us::eng"},
-    superSpace: {spotlight: true, source: "us", engine: "xkb:us::eng"},
-    superAltSpace: {switcher: [["us", "m17n:vi:telex"]], source: "m17n:vi:telex", engine: "m17n:vi:telex"},
-    superSpaceInTelex: {spotlight: true, source: "m17n:vi:telex", engine: "m17n:vi:telex"},
-    shiftSuperAltSpace: {switcher: [["m17n:vi:telex", "us"]], source: "us", engine: "xkb:us::eng"}}'
+readonly INPUT_SOURCES_MODE='{start: {source: "us", engine: "xkb:us::eng", chip: "EN"},
+    superSpace: {spotlight: true, source: "us", engine: "xkb:us::eng", chip: "EN"},
+    superAltSpace: {switcher: [["us", "m17n:vi:telex"]], source: "m17n:vi:telex", engine: "m17n:vi:telex", chip: "Ắ"},
+    superSpaceInTelex: {spotlight: true, source: "m17n:vi:telex", engine: "m17n:vi:telex", chip: "Ắ"},
+    shiftSuperAltSpace: {switcher: [["m17n:vi:telex", "us"]], source: "us", engine: "xkb:us::eng", chip: "EN"},
+    heldSuperAlt: {held: {shown: true, items: ["us", "m17n:vi:telex"], selected: "m17n:vi:telex", source: "us",
+        engine: "xkb:us::eng", chip: "EN"}, released: {shown: true, source: "m17n:vi:telex", engine: "m17n:vi:telex", chip: "Ắ"}},
+    back: {switcher: [["m17n:vi:telex", "us"]], source: "us", engine: "xkb:us::eng", chip: "EN"}}'
 readonly INPUT_SOURCES_REPORT="{ready: true, sources: [{type: \"xkb\", id: \"us\"}, {type: \"ibus\", id: \"m17n:vi:telex\"}],
     telexEngine: \"m17n:vi:telex\", session: $INPUT_SOURCES_MODE, typed: {engine: \"m17n:vi:telex\", text: \"Việt \"},
     overview: ({visible: true} + $INPUT_SOURCES_MODE), modals: 0}"
@@ -3217,7 +3220,7 @@ test_input_sources_case() {
     while IFS='|' read -r failures change what; do
         printf 'APEXG2-INPUT-SOURCES %s\n' "$(jq -nc "$INPUT_SOURCES_REPORT | $change")" >"$run/input-sources.log"
         read -r passes _ <<<"$(assertion_counts input_sources_case "$run")"
-        expect_eq "input-sources: $what fails $failures of 12" "$failures" $((12 - passes))
+        expect_eq "input-sources: $what fails $failures of 16" "$failures" $((16 - passes))
     done <<'CHANGES'
 0|.|the image's sources under both keys
 1|.ready = false|IBus never ready
@@ -3232,8 +3235,15 @@ test_input_sources_case() {
 1|.overview.superAltSpace.source = "us"|Super+Alt+Space in the overview that switches nothing
 1|.overview.shiftSuperAltSpace.switcher = [["us"]]|a backward switcher in the overview without Telex
 1|.typed.text = "Vieetj "|Telex that composes nothing
+1|.session.heldSuperAlt.held.shown = false|a held chord with no switcher shown
+1|.session.heldSuperAlt.held.source = "m17n:vi:telex"|a held chord that switches before the release
+1|.overview.heldSuperAlt.held.selected = "us"|a held switcher highlighting the current source
+1|.overview.heldSuperAlt.released.engine = "xkb:us::eng"|a release that switches nothing
+1|.session.superAltSpace.chip = "EN"|a chip that stays EN on Telex
+1|.overview.back.chip = "Ắ"|a chip that does not come back to EN
+1|.session.heldSuperAlt.released.chip = null|no chip on Telex
 1|.modals = 1|a grab left behind
-9|{error: "inputSourcesReport: no IBus"}|a probe error
+13|{error: "inputSourcesReport: no IBus"}|a probe error
 CHANGES
 }
 

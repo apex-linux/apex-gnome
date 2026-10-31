@@ -2487,14 +2487,21 @@ input_sources_case() {
     for m in session overview; do
         label='input-sources'
         [[ $m == overview ]] && label="input-sources in the overview"
-        expect "$label" "$r" ".$m | (\"$m\" == \"session\" or .visible) and .start == $us
-            and .superSpace == {spotlight: true} + $us and .superSpaceInTelex == {spotlight: true, source: $telex, engine: $telex}" \
+        expect "$label" "$r" ".$m | (\"$m\" == \"session\" or .visible) and (.start | {source, engine}) == $us
+            and (.superSpace | {spotlight, source, engine}) == {spotlight: true} + $us
+            and (.superSpaceInTelex | {spotlight, source, engine}) == {spotlight: true, source: $telex, engine: $telex}" \
             "Super+Space opens Spotlight and changes neither the source nor the IBus engine, in us and in Telex"
         expect "$label" "$r" ".$m | (.superAltSpace | .source == $telex and .engine == $telex)
             and (.shiftSuperAltSpace | {source, engine}) == $us" \
             "Super+Alt+Space switches us to Telex, the m17n:vi:telex engine, and Shift+Super+Alt+Space back"
         expect "$label" "$r" ".$m | .superAltSpace.switcher == [[\"us\", $telex]]
             and .shiftSuperAltSpace.switcher == [[$telex, \"us\"]]" "each chord shows the input-source switcher, us and Telex"
+        expect "$label" "$r" ".$m.heldSuperAlt | (.held | .shown and .items == [\"us\", $telex] and .selected == $telex
+            and {source, engine} == $us) and (.released | {source, engine}) == {source: $telex, engine: $telex}" \
+            "held, Super+Alt+Space shows the switcher on Telex, and switches only when Super+Alt are released"
+        expect "$label" "$r" ".$m | ([.start, .superSpace, .shiftSuperAltSpace, .heldSuperAlt.held, .back] | all(.chip == \"EN\"))
+            and ([.superAltSpace, .superSpaceInTelex, .heldSuperAlt.released] | all(.chip != null and .chip != \"EN\"))" \
+            "board 39's chip follows the source: EN on us, the Telex engine's own on Telex, EN again"
     done
     expect input-sources "$r" ".typed.engine == $telex and .typed.text == \"Việt \"" \
         "Vieetj and a space, typed into Spotlight under Telex, give \"Việt \""
