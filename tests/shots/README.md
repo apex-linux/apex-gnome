@@ -606,6 +606,23 @@ window's, the frame equals a full redraw; without, the blur's halo stays stale (
 OSD shown, an Alt+Tab list in a stand-in popup and the screenshot panel (styled while closed)
 each carry the popovers' `$apex_panel_blur` and `$apex_panel_saturation`.
 
+Every glass surface conforms, checked from the registry rather than a list: `glass.js` records
+every surface the glass registry gets during the case (the shell's, not its own `emptyTest` and
+`opacityTest`), and a surface the case never checked fails by name, as does one the assertions
+do not know, so a surface a later slice registers is caught until the case checks it. Each surface's blur is
+rounded at its border radius, all four corners alike, over the box St paints its background in
+(`get_background_paint_box` of its allocation). For the dock, Quick Settings, the calendar, a
+banner, the OSD, the Spotlight panel and the toast (the Alt+Tab list as above), a black and white
+checker goes under the surface's bottom-left corner, and that corner square is read with the
+glass on and with the surface unregistered: no pixel past the border's arc changes, every pixel
+in the 4 CSS px band just inside it does (no surface's padding lets content in there), the
+surface carries one glass effect, and a screenshot of the surface matches the screen over the
+square to 1/255 a channel (off stage, the dock, the OSD, the Spotlight panel and the toast
+round a few pixels the other way; the others match exactly). The toast hides itself after 2 s;
+a check it outlives is read again on a new toast, at most three times. A banner check first
+dismisses a banner the case did not post, such as the one-time search hint, which never expires
+while no one types and would hold the case's banner back.
+
 Opacity-following is measured in pixels: a scrim-styled glass the case registers over the tile
 pattern is read at opacity 255 (B), 128 (H) and 0 (D). D equals the pattern, pixel for pixel,
 and B differs from it. Every channel of H lies within 1 + 64/255 steps of (128·B + 127·D) / 255,
@@ -1079,6 +1096,17 @@ and on) waits there before an updates push. apex-image's admission cut sets `GA_
 deletes the ARG, and apex-lane then admits nothing from updates-testing, so `next-point.sh
 image` reopens its own copy (`next-point.sh reopen`): `ARG GA_REACHED=0` again, the ARG added
 if the cut deleted it. The real apex-image and every lane cache stay as they are.
+
+Often updates-testing moves none of them, as right after a push: `next-point.sh allowlist`
+then leaves the allowlist empty, apex-lane admits nothing, the lanes build the stable ones, and
+the report line ends `(nothing moves)`. That is not a failure. A query that fails or finds no
+build, on either side, still fails the run with its own message, so an unreachable
+updates-testing never reads as a quiet week.
+
+next-point's lanes number every release `.apex1` (`lane.sh` passes `--n 1`). The builder VM's
+N is the recipe and lane repositories' commit count, so it carries across stock versions:
+`gnome-shell-51.0-1.fc45.apex331` is followed by `51.1-1.fc45.apex33x`, not `.apex1`. Either
+sorts above every build of the version before.
 
 ## The authentication dialog
 
