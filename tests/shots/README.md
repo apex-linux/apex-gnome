@@ -416,6 +416,12 @@ Last, with `update1-mock.py` (python-dbusmock's Update1, started by `direct.sh`)
 update card: its place under the text, inset, radius, gap, fill and ring, the icon, the
 title and the versions, the switch (on, sensitive only when staged) and Restart's label,
 capturing `end-session-update` and `end-session-ready`.
+Then a mount's `ask-password`, through `shellMountOperation.js` as a mount asks it, opens the
+password dialog with its Remember Password check box: unchecked, its 2 px ring is
+`$apex_fg_dim` (`$apex_fg` hovered) and at least 3:1 on the dialog's fill, where stock's black
+or white at .15 is about 1.5:1; checked, the box is the accent shaded
+`$apex_quick_toggle_checked_shade`, the check white and the ring gone. The keyring prompt and
+the portal's access dialog take the same rule.
 
 `date_menu` runs in the same cases. The probe posts two low-urgency notifications (no
 banner), opens the calendar menu at the fixed date, captures it with
@@ -619,9 +625,9 @@ OSD shown, an Alt+Tab list in a stand-in popup and the screenshot panel (styled 
 each carry the popovers' `$apex_panel_blur` and `$apex_panel_saturation`.
 
 Every glass surface conforms, checked from the registry rather than a list: `glass.js` records
-every surface the glass registry gets during the case (the shell's, not its own `emptyTest`),
-and a surface the case never checked fails by name, as does one the assertions do not know, so
-a surface a later slice registers is caught until the case checks it. Each surface's blur is
+every surface the glass registry gets during the case (the shell's, not its own `emptyTest` and
+`opacityTest`), and a surface the case never checked fails by name, as does one the assertions
+do not know, so a surface a later slice registers is caught until the case checks it. Each surface's blur is
 rounded at its border radius, all four corners alike, over the box St paints its background in
 (`get_background_paint_box` of its allocation). For the dock, Quick Settings, the calendar, a
 banner, the OSD, the Spotlight panel and the toast (the Alt+Tab list as above), a black and white
@@ -634,6 +640,25 @@ round a few pixels the other way; the others match exactly). The toast hides its
 a check it outlives is read again on a new toast, at most three times. A banner check first
 dismisses a banner the case did not post, such as the one-time search hint, which never expires
 while no one types and would hold the case's banner back.
+
+Opacity-following is measured in pixels: a scrim-styled glass the case registers over the tile
+pattern is read at opacity 255 (B), 128 (H) and 0 (D). D equals the pattern, pixel for pixel,
+and B differs from it. Every channel of H lies within 1 + 64/255 steps of (128·B + 127·D) / 255,
+the blend 0003's `follow-opacity` asks for. The bound is three roundings: the blurred colour
+c, multiplied by 128/255, is converted to 8 bits before blending (½ step); the blend's sum is
+written to the 8-bit frame (½ step); and the reference reads c from B, which holds c rounded
+(½ step, carried at 128/255: 64/255). Measured: 1.208 steps; with `follow-opacity` forced off,
+88.651.
+
+A glass that moves blurs where it is. Each move is set by property, not by an animation's
+clock: the dock's box slid half its height up, and Quick Settings' BoxPointer halfway open
+(scale 0.98 from its top edge, half the arrow's rise up). Over the box the glass left and the
+box it took, on the tile pattern, the frame the move itself draws equals a full redraw of the
+same state by a fresh glass. The surface is unregistered and registered again first, because a
+plain full redraw would draw a kept result again, and so would pass a blur that never moves.
+The dock halfway down intellihide's slide reaches past the screen's bottom edge, and there its
+blur reads pixels no one painted (the last frame's for the live glass, a fresh buffer's for the
+new one): a known gap until 0003 clamps its blit to the stage view.
 
 `shadows_under_glass` checks the `shadows` feature against the glass in the same case, light
 and dark: `glass.js` lays the tile grid under Quick Settings, a popup menu and a dialog and
@@ -664,7 +689,8 @@ default: `glass-unlock.png` against `fedora-glass-unlock.png` differs by 0 pixel
 `a11y.js`, which opens each Apex surface in turn: the bar, again with two unread
 notifications so the clock shows its dot, the dock, a popup menu, the OSD,
 a banner, Quick Settings and its Wi-Fi menu, the date menu with two notifications, the
-window switcher, a polkit-shaped dialog, the shell's own power-off dialog, Spotlight with
+window switcher, a polkit-shaped dialog, the mount password dialog with its box checked
+(under each accent), the shell's own power-off dialog, Spotlight with
 "disk" typed and its toast, the overview and the app grid. Its targets are the visible
 labels, entries and symbolic icons under the surface, and any Clutter.Text outside a label
 or an entry, as a button's own label: St colours that from the button, and board 34's day
@@ -738,6 +764,23 @@ the inactive dot is) are the owner's to decide:
 | `high-contrast`, `high-contrast-solid` | upstream's screen-sharing glyph, white on `#ff7800` | 2.54:1 |
 
 Over the Facets every fill holds 3:1: 5.44:1 and 4.38:1 in `default`, 3.14:1 and 3.90:1 in `dark-style`.
+
+Key focus is measured too (`focus`, WCAG 2.4.11 and 1.4.11). On the first focusable control of
+Quick Settings, the dock, the polkit-shaped dialog and Spotlight, the probe reads the stage with
+nothing focused and again with that control focused, each after the shell's idle and a painted
+frame. The indicator is whatever changed, wherever the control draws it. A 1 px line around the
+control's own box must change by 3:1: the pixel at that count, among the changed pixels sorted by
+how far each moved from its unfocused self. Each control is read twice, over the case's backdrop
+and over a busy wallpaper (fine stripes of black, white and accents), so glass shows the ring
+over a real blurred backdrop. The probe sets that wallpaper only for the step and waits for the
+background to swap each way. `focus_rings` wants focus to land and the 3:1 line; today's
+shortfalls (`A11Y_FOCUS_TODAY`) are the owner's:
+
+| Control | Cases | Today |
+|---|---|---|
+| Spotlight's entry | every case | the caret only (1:1) |
+| Quick Settings' first toggle | `default`, `default-solid` | 2.37:1, 1.91:1; 2.14:1 over the busy wallpaper |
+| the dialog's entry | `dark-style`, `dark-style-solid` | 2.87:1 |
 
 The bar is measured the same way over every wallpaper G2 shows it on: the Facets, light in
 `default` and dark in `dark-style`; `#013b88` in the `-solid` twins; and, in `no-dock`
@@ -1103,14 +1146,14 @@ on dispatch and weekly (Tuesdays), never on a pull request, and no check require
 - **libadwaita:** the lane's libadwaita from updates-testing, then
   `tests/libadwaita/radius-test.sh` in its three modes (`--stock`, the rewrite, `--late`).
 - **ptyxis:** the lane's Ptyxis from updates-testing, then as ci.yml runs them
-  `tests/ptyxis/status-test.sh`, `shoot.sh`, `contrast-test.sh`, `palette-test.sh` (on
-  `tests/s2c/agent.sh`'s agent) and `panes-test.sh`.
+  `tests/ptyxis/status-test.sh`, `shoot.sh`, `contrast-test.sh`, `layout-test.sh`,
+  `palette-test.sh` (on `tests/s2c/agent.sh`'s agent) and `panes-test.sh`.
 - **report:** one line in the run's summary, passed/failed for each, `?` where a job gave
   none, then each app's NEVR and its ok/not ok count, and libadwaita's and Ptyxis's NEVR and
   their test scripts passed/failed: `next-point: gnome-shell-51.1-1.fc45.apex1 g2 1954/0
   goldens 30/0 shoot 523/0 | gnome-control-center-51.1-1.fc45.apex1 46/0 |
   nautilus-51.1-1.fc45.apex1 84/0 | libadwaita-1.10.0-2.fc45.apex1 3/0 |
-  ptyxis-50.1-6.fc45.apex1 5/0`.
+  ptyxis-50.1-6.fc45.apex1 6/0`.
 
 g2, signoff, apps, libadwaita and ptyxis install `next-point.sh shim` first, a `dnf5` ahead of
 Fedora's on `PATH`. It adds updates-testing beside each `--repo=updates` and

@@ -54,7 +54,8 @@ readonly A11Y_TEXT_RATIO=4.5
 readonly A11Y_ICON_RATIO=3
 readonly A11Y_ACCENTS=(blue teal green yellow orange red pink purple slate)
 readonly A11Y_SURFACES=(bar barUnread dock popupMenu osd banner quickSettings "${A11Y_ACCENTS[@]/#/quickSettingsAccents.}" wifiMenu wifiMenuConnected dateMenu
-    "${A11Y_ACCENTS[@]/#/dateMenuAccents.}" switcher dialog "${A11Y_ACCENTS[@]/#/dialogAccents.}" endSession screenshot
+    "${A11Y_ACCENTS[@]/#/dateMenuAccents.}" switcher dialog "${A11Y_ACCENTS[@]/#/dialogAccents.}"
+    checkBoxDialog "${A11Y_ACCENTS[@]/#/checkBoxDialogAccents.}" endSession screenshot
     spotlight.popup spotlight.toast overview appGrid barPills.indicatorMenu)
 # The failures still open: upstream's high-contrast sheet, which safe mode keeps as Fedora's.
 readonly A11Y_HC_TOGGLE="upstream HC sheet: Quick Settings' checked toggle, white on its accent (3.15:1), and its menu arrow (2.31:1)"
@@ -1209,6 +1210,14 @@ modal_dialog() {
             | (.b | map(select(.default | not)) | length == 1 and all((.background | colour_is($t.apex_button)) and (.foreground | colour_is($t.apex_fg)) and (.hover.background | colour_is($t.apex_button_hover))))
             and (.b | map(select(.default)) | length == 1 and all((.background | rgba) as $f | ([range(3)] | all(($f[.] - $a[.] * (1 - $k)) | fabs <= 1))
                 and (.foreground | colour_is("#ffffff"))))'
+    "${metric[@]}" 'a check box (the mount password dialog'"'"'s Remember Password) rings its box 2 px in $apex_fg_dim, $apex_fg hovered' \
+        "$d.checkBox" '.label == "Remember Password" and (.unchecked | (.border.top | px_is(2)) and (.borderColor | colour_is($t.apex_fg_dim)) and (.hover.borderColor | colour_is($t.apex_fg)))'
+    "${metric[@]}" 'that ring is at least '"$A11Y_ICON_RATIO"':1 on the dialog'"'"'s fill (WCAG 1.4.11; stock'"'"'s is about 1.5:1)' \
+        "$d.checkBox" ". as \$c | (.unchecked.borderColor | contrast_on(\$c.background)) >= $A11Y_ICON_RATIO"
+    "${metric[@]}" 'checked, the box is the accent shaded $apex_quick_toggle_checked_shade with black, its check in white, unringed' \
+        "{c: $d.checkBox.checked, accent: .topBar.accent}" '(.accent | rgba) as $a | ($t.apex_quick_toggle_checked_shade | rtrimstr("%") | tonumber / 100) as $k
+            | .c | (.background | rgba) as $f | ([range(3)] | all(($f[.] - $a[.] * (1 - $k)) | fabs <= 1)) and (.foreground | colour_is("#ffffff"))
+            and (.borderColor | rgba | .[3] == 0) and (.hover.borderColor | rgba | .[3] == 0)'
     "${metric[@]}" 'the end-session dialog has $apex_end_session_gap between its parts, its title tracked $apex_dialog_title_tracking, its countdown in tabular figures' \
         "$d.endSession" '(.box.spacing | px_is($t.apex_end_session_gap)) and (.contentSpacing | px_is($t.apex_end_session_gap))
             and (.title.tracking - ($t.apex_dialog_title_tracking | px) | fabs < 0.05) and (.description.font.features | test("tnum"))'
@@ -1994,12 +2003,57 @@ bar_pills() {
     done
 }
 
+# Each control's focus indicator over the case's backdrop and a busy wallpaper (WCAG 2.4.11, 1.4.11): key
+# focus lands, something changes, and a 1 px line's worth of it changes by 3:1, or it is a pinned gap.
+readonly A11Y_FOCUS_SURFACES=(quickSettings dock dialog spotlight)
+readonly A11Y_FOCUS_GAP="the owner's decision on the focus indicators (2026-10-31)"
+# Today's shortfalls: Spotlight's entry shows no indicator but the caret, so at 1:1 in every
+# case; Quick Settings' toggle in light and the dialog's entry in dark change too little.
+declare -A A11Y_FOCUS_TODAY=([default:backdrop:quickSettings]=2.37 [default:busy:quickSettings]=2.14
+    [default-solid:backdrop:quickSettings]=1.91 [default-solid:busy:quickSettings]=2.14
+    [dark-style:backdrop:dialog]=2.87 [dark-style:busy:dialog]=2.87
+    [dark-style-solid:backdrop:dialog]=2.87 [dark-style-solid:busy:dialog]=2.87)
+for a11y_case in default dark-style high-contrast default-solid dark-style-solid high-contrast-solid; do
+    for a11y_wall in backdrop busy; do
+        A11Y_FOCUS_TODAY[$a11y_case:$a11y_wall:spotlight]=1
+    done
+done
+unset a11y_case a11y_wall
+readonly A11Y_FOCUS_TODAY
+
+focus_rings() {
+    local label=$1 report=$2 w s r worst today desc
+    for w in backdrop busy; do
+        for s in "${A11Y_FOCUS_SURFACES[@]}"; do
+            r=$(jq -c --arg w "$w" --arg s "$s" '.focus[$w] as $f | if $f.error then {error: $f.error} else ($f[$s] // {error: "not measured"}) end' \
+                <<<"$report" 2>/dev/null)
+            desc="$label accessibility: focus over the $w: $s's indicator changes by $A11Y_ICON_RATIO:1"
+            if [[ -z $r ]] || jq -e '.error' <<<"$r" >/dev/null; then
+                fail "$desc ($(jq -r '.error // "not measured"' <<<"${r:-{\}}" 2>/dev/null))"
+                continue
+            fi
+            if ! jq -e '.focused' <<<"$r" >/dev/null; then
+                fail "$desc (key focus did not land on $(jq -r .name <<<"$r"))"
+                continue
+            fi
+            worst=$(jq -r .ratio <<<"$r")
+            today=${A11Y_FOCUS_TODAY[$label:$w:$s]:-}
+            if [[ -z $today ]]; then
+                pill_verdict "$desc" "$worst" "$A11Y_ICON_RATIO"
+                continue
+            fi
+            pill_verdict "$label accessibility: focus over the $w: $s's indicator is at least today's $today:1" "$worst" "$today"
+            known_gap "$A11Y_FOCUS_GAP" pill_verdict "$desc" "$worst" "$A11Y_ICON_RATIO"
+        done
+    done
+}
+
 # The text below 4.5:1 and the glyphs and dots below 3:1 in a report's surface at path; with gapdot
 # true, the inactive workspace dots are left to inactive_dot.
 a11y_low_contrast() {
     local report=$1 path=$2 gapdot=${3:-false}
     jq -r --arg path "$path" --argjson text "$A11Y_TEXT_RATIO" --argjson icon "$A11Y_ICON_RATIO" --argjson gapdot "$gapdot" \
-        "[$A11Y_SURFACE] as \$e | if (\$e | length) > 0 then \$e else (getpath(\$path | split(\".\")) | $A11Y_LOW_CONTRAST) end | join(\"; \")" \
+        "([$A11Y_SURFACE] | add // []) as \$e | if (\$e | length) > 0 then \$e else (getpath(\$path | split(\".\")) | $A11Y_LOW_CONTRAST) end | join(\"; \")" \
         <<<"$report" 2>&1
 }
 
@@ -2020,6 +2074,7 @@ a11y_contrast() {
         inactive_dot "$label" "$report" "$s" "$label"
     done
     bar_pills "$label" "$report"
+    focus_rings "$label" "$report"
     expect "$label accessibility" "$report" '.wifiMenuConnected.targets | any(.kind == "text" and (.inactive | not))' \
         "the connected network's name is measured over its row's own fill"
     expect "$label accessibility" "$report" '(.bar.targets | map(select(.kind == "dot" and .name == "workspace-dot")) | length >= 2)
@@ -2049,12 +2104,12 @@ a11y_layout() {
     expect "$label accessibility" "$report" '.textScalingFactor == 1.25' "text-scaling-factor is 1.25"
     for s in "${A11Y_SURFACES[@]}"; do
         problems=$(jq -r --arg path "$s" \
-            ".monitor as \$m | [$A11Y_SURFACE] as \$e | if (\$e | length) > 0 then \$e else (getpath(\$path | split(\".\")) | $A11Y_LAYOUT) end | join(\"; \")" \
+            ".monitor as \$m | ([$A11Y_SURFACE] | add // []) as \$e | if (\$e | length) > 0 then \$e else (getpath(\$path | split(\".\")) | $A11Y_LAYOUT) end | join(\"; \")" \
             <<<"$report" 2>&1)
         known_gap "${A11Y_GAPS[$label:$s]:-}" a11y_verdict "$label accessibility: $s: no text cut short, off the screen, outside its surface or overlapping" "$problems"
     done
     problems=$(jq -r --arg path barPills.crowded \
-        ".monitor as \$m | [$A11Y_SURFACE] as \$e | if (\$e | length) > 0 then \$e else (.barPills.crowded | $A11Y_LAYOUT) end | join(\"; \")" \
+        ".monitor as \$m | ([$A11Y_SURFACE] | add // []) as \$e | if (\$e | length) > 0 then \$e else (.barPills.crowded | $A11Y_LAYOUT) end | join(\"; \")" \
         <<<"$report" 2>&1)
     a11y_verdict "$label accessibility: board 39's crowded bar (chip, recording, share, privacy, five apps): no text cut short, off the screen or overlapping" \
         "$problems"
@@ -2930,6 +2985,10 @@ glass_manager() {
     empty=$(report_of "$log" APEXG2-GLASS | jq -r '.manager.emptyBox | "\(.emptyFrames) empty frames; laid out \(.laidOut.allocation | join("x")) after \(.laidOut.frames) frames, \(if .laidOut.enabled then "on" else "off" end)"' 2>/dev/null)
     "${expect_glass[@]}" '.manager.emptyBox | ([.shown, .hidden, .shownAgain] | all(.enabled | not)) and .emptyFrames == 3 and .laidOut.enabled and (.zeroHeight.enabled | not)' \
         "an actor-mode surface with an empty box draws a frame shown, hidden and shown again without blurring, blurs once laid out, and pauses at zero height (${empty:-no report})"
+    local opacity
+    opacity=$(report_of "$log" APEXG2-GLASS | jq -r '.manager.opacity | "\(.half) steps off at 128"' 2>/dev/null)
+    "${expect_glass[@]}" '.manager.opacity | .followOpacity and .fullDiffering > 0 and .noneDiffering == 0 and .half <= 1.251' \
+        "a glass follows its surface's opacity: at 128 the frame is the blur at 128/255 over the pattern within 1 + 64/255 steps, at 0 the pattern alone (${opacity:-no report})"
     "${expect_glass[@]}" "$glass"' .t as $t | .manager.monitorScale as $s | .manager.derived
         | (.osd | glass($t.apex_panel_blur; $t.apex_panel_saturation; $s)) and (.switcher | glass($t.apex_panel_blur; $t.apex_panel_saturation; $s))
         and (.screenshot | .radius == 2 * ($t.apex_panel_blur | px) * $s and .fine and (.enabled | not))' \
@@ -2955,6 +3014,13 @@ glass_manager() {
         'over a checker, the bottom-left corner of the dock, Quick Settings, the calendar, a banner, the OSD, the Spotlight panel and the toast blurs no pixel past its border'"'"'s arc and every pixel in the band inside it, under one glass'
     "${expect_glass[@]}" '.manager.conformance.checked | [.["dock", "quick-settings", "calendar", "banner", "osd", "spotlight", "toast"].corner.capturedMax] | length == 7 and all(type == "number" and . <= 1)' \
         'and a screenshot shows each of those corners as the screen does, to 1/255 a channel'
+    local motion
+    motion=$(report_of "$log" APEXG2-GLASS | jq -r '.manager.motion | to_entries | map("\(.key) \(.value.differingFromFull) of \(.value.pixels) px off") | join(", ")' 2>/dev/null)
+    "${expect_glass[@]}" '.manager.motion | [.dock, .popover] | all(.moved and .enabled and .pixels > 0 and .differingFromFull == 0)' \
+        "a glass that moves blurs where it is: the dock slid half its height up and Quick Settings halfway open, each set by property, draw the frame a fresh glass draws in a full redraw, over the box left and the box taken (${motion:-no report})"
+    known_gap "0003: a glass box past the stage edge blurs pixels no one painted; the fix is 0003 C, budget 310/310" \
+        "${expect_glass[@]}" '.manager.motion.dockPastEdge | .moved and .enabled and .pixels > 0 and .differingFromFull == 0' \
+        "and the dock halfway down intellihide's slide, past the screen's bottom edge, does too"
     "${expect_glass[@]}" "$glass"' .t as $t | .manager.monitorScale as $s | .manager.tile.shown.glass
         | glass($t.apex_tile_preview_blur; $t.apex_tile_preview_saturation; $s) and .cornerRadius == ($t.apex_radius_tile_preview | px) * $s' \
         'the shown tile preview registers its glass at board 22'"'"'s $apex_tile_preview_blur and $apex_tile_preview_saturation, rounded $apex_radius_tile_preview'

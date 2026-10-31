@@ -168,6 +168,20 @@ header greys its path and tag.
 fill colour, and the test fails unless its checks catch every session name in its row's
 fill. CI runs it after the captures.
 
+`tests/ptyxis/layout-test.sh` checks boards 32 and 33's layout in the same captures and in two
+more, `large` and `split-large`, taken in light with GNOME's Large Text
+(`org.gnome.desktop.interface text-scaling-factor` 1.25). `contrast-atspi.py` also records
+each label's laid-out text over AT-SPI's text extents, and which row and slot (title, subtitle,
+time) it fills. `layout.py` fails a label whose text runs to its box's right edge, as Pango's
+ellipsized text does, two labels of one row or header over each other, and a label outside the
+window. A row's subtitle may end in an ellipsis: the design cuts it (the rpmbuild row's does).
+Nothing is cut, overlapped or outside the window in any of the six. `apex.css` sizes its text in
+pt, which GTK scales with the setting, where px stays put: under Large Text the sidebar widens
+(176 px to 244 px, as libadwaita sizes it in sp) and a title's text grows from 16 px to 21 px. At
+1.0 each pt size is its old px size exactly (×0.75), and the captures are byte for byte the same.
+The test fails unless the titles grow by 1.15x, and unless its checks catch a session's title cut
+short. CI runs it after `contrast-test.sh`.
+
 `tests/ptyxis/palette-test.sh` runs the same headless shell. Its automation script,
 `palette-probe.js`, opens a terminal on a user palette with a red background, rewrites
 the file with a green one, and samples the terminal's pixels; the test fails unless the

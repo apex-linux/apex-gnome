@@ -38,6 +38,12 @@ $_item_bottom: $apex_dock_dot_gap + $apex_dock_dot_size;
     &:hover, &:focus, &:active, &:checked {
       .overview-icon { background-color: transparent; box-shadow: none; }
     }
+
+    // The icon covers an inset ring: this one fills the gap between items, rounded as the grid's tile.
+    &:focus .overview-icon {
+      border-radius: $apex_radius_bar_pill;
+      box-shadow: 0 0 0 $apex_entry_focus_ring $apex_dock_fg !important;
+    }
   }
 
   .show-apps-icon {

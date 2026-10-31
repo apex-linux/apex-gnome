@@ -328,7 +328,7 @@ jobs:
           retention-days: 7
 
   ptyxis:
-    name: tests/ptyxis (Fedora 45 with updates-testing, status, shoot, contrast, palette, panes)
+    name: tests/ptyxis (Fedora 45 with updates-testing, status, shoot, contrast, layout, palette, panes)
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     permissions:
@@ -368,6 +368,7 @@ jobs:
           run tests/ptyxis/status-test.sh
           run tests/ptyxis/shoot.sh _build/ptyxis/out
           run tests/ptyxis/contrast-test.sh
+          run tests/ptyxis/layout-test.sh
           tests/s2c/agent.sh
           run tests/ptyxis/palette-test.sh _build/ptyxis/out _build/s2c/apex-session-agent
           run tests/ptyxis/panes-test.sh _build/ptyxis/out

@@ -12,6 +12,7 @@ import St from 'gi://St';
 
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import * as ModalDialog from 'resource:///org/gnome/shell/ui/modalDialog.js';
+import * as Overview from 'resource:///org/gnome/shell/ui/overview.js';
 import * as Scripting from 'resource:///org/gnome/shell/ui/scripting.js';
 
 import {iconsOf, shellIconTheme} from '../shots/session-defaults.js';
@@ -337,6 +338,73 @@ async function shootLock() {
     fact('end', {locked: Main.screenShield.locked});
 }
 
+const MOTION_PROPERTIES = ['translation-x', 'translation-y', 'scale-x', 'scale-y', 'opacity'];
+const MOTION_POLL_MS = 10;
+
+// The transitions running on ROOT and every actor under it: what eases, from where to where, for how long.
+function transitionsUnder(root) {
+    const found = [];
+    const walk = actor => {
+        for (const property of MOTION_PROPERTIES) {
+            const transition = actor.get_transition(property) ?? actor.get_transition(property.replace('-', '_'));
+            const interval = transition?.get_interval?.();
+            if (interval) {
+                found.push({
+                    actor: actor === root ? 'root' : `${actor.constructor.name}.${actor.style_class ?? ''}`, property,
+                    from: interval.peek_initial_value(), to: interval.peek_final_value(), duration: transition.get_duration(),
+                });
+            }
+        }
+        actor.get_children().forEach(walk);
+    };
+    if (root)
+        walk(root);
+    return found;
+}
+
+// A sample every MOTION_POLL_MS, in ms from the call, until the returned stop(): transitions run whether or not a frame paints.
+function sampleMotion(sample) {
+    const samples = [];
+    const start = GLib.get_monotonic_time();
+    const id = GLib.timeout_add(GLib.PRIORITY_DEFAULT, MOTION_POLL_MS, () => {
+        samples.push({t: Math.round((GLib.get_monotonic_time() - start) / 1000), ...sample()});
+        return GLib.SOURCE_CONTINUE;
+    });
+    return () => {
+        GLib.source_remove(id);
+        return samples.filter(m => m.transitions.length).concat(samples.slice(-1));
+    };
+}
+
+// main.js inhibits animations without hardware-accelerated rendering, as the headless shell has; G2's motion case lifts it too.
+function motionSettings() {
+    const settings = St.Settings.get();
+    const uninhibited = !settings.enable_animations;
+    if (uninhibited)
+        settings.uninhibit_animations();
+    return {
+        reduced: settings.reducedMotion === St.ReducedMotion.REDUCE, duration: Overview.ANIMATION_TIME,
+        uninhibited, animations: settings.enable_animations,
+    };
+}
+
+// Reduce Motion: upstream fades the lock's curtain instead of sliding it, and nothing under it moves.
+async function shootMotion() {
+    await Scripting.sleep(SETTLE_MS);
+    fact('motion', motionSettings());
+    const shield = Main.screenShield;
+    const group = shield._lockDialogGroup;
+    const curtain = () => ({ty: group.translation_y, opacity: group.opacity, transitions: transitionsUnder(group)});
+    let stop = sampleMotion(curtain);
+    shield.lock(true);
+    await Scripting.sleep(STEP_MS);
+    fact('opening', stop());
+    stop = sampleMotion(curtain);
+    shield.deactivate(true);
+    await Scripting.sleep(STEP_MS);
+    fact('closing', stop());
+}
+
 // What polkit-agent-helper-1 would send, without the helper: PAM never runs, so nothing the
 // dialog does can authorise. Its answers are only counted.
 function stubSession(sessions, info) {
@@ -532,8 +600,12 @@ async function shootGreeter() {
     fact('list', describeGreeter(dialog));
     iconFact('list', [dialog, Main.panel]);
     await capture('list');
+    const settings = GLib.getenv('APEX_MOTION') ? motionSettings() : null;
+    const stop = settings ? sampleMotion(() => ({transitions: transitionsUnder(dialog)})) : null;
     dialog._userList.getItemFromUserName(GLib.getenv('APEX_USER')).emit('activate');
     await Scripting.sleep(SETTLE_MS);
+    if (stop)
+        fact('motion', {...settings, samples: stop()});
     fact('prompt', describeGreeter(dialog));
     iconFact('prompt', [dialog, Main.panel]);
     await capture('prompt');
@@ -803,6 +875,8 @@ export async function run() {
             await shootPolkit();
         else if (['lock', 'suspend'].includes(GLib.getenv('APEX_POLKIT')))
             await shootPolkitLocked(GLib.getenv('APEX_POLKIT') === 'suspend');
+        else if (GLib.getenv('APEX_MOTION') === 'lock')
+            await shootMotion();
         else if (GLib.getenv('APEX_DATE_MENU') === '1')
             await shootDateMenu();
         else if (GLib.getenv('APEX_END_SESSION') === '1')
