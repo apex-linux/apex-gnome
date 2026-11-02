@@ -13,7 +13,6 @@
 #define WAIT_STEPS 200
 
 static const int fatal[] = {SIGSEGV, SIGBUS, SIGABRT, SIGFPE, SIGILL};
-static struct sigaction previous[NSIG];
 static char line[160];
 static int first_signal;
 static int written;
@@ -48,18 +47,20 @@ static void die(int signal_number)
 
 static void on_fatal(int signal_number, siginfo_t *info, void *context)
 {
-    int none = 0;
+    int none = 0, first;
     void *frames[FRAMES];
     const char *name = sigabbrev_np(signal_number);
-    const struct sigaction *earlier = &previous[signal_number];
 
+    (void)info;
+    (void)context;
     if (!__atomic_compare_exchange_n(&first_signal, &none, signal_number, 0, __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE)) {
         // The unwinder faulted under this handler, or another thread crashed first: its signal decides.
         struct timespec step = {.tv_nsec = 10 * 1000 * 1000};
 
         for (int i = 0; !writing && i < WAIT_STEPS && !__atomic_load_n(&written, __ATOMIC_ACQUIRE); i++)
             nanosleep(&step, NULL);
-        die(__atomic_load_n(&first_signal, __ATOMIC_ACQUIRE));
+        first = __atomic_load_n(&first_signal, __ATOMIC_ACQUIRE);
+        die(first ? first : signal_number);
         return;
     }
     writing = 1;
@@ -70,16 +71,6 @@ static void on_fatal(int signal_number, siginfo_t *info, void *context)
     put("APEXG2-CRASH end\n");
     __atomic_store_n(&written, 1, __ATOMIC_RELEASE);
     writing = 0;
-    if (earlier->sa_flags & SA_SIGINFO ? earlier->sa_sigaction != NULL :
-        earlier->sa_handler != SIG_DFL && earlier->sa_handler != SIG_IGN) {
-        __atomic_store_n(&written, 0, __ATOMIC_RELEASE);
-        __atomic_store_n(&first_signal, 0, __ATOMIC_RELEASE);
-        if (earlier->sa_flags & SA_SIGINFO)
-            earlier->sa_sigaction(signal_number, info, context);
-        else
-            earlier->sa_handler(signal_number);
-        return;
-    }
     die(signal_number);
 }
 
@@ -102,6 +93,14 @@ __attribute__((constructor)) static void install(void)
     backtrace(warm, 1);
     sigaltstack(&stack, NULL);
     sigemptyset(&action.sa_mask);
-    for (size_t i = 0; i < sizeof(fatal) / sizeof(fatal[0]); i++)
-        sigaction(fatal[i], &action, &previous[fatal[i]]);
+    for (size_t i = 0; i < sizeof(fatal) / sizeof(fatal[0]); i++) {
+        struct sigaction current;
+        const char *name = sigabbrev_np(fatal[i]);
+
+        if (sigaction(fatal[i], NULL, &current) == 0 && !(current.sa_flags & SA_SIGINFO) && current.sa_handler == SIG_DFL) {
+            sigaction(fatal[i], &action, NULL);
+            continue;
+        }
+        fprintf(stderr, "APEXG2-CRASH %s[%d] leaves SIG%s as it found it\n", comm, (int)getpid(), name ? name : "?");
+    }
 }

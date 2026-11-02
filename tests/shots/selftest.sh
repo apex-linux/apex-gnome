@@ -3242,19 +3242,39 @@ test_case_backtrace() {
     PATH=$tools "$BASH" -c '. "$1/backtrace.sh"; case_backtrace "$2/x.log" 0 "$2/core" "$2/clean.bt"
         case_backtrace "$2/x.log" 139 "$2/core" "$2/none.bt"; : >"$2/core/core"
         case_backtrace "$2/x.log" 139 "$2/core" "$2/nogdb.bt"; : >"$2/core/core"
-        case_backtrace "$2/x.log" 134 "$2/core" "$2/expected.bt" 134' _ "$HERE" "$run"
+        case_backtrace "$2/x.log" 134 "$2/core" "$2/expected.bt" 134
+        case_backtrace "$2/x.log" 139 "$2/core" "$2/other.bt" 134' _ "$HERE" "$run"
     expect_eq "backtrace: a clean exit writes none" no "$([[ -e $run/clean.bt ]] && echo yes || echo no)"
     expect_eq "backtrace: crash.c's frames reach it" 1 "$(grep -c '^/usr/lib64/libst-17.so' "$run/none.bt")"
     expect_eq "backtrace: no core says so" 1 "$(grep -c '^no backtrace: no core in .*/core (core_pattern ' "$run/none.bt")"
     expect_eq "backtrace: a core without gdb says so" 1 "$(grep -c '^no backtrace: gdb missing' "$run/nogdb.bt")"
     expect_eq "backtrace: an expected signal exit writes none and drops its core" "no no" \
         "$([[ -e $run/expected.bt ]] && echo yes || echo no) $([[ -e $run/core/core ]] && echo yes || echo no)"
-    # The wiring: every case's shell preloads crash.c, and run_case writes its backtrace with the case's expected exit.
-    # shellcheck disable=SC2016 # direct.sh's lines, as written
-    expect_eq "backtrace: direct.sh builds crash.c, preloads it and calls case_backtrace" 4 "$(grep -cF \
-        -e 'gcc -O2 -Wall -Werror -shared -fPIC -o "$CRASH_LIB" /w/crash.c' -e 'G2_CRASH_LIB="$CRASH_LIB"' \
-        -e 'exec env LD_PRELOAD="$G2_CLOCK_LIB $G2_CRASH_LIB"' \
-        -e 'case_backtrace "/out/$name.log" "$rc" "$home" "/out/$name.bt" "$expected"' "$HERE/direct.sh")"
+    expect_eq "backtrace: an expected exit by another signal writes one" 1 "$(grep -c '^signal 11, the shell exited 139$' "$run/other.bt")"
+    # One budget for dnf5 and gdb: a dnf5 that takes most of it and a gdb that hangs end within it, plus the kill grace.
+    mkdir -p "$run/slow" && : >"$run/core/core"
+    for tool in find sed sort head cat cut rm grep timeout sleep; do ln -sf "$(command -v "$tool")" "$run/slow/$tool"; done
+    printf '#!%s\nprintf "#!%s\\nexec sleep 30\\n" >"%s/gdb"; chmod +x "%s/gdb"; exec sleep 2\n' \
+        "$BASH" "$BASH" "$run/slow" "$run/slow" >"$run/slow/dnf5"
+    ln -sf "$(command -v chmod)" "$run/slow/chmod"
+    chmod +x "$run/slow/dnf5"
+    # shellcheck disable=SC2016 # expanded by the inner bash
+    got=$(BACKTRACE_BUDGET_S=3 BACKTRACE_KILL_S=1 PATH=$run/slow "$BASH" -c '. "$1/backtrace.sh"
+        case_backtrace "$2/x.log" 139 "$2/core" "$2/slow.bt"; echo "$SECONDS"' _ "$HERE" "$run")
+    ((got <= 5)) && got=yes || got="no ($got s)"
+    [[ -e $run/core/core ]] && got+=" kept" || got+=" gone"
+    expect_eq "backtrace: a slow dnf5 and a hung gdb end within the budget and its grace, and say so, core gone" "yes gone 1" \
+        "$got $(grep -c '^no backtrace: gdb ran out of the 3 s budget$' "$run/slow.bt")"
+    # The wiring, whole lines: direct.sh loads backtrace.sh, builds and preloads crash.c, reads each case's expected
+    # exit, gives fault-abort its 134, and calls case_backtrace with it.
+    # shellcheck disable=SC2016,SC1003 # direct.sh's lines, as written
+    expect_eq "backtrace: direct.sh loads backtrace.sh, builds and preloads crash.c and calls case_backtrace" 7 \
+        "$(sed 's/^[[:space:]]*//' "$HERE/direct.sh" | grep -cxF -e '. "$(dirname -- "${BASH_SOURCE[0]}")/backtrace.sh"' \
+        -e 'gcc -O2 -Wall -Werror -shared -fPIC -o "$CRASH_LIB" /w/crash.c || { echo "direct.sh: cannot build crash.c" >&2; exit 1; }' \
+        -e 'G2_CRASH_LIB="$CRASH_LIB" \' -e 'exec env LD_PRELOAD="$G2_CLOCK_LIB $G2_CRASH_LIB" \' \
+        -e '[[ $arg == G2_EXPECT_EXIT=* ]] && expected=${arg#G2_EXPECT_EXIT=}' \
+        -e 'run_and_record_case fault-abort '"''"' APEX_SHELL_TEST_FAULT=abort-after-enable PROBE_WAIT=20 G2_EXPECT_EXIT=134' \
+        -e 'case_backtrace "/out/$name.log" "$rc" "$home" "/out/$name.bt" "$expected"')"
     echo 'x exit=139 secs=4 marker-after-exit=yes' >"$run/results-pr.txt"
     mv "$run/none.bt" "$run/x.bt"
     assertion_counts exits "$run" x 0 >/dev/null
@@ -3265,6 +3285,14 @@ test_case_backtrace() {
     assertion_counts exits "$run" x 0 >/dev/null
     expect_eq "backtrace: a signal exit's FAIL names the frame past the signal trampoline" 1 \
         "$(grep -c '; #5  0x3 in st_widget_get_theme_node () at st-widget.c:1 (x.bt))$' "$T/assertions.out")"
+    # GLib's abort and assertion frames, as gdb names their GCC clones, are passed; a frame that only starts like one is not.
+    printf '%s\n' 'signal 6, the shell exited 134' '#2  <signal handler called>' '#3  0x1 in __GI_raise (sig=6) at raise.c:26' \
+        '#4  0x2 in abort () at abort.c:79' '#5  0x3 in g_abort () at gutils.c:1' '#6  0x4 in _g_log_abort (breakpoint=1) at gmessages.c:1' \
+        '#7  0x5 in g_assertion_message[cold] () at gtestutils.c:1' '#8  0x6 in g_log_structured_array.part.0 (n=1) at gmessages.c:2' \
+        '#9  0x7 in g_assertion_message_expr.cold () at gtestutils.c:3' '#10 0x8 in raise_window (window=0x9) at window.c:10' >"$run/x.bt"
+    assertion_counts exits "$run" x 0 >/dev/null
+    expect_eq "backtrace: a signal exit's FAIL passes GLib's abort frames, clones too, and names raise_window" 1 \
+        "$(grep -c '; #10 0x8 in raise_window (window=0x9) at window.c:10 (x.bt))$' "$T/assertions.out")"
     rm "$run/x.bt"
     assertion_counts exits "$run" x 0 >/dev/null
     expect_eq "backtrace: a signal exit without one says so" 1 "$(grep -c '; no x.bt)$' "$T/assertions.out")"
@@ -3798,6 +3826,13 @@ C
         [[ $how == illbad ]] ||
             expect_eq "crash.c: a crash by $how prints its frames to the end" 1 "$(grep -c '^APEXG2-CRASH end$' "$T/crash.$how")"
     done
+    # A disposition the process started with (an ignored SIGBUS here) is left as it is, and said so.
+    # shellcheck disable=SC2016 # expanded by the inner bash
+    got=$(exit_of "$T/crash.kept" bash -c 'trap "" BUS; exec env LD_PRELOAD="$1" "$2" fault' _ "$T/crash.so" "$T/crashes")
+    expect_eq "crash.c: a process that starts with SIGBUS ignored keeps it ignored, and says so" 1 \
+        "$(grep -c '^APEXG2-CRASH crashes\[[0-9]*\] leaves SIGBUS as it found it$' "$T/crash.kept")"
+    expect_eq "crash.c: and its other signals still report: a fault exits 139 with its header" "139 1" \
+        "$got $(grep -c '^APEXG2-CRASH crashes\[[0-9]*\] SIGSEGV$' "$T/crash.kept")"
     # Eight threads that fault at once print one header and one end, never interleaved halves.
     local lost=0 run
     for run in 1 2 3 4 5 6 7 8 9 10; do
