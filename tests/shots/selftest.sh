@@ -362,7 +362,7 @@ REPORT_OF_A_DIALOG_DRAWN_FROM_TOKENS='
     entry: {height: ($t.apex_entry_height | px), radius: 999, background: ($t.apex_button | hex), boxShadow: null,
         padding: {left: ($t.apex_entry_padding | px), right: ($t.apex_entry_padding | px)},
         font: {size: ($t.apex_font_entry_size | px), weight: ($t.apex_font_entry_weight | tonumber)},
-        focus: {boxShadow: {inset: true, spread: ($t.apex_entry_focus_ring | px), color: "#3584e4ff"}}},
+        focus: {boxShadow: {inset: true, spread: ($t.apex_entry_focus_ring | px), color: ($t.apex_fg | hex)}}},
     buttons: [$button + {default: false, background: ($t.apex_button | hex), foreground: ($t.apex_fg | hex), hover: {background: ($t.apex_button_hover | hex)}},
         $button + {default: true, background: "#2863abff", foreground: "#ffffffff"}]}}}'
 # shellcheck disable=SC2016 # a jq program
@@ -562,7 +562,7 @@ REPORT_OF_DERIVED_SURFACES_DRAWN_FROM_TOKENS='
     candidatePopup: ($ring + {background: ($t.apex_panel_solid | hex), radius: ($t.apex_radius_menu | px)}),
     candidateBox: {radius: ($t.apex_radius_menu_row | px), hover: {background: ($t.apex_button_hover | hex)}},
     runEntry: {minHeight: ($t.apex_entry_height | px), background: ($t.apex_button | hex), boxShadow: null,
-        focus: {boxShadow: {inset: true, spread: ($t.apex_entry_focus_ring | px), color: "#3584e4ff"}}},
+        focus: {boxShadow: {inset: true, spread: ($t.apex_entry_focus_ring | px), color: ($t.apex_fg | hex)}}},
     audioDevice: {radius: ($t.apex_radius_switcher_item | px), background: "#00000000", foreground: ($t.apex_fg | hex),
         hover: {background: ($t.apex_button_hover | hex)}},
     monitorLabel: {radius: ($t.apex_radius_osd | px)}}}}'
@@ -1753,6 +1753,7 @@ del(.surfaces.dialog.endSession.buttons[1])|stock's row, without Restart
 .surfaces.dialog.endSession.rowSpacing = 12|dialog.js's 12 px between the buttons
 .surfaces.dialog.endSession.buttons[1].width = 128|an even row
 .surfaces.dialog.entry.focus.boxShadow.color = "#3584e4cc"|upstream's 80 % focus ring
+.surfaces.dialog.entry.focus.boxShadow.color = "#3584e4ff"|the raw accent ring, 2.87:1 on the dark entry
 .surfaces.dialog.buttons[0].radius = 12|upstream's square-ish buttons
 .surfaces.dialog.buttons[1].background = "#00000a10"|a default button without the accent
 .surfaces.dialog.buttons[1].background = "#3584e4ff"|a default button on the raw accent, 3.8:1 under white
