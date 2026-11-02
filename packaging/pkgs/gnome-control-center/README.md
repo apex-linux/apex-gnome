@@ -329,11 +329,16 @@ state's texts through AT-SPI, that board 26's dialog shows, that What's New's gr
 Show Changes' line up with the long fixture name cut short, and presses each button and
 the Automatic Downloads switch: `update1.py`'s log must show the method call each makes,
 with its arguments, and the switch must go back when `update1.py` refuses it as polkit
-would. `updates-bounds`, the "ready" page unscrolled, has `bounds.py` read every label on it off
-its own capture: each AT-SPI box must hold its text, and no edge may run through text.
-GTK 4.24 leaves an ancestor's CSS padding out of a widget's AT-SPI bounds, so the panel's
-cards inset their content with margins, never padding; a pill button's label is off by
-libadwaita's button padding, a known gap upstream.
+would. `bounds.py` reads every label on a page off its case's own capture: board 11's top
+(`top-bounds`), board 24 with the dGPU (`power-bounds`), and the "ready" page at the top and
+scrolled to its end (`updates-bounds`, `updates-bounds-end`). Each AT-SPI box must hold its
+text, and no line 3 px outside it may run through text. No such line tells a 2 px shift from
+a descender, so What's New's grid is held by structure: its labels start at their row's box
+plus the padding and margin `apex.css` gives the row and the grid. GTK 4.24 leaves an
+ancestor's CSS padding out of a widget's AT-SPI bounds, so the panel insets its content with
+margins, never padding. Where libadwaita's own padding does it (button, pill and toggle
+labels at their button's origin; the GPU pill, 2 px below an action row's header), the gap
+is pinned exactly in one list in `bounds.py`, as upstream.
 
 Last, Large Text (`text-scaling-factor` 1.25) on board 11 (`large-light`) and board 18
 (`updates-large-light`): `apex.css` sizes its text in pt, which GTK scales with it, where a px
