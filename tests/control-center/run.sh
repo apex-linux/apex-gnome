@@ -110,6 +110,8 @@ update_case() {
 
 update_case ready updates-light default APEX_SCROLL=1 "APEX_CHECK=updates.py ready" || status=1
 update_case ready updates-dark prefer-dark APEX_SCROLL=1 || status=1
+# Unscrolled, so bounds.py reads the page off this case's own capture.
+update_case ready updates-bounds default "APEX_CHECK=bounds.py" || status=1
 for scenario in up-to-date available waiting downloading health-failure fallback unavailable; do
     update_case "$scenario" "updates-$scenario" default "APEX_CHECK=updates.py $scenario" || status=1
 done
@@ -119,6 +121,6 @@ for scenario in health-failure fallback; do
 done
 update_case fallback updates-fallback-changes default "APEX_BEFORE=updates.py show-changes" || status=1
 headless_update1_stop
-grep -h '^ok \|^FAIL \|APEXCC-' "$out"/*.log || true
+grep -h '^ok \|^FAIL \|^GAP \|APEXCC-' "$out"/*.log || true
 ((status == 0)) || die "run.sh: a case failed; see ${out#"$APEX_ROOT/"}/*.log"
 log "run.sh: every row is bound, Appearance, Power and Keyboard check out and every Software Updates state is checked; captures in ${out#"$APEX_ROOT/"}"

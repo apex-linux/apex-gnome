@@ -778,7 +778,7 @@ REPORT_OF_LEGIBLE_SURFACES='
     checkBoxDialogAccents: (["blue", "teal", "green", "yellow", "orange", "red", "pink", "purple", "slate"] | map({key: ., value: $s}) | from_entries),
     screenshot: $s,
 
-    bar: ($s | .targets += [$dot, $inactiveDot]), barUnread: ($s | .targets += [$dot + {name: "messages-indicator"}, $inactiveDot]), dock: $s, popupMenu: $s, osd: $s, banner: $s, quickSettings: $s, wifiMenu: $s, wifiMenuConnected: $s, dateMenu: $s, switcher: $s,
+    bar: ($s | .targets += [$dot, $inactiveDot]), barUnread: ($s | .targets += [$dot + {name: "messages-indicator"}, $inactiveDot]), dock: $s, popupMenu: $s, osd: $s, banner: $s, quickSettings: $s, wifiMenu: $s, wifiMenuConnected: $s, dateMenu: $s, switcher: $s, inputSourceSwitcher: $s, ctrlAltTabSwitcher: $s, monitorSwitcher: $s,
     dialog: $s, endSession: $s, spotlight: {popup: $s, toast: $s}, overview: $s, appGrid: $s,
     barPills: {box: $s.box, pills: {input: {targets: [$text + {name: "EN"}], edge: null},
         recording: {targets: [$text + {name: "0:42", ink: "#ffffff", backdrop: "#c01c28", ratio: 5.6}], edge: $edge},
@@ -867,7 +867,7 @@ CHANGES
 test_a11y() {
     local assertions expected change what passes failures open_gaps want
     # dark-style's four focus gaps today: its Spotlight entry and dialog entry, each per wallpaper.
-    for assertions in a11y_contrast:86:4 a11y_layout:58:0; do
+    for assertions in a11y_contrast:89:4 a11y_layout:61:0; do
         IFS=: read -r assertions expected gaps <<<"$assertions"
         read -r passes failures open_gaps <<<"$(a11y_run "$assertions")"
         if ((failures == 0 && open_gaps == gaps && passes == expected)); then
@@ -886,6 +886,8 @@ test_a11y() {
     done <<'CHANGES'
 a11y_contrast|1|.bar.targets[0].ratio = 4.4|text at 4.4:1
 a11y_contrast|1|.dock.targets[1].ratio = 2.9|a glyph at 2.9:1
+a11y_contrast|1|.inputSourceSwitcher.targets[0].ratio = 4.4|the held input-source switcher's name at 4.4:1
+a11y_layout|1|.monitorSwitcher = {error: "no monitor-switcher"}|a Super+P switcher that never showed
 a11y_contrast|1|.checkBoxDialogAccents.yellow.targets[1].ratio = 2.9|a checked box's check at 2.9:1 on yellow
 a11y_contrast|2|.bar.targets[3].ratio = 2.9|an inactive workspace dot at 2.9:1, under 3:1 and dark-style's 4.24:1
 a11y_contrast|1|.bar.targets[3].ratio = 4.2|an inactive workspace dot at 4.2:1, under dark-style's 4.24:1
@@ -3270,6 +3272,74 @@ test_shutdown_banner_case() {
 CHANGES
 }
 
+# A shell that died on a signal leaves a backtrace, or one line saying why it has none, and its
+# exit assertion names it; a clean exit leaves nothing.
+test_case_backtrace() {
+    local run=$T/backtrace tools=$T/backtrace-tools tool
+    mkdir -p "$run/core" "$tools"
+    for tool in find sed sort head cat cut rm; do ln -sf "$(command -v "$tool")" "$tools/$tool"; done
+    printf '%s\n' 'GNOME Shell-Message: started' 'APEXG2-CRASH gnome-shell[42] SIGSEGV' '/usr/lib64/libst-17.so(+0x1) [0x2]' \
+        'APEXG2-CRASH end' >"$run/x.log"
+    # shellcheck disable=SC2016 # expanded by the inner bash
+    PATH=$tools "$BASH" -c '. "$1/backtrace.sh"; case_backtrace "$2/x.log" 0 "$2/core" "$2/clean.bt"
+        case_backtrace "$2/x.log" 139 "$2/core" "$2/none.bt"; : >"$2/core/core"
+        case_backtrace "$2/x.log" 139 "$2/core" "$2/nogdb.bt"; : >"$2/core/core"
+        case_backtrace "$2/x.log" 134 "$2/core" "$2/expected.bt" 134
+        case_backtrace "$2/x.log" 139 "$2/core" "$2/other.bt" 134' _ "$HERE" "$run"
+    expect_eq "backtrace: a clean exit writes none" no "$([[ -e $run/clean.bt ]] && echo yes || echo no)"
+    expect_eq "backtrace: crash.c's frames reach it" 1 "$(grep -c '^/usr/lib64/libst-17.so' "$run/none.bt")"
+    expect_eq "backtrace: no core says so" 1 "$(grep -c '^no backtrace: no core in .*/core (core_pattern ' "$run/none.bt")"
+    expect_eq "backtrace: a core without gdb says so" 1 "$(grep -c '^no backtrace: gdb missing' "$run/nogdb.bt")"
+    expect_eq "backtrace: an expected signal exit writes none and drops its core" "no no" \
+        "$([[ -e $run/expected.bt ]] && echo yes || echo no) $([[ -e $run/core/core ]] && echo yes || echo no)"
+    expect_eq "backtrace: an expected exit by another signal writes one" 1 "$(grep -c '^signal 11, the shell exited 139$' "$run/other.bt")"
+    # One budget for dnf5 and gdb: a dnf5 that takes most of it and a gdb that hangs end within it, plus the kill grace.
+    mkdir -p "$run/slow" && : >"$run/core/core"
+    for tool in find sed sort head cat cut rm grep timeout sleep; do ln -sf "$(command -v "$tool")" "$run/slow/$tool"; done
+    printf '#!%s\nprintf "#!%s\\nexec sleep 30\\n" >"%s/gdb"; chmod +x "%s/gdb"; exec sleep 2\n' \
+        "$BASH" "$BASH" "$run/slow" "$run/slow" >"$run/slow/dnf5"
+    ln -sf "$(command -v chmod)" "$run/slow/chmod"
+    chmod +x "$run/slow/dnf5"
+    # shellcheck disable=SC2016 # expanded by the inner bash
+    got=$(BACKTRACE_BUDGET_S=3 BACKTRACE_KILL_S=1 PATH=$run/slow "$BASH" -c '. "$1/backtrace.sh"
+        case_backtrace "$2/x.log" 139 "$2/core" "$2/slow.bt"; echo "$SECONDS"' _ "$HERE" "$run")
+    ((got <= 5)) && got=yes || got="no ($got s)"
+    [[ -e $run/core/core ]] && got+=" kept" || got+=" gone"
+    expect_eq "backtrace: a slow dnf5 and a hung gdb end within the budget and its grace, and say so, core gone" "yes gone 1" \
+        "$got $(grep -c '^no backtrace: gdb ran out of the 3 s budget$' "$run/slow.bt")"
+    # The wiring, whole lines: direct.sh loads backtrace.sh, builds and preloads crash.c, reads each case's expected
+    # exit, gives fault-abort its 134, and calls case_backtrace with it.
+    # shellcheck disable=SC2016,SC1003 # direct.sh's lines, as written
+    expect_eq "backtrace: direct.sh loads backtrace.sh, builds and preloads crash.c and calls case_backtrace" 7 \
+        "$(sed 's/^[[:space:]]*//' "$HERE/direct.sh" | grep -cxF -e '. "$(dirname -- "${BASH_SOURCE[0]}")/backtrace.sh"' \
+        -e 'gcc -O2 -Wall -Werror -shared -fPIC -o "$CRASH_LIB" /w/crash.c || { echo "direct.sh: cannot build crash.c" >&2; exit 1; }' \
+        -e 'G2_CRASH_LIB="$CRASH_LIB" \' -e 'exec env LD_PRELOAD="$G2_CLOCK_LIB $G2_CRASH_LIB" \' \
+        -e '[[ $arg == G2_EXPECT_EXIT=* ]] && expected=${arg#G2_EXPECT_EXIT=}' \
+        -e 'run_and_record_case fault-abort '"''"' APEX_SHELL_TEST_FAULT=abort-after-enable PROBE_WAIT=20 G2_EXPECT_EXIT=134' \
+        -e 'case_backtrace "/out/$name.log" "$rc" "$home" "/out/$name.bt" "$expected"')"
+    echo 'x exit=139 secs=4 marker-after-exit=yes' >"$run/results-pr.txt"
+    mv "$run/none.bt" "$run/x.bt"
+    assertion_counts exits "$run" x 0 >/dev/null
+    expect_eq "backtrace: a signal exit's FAIL names why there is none" 1 \
+        "$(grep -c '^FAIL x: the shell exits 0 (got: exit=139 .*; no backtrace: no core in .* (x.bt))$' "$T/assertions.out")"
+    printf '%s\n' 'signal 11, the shell exited 139' '#0  0x1 in __pthread_kill_implementation () at pthread_kill.c:44' \
+        '#4  0x2 in <signal handler called> () at /lib64/libc.so.6' '#5  0x3 in st_widget_get_theme_node () at st-widget.c:1' >"$run/x.bt"
+    assertion_counts exits "$run" x 0 >/dev/null
+    expect_eq "backtrace: a signal exit's FAIL names the frame past the signal trampoline" 1 \
+        "$(grep -c '; #5  0x3 in st_widget_get_theme_node () at st-widget.c:1 (x.bt))$' "$T/assertions.out")"
+    # GLib's abort and assertion frames, as gdb names their GCC clones, are passed; a frame that only starts like one is not.
+    printf '%s\n' 'signal 6, the shell exited 134' '#2  <signal handler called>' '#3  0x1 in __GI_raise (sig=6) at raise.c:26' \
+        '#4  0x2 in abort () at abort.c:79' '#5  0x3 in g_abort () at gutils.c:1' '#6  0x4 in _g_log_abort (breakpoint=1) at gmessages.c:1' \
+        '#7  0x5 in g_assertion_message[cold] () at gtestutils.c:1' '#8  0x6 in g_log_structured_array.part.0 (n=1) at gmessages.c:2' \
+        '#9  0x7 in g_assertion_message_expr.cold () at gtestutils.c:3' '#10 0x8 in raise_window (window=0x9) at window.c:10' >"$run/x.bt"
+    assertion_counts exits "$run" x 0 >/dev/null
+    expect_eq "backtrace: a signal exit's FAIL passes GLib's abort frames, clones too, and names raise_window" 1 \
+        "$(grep -c '; #10 0x8 in raise_window (window=0x9) at window.c:10 (x.bt))$' "$T/assertions.out")"
+    rm "$run/x.bt"
+    assertion_counts exits "$run" x 0 >/dev/null
+    expect_eq "backtrace: a signal exit without one says so" 1 "$(grep -c '; no x.bt)$' "$T/assertions.out")"
+}
+
 readonly SESSION_REPORT='{"settings": {"font-name": "Adwaita Sans 10.125", "document-font-name": "Adwaita Sans 10.125",
     "monospace-font-name": "JetBrains Mono 9.75", "font-hinting": "none", "icon-theme": "Apex"},
   "shell": {"font": "Adwaita Sans 10.125", "iconTheme": "Apex"},
@@ -3753,6 +3823,92 @@ test_fixtures() {
     kill "${pids[@]}" 2>/dev/null || true
 }
 
+# exit_of ERR CMD...: CMD's exit status, its stderr in ERR, with no core and no shell's crash note.
+exit_of() {
+    # shellcheck disable=SC2016 # expanded by the inner bash
+    bash -c 'ulimit -c 0; "$@" 2>"$0"; echo $?' "$@" 2>/dev/null
+}
+
+# crash.c must not change how a shell dies or what a healthy one prints: the same exit status,
+# its frames in the log, from a fault, an abort, a stack overflow and gjs's chained handler.
+test_crash_c() {
+    local how want got plain preloaded
+    if ! command -v gcc >/dev/null 2>&1; then
+        skip_or_fail "crash.c: needs gcc"
+        return
+    fi
+    if ! gcc -O2 -Wall -Werror -shared -fPIC -o "$T/crash.so" "$HERE/crash.c" 2>"$T/crash.err"; then
+        not_ok "crash.c: builds with -Wall -Werror ($(head -n 3 "$T/crash.err" | paste -sd'|' -))"
+        return
+    fi
+    ok "crash.c: builds with -Wall -Werror"
+    cat >"$T/crashes.c" <<'C'
+#include <pthread.h>
+#include <signal.h>
+#include <stdlib.h>
+#include <string.h>
+static int deep(volatile int *p) { return *p; }
+static int overflow(int n) { volatile char pad[4096]; pad[0] = (char)n; return overflow(n + 1) + pad[0]; }
+static pthread_barrier_t barrier;
+static void *fault(void *unused) { (void)unused; pthread_barrier_wait(&barrier); return (void *)(long)deep((volatile int *)0); }
+int main(int argc, char **argv) {
+    pthread_t threads[8];
+    if (argc < 2) return 0;
+    if (!strcmp(argv[1], "fault")) return deep((volatile int *)0);
+    if (!strcmp(argv[1], "abort")) abort();
+    /* An illegal instruction with no stack to unwind: backtrace() faults under the handler. */
+    if (!strcmp(argv[1], "illbad")) __asm__ volatile("xor %%ebp, %%ebp\n\txor %%esp, %%esp\n\tud2" ::: "memory");
+    if (!strcmp(argv[1], "threads")) {
+        pthread_barrier_init(&barrier, NULL, 8);
+        for (int i = 0; i < 8; i++) pthread_create(&threads[i], NULL, fault, NULL);
+        for (int i = 0; i < 8; i++) pthread_join(threads[i], NULL);
+    }
+    return overflow(0);
+}
+C
+    gcc -O0 -pthread -o "$T/crashes" "$T/crashes.c"
+    for how in fault abort overflow illbad; do
+        [[ $how != illbad || $(uname -m) == x86_64 ]] || continue
+        want=$(exit_of /dev/null "$T/crashes" "$how")
+        got=$(exit_of "$T/crash.$how" env LD_PRELOAD="$T/crash.so" "$T/crashes" "$how")
+        expect_eq "crash.c: a crash by $how exits as it does without it" "$want" "$got"
+        expect_eq "crash.c: a crash by $how names its signal first" 1 "$(grep -c '^APEXG2-CRASH crashes\[[0-9]*\] SIG[A-Z]*$' "$T/crash.$how")"
+        [[ $how == illbad ]] ||
+            expect_eq "crash.c: a crash by $how prints its frames to the end" 1 "$(grep -c '^APEXG2-CRASH end$' "$T/crash.$how")"
+    done
+    # A disposition the process started with (an ignored SIGBUS here) is left as it is, and said so.
+    # shellcheck disable=SC2016 # expanded by the inner bash
+    got=$(exit_of "$T/crash.kept" bash -c 'trap "" BUS; exec env LD_PRELOAD="$1" "$2" fault' _ "$T/crash.so" "$T/crashes")
+    expect_eq "crash.c: a process that starts with SIGBUS ignored keeps it ignored, and says so" 1 \
+        "$(grep -c '^APEXG2-CRASH crashes\[[0-9]*\] leaves SIGBUS as it found it$' "$T/crash.kept")"
+    expect_eq "crash.c: and its other signals still report: a fault exits 139 with its header" "139 1" \
+        "$got $(grep -c '^APEXG2-CRASH crashes\[[0-9]*\] SIGSEGV$' "$T/crash.kept")"
+    # Eight threads that fault at once print one header and one end, never interleaved halves.
+    local lost=0 run
+    for run in 1 2 3 4 5 6 7 8 9 10; do
+        exit_of "$T/crash.threads" env LD_PRELOAD="$T/crash.so" "$T/crashes" threads >/dev/null
+        [[ $(grep -c '^APEXG2-CRASH crashes\[[0-9]*\] SIG\|^APEXG2-CRASH end$' "$T/crash.threads") == 2 ]] || lost=$((lost + 1))
+    done
+    expect_eq "crash.c: eight threads crashing at once print one header and one end, 10 of 10 times" 0 "$lost"
+    # The contract with case_backtrace: every frame crash.c prints reaches the case's BT.
+    mkdir -p "$T/crash-cores"
+    # shellcheck disable=SC2016 # expanded by the inner bash
+    bash -c '. "$1/backtrace.sh"; case_backtrace "$2" 139 "$3" "$4"' _ "$HERE" "$T/crash.fault" "$T/crash-cores" "$T/crash.bt"
+    expect_eq "crash.c: case_backtrace carries every frame crash.c printed" "$(($(wc -l <"$T/crash.fault") - 2))" \
+        "$(grep -cv '^signal \|^APEXG2-CRASH \|^no backtrace' "$T/crash.bt")"
+    # SpiderMonkey's handler runs before crash.c's and calls it: the signal must still kill.
+    # shellcheck disable=SC2016 # a gjs program
+    got=$(exit_of "$T/crash.gjs" env LD_PRELOAD="$T/crash.so" timeout 20 gjs -c 'const {GLib, Gio} = imports.gi;
+        GLib.spawn_command_line_sync(`kill -SEGV ${new Gio.Credentials().get_unix_pid()}`);')
+    expect_eq "crash.c: gjs killed by SIGSEGV dies with 139, not hung" 139 "$got"
+    expect_eq "crash.c: gjs's crash prints its frames" 1 "$(grep -c '^APEXG2-CRASH gjs.*\[[0-9]*\] SIGSEGV$' "$T/crash.gjs")"
+    # shellcheck disable=SC2016 # a gjs program
+    plain=$(gjs -c 'print(imports.gi.GLib.get_user_name()); printerr("to stderr")' 2>&1)
+    # shellcheck disable=SC2016 # a gjs program
+    preloaded=$(LD_PRELOAD=$T/crash.so gjs -c 'print(imports.gi.GLib.get_user_name()); printerr("to stderr")' 2>&1)
+    expect_eq "crash.c: a healthy process prints the same with and without it" "$plain" "$preloaded"
+}
+
 # clock.c must hold the wall clock and leave an absolute monotonic timer alone: libfaketime
 # moved mutter's frame timer, and no headless shell ever finished starting.
 test_clock_c() {
@@ -3863,6 +4019,46 @@ REPORTS
 REPORTS
 }
 
+# glass_views: two moves and the straddling box exact against a fresh effect, the box within the
+# glass bounds away from the boundary, the seam pinned at today's and a known gap no report closes.
+test_glass_views() {
+    local report failures gap what change passes fails state
+    report='{"views": 2, "scale": 2, "boundary": 1440,
+        "straddling": {"views": 2, "liveDifferingFromFresh": 0,
+            "live": {"band": 8, "seamMax": 93.581, "seamInteriorMax": 93.581, "seamEdgeMax": 88.731,
+                "interiorMax": 2.913, "edgeMax": 9.829, "mean": 0.773},
+            "fresh": {"band": 8, "seamMax": 93.581, "seamInteriorMax": 93.581, "seamEdgeMax": 88.731,
+                "interiorMax": 2.913, "edgeMax": 9.829, "mean": 0.773}},
+        "across": {"views": 2, "differingFromFresh": 0, "pixels": 235520},
+        "back": {"views": 2, "differingFromFresh": 0, "pixels": 235520}}'
+    while IFS='|' read -r failures gap what change; do
+        jq -c "$change" <<<"$report" | sed 's/^/APEXG2-GLASS-VIEWS /' >"$T/glass-views.log"
+        read -r passes fails <<<"$(assertion_counts glass_views glass-views "$T/glass-views.log")"
+        expect_eq "glass views: $what fails $failures of 4" "$failures" "$fails"
+        if ((failures == 0)); then
+            expect_eq "glass views: $what passes 3 of 4, the 4th its known gap" 3 "$passes"
+        fi
+        state=open
+        grep -q 'but it holds now' "$T/assertions.out" && state=holds
+        grep -q '^GAP ' "$T/assertions.out" || [[ $state == holds ]] || state=none
+        expect_eq "glass views: $what leaves the seam's gap $gap" "$gap" "$state"
+    done <<'CHANGES'
+0|open|both moves exact, the straddling box deterministic and within bounds away from its seam|.
+1|open|a box that keeps its blur on the view it left|.across.differingFromFresh = 9200
+1|open|a box moved back that one view never repainted|.back.views = 1
+1|open|a straddling box that a fresh effect draws otherwise|.straddling.liveDifferingFromFresh = 640
+1|open|a box off the reference by 9/255 away from the seam|.straddling.live.interiorMax = 9
+2|holds|a seam fixed, 2.51 inside and 9.18 in its band: off its pin, and a gap that holds now|.straddling.live += {seamMax: 9.18, seamInteriorMax: 2.51, seamEdgeMax: 9.18}
+1|open|a seam fixed inside but 14/255 in its band: off its pin, still a gap|.straddling.live += {seamMax: 14, seamInteriorMax: 2.51, seamEdgeMax: 14}
+1|open|a seam 2/255 wider than its pin|.straddling.live.seamMax = 95.6
+1|open|a seam 2/255 narrower than its pin, still a gap|.straddling.live.seamMax = 91.5
+3|open|one view only, the probe's early return|{views: 1, scales: [2]}
+3|open|two views at two scales, the probe's early return|{views: 2, scales: [2, 1]}
+3|open|the probe's error report|{error: "No property fine on ShellBlurEffect"}
+3|open|no report|del(.views, .straddling, .across, .back)
+CHANGES
+}
+
 test_shadows_under_glass() {
     local surface='{"covered": true, "sameSize": true, "interiorDiffering": 0, "rim": 9, "picked": "St.BoxLayout.popup-menu-content", "samePick": true}'
     local good passes failures what change
@@ -3960,8 +4156,8 @@ CHANGES
             disabled: ($none + {solidClass: false}), restored: $g,
             scrims: {overview: $scrim, launcher: ($scrim + {radius: 160, saturation: 1.6}), hidden: ($scrim + {enabled: false}), barOverScrim: $on,
                 unforwarded: {changed: 59520, differingFromFull: 42880}, forwarded: {changed: 102400, differingFromFull: 0}},
-            derived: {osd: $p, screenshot: ($p + {enabled: false}),
-                switcher: ($p + {corner: {radius: 52, outside: 560, inside: 2080, square: 2704, blurredOutside: 0, blurredInside: 2080, capturedDiffering: 0}})},
+            derived: {osd: $p, screenshot: ($p + {enabled: false}), switchers: (($p + {corner: $corner}) as $s
+                | {switcher: $s, "input-source-switcher": $s, "ctrl-alt-tab-switcher": $s, "monitor-switcher": $s})},
             emptyBox: {shown: ($scrim + {enabled: false}), hidden: ($scrim + {enabled: false}), shownAgain: ($scrim + {enabled: false}),
                 emptyFrames: 3, laidOut: ($scrim + {frames: 1, allocation: [320, 200]}), zeroHeight: ($scrim + {enabled: false})},
             opacity: {followOpacity: true, fullDiffering: 102400, noneDiffering: 0, half: 1.208},
@@ -3975,12 +4171,14 @@ CHANGES
                 ring: ($ring + {expected: 4, corners: [4.02, 3.98, 4, 4.01], edges: [4, 4, 4, 4]}),
                 reduceTransparency: $ring,
                 highContrast: ($ring + {borders: [0, 0, 0, 0], radius: 0, borderColor: "#00000000", background: "#00000000", previewBackground: "#3584e47f"})},
-            conformance: {registered: ["banner", "calendar", "dock", "osd", "panel", "quick-settings", "scrim-0", "screenshot", "spotlight",
-                    "switcher", "tilePreview", "toast"], unchecked: [],
+            conformance: {registered: ["banner", "calendar", "ctrl-alt-tab-switcher", "dock", "input-source-switcher", "monitor-switcher", "osd",
+                    "panel", "quick-settings", "scrim-0", "screenshot", "spotlight", "switcher", "tilePreview", "toast"], unchecked: [],
                 checked: {panel: $on, "scrim-0": ($scrim + {cornerRadius: 0, allocation: [1440, 900], painted: {box: [0, 0, 1440, 900], radii: [0, 0, 0, 0]}}),
                     dock: ($dock + {corner: $corner}), "quick-settings": ($p + {corner: $corner}), calendar: ($p + {corner: $corner}),
                     banner: ($p + {corner: $corner}), osd: ($p + {corner: $corner}), spotlight: ($p + {corner: $corner}),
-                    toast: ($p + {corner: $corner, tries: 1}), switcher: ($p + {corner: $corner}), screenshot: ($p + {enabled: false, allocation: [null, null]}),
+                    toast: ($p + {corner: $corner, tries: 1}), switcher: ($p + {corner: $corner}), "input-source-switcher": ($p + {corner: $corner}),
+                    "ctrl-alt-tab-switcher": ($p + {corner: $corner}), "monitor-switcher": ($p + {corner: $corner}),
+                    screenshot: ($p + {enabled: false, allocation: [null, null]}),
                     tilePreview: {radius: 80, saturation: 1.6, cornerRadius: 28, enabled: true, fine: true, followOpacity: true, background: true,
                         allocation: [372, 180], painted: {box: [0, 0, 372, 180], radii: [28, 28, 28, 28]}}}},
             motion: {dock: {moved: true, enabled: true, covered: true, differingFromFull: 0, pixels: 86136},
@@ -4011,7 +4209,7 @@ CHANGES
 1|a scrim left on after the overview|.manager.scrims.hidden.enabled = true
 1|a forwarded damage that leaves a stale halo|.manager.scrims.forwarded.differingFromFull = 120
 2|an OSD without glass|.manager.derived.osd = null
-1|an Alt+Tab list at the bar's saturation|.manager.derived.switcher.saturation = 1.6
+1|an Alt+Tab list at the bar's saturation|.manager.derived.switchers.switcher.saturation = 1.6
 2|a tile preview that never registers its glass|.manager.tile.shown.glass = null
 1|a tile preview at the popovers' glass|.manager.tile.shown.glass.radius = 120
 1|a blurred box that includes the clear border|.manager.tile.shown.glassBox = .manager.tile.shown.preview
@@ -4029,13 +4227,18 @@ CHANGES
 1|a glass at opacity 0 that still draws|.manager.opacity.noneDiffering = 3200
 1|a glass that blurs nothing at 255|.manager.opacity.fullDiffering = 0
 1|no opacity report|.manager.opacity = null
-1|an Alt+Tab list's blur rounded twice its border's radius|.manager.derived.switcher.cornerRadius = 104
+1|an Alt+Tab list's blur rounded twice its border's radius|.manager.derived.switchers.switcher.cornerRadius = 104
 1|a banner rounded at one corner only|.manager.glass.banner.painted.radii = [52, 0, 0, 0]
 1|a blur over a box other than the painted background|.manager.glass.banner.painted.box = [0, 8, 360, 392]
 1|a screenshot panel rounded unlike its border|.manager.derived.screenshot.cornerRadius = 40
-1|a corner whose blur reaches past the border's arc|.manager.derived.switcher.corner.blurredOutside = 120
-1|a corner left unblurred inside the arc|.manager.derived.switcher.corner.blurredInside = 1960
-1|a screenshot whose corner is not the screen's|.manager.derived.switcher.corner.capturedDiffering = 640
+1|a corner whose blur reaches past the border's arc|.manager.derived.switchers.switcher.corner.blurredOutside = 120
+1|a corner left unblurred inside the arc|.manager.derived.switchers.switcher.corner.blurredInside = 1960
+1|a screenshot whose corner is not the screen's|.manager.derived.switchers.switcher.corner.capturedDiffering = 640
+1|Ctrl+Alt+Tab's list at the bar's saturation|.manager.derived.switchers["ctrl-alt-tab-switcher"].saturation = 1.6
+1|Super+P's list blurred past its corner's arc|.manager.derived.switchers["monitor-switcher"].corner.blurredOutside = 120
+1|Super+P's corner a screenshot draws 2/255 apart|.manager.derived.switchers["monitor-switcher"].corner.capturedMax = 2
+6|the held input-source switcher tinted but never blurred, as main's name match leaves it|.manager.derived.switchers["input-source-switcher"] = null | .manager.conformance.registered -= ["input-source-switcher"] | .manager.conformance.checked["input-source-switcher"] = null
+1|Super+P's list registered under the plain switcher name, so its own is missing|.manager.conformance.registered -= ["monitor-switcher"]
 1|the inset-shadow ring St thickens at the corners|.manager.tile.ring.corners = [8, 8, 8, 8]
 1|one corner 0.3 px wider|.manager.tile.ring.corners[3] = 4.3
 1|a ring left on the preview, under the class|.manager.tile.ring.previewShadow = true
@@ -4144,7 +4347,10 @@ test_solid_bar
 test_dark_style_off
 test_fixtures
 test_glass
+test_glass_views
 test_shadows_under_glass
+test_case_backtrace
+test_crash_c
 
 printf '1..%d\n' "$tests"
 ((failed == 0))

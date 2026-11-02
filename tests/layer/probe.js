@@ -1725,13 +1725,25 @@ async function exerciseGlass() {
     overviewGroup.emit('notify::visible');
     Main.messageTray.showBanner();
     report('banner');
-    class TestSwitcherPopup extends Main.StubActor {}
-    const popup = new TestSwitcherPopup('popup', {parent: Main.uiGroup});
-    Main.uiGroup.emit('child-added', popup);
-    const list = new Main.StubActor('switcher', {glass: {...POPOVER_GLASS_IN_TEST}, parent: popup});
-    list.add_style_class_name('switcher-list');
-    popup.emit('child-added', list);
+    const {SwitcherPopup} = await import(`file://${shellDir}/js/ui/switcherPopup.js`);
+    const switcherList = PopupClass => {
+        const popup = new PopupClass('popup', {parent: Main.uiGroup});
+        Main.uiGroup.emit('child-added', popup);
+        const list = new Main.StubActor('switcher', {glass: {...POPOVER_GLASS_IN_TEST}, parent: popup});
+        list.add_style_class_name('switcher-list');
+        popup.emit('child-added', list);
+        return list;
+    };
+    class AppSwitcherPopup extends SwitcherPopup {}
+    const list = switcherList(AppSwitcherPopup);
     fact('glass.derived', [Main.osdWindowManager._osdWindows[0]._hbox, list, Main.screenshotUI._panel].map(glassOf).join(' '));
+    // keyboard.js's, ctrlAltTab.js's and switchMonitor.js's popups: SwitcherPopups by class, not by name.
+    class InputSourcePopup extends SwitcherPopup {}
+    class CtrlAltTabPopup extends SwitcherPopup {}
+    class SwitchMonitorPopup extends SwitcherPopup {}
+    class NotASwitcherPopup extends Main.StubActor {}
+    const lists = [InputSourcePopup, CtrlAltTabPopup, SwitchMonitorPopup, NotASwitcherPopup].map(switcherList);
+    fact('glass.switchers', lists.map(l => `${Registry.surfaces().find(r => r.actor === l)?.name ?? 'unregistered'}:${glassOf(l).split(':')[1]}`).join(' '));
 
     // windowManager.js's TilePreview adds itself to the window group, hidden until a tiling shows it.
     class TilePreview extends St.Widget {}
