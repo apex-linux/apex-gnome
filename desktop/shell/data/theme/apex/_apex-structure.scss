@@ -46,3 +46,10 @@ $apex_dock_border: $_hc_border;
   &:ltr { padding-right: 0; }
   &:rtl { padding-left: 0; }
 }
+
+// Upstream's filled avatar holds its glyph at 2.3:1; an outline in HC's fg, as board 12's, keeps it at 4.5:1.
+.login-dialog-user-list-view .login-dialog-user-list .login-dialog-user-list-item .user-icon {
+  border: 1px solid $_hc_fg;
+  background-color: transparent;
+  color: $_hc_fg;
+}

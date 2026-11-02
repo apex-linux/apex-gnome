@@ -603,6 +603,7 @@ function describeGreeter(dialog) {
         prompt: describePrompt(dialog._authPrompt?.visible ? dialog._authPrompt : null),
         style: describeGreeterStyle(dialog),
         layout: describeGreeterLayout(dialog, items),
+        avatars: items.map(i => i._userWidget._avatar).map(a => ({...button(a), fg: color(a.get_theme_node().get_foreground_color())})),
     };
 }
 

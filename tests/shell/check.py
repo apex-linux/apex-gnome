@@ -42,6 +42,7 @@ LOCK_CASES = {
     "lock-safe": {"apex": False, "question": "Password", "layer": False},
 }
 GREETER_CASES = ["greeter-light", "greeter-dark"]
+HC_GREETER = "greeter-high-contrast"
 # dbus-daemon logs each activation: a mode that cannot screencast has no use for the service (patch 0020).
 SCREENCAST_STARTED = "Activating service name='org.gnome.Shell.Screencast'"
 # Per polkit case: board 13's dialog or upstream's, and the info line PAM sent.
@@ -740,6 +741,35 @@ CONTRAST_STEPS = {"lock": ("contrast-opened", "contrast-field", "contrast-wrong-
                   "greeter": ("contrast-list", "contrast-list-hover", "contrast-prompt", "contrast-field")}
 
 
+def wcag_ratio(a, b):
+    def lum(c):
+        lin = [v / 12.92 if v <= .03928 else ((v + .055) / 1.055) ** 2.4 for v in (int(c[i:i + 2], 16) / 255 for i in (1, 3, 5))]
+        return .2126 * lin[0] + .7152 * lin[1] + .0722 * lin[2]
+    hi, lo = sorted((lum(a), lum(b)), reverse=True)
+    return round((hi + .05) / (lo + .05), 2)
+
+
+def check_greeter_avatars(shots, case, hc):
+    """Board 12's avatars are outlines: a fill under the glyph drops it under 3:1, and under HC's 4.5:1."""
+    f = facts(read(shots, f"{case}.log"))
+    avatars = (f.get("list") or {}).get("avatars") or []
+    check(f"{case}: every list avatar is unfilled", len(avatars) == 2 and all(a["background"][7:] == "00" for a in avatars),
+          json.dumps(avatars))
+    if not hc:
+        return
+    # The glyph's square box crosses its own ring, so the row is read where the stage draws it under the row's name.
+    targets = [t for t in (f.get("contrast-list") or {}).get("targets", []) if not t["offscreen"]]
+    rows = [t["backdrop"] for t in targets if t["styleClass"] == "user-widget-label"]
+    glyphs = [wcag_ratio(t["ink"], row) for t, row in zip([t for t in targets if t["styleClass"] == "user-icon"], rows)]
+    check(f"{case}: each avatar is a 1px outline in the glyph's colour, HC's fg",
+          avatars and all(a["border"] == 1 and a["borderColor"] == a["fg"] == "#ffffffff" for a in avatars), json.dumps(avatars))
+    check(f"{case}: each avatar glyph at {TEXT_RATIO}:1 on its row", len(glyphs) == 2 and min(glyphs) >= TEXT_RATIO,
+          json.dumps({"glyphs": glyphs, "rows": rows}))
+    outline = [wcag_ratio(a["borderColor"], row) for a, row in zip(avatars, rows)]
+    check(f"{case}: each avatar outline at {ICON_RATIO}:1 on its row", len(outline) == 2 and min(outline) >= ICON_RATIO,
+          json.dumps(outline))
+
+
 def low_contrast(report):
     """G2's rule (assert.sh A11Y_LOW_CONTRAST): text under 4.5:1, glyphs under 3:1, against what the stage drew."""
     return [f"{t['kind']} {json.dumps(t['name'])} {t['ink']} at {t['alpha']} on {t['backdrop']}: {t['ratio']}"
@@ -879,6 +909,8 @@ def main():
     for case in GREETER_CASES:
         check_greeter(shots, case)
         check_contrast(shots, case, "greeter")
+        check_greeter_avatars(shots, case, hc=False)
+    check_greeter_avatars(shots, HC_GREETER, hc=True)
     for case in ("lock-contrast-light", "lock-contrast-dark", "lock-fallback-light", "lock-fallback-dark"):
         check_contrast(shots, case, "lock")
     check_motion(shots, "lock-motion", reduced=False)
