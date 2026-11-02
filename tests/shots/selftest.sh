@@ -364,7 +364,7 @@ REPORT_OF_A_DIALOG_DRAWN_FROM_TOKENS='
     entry: {height: ($t.apex_entry_height | px), radius: 999, background: ($t.apex_button | hex), boxShadow: null,
         padding: {left: ($t.apex_entry_padding | px), right: ($t.apex_entry_padding | px)},
         font: {size: ($t.apex_font_entry_size | px), weight: ($t.apex_font_entry_weight | tonumber)},
-        focus: {boxShadow: {inset: true, spread: ($t.apex_entry_focus_ring | px), color: "#3584e4ff"}}},
+        focus: {boxShadow: {inset: true, spread: ($t.apex_entry_focus_ring | px), color: ($t.apex_fg | hex)}}},
     buttons: [$button + {default: false, background: ($t.apex_button | hex), foreground: ($t.apex_fg | hex), hover: {background: ($t.apex_button_hover | hex)}},
         $button + {default: true, background: "#2863abff", foreground: "#ffffffff"}]}}}'
 # shellcheck disable=SC2016 # a jq program
@@ -564,7 +564,7 @@ REPORT_OF_DERIVED_SURFACES_DRAWN_FROM_TOKENS='
     candidatePopup: ($ring + {background: ($t.apex_panel_solid | hex), radius: ($t.apex_radius_menu | px)}),
     candidateBox: {radius: ($t.apex_radius_menu_row | px), hover: {background: ($t.apex_button_hover | hex)}},
     runEntry: {minHeight: ($t.apex_entry_height | px), background: ($t.apex_button | hex), boxShadow: null,
-        focus: {boxShadow: {inset: true, spread: ($t.apex_entry_focus_ring | px), color: "#3584e4ff"}}},
+        focus: {boxShadow: {inset: true, spread: ($t.apex_entry_focus_ring | px), color: ($t.apex_fg | hex)}}},
     audioDevice: {radius: ($t.apex_radius_switcher_item | px), background: "#00000000", foreground: ($t.apex_fg | hex),
         hover: {background: ($t.apex_button_hover | hex)}},
     monitorLabel: {radius: ($t.apex_radius_osd | px)}}}}'
@@ -780,7 +780,7 @@ REPORT_OF_LEGIBLE_SURFACES='
     checkBoxDialogAccents: (["blue", "teal", "green", "yellow", "orange", "red", "pink", "purple", "slate"] | map({key: ., value: $s}) | from_entries),
     screenshot: $s,
 
-    bar: ($s | .targets += [$dot, $inactiveDot]), barUnread: ($s | .targets += [$dot + {name: "messages-indicator"}, $inactiveDot]), dock: $s, popupMenu: $s, osd: $s, banner: $s, quickSettings: $s, wifiMenu: $s, wifiMenuConnected: $s, dateMenu: $s, switcher: $s,
+    bar: ($s | .targets += [$dot, $inactiveDot]), barUnread: ($s | .targets += [$dot + {name: "messages-indicator"}, $inactiveDot]), dock: $s, popupMenu: $s, osd: $s, banner: $s, quickSettings: $s, wifiMenu: $s, wifiMenuConnected: $s, dateMenu: $s, switcher: $s, inputSourceSwitcher: $s, ctrlAltTabSwitcher: $s, monitorSwitcher: $s,
     dialog: $s, endSession: $s, spotlight: {popup: $s, toast: $s}, overview: $s, appGrid: $s,
     barPills: {box: $s.box, pills: {input: {targets: [$text + {name: "EN"}], edge: null},
         recording: {targets: [$text + {name: "0:42", ink: "#ffffff", backdrop: "#c01c28", ratio: 5.6}], edge: $edge},
@@ -789,20 +789,15 @@ REPORT_OF_LEGIBLE_SURFACES='
         + ([range(4)] | map({key: "indicator\(.)", value: {targets: [$icon + {name: "Chat"}], edge: null}}) | from_entries),
         crowded: $s, indicatorMenu: $s},
     focus: ({name: "Control", focused: true, changed: 900, perimeter: 400, ratio: 4} as $ring
-        | {quickSettings: $ring, dock: $ring, dialog: ($ring + {ratio: 2.87}),
+        | {quickSettings: $ring, dock: $ring, dialog: $ring,
             spotlight: ($ring + {changed: 164, ratio: 1})} | {backdrop: ., busy: .})}'
 
 # The label picks the backdrop: dark-style's inactive dot passes 3:1 today, default's is the gap.
-# Each label's focus readings at today's pins, Quick Settings' and the dialog's per wallpaper: four gaps.
-declare -Ar A11Y_FOCUS_FIXTURE=([default]='{"quickSettings":[2.37,2.14],"dialog":[4,4]}'
-    [default-solid]='{"quickSettings":[1.91,2.14],"dialog":[4,4]}' [dark-style]='{"quickSettings":[4,4],"dialog":[2.87,2.87]}')
 
 a11y_run() {
     local assertions=$1 change=${2:-.} label=${3:-dark-style} inactive=${4:-4.24}
     # shellcheck disable=SC2016 # a jq program
-    jq -nc --argjson inactive "$inactive" --argjson today "${A11Y_FOCUS_FIXTURE[$label]}" "$REPORT_OF_LEGIBLE_SURFACES
-        | .focus |= with_entries(.key as \$w | (if \$w == \"busy\" then 1 else 0 end) as \$i
-            | .value.quickSettings.ratio = \$today.quickSettings[\$i] | .value.dialog.ratio = \$today.dialog[\$i]) | $change" |
+    jq -nc --argjson inactive "$inactive" "$REPORT_OF_LEGIBLE_SURFACES | $change" |
         sed 's/^/APEXG2-A11Y /' >"$T/a11y.log"
     # shellcheck disable=SC2016 # expanded by the inner bash
     bash -c '. "$1/assert.sh"; "$2" "$3" "$4" >"$5" 2>&1; summary >>"$5"; echo "$npass $nfail $ngap"' \
@@ -838,9 +833,9 @@ test_inactive_dot_gap() {
             not_ok "inactive dot gap: $what fails $want_failures, $want_gaps gap(s) (passed/failed/gaps $passes/$failures/$open_gaps): $(grep -m3 '^FAIL' "$T/a11y.out" | paste -sd'|' -)"
         fi
     done <<'CHANGES'
-0|6|2.86|default's dot at today's 2.86:1, in the bar and with the unread dot
-2|6|2.85|a dot below today's 2.86:1
-2|4|3|the dot at 3:1: the gap must go
+0|4|2.86|default's dot at today's 2.86:1, in the bar and with the unread dot
+2|4|2.85|a dot below today's 2.86:1
+2|2|3|the dot at 3:1: the gap must go
 CHANGES
 }
 
@@ -856,16 +851,16 @@ test_pill_gaps() {
             not_ok "pill gaps: $what fails $want_failures, $want_gaps gap(s) (passed/failed/gaps $passes/$failures/$open_gaps): $(grep -m3 '^FAIL' "$T/a11y.out" | paste -sd'|' -)"
         fi
     done <<'CHANGES'
-0|9|1.62|default-solid's three pill fills at today's ratios, beside its two inactive-dot gaps
-1|9|1.61|the sharing pill's fill below today's 1.62:1
-1|8|3|the sharing pill's fill at 3:1: its gap must go
+0|7|1.62|default-solid's three pill fills at today's ratios, beside its two inactive-dot gaps
+1|7|1.61|the sharing pill's fill below today's 1.62:1
+1|6|3|the sharing pill's fill at 3:1: its gap must go
 CHANGES
 }
 
 test_a11y() {
     local assertions expected change what passes failures open_gaps want
-    # dark-style's four focus gaps today: its Spotlight entry and dialog entry, each per wallpaper.
-    for assertions in a11y_contrast:77:4 a11y_layout:58:0; do
+    # dark-style's two focus gaps today: its Spotlight entry, per wallpaper.
+    for assertions in a11y_contrast:80:2 a11y_layout:61:0; do
         IFS=: read -r assertions expected gaps <<<"$assertions"
         read -r passes failures open_gaps <<<"$(a11y_run "$assertions")"
         if ((failures == 0 && open_gaps == gaps && passes == expected)); then
@@ -884,6 +879,8 @@ test_a11y() {
     done <<'CHANGES'
 a11y_contrast|1|.bar.targets[0].ratio = 4.4|text at 4.4:1
 a11y_contrast|1|.dock.targets[1].ratio = 2.9|a glyph at 2.9:1
+a11y_contrast|1|.inputSourceSwitcher.targets[0].ratio = 4.4|the held input-source switcher's name at 4.4:1
+a11y_layout|1|.monitorSwitcher = {error: "no monitor-switcher"}|a Super+P switcher that never showed
 a11y_contrast|1|.checkBoxDialogAccents.yellow.targets[1].ratio = 2.9|a checked box's check at 2.9:1 on yellow
 a11y_contrast|2|.bar.targets[3].ratio = 2.9|an inactive workspace dot at 2.9:1, under 3:1 and dark-style's 4.24:1
 a11y_contrast|1|.bar.targets[3].ratio = 4.2|an inactive workspace dot at 4.2:1, under dark-style's 4.24:1
@@ -904,7 +901,8 @@ a11y_contrast|1|.barPills.indicatorMenu.targets[0].ratio = 3|the Chat app's menu
 a11y_contrast|2|del(.barPills.pills.overflow, .barPills.pills.indicator0, .barPills.pills.indicator1, .barPills.pills.indicator2, .barPills.pills.indicator3)|no app indicators shown
 a11y_contrast|1|.focus.busy.quickSettings += {ratio: 1}|a focus indicator drawn in its surface's own colour over the busy wallpaper
 a11y_contrast|1|.focus.backdrop.dock += {changed: 0, ratio: 1}|a dock item that shows no focus indicator
-a11y_contrast|1|.focus.busy.dialog.ratio = 2.5|the dialog entry's indicator below today's 2.87:1
+a11y_contrast|1|.focus.busy.dialog.ratio = 2.87|the dialog entry's indicator back at its accent ring's 2.87:1
+a11y_contrast|1|.focus.backdrop.quickSettings.ratio = 2.37|Quick Settings' toggle back at its fill-only 2.37:1
 a11y_contrast|1|.focus.backdrop.dialog.focused = false|key focus that never lands on the dialog's control
 a11y_contrast|4|.focus.busy = {error: "the wallpaper never changed"}|a busy wallpaper that never showed
 a11y_contrast|0|.focus.backdrop.quickSettings.ratio = 3|a focus indicator at 3:1
@@ -1773,6 +1771,7 @@ del(.surfaces.dialog.endSession.buttons[1])|stock's row, without Restart
 .surfaces.dialog.endSession.rowSpacing = 12|dialog.js's 12 px between the buttons
 .surfaces.dialog.endSession.buttons[1].width = 128|an even row
 .surfaces.dialog.entry.focus.boxShadow.color = "#3584e4cc"|upstream's 80 % focus ring
+.surfaces.dialog.entry.focus.boxShadow.color = "#3584e4ff"|the raw accent ring, 2.87:1 on the dark entry
 .surfaces.dialog.buttons[0].radius = 12|upstream's square-ish buttons
 .surfaces.dialog.buttons[1].background = "#00000a10"|a default button without the accent
 .surfaces.dialog.buttons[1].background = "#3584e4ff"|a default button on the raw accent, 3.8:1 under white
@@ -3956,8 +3955,8 @@ CHANGES
             disabled: ($none + {solidClass: false}), restored: $g,
             scrims: {overview: $scrim, launcher: ($scrim + {radius: 160, saturation: 1.6}), hidden: ($scrim + {enabled: false}), barOverScrim: $on,
                 unforwarded: {changed: 59520, differingFromFull: 42880}, forwarded: {changed: 102400, differingFromFull: 0}},
-            derived: {osd: $p, screenshot: ($p + {enabled: false}),
-                switcher: ($p + {corner: {radius: 52, outside: 560, inside: 2080, square: 2704, blurredOutside: 0, blurredInside: 2080, capturedDiffering: 0}})},
+            derived: {osd: $p, screenshot: ($p + {enabled: false}), switchers: (($p + {corner: $corner}) as $s
+                | {switcher: $s, "input-source-switcher": $s, "ctrl-alt-tab-switcher": $s, "monitor-switcher": $s})},
             emptyBox: {shown: ($scrim + {enabled: false}), hidden: ($scrim + {enabled: false}), shownAgain: ($scrim + {enabled: false}),
                 emptyFrames: 3, laidOut: ($scrim + {frames: 1, allocation: [320, 200]}), zeroHeight: ($scrim + {enabled: false})},
             opacity: {followOpacity: true, fullDiffering: 102400, noneDiffering: 0, half: 1.208},
@@ -3971,12 +3970,14 @@ CHANGES
                 ring: ($ring + {expected: 4, corners: [4.02, 3.98, 4, 4.01], edges: [4, 4, 4, 4]}),
                 reduceTransparency: $ring,
                 highContrast: ($ring + {borders: [0, 0, 0, 0], radius: 0, borderColor: "#00000000", background: "#00000000", previewBackground: "#3584e47f"})},
-            conformance: {registered: ["banner", "calendar", "dock", "osd", "panel", "quick-settings", "scrim-0", "screenshot", "spotlight",
-                    "switcher", "tilePreview", "toast"], unchecked: [],
+            conformance: {registered: ["banner", "calendar", "ctrl-alt-tab-switcher", "dock", "input-source-switcher", "monitor-switcher", "osd",
+                    "panel", "quick-settings", "scrim-0", "screenshot", "spotlight", "switcher", "tilePreview", "toast"], unchecked: [],
                 checked: {panel: $on, "scrim-0": ($scrim + {cornerRadius: 0, allocation: [1440, 900], painted: {box: [0, 0, 1440, 900], radii: [0, 0, 0, 0]}}),
                     dock: ($dock + {corner: $corner}), "quick-settings": ($p + {corner: $corner}), calendar: ($p + {corner: $corner}),
                     banner: ($p + {corner: $corner}), osd: ($p + {corner: $corner}), spotlight: ($p + {corner: $corner}),
-                    toast: ($p + {corner: $corner, tries: 1}), switcher: ($p + {corner: $corner}), screenshot: ($p + {enabled: false, allocation: [null, null]}),
+                    toast: ($p + {corner: $corner, tries: 1}), switcher: ($p + {corner: $corner}), "input-source-switcher": ($p + {corner: $corner}),
+                    "ctrl-alt-tab-switcher": ($p + {corner: $corner}), "monitor-switcher": ($p + {corner: $corner}),
+                    screenshot: ($p + {enabled: false, allocation: [null, null]}),
                     tilePreview: {radius: 80, saturation: 1.6, cornerRadius: 28, enabled: true, fine: true, followOpacity: true, background: true,
                         allocation: [372, 180], painted: {box: [0, 0, 372, 180], radii: [28, 28, 28, 28]}}}},
             motion: {dock: {moved: true, enabled: true, covered: true, differingFromFull: 0, pixels: 86136},
@@ -4007,7 +4008,7 @@ CHANGES
 1|a scrim left on after the overview|.manager.scrims.hidden.enabled = true
 1|a forwarded damage that leaves a stale halo|.manager.scrims.forwarded.differingFromFull = 120
 2|an OSD without glass|.manager.derived.osd = null
-1|an Alt+Tab list at the bar's saturation|.manager.derived.switcher.saturation = 1.6
+1|an Alt+Tab list at the bar's saturation|.manager.derived.switchers.switcher.saturation = 1.6
 2|a tile preview that never registers its glass|.manager.tile.shown.glass = null
 1|a tile preview at the popovers' glass|.manager.tile.shown.glass.radius = 120
 1|a blurred box that includes the clear border|.manager.tile.shown.glassBox = .manager.tile.shown.preview
@@ -4025,13 +4026,18 @@ CHANGES
 1|a glass at opacity 0 that still draws|.manager.opacity.noneDiffering = 3200
 1|a glass that blurs nothing at 255|.manager.opacity.fullDiffering = 0
 1|no opacity report|.manager.opacity = null
-1|an Alt+Tab list's blur rounded twice its border's radius|.manager.derived.switcher.cornerRadius = 104
+1|an Alt+Tab list's blur rounded twice its border's radius|.manager.derived.switchers.switcher.cornerRadius = 104
 1|a banner rounded at one corner only|.manager.glass.banner.painted.radii = [52, 0, 0, 0]
 1|a blur over a box other than the painted background|.manager.glass.banner.painted.box = [0, 8, 360, 392]
 1|a screenshot panel rounded unlike its border|.manager.derived.screenshot.cornerRadius = 40
-1|a corner whose blur reaches past the border's arc|.manager.derived.switcher.corner.blurredOutside = 120
-1|a corner left unblurred inside the arc|.manager.derived.switcher.corner.blurredInside = 1960
-1|a screenshot whose corner is not the screen's|.manager.derived.switcher.corner.capturedDiffering = 640
+1|a corner whose blur reaches past the border's arc|.manager.derived.switchers.switcher.corner.blurredOutside = 120
+1|a corner left unblurred inside the arc|.manager.derived.switchers.switcher.corner.blurredInside = 1960
+1|a screenshot whose corner is not the screen's|.manager.derived.switchers.switcher.corner.capturedDiffering = 640
+1|Ctrl+Alt+Tab's list at the bar's saturation|.manager.derived.switchers["ctrl-alt-tab-switcher"].saturation = 1.6
+1|Super+P's list blurred past its corner's arc|.manager.derived.switchers["monitor-switcher"].corner.blurredOutside = 120
+1|Super+P's corner a screenshot draws 2/255 apart|.manager.derived.switchers["monitor-switcher"].corner.capturedMax = 2
+6|the held input-source switcher tinted but never blurred, as main's name match leaves it|.manager.derived.switchers["input-source-switcher"] = null | .manager.conformance.registered -= ["input-source-switcher"] | .manager.conformance.checked["input-source-switcher"] = null
+1|Super+P's list registered under the plain switcher name, so its own is missing|.manager.conformance.registered -= ["monitor-switcher"]
 1|the inset-shadow ring St thickens at the corners|.manager.tile.ring.corners = [8, 8, 8, 8]
 1|one corner 0.3 px wider|.manager.tile.ring.corners[3] = 4.3
 1|a ring left on the preview, under the class|.manager.tile.ring.previewShadow = true

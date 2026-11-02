@@ -150,10 +150,10 @@ $_end_session_share: $_end_session_row /
   font-weight: $apex_font_entry_weight;
 
   &:hover { background-color: $apex_button; }
-  // Upstream's focus ring is !important, at 80 % of the accent.
+  // Upstream's focus ring is !important, at 80 % of the accent: the accent's is 2.87:1 in dark.
   &:focus {
     background-color: $apex_button;
-    box-shadow: inset 0 0 0 $apex_entry_focus_ring $apex_accent !important;
+    box-shadow: inset 0 0 0 $apex_entry_focus_ring $apex_fg !important;
   }
 }
 

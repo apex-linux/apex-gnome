@@ -54,7 +54,7 @@ readonly A11Y_TEXT_RATIO=4.5
 readonly A11Y_ICON_RATIO=3
 readonly A11Y_ACCENTS=(blue teal green yellow orange red pink purple slate)
 readonly A11Y_SURFACES=(bar barUnread dock popupMenu osd banner quickSettings "${A11Y_ACCENTS[@]/#/quickSettingsAccents.}" wifiMenu wifiMenuConnected dateMenu
-    "${A11Y_ACCENTS[@]/#/dateMenuAccents.}" switcher dialog "${A11Y_ACCENTS[@]/#/dialogAccents.}"
+    "${A11Y_ACCENTS[@]/#/dateMenuAccents.}" switcher inputSourceSwitcher ctrlAltTabSwitcher monitorSwitcher dialog "${A11Y_ACCENTS[@]/#/dialogAccents.}"
     checkBoxDialog "${A11Y_ACCENTS[@]/#/checkBoxDialogAccents.}" endSession screenshot
     spotlight.popup spotlight.toast overview appGrid barPills.indicatorMenu)
 # The failures still open: upstream's high-contrast sheet, which safe mode keeps as Fedora's.
@@ -1208,8 +1208,8 @@ modal_dialog() {
         "$d.entry" '(.height | px_is($t.apex_entry_height)) and .radius >= ($t.apex_entry_height | px) / 2 and (.background | colour_is($t.apex_button)) and .boxShadow == null
             and (.padding.left | px_is($t.apex_entry_padding)) and (.padding.right | px_is($t.apex_entry_padding))
             and (.font.size | px_is($t.apex_font_entry_size)) and .font.weight == ($t.apex_font_entry_weight | tonumber)'
-    "${metric[@]}" 'focused, it draws a $apex_entry_focus_ring ring in the raw accent' \
-        "{e: $d.entry, accent: .topBar.accent}" '.accent as $a | .e.focus.boxShadow | .inset and (.spread | px_is($t.apex_entry_focus_ring)) and (.color | colour_is($a))'
+    "${metric[@]}" 'focused, it draws a $apex_entry_focus_ring ring in $apex_fg' \
+        "$d.entry.focus.boxShadow" '.inset and (.spread | px_is($t.apex_entry_focus_ring)) and (.color | colour_is($t.apex_fg))'
     "${metric[@]}" 'its buttons are $apex_dialog_button_height high, fully round, $apex_font_dialog_button_size at $apex_font_label_weight' \
         "$d.buttons" 'length == 2 and all((.height | px_is($t.apex_dialog_button_height)) and .radius >= ($t.apex_dialog_button_height | px) / 2
             and (.font.size | px_is($t.apex_font_dialog_button_size)) and .font.weight == ($t.apex_font_label_weight | tonumber))'
@@ -1564,9 +1564,9 @@ derived_surfaces() {
     "${metric[@]}" 'the input method'"'"'s candidates take the popup menu: $apex_panel_solid, ring and shadow, radius $apex_radius_menu; rows radius $apex_radius_menu_row, $apex_button_hover when hovered' \
         "$d" "(.candidatePopup | (.background | colour_is(\$t.apex_panel_solid)) and (.radius | px_is(\$t.apex_radius_menu)) and $ring)
             and (.candidateBox | (.radius | px_is(\$t.apex_radius_menu_row)) and (.hover.background | colour_is(\$t.apex_button_hover)))"
-    "${metric[@]}" 'the run dialog'"'"'s entry is the password entry: $apex_entry_height, $apex_button, a $apex_entry_focus_ring raw-accent ring when focused' \
-        "{e: $d.runEntry, accent: .topBar.accent}" '.accent as $a | .e | (.minHeight | px_is($t.apex_entry_height)) and (.background | colour_is($t.apex_button)) and .boxShadow == null
-            and (.focus.boxShadow | .inset and (.spread | px_is($t.apex_entry_focus_ring)) and (.color | colour_is($a)))'
+    "${metric[@]}" 'the run dialog'"'"'s entry is the password entry: $apex_entry_height, $apex_button, a $apex_entry_focus_ring ring in $apex_fg when focused' \
+        "$d.runEntry" '(.minHeight | px_is($t.apex_entry_height)) and (.background | colour_is($t.apex_button)) and .boxShadow == null
+            and (.focus.boxShadow | .inset and (.spread | px_is($t.apex_entry_focus_ring)) and (.color | colour_is($t.apex_fg)))'
     "${metric[@]}" 'an audio device tile takes the switcher'"'"'s: radius $apex_radius_switcher_item, unfilled, $apex_button_hover when hovered, $apex_fg' \
         "$d.audioDevice" '(.radius | px_is($t.apex_radius_switcher_item)) and (.background | rgba | .[3] == 0) and (.hover.background | colour_is($t.apex_button_hover)) and (.foreground | colour_is($t.apex_fg))'
     "${metric[@]}" 'the monitor number takes the OSD'"'"'s radius $apex_radius_osd' \
@@ -2015,12 +2015,8 @@ bar_pills() {
 # focus lands, something changes, and a 1 px line's worth of it changes by 3:1, or it is a pinned gap.
 readonly A11Y_FOCUS_SURFACES=(quickSettings dock dialog spotlight)
 readonly A11Y_FOCUS_GAP="the owner's decision on the focus indicators (2026-10-31)"
-# Today's shortfalls: Spotlight's entry shows no indicator but the caret, so at 1:1 in every
-# case; Quick Settings' toggle in light and the dialog's entry in dark change too little.
-declare -A A11Y_FOCUS_TODAY=([default:backdrop:quickSettings]=2.37 [default:busy:quickSettings]=2.14
-    [default-solid:backdrop:quickSettings]=1.91 [default-solid:busy:quickSettings]=2.14
-    [dark-style:backdrop:dialog]=2.87 [dark-style:busy:dialog]=2.87
-    [dark-style-solid:backdrop:dialog]=2.87 [dark-style-solid:busy:dialog]=2.87)
+# Today's shortfall: Spotlight's entry shows no indicator but the caret, so at 1:1 in every case.
+declare -A A11Y_FOCUS_TODAY=()
 for a11y_case in default dark-style high-contrast default-solid dark-style-solid high-contrast-solid; do
     for a11y_wall in backdrop busy; do
         A11Y_FOCUS_TODAY[$a11y_case:$a11y_wall:spotlight]=1
@@ -3007,22 +3003,26 @@ glass_manager() {
     "${expect_glass[@]}" '.manager.opacity | .followOpacity and .fullDiffering > 0 and .noneDiffering == 0 and .half <= 1.251' \
         "a glass follows its surface's opacity: at 128 the frame is the blur at 128/255 over the pattern within 1 + 64/255 steps, at 0 the pattern alone (${opacity:-no report})"
     "${expect_glass[@]}" "$glass"' .t as $t | .manager.monitorScale as $s | .manager.derived
-        | (.osd | glass($t.apex_panel_blur; $t.apex_panel_saturation; $s)) and (.switcher | glass($t.apex_panel_blur; $t.apex_panel_saturation; $s))
+        | (.osd | glass($t.apex_panel_blur; $t.apex_panel_saturation; $s))
+        and (.switchers | length == 4 and all(glass($t.apex_panel_blur; $t.apex_panel_saturation; $s)))
         and (.screenshot | .radius == 2 * ($t.apex_panel_blur | px) * $s and .fine and (.enabled | not))' \
-        'the derived glass: the OSD and an Alt+Tab list blur at $apex_panel_blur and $apex_panel_saturation as the popovers do; the screenshot panel too, paused while closed'
+        'the derived glass: the OSD and every switcher (Alt+Tab, the held input-source switcher, Ctrl+Alt+Tab, Super+P) blur at $apex_panel_blur and $apex_panel_saturation as the popovers do; the screenshot panel too, paused while closed'
     "${expect_glass[@]}" 'def fits: .cornerRadius as $r | .painted.radii | all(. == $r); .manager
-        | ([.glass.panel, .glass.dock, .glass.quickSettings, .glass.calendar, .glass.banner, .derived.osd, .derived.switcher, .tile.shown.glass]
+        | ([.glass.panel, .glass.dock, .glass.quickSettings, .glass.calendar, .glass.banner, .derived.osd, .derived.switchers[], .tile.shown.glass]
             | all(fits and .painted.box == [0, 0] + .allocation))
         and (.derived.screenshot | fits)' \
-        'every glass rounds its blur at its border radius, all four corners, over the box St paints its background in: the bar, the dock, Quick Settings, the calendar, a banner, the OSD, an Alt+Tab list and the tile preview; the screenshot panel'"'"'s corners too'
-    "${expect_glass[@]}" '.manager.derived.switcher.corner | .radius > 0 and .outside > 0 and .inside > 0 and .blurredOutside == 0 and .blurredInside == .inside' \
-        'over a checker, an Alt+Tab list'"'"'s bottom-left corner blurs no pixel past its border'"'"'s arc and every pixel inside it (board 15)'
-    "${expect_glass[@]}" '.manager.derived.switcher.corner.capturedDiffering == 0' \
-        'and a screenshot shows that corner as the screen does, pixel for pixel: off stage, the blur maps the stage through the capture'"'"'s viewport'
+        'every glass rounds its blur at its border radius, all four corners, over the box St paints its background in: the bar, the dock, Quick Settings, the calendar, a banner, the OSD, each switcher'"'"'s list and the tile preview; the screenshot panel'"'"'s corners too'
+    "${expect_glass[@]}" '[.manager.derived.switchers[].corner] | length == 4 and all(.radius > 0 and .outside > 0 and .inside > 0 and .blurredOutside == 0 and .blurredInside == .inside)' \
+        'over a checker, each switcher list'"'"'s bottom-left corner blurs no pixel past its border'"'"'s arc and every pixel inside it (board 15)'
+    "${expect_glass[@]}" '.manager.derived.switchers | (.switcher.corner.capturedDiffering == 0)
+        and ([.["input-source-switcher", "ctrl-alt-tab-switcher", "monitor-switcher"].corner.capturedMax] | length == 3 and all(type == "number" and . <= 1))' \
+        'and a screenshot shows those corners as the screen does: Alt+Tab'"'"'s pixel for pixel (off stage, the blur maps the stage through the capture'"'"'s viewport), the other three to 1/255 a channel, as the popovers'"'"''
     local conformance
     conformance=$(report_of "$log" APEXG2-GLASS | jq -r '.manager.conformance | "\(.registered | length) registered: \(.registered | join(", "))"' 2>/dev/null)
-    "${expect_glass[@]}" '.manager.conformance | (.registered | length) > 0 and .unchecked == [] and (.registered | all(. as $n | $n | IN(["panel", "dock", "quick-settings", "calendar", "banner", "osd", "spotlight", "toast", "switcher", "screenshot", "tilePreview"][]) or startswith("scrim-")))' \
-        "every surface the glass registry got in the case was checked, each by name, and none unknown to it (${conformance:-no report})"
+    "${expect_glass[@]}" '.manager.conformance | (.registered | length) > 0 and .unchecked == [] and (.registered | all(. as $n | $n | IN(["panel", "dock", "quick-settings", "calendar", "banner", "osd", "spotlight", "toast", "switcher", "input-source-switcher",
+            "ctrl-alt-tab-switcher", "monitor-switcher", "screenshot", "tilePreview"][]) or startswith("scrim-")))
+        and (.registered | contains(["input-source-switcher", "ctrl-alt-tab-switcher", "monitor-switcher"]))' \
+        "every surface the glass registry got in the case was checked, each by name, and none unknown to it; the held input-source switcher, Ctrl+Alt+Tab and Super+P among them, each under its own name (${conformance:-no report})"
     "${expect_glass[@]}" '.manager.conformance.checked | to_entries | all(.value | .cornerRadius as $r
         | (.painted.radii | all(. == $r)) and (.allocation[0] == null or .painted.box == [0, 0] + .allocation))' \
         'each rounds its blur at its border radius, all four corners, over the box St paints its background in: the Spotlight panel and the toast too'
