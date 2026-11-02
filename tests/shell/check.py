@@ -757,10 +757,10 @@ def check_greeter_avatars(shots, case, hc):
           json.dumps(avatars))
     if not hc:
         return
-    # The glyph's square box crosses its own ring, so the row is read where the stage draws it under the row's name.
-    targets = [t for t in (f.get("contrast-list") or {}).get("targets", []) if not t["offscreen"]]
-    rows = [t["backdrop"] for t in targets if t["styleClass"] == "user-widget-label"]
-    glyphs = [wcag_ratio(t["ink"], row) for t, row in zip([t for t in targets if t["styleClass"] == "user-icon"], rows)]
+    targets = (f.get("contrast-list") or {}).get("targets", [])
+    icons = [t for t in targets if t["styleClass"] == "user-icon" and not t["offscreen"]]
+    glyphs = [t["ratio"] for t in icons]
+    rows = [t["backdrop"] for t in icons]
     check(f"{case}: each avatar is a 1px outline in the glyph's colour, HC's fg",
           avatars and all(a["border"] == 1 and a["borderColor"] == a["fg"] == "#ffffffff" for a in avatars), json.dumps(avatars))
     check(f"{case}: each avatar glyph at {TEXT_RATIO}:1 on its row", len(glyphs) == 2 and min(glyphs) >= TEXT_RATIO,
