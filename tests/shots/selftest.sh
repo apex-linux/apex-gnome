@@ -1053,6 +1053,20 @@ test_goldens() {
     else
         not_ok "goldens import: a later approval adds to the pinned commit, and both boards pass: $(tail -n 3 "$T/goldens.out")"
     fi
+
+    cp "$dir/moved-dark.png" "$dir/board-36-launcher-dark.png"
+    hash=$(cat "$dir/board-36-launcher-light.png" "$dir/board-36-launcher-dark.png" | sha256sum | cut -c 1-12)
+    jq -n --arg h "$hash" '{boards: {"36-launcher": {status: "approved", shots: $h, approvedAt: "2026-10-27T10:00:00Z"}}}' >"$T/decisions3.json"
+    if goldens import "$dir" "$T/decisions3.json" && grep -qx 'goldens.sh: board 36-launcher replaces its legacy golden 36' "$T/goldens.out" &&
+        jq -e --arg h "$hash" '.boards | keys == ["14", "36-launcher"] and .["36-launcher"].shots == $h' "$T/goldens-work/manifest.json" >/dev/null &&
+        [[ $(git -C "$T/goldens-work" ls-files | paste -sd' ') == 'boards/board-14-dark.png boards/board-14-light.png boards/board-36-launcher-dark.png boards/board-36-launcher-light.png manifest.json' ]] &&
+        git -C "$T/goldens-work" push -q "$T/goldens-remote" HEAD:refs/heads/goldens && goldens check "$dir" &&
+        grep -q '^PASS captures board 36 (Launcher), dark: equal' "$T/goldens.out"; then
+        ok "goldens import: a row's NN-SLUG approval replaces its board's legacy NN golden and files, and the check passes"
+    else
+        not_ok "goldens import: a row's NN-SLUG approval replaces its board's legacy NN golden and files, and the check passes: $(tail -n 3 "$T/goldens.out")"
+    fi
+    cp "$T/dark.png" "$dir/board-36-launcher-dark.png"
 }
 
 rows_goldens() {

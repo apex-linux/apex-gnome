@@ -52,6 +52,10 @@ readonly ROWS='.boards | map(. + {key: (.key // "\(.board)-\(.slug)")}) | group_
 # The row a decision key names: NN-SLUG, or a legacy NN for a board of one row.
 # shellcheck disable=SC2016 # a jq program
 readonly ROW_OF='def row_of($k): map(select(.key == $k or (.rows == 1 and (.board | tostring) == $k)))[0];'
+# On a manifest: the legacy NN golden the check would match for row $b, which an approval keyed $k replaces.
+# shellcheck disable=SC2016 # a jq program
+readonly LEGACY_OF='def legacy_of($k; $b): ($b.board | tostring) as $n
+    | if $k != $n and $b.rows == 1 and .boards[$n].slug == $b.slug then $n else empty end;'
 
 fetch_goldens() {
     local dir=$1 rev=$2
@@ -92,7 +96,7 @@ decision_errors() {
 }
 
 import() {
-    local signoff=$1 decisions=$2 errors=() approved=() board row title light dark hash shots rev commit entries=() variant from
+    local signoff=$1 decisions=$2 errors=() approved=() board row title light dark hash shots rev commit entries=() variant from legacy
     signoff_json "$signoff"
     [[ -s $decisions ]] || die "no decisions in $decisions"
     mapfile -t errors < <(decision_errors "$signoff" "$decisions")
@@ -129,13 +133,21 @@ import() {
     [[ -s $GOLDENS_WORK/manifest.json ]] || echo '{"boards": {}}' >"$GOLDENS_WORK/manifest.json"
     for entry in "${entries[@]}"; do
         IFS='|' read -r board hash light dark <<<"$entry"
+        legacy=$(jq -r --arg k "$board" --slurpfile signoff "$signoff/signoff.json" "$ROW_OF$LEGACY_OF"'
+            legacy_of($k; $signoff[0] | '"$ROWS"' | row_of($k))' "$GOLDENS_WORK/manifest.json") ||
+            die "cannot read $GOLDENS_WORK/manifest.json"
+        if [[ -n $legacy ]]; then
+            rm -f -- "$GOLDENS_WORK/boards/board-$legacy-light.png" "$GOLDENS_WORK/boards/board-$legacy-dark.png"
+            echo "goldens.sh: board $board replaces its legacy golden $legacy"
+        fi
         for variant in light dark; do
             [[ $variant == light ]] && from=$light || from=$dark
             [[ -n $from ]] || continue
             cp "$from" "$GOLDENS_WORK/boards/board-$board-$variant.png" || die "cannot copy board $board's captures"
         done
-        jq --arg k "$board" --arg hash "$hash" --slurpfile signoff "$signoff/signoff.json" --slurpfile d "$decisions" "$ROW_OF"'
+        jq --arg k "$board" --arg hash "$hash" --slurpfile signoff "$signoff/signoff.json" --slurpfile d "$decisions" "$ROW_OF$LEGACY_OF"'
             ($signoff[0] | '"$ROWS"' | row_of($k)) as $b
+            | reduce legacy_of($k; $b) as $n (.; del(.boards[$n]))
             | .boards[$k] = {
                 board: $b.board, title: $b.title, slug: $b.slug, source: $b.source, fixture: $b.fixture, scene: $b.scene, shots: $hash,
                 files: {light: "boards/board-\($k)-light.png", dark: (if $b.files.dark == null then null else "boards/board-\($k)-dark.png" end)},
