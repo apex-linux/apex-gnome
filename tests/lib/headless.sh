@@ -8,10 +8,13 @@ readonly HEADLESS_LIB
 . "$HEADLESS_LIB/../../.github/scripts/lib.sh"
 
 readonly SHOTS=$HEADLESS_LIB/../shots
+# shellcheck source=SCRIPTDIR/../shots/backtrace.sh
+. "$SHOTS/backtrace.sh"
 readonly USER_NAME=apex
 readonly MONITOR=2880x1800
 readonly SCALE=2
 readonly CLOCK_LIB=/run/apex-ptyxis-clock.so
+readonly CRASH_LIB=/run/apex-headless-crash.so
 readonly CLOCK='2026-10-24 10:24:00'
 readonly FIXTURE_NAMES=(org.freedesktop.UPower org.freedesktop.NetworkManager org.bluez net.hadess.SwitcherooControl)
 # apex-desktop's values (schemas/90_apex.gschema.override, dconf/distro.d/50-apex-ptyxis).
@@ -67,6 +70,7 @@ headless_bus() {
     [[ -S /run/dbus/system_bus_socket ]] || dbus-daemon --system --fork || log "no system bus"
     python3 "$SHOTS/fixtures.py" "$log_dir" >"$log_dir/fixtures.txt" 2>&1 || log "fixtures.py: exit $?"
     gcc -O2 -Wall -Werror -shared -fPIC -o "$CLOCK_LIB" "$SHOTS/clock.c" || die "cannot build tests/shots/clock.c"
+    crash_lib "$CRASH_LIB" || die "cannot build tests/shots/crash.c"
     CLOCK_EPOCH=$(date -u -d "$CLOCK" +%s)
     held=$(env LD_PRELOAD="$CLOCK_LIB" G2_CLOCK_EPOCH="$CLOCK_EPOCH" date -u '+%F %T' 2>&1)
     [[ $held == "$CLOCK" ]] || die "$CLOCK_LIB does not hold the clock at $CLOCK: $held"
@@ -76,9 +80,9 @@ headless_bus() {
     chmod 755 "$HEADLESS_SHIM" "$HEADLESS_SHIM/systemd-run"
 }
 
-# headless_run LOG PROBE TIMEOUT SETTINGS [NAME=VALUE...]: one shell with PROBE as its automation script.
+# headless_run LOG PROBE TIMEOUT SETTINGS [NAME=VALUE...]: a shell running PROBE; a crash leaves its .bt by LOG.
 headless_run() {
-    local log=$1 probe=$2 timeout=$3 settings=$4 run
+    local log=$1 probe=$2 timeout=$3 settings=$4 run rc=0
     shift 4
     run=$(mktemp -d)
     chown "$USER_NAME:" "$run" && chmod 700 "$run"
@@ -86,13 +90,16 @@ headless_run() {
     runuser -u "$USER_NAME" -- env -i HOME="$HEADLESS_HOME" PATH="$HEADLESS_SHIM:/usr/bin:/usr/sbin" \
         XDG_RUNTIME_DIR="$run" LANG=C.UTF-8 TZ=UTC CLOCK_LIB="$CLOCK_LIB" G2_CLOCK_EPOCH="$CLOCK_EPOCH" \
         DBUS_SYSTEM_BUS_ADDRESS=unix:path=/run/dbus/system_bus_socket PROBE="$probe" MONITOR="$MONITOR" \
-        SETTINGS="$APEX_SETTINGS"$'\n'"$CAPTURE_SETTINGS"$'\n'"$settings" "$@" \
+        SETTINGS="$APEX_SETTINGS"$'\n'"$CAPTURE_SETTINGS"$'\n'"$settings" CRASH_LIB="$CRASH_LIB" "$@" \
         timeout "$timeout" dbus-run-session -- bash -c '
             while read -r schema key value; do
                 [[ -n $schema ]] || continue
                 gsettings set "$schema" "$key" "$value" || exit 1
             done <<<"$SETTINGS"
-            exec env LD_PRELOAD="$CLOCK_LIB" gnome-shell --headless --virtual-monitor "$MONITOR" \
+            ulimit -c unlimited 2>/dev/null
+            exec env LD_PRELOAD="$CLOCK_LIB $CRASH_LIB" gnome-shell --headless --virtual-monitor "$MONITOR" \
                 --wayland-display=apex-ptyxis --automation-script "$PROBE"
-        ' >"$log" 2>&1
+        ' >"$log" 2>&1 || rc=$?
+    case_backtrace "$log" "$rc" "$HEADLESS_HOME" "${log%.log}.bt"
+    return "$rc"
 }
