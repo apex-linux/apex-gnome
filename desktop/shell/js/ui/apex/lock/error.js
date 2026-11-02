@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 //
-// Board 20's wrong password: while the prompt's error shows, the field takes the error ring.
-// A fingerprint error hides the message for the hint's line, so it rings nothing.
+// Board 20's field rings while the prompt shows an error; a fingerprint error, on the hint's line, rings nothing.
 
 import {ERROR_CLASS} from './fingerprint.js';
 
