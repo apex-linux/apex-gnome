@@ -552,12 +552,14 @@ jobs:
           path: _build/shots-patched/rpms
 
       - name: tests/shots/patched.sh on the lane's RPMs, direct.sh pr on a pull request and main otherwise
+        # Inside the job's 45 minutes, so a hung case still leaves time to upload its logs and .bt.
+        timeout-minutes: 40
         env:
           PATCHED_PART: ${{ github.event_name == 'pull_request' && 'pr' || '' }}
         run: PATCHED_RPMS="$PWD/_build/shots-patched/rpms" PATCHED_OUT="$PWD/_build/shots-patched/out" tests/shots/patched.sh
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        if: failure()
+        if: failure() || cancelled()
         with:
           name: shots-patched
           path: _build/shots-patched/out/
