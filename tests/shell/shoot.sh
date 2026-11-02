@@ -7,7 +7,7 @@ readonly SHOTS=$HERE/../shots
 . "$HERE/../../.github/scripts/lib.sh"
 
 readonly APEX_DESKTOP_URL=https://github.com/apex-linux/apex-desktop
-readonly APEX_DESKTOP_REV=f1a2f930f7e16ab7c7fde8f3a178d2e3ad9666ac
+readonly APEX_DESKTOP_REV=44d889fe455a4dd3e62bfa33796fb89d9bc2ff4f
 
 usage() {
     cat <<EOF
@@ -236,6 +236,8 @@ for scheme in light dark; do
     shoot "lock-$scheme" "$USER_NAME" user "$color" 'Password:' || status=1
     shoot "greeter-$scheme" "$GREETER_USER" gdm "$color" 'Password:' -- GDM_GREETER_TEST=1 || status=1
 done
+shoot greeter-high-contrast "$GREETER_USER" gdm default 'Password:' "org.gnome.desktop.a11y.interface high-contrast true" -- \
+    GDM_GREETER_TEST=1 || status=1
 for scheme in light dark; do
     color=default
     [[ $scheme == dark ]] && color=prefer-dark

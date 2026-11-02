@@ -401,6 +401,10 @@ $apex_lock_avatar_shadow: rgba(0, 0, 0, .25);
 $apex_lock_list: rgba(255, 255, 255, .14);
 $apex_lock_list_border: rgba(255, 255, 255, .22);
 $apex_lock_list_separator: rgba(255, 255, 255, .12);
+// The most a hovered row lightens with its white text still at 4.5:1 over light Facets.
+$apex_lock_list_hover: rgba(255, 255, 255, .06);
+// The least fill St paints a focused row's inset ring on.
+$apex_lock_list_focus: rgba(255, 255, 255, .01);
 $apex_lock_greeter_base: #0c1122;
 // lock/background.js reads them from the sheet (-apex-lock-blur, -apex-lock-saturation) for the lock's blur.
 $apex_lock_blur: 30px;

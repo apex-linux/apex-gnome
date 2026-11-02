@@ -336,8 +336,9 @@ async function shootLock() {
     await type(WRONG_ANSWER);
     await Scripting.sleep(STEP_MS * 2);
     fact('wrong-answer', describeLock(dialog));
+    // The field is insensitive while GDM asks again, which WCAG exempts: the message is what this step adds.
     if (contrast)
-        fact('contrast-wrong-answer', await contrastOf(dialog._authPrompt));
+        fact('contrast-wrong-answer', await contrastOf(dialog._authPrompt._message));
 
     await setPowerSaveMode(POWER_SAVE_OFF);
     await Scripting.sleep(STEP_MS);
@@ -619,6 +620,14 @@ async function shootGreeter() {
     iconFact('list', [dialog, Main.panel]);
     await capture('list');
     fact('contrast-list', await contrastOf(dialog));
+    // The unfocused row hovered: the focused one shows its ring instead.
+    const hovered = [...dialog._userList._items.values()].find(item => !item.has_key_focus());
+    // track_hover would reset .hover from the pointer, which never comes near: the pseudo-class itself.
+    if (hovered) {
+        hovered.add_style_pseudo_class('hover');
+        fact('contrast-list-hover', await contrastOf(dialog._userList));
+        hovered.remove_style_pseudo_class('hover');
+    }
     const settings = GLib.getenv('APEX_MOTION') ? motionSettings() : null;
     const stop = settings ? sampleMotion(() => ({transitions: transitionsUnder(dialog)})) : null;
     dialog._userList.getItemFromUserName(GLib.getenv('APEX_USER')).emit('activate');

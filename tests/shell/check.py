@@ -145,7 +145,8 @@ def lock_scrim(dark):
         m = re.search(r"^\$apex_lock_scrim: if\(\$variant == 'light', rgba\((\d+), (\d+), (\d+), ([.\d]+)\), rgba\((\d+), (\d+), (\d+), ([.\d]+)\)\);",
                       f.read(), re.M)
     r, g, b, a = m.groups()[4:] if dark else m.groups()[:4]
-    return "#" + "".join(f"{int(v):02x}" for v in (r, g, b)) + f"{round(float(a) * 255):02x}"
+    # St reads a CSS alpha into a byte as min(255, a * 256): .34 is 0x57, .68 is 0xae.
+    return "#" + "".join(f"{int(v):02x}" for v in (r, g, b)) + f"{min(255, int(float(a) * 256)):02x}"
 
 
 def check_layout(case, layout, overlay_alpha=None, dark=False):
@@ -736,9 +737,7 @@ def check_greeter_motion(shots, case):
 TEXT_RATIO = 4.5  # tests/shots/assert.sh's A11Y_TEXT_RATIO and A11Y_ICON_RATIO
 ICON_RATIO = 3
 CONTRAST_STEPS = {"lock": ("contrast-opened", "contrast-field", "contrast-wrong-answer"),
-                  "greeter": ("contrast-list", "contrast-prompt", "contrast-field")}
-# Board 12's background is apex-desktop's apex-greeter-light.svg at APEX_DESKTOP_REV, baked with its scrim.
-GREETER_CONTRAST_GAP = "apex-desktop's apex-greeter-light.svg still bakes a .34 scrim; it passes once the pin carries .68"
+                  "greeter": ("contrast-list", "contrast-list-hover", "contrast-prompt", "contrast-field")}
 
 
 def low_contrast(report):
@@ -748,7 +747,7 @@ def low_contrast(report):
             and t["ratio"] < (TEXT_RATIO if t["kind"] == "text" else ICON_RATIO)]
 
 
-def check_contrast(shots, case, surface, gap=None):
+def check_contrast(shots, case, surface):
     """Every text and glyph of board 20 or 12 over the wallpaper it is drawn on, as G2's a11y rows read them."""
     f = facts(read(shots, f"{case}.log"))
     steps = CONTRAST_STEPS[surface]
@@ -757,10 +756,6 @@ def check_contrast(shots, case, surface, gap=None):
     low = {step: low_contrast(f[step]) for step in steps if "targets" in f.get(step, {})}
     measured = sum(len(f[step]["targets"]) for step in low)
     failing = {step: lines for step, lines in low.items() if lines}
-    if gap:
-        check(f"{case}: known gap ({gap}): some text still under {TEXT_RATIO}:1, so the gap stands",
-              bool(failing), "every text passes: the gap is closed, remove it")
-        return
     check(f"{case}: all {measured} texts at {TEXT_RATIO}:1 and glyphs at {ICON_RATIO}:1", measured > 0 and not failing,
           json.dumps(failing))
 
@@ -883,7 +878,7 @@ def main():
     check_fingerprint_suspend(shots, "lock-fingerprint-suspend")
     for case in GREETER_CASES:
         check_greeter(shots, case)
-        check_contrast(shots, case, "greeter", GREETER_CONTRAST_GAP)
+        check_contrast(shots, case, "greeter")
     for case in ("lock-contrast-light", "lock-contrast-dark", "lock-fallback-light", "lock-fallback-dark"):
         check_contrast(shots, case, "lock")
     check_motion(shots, "lock-motion", reduced=False)

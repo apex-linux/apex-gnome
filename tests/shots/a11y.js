@@ -171,8 +171,9 @@ function snapshot(target, root, cards, unit) {
         fill: fill?.alpha ? [fill.red, fill.green, fill.blue, fill.alpha / 255] : null,
         rgb: [color.red, color.green, color.blue],
         alpha: color.alpha / 255 * actor.get_paint_opacity() / 255,
-        extents: extents(actor),
-        box: roundedBox(extents(actor), unit),
+        // An entry draws its text in its ClutterText, inside the border and padding.
+        extents: extents(actor instanceof St.Entry ? target.ink : actor),
+        box: roundedBox(extents(actor instanceof St.Entry ? target.ink : actor), unit),
         ellipsized: layout?.is_ellipsized() ?? false,
         // A collapsed notification's body, whole once the notification expands.
         expandable: !!label?.has_style_class_name('message-body') && !!ancestor(actor, root, a => a.has_style_class_name?.('message')),
