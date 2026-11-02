@@ -23,10 +23,11 @@ case locks, answers wrongly (lock-fingerprint fails a scan), blanks and wakes th
 but lock-wake-key: after Esc and a blank, a Return that arrives after the wake, and
 lock-wake-key-blank the same, locked while blank; lock-idle sends gnome-session's
 IDLE at lock, as every real lock does, then blanks and wakes with no key; lock-suspend
-has logind's mock prepare for sleep and resume; lock-contrast and lock-fallback (over GNOME's #013b88) measure
-each text and glyph of the lock as G2's a11y rows do; lock-motion and lock-reduce-motion record every frame of
+has logind's mock prepare for sleep and resume; lock-contrast, lock-fallback (over GNOME's #013b88) and
+lock-contrast-high-contrast measure each text and glyph of the lock, opened, typed in and failed, as G2's a11y rows do; lock-motion and lock-reduce-motion record every frame of
 the lock's opening and closing, without and with Reduce Motion; each greeter case (--mode=gdm) shows the user list,
-then the prompt, and greeter-reduce-motion records each frame between the two. Each polkit case opens the shell's own authentication dialog through the polkit
+then the prompt, measuring the list (as is and with a row pointed at), the prompt and the field, and
+greeter-reduce-motion records each frame between the two; greeter-high-contrast also checks the list's avatars. Each polkit case opens the shell's own authentication dialog through the polkit
 component's _onInitiate(), with a stubbed PolkitAgent.Session that PAM never answers, for
 captures and style checks only (pkexec end to end is G4's); polkit-lock and polkit-suspend
 lock the screen, or sleep and resume, under the open dialog, type at the lock, then end the lock,
@@ -265,6 +266,8 @@ hint_shown="io.github.apex_linux.Apex.Desktop search-hint-shown true"
 shoot date-menu "$USER_NAME" user default 'Password:' "$hint_shown" -- APEX_DATE_MENU=1 || status=1
 shoot date-menu-disabled "$USER_NAME" user default 'Password:' "$hint_shown" "$notifications_off" -- APEX_DATE_MENU=1 || status=1
 shoot lock-high-contrast "$USER_NAME" user default 'Password:' "org.gnome.desktop.a11y.interface high-contrast true" || status=1
+shoot lock-contrast-high-contrast "$USER_NAME" user default 'Password:' "org.gnome.desktop.a11y.interface high-contrast true" -- \
+    APEX_CONTRAST=1 || status=1
 shoot lock-large-text "$USER_NAME" user default 'Password:' "org.gnome.desktop.interface text-scaling-factor 1.25" || status=1
 # authselect locks GDM's fingerprint key off; an image with a reader enables the feature.
 if ! authselect enable-feature with-fingerprint >"$out/authselect.log" 2>&1 || ! dconf update; then
