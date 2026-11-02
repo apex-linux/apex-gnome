@@ -133,8 +133,11 @@ function describeLock(dialog) {
 
 // The entry's box-shadow, as its theme node resolves it.
 function ring(entry) {
-    const shadow = entry.get_theme_node().get_box_shadow();
-    return shadow ? {inset: shadow.inset, spread: shadow.spread, color: color(shadow.color)} : null;
+    const node = entry.get_theme_node();
+    const shadow = node.get_box_shadow();
+    const border = node.get_border_width(St.Side.TOP) / scale();
+    const borderColor = color(node.get_border_color(St.Side.TOP));
+    return shadow ? {inset: shadow.inset, spread: shadow.spread, color: color(shadow.color), border, borderColor} : null;
 }
 
 // What the eye reads, top to bottom, in logical pixels; only what is on screen.

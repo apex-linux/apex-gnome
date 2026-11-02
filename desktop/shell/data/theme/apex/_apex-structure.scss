@@ -34,7 +34,7 @@ $apex_dock_border: $_hc_border;
 .apex-lock-overlay { background-color: $apex_lock_overlay_contrast; }
 
 .unlock-dialog.apex-lock.apex-lock-error .login-dialog-prompt-entry {
-  &, &:focus { box-shadow: inset 0 0 0 $apex_entry_focus_ring $apex_lock_fg !important; }
+  &, &:focus { border-color: $apex_lock_fg; box-shadow: inset 0 0 0 $apex_entry_focus_ring $apex_lock_fg !important; }
 }
 
 .apex-lock-background { -apex-lock-blur: $apex_lock_blur; -apex-lock-saturation: $apex_lock_saturation / 100%; }

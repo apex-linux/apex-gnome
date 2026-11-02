@@ -204,9 +204,14 @@ def check_error_ring(case, opened, wrong, wake, dark):
     """Board 20's wrong password rings the field in $apex_lock_error_ring; high contrast's in its own white."""
     want = "#ffffffff" if case == "lock-high-contrast" else f"{lock_error_ring(dark)}ff"
     check(f"{case}: no error ring before the wrong answer", not opened.get("errorRing"), json.dumps([opened.get("errorRing"), opened.get("ring")]))
-    check(f"{case}: the wrong answer rings the field: 2 px inset, {want}",
-          wrong.get("errorRing") is True and wrong.get("ring") == {"inset": True, "spread": 2, "color": want},
-          json.dumps([wrong.get("errorRing"), wrong.get("ring")]))
+    r = wrong.get("ring") or {}
+    check(f"{case}: the wrong answer rings the field: 2 px inset, {want}, the border its outer pixel",
+          wrong.get("errorRing") is True and (r.get("inset"), r.get("color")) == (True, want)
+          and r.get("spread", 0) + r.get("border", 0) == 2,
+          json.dumps([wrong.get("errorRing"), r]))
+    # A border of its own colour between the ring and the scrim drops board 20's ring under 3:1 on #013b88.
+    check(f"{case}: no other border beside the ring", r.get("border", 0) == 0 or r.get("borderColor") == want,
+          json.dumps(r))
     check(f"{case}: the prompt rebuilt after blank has no ring", not wake.get("errorRing"), json.dumps([wake.get("errorRing"), wake.get("ring")]))
 
 
