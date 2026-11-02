@@ -48,7 +48,7 @@ mkdir -p "$T/schemas" "$T/noschema" "$T/nochild" "$T/data" "$T/home" "$T/shell" 
 # main.js and the Meta and Shell typelibs come only with gnome-shell and mutter.
 cp -R "$REPO/desktop/shell/js" "$T/shell/"
 cp "$HERE/main-stub.js" "$T/shell/js/ui/main.js"
-for upstream in panelMenu dash iconGrid popupMenu layout messageList background; do
+for upstream in panelMenu dash iconGrid popupMenu layout messageList background switcherPopup; do
     cp "$HERE/stubs/$upstream.js" "$T/shell/js/ui/$upstream.js"
 done
 # Spotlight's providers: upstream's app search and remote providers, faked.
@@ -833,6 +833,8 @@ fact "glass: and blurs at the overview's sigma 36 and 1.5, in actor mode, while 
 fact "glass: at the launcher's 40 and 1.6 once the app grid shows" 'glass\.scrim\.launcher=apexGlassScrim:r160/s1\.6/c0/on/actor visible=true'
 fact "glass: the derived glass: the OSD, an Alt+Tab list once its popup adds it, and the screenshot panel (closed) take the popovers' glass" \
     'glass\.derived=osd:r120/s1\.8/c40/on/background switcher:r120/s1\.8/c52/on/background screenshot:r120/s1\.8/c32/paused/background'
+fact "glass: the held input-source switcher, Ctrl+Alt+Tab and Super+P take it too, each under its own name; a popup that is no SwitcherPopup does not, whatever its name" \
+    'glass\.switchers=input-source-switcher:r120/s1\.8/c52/on/background ctrl-alt-tab-switcher:r120/s1\.8/c52/on/background monitor-switcher:r120/s1\.8/c52/on/background unregistered:none'
 fact "glass: the tile preview, as windowManager.js builds it hidden, gets a glass actor below it, unregistered, and the class that hands it the fill and ring" \
     'glass\.tile\.created=apexTilePreviewGlass:none registered=false below=true offsets=12,12,-24,-24 opacity=255 glassed=true'
 fact "glass: shown, it registers as tilePreview at board 22's sigma 20 and 1.6, inset by the preview's clear border" \

@@ -10,7 +10,7 @@
 
 #panel { @include apex-glass($apex_bar_blur, $apex_bar_saturation); }
 
-// DESIGN's derived glass: OSDs, Alt+Tab and the screenshot panel copy the popovers' glass.
+// DESIGN's derived glass: OSDs, every switcher popup's list and the screenshot panel copy the popovers' glass.
 .popup-menu-content.quick-settings,
 .popup-menu-content.datemenu-popover,
 .notification-banner,
