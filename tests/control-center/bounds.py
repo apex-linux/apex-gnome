@@ -50,7 +50,8 @@ GAPS = {
     "Check Now": Gap("buttons", 1, (0, 0, 34, 10), (2, 2), (19, 7), BUTTON),
     "Use at Next Restart…": Gap("buttons", 1, (0, 0, 34, 10), (2, 2), (19, 7), BUTTON),
     "S": Gap("toggles", 2, (0, 0, 108, 6), (2, 2), (13, 5), TOGGLE),
-    # The active toggle: its label fills its raised fill top to bottom, so no line 3 px outside is clear of it.
+    # The active toggle's label fills its raised fill top to bottom, so no line 3 px outside is clear: it is held by
+    # its box and its group's fill alone. Toggle text pins hold to about 2 px, as box() does.
     "M": Gap("toggles", 2, (43, 0, 65, 6), (2, 2), None, TOGGLE),
     "L": Gap("toggles", 2, (86, 0, 22, 6), (2, 2), (13, 5), TOGGLE),
     "Off": Gap("gpu", 1, (23, 4, 10, 5), (2, 2), (2, 2), "its list row's padding"),
@@ -63,22 +64,29 @@ def extents(node):
 
 
 def margins(selector):
-    """The selector's margin in apex.css as top, right, bottom, left: its rules in order, shorthand and longhands."""
+    """The selector's margin in apex.css (top, right, bottom, left), its rules in order, shorthand and longhands; and
+    any other selector naming its class that sets a margin or padding, which this reading would miss."""
     sides = ["top", "right", "bottom", "left"]
     margin = dict.fromkeys(sides, 0.0)
+    others = []
     px = lambda v: 0.0 if v == "0" else float(v.removesuffix("px"))
     rules = re.sub(r"/\*.*?\*/", "", CSS.read_text(), flags=re.S)
     for selectors, body in re.findall(r"([^{}]+)\{([^}]*)\}", rules):
+        declarations = re.findall(r"([\w-]+)\s*:\s*([^;]+);", body)
+        for other in (s.strip() for s in selectors.split(",")):
+            naming = re.search(rf"{re.escape(selector)}(?![\w-])", other)
+            if naming and other != selector and any(p.startswith(("margin", "padding")) for p, _ in declarations):
+                others.append(other)
         if selector not in (s.strip() for s in selectors.split(",")):
             continue
-        for prop, value in re.findall(r"([\w-]+)\s*:\s*([^;]+);", body):
+        for prop, value in declarations:
             if prop == "margin":
                 v = [px(s) for s in value.split()]
                 v = v * 4 if len(v) == 1 else v + v if len(v) == 2 else v + v[1:2] if len(v) == 3 else v
                 margin.update(zip(sides, v))
             elif prop.removeprefix("margin-") in sides:
                 margin[prop.removeprefix("margin-")] = px(value.strip())
-    return tuple(margin[s] for s in sides)
+    return tuple(margin[s] for s in sides), others
 
 
 def check_rows(pane):
@@ -107,18 +115,30 @@ def check_rows(pane):
 
 
 def check_grid(pane):
-    """The grid's row is the grid plus its margins in apex.css, exactly: a row padding of any rule shows in its size."""
-    top, right, bottom, left = margins(".apex-changes")
+    """The grid's row is the grid plus its margins in apex.css, exactly, and the grid is its labels' boxes exactly: a
+    padding of any rule, the row's or the grid's own, shows in a size."""
+    (top, right, bottom, left), others = margins(".apex-changes")
     grids = {}
     for kind in walk(pane):
         if kind.get_role() == Atspi.Role.LABEL and kind.get_name() in KINDS:
             grids[extents(kind.get_parent())] = kind.get_parent()
+    if grids and others:
+        failures.append("change grid")
+        print(f"FAIL bounds: {', '.join(others)} in apex.css sets the grid's margin or padding where this check does "
+              "not read it", flush=True)
     for (gx, gy, gw, gh), grid in grids.items():
         row = grid.get_parent()
         rx, ry, rw, rh = extents(row)
         got = (gx - rx, gy - ry, rw - gw, rh - gh)
         want = (left, top, left + right, top + bottom)
-        if row.get_role() == Atspi.Role.LIST_ITEM and got == want:
+        boxes = [extents(n) for n in list(walk(grid))[1:]]
+        cells = (min(b[0] for b in boxes), min(b[1] for b in boxes), max(b[0] + b[2] for b in boxes),
+                 max(b[1] + b[3] for b in boxes))
+        if cells != (gx, gy, gx + gw, gy + gh):
+            failures.append("change grid")
+            print(f"FAIL bounds: What's New's grid is {gx},{gy} to {gx + gw},{gy + gh} but its labels {cells}: its own "
+                  "padding is left out of its labels' AT-SPI bounds", flush=True)
+        elif row.get_role() == Atspi.Role.LIST_ITEM and got == want:
             print(f"ok bounds: What's New's grid sits {got[0]:g},{got[1]:g} into its row, which is {got[2]:g}x"
                   f"{got[3]:g} bigger: its margins in apex.css and no padding", flush=True)
         else:
