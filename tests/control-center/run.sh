@@ -56,11 +56,12 @@ headless_bus "$out"
 # run_case NAME SCHEME [NAME=VALUE...]: one shell; libadwaita has no settings portal here, so ADW_DEBUG_COLOR_SCHEME.
 # CASE_SETTINGS holds extra "schema key value" lines for that shell.
 run_case() {
-    local name=$1 scheme=$2
+    local name=$1 scheme=$2 rc=0 crash
     shift 2
     headless_run "$out/$name.log" "$CC_TESTS/probe.js" "$SHELL_TIMEOUT" "${CASE_SETTINGS:-}" \
-        APEX_SHOTS="$out" APEX_SHOT="$name" ADW_DEBUG_COLOR_SCHEME="$scheme" "$@"
-    log "run.sh: $name: exit $?"
+        APEX_SHOTS="$out" APEX_SHOT="$name" ADW_DEBUG_COLOR_SCHEME="$scheme" "$@" || rc=$?
+    log "run.sh: $name: exit $rc"
+    if crash=$(shell_crash "$out/$name.log" "$rc"); then log "run.sh: $name: $crash"; return 1; fi
     grep -q 'APEXCC ' "$out/$name.log" && [[ -s $out/$name.png ]] || return 1
     ! grep -q '"check":false\|"ready":false\|"before":false' "$out/$name.log"
 }
