@@ -633,11 +633,12 @@ changes colour under the scrim: with the damage forwarded as the manager forward
 window's, the frame equals a full redraw; without, the blur's halo stays stale (the control). The derived glass: an
 OSD shown, every switcher popup and the screenshot panel (styled while closed) each carry the
 popovers' `$apex_panel_blur` and `$apex_panel_saturation`. The switchers are `switchers.js`'s, each
-shown as its keybinding shows it with no modifier held: an Alt+Tab list in a stand-in of
+shown as its keybinding shows it, its 1.5 s no-modifier finish stopped as a held modifier would
+stop it, so it stays until destroyed: an Alt+Tab list in a stand-in of
 `switcherPopup.js`'s class, the held Super+Alt+Space switcher with two sources, Ctrl+Alt+Tab over
 the bar's focus group, and Super+P's (through `SwitcherPopup`'s own `show()`, as one monitor
-cannot switch), each list over board 15's checker from its top-left corner (a corner-sized one
-lets the blur reach the screen's centre, which a screenshot draws up to 4/255 apart). Alt+Tab's
+cannot switch), each list over board 15's 192 px checker from its top-left corner (without it
+the blur reads the wallpaper, and the captured corners measured 1 to 4/255 off the screen). Alt+Tab's
 corner, captured, matches the screen pixel for pixel; the other three to 1/255 a channel, as the
 popovers' do (Super+P's rounds one pixel). `glass/derived.js` matches them by class, so each
 registers under its own name.

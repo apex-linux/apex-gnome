@@ -3011,8 +3011,9 @@ glass_manager() {
     local conformance
     conformance=$(report_of "$log" APEXG2-GLASS | jq -r '.manager.conformance | "\(.registered | length) registered: \(.registered | join(", "))"' 2>/dev/null)
     "${expect_glass[@]}" '.manager.conformance | (.registered | length) > 0 and .unchecked == [] and (.registered | all(. as $n | $n | IN(["panel", "dock", "quick-settings", "calendar", "banner", "osd", "spotlight", "toast", "switcher", "input-source-switcher",
-            "ctrl-alt-tab-switcher", "monitor-switcher", "screenshot", "tilePreview"][]) or startswith("scrim-")))' \
-        "every surface the glass registry got in the case was checked, each by name, and none unknown to it (${conformance:-no report})"
+            "ctrl-alt-tab-switcher", "monitor-switcher", "screenshot", "tilePreview"][]) or startswith("scrim-")))
+        and (.registered | contains(["input-source-switcher", "ctrl-alt-tab-switcher", "monitor-switcher"]))' \
+        "every surface the glass registry got in the case was checked, each by name, and none unknown to it; the held input-source switcher, Ctrl+Alt+Tab and Super+P among them, each under its own name (${conformance:-no report})"
     "${expect_glass[@]}" '.manager.conformance.checked | to_entries | all(.value | .cornerRadius as $r
         | (.painted.radii | all(. == $r)) and (.allocation[0] == null or .painted.box == [0, 0] + .allocation))' \
         'each rounds its blur at its border radius, all four corners, over the box St paints its background in: the Spotlight panel and the toast too'

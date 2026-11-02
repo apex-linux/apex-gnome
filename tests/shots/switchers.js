@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 // The shell's switcher popups, each as its keybinding opens it, for glass.js and a11y.js.
 
+import GLib from 'gi://GLib';
 import GObject from 'gi://GObject';
 import St from 'gi://St';
 
@@ -33,10 +34,15 @@ export function showSwitcher(build) {
     const popup = build();
     if (!popup)
         return null;
-    // SwitcherPopup's own show(), as SwitchMonitorPopup's refuses on a monitor that cannot switch.
+    // SwitcherPopup's own show(), as SwitchMonitorPopup's refuses on a monitor that cannot switch; with no modifier
+    // held it finishes the popup 1.5 s on (_resetNoModsTimeout), which a held one would not.
     if (!popup._haveModal && !SwitcherPopup.SwitcherPopup.prototype.show.call(popup, false, null, 0)) {
         popup.destroy();
         return null;
+    }
+    if (popup._noModsTimeoutId) {
+        GLib.source_remove(popup._noModsTimeoutId);
+        popup._noModsTimeoutId = 0;
     }
     popup._showImmediately();
     return popup;

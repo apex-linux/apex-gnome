@@ -3995,7 +3995,8 @@ CHANGES
 1|Ctrl+Alt+Tab's list at the bar's saturation|.manager.derived.switchers["ctrl-alt-tab-switcher"].saturation = 1.6
 1|Super+P's list blurred past its corner's arc|.manager.derived.switchers["monitor-switcher"].corner.blurredOutside = 120
 1|Super+P's corner a screenshot draws 2/255 apart|.manager.derived.switchers["monitor-switcher"].corner.capturedMax = 2
-5|the held input-source switcher tinted but never blurred, as main's name match leaves it|.manager.derived.switchers["input-source-switcher"] = null | .manager.conformance.registered -= ["input-source-switcher"] | .manager.conformance.checked["input-source-switcher"] = null
+6|the held input-source switcher tinted but never blurred, as main's name match leaves it|.manager.derived.switchers["input-source-switcher"] = null | .manager.conformance.registered -= ["input-source-switcher"] | .manager.conformance.checked["input-source-switcher"] = null
+1|Super+P's list registered under the plain switcher name, so its own is missing|.manager.conformance.registered -= ["monitor-switcher"]
 1|the inset-shadow ring St thickens at the corners|.manager.tile.ring.corners = [8, 8, 8, 8]
 1|one corner 0.3 px wider|.manager.tile.ring.corners[3] = 4.3
 1|a ring left on the preview, under the class|.manager.tile.ring.previewShadow = true

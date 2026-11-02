@@ -518,8 +518,8 @@ async function switchersState() {
             await Scripting.waitLeisure();
             // eslint-disable-next-line no-await-in-loop
             const list = popup ? await laidOut(popup._switcherList) : null;
-            // Board 15's checker under each list, as the stand-in had: a corner-sized one lets the blur
-            // reach the screen's centre, which a screenshot draws up to 4/255 apart.
+            // Board 15's 192 px checker under each list, as the stand-in had: without it the blur reads the
+            // wallpaper, and the captured corners measured 1 to 4/255 off the screen.
             if (list) {
                 const [x, y] = list.get_transformed_position().map(Math.round);
                 checker = buildChecker({x, y});
