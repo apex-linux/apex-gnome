@@ -17,6 +17,7 @@ import * as SwitcherPopup from 'resource:///org/gnome/shell/ui/switcherPopup.js'
 
 import {showInUse, showItems} from './indicators.js';
 import * as Png from './png.js';
+import {SWITCHERS, showSwitcher} from './switchers.js';
 
 Gio._promisify(Shell.Screenshot.prototype, 'screenshot_area');
 
@@ -635,6 +636,12 @@ export async function a11yReport(h) {
     lap('dateMenuAccents');
     out.switcher = await withOpen(switcher, list => list.destroy(), list => report(list));
     lap('switcher');
+    for (const [key, name] of [['inputSourceSwitcher', 'input-source-switcher'], ['ctrlAltTabSwitcher', 'ctrl-alt-tab-switcher'], ['monitorSwitcher', 'monitor-switcher']]) {
+        // eslint-disable-next-line no-await-in-loop
+        out[key] = await withOpen(() => showSwitcher(SWITCHERS[name]), popup => popup?.destroy(),
+            popup => popup ? report(popup._switcherList) : {error: `no ${name}`});
+        lap(key);
+    }
     out.dialog = await withOpen(() => h.openModalDialog(), d => d.close(), d => report(d.root));
     lap('dialog');
     // A dialog's default button takes its fill from the accent; the screenshot UI is measured once.
