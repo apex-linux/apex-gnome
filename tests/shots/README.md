@@ -174,7 +174,8 @@ the sign-off shells (above). Every case's probe reports them (`session-defaults.
   `/usr/share/icons/Apex/`. Explicit lists, each entry by exact name with its reason, name the
   only others: `FIXTURE_APPS`, G2's own stub apps, which have no icon and draw GNOME's generic
   one; `SHELL_RESOURCE_ICONS`, icons the shell draws from its own resource because board 31
-  has no glyph of that name yet (below, "Open"); and `STAND_IN_ICONS`, a stock icon on one
+  has no glyph of that name, empty since apex-desktop#35 (below; the selftests list
+  `apex-test-resource-icon` through `G2_SHELL_RESOURCE_ICONS`); and `STAND_IN_ICONS`, a stock icon on one
   surface only (`switcher application-x-executable`, G2's switcher stand-in, and
   `spotlight drive-harddisk`, a full-colour device icon a search provider returns, which Apex
   inherits from Adwaita by design). A failure names each icon, where it showed, its app and
@@ -203,12 +204,12 @@ job, `check.py` reports it "not run: no Apex theme", never a pass.
 
 The wallpaper is `backdrop_painted`'s (below).
 
-### Open: glyphs board 31 lacks
+### Closed: glyphs board 31 lacked
 
-Names the shell draws from its own resource today, each on `SHELL_RESOURCE_ICONS`.
-apex-desktop#35 ships all nine in Apex Symbolic, seven as aliases of glyphs the boards already
-draw and the switch's two shapes as new ones. They are pending the `APEX_DESKTOP_REV` bump that
-brings it, which then takes them off the list.
+Names the shell drew from its own resource until `APEX_DESKTOP_REV` reached apex-desktop#35
+(a9c32ef), which ships all nine in Apex Symbolic, seven as aliases of glyphs the boards already
+draw and the switch's two shapes as new ones. That bump took them off `SHELL_RESOURCE_ICONS`,
+which is empty since.
 
 | Name | Surface |
 |---|---|

@@ -47,6 +47,8 @@ for tool in gjs jq; do
 done
 
 T=$(mktemp -d "${TMPDIR:-/tmp}/apex-shots-test.XXXXXX")
+# assert.sh lists no shell resource icon since apex-desktop#35: the rows that need one list this name.
+export G2_SHELL_RESOURCE_ICONS=apex-test-resource-icon
 trap 'kill "$(head -n 1 "$T/bus.pid" 2>/dev/null)" 2>/dev/null || true; rm -rf "$T"' EXIT
 # shellcheck source=tests/shots/lib.sh
 . "$HERE/lib.sh"
@@ -1233,7 +1235,7 @@ test_shell_icons() {
 9/1|s/"icons":\[.*\]}}/"icons":[]}}/|a lock that drew no icon
 9/1|s#/usr/share/icons/Apex/symbolic/view-reveal#/usr/share/icons/Adwaita/symbolic/actions/view-reveal#|an Adwaita glyph on the lock
 9/1|s#"file":"[^"]*"#"file":null#|a lock icon that resolves nowhere
-10/0|s#"icon":"view-reveal-symbolic","file":"[^"]*"#"icon":"screenshooter-symbolic","file":"/org/gnome/shell/icons/scalable/actions/screenshooter-symbolic.svg"#|a resource icon on SHELL_RESOURCE_ICONS
+10/0|s#"icon":"view-reveal-symbolic","file":"[^"]*"#"icon":"apex-test-resource-icon","file":"/org/gnome/shell/icons/scalable/actions/apex-test-resource-icon.svg"#|a resource icon on SHELL_RESOURCE_ICONS
 9/1|d|a step that reported nothing
 CHANGES
     shell_icon_facts "$dir" && sed -i 's#/usr/share/icons/Apex/symbolic/view-reveal#/usr/share/icons/Adwaita/symbolic/actions/view-reveal#' "$dir/polkit-dark.log"
@@ -3242,8 +3244,8 @@ readonly SESSION_REPORT='{"settings": {"font-name": "Adwaita Sans 10.125", "docu
       {"icon": "application-x-executable", "file": "/usr/share/icons/Adwaita/scalable/mimetypes/application-x-executable.svg",
        "app": "io.github.apex_linux.G2Stub1.desktop"}],
     "dash": null,
-    "quickSettings": [{"icon": ". GThemedIcon screenshooter-symbolic screenshooter",
-      "file": "/org/gnome/shell/icons/scalable/actions/screenshooter-symbolic.svg", "app": null}]}}'
+    "quickSettings": [{"icon": ". GThemedIcon apex-test-resource-icon",
+      "file": "/org/gnome/shell/icons/scalable/actions/apex-test-resource-icon.svg", "app": null}]}}'
 
 test_session_defaults() {
     local passes failures change what stubs
@@ -3251,12 +3253,15 @@ test_session_defaults() {
     # shellcheck disable=SC2016 # expanded by the inner bash
     expect_eq "session defaults: assert.sh's fixture apps are direct.sh's STUB_APPS" "$stubs" \
         "$(bash -c '. "$1/assert.sh"; echo "${FIXTURE_APPS[*]}"' _ "$HERE")"
+    # shellcheck disable=SC2016 # expanded by the inner bash
+    expect_eq "session defaults: assert.sh lists no shell resource icon, apex-desktop#35 having shipped the last" "" \
+        "$(env -u G2_SHELL_RESOURCE_ICONS bash -c '. "$1/assert.sh"; echo "${SHELL_RESOURCE_ICONS[*]}"' _ "$HERE")"
     while IFS='|' read -r failures change what; do
         printf 'APEXG2-SESSION %s\n' "$(jq -nc "$SESSION_REPORT | $change")" >"$T/session.log"
         read -r passes _ <<<"$(assertion_counts session_defaults default "$T/session.log")"
         expect_eq "session defaults: $what fails $failures of 7" "$failures" $((7 - passes))
     done <<'CHANGES'
-0|.|apex-desktop's defaults, a fixture app's generic icon and the shell's own screenshooter
+0|.|apex-desktop's defaults, a fixture app's generic icon and a listed shell resource icon
 1|.settings["monospace-font-name"] = "DejaVu Sans Mono 10"|another monospace font in the settings
 1|.settings["icon-theme"] = "Adwaita"|another icon theme in the settings
 1|.shell.iconTheme = "Adwaita"|a shell that draws another icon theme
@@ -3268,7 +3273,7 @@ test_session_defaults() {
 1|.icons.dock[0].file = "/usr/share/icons/hicolor/scalable/apps/org.gnome.Nautilus.svg"|an image app's icon from outside Apex
 1|.icons.quickSettings[0].icon = ". GThemedIcon camera-photo-symbolic"|a shell icon that is not on the list
 1|.icons = {bar: [], dock: null, dash: null, quickSettings: []}|no icons reported
-1|.apexSymbolic = ["battery-level-80-symbolic", "screenshooter-symbolic"]|an icon listed as the shell's own that Apex now ships
+1|.apexSymbolic = ["battery-level-80-symbolic", "apex-test-resource-icon"]|an icon listed as the shell's own that Apex now ships
 1|.apexSymbolic = []|no Apex Symbolic glyphs reported
 7|{error: "sessionDefaultsReport: no panel"}|a probe error
 CHANGES
@@ -3281,10 +3286,10 @@ CHANGES
     assertion_counts session_defaults default "$T/session.log" >/dev/null
     expect_eq "session defaults: a missing JetBrains Mono names the family fontconfig fell back to" 1 \
         "$(grep -c '^FAIL default: fontconfig gives JetBrains Mono .*(got {"family":"Noto Sans",' "$T/assertions.out")"
-    printf 'APEXG2-SESSION %s\n' "$(jq -nc "$SESSION_REPORT | .apexSymbolic += [\"switch-on-symbolic\"]")" >"$T/session.log"
+    printf 'APEXG2-SESSION %s\n' "$(jq -nc "$SESSION_REPORT | .apexSymbolic += [\"apex-test-resource-icon\"]")" >"$T/session.log"
     assertion_counts session_defaults default "$T/session.log" >/dev/null
     expect_eq "session defaults: a listed icon Apex ships is named, so it leaves the list" 1 \
-        "$(grep -c '^FAIL default: no icon listed .*(listed as shell-only, but /usr/share/icons/Apex has it: switch-on-symbolic)$' "$T/assertions.out")"
+        "$(grep -c '^FAIL default: no icon listed .*(listed as shell-only, but /usr/share/icons/Apex has it: apex-test-resource-icon)$' "$T/assertions.out")"
 }
 
 # One icon per surface probe.js's iconSurfaces opens, each resolved under Apex.
@@ -3297,8 +3302,8 @@ readonly SURFACES_REPORT='{
   "surfaces": [{"icon": "user-home-symbolic", "file": "/usr/share/icons/Apex/symbolic/user-home-symbolic.svg", "app": null}],
   "dialog": [{"icon": "dialog-password-symbolic", "file": "/usr/share/icons/Apex/symbolic/dialog-password-symbolic.svg", "app": null}],
   "endSession": [{"icon": "system-shutdown-symbolic", "file": "/usr/share/icons/Apex/symbolic/system-shutdown-symbolic.svg", "app": null}],
-  "screenshot": [{"icon": ". GThemedIcon screenshooter-symbolic screenshooter",
-    "file": "/org/gnome/shell/icons/scalable/actions/screenshooter-symbolic.svg", "app": null}]}'
+  "screenshot": [{"icon": ". GThemedIcon apex-test-resource-icon",
+    "file": "/org/gnome/shell/icons/scalable/actions/apex-test-resource-icon.svg", "app": null}]}'
 
 test_session_surface_icons() {
     local passes failures want change what scenes
@@ -3309,7 +3314,7 @@ test_session_surface_icons() {
         read -r passes failures <<<"$(assertion_counts session_defaults default "$T/surfaces.log")"
         expect_eq "surface icons: $what" "$want" "$passes/$failures"
     done <<'CHANGES'
-16/0|1|.|every surface's icons through Apex, the shell's own screenshooter on the list
+16/0|1|.|every surface's icons through Apex, a listed shell resource icon among them
 15/1|1|.dateMenu[0].file = "/usr/share/icons/Adwaita/symbolic/status/software-update-available-symbolic.svg"|an Adwaita glyph in the date menu
 15/1|1|.dialog[0].file = null|a dialog icon that resolves nowhere
 15/1|1|.switcher[0] = {icon: "org.gnome.Nautilus", file: "/usr/share/icons/hicolor/scalable/apps/org.gnome.Nautilus.svg", app: null}|a hicolor app icon in the switcher

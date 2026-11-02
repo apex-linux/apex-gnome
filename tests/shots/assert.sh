@@ -271,19 +271,10 @@ exit_cut() {
 
 # G2's fixture apps (direct.sh's STUB_APPS) have no icon of their own: GNOME draws its generic one.
 readonly FIXTURE_APPS=(io.github.apex_linux.G2Stub1.desktop io.github.apex_linux.G2Stub2.desktop io.github.apex_linux.G2Stub3.desktop)
-# Icons the shell draws from its own resource because Apex Symbolic (board 31) draws none of that name yet: each
-# is one apex-desktop#35 ships, and leaves this list when APEX_DESKTOP_REV reaches it (surface_icons fails it then).
-readonly SHELL_RESOURCE_ICONS=(
-    screenshooter-symbolic
-    notification-expand-symbolic
-    switch-on-symbolic
-    switch-off-symbolic
-    screenshot-ui-area-symbolic
-    screenshot-ui-display-symbolic
-    screenshot-ui-window-symbolic
-    screenshot-ui-show-pointer-symbolic
-    preview-close-symbolic
-)
+# Icons the shell draws from its own resource because Apex Symbolic (board 31) draws none of that name: none since
+# APEX_DESKTOP_REV reached apex-desktop#35. G2_SHELL_RESOURCE_ICONS lists names in their place, for tests.
+read -ra SHELL_RESOURCE_ICONS <<<"${G2_SHELL_RESOURCE_ICONS:-}"
+readonly SHELL_RESOURCE_ICONS
 # Stock icons a surface legitimately draws, "surface name" by exact name, never a pattern.
 readonly STAND_IN_ICONS=(
     # G2's switcher stand-in (probe.js's windowSwitcher) gives its items GNOME's generic app icon.
