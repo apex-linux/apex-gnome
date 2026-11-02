@@ -25,7 +25,7 @@ readonly DIRECT_CASES=(default default-scale1 dark-style high-contrast large-tex
     large-text-solid dock-intellihide dock-intellihide-dark dock-one-gpu no-dock no-dock-dark stock-light stock-dark safe-env
     layer-disabled layer-cycles motion idle dock-pin dock-dnd dock-external keys glass-load glass-stress fault-configure fault-enable fault-abort shutdown-banner
     kernel-safe
-    fedora-light fedora-dark glass glass-scale1 fedora-glass
+    fedora-light fedora-dark glass glass-scale1 glass-views fedora-glass
     indicators indicators-scale1 indicators-dark)
 readonly DIRECT_PARTS=(main kernel fedora)
 readonly CAPTURE_CASES=(default default-scale1 dark-style stock-light stock-dark fedora-light fedora-dark)
@@ -126,6 +126,10 @@ readonly ALWAYS_LOADED_USER_UNIT=default.target
 readonly GLASS_INTERIOR_MAX=4
 readonly GLASS_EDGE_MAX=12
 readonly GLASS_MEAN_ERROR=1
+# glass-views' seam, 0003's per-view texture over two monitors (15c), pinned at its first run's
+# value: it fails if the seam moves either way, so a change to 0003 shows here first.
+readonly GLASS_VIEWS_SEAM_TODAY=93.58
+readonly GLASS_VIEWS_SEAM_PIN=1
 # Board 22's ring width from its coverage (glass.js ringWidths): 8-bit rounding moves it under 0.05
 # device px; St's inset-shadow ring inside a clear border measures 8 px at its corners against 4.
 readonly TILE_RING_ALLOWANCE=0.25
@@ -137,12 +141,24 @@ result_of() {
 }
 
 exits() {
-    local run=$1 case_name=$2 status=$3
-    if [[ $(result_of "$run" "$case_name") == "exit=$status "* ]]; then
+    local run=$1 case_name=$2 status=$3 got bt=$1/$2.bt where=
+    got=$(result_of "$run" "$case_name")
+    if [[ $got == "exit=$status "* ]]; then
         pass "$case_name: the shell exits $status"
-    else
-        fail "$case_name: the shell exits $status (got: $(result_of "$run" "$case_name"))"
+        return
     fi
+    # A shell that died on a signal names where, from direct.sh's backtrace, or why there is none.
+    if [[ $got =~ ^exit=(129|1[3-9][0-9]|2[0-5][0-9])\  ]]; then
+        # The crashing thread comes first; past the signal trampoline, raise, abort and GLib's
+        # assertion and log frames, GCC clones of them too, come before the site that called them.
+        where=$(awk -v skip='(__pthread_kill[a-z_]*|__GI_raise|raise|__GI_abort|abort|g_abort|_g_log_abort|g_assertion_message[a-z_]*|g_log[a-z_]*)' \
+            -v clone='(\\[cold\\]|[.](cold|part[.][0-9]+|isra[.][0-9]+|constprop[.][0-9]+))*' '
+            /<signal handler called>/ { past = 1; next }
+            past && /^#/ && $0 !~ (" " skip clone " \\(") { print; exit }' "$bt" 2>/dev/null)
+        [[ -n $where ]] || where=$(grep -m 1 -E '^#0 |^no backtrace: ' "$bt" 2>/dev/null)
+        where="; ${where:-no ${bt##*/}}${where:+ (${bt##*/})}"
+    fi
+    fail "$case_name: the shell exits $status (got: $got$where)"
 }
 
 no_js_error() {
@@ -2537,6 +2553,7 @@ direct_cases() {
     glass_frames glass-scale1 "$run/glass-scale1.log"
     shadows_under_glass glass-scale1 "$run/glass-scale1.log"
     glass_manager glass-scale1 "$run/glass-scale1.log" light
+    glass_views glass-views "$run/glass-views.log"
     glass_unlock_vs_fedora "$run"
     indicator_cases "$run"
     one_gpu_case "$run"
@@ -2863,6 +2880,8 @@ patched_assertions() {
     asserted glass-scale1 && glass_frames glass-scale1 "$run/glass-scale1.log"
     asserted glass-scale1 && shadows_under_glass glass-scale1 "$run/glass-scale1.log"
     asserted glass-scale1 && glass_manager glass-scale1 "$run/glass-scale1.log" light
+    asserted glass-views && no_js_error glass-views "$run/glass-views.log"
+    asserted glass-views && glass_views glass-views "$run/glass-views.log"
     asserted glass fedora-glass && glass_unlock_vs_fedora "$run"
     asserted indicators indicators-scale1 indicators-dark && indicator_cases "$run"
     asserted dock-one-gpu && one_gpu_case "$run"
@@ -2949,6 +2968,24 @@ glass_frames() {
 }
 
 # shellcheck disable=SC2016 # jq programs
+# The glass-views case: patch 0003's glass on two stage views, as glass-views.js reads each one.
+glass_views() {
+    local label=$1 log=$2 views
+    views=$(report_of "$log" APEXG2-GLASS-VIEWS | jq -r '.straddling.live | "seam \(.seamMax)/255; away from it \(.interiorMax) inside, \(.edgeMax) at the edges, \(.mean) on average"' 2>/dev/null)
+    expect_report "$label" "$log" '.views == 2 and ([.across, .back] | all(.views == 2 and .pixels > 0 and .differingFromFresh == 0))
+        and (.straddling | .views == 2 and .liveDifferingFromFresh == 0)' \
+        "a glass box moved from one monitor's view to the other's and back draws, in both views' frames, what a fresh effect draws; one over their boundary draws what a fresh effect draws there too" APEXG2-GLASS-VIEWS
+    expect_report "$label" "$log" ".straddling.live | .band > 0 and ([.interiorMax, .edgeMax, .mean] | all(type == \"number\"))
+        and .interiorMax <= $GLASS_INTERIOR_MAX and .edgeMax <= $GLASS_EDGE_MAX and .mean <= $GLASS_MEAN_ERROR" \
+        "over the boundary, away from it, the box is blur-ref.js's blur within $GLASS_INTERIOR_MAX/255 inside, $GLASS_EDGE_MAX/255 in the ds/2 band, $GLASS_MEAN_ERROR/255 on average (${views:-no report})" APEXG2-GLASS-VIEWS
+    expect_report "$label" "$log" ".straddling.live.seamMax | type == \"number\" and (. - $GLASS_VIEWS_SEAM_TODAY | fabs) <= $GLASS_VIEWS_SEAM_PIN" \
+        "within 3 sigma of the boundary the seam is today's, $GLASS_VIEWS_SEAM_TODAY/255 within $GLASS_VIEWS_SEAM_PIN/255 either way" APEXG2-GLASS-VIEWS
+    known_gap "0003: fine mode's per-view texture never gets the other view's pixels, a seam over two monitors; not 15b's fix" \
+        expect_report "$label" "$log" ".straddling.live | ([.seamInteriorMax, .seamEdgeMax] | all(type == \"number\"))
+            and .seamInteriorMax <= $GLASS_INTERIOR_MAX and .seamEdgeMax <= $GLASS_EDGE_MAX" \
+        "and within 3 sigma of the boundary, too, by the same bounds inside and in the ds/2 band" APEXG2-GLASS-VIEWS
+}
+
 shadows_under_glass() {
     local label=$1 log=$2 all='[.shadows.light, .shadows.dark | .quickSettings, .popupMenu, .dialog]'
     expect_report "$label" "$log" "$all | length == 6 and all(.covered and .sameSize and .interiorDiffering == 0)" \

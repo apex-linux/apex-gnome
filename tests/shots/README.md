@@ -37,7 +37,7 @@ A case that gets no report within `direct.sh`'s timeout stops G2 at once.
 | G1's `image/checks/desktop.sh` | a container of the image | it passes on the image under test, so no text file under `/usr` or `/etc` names `APEX_SHELL_TEST_FAULT` |
 | `direct.sh main` | a container of the image plus `dbus-daemon` (the image has no `dbus-run-session`), `python3-dbusmock` and `gcc` for `clock.c`; `rpm -V` shows the shell's packages unmodified | each case below: one headless shell with a fresh home, dconf and runtime directory, the fixtures on the system bus and the fixed clock (see "Fixtures and the clock") |
 | `direct.sh kernel` | the same, with `apex.safe=1` bound over `/proc/cmdline` | the kernel switch |
-| `direct.sh pr` | CI's `shots-patched` job on a pull request, through `patched.sh` with `PATCHED_PART=pr` on the gnome-shell lane's RPMs | the cases `parts.sh`'s `PR_CASES` names, in `main`'s order (the scenes and every a11y check with their solid-backdrop twins, then the quick dock, indicator, safe-mode, fault and shutdown cases, `dock-dnd`, `dock-external`, `keys` and `shutdown-banner` among them, and the glass cases `glass` and `glass-scale1`), with their assertions; each listed case must have run and reported (`part_ran`). Before them, `direct.sh fedora` runs only `PR_FEDORA_CASES`, `fedora-light` and `fedora-dark`, so the pull request compares Apex's desktop and safe mode's (`stock-light`, `stock-dark`) with Fedora's (`compare_with_fedora`). A push to `main` and the daily run take `main` with the whole Fedora baseline |
+| `direct.sh pr` | CI's `shots-patched` job on a pull request, through `patched.sh` with `PATCHED_PART=pr` on the gnome-shell lane's RPMs | the cases `parts.sh`'s `PR_CASES` names, in `main`'s order (the scenes and every a11y check with their solid-backdrop twins, then the quick dock, indicator, safe-mode, fault and shutdown cases, `dock-dnd`, `dock-external`, `keys` and `shutdown-banner` among them, and the glass cases `glass`, `glass-scale1` and `glass-views`), with their assertions; each listed case must have run and reported (`part_ran`). Before them, `direct.sh fedora` runs only `PR_FEDORA_CASES`, `fedora-light` and `fedora-dark`, so the pull request compares Apex's desktop and safe mode's (`stock-light`, `stock-dark`) with Fedora's (`compare_with_fedora`). A push to `main` and the daily run take `main` with the whole Fedora baseline |
 | `direct.sh fedora` | the same image with Fedora's own gnome-shell and gnome-shell-common of the tested NVR in place of the Apex build, downloaded from Fedora's repositories; each RPM must report `digests signatures OK` against a keyring that holds Fedora's key alone, so an unsigned RPM fails | the baseline of the captures |
 | `guard.sh` | a container of the image booted with its own systemd; a test user's `systemd --user` with the image's unmodified units | the crash guard, and that neither the user manager nor the shell's unit sets `APEX_SHELL_TEST_FAULT` |
 | `assert.sh` | the builder VM; `compare.js` in a container of the image | everything below |
@@ -70,6 +70,7 @@ The direct cases:
 | `fedora-light`, `fedora-dark` | Fedora's build, `prefer-light` or `prefer-dark` | no Apex module; upstream's sheet at its own path, byte for byte the one safe mode loads from `theme/stock/` |
 | `glass`, `fedora-glass` | the capture settings, `G2_GLASS=1` | patch 0003's glass in the frames the shell drew; the stock unlock blur captured in both shells (see "Glass") |
 | `glass-scale1` | as `glass`, at scale 1 on 1440x900 (`G2_SCALE=1`), as the desktop VM runs | the same glass assertions, every bound read at that scale (see "Glass") |
+| `glass-views` | the capture settings and a second virtual monitor, 1920x1080, right of the panel, both at scale 2 (`G2_MONITOR2`), `G2_GLASS_VIEWS=1` | `glass-views.js`: patch 0003's glass on two stage views, each read from its own framebuffer (see "Glass") |
 
 Every case: the probe ran (so the static import graph loaded), from `startup-complete`, and no `JS ERROR`;
 no key binding overwrites another (mutter's "Overwriting existing binding" warning);
@@ -122,6 +123,28 @@ while timers and frames keep the real clocks. It stops before the first case whe
 clock does not hold. libfaketime cannot do this: it converts every absolute timer as if
 it ran on the wall clock, so mutter's frame timer never fired and no shell started.
 The guard's shells, started by systemd, keep the real clock and have no fixtures.
+
+A shell that dies on a signal leaves a backtrace. `direct.sh` also preloads `crash.c`, whose
+handler writes `APEXG2-CRASH` and the signal, then the frames (`backtrace_symbols_fd`), into the
+case's log before it takes the default action, so a synchronous fault (a bad address, an illegal
+instruction) exits as it would without it. It installs only where it finds the default action: a
+signal the process started with another disposition for is left as it is, and one line says so.
+The first signal decides: a fault in the unwinder, or another thread's crash, raises that one. It
+covers SIGSEGV, SIGBUS and SIGILL; gnome-shell's `main.c` replaces its SIGABRT and SIGFPE handler
+with its own (gjs's stack dump), so an abort or a failed `g_assert` leaves that dump and no frames. Its alternate stack is the
+main thread's alone: a stack overflow in another thread prints nothing. There are frames even where
+the core goes to a pipe the container cannot reach, as on CI's runners. Each case's shell runs with
+`ulimit -c unlimited`, from its HOME, where a core lands under core_pattern `core`. After a signal
+exit the case does not expect (`G2_EXPECT_EXIT`, 134 for `fault-abort`), `backtrace.sh`'s
+`case_backtrace` writes `/out/CASE.bt`: those frames, then gdb's `bt` of the core without fetching
+symbols, then `bt` and `thread apply all bt full` with symbols from Fedora's debuginfod (the lane's
+own gnome-shell has none, which it says). gdb is installed on demand, and dnf5 and gdb share one
+120 s budget, each stopped 10 s after a TERM it ignores. Otherwise one line says why there is none
+(`no backtrace: no core in … (core_pattern …, ulimit -Hc …)`, `no backtrace: gdb missing …`, `no
+backtrace: gdb ran out of the 120 s budget`). The core is deleted once read, or at once when the
+exit was expected. The shell's `exits` assertion then names the crashing thread's frame past the
+signal trampoline (past `raise`, `abort` and GLib's assertion and log frames, and their GCC clones
+such as `g_assertion_message[cold]`), or that reason, or `no CASE.bt`.
 
 The layer follows `layer-enabled` live in a shell that started with it on
 ([DESIGN.md](https://github.com/apex-linux/apex/blob/main/docs/DESIGN.md#schema-iogithubapex_linuxapexdesktop): the layer reads
@@ -621,6 +644,21 @@ any scale. Measured at scale 1 against scale 2: inside 2.89/255 against 3.2, alo
 10.53 against 11.67, on average 0.77 against 0.75; screenshots of the corners exact (0) against
 1/255; the opacity blend 1.208 steps at both. The dock past the stage edge, the known gap,
 reads 5033 px off at scale 1.
+
+`glass-views` puts the same glass (σ 24, saturation 1.6, corners 18, `fine`) on two monitors,
+two stage views with a framebuffer each, and reads each view's part of a box from its own.
+A box moved from the left view to the right one and back draws, in both views' frames, what a
+fresh effect draws there: the blur follows it from view to view. A box over the boundary draws
+what a fresh effect draws too, and away from the boundary it is `blur-ref.js`'s blur within the
+bounds above. Within 3 σ of the boundary it is not: `fine` keeps its last result per stage view,
+each in a texture of its own that only that view's blit fills, so each half blurs without the
+other view's pixels and the halves meet at a seam, up to 93.58/255 off the reference. Stock's
+effect has one texture that every view fills its part of, so it shows the seam only in a new
+effect's first frame (77/255) and then 1.28/255. The seam is pinned at today's 93.58/255 within
+1/255 either way, and is a known gap that closes when the seam's columns meet the bounds above,
+4/255 inside and 12/255 in the ds/2 band; a report without the numbers keeps it open. It is not
+the gap the edge fix (15b) closes: that fix makes the pixels past the stage defined, not the
+other view's.
 In the same case the glass manager (`js/ui/apex/glass/`) is read on the live shell, light:
 `glass_manager` asserts that the bar's blur is `$apex_bar_blur` at `$apex_bar_saturation`,
 and Quick Settings', the calendar's (each opened) and a banner's `$apex_panel_blur` at
@@ -1064,6 +1102,8 @@ Not asserted here: the volume glyph (the container has no audio server), and wha
 | `direct.sh`, `guard.sh` | containers of the image | the cases and the crash-guard phases |
 | `fixtures.py` | the direct cases' containers | the python-dbusmock services on the system bus |
 | `clock.c` | the direct cases' shells (`LD_PRELOAD`) | the fixed wall clock |
+| `crash.c` | the direct cases' shells (`LD_PRELOAD`) | the frames of a fatal signal, into the case's log |
+| `backtrace.sh` | `direct.sh` | `case_backtrace`: a crashed case's `CASE.bt` |
 | `smoke.sh` | CI's Fedora 45 container | `direct.sh fedora` on Fedora's gnome-shell, and the assertions that need no Apex build |
 | `patched.sh` | a throwaway Fedora 45 container, by hand | the patched shell before a builder VM: rebuilds Fedora's SRPM with this checkout's recipe and `desktop/shell/`, runs `direct.sh main`, and asserts the logs and the top bar (below) |
 | `repeat.sh` | the host, by hand | `patched.sh` N times on one build, each in its own container, then every assertion whose verdict differs between the runs (below) |
