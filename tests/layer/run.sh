@@ -1206,8 +1206,18 @@ dock_labels_are() {
     got=$(sed -n 's/^probe: dock\.labels\.\([a-z-]*\)=\(.*\)$/[\1] \2/p' "$OUT" | paste -sd' ' -)
     if [[ $got == "$2" ]]; then ok "$1"; else not_ok "$1 (got '$got', expected '$2')"; _show; fi
 }
-dock_labels_are "dock: key focus shows an item's name label as a hover does, one at a time: it moves with the focus; a hover elsewhere takes it and gives it back; a hover on the focused item neither fades it in again nor takes it; any open menu, an unmapped item or a dock slid out hides it; activation keeps it; a moved dock places it again; Escape drops the focus and the label, and in the overview passes on to it; a focused item destroyed leaves nothing behind" \
-    '[initial] none focus=none [focused] Files focus=Files [moved] Web focus=Web [hovered] showApps focus=Web [hover-ended] Web focus=Web [hover-focused] Web focus=Web [hover-focused-ended] Web focus=Web faded-in-again=0 [other-menu-open] none focus=Web [other-menu-closed] Web focus=Web [trash-menu-open] none focus=Web [trash-menu-closed] Web focus=Web [unmapped] none focus=Web [mapped] Web focus=Web [slid-out] none focus=Web [slid-back] Web focus=Web [activated] Web focus=Web [dock-moved] Web focus=Web label-moved=100 faded-in-again=0 [escape] none focus=none [escape-in-overview] none focus=none to-overview=true [focused-item-destroyed] none focus=none'
+dock_label_steps=(
+    '[initial] none focus=none' '[focused] Files focus=Files' '[moved] Web focus=Web' '[hovered] showApps focus=Web'
+    '[hover-ended] Web focus=Web' '[hover-focused] Web focus=Web' '[hover-focused-ended] Web focus=Web faded-in-again=0'
+    '[other-menu-open] none focus=Web' '[other-menu-closed] Web focus=Web' '[trash-menu-open] none focus=Web'
+    '[trash-menu-closed] Web focus=Web' '[unmapped] none focus=Web' '[mapped] Web focus=Web' '[slid-out] none focus=Web'
+    '[slid-back] Web focus=Web' '[activated] Web focus=Web' '[dock-moved] Web focus=Web label-moved=100 faded-in-again=0'
+    '[escape] none focus=none' '[escape-in-overview] none focus=none to-overview=true' '[focused-item-destroyed] none focus=none')
+dock_labels_are "dock: key focus shows an item's name label as a hover does, one at a time: it moves with the focus; \
+a hover elsewhere takes it and gives it back; a hover on the focused item neither fades it in again nor takes it; \
+any open menu, an unmapped item or a dock slid out hides it; activation keeps it; a moved dock places it again; \
+Escape drops the focus and the label, and in the overview passes on to it; a focused item destroyed leaves nothing behind" \
+    "${dock_label_steps[*]}"
 fact "dock: layer-enabled=false comes while a focused item's label is up" 'dock\.focus-label-at-disable=Web'
 fact "dock: layer-enabled=false takes it away and gives the overview its dash back, at its own height" 'dock\.off=none dash=true dash-height=-1'
 fact "dock: a redisplay still pending when the dock goes away never runs, and the overview's dash queues as stock's does again" \
