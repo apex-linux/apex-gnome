@@ -134,25 +134,25 @@ async function freshFrame(glass, rect, scale, label) {
     return (await fullFrame(rect, scale, label)).rgba;
 }
 
-// Against blur-ref.js's blur: in the columns a kernel's reach, 3 sigma, takes from the boundary,
-// where each view blurs without the other's pixels, and away from them as glass.js's bounds read.
+// Against blur-ref.js's blur, in the columns 3 sigma from the boundary, where each view blurs
+// without the other's pixels, and away from them; each split at the ds/2 band, as glass.js's bounds.
 function againstReference(rgba, expected, box, boundary, scale) {
     const [width, height] = [box.width * scale, box.height * scale];
     const band = BlurRef.fineDownscale(width, height, SIGMA * scale) / 2;
     const seamX = (boundary - box.x) * scale, reach = 3 * SIGMA * scale;
-    const seam = {max: 0}, interior = {max: 0}, edge = {max: 0};
+    const max = {seamInterior: 0, seamEdge: 0, boxInterior: 0, boxEdge: 0};
     const sums = [0, 0, 0];
     let count = 0;
     for (let y = 0; y < height; y++) {
         for (let x = 0; x < width; x++) {
             const p = y * width + x;
             const errors = [0, 1, 2].map(c => Math.abs(rgba[4 * p + c] - expected[3 * p + c]));
-            if (Math.abs(x - seamX) < reach) {
-                seam.max = Math.max(seam.max, ...errors);
+            const inBand = Math.min(x, y, width - 1 - x, height - 1 - y) < band;
+            const inSeam = Math.abs(x - seamX) < reach;
+            const key = `${inSeam ? 'seam' : 'box'}${inBand ? 'Edge' : 'Interior'}`;
+            max[key] = Math.max(max[key], ...errors);
+            if (inSeam)
                 continue;
-            }
-            const near = Math.min(x, y, width - 1 - x, height - 1 - y) < band ? edge : interior;
-            near.max = Math.max(near.max, ...errors);
             errors.forEach((error, c) => (sums[c] += error));
             count++;
         }
@@ -160,8 +160,9 @@ function againstReference(rgba, expected, box, boundary, scale) {
     // As blur-ref.js's errors(): the mean per channel, the largest of the three.
     const round = v => Math.round(v * 1000) / 1000;
     return {
-        band, seamMax: round(seam.max), interiorMax: round(interior.max), edgeMax: round(edge.max),
-        mean: round(Math.max(...sums) / count),
+        band, seamMax: round(Math.max(max.seamInterior, max.seamEdge)),
+        seamInteriorMax: round(max.seamInterior), seamEdgeMax: round(max.seamEdge),
+        interiorMax: round(max.boxInterior), edgeMax: round(max.boxEdge), mean: round(Math.max(...sums) / count),
     };
 }
 

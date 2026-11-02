@@ -2951,13 +2951,15 @@ glass_views() {
     expect_report "$label" "$log" '.views == 2 and ([.across, .back] | all(.views == 2 and .pixels > 0 and .differingFromFresh == 0))
         and (.straddling | .views == 2 and .liveDifferingFromFresh == 0)' \
         "a glass box moved from one monitor's view to the other's and back draws, in both views' frames, what a fresh effect draws; one over their boundary draws what a fresh effect draws there too" APEXG2-GLASS-VIEWS
-    expect_report "$label" "$log" ".straddling.live | .interiorMax <= $GLASS_INTERIOR_MAX and .edgeMax <= $GLASS_EDGE_MAX and .mean <= $GLASS_MEAN_ERROR" \
+    expect_report "$label" "$log" ".straddling.live | .band > 0 and ([.interiorMax, .edgeMax, .mean] | all(type == \"number\"))
+        and .interiorMax <= $GLASS_INTERIOR_MAX and .edgeMax <= $GLASS_EDGE_MAX and .mean <= $GLASS_MEAN_ERROR" \
         "over the boundary, away from it, the box is blur-ref.js's blur within $GLASS_INTERIOR_MAX/255 inside, $GLASS_EDGE_MAX/255 in the ds/2 band, $GLASS_MEAN_ERROR/255 on average (${views:-no report})" APEXG2-GLASS-VIEWS
-    expect_report "$label" "$log" ".straddling.live.seamMax | . - $GLASS_VIEWS_SEAM_TODAY | fabs <= $GLASS_VIEWS_SEAM_PIN" \
+    expect_report "$label" "$log" ".straddling.live.seamMax | type == \"number\" and (. - $GLASS_VIEWS_SEAM_TODAY | fabs) <= $GLASS_VIEWS_SEAM_PIN" \
         "within 3 sigma of the boundary the seam is today's, $GLASS_VIEWS_SEAM_TODAY/255 within $GLASS_VIEWS_SEAM_PIN/255 either way" APEXG2-GLASS-VIEWS
     known_gap "0003: fine mode's per-view texture never gets the other view's pixels, a seam over two monitors; not 15b's fix" \
-        expect_report "$label" "$log" ".straddling.live.seamMax <= $GLASS_INTERIOR_MAX" \
-        "and within 3 sigma of the boundary, too" APEXG2-GLASS-VIEWS
+        expect_report "$label" "$log" ".straddling.live | ([.seamInteriorMax, .seamEdgeMax] | all(type == \"number\"))
+            and .seamInteriorMax <= $GLASS_INTERIOR_MAX and .seamEdgeMax <= $GLASS_EDGE_MAX" \
+        "and within 3 sigma of the boundary, too, by the same bounds inside and in the ds/2 band" APEXG2-GLASS-VIEWS
 }
 
 shadows_under_glass() {

@@ -629,8 +629,11 @@ bounds above. Within 3 σ of the boundary it is not: `fine` keeps its last resul
 each in a texture of its own that only that view's blit fills, so each half blurs without the
 other view's pixels and the halves meet at a seam, up to 93.58/255 off the reference. Stock's
 effect has one texture that every view fills its part of, so it shows the seam only in a new
-effect's first frame (77/255) and then 1.28/255. The seam is a known gap, and not the one the
-edge fix (15b) closes: that fix makes the pixels past the stage defined, not the other view's.
+effect's first frame (77/255) and then 1.28/255. The seam is pinned at today's 93.58/255 within
+1/255 either way, and is a known gap that closes when the seam's columns meet the bounds above,
+4/255 inside and 12/255 in the ds/2 band; a report without the numbers keeps it open. It is not
+the gap the edge fix (15b) closes: that fix makes the pixels past the stage defined, not the
+other view's.
 In the same case the glass manager (`js/ui/apex/glass/`) is read on the live shell, light:
 `glass_manager` asserts that the bar's blur is `$apex_bar_blur` at `$apex_bar_saturation`,
 and Quick Settings', the calendar's (each opened) and a banner's `$apex_panel_blur` at

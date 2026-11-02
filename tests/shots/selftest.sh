@@ -3816,33 +3816,42 @@ REPORTS
 }
 
 # glass_views: two moves and the straddling box exact against a fresh effect, the box within the
-# glass bounds away from the boundary, the seam pinned at today's and a known gap.
+# glass bounds away from the boundary, the seam pinned at today's and a known gap no report closes.
 test_glass_views() {
-    local report failures what change passes fails
+    local report failures gap what change passes fails state
     report='{"views": 2, "scale": 2, "boundary": 1440,
         "straddling": {"views": 2, "liveDifferingFromFresh": 0,
-            "live": {"band": 8, "seamMax": 93.58, "interiorMax": 2.91, "edgeMax": 9.83, "mean": 0.8},
-            "fresh": {"band": 8, "seamMax": 93.58, "interiorMax": 2.91, "edgeMax": 9.83, "mean": 0.8}},
+            "live": {"band": 8, "seamMax": 93.581, "seamInteriorMax": 93.581, "seamEdgeMax": 88.731,
+                "interiorMax": 2.913, "edgeMax": 9.829, "mean": 0.773},
+            "fresh": {"band": 8, "seamMax": 93.581, "seamInteriorMax": 93.581, "seamEdgeMax": 88.731,
+                "interiorMax": 2.913, "edgeMax": 9.829, "mean": 0.773}},
         "across": {"views": 2, "differingFromFresh": 0, "pixels": 235520},
         "back": {"views": 2, "differingFromFresh": 0, "pixels": 235520}}'
-    while IFS='|' read -r failures what change; do
+    while IFS='|' read -r failures gap what change; do
         jq -c "$change" <<<"$report" | sed 's/^/APEXG2-GLASS-VIEWS /' >"$T/glass-views.log"
         read -r passes fails <<<"$(assertion_counts glass_views glass-views "$T/glass-views.log")"
         expect_eq "glass views: $what fails $failures of 4" "$failures" "$fails"
         if ((failures == 0)); then
             expect_eq "glass views: $what passes 3 of 4, the 4th its known gap" 3 "$passes"
         fi
+        state=open
+        grep -q 'but it holds now' "$T/assertions.out" && state=holds
+        grep -q '^GAP ' "$T/assertions.out" || [[ $state == holds ]] || state=none
+        expect_eq "glass views: $what leaves the seam's gap $gap" "$gap" "$state"
     done <<'CHANGES'
-0|both moves exact, the straddling box deterministic and within bounds away from its seam|.
-1|a box that keeps its blur on the view it left|.across.differingFromFresh = 9200
-1|a box moved back that one view never repainted|.back.views = 1
-1|a straddling box that a fresh effect draws otherwise|.straddling.liveDifferingFromFresh = 640
-1|a box off the reference by 9/255 away from the seam|.straddling.live.interiorMax = 9
-2|a seam within the bounds: off its pin, and a gap that holds now|.straddling.live.seamMax = 3.5
-1|a seam 2/255 wider than its pin|.straddling.live.seamMax = 95.6
-1|a seam 2/255 narrower than its pin, still a gap|.straddling.live.seamMax = 91.5
-1|one view only|.views = 1
-3|no report|del(.views, .straddling, .across, .back)
+0|open|both moves exact, the straddling box deterministic and within bounds away from its seam|.
+1|open|a box that keeps its blur on the view it left|.across.differingFromFresh = 9200
+1|open|a box moved back that one view never repainted|.back.views = 1
+1|open|a straddling box that a fresh effect draws otherwise|.straddling.liveDifferingFromFresh = 640
+1|open|a box off the reference by 9/255 away from the seam|.straddling.live.interiorMax = 9
+2|holds|a seam fixed, 2.51 inside and 9.18 in its band: off its pin, and a gap that holds now|.straddling.live += {seamMax: 9.18, seamInteriorMax: 2.51, seamEdgeMax: 9.18}
+1|open|a seam fixed inside but 14/255 in its band: off its pin, still a gap|.straddling.live += {seamMax: 14, seamInteriorMax: 2.51, seamEdgeMax: 14}
+1|open|a seam 2/255 wider than its pin|.straddling.live.seamMax = 95.6
+1|open|a seam 2/255 narrower than its pin, still a gap|.straddling.live.seamMax = 91.5
+3|open|one view only, the probe's early return|{views: 1, scales: [2]}
+3|open|two views at two scales, the probe's early return|{views: 2, scales: [2, 1]}
+3|open|the probe's error report|{error: "No property fine on ShellBlurEffect"}
+3|open|no report|del(.views, .straddling, .across, .back)
 CHANGES
 }
 
