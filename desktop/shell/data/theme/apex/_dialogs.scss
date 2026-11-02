@@ -38,6 +38,18 @@
   }
 }
 
+// Stock rings the box in black or white at .15, about 1.5:1 on the solid fill; 1.4.11 asks 3:1.
+.modal-dialog .check-box {
+  StIcon { border-color: $apex_fg_dim; }
+  &:hover StIcon, &:active StIcon { border-color: $apex_fg; }
+
+  &:checked StIcon, &:checked:hover StIcon, &:checked:active StIcon {
+    color: -st-accent-fg-color;
+    background-color: st-mix(black, $apex_accent, $apex_quick_toggle_checked_shade);
+    border-color: transparent;
+  }
+}
+
 .message-dialog-content {
   spacing: $apex_dialog_text_gap;
 

@@ -353,6 +353,9 @@ REPORT_OF_A_DIALOG_DRAWN_FROM_TOKENS='
             background: "#3584e4ff", knob: {width: ($t.apex_update_switch_knob | px)}, opacity: 1, focusable: true, a11ySensitive: true},
         buttons: ["Cancel", "Restart & Update"]}
         | {staged: ., ready: (.toggle += {sensitive: false, opacity: ($t.apex_update_switch_insensitive_opacity | tonumber), focusable: false, a11ySensitive: false})}),
+    checkBox: {background: ($t.apex_panel_solid | hex), label: "Remember Password",
+        unchecked: {border: {top: 2}, borderColor: ($t.apex_fg_dim | hex), hover: {borderColor: ($t.apex_fg | hex)}},
+        checked: {background: "#2863abff", foreground: "#ffffffff", borderColor: "#00000000", hover: {borderColor: "#00000000"}}},
     contentSpacing: ($t.apex_dialog_gap | px), textSpacing: ($t.apex_dialog_text_gap | px),
     title: {font: {size: ($t.apex_font_dialog_title_size | px), weight: ($t.apex_font_heading_weight | tonumber)}},
     description: {font: {size: ($t.apex_font_size | px)}, foreground: ($t.apex_fg_dim | hex)},
@@ -771,6 +774,8 @@ REPORT_OF_LEGIBLE_SURFACES='
     quickSettingsAccents: (["blue", "teal", "green", "yellow", "orange", "red", "pink", "purple", "slate"] | map({key: ., value: $s}) | from_entries),
     dateMenuAccents: (["blue", "teal", "green", "yellow", "orange", "red", "pink", "purple", "slate"] | map({key: ., value: $s}) | from_entries),
     dialogAccents: (["blue", "teal", "green", "yellow", "orange", "red", "pink", "purple", "slate"] | map({key: ., value: $s}) | from_entries),
+    checkBoxDialog: $s,
+    checkBoxDialogAccents: (["blue", "teal", "green", "yellow", "orange", "red", "pink", "purple", "slate"] | map({key: ., value: $s}) | from_entries),
     screenshot: $s,
 
     bar: ($s | .targets += [$dot, $inactiveDot]), barUnread: ($s | .targets += [$dot + {name: "messages-indicator"}, $inactiveDot]), dock: $s, popupMenu: $s, osd: $s, banner: $s, quickSettings: $s, wifiMenu: $s, wifiMenuConnected: $s, dateMenu: $s, switcher: $s,
@@ -782,11 +787,11 @@ REPORT_OF_LEGIBLE_SURFACES='
         + ([range(4)] | map({key: "indicator\(.)", value: {targets: [$icon + {name: "Chat"}], edge: null}}) | from_entries),
         crowded: $s, indicatorMenu: $s},
     focus: ({name: "Control", focused: true, changed: 900, perimeter: 400, ratio: 4} as $ring
-        | {quickSettings: $ring, dock: ($ring + {changed: 0, ratio: 1}), dialog: ($ring + {ratio: 2.87}),
+        | {quickSettings: $ring, dock: $ring, dialog: ($ring + {ratio: 2.87}),
             spotlight: ($ring + {changed: 164, ratio: 1})} | {backdrop: ., busy: .})}'
 
 # The label picks the backdrop: dark-style's inactive dot passes 3:1 today, default's is the gap.
-# Each label's focus readings at today's pins, Quick Settings' and the dialog's per wallpaper: six gaps.
+# Each label's focus readings at today's pins, Quick Settings' and the dialog's per wallpaper: four gaps.
 declare -Ar A11Y_FOCUS_FIXTURE=([default]='{"quickSettings":[2.37,2.14],"dialog":[4,4]}'
     [default-solid]='{"quickSettings":[1.91,2.14],"dialog":[4,4]}' [dark-style]='{"quickSettings":[4,4],"dialog":[2.87,2.87]}')
 
@@ -831,9 +836,9 @@ test_inactive_dot_gap() {
             not_ok "inactive dot gap: $what fails $want_failures, $want_gaps gap(s) (passed/failed/gaps $passes/$failures/$open_gaps): $(grep -m3 '^FAIL' "$T/a11y.out" | paste -sd'|' -)"
         fi
     done <<'CHANGES'
-0|8|2.86|default's dot at today's 2.86:1, in the bar and with the unread dot
-2|8|2.85|a dot below today's 2.86:1
-2|6|3|the dot at 3:1: the gap must go
+0|6|2.86|default's dot at today's 2.86:1, in the bar and with the unread dot
+2|6|2.85|a dot below today's 2.86:1
+2|4|3|the dot at 3:1: the gap must go
 CHANGES
 }
 
@@ -849,16 +854,16 @@ test_pill_gaps() {
             not_ok "pill gaps: $what fails $want_failures, $want_gaps gap(s) (passed/failed/gaps $passes/$failures/$open_gaps): $(grep -m3 '^FAIL' "$T/a11y.out" | paste -sd'|' -)"
         fi
     done <<'CHANGES'
-0|11|1.62|default-solid's three pill fills at today's ratios, beside its two inactive-dot gaps
-1|11|1.61|the sharing pill's fill below today's 1.62:1
-1|10|3|the sharing pill's fill at 3:1: its gap must go
+0|9|1.62|default-solid's three pill fills at today's ratios, beside its two inactive-dot gaps
+1|9|1.61|the sharing pill's fill below today's 1.62:1
+1|8|3|the sharing pill's fill at 3:1: its gap must go
 CHANGES
 }
 
 test_a11y() {
     local assertions expected change what passes failures open_gaps want
-    # dark-style's six focus gaps today: its dock, Spotlight entry and dialog entry, each per wallpaper.
-    for assertions in a11y_contrast:67:6 a11y_layout:48:0; do
+    # dark-style's four focus gaps today: its Spotlight entry and dialog entry, each per wallpaper.
+    for assertions in a11y_contrast:77:4 a11y_layout:58:0; do
         IFS=: read -r assertions expected gaps <<<"$assertions"
         read -r passes failures open_gaps <<<"$(a11y_run "$assertions")"
         if ((failures == 0 && open_gaps == gaps && passes == expected)); then
@@ -877,6 +882,7 @@ test_a11y() {
     done <<'CHANGES'
 a11y_contrast|1|.bar.targets[0].ratio = 4.4|text at 4.4:1
 a11y_contrast|1|.dock.targets[1].ratio = 2.9|a glyph at 2.9:1
+a11y_contrast|1|.checkBoxDialogAccents.yellow.targets[1].ratio = 2.9|a checked box's check at 2.9:1 on yellow
 a11y_contrast|2|.bar.targets[3].ratio = 2.9|an inactive workspace dot at 2.9:1, under 3:1 and dark-style's 4.24:1
 a11y_contrast|1|.bar.targets[3].ratio = 4.2|an inactive workspace dot at 4.2:1, under dark-style's 4.24:1
 a11y_contrast|1|.barUnread.targets[2].ratio = 2.9|the clock's unread dot at 2.9:1
@@ -895,7 +901,7 @@ a11y_contrast|1|.barPills.pills.overflow.targets[0].ratio = 4.4|the overflow's +
 a11y_contrast|1|.barPills.indicatorMenu.targets[0].ratio = 3|the Chat app's menu text at 3:1
 a11y_contrast|2|del(.barPills.pills.overflow, .barPills.pills.indicator0, .barPills.pills.indicator1, .barPills.pills.indicator2, .barPills.pills.indicator3)|no app indicators shown
 a11y_contrast|1|.focus.busy.quickSettings += {ratio: 1}|a focus indicator drawn in its surface's own colour over the busy wallpaper
-a11y_contrast|1|.focus.backdrop.dock += {changed: 900, ratio: 3.2}|the dock's focus indicator reaching 3:1 while its gap is pinned
+a11y_contrast|1|.focus.backdrop.dock += {changed: 0, ratio: 1}|a dock item that shows no focus indicator
 a11y_contrast|1|.focus.busy.dialog.ratio = 2.5|the dialog entry's indicator below today's 2.87:1
 a11y_contrast|1|.focus.backdrop.dialog.focused = false|key focus that never lands on the dialog's control
 a11y_contrast|4|.focus.busy = {error: "the wallpaper never changed"}|a busy wallpaper that never showed
@@ -1716,7 +1722,7 @@ test_modal_dialog() {
     local variant change what passes failures open_gaps
     for variant in light dark; do
         read -r passes failures open_gaps <<<"$(assert_run modal_dialog "$variant")"
-        if ((failures == 0 && open_gaps == 0 && passes == 17)); then
+        if ((failures == 0 && open_gaps == 0 && passes == 20)); then
             ok "modal dialog ($variant): drawn from the tokens it passes all $passes assertions"
         else
             not_ok "modal dialog ($variant): drawn from the tokens it passes (passed/failed/gaps $passes/$failures/$open_gaps): $(grep -m3 '^FAIL' "$T/top-bar.out" | paste -sd'|' -)"
@@ -1738,6 +1744,9 @@ test_modal_dialog() {
 .surfaces.dialog.endSession.box.width = 384|upstream's 24em end-session dialog
 .surfaces.dialog.endSession.contentSpacing = 18|the plain dialog gap in the end-session dialog
 .surfaces.dialog.endSession.title.tracking = 0|an untracked end-session title
+.surfaces.dialog.checkBox.unchecked.hover.borderColor = "#00000033"|stock's darker ring on hover
+.surfaces.dialog.checkBox.checked.background = "#3584e4ff"|the raw accent under a checked box's white check
+.surfaces.dialog.checkBox.checked.borderColor = "#3584e4ff"|a ring left on a checked box
 .surfaces.dialog.endSession.description.font.features = null|a countdown in proportional figures
 .surfaces.dialog.endSession.buttons[2].background = "#ebebedff"|a plain Power Off button
 .surfaces.dialog.endSession.buttons[2].hover.background = "#c01c28ff"|a Power Off button without hover feedback
@@ -1763,6 +1772,17 @@ del(.surfaces.dialog.endSession.buttons[1])|stock's row, without Restart
 .surfaces.dialog.updateCard.ready.toggle.focusable = true|a ready-for-reboot switch that takes focus
 .surfaces.dialog.updateCard.ready.toggle.a11ySensitive = true|a ready-for-reboot switch announced as available
 CHANGES
+    local ring
+    for variant in light:000000 dark:ffffff; do
+        ring=${variant#*:}
+        variant=${variant%:*}
+        read -r passes failures open_gaps <<<"$(assert_run modal_dialog "$variant" ".surfaces.dialog.checkBox.unchecked.borderColor = \"#${ring}26\"")"
+        if ((failures == 2)); then
+            ok "modal dialog ($variant): stock's ring, #$ring at .15, fails its token and 3:1"
+        else
+            not_ok "modal dialog ($variant): stock's ring, #$ring at .15, fails its token and 3:1 (passed/failed/gaps $passes/$failures/$open_gaps)"
+        fi
+    done
 }
 
 test_date_menu() {
@@ -3518,7 +3538,7 @@ test_pr_assertions() {
         "$(grep -c "^FAIL default: main.js's startup-complete handler ran 0 times, not once" "$T/assertions.out")"
     # shellcheck disable=SC2016 # expanded by the inner bash
     expect_eq "parts: main asserts every case, pr only its own" "0 1 0" \
-        "$(bash -c '. "$1/assert.sh"; part=main; asserted glass; a=$?; part=pr; asserted glass; b=$?; asserted default; echo "$a $b $?"' _ "$HERE")"
+        "$(bash -c '. "$1/assert.sh"; part=main; asserted glass-load; a=$?; part=pr; asserted glass-load; b=$?; asserted default; echo "$a $b $?"' _ "$HERE")"
 }
 
 test_one_gpu() {

@@ -19,6 +19,7 @@ import * as ModalDialog from 'resource:///org/gnome/shell/ui/modalDialog.js';
 import * as OverviewControls from 'resource:///org/gnome/shell/ui/overviewControls.js';
 import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 import * as Scripting from 'resource:///org/gnome/shell/ui/scripting.js';
+import * as ShellMountOperation from 'resource:///org/gnome/shell/ui/shellMountOperation.js';
 import * as Slider from 'resource:///org/gnome/shell/ui/slider.js';
 import * as SwitcherPopup from 'resource:///org/gnome/shell/ui/switcherPopup.js';
 import * as UserWidget from 'resource:///org/gnome/shell/ui/userWidget.js';
@@ -78,6 +79,12 @@ const SIGNOFF_FOCUS_ORDER = ['org.gnome.Calendar.desktop', 'org.gnome.TextEditor
 const SIGNOFF_QUIET_MS = 1500;
 const SIGNOFF_FOCUS_ATTEMPTS = 3;
 const WIFI_SCAN_MS = 5000;
+// A WPA2 network that appears while the Wi-Fi menu is open (fixtures.py's NM_80211_AP_SEC_WPA2_PSK).
+const LATE_NETWORK = {
+    name: 'apexlate', ssid: 'Apex-Late', address: '02:A5:E0:00:00:09', frequency: 5745, rate: 866700, strength: 64,
+    security: 0x188,
+};
+const NM_DEVICE = '/org/freedesktop/NetworkManager/Devices/wlan0';
 const TRAY_DRAIN_MS = 3000;
 const SHUTDOWN_HISTORY_DELAY_MS = 300;
 const SHUTDOWN_BANNER_TIMEOUT_MS = 100;
@@ -1059,32 +1066,65 @@ async function wifiMenuRows(unit) {
         await settle();
         const {_header: header, _headerSubtitle: subtitle} = wifi.menu;
         const meta = header.layout_manager.get_child_meta(header, subtitle);
-        const rows = findAll(wifi.menu.box, a => a.constructor.name === 'NMWirelessNetworkItem');
+        const rows = () => findAll(wifi.menu.box, a => a.constructor.name === 'NMWirelessNetworkItem');
+        const describe = row => {
+            const lock = row._secureIcon;
+            const children = row.get_children();
+            return {
+                ssid: row._label.text,
+                active: row.network.is_active,
+                checked: row.has_style_pseudo_class('checked'),
+                accessibleName: row.accessible_name ?? null,
+                accessibleChecked: row.get_accessible().ref_state_set().contains_state(Atk.StateType.CHECKED),
+                strength: row.network.signal_strength,
+                secure: !!lock.icon_name,
+                lockAfterName: children.indexOf(lock) === children.indexOf(row._label) + 1,
+                box: boxOf(row, unit), label: boxOf(row._label, unit), signal: boxOf(row._signalIcon, unit),
+                lockBox: lock.icon_name ? boxOf(lock, unit) : null,
+                lockSize: lengthOrNull(lock.get_theme_node(), 'icon-size', unit),
+                lockColor: hex(lock.get_theme_node().get_foreground_color()),
+            };
+        };
+        const listed = rows().map(describe);
         return {
             subtitle: {column: meta.left_attach, row: meta.top_attach, xAlign: subtitle.x_align, end: Clutter.ActorAlign.END},
-            rows: rows.map(row => {
-                const lock = row._secureIcon;
-                const children = row.get_children();
-                return {
-                    ssid: row._label.text,
-                    active: row.network.is_active,
-                    checked: row.has_style_pseudo_class('checked'),
-                    accessibleName: row.accessible_name ?? null,
-                    accessibleChecked: row.get_accessible().ref_state_set().contains_state(Atk.StateType.CHECKED),
-                    strength: row.network.signal_strength,
-                    secure: !!lock.icon_name,
-                    lockAfterName: children.indexOf(lock) === children.indexOf(row._label) + 1,
-                    box: boxOf(row, unit), label: boxOf(row._label, unit), signal: boxOf(row._signalIcon, unit),
-                    lockBox: lock.icon_name ? boxOf(lock, unit) : null,
-                    lockSize: lengthOrNull(lock.get_theme_node(), 'icon-size', unit),
-                    lockColor: hex(lock.get_theme_node().get_foreground_color()),
-                };
-            }),
+            rows: listed,
+            late: await lateNetworkRow(rows, describe),
         };
     } finally {
         wifi.menu.close(BoxPointer.PopupAnimation.NONE);
         menu.close(BoxPointer.PopupAnimation.NONE);
         await settle();
+    }
+}
+
+// network.js names a new network's row as its first access point arrives, before it is the
+// best one: the name must still end up with the access point's strength.
+async function lateNetworkRow(rows, describe) {
+    const call = (method, signature, args) => new Promise((resolve, reject) => Gio.DBus.system.call(
+        'org.freedesktop.NetworkManager', '/org/freedesktop/NetworkManager', 'org.freedesktop.DBus.Mock', method,
+        new GLib.Variant(signature, args), null, Gio.DBusCallFlags.NONE, -1, null, (bus, res) => {
+            try {
+                resolve(bus.call_finish(res).deepUnpack()[0]);
+            } catch (e) {
+                reject(e);
+            }
+        }));
+    const {name, ssid, address, frequency, rate, strength, security} = LATE_NETWORK;
+    let path;
+    try {
+        path = await call('AddAccessPoint', '(ssssuuuyu)',
+            [NM_DEVICE, name, ssid, address, 2, frequency, rate, strength, security]);
+        const late = () => rows().find(row => row._label.text === ssid);
+        for (let waited = 0; !late() && waited < WIFI_SCAN_MS; waited += 100)
+            await Scripting.sleep(100); // eslint-disable-line no-await-in-loop
+        await settle();
+        return late() ? describe(late()) : {error: `no row for ${ssid} within ${WIFI_SCAN_MS} ms`};
+    } catch (e) {
+        return {error: e.message};
+    } finally {
+        if (path)
+            await call('RemoveAccessPoint', '(ss)', [NM_DEVICE, path]).catch(() => {});
     }
 }
 
@@ -1439,6 +1479,39 @@ async function modalDialog(unit) {
     } finally {
         dialog.close();
         dialog.destroy();
+        await settle();
+    }
+}
+
+// The mount password dialog, as a mount's ask-password opens it: its Remember Password is a check box.
+function openMountPasswordDialog() {
+    const operation = new ShellMountOperation.ShellMountOperation({get_drive: () => null});
+    operation.mountOp.emit('ask-password', 'Password Required\nEnter the password for the G2 share', 'apex', 'WORKGROUP',
+        Gio.AskPasswordFlags.NEED_PASSWORD | Gio.AskPasswordFlags.SAVING_SUPPORTED);
+    const dialog = operation._dialog;
+    return {
+        root: dialog.dialogLayout._dialog,
+        check: dialog._rememberChoice,
+        close: () => operation.close(),
+    };
+}
+
+async function checkBoxDialog(unit) {
+    const opened = openMountPasswordDialog();
+    const {check} = opened;
+    const state = checked => {
+        check.checked = checked;
+        return {
+            ...styleOf(check._check, unit),
+            hover: underPseudoClass(check, 'hover', () => ({borderColor: hex(check._check.get_theme_node().get_border_color(St.Side.TOP))})),
+        };
+    };
+    try {
+        await settle();
+        global.stage.set_key_focus(null);
+        return {background: styleOf(opened.root, unit).background, label: check.getLabelActor().text, unchecked: state(false), checked: state(true)};
+    } finally {
+        opened.close();
         await settle();
     }
 }
@@ -2480,7 +2553,10 @@ async function scenes() {
         surfaces.idleRepaints = await idleRepaints();
     }
     surfaces.switcher = await windowSwitcher(unit);
-    surfaces.dialog = {...await modalDialog(unit), endSession: await endSessionDialog(unit), updateCard: await updateCard(unit)};
+    surfaces.dialog = {
+        ...await modalDialog(unit), endSession: await endSessionDialog(unit), updateCard: await updateCard(unit),
+        checkBox: await checkBoxDialog(unit),
+    };
     surfaces.dateMenu = await calendarMenu(unit);
     surfaces.notificationsLayer = await notificationsLayer(unit);
     surfaces.derived = derivedSurfaces(unit);
@@ -3386,6 +3462,7 @@ async function runProbe() {
             result = await A11y.a11yReport({
                 settle, unit: cssUnit(), apexDock, findDescendant, openPopupMenu, openOsd, openBanner,
                 openModalDialog: () => openPromptDialog({avatar: true}), openEndSessionDialog: openShellEndSession, withSpotlight,
+                openMountPasswordDialog,
             });
         } catch (e) {
             result = {error: `${e.message}\n${e.stack}`};
