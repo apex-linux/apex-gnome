@@ -12,7 +12,11 @@ const printFact = (key, value) => printerr(`probe: ${key}=${value}`);
 function withLabel(item) {
     item.label = new St.Label({style_class: 'dash-label'});
     item.label.visible = false;
-    item.showLabel = () => (item.label.visible = true);
+    item.label.shows = 0;
+    item.showLabel = () => {
+        item.label.visible = true;
+        item.label.shows++;
+    };
     item.hideLabel = () => (item.label.visible = false);
     return item;
 }
@@ -76,6 +80,7 @@ export const Dash = GObject.registerClass({
         this._showAppsIcon.icon = new BaseIconStub('Show Apps');
         this._showAppsIcon.child = new St.Button();
         this._showAppsIcon.child._delegate = this._showAppsIcon;
+        this._hookUpLabel(this._showAppsIcon);
         this._dashContainer.add_child(this._showAppsIcon);
         this._dashContainer._parent = this;
         this.showAppsButton = new St.Button({checked: false});
@@ -83,7 +88,10 @@ export const Dash = GObject.registerClass({
             this._box.add_child(this._createAppItem({get_name: () => name}));
     }
 
-    _hookUpLabel() {}
+    // Upstream's clicked handler hides the label (dash.js _hookUpLabel).
+    _hookUpLabel(item) {
+        item.child.connect('clicked', () => item.hideLabel());
+    }
 
     // Upstream's: the hovered item's label shows, and goes when the hover does.
     _syncLabel(item) {
@@ -103,6 +111,7 @@ export const Dash = GObject.registerClass({
         item.child = new St.Button();
         item.child.icon = new BaseIconStub(app.get_name());
         item.child._delegate = {app, icon: item.child.icon};
+        this._hookUpLabel(item);
         return item;
     }
 

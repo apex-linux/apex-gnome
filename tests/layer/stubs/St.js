@@ -152,7 +152,7 @@ class Widget {
     }
 
     get_theme_node() {
-        return this._themeNode ?? {get_shadow: () => null, get_border_radius: () => 0};
+        return this._themeNode ?? {get_shadow: () => null, get_border_radius: () => 0, get_length: () => 0};
     }
 
     set_size(width, height) {
@@ -318,6 +318,8 @@ class Widget {
     }
 
     remove_all_transitions() {}
+
+    remove_transition() {}
 
     destroy() {
         if (this.destroyed)

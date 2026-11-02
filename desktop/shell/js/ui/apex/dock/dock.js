@@ -59,14 +59,27 @@ class ApexDock extends Dash.Dash {
         this._syncFocusLabel();
     }
 
-    // Upstream clamps the label to the stage (dash.js showLabel); next to another monitor it would reach over.
+    // The dock moved to a new primary: the focused item's label follows it, without fading in again.
+    replaceFocusLabel() {
+        if (this._focusShowing)
+            this._placeLabel(this._focusShowing);
+    }
+
+    // Where upstream's showLabel puts the label (dash.js), but clamped to the item's monitor, not the stage.
+    _placeLabel(item) {
+        const [x, y] = item.get_transformed_position();
+        const {width, height} = item.label;
+        const monitor = Main.layoutManager.findMonitorForActor(item) ?? {x: 0, width: global.stage.width};
+        const left = Math.floor(x + (item.allocation.get_width() - width) / 2);
+        item.label.set_position(Math.max(monitor.x, Math.min(left, monitor.x + monitor.width - width)),
+            y - height - item.label.get_theme_node().get_length('-y-offset'));
+    }
+
     _keepLabelOnMonitor(item) {
         const showLabel = item.showLabel.bind(item);
         item.showLabel = () => {
             showLabel();
-            const monitor = Main.layoutManager.findMonitorForActor(item);
-            if (monitor)
-                item.label.x = Math.max(monitor.x, Math.min(item.label.x, monitor.x + monitor.width - item.label.width));
+            this._placeLabel(item);
         };
     }
 
@@ -87,13 +100,28 @@ class ApexDock extends Dash.Dash {
             }
         });
         item.child.connect('notify::mapped', () => this._syncFocusLabel());
-        // As the panel's Escape: key focus leaves the dock, and with it the name.
-        item.child.connect('key-press-event', (_child, event) => {
-            if (event.get_key_symbol() !== Clutter.KEY_Escape)
-                return Clutter.EVENT_PROPAGATE;
-            global.stage.set_key_focus(null);
-            return Clutter.EVENT_STOP;
+        // Upstream hides the label on activation; the item keeps the key focus.
+        item.child.connect('clicked', () => {
+            if (this._focusShowing === item)
+                this._focusShowing = null;
+            this._syncFocusLabel();
         });
+        item.child.connect('key-press-event', (_child, event) => this._onKeyPress(event));
+        // An unpinned app's item goes with no key-focus-out.
+        item.connect('destroy', () => {
+            for (const key of ['_focusItem', '_focusShowing', '_menuItem']) {
+                if (this[key] === item)
+                    this[key] = null;
+            }
+        });
+    }
+
+    // As the panel's Escape: key focus leaves the dock, and with it the name; the overview still closes.
+    _onKeyPress(event) {
+        if (event.get_key_symbol() !== Clutter.KEY_Escape)
+            return Clutter.EVENT_PROPAGATE;
+        global.stage.set_key_focus(null);
+        return Main.overview.visible ? Clutter.EVENT_PROPAGATE : Clutter.EVENT_STOP;
     }
 
     // One name at a time: a hover elsewhere, an open menu or a hidden dock takes the focused item's.
@@ -102,14 +130,12 @@ class ApexDock extends Dash.Dash {
         if (!item)
             return;
         const hovered = this._labelledItems().find(i => i.child.hover) ?? null;
-        if (hovered === item)
-            return;
         const shown = item.child.mapped && !this._slidOut;
-        if (hovered || this._menuItem || !shown) {
+        if ((hovered && hovered !== item) || this._menuItem || !shown) {
             if (this._focusShowing === item)
                 item.hideLabel();
             this._focusShowing = null;
-        } else if (this._focusShowing !== item) {
+        } else if (this._focusShowing !== item && hovered !== item) {
             this._focusShowing = item;
             item.showLabel();
         }
@@ -119,11 +145,10 @@ class ApexDock extends Dash.Dash {
         return [...this._box.get_children(), this._showAppsIcon, this._trash].filter(i => i.child && i.label);
     }
 
+    // A hover on the focused item leaves its label up as it is: no second fade in, none out.
     _syncLabel(item, appIcon) {
-        super._syncLabel(item, appIcon);
-        // Upstream shows or hides the hovered item's own label, the focused one's too.
-        if (item === this._focusShowing)
-            this._focusShowing = null;
+        if (item !== this._focusShowing)
+            super._syncLabel(item, appIcon);
         this._syncFocusLabel();
     }
 

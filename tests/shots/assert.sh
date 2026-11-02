@@ -2079,11 +2079,11 @@ dock_labels() {
     local label=$1 report=$2 path
     for path in "${A11Y_DOCK_LABELS[@]}"; do
         expect "$label accessibility" "$report" ".monitor as \$m | .${path%.*} as \$d | \$d.${path#*.} as \$l | (\$d.error // \$l.error) == null
-            and \$l.box.x >= \$m.x - 1 and \$l.box.x + \$l.box.width <= \$m.x + \$m.width + 1 and \$l.box.y >= \$m.y - 1
-            and \$l.box.y + \$l.box.height <= \$d.dock.y + 1" "$path: a hover shows the name label, whole on the monitor and above the dock"
+            and \$l.box.x >= \$m.x and \$l.box.x + \$l.box.width <= \$m.x + \$m.width and \$l.box.y >= \$m.y
+            and \$l.box.y + \$l.box.height <= \$d.dock.y" "$path: a hover shows the name label, whole on the monitor and above the dock"
     done
-    expect "$label accessibility" "$report" '.dockLabels.keyFocus | .focused and .shown' \
-        "key focus on the dock's first item shows its name label, as a hover does"
+    expect "$label accessibility" "$report" '.dockLabels.keyFocus | .hidden and .focused and .shown' \
+        "with every label down, key focus on the dock's first item shows its name label, as a hover does"
 }
 
 # A case that measures the dock's labels alone, at its own scale: their text and their place.
@@ -2734,6 +2734,9 @@ dock_edge_labels() {
     local r=$1 step side
     for step in mixedOnExternal:left mixed:right; do
         side=${step#*:}
+        expect dock-external "$r" ".steps.${step%:*}.edgeLabel | .label.width > .item.width and
+            if \"$side\" == \"left\" then .item.x == .monitor.x else .item.x + .item.width == .monitor.x + .monitor.width end" \
+            "Show Apps, its name wider than its icon, stands at the primary's $side edge"
         expect dock-external "$r" ".steps.${step%:*}.edgeLabel | .shown and .label.x >= .monitor.x
             and .label.x + .label.width <= .monitor.x + .monitor.width" \
             "with Show Apps at the primary's $side edge, a hover shows its name label inside the primary, not over the monitor beside it"
@@ -2778,6 +2781,9 @@ keys_case() {
     expect keys "$r" '.pressed.ctrlAltTab.focus as $first | .pressed.dockHover | .focused == [$first] and .hovered == [.hoveredName]
         and .left == [$first]' \
         "with the first item focused, a hover on the third shows the third's label alone, then the first's once the pointer leaves"
+    expect keys "$r" '.pressed.ctrlAltTab.focus as $first | .pressed.dockHover | .onFocused == [$first] and .offFocused == [$first]
+        and .lowestOpacity == 255' \
+        "and a hover on the focused item, then off it, leaves its label up, never fading it in again"
     expect keys "$r" '.pressed.superTap == {overview: true, apps: false}' "a Super tap opens the overview, on its windows"
     expect keys "$r" '.pressed.superA == {overview: true, apps: true}' "Super+A opens the launcher, the app grid"
     expect keys "$r" '.modals == 0' "and nothing is left holding a grab"

@@ -508,9 +508,12 @@ async function dockLabels(h, settle, unit, report, keyFocus = false) {
         const [, first] = picked[0];
         if (!keyFocus)
             return out;
+        // A hover's label still up would pass for key focus's.
+        const hidden = items.every(i => !i.label.visible);
         first.child.grab_key_focus();
         out.keyFocus = {
             name: first._labelText,
+            hidden,
             focused: global.stage.get_key_focus() === first.child,
             shown: await until(() => first.label.visible && first.label.opacity > 0),
         };

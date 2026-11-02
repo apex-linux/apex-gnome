@@ -782,7 +782,7 @@ REPORT_OF_LEGIBLE_SURFACES='
 
     bar: ($s | .targets += [$dot, $inactiveDot]), barUnread: ($s | .targets += [$dot + {name: "messages-indicator"}, $inactiveDot]), dock: $s, popupMenu: $s, osd: $s, banner: $s, quickSettings: $s, wifiMenu: $s, wifiMenuConnected: $s, dateMenu: $s, switcher: $s, inputSourceSwitcher: $s, ctrlAltTabSwitcher: $s, monitorSwitcher: $s,
     dialog: $s, endSession: $s, spotlight: {popup: $s, toast: $s}, overview: $s, appGrid: $s,
-    dockLabels: ($labels + {keyFocus: {name: "Files", focused: true, shown: true}}), dockLabelsBusy: $labels,
+    dockLabels: ($labels + {keyFocus: {name: "Files", hidden: true, focused: true, shown: true}}), dockLabelsBusy: $labels,
     barPills: {box: $s.box, pills: {input: {targets: [$text + {name: "EN"}], edge: null},
         recording: {targets: [$text + {name: "0:42", ink: "#ffffff", backdrop: "#c01c28", ratio: 5.6}], edge: $edge},
         sharing: {targets: [$icon + {name: "screen-shared-symbolic"}], edge: $edge}, privacy: {targets: [$icon, $icon], edge: $edge},
@@ -826,6 +826,30 @@ CHANGES
     a11y_run a11y_layout '.barPills.crowded = {error: "not shown"}' >/dev/null
     expect_eq "accessibility: a11y_layout names the crowded bar's own failure" 1 \
         "$(grep -c "^FAIL dark-style accessibility: board 39's crowded bar .* (error: not shown)$" "$T/a11y.out")"
+}
+
+# default-scale1's dock labels alone (G2_DOCK_LABELS): each bad change fails one row of 13.
+test_dock_labels_case() {
+    local want change what passes failures
+    while IFS='|' read -r want change what; do
+        # shellcheck disable=SC2016 # a jq program
+        jq -nc --argjson inactive 4 "$REPORT_OF_LEGIBLE_SURFACES | {monitor, dockLabels, dockLabelsBusy} | $change" |
+            sed 's/^/APEXG2-DOCK-LABELS /' >"$T/dock-labels.log"
+        read -r passes failures <<<"$(assertion_counts dock_labels_case default-scale1 "$T/dock-labels.log")"
+        expect_eq "dock labels at scale 1: $what fails $want" "$want/$((13 - want))" "$failures/$passes"
+    done <<'CHANGES'
+0|.|the labels as measured
+1|.dockLabels.first.targets[0].ratio = 4.4|a label's text at 4.4:1
+1|.dockLabelsBusy.middle.box.x = -5|a label past the monitor's left edge
+1|.dockLabels.middle.box.x = 1300|a label past the monitor's right edge
+1|.dockLabels.last.box.y = 800|a label over the dock
+1|.dockLabels.keyFocus.shown = false|key focus that shows no label
+1|.dockLabels.keyFocus.hidden = false|a hover's label still up when key focus comes
+CHANGES
+    printf 'APEXG2-DOCK-LABELS %s\n' '{"error":"dockLabelsReport: no dock"}' >"$T/dock-labels.log"
+    read -r passes failures <<<"$(assertion_counts dock_labels_case default-scale1 "$T/dock-labels.log")"
+    expect_eq "dock labels at scale 1: a probe error fails once, naming it" "1/0 1" \
+        "$failures/$passes $(grep -c 'no dock' "$T/assertions.out")"
 }
 
 # default's inactive dot is Apex's known gap: pinned at 2.86:1, and failing once it reaches 3:1.
@@ -905,6 +929,7 @@ a11y_contrast|1|.dockLabels.first.box.x = -20|a dock label past the monitor's le
 a11y_contrast|1|.dockLabelsBusy.last.box.y = 800|a dock label over the dock
 a11y_contrast|2|.dockLabels.middle = {error: "Clocks's label never showed"}|a dock label that never showed
 a11y_contrast|1|.dockLabels.keyFocus.shown = false|key focus that shows no dock label
+a11y_contrast|1|.dockLabels.keyFocus.hidden = false|a hover's label still up when key focus comes
 a11y_contrast|1|.dockLabelsBusy.last.targets[0].ratio = 4.4|a dock label's text at 4.4:1 over the busy wallpaper
 a11y_layout|1|.dockLabels.first.targets[0].ellipsized = true|a dock label cut short
 a11y_contrast|1|.barPills.pills.indicator2.targets[0] += {ink: "#16161a", ratio: 1}|an app indicator's glyph drawn in the bar's own colour
@@ -2819,6 +2844,9 @@ test_dock_external() {
 .steps.mixed.edgeLabel.label.x = 3300|an end item's label off the stage's right edge
 .steps.mixedOnExternal.edgeLabel.label.x = 1423|Show Apps' label 17 px over the panel, where upstream's stage clamp leaves it
 .steps.mixed.edgeLabel.label.x = 1367|Show Apps' label 16 px over the external display
+.steps.mixedOnExternal.edgeLabel.item.x = 1500|Show Apps short of the external display's left edge
+.steps.mixed.edgeLabel.item.x = 1000|Show Apps short of the panel's right edge
+.steps.mixed.edgeLabel.label.width = 40|a label narrower than its item, which no clamp could move
 CHANGES
     write_report_run dock-external DOCK-EXTERNAL '{error: "G2 runs 1 monitor(s), not two\ndock-external.js:98"}' .
     read -r passes failures <<<"$(assertion_counts dock_external_case "$T/dock-external")"
@@ -3470,7 +3498,8 @@ readonly KEYS_REPORT="{bindings: {
     ctrlAltTab: {groups: [{name: \"Windows\", dock: false}, {name: \"Top Bar\", dock: false}, {name: \"Dash\", dock: true}], dockFocused: true,
       focus: \"Files\", labels: [\"Files\"]},
     dockRight: {focus: \"Clocks\", labels: [\"Clocks\"]}, dockEscape: {focus: null, labels: []},
-    dockHover: {focused: [\"Files\"], hovered: [\"Show Apps\"], left: [\"Files\"], hoveredName: \"Show Apps\"},
+    dockHover: {focused: [\"Files\"], hovered: [\"Show Apps\"], left: [\"Files\"], hoveredName: \"Show Apps\",
+      onFocused: [\"Files\"], offFocused: [\"Files\"], lowestOpacity: 255},
     superTap: {overview: true, apps: false}, superA: {overview: true, apps: true}},
   modals: 0}"
 
@@ -3481,7 +3510,7 @@ test_keys_case() {
     while IFS='|' read -r failures change what; do
         printf 'APEXG2-KEYS %s\n' "$(jq -nc "$KEYS_REPORT | $change")" >"$run/keys.log"
         read -r passes _ <<<"$(assertion_counts keys_case "$run")"
-        expect_eq "keys: $what fails $failures of 17" "$failures" $((17 - passes))
+        expect_eq "keys: $what fails $failures of 18" "$failures" $((18 - passes))
     done <<'CHANGES'
 0|.|the keys as registered and pressed
 1|.bindings.inputSource.accelerators = ["<Super>space", "XF86Keyboard"]|GNOME's input source key, on Spotlight's Super+Space
@@ -3497,10 +3526,13 @@ test_keys_case() {
 1|.pressed.dockEscape.labels = ["Clocks"]|Escape that leaves the label up
 1|.pressed.dockHover.hovered = ["Files", "Show Apps"]|the focused item's label still up under a hover elsewhere
 1|.pressed.dockHover.left = []|the focused item's label not back once the hover ends
+1|.pressed.dockEscape.focus = "Clocks"|Escape that hides the label but keeps the focus
+1|.pressed.dockHover.lowestOpacity = 0|the focused item's label fading in again under a hover on it
+1|.pressed.dockHover.offFocused = []|the focused item's label gone once a hover on it ends
 1|.pressed.superTap.overview = false|a Super tap that opens nothing
 1|.pressed.superA.apps = false|Super+A that opens the windows, not the launcher
 1|.modals = 1|a grab left behind
-14|{error: "keysCase: no keyboard"}|a probe error
+15|{error: "keysCase: no keyboard"}|a probe error
 CHANGES
 }
 
@@ -4262,6 +4294,7 @@ test_modal_dialog
 test_a11y
 test_inactive_dot_gap
 test_a11y_surface_errors
+test_dock_labels_case
 test_pill_gaps
 test_signoff
 test_shell_icons

@@ -2061,7 +2061,17 @@ async function hoverWhileFocused(dock) {
     const hovered = await dockLabelsShown(dock);
     await moveTo(away);
     const left = await dockLabelsShown(dock);
-    return {focused, hovered, left, hoveredName: items[2]._labelText};
+    // The focused item hovered and left: its label stays up, never fading in again.
+    let lowest = items[0].label.opacity;
+    const id = items[0].label.connect('notify::opacity', label => (lowest = Math.min(lowest, label.opacity)));
+    const [fx, fy] = items[0].child.get_transformed_position();
+    const [fw, fh] = items[0].child.get_transformed_size();
+    await moveTo([fx + fw / 2, fy + fh / 2].map(Math.round));
+    const onFocused = await dockLabelsShown(dock);
+    await moveTo(away);
+    const offFocused = await dockLabelsShown(dock);
+    items[0].label.disconnect(id);
+    return {focused, hovered, left, hoveredName: items[2]._labelText, onFocused, offFocused, lowestOpacity: lowest};
 }
 
 // The session's keys, each as registered and then pressed, from the desktop with nothing open.
