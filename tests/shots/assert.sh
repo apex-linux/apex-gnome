@@ -57,7 +57,7 @@ readonly A11Y_SURFACES=(bar barUnread dock popupMenu osd banner quickSettings "$
     "${A11Y_ACCENTS[@]/#/dateMenuAccents.}" switcher inputSourceSwitcher ctrlAltTabSwitcher monitorSwitcher dialog "${A11Y_ACCENTS[@]/#/dialogAccents.}"
     checkBoxDialog "${A11Y_ACCENTS[@]/#/checkBoxDialogAccents.}" endSession screenshot
     spotlight.popup spotlight.toast overview appGrid barPills.indicatorMenu)
-# The failures still open: upstream's high-contrast sheet, which safe mode keeps as Fedora's.
+# The failures still open: upstream's high-contrast rules, which the Apex part does not yet restyle.
 readonly A11Y_HC_TOGGLE="upstream HC sheet: Quick Settings' checked toggle, white on its accent (3.15:1), and its menu arrow (2.31:1)"
 declare -A A11Y_GAPS=([high-contrast:quickSettings]=$A11Y_HC_TOGGLE)
 for a11y_accent in "${A11Y_ACCENTS[@]}"; do
@@ -1763,7 +1763,7 @@ high_contrast_is_fedoras() {
         "Fedora's high-contrast sheet has no Apex structure marker"
     expect_report stock-light "$run/stock-light.log" \
         ".highContrastSheet | .structure and .sha256BeforeStructure == \"${fedora:-none}\"" \
-        "the rebuilt high-contrast sheet, which safe mode keeps (it has no stock copy), is Fedora's up to the structure marker: Apex only appends"
+        "the rebuilt high-contrast sheet is Fedora's up to the structure marker: Apex only appends"
 }
 
 fedora_baseline() {

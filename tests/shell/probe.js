@@ -577,6 +577,17 @@ function describeGreeterLayout(dialog, items) {
     };
 }
 
+// A list avatar's circle and the glyph's own box, which upstream fills for a logged-in user.
+function avatarOf(item) {
+    const avatar = item._userWidget._avatar;
+    const glyph = avatar.child;
+    return {
+        ...button(avatar), fg: color(avatar.get_theme_node().get_foreground_color()),
+        loggedIn: item.has_style_pseudo_class('logged-in'),
+        glyphFill: glyph ? color(glyph.get_theme_node().get_background_color()) : null,
+    };
+}
+
 function describeGreeter(dialog) {
     const items = [...dialog._userList._items.values()];
     return {
@@ -584,6 +595,8 @@ function describeGreeter(dialog) {
         prompt: describePrompt(dialog._authPrompt?.visible ? dialog._authPrompt : null),
         style: describeGreeterStyle(dialog),
         layout: describeGreeterLayout(dialog, items),
+        avatars: items.map(avatarOf),
+        sheet: St.ThemeContext.get_for_stage(global.stage).get_theme().default_stylesheet?.get_uri() ?? null,
     };
 }
 

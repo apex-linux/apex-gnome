@@ -80,11 +80,11 @@
     <file alias="diamond-dark.svg">data/theme/apex/diamond-dark.svg</file>
   </gresource>
   <!--
-    Safe mode's sheets: upstream's compiled ones, moved here by %prep. With no stock
-    high-contrast sheet, safe mode uses the rebuilt one.
+    Safe mode's sheets: upstream's compiled ones, moved here by %prep.
   -->
   <gresource prefix="/org/gnome/shell/theme/stock">
     <file alias="gnome-shell-light.css">data/theme/apex/stock/gnome-shell-light.css</file>
     <file alias="gnome-shell-dark.css">data/theme/apex/stock/gnome-shell-dark.css</file>
+    <file alias="gnome-shell-high-contrast.css">data/theme/apex/stock/gnome-shell-high-contrast.css</file>
   </gresource>
 </gresources>
