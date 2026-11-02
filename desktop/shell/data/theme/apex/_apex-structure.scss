@@ -30,11 +30,19 @@ $apex_dock_border: $_hc_border;
 @import "dock";
 @import "end-session-icon";
 
-// The lock's blur leaves darkening to its overlay (lock/stage.js), so HC's white text needs a darker one.
+// HC's white needs a darker overlay than the blur leaves; upstream's avatar fill and .7 hint held it at 2.96, 3.98:1.
 .apex-lock-overlay { background-color: $apex_lock_overlay_contrast; }
+.unlock-dialog.apex-lock .user-widget .user-icon {
+  border: $apex_surface_border solid $_hc_fg;
+  background-color: transparent;
+  box-shadow: none;
+  color: $_hc_fg;
+}
+.unlock-dialog.apex-lock .login-dialog-prompt-entry StLabel.hint-text { color: $_hc_fg; }
 
 .apex-lock-background { -apex-lock-blur: $apex_lock_blur; -apex-lock-saturation: $apex_lock_saturation / 100%; }
 
+// GNOME 51.1's fixed prompt height, as in _lock.scss.
 .unlock-dialog.apex-lock .login-dialog-prompt-layout { height: auto; }
 
 // Upstream's stray-space `& :ltr` also pads the field's icons; only the Apex lock ends board 20's eye inside it.
@@ -43,8 +51,12 @@ $apex_dock_border: $_hc_border;
   &:rtl { padding-left: 0; }
 }
 
-.login-dialog-user-list-view .login-dialog-user-list .login-dialog-user-list-item .user-icon {
-  border: 1px solid $_hc_fg;
-  background-color: transparent;
-  color: $_hc_fg;
+.login-dialog-user-list-view .login-dialog-user-list .login-dialog-user-list-item {
+  .user-icon {
+    border: $apex_surface_border solid $_hc_fg;
+    background-color: transparent;
+    color: $_hc_fg;
+  }
+  &:logged-in .user-icon { border-width: 2 * $apex_surface_border; }
+  &:logged-in .user-icon StIcon { background-color: transparent; }
 }
