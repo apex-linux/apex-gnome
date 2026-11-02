@@ -25,7 +25,7 @@ readonly DIRECT_CASES=(default default-scale1 dark-style high-contrast large-tex
     large-text-solid dock-intellihide dock-intellihide-dark dock-one-gpu no-dock no-dock-dark stock-light stock-dark safe-env
     layer-disabled layer-cycles motion idle dock-pin dock-dnd dock-external keys glass-load glass-stress fault-configure fault-enable fault-abort shutdown-banner
     kernel-safe
-    fedora-light fedora-dark glass fedora-glass
+    fedora-light fedora-dark glass glass-scale1 fedora-glass
     indicators indicators-scale1 indicators-dark)
 readonly DIRECT_PARTS=(main kernel fedora)
 readonly CAPTURE_CASES=(default default-scale1 dark-style stock-light stock-dark fedora-light fedora-dark)
@@ -2015,15 +2015,14 @@ bar_pills() {
 # focus lands, something changes, and a 1 px line's worth of it changes by 3:1, or it is a pinned gap.
 readonly A11Y_FOCUS_SURFACES=(quickSettings dock dialog spotlight)
 readonly A11Y_FOCUS_GAP="the owner's decision on the focus indicators (2026-10-31)"
-# Today's shortfalls: the dock and Spotlight's entry show no indicator but the caret, so at 1:1 in
-# every case; Quick Settings' toggle in light and the dialog's entry in dark change too little.
+# Today's shortfalls: Spotlight's entry shows no indicator but the caret, so at 1:1 in every
+# case; Quick Settings' toggle in light and the dialog's entry in dark change too little.
 declare -A A11Y_FOCUS_TODAY=([default:backdrop:quickSettings]=2.37 [default:busy:quickSettings]=2.14
     [default-solid:backdrop:quickSettings]=1.91 [default-solid:busy:quickSettings]=2.14
     [dark-style:backdrop:dialog]=2.87 [dark-style:busy:dialog]=2.87
     [dark-style-solid:backdrop:dialog]=2.87 [dark-style-solid:busy:dialog]=2.87)
 for a11y_case in default dark-style high-contrast default-solid dark-style-solid high-contrast-solid; do
     for a11y_wall in backdrop busy; do
-        A11Y_FOCUS_TODAY[$a11y_case:$a11y_wall:dock]=1
         A11Y_FOCUS_TODAY[$a11y_case:$a11y_wall:spotlight]=1
     done
 done
@@ -2538,6 +2537,9 @@ direct_cases() {
     glass_frames glass "$run/glass.log"
     shadows_under_glass glass "$run/glass.log"
     glass_manager glass "$run/glass.log" light
+    glass_frames glass-scale1 "$run/glass-scale1.log"
+    shadows_under_glass glass-scale1 "$run/glass-scale1.log"
+    glass_manager glass-scale1 "$run/glass-scale1.log" light
     glass_unlock_vs_fedora "$run"
     indicator_cases "$run"
     one_gpu_case "$run"
@@ -2855,6 +2857,10 @@ patched_assertions() {
     asserted glass && glass_frames glass "$run/glass.log"
     asserted glass && shadows_under_glass glass "$run/glass.log"
     asserted glass && glass_manager glass "$run/glass.log" light
+    asserted glass-scale1 && no_js_error glass-scale1 "$run/glass-scale1.log"
+    asserted glass-scale1 && glass_frames glass-scale1 "$run/glass-scale1.log"
+    asserted glass-scale1 && shadows_under_glass glass-scale1 "$run/glass-scale1.log"
+    asserted glass-scale1 && glass_manager glass-scale1 "$run/glass-scale1.log" light
     asserted glass fedora-glass && glass_unlock_vs_fedora "$run"
     asserted indicators indicators-scale1 indicators-dark && indicator_cases "$run"
     asserted dock-one-gpu && one_gpu_case "$run"

@@ -8,8 +8,6 @@ readonly PTYXIS_TESTS
 readonly SHOTS=(light dark split-light split-dark large split-large)
 # GNOME's Large Text, and how much it must at least grow the rows' titles to have taken.
 readonly LARGE=1.25 GROWN=1.15
-# apex.css sizes its text in px, which GTK does not scale: the sidebar widens, its labels do not.
-readonly GAP="the owner's decision on Large Text in boards 32 and 33 (2026-10-31)"
 
 usage() {
     cat <<EOF
@@ -21,8 +19,7 @@ with contrast-atspi.py's targets (SHOTS_DIR, by default _build/ptyxis/shots). la
 a session's title, a time, a count, a group heading or a header label cut short, two of a
 row's or a header's labels over each other, and a label outside the window. A row's subtitle
 may end in an ellipsis: the design cuts it. Large Text must grow the rows' titles by
-${GROWN}x; that they do not is a known gap (GAP), which fails once it holds, so the fix also
-removes it. It needs python3 and jq.
+${GROWN}x, so apex.css's sizes follow it. It needs python3 and jq.
 EOF
 }
 
@@ -33,7 +30,7 @@ shots=${1:-$APEX_ROOT/_build/ptyxis/shots}
 
 python3 "$PTYXIS_TESTS/layout.py" --selftest || die "layout-test.sh: layout.py's selftest failed"
 
-failures=0 gaps=0
+failures=0
 fail() {
     failures=$((failures + 1))
     log "FAIL - $*"
@@ -63,10 +60,9 @@ titles() {
 }
 light=$(titles light) large=$(titles large)
 if jq -en "$large >= $light * $GROWN" >/dev/null; then
-    fail "large: Large Text grows the rows' titles from $light px to $large px: a known gap until $GAP, but it holds now: remove the gap"
+    log "ok - large: Large Text grows the rows' titles from $light px to $large px"
 else
-    gaps=$((gaps + 1))
-    log "gap - large: Large Text leaves the rows' titles at $large px against $light px ($GAP)"
+    fail "large: Large Text leaves the rows' titles at $large px against $light px"
 fi
 
 # The checks themselves: a session's title whose text runs to its box's edge must fail.
@@ -78,4 +74,4 @@ else
 fi
 
 ((failures == 0)) || die "layout-test.sh: $failures check(s) failed; see ${shots#"$APEX_ROOT/"}/*.targets.json"
-log "layout-test.sh: boards 32 and 33 lay out at the design's text size and under Large Text but for $gaps known gap(s)"
+log "layout-test.sh: boards 32 and 33 lay out at the design's text size and under Large Text"
