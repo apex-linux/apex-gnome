@@ -3303,6 +3303,15 @@ test_case_backtrace() {
         -e '[[ $arg == G2_EXPECT_EXIT=* ]] && expected=${arg#G2_EXPECT_EXIT=}' \
         -e 'run_and_record_case fault-abort '"''"' APEX_SHELL_TEST_FAULT=abort-after-enable PROBE_WAIT=20 G2_EXPECT_EXIT=134' \
         -e 'case_backtrace "/out/$name.log" "$rc" "$home" "/out/$name.bt" "$expected"')"
+    # Every other shell a test starts does the same: it builds crash.c, preloads it with clock.c and writes a .bt.
+    local starter
+    for starter in lib/headless.sh control-center/lib.sh nautilus/shoot.sh shell/shoot.sh; do
+        # shellcheck disable=SC2016 # the starter's lines, as written
+        expect_eq "backtrace: tests/$starter builds and preloads crash.c and calls case_backtrace" 4 \
+            "$(sed 's/^[[:space:]]*//' "$HERE/../$starter" | grep -cE -e '^\. "\$SHOTS/backtrace\.sh"$' \
+            -e '^crash_lib "\$CRASH_LIB" \|\| die ' -e '^exec env LD_PRELOAD="\$CLOCK_LIB \$CRASH_LIB" gnome-shell ' \
+            -e '^case_backtrace "[^"]*" "\$rc" ')"
+    done
     echo 'x exit=139 secs=4 marker-after-exit=yes' >"$run/results-pr.txt"
     mv "$run/none.bt" "$run/x.bt"
     assertion_counts exits "$run" x 0 >/dev/null
