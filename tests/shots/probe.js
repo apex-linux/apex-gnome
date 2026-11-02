@@ -84,6 +84,16 @@ const LATE_NETWORK = {
     name: 'apexlate', ssid: 'Apex-Late', address: '02:A5:E0:00:00:09', frequency: 5745, rate: 866700, strength: 64,
     security: 0x188,
 };
+// RSN PSK without a cipher, then a WPA2 network with them.
+const REFUSED_NETWORK = {
+    name: 'apexodd', ssid: 'Apex-Odd', address: '02:A5:E0:00:00:0A', frequency: 5180, rate: 866700, strength: 70,
+    security: 0x100,
+};
+const ADOPTED_NETWORK = {
+    name: 'apexfixed', ssid: 'Apex-Fixed', address: '02:A5:E0:00:00:0B', frequency: 2462, rate: 300000, strength: 56,
+    security: 0x188,
+};
+const WIFI_REFUSED_MS = 1500;
 const NM_DEVICE = '/org/freedesktop/NetworkManager/Devices/wlan0';
 const TRAY_DRAIN_MS = 3000;
 const SHUTDOWN_HISTORY_DELAY_MS = 300;
@@ -1090,6 +1100,7 @@ async function wifiMenuRows(unit) {
             subtitle: {column: meta.left_attach, row: meta.top_attach, xAlign: subtitle.x_align, end: Clutter.ActorAlign.END},
             rows: listed,
             late: await lateNetworkRow(rows, describe),
+            refused: await refusedNetworkRows(rows, describe),
         };
     } finally {
         wifi.menu.close(BoxPointer.PopupAnimation.NONE);
@@ -1098,10 +1109,8 @@ async function wifiMenuRows(unit) {
     }
 }
 
-// network.js names a new network's row as its first access point arrives, before it is the
-// best one: the name must still end up with the access point's strength.
-async function lateNetworkRow(rows, describe) {
-    const call = (method, signature, args) => new Promise((resolve, reject) => Gio.DBus.system.call(
+function nmMock(method, signature, args) {
+    return new Promise((resolve, reject) => Gio.DBus.system.call(
         'org.freedesktop.NetworkManager', '/org/freedesktop/NetworkManager', 'org.freedesktop.DBus.Mock', method,
         new GLib.Variant(signature, args), null, Gio.DBusCallFlags.NONE, -1, null, (bus, res) => {
             try {
@@ -1110,22 +1119,70 @@ async function lateNetworkRow(rows, describe) {
                 reject(e);
             }
         }));
-    const {name, ssid, address, frequency, rate, strength, security} = LATE_NETWORK;
+}
+
+function addAccessPoint({name, ssid, address, frequency, rate, strength, security}) {
+    return nmMock('AddAccessPoint', '(ssssuuuyu)', [NM_DEVICE, name, ssid, address, 2, frequency, rate, strength, security]);
+}
+
+async function rowFor(rows, ssid) {
+    const row = () => rows().find(r => r.visible && r._label.text === ssid);
+    for (let waited = 0; !row() && waited < WIFI_SCAN_MS; waited += 100)
+        await Scripting.sleep(100); // eslint-disable-line no-await-in-loop
+    await settle();
+    return row();
+}
+
+// network.js names a new network's row as its first access point arrives, before it is the
+// best one: the name must still end up with the access point's strength.
+async function lateNetworkRow(rows, describe) {
     let path;
     try {
-        path = await call('AddAccessPoint', '(ssssuuuyu)',
-            [NM_DEVICE, name, ssid, address, 2, frequency, rate, strength, security]);
-        const late = () => rows().find(row => row._label.text === ssid);
-        for (let waited = 0; !late() && waited < WIFI_SCAN_MS; waited += 100)
-            await Scripting.sleep(100); // eslint-disable-line no-await-in-loop
-        await settle();
-        return late() ? describe(late()) : {error: `no row for ${ssid} within ${WIFI_SCAN_MS} ms`};
+        path = await addAccessPoint(LATE_NETWORK);
+        const late = await rowFor(rows, LATE_NETWORK.ssid);
+        return late ? describe(late) : {error: `no row for ${LATE_NETWORK.ssid} within ${WIFI_SCAN_MS} ms`};
     } catch (e) {
         return {error: e.message};
     } finally {
         if (path)
-            await call('RemoveAccessPoint', '(ss)', [NM_DEVICE, path]).catch(() => {});
+            await nmMock('RemoveAccessPoint', '(ss)', [NM_DEVICE, path]).catch(() => {});
     }
+}
+
+// An access point no security type validates: network.js keeps the row it made for it, blank.
+// The next valid access point goes to that same network, and its row shows.
+async function refusedNetworkRows(rows, describe) {
+    const shown = () => rows().filter(r => r.visible);
+    const paths = [];
+    try {
+        const before = shown().length;
+        paths.push(await addAccessPoint(REFUSED_NETWORK));
+        await Scripting.sleep(WIFI_REFUSED_MS);
+        await settle();
+        const after = shown();
+        const refused = {
+            before, after: after.length,
+            blank: after.filter(r => !r._label.text).length,
+            unnamed: after.filter(r => !r.accessible_name).length,
+        };
+        paths.push(await addAccessPoint(ADOPTED_NETWORK));
+        const adopted = await rowFor(rows, ADOPTED_NETWORK.ssid);
+        refused.adopted = adopted ? describe(adopted) : {error: `no row for ${ADOPTED_NETWORK.ssid}`};
+        // Without access points left, network.js destroys the network and its row.
+        await removeAccessPoints(paths.splice(0));
+        await Scripting.sleep(WIFI_REFUSED_MS);
+        await settle();
+        return {...refused, removed: {shown: shown().length, rows: rows().length}};
+    } catch (e) {
+        return {error: e.message};
+    } finally {
+        await removeAccessPoints(paths);
+    }
+}
+
+async function removeAccessPoints(paths) {
+    for (const path of paths)
+        await nmMock('RemoveAccessPoint', '(ss)', [NM_DEVICE, path]).catch(() => {}); // eslint-disable-line no-await-in-loop
 }
 
 // The quick-settings feature: the toggles' order, Power Mode lit, On/Off subtitles; then two
