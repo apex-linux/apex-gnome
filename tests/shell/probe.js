@@ -416,12 +416,19 @@ async function shootMotion() {
     const curtain = () => ({ty: group.translation_y, opacity: group.opacity, transitions: transitionsUnder(group)});
     let stop = sampleMotion(curtain);
     shield.lock(true);
-    await Scripting.sleep(STEP_MS);
+    await settleMotion(group);
     fact('opening', stop());
     stop = sampleMotion(curtain);
     shield.deactivate(true);
-    await Scripting.sleep(STEP_MS);
+    await settleMotion(group);
     fact('closing', stop());
+}
+
+// The prompt fades its entry in when GDM's question arrives, which can be late: the last sample waits for it.
+async function settleMotion(group) {
+    await Scripting.sleep(STEP_MS);
+    for (let waited = 0; waited < STEP_MS && transitionsUnder(group).length; waited += MOTION_POLL_MS)
+        await Scripting.sleep(MOTION_POLL_MS);
 }
 
 // What polkit-agent-helper-1 would send, without the helper: PAM never runs, so nothing the
