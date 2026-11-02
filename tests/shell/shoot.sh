@@ -7,7 +7,7 @@ readonly SHOTS=$HERE/../shots
 . "$HERE/../../.github/scripts/lib.sh"
 
 readonly APEX_DESKTOP_URL=https://github.com/apex-linux/apex-desktop
-readonly APEX_DESKTOP_REV=f1a2f930f7e16ab7c7fde8f3a178d2e3ad9666ac
+readonly APEX_DESKTOP_REV=44d889fe455a4dd3e62bfa33796fb89d9bc2ff4f
 
 usage() {
     cat <<EOF
@@ -23,8 +23,10 @@ case locks, answers wrongly (lock-fingerprint fails a scan), blanks and wakes th
 but lock-wake-key: after Esc and a blank, a Return that arrives after the wake, and
 lock-wake-key-blank the same, locked while blank; lock-idle sends gnome-session's
 IDLE at lock, as every real lock does, then blanks and wakes with no key; lock-suspend
-has logind's mock prepare for sleep and resume; each greeter case (--mode=gdm) shows the user list, then the
-prompt. Each polkit case opens the shell's own authentication dialog through the polkit
+has logind's mock prepare for sleep and resume; lock-contrast and lock-fallback (over GNOME's #013b88) measure
+each text and glyph of the lock as G2's a11y rows do; lock-motion and lock-reduce-motion record every frame of
+the lock's opening and closing, without and with Reduce Motion; each greeter case (--mode=gdm) shows the user list,
+then the prompt, and greeter-reduce-motion records each frame between the two. Each polkit case opens the shell's own authentication dialog through the polkit
 component's _onInitiate(), with a stubbed PolkitAgent.Session that PAM never answers, for
 captures and style checks only (pkexec end to end is G4's); polkit-lock and polkit-suspend
 lock the screen, or sleep and resume, under the open dialog, type at the lock, then end the lock,
@@ -234,6 +236,15 @@ for scheme in light dark; do
     shoot "lock-$scheme" "$USER_NAME" user "$color" 'Password:' || status=1
     shoot "greeter-$scheme" "$GREETER_USER" gdm "$color" 'Password:' -- GDM_GREETER_TEST=1 || status=1
 done
+shoot greeter-high-contrast "$GREETER_USER" gdm default 'Password:' "org.gnome.desktop.a11y.interface high-contrast true" -- \
+    GDM_GREETER_TEST=1 || status=1
+for scheme in light dark; do
+    color=default
+    [[ $scheme == dark ]] && color=prefer-dark
+    shoot "lock-contrast-$scheme" "$USER_NAME" user "$color" 'Password:' -- APEX_CONTRAST=1 || status=1
+    shoot "lock-fallback-$scheme" "$USER_NAME" user "$color" 'Password:' "org.gnome.desktop.background picture-options 'none'" \
+        "org.gnome.desktop.background primary-color '#013b88'" -- APEX_CONTRAST=1 || status=1
+done
 shoot lock-question "$USER_NAME" user default 'Verification code:' || status=1
 shoot lock-disabled "$USER_NAME" user default 'Password:' "$lock_off" || status=1
 shoot lock-safe "$USER_NAME" user default 'Password:' -- APEX_SHELL_SAFE=1 || status=1
@@ -242,6 +253,13 @@ shoot lock-wake-key "$USER_NAME" user default 'Password:' -- APEX_WAKE_KEY=clock
 shoot lock-wake-key-blank "$USER_NAME" user default 'Password:' -- APEX_WAKE_KEY=locked-blank || status=1
 shoot lock-idle "$USER_NAME" user default 'Password:' -- APEX_IDLE=1 || status=1
 shoot lock-suspend "$USER_NAME" user default 'Password:' -- APEX_SUSPEND=1 || status=1
+# The captures turn animations off; motion is only seen with them on, as a real session has them.
+animations="org.gnome.desktop.interface enable-animations true"
+reduce_motion="org.gnome.desktop.a11y.interface reduced-motion 'reduce'"
+shoot lock-motion "$USER_NAME" user default 'Password:' "$animations" -- APEX_MOTION=lock || status=1
+shoot lock-reduce-motion "$USER_NAME" user default 'Password:' "$animations" "$reduce_motion" -- APEX_MOTION=lock || status=1
+shoot greeter-reduce-motion "$GREETER_USER" gdm default 'Password:' "$animations" "$reduce_motion" -- GDM_GREETER_TEST=1 \
+    APEX_MOTION=greeter || status=1
 notifications_off="io.github.apex_linux.Apex.Desktop disabled-features ['notifications']"
 hint_shown="io.github.apex_linux.Apex.Desktop search-hint-shown true"
 shoot date-menu "$USER_NAME" user default 'Password:' "$hint_shown" -- APEX_DATE_MENU=1 || status=1

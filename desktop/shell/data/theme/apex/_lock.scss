@@ -123,7 +123,7 @@
   &, &:focus { box-shadow: inset 0 0 0 $apex_entry_focus_ring $apex_lock_error_ring !important; }
 }
 
-.apex-lock-overlay { background-color: $apex_lock_overlay; }
+.apex-lock-overlay { background-color: $apex_lock_scrim; }
 
 .apex-lock-background {
   -apex-lock-blur: $apex_lock_blur;
@@ -190,7 +190,13 @@
 
       &:first-child { border-top-width: 0; border-radius: $apex_radius_lock_list $apex_radius_lock_list 0 0; }
       &:last-child { border-radius: 0 0 $apex_radius_lock_list $apex_radius_lock_list; }
-      &:hover, &:focus { background-color: $apex_lock_list_separator; }
+      // Board 12's row text keeps 4.5:1 in every state: hover lightens little, focus rings the row over
+      // upstream's !important ring. St paints an inset shadow with the background, so it needs one.
+      &:hover { background-color: $apex_lock_list_hover; }
+      &:focus {
+        background-color: $apex_lock_list_focus;
+        box-shadow: inset 0 0 0 $apex_entry_focus_ring $apex_lock_fg !important;
+      }
 
       .user-widget.horizontal { spacing: $apex_lock_prompt_gap; }
 
@@ -203,7 +209,8 @@
         icon-size: $apex_lock_list_avatar_size;
         border: $apex_surface_border solid $apex_lock_avatar_border;
         border-radius: $apex_lock_list_avatar_size / 2;
-        background-color: $apex_lock_glass_strong;
+        // An outline only: upstream's default glyph holds 3:1 on the row, not on a lighter circle.
+        background-color: transparent;
       }
     }
   }

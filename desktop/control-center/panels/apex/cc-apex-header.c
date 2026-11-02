@@ -151,20 +151,24 @@ cc_apex_header_class_init (CcApexHeaderClass *klass)
     object_class->dispose = cc_apex_header_dispose;
     object_class->finalize = cc_apex_header_finalize;
 
-    gtk_widget_class_set_layout_manager_type (widget_class, GTK_TYPE_BOX_LAYOUT);
+    gtk_widget_class_set_layout_manager_type (widget_class, GTK_TYPE_BIN_LAYOUT);
     gtk_widget_class_set_css_name (widget_class, "apex-header");
 }
 
 static void
 cc_apex_header_init (CcApexHeader *self)
 {
-    GtkWidget *text, *title;
+    GtkWidget *content, *text, *title;
 
-    gtk_orientable_set_orientation (GTK_ORIENTABLE (gtk_widget_get_layout_manager (GTK_WIDGET (self))),
-                                    GTK_ORIENTATION_VERTICAL);
-    gtk_box_layout_set_spacing (GTK_BOX_LAYOUT (gtk_widget_get_layout_manager (GTK_WIDGET (self))), 14);
     gtk_widget_add_css_class (GTK_WIDGET (self), "card");
-    gtk_widget_set_parent (GTK_WIDGET (g_object_new (CC_TYPE_APEX_TILE, NULL)), GTK_WIDGET (self));
+    /* The card's inset is margin on its content, not CSS padding: GTK 4.24's AT-SPI bounds leave padding out. */
+    content = gtk_box_new (GTK_ORIENTATION_VERTICAL, 14);
+    gtk_widget_set_margin_top (content, 28);
+    gtk_widget_set_margin_start (content, 20);
+    gtk_widget_set_margin_end (content, 20);
+    gtk_widget_set_margin_bottom (content, 22);
+    gtk_box_append (GTK_BOX (content), GTK_WIDGET (g_object_new (CC_TYPE_APEX_TILE, NULL)));
+    gtk_widget_set_parent (content, GTK_WIDGET (self));
 
     text = gtk_box_new (GTK_ORIENTATION_VERTICAL, 3);
     title = gtk_label_new (_("Apex Desktop"));
@@ -178,7 +182,7 @@ cc_apex_header_init (CcApexHeader *self)
     gtk_widget_add_css_class (GTK_WIDGET (self->versions_label), "apex-versions");
     gtk_widget_add_css_class (GTK_WIDGET (self->versions_label), "dim-label");
     gtk_box_append (GTK_BOX (text), GTK_WIDGET (self->versions_label));
-    gtk_widget_set_parent (text, GTK_WIDGET (self));
+    gtk_box_append (GTK_BOX (content), text);
 
     self->cancellable = g_cancellable_new ();
     self->image_version = read_image_version ();

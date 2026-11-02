@@ -79,6 +79,22 @@ const SIGNOFF_FOCUS_ORDER = ['org.gnome.Calendar.desktop', 'org.gnome.TextEditor
 const SIGNOFF_QUIET_MS = 1500;
 const SIGNOFF_FOCUS_ATTEMPTS = 3;
 const WIFI_SCAN_MS = 5000;
+// A WPA2 network that appears while the Wi-Fi menu is open (fixtures.py's NM_80211_AP_SEC_WPA2_PSK).
+const LATE_NETWORK = {
+    name: 'apexlate', ssid: 'Apex-Late', address: '02:A5:E0:00:00:09', frequency: 5745, rate: 866700, strength: 64,
+    security: 0x188,
+};
+// RSN PSK without a cipher, then a WPA2 network with them.
+const REFUSED_NETWORK = {
+    name: 'apexodd', ssid: 'Apex-Odd', address: '02:A5:E0:00:00:0A', frequency: 5180, rate: 866700, strength: 70,
+    security: 0x100,
+};
+const ADOPTED_NETWORK = {
+    name: 'apexfixed', ssid: 'Apex-Fixed', address: '02:A5:E0:00:00:0B', frequency: 2462, rate: 300000, strength: 56,
+    security: 0x188,
+};
+const WIFI_REFUSED_MS = 1500;
+const NM_DEVICE = '/org/freedesktop/NetworkManager/Devices/wlan0';
 const TRAY_DRAIN_MS = 3000;
 const SHUTDOWN_HISTORY_DELAY_MS = 300;
 const SHUTDOWN_BANNER_TIMEOUT_MS = 100;
@@ -1060,33 +1076,113 @@ async function wifiMenuRows(unit) {
         await settle();
         const {_header: header, _headerSubtitle: subtitle} = wifi.menu;
         const meta = header.layout_manager.get_child_meta(header, subtitle);
-        const rows = findAll(wifi.menu.box, a => a.constructor.name === 'NMWirelessNetworkItem');
+        const rows = () => findAll(wifi.menu.box, a => a.constructor.name === 'NMWirelessNetworkItem');
+        const describe = row => {
+            const lock = row._secureIcon;
+            const children = row.get_children();
+            return {
+                ssid: row._label.text,
+                active: row.network.is_active,
+                checked: row.has_style_pseudo_class('checked'),
+                accessibleName: row.accessible_name ?? null,
+                accessibleChecked: row.get_accessible().ref_state_set().contains_state(Atk.StateType.CHECKED),
+                strength: row.network.signal_strength,
+                secure: !!lock.icon_name,
+                lockAfterName: children.indexOf(lock) === children.indexOf(row._label) + 1,
+                box: boxOf(row, unit), label: boxOf(row._label, unit), signal: boxOf(row._signalIcon, unit),
+                lockBox: lock.icon_name ? boxOf(lock, unit) : null,
+                lockSize: lengthOrNull(lock.get_theme_node(), 'icon-size', unit),
+                lockColor: hex(lock.get_theme_node().get_foreground_color()),
+            };
+        };
+        const listed = rows().map(describe);
         return {
             subtitle: {column: meta.left_attach, row: meta.top_attach, xAlign: subtitle.x_align, end: Clutter.ActorAlign.END},
-            rows: rows.map(row => {
-                const lock = row._secureIcon;
-                const children = row.get_children();
-                return {
-                    ssid: row._label.text,
-                    active: row.network.is_active,
-                    checked: row.has_style_pseudo_class('checked'),
-                    accessibleName: row.accessible_name ?? null,
-                    accessibleChecked: row.get_accessible().ref_state_set().contains_state(Atk.StateType.CHECKED),
-                    strength: row.network.signal_strength,
-                    secure: !!lock.icon_name,
-                    lockAfterName: children.indexOf(lock) === children.indexOf(row._label) + 1,
-                    box: boxOf(row, unit), label: boxOf(row._label, unit), signal: boxOf(row._signalIcon, unit),
-                    lockBox: lock.icon_name ? boxOf(lock, unit) : null,
-                    lockSize: lengthOrNull(lock.get_theme_node(), 'icon-size', unit),
-                    lockColor: hex(lock.get_theme_node().get_foreground_color()),
-                };
-            }),
+            rows: listed,
+            late: await lateNetworkRow(rows, describe),
+            refused: await refusedNetworkRows(rows, describe),
         };
     } finally {
         wifi.menu.close(BoxPointer.PopupAnimation.NONE);
         menu.close(BoxPointer.PopupAnimation.NONE);
         await settle();
     }
+}
+
+function nmMock(method, signature, args) {
+    return new Promise((resolve, reject) => Gio.DBus.system.call(
+        'org.freedesktop.NetworkManager', '/org/freedesktop/NetworkManager', 'org.freedesktop.DBus.Mock', method,
+        new GLib.Variant(signature, args), null, Gio.DBusCallFlags.NONE, -1, null, (bus, res) => {
+            try {
+                resolve(bus.call_finish(res).deepUnpack()[0]);
+            } catch (e) {
+                reject(e);
+            }
+        }));
+}
+
+function addAccessPoint({name, ssid, address, frequency, rate, strength, security}) {
+    return nmMock('AddAccessPoint', '(ssssuuuyu)', [NM_DEVICE, name, ssid, address, 2, frequency, rate, strength, security]);
+}
+
+async function rowFor(rows, ssid) {
+    const row = () => rows().find(r => r.visible && r._label.text === ssid);
+    for (let waited = 0; !row() && waited < WIFI_SCAN_MS; waited += 100)
+        await Scripting.sleep(100); // eslint-disable-line no-await-in-loop
+    await settle();
+    return row();
+}
+
+// network.js names a new network's row as its first access point arrives, before it is the
+// best one: the name must still end up with the access point's strength.
+async function lateNetworkRow(rows, describe) {
+    let path;
+    try {
+        path = await addAccessPoint(LATE_NETWORK);
+        const late = await rowFor(rows, LATE_NETWORK.ssid);
+        return late ? describe(late) : {error: `no row for ${LATE_NETWORK.ssid} within ${WIFI_SCAN_MS} ms`};
+    } catch (e) {
+        return {error: e.message};
+    } finally {
+        if (path)
+            await nmMock('RemoveAccessPoint', '(ss)', [NM_DEVICE, path]).catch(() => {});
+    }
+}
+
+// An access point no security type validates: network.js keeps the row it made for it, blank.
+// The next valid access point goes to that same network, and its row shows.
+async function refusedNetworkRows(rows, describe) {
+    const shown = () => rows().filter(r => r.visible);
+    const paths = [];
+    try {
+        const before = shown().length;
+        paths.push(await addAccessPoint(REFUSED_NETWORK));
+        await Scripting.sleep(WIFI_REFUSED_MS);
+        await settle();
+        const after = shown();
+        const refused = {
+            before, after: after.length,
+            blank: after.filter(r => !r._label.text).length,
+            unnamed: after.filter(r => !r.accessible_name).length,
+        };
+        paths.push(await addAccessPoint(ADOPTED_NETWORK));
+        const adopted = await rowFor(rows, ADOPTED_NETWORK.ssid);
+        refused.adopted = adopted ? describe(adopted) : {error: `no row for ${ADOPTED_NETWORK.ssid}`};
+        // Without access points left, network.js destroys the network and its row.
+        await removeAccessPoints(paths.splice(0));
+        await Scripting.sleep(WIFI_REFUSED_MS);
+        await settle();
+        return {...refused, removed: {shown: shown().length, rows: rows().length}};
+    } catch (e) {
+        return {error: e.message};
+    } finally {
+        await removeAccessPoints(paths);
+    }
+}
+
+async function removeAccessPoints(paths) {
+    for (const path of paths)
+        await nmMock('RemoveAccessPoint', '(ss)', [NM_DEVICE, path]).catch(() => {}); // eslint-disable-line no-await-in-loop
 }
 
 // The quick-settings feature: the toggles' order, Power Mode lit, On/Off subtitles; then two
@@ -3581,6 +3677,17 @@ async function runProbe() {
             result = {error: `${e.message}\n${e.stack}`};
         }
         console.log(`APEXG2-DOCK-EXTERNAL ${JSON.stringify(result)}`);
+    }
+
+    if (GLib.getenv('G2_GLASS_VIEWS') === '1') {
+        let result;
+        try {
+            const GlassViews = await import('./glass-views.js');
+            result = await GlassViews.glassViewsReport();
+        } catch (e) {
+            result = {error: `${e.message}\n${e.stack}`};
+        }
+        console.log(`APEXG2-GLASS-VIEWS ${JSON.stringify(result)}`);
     }
 
     if (GLib.getenv('G2_DOCK') === '1') {

@@ -12,8 +12,10 @@ import St from 'gi://St';
 
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import * as ModalDialog from 'resource:///org/gnome/shell/ui/modalDialog.js';
+import * as Overview from 'resource:///org/gnome/shell/ui/overview.js';
 import * as Scripting from 'resource:///org/gnome/shell/ui/scripting.js';
 
+import {surfaceReport} from '../shots/a11y.js';
 import {iconsOf, shellIconTheme} from '../shots/session-defaults.js';
 
 Gio._promisify(Shell.Screenshot.prototype, 'screenshot_area');
@@ -304,6 +306,13 @@ async function shootWakeKey(lockedBlank) {
     fact('end', {locked: Main.screenShield.locked});
 }
 
+const CONTRAST_SETTLE_MS = 500;
+
+// G2's text and glyph contrast (tests/shots/a11y.js) over what the stage draws behind ROOT.
+function contrastOf(root) {
+    return surfaceReport(root, () => Scripting.sleep(CONTRAST_SETTLE_MS), {length: scale()});
+}
+
 // Locking fades to black, as before the screen blanks; activity lifts it. A move does not
 // open upstream's prompt, so its lock keeps two stages.
 async function shootLock() {
@@ -323,11 +332,22 @@ async function shootLock() {
     fact('opened', describeLock(dialog));
     iconFact('opened', [dialog, Main.panel]);
     await capture('open');
+    const contrast = GLib.getenv('APEX_CONTRAST') === '1';
+    if (contrast) {
+        fact('contrast-opened', await contrastOf(dialog));
+        const entry = dialog._authPrompt._entry;
+        entry.set_text(WRONG_ANSWER);
+        fact('contrast-field', await contrastOf(entry));
+        entry.set_text('');
+    }
 
     await type(WRONG_ANSWER);
     await Scripting.sleep(STEP_MS * 2);
     fact('wrong-answer', describeLock(dialog));
     await capture('wrong-answer');
+    // The field is insensitive while GDM asks again, which WCAG exempts: the message is what this step adds.
+    if (contrast)
+        fact('contrast-wrong-answer', await contrastOf(dialog._authPrompt._message));
 
     await setPowerSaveMode(POWER_SAVE_OFF);
     await Scripting.sleep(STEP_MS);
@@ -344,6 +364,73 @@ async function shootLock() {
     fact('key-after-escape', describeLock(dialog));
     await Scripting.sleep(SETTLE_MS);
     fact('end', {locked: Main.screenShield.locked});
+}
+
+const MOTION_PROPERTIES = ['translation-x', 'translation-y', 'scale-x', 'scale-y', 'opacity'];
+const MOTION_POLL_MS = 10;
+
+// The transitions running on ROOT and every actor under it: what eases, from where to where, for how long.
+function transitionsUnder(root) {
+    const found = [];
+    const walk = actor => {
+        for (const property of MOTION_PROPERTIES) {
+            const transition = actor.get_transition(property) ?? actor.get_transition(property.replace('-', '_'));
+            const interval = transition?.get_interval?.();
+            if (interval) {
+                found.push({
+                    actor: actor === root ? 'root' : `${actor.constructor.name}.${actor.style_class ?? ''}`, property,
+                    from: interval.peek_initial_value(), to: interval.peek_final_value(), duration: transition.get_duration(),
+                });
+            }
+        }
+        actor.get_children().forEach(walk);
+    };
+    if (root)
+        walk(root);
+    return found;
+}
+
+// A sample every MOTION_POLL_MS, in ms from the call, until the returned stop(): transitions run whether or not a frame paints.
+function sampleMotion(sample) {
+    const samples = [];
+    const start = GLib.get_monotonic_time();
+    const id = GLib.timeout_add(GLib.PRIORITY_DEFAULT, MOTION_POLL_MS, () => {
+        samples.push({t: Math.round((GLib.get_monotonic_time() - start) / 1000), ...sample()});
+        return GLib.SOURCE_CONTINUE;
+    });
+    return () => {
+        GLib.source_remove(id);
+        return samples.filter(m => m.transitions.length).concat(samples.slice(-1));
+    };
+}
+
+// main.js inhibits animations without hardware-accelerated rendering, as the headless shell has; G2's motion case lifts it too.
+function motionSettings() {
+    const settings = St.Settings.get();
+    const uninhibited = !settings.enable_animations;
+    if (uninhibited)
+        settings.uninhibit_animations();
+    return {
+        reduced: settings.reducedMotion === St.ReducedMotion.REDUCE, duration: Overview.ANIMATION_TIME,
+        uninhibited, animations: settings.enable_animations,
+    };
+}
+
+// Reduce Motion: upstream fades the lock's curtain instead of sliding it, and nothing under it moves.
+async function shootMotion() {
+    await Scripting.sleep(SETTLE_MS);
+    fact('motion', motionSettings());
+    const shield = Main.screenShield;
+    const group = shield._lockDialogGroup;
+    const curtain = () => ({ty: group.translation_y, opacity: group.opacity, transitions: transitionsUnder(group)});
+    let stop = sampleMotion(curtain);
+    shield.lock(true);
+    await Scripting.sleep(STEP_MS);
+    fact('opening', stop());
+    stop = sampleMotion(curtain);
+    shield.deactivate(true);
+    await Scripting.sleep(STEP_MS);
+    fact('closing', stop());
 }
 
 // What polkit-agent-helper-1 would send, without the helper: PAM never runs, so nothing the
@@ -525,6 +612,7 @@ function describeGreeter(dialog) {
         prompt: describePrompt(dialog._authPrompt?.visible ? dialog._authPrompt : null),
         style: describeGreeterStyle(dialog),
         layout: describeGreeterLayout(dialog, items),
+        avatars: items.map(i => i._userWidget._avatar).map(a => ({...button(a), fg: color(a.get_theme_node().get_foreground_color())})),
     };
 }
 
@@ -541,11 +629,29 @@ async function shootGreeter() {
     fact('list', describeGreeter(dialog));
     iconFact('list', [dialog, Main.panel]);
     await capture('list');
+    fact('contrast-list', await contrastOf(dialog));
+    // The unfocused row hovered: the focused one shows its ring instead.
+    const hovered = [...dialog._userList._items.values()].find(item => !item.has_key_focus());
+    // track_hover would reset .hover from the pointer, which never comes near: the pseudo-class itself.
+    if (hovered) {
+        hovered.add_style_pseudo_class('hover');
+        fact('contrast-list-hover', await contrastOf(dialog._userList));
+        hovered.remove_style_pseudo_class('hover');
+    }
+    const settings = GLib.getenv('APEX_MOTION') ? motionSettings() : null;
+    const stop = settings ? sampleMotion(() => ({transitions: transitionsUnder(dialog)})) : null;
     dialog._userList.getItemFromUserName(GLib.getenv('APEX_USER')).emit('activate');
     await Scripting.sleep(SETTLE_MS);
+    if (stop)
+        fact('motion', {...settings, samples: stop()});
     fact('prompt', describeGreeter(dialog));
     iconFact('prompt', [dialog, Main.panel]);
     await capture('prompt');
+    fact('contrast-prompt', await contrastOf(dialog));
+    const entry = dialog._authPrompt._entry;
+    entry.set_text(WRONG_ANSWER);
+    fact('contrast-field', await contrastOf(entry));
+    entry.set_text('');
 }
 
 const UPDATE1 = ['io.github.apex_linux.Apex.Update1', '/io/github/apex_linux/Apex/Update1'];
@@ -812,6 +918,8 @@ export async function run() {
             await shootPolkit();
         else if (['lock', 'suspend'].includes(GLib.getenv('APEX_POLKIT')))
             await shootPolkitLocked(GLib.getenv('APEX_POLKIT') === 'suspend');
+        else if (GLib.getenv('APEX_MOTION') === 'lock')
+            await shootMotion();
         else if (GLib.getenv('APEX_DATE_MENU') === '1')
             await shootDateMenu();
         else if (GLib.getenv('APEX_END_SESSION') === '1')

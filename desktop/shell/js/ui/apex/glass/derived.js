@@ -1,16 +1,24 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 //
 // DESIGN's derived glass: the transient surfaces that copy a drawn glass surface take its
-// glass. OSDs, Alt+Tab, the screenshot panel and the tile preview, as banners do (surfaces.js).
+// glass. OSDs, every switcher popup, the screenshot panel and the tile preview, as banners do (surfaces.js).
 
 import Clutter from 'gi://Clutter';
 import GObject from 'gi://GObject';
 import St from 'gi://St';
 
 import * as Main from '../../main.js';
+import * as SwitcherPopup from '../../switcherPopup.js';
 import * as Registry from './registry.js';
 
 const SWITCHER_LIST_STYLE_CLASS = 'switcher-list';
+// Alt+Tab's popups are board 15's switcher; the others carry names of their own, so the
+// glass case checks each one it registers.
+const SWITCHER_NAMES = new Map([
+    ['InputSourcePopup', 'input-source-switcher'],
+    ['CtrlAltTabPopup', 'ctrl-alt-tab-switcher'],
+    ['SwitchMonitorPopup', 'monitor-switcher'],
+]);
 const TILE_GLASS_STYLE_CLASS = 'apex-tile-preview-glass';
 const TILE_GLASSED_STYLE_CLASS = 'apex-tile-preview-glassed';
 
@@ -35,12 +43,12 @@ function _osds() {
 // switcherPopup.js adds each popup to uiGroup, then its list once it has items.
 function _switchers() {
     const watched = new Map();
-    const registerList = (_popup, child) => {
+    const registerList = (popup, child) => {
         if (child.has_style_class_name?.(SWITCHER_LIST_STYLE_CLASS))
-            Registry.register(child, {name: 'switcher'});
+            Registry.register(child, {name: SWITCHER_NAMES.get(popup.constructor.name) ?? 'switcher'});
     };
     const id = Main.uiGroup.connect('child-added', (_group, actor) => {
-        if (actor.constructor.name.endsWith('SwitcherPopup') && !watched.has(actor)) {
+        if (actor instanceof SwitcherPopup.SwitcherPopup && !watched.has(actor)) {
             watched.set(actor, actor.connect('child-added', registerList));
             actor.connect('destroy', () => watched.delete(actor));
         }
