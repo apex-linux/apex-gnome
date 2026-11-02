@@ -120,6 +120,10 @@ for scenario in health-failure fallback; do
     update_case "$scenario" "updates-$scenario-dark" prefer-dark || status=1
 done
 update_case fallback updates-fallback-changes default "APEX_BEFORE=updates.py show-changes" || status=1
+# Large Text: apex.css's pt sizes grow with it. A setting stays from one case to the next, so these come last.
+large=$'org.gnome.desktop.a11y.interface high-contrast false\norg.gnome.desktop.interface text-scaling-factor 1.25'
+CASE_SETTINGS=$large run_case large-light default "APEX_CHECK=fonts.py apex" || status=1
+CASE_SETTINGS=$large update_case ready updates-large-light default "APEX_CHECK=fonts.py updates" || status=1
 headless_update1_stop
 grep -h '^ok \|^FAIL \|^GAP \|APEXCC-' "$out"/*.log || true
 ((status == 0)) || die "run.sh: a case failed; see ${out#"$APEX_ROOT/"}/*.log"
