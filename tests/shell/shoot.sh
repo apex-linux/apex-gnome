@@ -5,6 +5,8 @@ set -uo pipefail
 HERE=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 readonly SHOTS=$HERE/../shots
 . "$HERE/../../.github/scripts/lib.sh"
+# shellcheck source=SCRIPTDIR/../shots/backtrace.sh
+. "$SHOTS/backtrace.sh"
 
 readonly APEX_DESKTOP_URL=https://github.com/apex-linux/apex-desktop
 readonly APEX_DESKTOP_REV=f1a2f930f7e16ab7c7fde8f3a178d2e3ad9666ac
@@ -57,6 +59,7 @@ readonly USER_NAME=apex
 readonly GREETER_USER=gdm-greeter
 readonly SHELL_TIMEOUT=120
 readonly CLOCK_LIB=/run/apex-lock-clock.so
+readonly CRASH_LIB=/run/apex-lock-crash.so
 readonly FIXTURE_NAMES=(org.freedesktop.UPower org.freedesktop.NetworkManager org.bluez)
 # fixtures.py's keyboard, at its KEYBOARD_ADDRESS.
 readonly KEYBOARD_PATH=/org/bluez/hci0/dev_DC_2C_26_4B_33_01
@@ -180,6 +183,7 @@ gdbus call --system -d "$LOGIND_NAME" -o "/org/freedesktop/login1/session/$(sess
     -m org.freedesktop.DBus.Mock.UpdateProperties org.freedesktop.login1.Session "{'Class': <'greeter'>}" >/dev/null ||
     die "cannot make $GREETER_USER's logind session a greeter's"
 gcc -O2 -Wall -Werror -shared -fPIC -o "$CLOCK_LIB" "$SHOTS/clock.c" || die "cannot build tests/shots/clock.c"
+crash_lib "$CRASH_LIB" || die "cannot build tests/shots/crash.c"
 clock_epoch=$(date -u -d "$CLOCK" +%s)
 held=$(env LD_PRELOAD="$CLOCK_LIB" G2_CLOCK_EPOCH="$clock_epoch" date -u '+%F %T' 2>&1)
 [[ $held == "$CLOCK" ]] || die "$CLOCK_LIB does not hold the clock at $CLOCK: $held"
@@ -211,16 +215,18 @@ shoot() {
     # shellcheck disable=SC2016 # expanded by the user's bash
     runuser -u "$user" -- env -i HOME="$home" PATH="/usr/bin:/usr/sbin" XDG_RUNTIME_DIR="$run" \
         LANG=C.UTF-8 TZ=UTC XDG_SESSION_ID="$(session_of "$user")" APEX_SHOTS="$out" APEX_SHOT="$name" APEX_USER="$USER_NAME" \
-        CLOCK_LIB="$CLOCK_LIB" G2_CLOCK_EPOCH="$clock_epoch" "$LOAD_WITNESS" "$@" \
+        CLOCK_LIB="$CLOCK_LIB" CRASH_LIB="$CRASH_LIB" G2_CLOCK_EPOCH="$clock_epoch" "$LOAD_WITNESS" "$@" \
         DBUS_SYSTEM_BUS_ADDRESS=unix:path=/run/dbus/system_bus_socket SETTINGS="$settings" \
         timeout "$SHELL_TIMEOUT" dbus-run-session -- bash -c '
             while read -r schema key value; do
                 gsettings set "$schema" "$key" "$value" || exit 1
             done <<<"$SETTINGS"
-            exec env LD_PRELOAD="$CLOCK_LIB" gnome-shell --headless --virtual-monitor '"$MONITOR"' \
+            ulimit -c unlimited 2>/dev/null
+            exec env LD_PRELOAD="$CLOCK_LIB $CRASH_LIB" gnome-shell --headless --virtual-monitor '"$MONITOR"' \
                 --wayland-display=apex-lock --mode='"$mode"' --automation-script '"$HERE"'/probe.js
         ' >"$out/$name.log" 2>&1
     rc=$?
+    case_backtrace "$out/$name.log" "$rc" "$home" "$out/$name.bt"
     kill "$mock" ${fprintd:+"$fprintd"} 2>/dev/null
     wait "$mock" 2>/dev/null
     log "shoot.sh: $name: exit $rc"

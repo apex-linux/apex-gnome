@@ -1053,6 +1053,32 @@ test_goldens() {
     else
         not_ok "goldens import: a later approval adds to the pinned commit, and both boards pass: $(tail -n 3 "$T/goldens.out")"
     fi
+
+    cp "$dir/moved-dark.png" "$dir/board-36-launcher-dark.png"
+    hash=$(cat "$dir/board-36-launcher-light.png" "$dir/board-36-launcher-dark.png" | sha256sum | cut -c 1-12)
+    jq -n --arg h "$hash" '{boards: {"36-launcher": {status: "approved", shots: $h, approvedAt: "2026-10-27T10:00:00Z"}}}' >"$T/decisions3.json"
+    if goldens import "$dir" "$T/decisions3.json" && grep -qx "goldens.sh: board 36-launcher replaces the same row's golden 36" "$T/goldens.out" &&
+        jq -e --arg h "$hash" '.boards | keys == ["14", "36-launcher"] and .["36-launcher"].shots == $h' "$T/goldens-work/manifest.json" >/dev/null &&
+        [[ $(git -C "$T/goldens-work" ls-files | paste -sd' ') == 'boards/board-14-dark.png boards/board-14-light.png boards/board-36-launcher-dark.png boards/board-36-launcher-light.png manifest.json' ]] &&
+        git -C "$T/goldens-work" push -q "$T/goldens-remote" HEAD:refs/heads/goldens && goldens check "$dir" &&
+        grep -q '^PASS captures board 36 (Launcher), dark: equal' "$T/goldens.out"; then
+        ok "goldens import: a row's NN-SLUG approval replaces its board's legacy NN golden and files, and the check passes"
+    else
+        not_ok "goldens import: a row's NN-SLUG approval replaces its board's legacy NN golden and files, and the check passes: $(tail -n 3 "$T/goldens.out")"
+    fi
+    cp "$T/dark.png" "$dir/board-36-launcher-dark.png"
+
+    hash=$(cat "$dir/board-36-launcher-light.png" "$dir/board-36-launcher-dark.png" | sha256sum | cut -c 1-12)
+    jq -n --arg h "$hash" '{boards: {"36": {status: "approved", shots: $h, approvedAt: "2026-10-28T10:00:00Z"}}}' >"$T/decisions4.json"
+    if goldens import "$dir" "$T/decisions4.json" && grep -qx "goldens.sh: board 36 replaces the same row's golden 36-launcher" "$T/goldens.out" &&
+        jq -e --arg h "$hash" '.boards | keys == ["14", "36"] and .["36"].shots == $h' "$T/goldens-work/manifest.json" >/dev/null &&
+        [[ $(git -C "$T/goldens-work" ls-files | paste -sd' ') == 'boards/board-14-dark.png boards/board-14-light.png boards/board-36-dark.png boards/board-36-light.png manifest.json' ]] &&
+        git -C "$T/goldens-work" push -q "$T/goldens-remote" HEAD:refs/heads/goldens && goldens check "$dir" &&
+        grep -q '^PASS captures board 36 (Launcher), dark: equal' "$T/goldens.out"; then
+        ok "goldens import: a row's legacy NN approval replaces its NN-SLUG golden and files, and the check passes"
+    else
+        not_ok "goldens import: a row's legacy NN approval replaces its NN-SLUG golden and files, and the check passes: $(tail -n 3 "$T/goldens.out")"
+    fi
 }
 
 rows_goldens() {
@@ -3277,6 +3303,15 @@ test_case_backtrace() {
         -e '[[ $arg == G2_EXPECT_EXIT=* ]] && expected=${arg#G2_EXPECT_EXIT=}' \
         -e 'run_and_record_case fault-abort '"''"' APEX_SHELL_TEST_FAULT=abort-after-enable PROBE_WAIT=20 G2_EXPECT_EXIT=134' \
         -e 'case_backtrace "/out/$name.log" "$rc" "$home" "/out/$name.bt" "$expected"')"
+    # Every other shell a test starts does the same: it builds crash.c, preloads it with clock.c and writes a .bt.
+    local starter
+    for starter in lib/headless.sh control-center/lib.sh nautilus/shoot.sh shell/shoot.sh; do
+        # shellcheck disable=SC2016 # the starter's lines, as written
+        expect_eq "backtrace: tests/$starter builds and preloads crash.c and calls case_backtrace" 4 \
+            "$(sed 's/^[[:space:]]*//' "$HERE/../$starter" | grep -cE -e '^\. "\$SHOTS/backtrace\.sh"$' \
+            -e '^crash_lib "\$CRASH_LIB" \|\| die ' -e '^exec env LD_PRELOAD="\$CLOCK_LIB \$CRASH_LIB" gnome-shell ' \
+            -e '^case_backtrace "[^"]*" "\$rc" ')"
+    done
     echo 'x exit=139 secs=4 marker-after-exit=yes' >"$run/results-pr.txt"
     mv "$run/none.bt" "$run/x.bt"
     assertion_counts exits "$run" x 0 >/dev/null

@@ -3,6 +3,12 @@
 
 readonly BACKTRACE_BUDGET_S=${BACKTRACE_BUDGET_S:-120}
 readonly BACKTRACE_KILL_S=${BACKTRACE_KILL_S:-10}
+BACKTRACE_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+readonly BACKTRACE_DIR
+
+crash_lib() {
+    gcc -O2 -Wall -Werror -shared -fPIC -o "$1" "$BACKTRACE_DIR/crash.c"
+}
 
 # case_backtrace LOG RC HOME BT [EXPECTED]: a shell that died on a signal it was not expected to (RC above
 # 128) gets BT: crash.c's frames from LOG, then gdb's backtrace of its core in HOME, or why there is none.
