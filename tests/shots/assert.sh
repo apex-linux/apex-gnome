@@ -25,7 +25,7 @@ readonly DIRECT_CASES=(default default-scale1 dark-style high-contrast large-tex
     large-text-solid dock-intellihide dock-intellihide-dark dock-one-gpu no-dock no-dock-dark stock-light stock-dark safe-env
     layer-disabled layer-cycles motion idle dock-pin dock-dnd dock-external keys glass-load glass-stress fault-configure fault-enable fault-abort shutdown-banner
     kernel-safe
-    fedora-light fedora-dark glass fedora-glass
+    fedora-light fedora-dark glass glass-scale1 fedora-glass
     indicators indicators-scale1 indicators-dark)
 readonly DIRECT_PARTS=(main kernel fedora)
 readonly CAPTURE_CASES=(default default-scale1 dark-style stock-light stock-dark fedora-light fedora-dark)
@@ -1022,6 +1022,9 @@ quick_settings_layer() {
         expect "$label Quick Settings" "$scenes" \
             "$q.wifiMenu.rows | length > 1 and all(.accessibleName == \"\\(.ssid), \\(if .secure then \"Secure\" else \"Not secure\" end), Signal strength \\(.strength)%\")" \
             "each row names its network, security and its best access point's signal for a screen reader"
+        expect "$label Quick Settings" "$scenes" \
+            "$q.wifiMenu.late | .ssid == \"Apex-Late\" and .secure and .strength == 64 and .accessibleName == \"Apex-Late, Secure, Signal strength 64%\"" \
+            "a secured network that appears with the menu open is named secure, at its signal, for a screen reader"
         network_rows_centred "$label" "$scenes" "$q.wifiMenu.rows"
         top_bar_metric "$label Quick Settings" "$scenes" "$(tokens_for "$variant")" \
             'a secure network'"'"'s lock follows its name, $apex_quick_menu_lock_size in $apex_fg at $apex_quick_menu_lock_opacity' \
@@ -2527,6 +2530,9 @@ direct_cases() {
     glass_frames glass "$run/glass.log"
     shadows_under_glass glass "$run/glass.log"
     glass_manager glass "$run/glass.log" light
+    glass_frames glass-scale1 "$run/glass-scale1.log"
+    shadows_under_glass glass-scale1 "$run/glass-scale1.log"
+    glass_manager glass-scale1 "$run/glass-scale1.log" light
     glass_unlock_vs_fedora "$run"
     indicator_cases "$run"
     one_gpu_case "$run"
@@ -2844,6 +2850,10 @@ patched_assertions() {
     asserted glass && glass_frames glass "$run/glass.log"
     asserted glass && shadows_under_glass glass "$run/glass.log"
     asserted glass && glass_manager glass "$run/glass.log" light
+    asserted glass-scale1 && no_js_error glass-scale1 "$run/glass-scale1.log"
+    asserted glass-scale1 && glass_frames glass-scale1 "$run/glass-scale1.log"
+    asserted glass-scale1 && shadows_under_glass glass-scale1 "$run/glass-scale1.log"
+    asserted glass-scale1 && glass_manager glass-scale1 "$run/glass-scale1.log" light
     asserted glass fedora-glass && glass_unlock_vs_fedora "$run"
     asserted indicators indicators-scale1 indicators-dark && indicator_cases "$run"
     asserted dock-one-gpu && one_gpu_case "$run"
