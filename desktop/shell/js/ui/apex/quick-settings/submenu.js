@@ -11,6 +11,14 @@ export const LOCK_STYLE_CLASS = 'apex-network-lock';
 const _rows = new Map();
 const _menus = new Map();
 
+// A network refusing its first access point (no valid security) keeps its row, blank (network.js:1241).
+function _hideEmpty(item) {
+    if (item.visible && !item.network.hasAccessPoints()) {
+        _rows.get(item).hidEmpty = true;
+        item.hide();
+    }
+}
+
 function _followActive(item) {
     if (item.network.is_active)
         item.add_style_pseudo_class(CHECKED);
@@ -24,12 +32,13 @@ export function addRow(item) {
     if (_rows.has(item) || !icons || !item._label)
         return;
     const entry = {lock, icons, yAlign: lock.y_align, labelYAlign: item._label.y_align};
-    // Stock names the row before its first access point is in, and a new best access point
-    // changes the strength notifying only icon-name (network.js:994): the name kept 0 %.
+    // A new best access point notifies only icon-name (network.js:994): the name kept 0 %.
     entry.ids = [[item.network, item.network.connect('notify::is-active', () => _followActive(item))],
         [item.network, item.network.connect('notify::icon-name', () => item._updateAccessibleName())],
+        [item, item.connect('notify::visible', () => _hideEmpty(item))],
         [item, item.connect('destroy', () => _forgetRow(item))]];
     _rows.set(item, entry);
+    _hideEmpty(item);
     icons.remove_child(lock);
     item.insert_child_above(lock, item._label);
     lock.y_align = Clutter.ActorAlign.CENTER;
@@ -45,8 +54,10 @@ function _forgetRow(item) {
 }
 
 function _restoreRow(item) {
-    const {lock, icons, yAlign, labelYAlign} = _rows.get(item);
+    const {lock, icons, yAlign, labelYAlign, hidEmpty} = _rows.get(item);
     _forgetRow(item);
+    if (hidEmpty && !item.network.hasAccessPoints())
+        item.show();
     item._label.y_align = labelYAlign;
     item.remove_style_pseudo_class(CHECKED);
     lock.remove_style_class_name(LOCK_STYLE_CLASS);

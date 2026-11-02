@@ -329,7 +329,17 @@ state's texts through AT-SPI, that board 26's dialog shows, that What's New's gr
 Show Changes' line up with the long fixture name cut short, and presses each button and
 the Automatic Downloads switch: `update1.py`'s log must show the method call each makes,
 with its arguments, and the switch must go back when `update1.py` refuses it as polkit
-would.
+would. `updates-bounds`, the "ready" page unscrolled, has `bounds.py` read every label on it off
+its own capture: each AT-SPI box must hold its text, and no edge may run through text.
+GTK 4.24 leaves an ancestor's CSS padding out of a widget's AT-SPI bounds, so the panel's
+cards inset their content with margins, never padding; a pill button's label is off by
+libadwaita's button padding, a known gap upstream.
+
+Last, Large Text (`text-scaling-factor` 1.25) on board 11 (`large-light`) and board 18
+(`updates-large-light`): `apex.css` sizes its text in pt, which GTK scales with it, where a px
+size stays put, and `fonts.py` checks that each label it sizes (the titles, the version lines,
+the hero's subtitle and What's New's grid) is drawn at its rule's size times 1.25. These come
+after every other case, as a setting stays from one case to the next.
 
 In these captures the sidebar has no separator under Apex Desktop: the fixtures offer no
 Wi-Fi device, so the Wi-Fi row, the one after the separator in `panel_order[]`, is not

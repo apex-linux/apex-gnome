@@ -541,9 +541,19 @@ function quickSettingsState(label, quickSettings) {
 }
 
 // NMWirelessNetworkItem's and QuickToggleMenu's actors, as their constructors leave them.
-function networkRow(St, Clutter, active) {
+function networkRow(St, Clutter, active, accessPoints = 1) {
     const row = new St.Widget({name: 'row'});
-    row.network = new St.Widget({is_active: active});
+    row.network = new St.Widget({is_active: active, accessPoints});
+    row.network.hasAccessPoints = () => row.network.accessPoints > 0;
+    // Clutter notifies visible: the stub's plain field does not.
+    let visible = true;
+    Object.defineProperty(row, 'visible', {
+        get: () => visible,
+        set: value => {
+            visible = value;
+            row.emit('notify::visible');
+        },
+    });
     const icons = new St.BoxLayout({name: 'icons'});
     row._secureIcon = new St.Icon({name: 'lock', y_align: Clutter.ActorAlign.END});
     [new St.Icon({name: 'signal'}), row._secureIcon].forEach(i => icons.add_child(i));
@@ -611,17 +621,28 @@ async function exerciseSubmenus(Main) {
     other.network.is_active = true;
     other.network.emit('notify::is-active');
     fact('qs.row.switched', `${rowState(active)} | ${rowState(other)}`);
+    // network.js shows every row after each access point, the one it made for a refused one too.
+    const [empty, refused] = [networkRow(St, Clutter, false, 0), networkRow(St, Clutter, false, 0)];
+    quickSettings.menu.actor.children.push(empty, refused);
+    [empty, refused].forEach(row => Hooks.run('quick-settings-network-item', row));
+    [empty, refused].forEach(row => row.show());
+    fact('qs.row.empty', `visible=${empty.visible}`);
+    empty.network.accessPoints = 1;
+    empty.show();
+    fact('qs.row.adopted', `visible=${empty.visible}`);
     const gone = networkRow(St, Clutter, true);
     Hooks.run('quick-settings-network-item', gone);
     gone.destroy();
     settings.set_boolean('layer-enabled', false);
     await spin(200);
     fact('qs.off.row', rowState(other));
+    fact('qs.off.refused', `visible=${refused.visible}`);
     fact('qs.off.menu', menu.subtitleAt());
     other.network.emit('notify::is-active');
     fact('qs.off.row-unfollowed', `checked=${other.has_style_pseudo_class('checked')}`);
     settings.set_boolean('layer-enabled', true);
     await spin(200);
+    fact('qs.on.refused', `visible=${refused.visible}`);
     fact('qs.on.row', rowState(other));
     fact('qs.on.menu', menu.subtitleAt());
 }
@@ -1725,13 +1746,25 @@ async function exerciseGlass() {
     overviewGroup.emit('notify::visible');
     Main.messageTray.showBanner();
     report('banner');
-    class TestSwitcherPopup extends Main.StubActor {}
-    const popup = new TestSwitcherPopup('popup', {parent: Main.uiGroup});
-    Main.uiGroup.emit('child-added', popup);
-    const list = new Main.StubActor('switcher', {glass: {...POPOVER_GLASS_IN_TEST}, parent: popup});
-    list.add_style_class_name('switcher-list');
-    popup.emit('child-added', list);
+    const {SwitcherPopup} = await import(`file://${shellDir}/js/ui/switcherPopup.js`);
+    const switcherList = PopupClass => {
+        const popup = new PopupClass('popup', {parent: Main.uiGroup});
+        Main.uiGroup.emit('child-added', popup);
+        const list = new Main.StubActor('switcher', {glass: {...POPOVER_GLASS_IN_TEST}, parent: popup});
+        list.add_style_class_name('switcher-list');
+        popup.emit('child-added', list);
+        return list;
+    };
+    class AppSwitcherPopup extends SwitcherPopup {}
+    const list = switcherList(AppSwitcherPopup);
     fact('glass.derived', [Main.osdWindowManager._osdWindows[0]._hbox, list, Main.screenshotUI._panel].map(glassOf).join(' '));
+    // keyboard.js's, ctrlAltTab.js's and switchMonitor.js's popups: SwitcherPopups by class, not by name.
+    class InputSourcePopup extends SwitcherPopup {}
+    class CtrlAltTabPopup extends SwitcherPopup {}
+    class SwitchMonitorPopup extends SwitcherPopup {}
+    class NotASwitcherPopup extends Main.StubActor {}
+    const lists = [InputSourcePopup, CtrlAltTabPopup, SwitchMonitorPopup, NotASwitcherPopup].map(switcherList);
+    fact('glass.switchers', lists.map(l => `${Registry.surfaces().find(r => r.actor === l)?.name ?? 'unregistered'}:${glassOf(l).split(':')[1]}`).join(' '));
 
     // windowManager.js's TilePreview adds itself to the window group, hidden until a tiling shows it.
     class TilePreview extends St.Widget {}

@@ -38,6 +38,7 @@ export default defineConfig([
             'tests/layer/probe.js',
             'tests/shots/probe.js',
             'tests/shots/glass.js',
+            'tests/shots/glass-views.js',
             'tests/shots/a11y.js',
             'tests/shots/backdrop.js',
             'tests/shots/indicators.js',

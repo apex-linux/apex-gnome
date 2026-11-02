@@ -469,15 +469,23 @@ maybe_alert (CcApexUpdatesPage *self, const char *health_failure, const char *la
 static void
 add_note (CcApexUpdatesPage *self, const char *title, const char *body)
 {
-    GtkWidget *note, *icon, *text, *label;
+    GtkWidget *note, *content, *icon, *text, *label;
 
-    note = gtk_box_new (GTK_ORIENTATION_HORIZONTAL, 12);
+    note = gtk_box_new (GTK_ORIENTATION_HORIZONTAL, 0);
     gtk_widget_add_css_class (note, "apex-note");
     gtk_accessible_update_property (GTK_ACCESSIBLE (note), GTK_ACCESSIBLE_PROPERTY_LABEL, title, -1);
+    /* Margin, not CSS padding: GTK 4.24's AT-SPI bounds leave padding out, as cc-apex-header.c says. */
+    content = gtk_box_new (GTK_ORIENTATION_HORIZONTAL, 12);
+    gtk_widget_set_margin_top (content, 14);
+    gtk_widget_set_margin_start (content, 16);
+    gtk_widget_set_margin_end (content, 16);
+    gtk_widget_set_margin_bottom (content, 14);
+    gtk_widget_set_hexpand (content, TRUE);
+    gtk_box_append (GTK_BOX (note), content);
     icon = gtk_image_new_from_icon_name ("dialog-warning-symbolic");
     gtk_widget_set_valign (icon, GTK_ALIGN_START);
     gtk_widget_add_css_class (icon, "apex-note-icon");
-    gtk_box_append (GTK_BOX (note), icon);
+    gtk_box_append (GTK_BOX (content), icon);
     text = gtk_box_new (GTK_ORIENTATION_VERTICAL, 3);
     label = gtk_label_new (title);
     gtk_label_set_xalign (GTK_LABEL (label), 0);
@@ -490,7 +498,7 @@ add_note (CcApexUpdatesPage *self, const char *title, const char *body)
     gtk_widget_add_css_class (label, "dim-label");
     gtk_widget_add_css_class (label, "caption");
     gtk_box_append (GTK_BOX (text), label);
-    gtk_box_append (GTK_BOX (note), text);
+    gtk_box_append (GTK_BOX (content), text);
     gtk_box_append (self->notes, note);
 }
 

@@ -48,7 +48,7 @@ mkdir -p "$T/schemas" "$T/noschema" "$T/nochild" "$T/data" "$T/home" "$T/shell" 
 # main.js and the Meta and Shell typelibs come only with gnome-shell and mutter.
 cp -R "$REPO/desktop/shell/js" "$T/shell/"
 cp "$HERE/main-stub.js" "$T/shell/js/ui/main.js"
-for upstream in panelMenu dash iconGrid popupMenu layout messageList background; do
+for upstream in panelMenu dash iconGrid popupMenu layout messageList background switcherPopup; do
     cp "$HERE/stubs/$upstream.js" "$T/shell/js/ui/$upstream.js"
 done
 # Spotlight's providers: upstream's app search and remote providers, faked.
@@ -383,9 +383,13 @@ fact "quick-settings: the active network's row is :checked, its lock after the n
 fact "quick-settings: another network's row is not" 'qs\.row\.other=children=icons,label,lock,check icons=signal checked=false lock=2/apex-network-lock label=2'
 fact "quick-settings: a submenu header's subtitle ends the title's row" 'qs\.menu=3,0 x_align=3'
 fact "quick-settings: :checked follows is-active" 'qs\.row\.switched=children=icons,label,lock,check icons=signal checked=false lock=2/apex-network-lock label=2 \| children=icons,label,lock,check icons=signal checked=true lock=2/apex-network-lock label=2'
+fact "quick-settings: a row whose network holds no access point stays hidden when network.js shows it" 'qs\.row\.empty=visible=false'
+fact "quick-settings: and shows once its network takes one" 'qs\.row\.adopted=visible=true'
+fact "quick-settings: layer off: a row it hid shows again, as stock has it" 'qs\.off\.refused=visible=true'
 fact "quick-settings: layer off: the row stock again" 'qs\.off\.row=children=icons,label,check icons=signal,lock checked=false lock=3/none label=0'
 fact "quick-settings: layer off: the subtitle under the title" 'qs\.off\.menu=1,1 x_align=0'
 fact "quick-settings: layer off: :checked no longer follows" 'qs\.off\.row-unfollowed=checked=false'
+fact "quick-settings: layer back on: a row still without an access point hides again" 'qs\.on\.refused=visible=false'
 fact "quick-settings: layer back on: rows and menus built before it change again" 'qs\.on\.row=children=icons,label,lock,check icons=signal checked=true lock=2/apex-network-lock label=2'
 fact "quick-settings: layer back on: the subtitle on the title's row" 'qs\.on\.menu=3,0 x_align=3'
 fact "quick-settings: layer off: stock order" \
@@ -456,6 +460,7 @@ fact "disabled-features=['quick-settings']: stock order" \
     'qs\.order=Wi-Fi,VPN,Bluetooth,Power Mode,Night Light,Dark Style,Do Not Disturb,Airplane Mode,Auto Rotate'
 fact "disabled-features=['quick-settings']: Power Mode unlit" 'qs\.power=checked=false classes=none'
 fact "disabled-features=['quick-settings']: stock's name ignores a new best access point" 'qs\.row\.best-ap=names=0'
+fact "disabled-features=['quick-settings']: stock shows a row whose network holds no access point" 'qs\.row\.empty=visible=true'
 fact "disabled-features=['quick-settings']: a network row stays stock" 'qs\.row\.active=children=icons,label,check icons=signal,lock checked=false lock=3/none label=0'
 fact "disabled-features=['quick-settings']: the subtitle stays under the title" 'qs\.menu=1,1 x_align=0'
 
@@ -833,6 +838,8 @@ fact "glass: and blurs at the overview's sigma 36 and 1.5, in actor mode, while 
 fact "glass: at the launcher's 40 and 1.6 once the app grid shows" 'glass\.scrim\.launcher=apexGlassScrim:r160/s1\.6/c0/on/actor visible=true'
 fact "glass: the derived glass: the OSD, an Alt+Tab list once its popup adds it, and the screenshot panel (closed) take the popovers' glass" \
     'glass\.derived=osd:r120/s1\.8/c40/on/background switcher:r120/s1\.8/c52/on/background screenshot:r120/s1\.8/c32/paused/background'
+fact "glass: the held input-source switcher, Ctrl+Alt+Tab and Super+P take it too, each under its own name; a popup that is no SwitcherPopup does not, whatever its name" \
+    'glass\.switchers=input-source-switcher:r120/s1\.8/c52/on/background ctrl-alt-tab-switcher:r120/s1\.8/c52/on/background monitor-switcher:r120/s1\.8/c52/on/background unregistered:none'
 fact "glass: the tile preview, as windowManager.js builds it hidden, gets a glass actor below it, unregistered, and the class that hands it the fill and ring" \
     'glass\.tile\.created=apexTilePreviewGlass:none registered=false below=true offsets=12,12,-24,-24 opacity=255 glassed=true'
 fact "glass: shown, it registers as tilePreview at board 22's sigma 20 and 1.6, inset by the preview's clear border" \

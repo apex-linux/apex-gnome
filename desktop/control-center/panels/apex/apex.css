@@ -1,11 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
 /*! apex-control-center */
 
-apex-header,
-.apex-updates-hero {
-  padding: 28px 20px 22px;
-}
-
 apex-tile .frame {
   border-radius: 20px;
   background-color: var(--view-bg-color);
@@ -58,14 +53,14 @@ image.apex-tile {
 }
 
 .apex-title {
-  font-size: 20px;
+  font-size: 15pt;
   font-weight: 800;
   letter-spacing: -0.3px;
 }
 
 .apex-versions,
 .apex-updates-hero .apex-subtitle {
-  font-size: 12.5px;
+  font-size: 9.375pt;
 }
 
 .apex-updates-hero .apex-progress trough,
@@ -75,7 +70,6 @@ image.apex-tile {
 }
 
 .apex-note {
-  padding: 14px 16px;
   border-radius: 12px;
   background-color: color-mix(in srgb, var(--warning-bg-color) 14%, transparent);
 }
@@ -90,8 +84,8 @@ image.apex-tile {
 
 /* Board 18: What's New lists its changes as a compact grid. */
 .apex-changes {
-  padding: 8px 14px 12px;
-  font-size: 12px;
+  margin: 8px 14px 12px;
+  font-size: 9pt;
 }
 
 .apex-changes .apex-change-kind {
@@ -102,7 +96,7 @@ image.apex-tile {
 .apex-changes .apex-change-name,
 .apex-changes .apex-change-versions {
   font-family: monospace;
-  font-size: 11.5px;
+  font-size: 8.625pt;
 }
 
 .apex-changes .apex-change-name {
