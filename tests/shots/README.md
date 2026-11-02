@@ -976,7 +976,7 @@ history. `tests/shots/goldens.lock` pins the commit G2 compares with. That commi
 A KEY is a row's `NN-SLUG`. The fifteen shell boards approved before the app boards joined are
 keyed by their number alone (`NN`), with their slug recorded: a legacy key stands for a board
 of one row, and the check matches it by number and slug, so those goldens stay as approved.
-An approval keyed by such a row's `NN-SLUG` replaces its legacy entry and files.
+Approving such a row under one of its two keys replaces its golden under the other, entry and files.
 
 The shots hash is the page's: sha256 over the light PNG's bytes, then the dark PNG's, first
 12 hex digits. A light-only row hashes its light PNG alone.
