@@ -508,12 +508,10 @@ function notifications() {
     return source;
 }
 
-// Every Apex surface in turn; h holds probe.js's openers and helpers.
-// The shell idle, then one frame painted after it: what the stage shows is what it last drew.
+// One frame painted from now: what the stage shows is what it last drew.
 const FRAME_TIMEOUT_MS = 1000;
-async function quiet() {
-    await Scripting.waitLeisure();
-    await new Promise(resolve => {
+export function paintedFrame() {
+    return new Promise(resolve => {
         let id = 0;
         const done = () => {
             if (!id)
@@ -528,6 +526,12 @@ async function quiet() {
     });
 }
 
+async function quiet() {
+    await Scripting.waitLeisure();
+    await paintedFrame();
+}
+
+// Every Apex surface in turn; h holds probe.js's openers and helpers.
 export async function a11yReport(h) {
     const {unit} = h;
     const waits = {count: 0, ms: 0};
@@ -660,7 +664,7 @@ export async function a11yReport(h) {
     out.endSession = await withOpen(() => h.openEndSessionDialog(), d => d?.cancel(), d => report(d?.dialogLayout._dialog));
     lap('endSession');
     out.spotlight = await h.withSpotlight(async (popup, toast) => {
-        popup.panel.get_children()[0].get_children()[1].set_text('disk');
+        await h.typeInSpotlight(popup, 'disk');
         return {popup: await report(popup.panel), toast: await report(await toast())};
     }) ?? {error: 'no Spotlight'};
     lap('spotlight');
