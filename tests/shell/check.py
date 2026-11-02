@@ -35,7 +35,7 @@ LOAD_WITNESS = "Apex: APEX_SHELL_TEST_FAULT=load-witness names no phase"
 # Per lock case: the layer's lock or upstream's, and the question its prompt shows.
 LOCK_CASES = {
     "lock-light": {"apex": True, "question": "Enter Password"},
-    "lock-dark": {"apex": True, "question": "Enter Password"},
+    "lock-dark": {"apex": True, "question": "Enter Password", "dark": True},
     "lock-question": {"apex": True, "question": "Verification code:"},
     "lock-high-contrast": {"apex": True, "question": "Enter Password", "overlay_alpha": 0x8c},
     "lock-large-text": {"apex": True, "question": "Enter Password"},
@@ -43,6 +43,7 @@ LOCK_CASES = {
     "lock-safe": {"apex": False, "question": "Password", "layer": False},
 }
 GREETER_CASES = ["greeter-light", "greeter-dark"]
+HC_GREETER = "greeter-high-contrast"
 # dbus-daemon logs each activation: a mode that cannot screencast has no use for the service (patch 0020).
 SCREENCAST_STARTED = "Activating service name='org.gnome.Shell.Screencast'"
 # Per polkit case: board 13's dialog or upstream's, and the info line PAM sent.
@@ -148,11 +149,17 @@ def channels(gdm_log):
 
 # Top to bottom, as board 20 stacks them.
 LAYOUT_ORDER = ("date", "time", "avatar", "field", "message", "hint")
-# $apex_lock_overlay, rgba(8, 10, 20, .34); the high-contrast sheet's own is darker.
-OVERLAY = "#080a1457"
+def lock_scrim(dark):
+    """$apex_lock_scrim for the variant, as the overlay's colour reads: #rrggbbaa."""
+    with open(TOKENS, encoding="utf-8") as f:
+        m = re.search(r"^\$apex_lock_scrim: if\(\$variant == 'light', rgba\((\d+), (\d+), (\d+), ([.\d]+)\), rgba\((\d+), (\d+), (\d+), ([.\d]+)\)\);",
+                      f.read(), re.M)
+    r, g, b, a = m.groups()[4:] if dark else m.groups()[:4]
+    # St reads a CSS alpha into a byte as min(255, a * 256): .34 is 0x57, .68 is 0xae.
+    return "#" + "".join(f"{int(v):02x}" for v in (r, g, b)) + f"{min(255, int(float(a) * 256)):02x}"
 
 
-def check_layout(case, layout, overlay_alpha=None):
+def check_layout(case, layout, overlay_alpha=None, dark=False):
     screen = layout.get("screen") or {}
     parts = [(name, layout[name]) for name in LAYOUT_ORDER if name in layout]
     off = [name for name, b in parts if b["x"] < screen.get("x", 0) or b["y"] < screen.get("y", 0)
@@ -166,7 +173,8 @@ def check_layout(case, layout, overlay_alpha=None):
         check_spacing(case, layout)
     got = layout.get("overlay") or ""
     if overlay_alpha is None:
-        check(f"{case}: the overlay darkens as $apex_lock_overlay", got == OVERLAY, got)
+        want = lock_scrim(dark)
+        check(f"{case}: the overlay darkens as $apex_lock_scrim's {'dark' if dark else 'light'} {want}", got == want, got)
     else:
         check(f"{case}: high contrast darkens more, to alpha {overlay_alpha:#x}",
               got[:7] == "#000000" and len(got) == 9 and int(got[7:], 16) >= overlay_alpha, got)
@@ -239,7 +247,7 @@ def check_lock(shots, case, want):
         check(f"{case}: the initial-letter avatar", (opened["prompt"] or {}).get("avatar") == "initial A",
               json.dumps(opened["prompt"]))
         check(f"{case}: the user's name", (opened["prompt"] or {}).get("name") == "Apex")
-        check_layout(case, opened.get("layout") or {}, want.get("overlay_alpha"))
+        check_layout(case, opened.get("layout") or {}, want.get("overlay_alpha"), want.get("dark", False))
         if want["question"] == "Enter Password":
             check_reveal(case, (opened.get("layout") or {}).get("reveal"))
         check(f"{case}: blanking takes the prompt down", blank["prompt"] is None, json.dumps(blank["prompt"]))
@@ -816,6 +824,61 @@ def check_polkit_cancel(shots, case):
     check(f"{case}: the vendor lookup is cancelled with the dialog", c["lookups"] == [{"cancelled": True}], json.dumps(c["lookups"]))
 
 
+TEXT_RATIO = 4.5  # tests/shots/assert.sh's A11Y_TEXT_RATIO and A11Y_ICON_RATIO
+ICON_RATIO = 3
+CONTRAST_STEPS = {"lock": ("contrast-opened", "contrast-field", "contrast-wrong-answer"),
+                  "greeter": ("contrast-list", "contrast-list-hover", "contrast-prompt", "contrast-field")}
+
+
+def wcag_ratio(a, b):
+    def lum(c):
+        lin = [v / 12.92 if v <= .03928 else ((v + .055) / 1.055) ** 2.4 for v in (int(c[i:i + 2], 16) / 255 for i in (1, 3, 5))]
+        return .2126 * lin[0] + .7152 * lin[1] + .0722 * lin[2]
+    hi, lo = sorted((lum(a), lum(b)), reverse=True)
+    return round((hi + .05) / (lo + .05), 2)
+
+
+def check_greeter_avatars(shots, case, hc):
+    """Board 12's avatars are outlines: a fill under the glyph drops it under 3:1, and under HC's 4.5:1."""
+    f = facts(read(shots, f"{case}.log"))
+    avatars = (f.get("list") or {}).get("avatars") or []
+    check(f"{case}: every list avatar is unfilled", len(avatars) == 2 and all(a["background"][7:] == "00" for a in avatars),
+          json.dumps(avatars))
+    if not hc:
+        return
+    # The glyph's square box crosses its own ring, so the row is read where the stage draws it under the row's name.
+    targets = [t for t in (f.get("contrast-list") or {}).get("targets", []) if not t["offscreen"]]
+    rows = [t["backdrop"] for t in targets if t["styleClass"] == "user-widget-label"]
+    glyphs = [wcag_ratio(t["ink"], row) for t, row in zip([t for t in targets if t["styleClass"] == "user-icon"], rows)]
+    check(f"{case}: each avatar is a 1px outline in the glyph's colour, HC's fg",
+          avatars and all(a["border"] == 1 and a["borderColor"] == a["fg"] == "#ffffffff" for a in avatars), json.dumps(avatars))
+    check(f"{case}: each avatar glyph at {TEXT_RATIO}:1 on its row", len(glyphs) == 2 and min(glyphs) >= TEXT_RATIO,
+          json.dumps({"glyphs": glyphs, "rows": rows}))
+    outline = [wcag_ratio(a["borderColor"], row) for a, row in zip(avatars, rows)]
+    check(f"{case}: each avatar outline at {ICON_RATIO}:1 on its row", len(outline) == 2 and min(outline) >= ICON_RATIO,
+          json.dumps(outline))
+
+
+def low_contrast(report):
+    """G2's rule (assert.sh A11Y_LOW_CONTRAST): text under 4.5:1, glyphs under 3:1, against what the stage drew."""
+    return [f"{t['kind']} {json.dumps(t['name'])} {t['ink']} at {t['alpha']} on {t['backdrop']}: {t['ratio']}"
+            for t in report.get("targets", []) if not t["inactive"] and not t["offscreen"]
+            and t["ratio"] < (TEXT_RATIO if t["kind"] == "text" else ICON_RATIO)]
+
+
+def check_contrast(shots, case, surface):
+    """Every text and glyph of board 20 or 12 over the wallpaper it is drawn on, as G2's a11y rows read them."""
+    f = facts(read(shots, f"{case}.log"))
+    steps = CONTRAST_STEPS[surface]
+    check(f"{case}: contrast measured at {', '.join(steps)}", all(k in f and "targets" in f[k] for k in steps),
+          json.dumps({k: f.get(k, {}).get("error") for k in steps}))
+    low = {step: low_contrast(f[step]) for step in steps if "targets" in f.get(step, {})}
+    measured = sum(len(f[step]["targets"]) for step in low)
+    failing = {step: lines for step, lines in low.items() if lines}
+    check(f"{case}: all {measured} texts at {TEXT_RATIO}:1 and glyphs at {ICON_RATIO}:1", measured > 0 and not failing,
+          json.dumps(failing))
+
+
 DND_LABEL = "Do Not Disturb"
 ICON_SIZE = 32
 MESSAGE_GAP = 8  # $apex_message_gap
@@ -1030,6 +1093,11 @@ def main():
     check_fingerprint_suspend(shots, "lock-fingerprint-suspend")
     for case in GREETER_CASES:
         check_greeter(shots, case)
+        check_contrast(shots, case, "greeter")
+        check_greeter_avatars(shots, case, hc=False)
+    check_greeter_avatars(shots, HC_GREETER, hc=True)
+    for case in ("lock-contrast-light", "lock-contrast-dark", "lock-fallback-light", "lock-fallback-dark"):
+        check_contrast(shots, case, "lock")
     check_motion(shots, "lock-motion", reduced=False)
     check_motion(shots, "lock-reduce-motion", reduced=True)
     check_greeter_motion(shots, "greeter-reduce-motion")
