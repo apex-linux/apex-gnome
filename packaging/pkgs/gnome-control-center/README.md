@@ -331,14 +331,18 @@ the Automatic Downloads switch: `update1.py`'s log must show the method call eac
 with its arguments, and the switch must go back when `update1.py` refuses it as polkit
 would. `bounds.py` reads every label on a page off its case's own capture: board 11's top
 (`top-bounds`), board 24 with the dGPU (`power-bounds`), and the "ready" page at the top and
-scrolled to its end (`updates-bounds`, `updates-bounds-end`). Each AT-SPI box must hold its
-text, and no line 3 px outside it may run through text. No such line tells a 2 px shift from
-a descender, so What's New's grid is held by structure: its labels start at their row's box
-plus the padding and margin `apex.css` gives the row and the grid. GTK 4.24 leaves an
-ancestor's CSS padding out of a widget's AT-SPI bounds, so the panel insets its content with
-margins, never padding. Where libadwaita's own padding does it (button, pill and toggle
-labels at their button's origin; the GPU pill, 2 px below an action row's header), the gap
-is pinned exactly in one list in `bounds.py`, as upstream.
+scrolled to its end (`updates-bounds`, `updates-bounds-end`). GTK 4.24 reports a widget's size
+right but leaves its ancestors' CSS padding out of its place, so the panel insets its content
+with margins, never padding. Each AT-SPI box must hold its text, and no line 3 px outside it
+may run through text: that catches a box cut through its text, not a small shift (a row title
+holds for vertical shifts of −6 to +8 px). Small shifts are held by sizes: each list row hides
+libadwaita's 2 px of padding a side (`list > row`), so every row label sits 2 px left of its
+text, except in What's New's grid row and expander rows, which hide none; and the grid's row
+is exactly the grid plus its margins in `apex.css`, so padding there from any rule fails.
+libadwaita's own padding leaves some labels off (pill, plain and toggle buttons' labels at
+their button's origin, the GPU pill 2 px off in its list row); each is pinned exactly in one
+list in `bounds.py`, as upstream. Each case names what its page must show (`rows`, `grid`,
+`pills`, `buttons`, `toggles`, `gpu`), and one that is missing fails.
 
 Last, Large Text (`text-scaling-factor` 1.25) on board 11 (`large-light`) and board 18
 (`updates-large-light`): `apex.css` sizes its text in pt, which GTK scales with it, where a px
