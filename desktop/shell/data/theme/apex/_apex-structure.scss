@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 //
-// Safe mode keeps the high-contrast sheet: rules here match only Apex actors and append.
-// Upstream's high-contrast palette, captured before the tokens, maps onto them.
+// Safe mode keeps high contrast's sheet: these rules append, with its palette, captured first, mapped onto the tokens.
 
 /*! apex-shell-structure */
 
@@ -31,23 +30,19 @@ $apex_dock_border: $_hc_border;
 @import "dock";
 @import "end-session-icon";
 
-// The lock blurs without darkening and leaves that to its overlay (lock/stage.js): without
-// this, high contrast's white text sits on the bright blurred wallpaper.
+// The lock's blur leaves darkening to its overlay (lock/stage.js), so HC's white text needs a darker one.
 .apex-lock-overlay { background-color: $apex_lock_overlay_contrast; }
 
 .apex-lock-background { -apex-lock-blur: $apex_lock_blur; -apex-lock-saturation: $apex_lock_saturation / 100%; }
 
-// GNOME 51.1's fixed prompt height, as in _lock.scss.
 .unlock-dialog.apex-lock .login-dialog-prompt-layout { height: auto; }
 
-// Upstream's `& :ltr` padding, a stray space, also pads the field's icons; the Apex lock alone ends board 20's eye
-// inside the field's padding, so safe mode keeps upstream's.
+// Upstream's stray-space `& :ltr` also pads the field's icons; only the Apex lock ends board 20's eye inside it.
 .apex-lock .login-dialog-prompt-entry StIcon {
   &:ltr { padding-right: 0; }
   &:rtl { padding-left: 0; }
 }
 
-// Upstream's filled avatar holds its glyph at 2.3:1; an outline in HC's fg, as board 12's, keeps it at 4.5:1.
 .login-dialog-user-list-view .login-dialog-user-list .login-dialog-user-list-item .user-icon {
   border: 1px solid $_hc_fg;
   background-color: transparent;
