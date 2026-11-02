@@ -213,7 +213,7 @@ case $part in
 esac
 
 run_and_record_case default "$CAPTURE_SETTINGS;$SIX_FAVOURITES" G2_SCENES=1 G2_A11Y=1 G2_SOLID_BAR=1 G2_STUB_APPS="$STUB_APPS"
-run_and_record_case default-scale1 "$CAPTURE_SETTINGS" G2_SCENES=1 G2_SCALE=1 G2_MONITOR=1440x900
+run_and_record_case default-scale1 "$CAPTURE_SETTINGS" G2_SCENES=1 G2_SCALE=1 G2_MONITOR=1440x900 G2_DOCK_LABELS=1
 run_and_record_case dark-style "$CAPTURE_SETTINGS;org.gnome.desktop.interface color-scheme prefer-dark;$SIX_FAVOURITES" G2_SCENES=1 G2_A11Y=1 G2_SOLID_BAR=1 \
     G2_TURN_DARK_OFF=1 G2_STUB_APPS="$STUB_APPS"
 run_and_record_case high-contrast "$CAPTURE_SETTINGS;org.gnome.desktop.a11y.interface high-contrast true" G2_A11Y=1
@@ -251,7 +251,7 @@ run_and_record_case dock-dnd "$CAPTURE_SETTINGS;$NO_HOT_CORNER;$TWO_FAVOURITES" 
 # A 1920x1080 external display right of the 2880x1800 panel, as a laptop on a desk has.
 run_and_record_case dock-external "$CAPTURE_SETTINGS;$NO_HOT_CORNER" G2_DOCK_EXTERNAL=1 G2_MONITOR2=1920x1080
 # Two input sources, so Super+Alt+Space has one to switch to.
-run_and_record_case keys "$CAPTURE_SETTINGS;$NO_HOT_CORNER;$TWO_SOURCES" G2_KEYS=1
+run_and_record_case keys "$CAPTURE_SETTINGS;$NO_HOT_CORNER;$TWO_SOURCES;$TWO_FAVOURITES" G2_KEYS=1
 run_and_record_case fault-configure '' APEX_SHELL_TEST_FAULT=configure
 run_and_record_case fault-enable '' APEX_SHELL_TEST_FAULT=enable PROBE_WAIT=10
 run_and_record_case fault-abort '' APEX_SHELL_TEST_FAULT=abort-after-enable PROBE_WAIT=20 G2_EXPECT_EXIT=134

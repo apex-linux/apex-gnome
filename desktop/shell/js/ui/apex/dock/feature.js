@@ -156,6 +156,7 @@ export function enable() {
     _syncLock();
     _place();
     _intellihide = new Intellihide(_box, _settings, INTELLIHIDE_KEY);
+    _connections.push([_box, _box.connect('notify::translation-y', () => _dock.setSlidOut(_box.translation_y > 0))]);
 }
 
 export function disable() {

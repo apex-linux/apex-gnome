@@ -1201,6 +1201,13 @@ fact "dock: its Show Apps opens the overview's app grid" 'dock\.show-apps=overvi
 fact "dock: and follows the overview's own button" 'dock\.overview-show-apps-off=dock-button=false'
 fact "dock: no separator between the dock's favourites and running apps, upstream's elsewhere; a full-colour Show Apps" \
     'dock\.hooks=separator=false stock-separator=true show-apps=view-app-grid'
+dock_labels_are() {
+    local got
+    got=$(sed -n 's/^probe: dock\.labels\.\([a-z-]*\)=\(.*\)$/[\1] \2/p' "$OUT" | paste -sd' ' -)
+    if [[ $got == "$2" ]]; then ok "$1"; else not_ok "$1 (got '$got', expected '$2')"; _show; fi
+}
+dock_labels_are "dock: key focus shows an item's name label as a hover does, one at a time: it moves with the focus, a hover elsewhere takes it and gives it back, an open menu or a slid-out dock hides it, and Escape takes the focus and the label away" \
+    '[initial] none [focused] Files [moved] Web [hovered] showApps [hover-ended] Web [menu-open] none [menu-closed] Web [slid-out] none [slid-back] Web [escape] none'
 fact "dock: layer-enabled=false takes it away and gives the overview its dash back, at its own height" 'dock\.off=none dash=true dash-height=-1'
 fact "dock: a redisplay still pending when the dock goes away never runs, and the overview's dash queues as stock's does again" \
     'dock\.overview-dash-off=redisplays=2 queued=1'

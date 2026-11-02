@@ -2236,6 +2236,44 @@ async function exerciseRemoteWatcher() {
     [early, late].forEach(item => item.quit());
 }
 
+// Key focus names a dock item as a hover does, one label at a time.
+async function dockFocusLabels(dock) {
+    const {default: Clutter} = await import(`file://${GLib.path_get_dirname(shellDir)}/Clutter.js`);
+    const items = dock._labelledItems();
+    const name = item => item.labelText ?? item.name;
+    const labels = step => fact(`dock.labels.${step}`, items.filter(i => i.label.visible).map(name).join(',') || 'none');
+    const focus = (item, inside) => item.child.emit(inside ? 'key-focus-in' : 'key-focus-out');
+    const hover = (item, on) => {
+        item.child.hover = on;
+        dock._syncLabel(item);
+    };
+    labels('initial');
+    focus(items[0], true);
+    labels('focused');
+    focus(items[0], false);
+    focus(items[1], true);
+    labels('moved');
+    hover(items[2], true);
+    labels('hovered');
+    hover(items[2], false);
+    labels('hover-ended');
+    dock._itemMenuStateChanged(items[1], true);
+    labels('menu-open');
+    dock._itemMenuStateChanged(items[1], false);
+    labels('menu-closed');
+    dock.setSlidOut(true);
+    labels('slid-out');
+    dock.setSlidOut(false);
+    labels('slid-back');
+    global.stage.set_key_focus = actor => {
+        if (actor === null)
+            focus(items[1], false);
+    };
+    items[1].child.emit('key-press-event', {get_key_symbol: () => Clutter.KEY_Escape});
+    delete global.stage.set_key_focus;
+    labels('escape');
+}
+
 async function exerciseDock() {
     if (GLib.getenv('PROBE_DOCK') !== '1')
         return;
@@ -2281,6 +2319,7 @@ async function exerciseDock() {
         fact('dock.hooks', `separator=${Hooks.value('dash-favorites-separator', true, dock)} ` +
             `stock-separator=${Hooks.value('dash-favorites-separator', true, {})} ` +
             `show-apps=${Hooks.value('show-apps-icon-name', 'view-app-grid-symbolic', dock.tailItems.showApps)}`);
+        await dockFocusLabels(dock);
     }
     dash._queueRedisplay();
     settings.set_boolean('layer-enabled', false);
