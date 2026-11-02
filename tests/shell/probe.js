@@ -644,6 +644,8 @@ async function shootGreeter() {
     if (hovered) {
         const focused = global.stage.key_focus;
         hovered.hover = true;
+        // Upstream's avatar rebuilds its glyph on the row's new style: measure once it has.
+        await Scripting.sleep(CONTRAST_SETTLE_MS);
         fact('list-hover', {selected: hovered.has_style_pseudo_class('selected'), focused: hovered.has_key_focus(),
             background: color(hovered.get_theme_node().get_background_color())});
         fact('contrast-list-hover', await contrastOf(dialog._userList));

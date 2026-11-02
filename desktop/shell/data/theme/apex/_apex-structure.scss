@@ -30,7 +30,7 @@ $apex_dock_border: $_hc_border;
 @import "dock";
 @import "end-session-icon";
 
-// HC's white needs a darker overlay than the blur leaves, and upstream's filled avatar held the initial at 2.96:1.
+// HC's white needs a darker overlay than the blur leaves; upstream's avatar fill and .7 hint held it at 2.96, 3.98:1.
 .apex-lock-overlay { background-color: $apex_lock_overlay_contrast; }
 .unlock-dialog.apex-lock .user-widget .user-icon {
   border: $apex_surface_border solid $_hc_fg;
@@ -38,6 +38,7 @@ $apex_dock_border: $_hc_border;
   box-shadow: none;
   color: $_hc_fg;
 }
+.unlock-dialog.apex-lock .login-dialog-prompt-entry StLabel.hint-text { color: $_hc_fg; }
 
 .apex-lock-background { -apex-lock-blur: $apex_lock_blur; -apex-lock-saturation: $apex_lock_saturation / 100%; }
 
