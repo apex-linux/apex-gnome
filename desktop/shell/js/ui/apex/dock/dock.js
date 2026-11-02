@@ -8,6 +8,7 @@ import GObject from 'gi://GObject';
 import St from 'gi://St';
 
 import * as Dash from '../../dash.js';
+import * as Main from '../../main.js';
 import {TrashItem} from './trash.js';
 
 const LIFT_PX = 6;
@@ -58,8 +59,20 @@ class ApexDock extends Dash.Dash {
         this._syncFocusLabel();
     }
 
+    // Upstream clamps the label to the stage (dash.js showLabel); next to another monitor it would reach over.
+    _keepLabelOnMonitor(item) {
+        const showLabel = item.showLabel.bind(item);
+        item.showLabel = () => {
+            showLabel();
+            const monitor = Main.layoutManager.findMonitorForActor(item);
+            if (monitor)
+                item.label.x = Math.max(monitor.x, Math.min(item.label.x, monitor.x + monitor.width - item.label.width));
+        };
+    }
+
     // Upstream's dash names an item on hover only (dash.js _syncLabel).
     _nameOnFocus(item) {
+        this._keepLabelOnMonitor(item);
         item.child.connect('key-focus-in', () => {
             this._focusItem = item;
             this._syncFocusLabel();

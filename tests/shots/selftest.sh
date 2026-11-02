@@ -2765,13 +2765,13 @@ readonly DOCK_EXTERNAL_REPORT='def lay($p; $window; $hidden; $solid): {primary: 
        desktopGlass: {dock: glass(56; 1; {x: 2276, y: 1010, width: 249, height: 70}), bar: glass(48; 1; {x: 1440, y: 0, width: 1920, height: 32}),
          scrims: [(glass(144; 2; mon0) + {enabled: false}), (glass(72; 1; ext1) + {enabled: false})]},
        edgeLabel: {name: "Show Apps", shown: true, item: {x: 1440, y: 1005, width: 56, height: 62},
-         label: {x: 1424, y: 965, width: 89, height: 28}, monitor: ext1}}),
+         label: {x: 1440, y: 965, width: 89, height: 28}, monitor: ext1}}),
      mixed: (lay(0; {monitor: 0, maximised: true}; true; true) + {changed: true,
        monitors: [{x: 0, y: 0, width: 1440, height: 900, index: 0}, {x: 1440, y: 0, width: 1920, height: 1080, index: 1}],
        dockBox: {x: 596, y: 980, width: 249, height: 80},
        glass: {dock: glass(112; 2; {x: 596, y: 990, width: 249, height: 70}), bar: (glass(96; 2; {x: 0, y: 0, width: 1440, height: 32}) + {enabled: false})},
        edgeLabel: {name: "Show Apps", shown: true, item: {x: 1384, y: 825, width: 56, height: 62},
-         label: {x: 1364, y: 785, width: 96, height: 29}, monitor: mon0}})}}'
+         label: {x: 1351, y: 785, width: 89, height: 28}, monitor: mon0}})}}'
 
 test_dock_external() {
     local change what passes failures all
@@ -2817,6 +2817,8 @@ test_dock_external() {
 .steps.mixed.glass.dock.resourceScale = 1|dock glass left at scale 1 back on the panel
 .steps.mixedOnExternal.edgeLabel.shown = false|Show Apps at the external display's left edge showing no label
 .steps.mixed.edgeLabel.label.x = 3300|an end item's label off the stage's right edge
+.steps.mixedOnExternal.edgeLabel.label.x = 1423|Show Apps' label 17 px over the panel, where upstream's stage clamp leaves it
+.steps.mixed.edgeLabel.label.x = 1367|Show Apps' label 16 px over the external display
 CHANGES
     write_report_run dock-external DOCK-EXTERNAL '{error: "G2 runs 1 monitor(s), not two\ndock-external.js:98"}' .
     read -r passes failures <<<"$(assertion_counts dock_external_case "$T/dock-external")"

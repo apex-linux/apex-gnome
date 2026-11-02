@@ -2728,17 +2728,15 @@ dock_external_case() {
         (.glass.dock | blurs(\$t.apex_dock_blur; 2)) and (.glass.bar | .resourceScale == 2 and .radius == 2 * (\$t.apex_bar_blur | px) * 2)"
 }
 
-# Show Apps' name label at a primary's edge that meets the other monitor: shown and on the stage,
-# and, while upstream clamps it to the stage alone, a pinned gap until it keeps to its monitor.
-readonly DOCK_EDGE_LABEL_GAP="upstream's dash clamps a dock label to the stage, not its monitor (dash.js showLabel)"
+# Show Apps' name label at a primary's edge that meets the other monitor: shown, and kept to its
+# own monitor, where upstream's dash clamps it to the stage alone.
 dock_edge_labels() {
     local r=$1 step side
     for step in mixedOnExternal:left mixed:right; do
         side=${step#*:}
-        expect dock-external "$r" ".steps.${step%:*}.edgeLabel | .shown and .label.x >= 0 and .label.x + .label.width <= 3360" \
-            "with Show Apps at the primary's $side edge, a hover shows its name label on the stage"
-        known_gap "$DOCK_EDGE_LABEL_GAP" expect dock-external "$r" ".steps.${step%:*}.edgeLabel | .label.x >= .monitor.x
-            and .label.x + .label.width <= .monitor.x + .monitor.width" "and on the primary, not over the monitor beside it"
+        expect dock-external "$r" ".steps.${step%:*}.edgeLabel | .shown and .label.x >= .monitor.x
+            and .label.x + .label.width <= .monitor.x + .monitor.width" \
+            "with Show Apps at the primary's $side edge, a hover shows its name label inside the primary, not over the monitor beside it"
     done
 }
 
