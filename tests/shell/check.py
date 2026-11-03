@@ -8,7 +8,8 @@ locked, that a GDM refusing to reauthenticate leaves it locked, that the fingerp
 conversation stops while the screen is blank, that blanking cancels the conversation and waking starts a new one, that
 the key that wakes the screen never answers a prompt, that gnome-session's idle at lock leaves the prompt to blank, that resume brings back the prompt sleep took down, that
 stock and safe mode keep upstream's lock, and that the greeter runs no Apex JS and no screencast service; what board 13's
-authentication dialog shows, from a stubbed polkit session that is never answered; and board 34's
+authentication dialog shows, from a stubbed polkit session that is never answered or that refuses an answer, and that
+Esc dismisses it; and board 34's
 date menu: flat cards headed "app · time" with the app's icon, Clear on the right, Do Not Disturb;
 and what the end-session dialog's update card does with update1-mock.py's Apply.
 Prints one line per assertion and exits 1 when one fails.
@@ -34,14 +35,15 @@ LOAD_WITNESS = "Apex: APEX_SHELL_TEST_FAULT=load-witness names no phase"
 # Per lock case: the layer's lock or upstream's, and the question its prompt shows.
 LOCK_CASES = {
     "lock-light": {"apex": True, "question": "Enter Password"},
-    "lock-dark": {"apex": True, "question": "Enter Password"},
+    "lock-dark": {"apex": True, "question": "Enter Password", "dark": True},
     "lock-question": {"apex": True, "question": "Verification code:"},
-    "lock-high-contrast": {"apex": True, "question": "Enter Password", "overlay_alpha": 0x8c},
+    "lock-high-contrast": {"apex": True, "question": "Enter Password", "hc": True},
     "lock-large-text": {"apex": True, "question": "Enter Password"},
     "lock-disabled": {"apex": False, "question": "Password", "layer": True},
     "lock-safe": {"apex": False, "question": "Password", "layer": False},
 }
 GREETER_CASES = ["greeter-light", "greeter-dark"]
+HC_GREETER = "greeter-high-contrast"
 STOCK_HC = "resource:///org/gnome/shell/theme/stock/gnome-shell-high-contrast.css"
 UPSTREAM_HC_AVATAR = "rgba(255, 255, 255, .3)"  # transparentize($_gdm_fg, .7)
 # dbus-daemon logs each activation: a mode that cannot screencast has no use for the service (patch 0020).
@@ -52,6 +54,14 @@ POLKIT_CASES = {
     "polkit-dark": {"apex": True, "info": None},
     "polkit-fingerprint": {"apex": True, "info": "Place your finger on the fingerprint reader"},
     "polkit-disabled": {"apex": False, "info": None},
+}
+# Per refused case: the error line after the wrong answer, and the info line the retry shows.
+POLKIT_UPSTREAM_ERROR = "Sorry, that didn’t work. Please try again."
+POLKIT_REFUSED_CASES = {
+    "polkit-refused-light": {"error": POLKIT_UPSTREAM_ERROR, "info": None},
+    "polkit-refused-dark": {"error": POLKIT_UPSTREAM_ERROR, "info": None},
+    "polkit-refused-fingerprint": {"error": None, "info": "Place your finger on the fingerprint reader"},
+    "polkit-refused-faillock": {"error": "The account is locked due to 3 failed logins.", "info": None},
 }
 POLKIT_ACTION = "io.github.apex-linux.apex.update.rollback"
 POLKIT_MESSAGE = "Booting the previous version of Apex at the next restart needs an administrator password."
@@ -77,7 +87,7 @@ def tokens():
     found = {}
     with open(TOKENS, encoding="utf-8") as f:
         for line in f:
-            m = re.match(r"\$(apex_(?:greeter|lock|surface)_\w+):\s*(.+?);", line)
+            m = re.match(r"\$(apex_(?:greeter|lock|polkit|surface)_\w+):\s*(.+?);", line)
             if m:
                 found[m.group(1)] = m.group(2).strip("'\"")
     return found
@@ -141,11 +151,17 @@ def channels(gdm_log):
 
 # Top to bottom, as board 20 stacks them.
 LAYOUT_ORDER = ("date", "time", "avatar", "field", "message", "hint")
-# $apex_lock_overlay, rgba(8, 10, 20, .34); the high-contrast sheet's own is darker.
-OVERLAY = "#080a1457"
+def lock_scrim(dark):
+    """$apex_lock_scrim for the variant, as the overlay's colour reads: #rrggbbaa."""
+    with open(TOKENS, encoding="utf-8") as f:
+        m = re.search(r"^\$apex_lock_scrim: if\(\$variant == 'light', rgba\((\d+), (\d+), (\d+), ([.\d]+)\), rgba\((\d+), (\d+), (\d+), ([.\d]+)\)\);",
+                      f.read(), re.M)
+    r, g, b, a = m.groups()[4:] if dark else m.groups()[:4]
+    # St reads a CSS alpha into a byte as min(255, a * 256): .34 is 0x57, .68 is 0xae.
+    return "#" + "".join(f"{int(v):02x}" for v in (r, g, b)) + f"{min(255, int(float(a) * 256)):02x}"
 
 
-def check_layout(case, layout, overlay_alpha=None):
+def check_layout(case, layout, hc=False, dark=False):
     screen = layout.get("screen") or {}
     parts = [(name, layout[name]) for name in LAYOUT_ORDER if name in layout]
     off = [name for name, b in parts if b["x"] < screen.get("x", 0) or b["y"] < screen.get("y", 0)
@@ -155,14 +171,16 @@ def check_layout(case, layout, overlay_alpha=None):
           {"date", "time", "avatar", "field", "hint"} <= dict(parts).keys() and not off, json.dumps(layout))
     overlaps = [f"{a}/{b}" for (a, ba), (b, bb) in itertools.pairwise(parts) if ba["y"] + ba["height"] > bb["y"] + 1]
     check(f"{case}: top to bottom, nothing overlaps", not overlaps, ", ".join(overlaps))
-    if overlay_alpha is None and {"avatar", "field", "hint"} <= dict(parts).keys():
+    if not hc and {"avatar", "field", "hint"} <= dict(parts).keys():
         check_spacing(case, layout)
     got = layout.get("overlay") or ""
-    if overlay_alpha is None:
-        check(f"{case}: the overlay darkens as $apex_lock_overlay", got == OVERLAY, got)
+    if not hc:
+        want = lock_scrim(dark)
+        check(f"{case}: the overlay darkens as $apex_lock_scrim's {'dark' if dark else 'light'} {want}", got == want, got)
     else:
-        check(f"{case}: high contrast darkens more, to alpha {overlay_alpha:#x}",
-              got[:7] == "#000000" and len(got) == 9 and int(got[7:], 16) >= overlay_alpha, got)
+        floor = int(lock_scrim(False)[7:], 16)
+        check(f"{case}: high contrast's black darkens at least as the light scrim, alpha {floor:#x}",
+              got[:7] == "#000000" and len(got) == 9 and int(got[7:], 16) >= floor, got)
 
 
 def check_spacing(case, layout):
@@ -194,6 +212,27 @@ def check_reveal(case, reveal):
           abs(icon["y"] + icon["height"] / 2 - centre) <= 1, json.dumps(reveal))
 
 
+def check_error_ring(case, opened, wrong, wake, dark):
+    """Board 20's wrong password rings the field in $apex_lock_error_ring; high contrast's in its own white."""
+    want = "#ffffffff" if case == "lock-high-contrast" else f"{lock_error_ring(dark)}ff"
+    check(f"{case}: no error ring before the wrong answer", not opened.get("errorRing"), json.dumps([opened.get("errorRing"), opened.get("ring")]))
+    r = wrong.get("ring") or {}
+    check(f"{case}: the wrong answer rings the field: 2 px inset, {want}, the border its outer pixel",
+          wrong.get("errorRing") is True and (r.get("inset"), r.get("color")) == (True, want)
+          and r.get("spread", 0) + r.get("border", 0) == 2,
+          json.dumps([wrong.get("errorRing"), r]))
+    # A border of its own colour between the ring and the scrim drops board 20's ring under 3:1 on #013b88.
+    check(f"{case}: no other border beside the ring", r.get("border", 0) == 0 or r.get("borderColor") == want,
+          json.dumps(r))
+    check(f"{case}: the prompt rebuilt after blank has no ring", not wake.get("errorRing"), json.dumps([wake.get("errorRing"), wake.get("ring")]))
+
+
+def lock_error_ring(dark):
+    with open(TOKENS, encoding="utf-8") as f:
+        m = re.search(r"^\$apex_lock_error_ring: if\(\$variant == 'light', (#[0-9a-f]{6}), (#[0-9a-f]{6})\);", f.read(), re.M)
+    return m.group(2 if dark else 1) if m else None
+
+
 def check_lock(shots, case, want):
     log = read(shots, f"{case}.log")
     gdm = read(shots, f"{case}.gdm.log")
@@ -223,6 +262,8 @@ def check_lock(shots, case, want):
           json.dumps(wrong["prompt"]))
     check(f"{case}: the question", (wrong["prompt"] or {}).get("question") == want["question"],
           json.dumps(wrong["prompt"]))
+    if not want["apex"]:
+        check(f"{case}: upstream's lock takes no Apex error ring", not wrong.get("errorRing"), json.dumps(wrong.get("errorRing")))
     if want["apex"]:
         check(f"{case}: one stage", "apex-lock" in opened["classes"].split())
         check(f"{case}: sigma 30, saturation 1.3, no darkening", opened["blur"] == APEX_BLUR, str(opened["blur"]))
@@ -232,9 +273,10 @@ def check_lock(shots, case, want):
         check(f"{case}: the initial-letter avatar", (opened["prompt"] or {}).get("avatar") == "initial A",
               json.dumps(opened["prompt"]))
         check(f"{case}: the user's name", (opened["prompt"] or {}).get("name") == "Apex")
-        check_layout(case, opened.get("layout") or {}, want.get("overlay_alpha"))
+        check_layout(case, opened.get("layout") or {}, want.get("hc", False), want.get("dark", False))
         if want["question"] == "Enter Password":
             check_reveal(case, (opened.get("layout") or {}).get("reveal"))
+        check_error_ring(case, opened, wrong, f["wake"], want.get("dark", False))
         check(f"{case}: blanking takes the prompt down", blank["prompt"] is None, json.dumps(blank["prompt"]))
         if answered:
             check(f"{case}: and cancels its conversation", "Cancel" in calls[answered[0]])
@@ -468,6 +510,11 @@ def check_greeter(shots, case):
     check(f"{case}: upstream's question", prompt.get("question") == "Password", json.dumps(prompt))
     check(f"{case}: upstream's avatar icon", prompt.get("avatar") == "avatar-default-symbolic", json.dumps(prompt))
     check_greeter_style(case, f["list"].get("style") or {}, tokens())
+    hover = f.get("list-hover") or {}
+    want = tokens()["apex_lock_list_hover"]
+    check(f"{case}: a pointed row is selected and focused, as upstream makes it, and takes {want}",
+          (hover.get("selected"), hover.get("focused")) == (True, True) and same_colour(hover.get("background", "#0"), want),
+          json.dumps(hover))
     check_back_button(case, (f["prompt"].get("style") or {}).get("back"), tokens())
     check_greeter_spacing(case, f["list"].get("layout") or {},
                           {**(f["prompt"].get("layout") or {}), "back": (f["prompt"].get("style") or {}).get("back")}, tokens())
@@ -676,6 +723,7 @@ def check_polkit(shots, case, want):
         check(f"{case}: pam_fprintd's prompt is board 13's fingerprint line",
               info["text"] == want["info"] and "apex-polkit-fingerprint" in info["line"] and info["glyph"] == "auth-fingerprint-symbolic",
               json.dumps(info))
+        check_message_row(case, "fingerprint line", info, d, px(tokens()["apex_polkit_body_gap"]))
     else:
         check(f"{case}: no fingerprint line when PAM sends none", info["text"] is None and info["glyph"] is None, json.dumps(info))
 
@@ -738,6 +786,153 @@ def check_greeter_motion(shots, case):
     faded = sorted({t["actor"] for s in m["samples"] for t in s["transitions"] if t["property"] == "opacity"})
     check(f"{case}: the sampler catches the prompt's own fades", any("login-dialog-prompt-layout" in a for a in faded), json.dumps(faded))
     check(f"{case}: from the list to the prompt, nothing slides or scales", not moving(m["samples"]), json.dumps(moving(m["samples"])))
+
+
+def error_fg(dark):
+    """$apex_error_fg for the variant, from its if($variant == 'light', LIGHT, DARK)."""
+    with open(TOKENS, encoding="utf-8") as f:
+        m = re.search(r"\$apex_error_fg:\s*if\(\$variant == 'light', (#[0-9a-f]{6}), (#[0-9a-f]{6})\);", f.read())
+    return m.group(2 if dark else 1) if m else None
+
+
+def contrast(fg, bg):
+    def lum(c):
+        rgb = [int(c[i:i + 2], 16) / 255 for i in (1, 3, 5)]
+        r, g, b = [v / 12.92 if v <= 0.03928 else ((v + 0.055) / 1.055) ** 2.4 for v in rgb]
+        return 0.2126 * r + 0.7152 * g + 0.0722 * b
+    hi, lo = sorted((lum(fg), lum(bg)), reverse=True)
+    return (hi + 0.05) / (lo + 0.05)
+
+
+def check_message_row(case, what, line, d, gap):
+    """Board 13's message row: no pill, the row's full width, $apex_polkit_body_gap under the field."""
+    field, row = d["field"], d["row"]
+    check(f"{case}: the {what} has no fill", line["fill"].endswith("00"), json.dumps(line))
+    check(f"{case}: the {what} spans the message row", line["x"] == row["x"] and line["width"] == row["width"],
+          json.dumps([row, line]))
+    check(f"{case}: the {what} sits $apex_polkit_body_gap ({gap:g} px) under the field",
+          abs(line["y"] - field["y"] - field["height"] - gap) <= 1, json.dumps([field, line]))
+
+
+def check_polkit_refused(shots, case, want, t):
+    """Board 13 after a wrong answer: upstream's error line in the Apex dialog, and a fresh question."""
+    log = read(shots, f"{case}.log")
+    f = facts(log)
+    check(f"{case}: the dialog before and after the wrong answer is reported", all(k in f for k in ("polkit", "refused", "polkit-sessions")))
+    check(f"{case}: no JS error", "JS ERROR" not in log and "APEXLOCK-ERROR" not in log)
+    if not all(k in f for k in ("polkit", "refused", "polkit-sessions")):
+        return
+    before, d, sessions = f["polkit"], f["refused"], f["polkit-sessions"]
+    check(f"{case}: one wrong answer, then upstream asks again in a new session",
+          sessions == [{"responses": 1, "cancelled": False}, {"responses": 0, "cancelled": False}], json.dumps(sessions))
+    check(f"{case}: the field is cleared and asks again, focused",
+          d["entry"] == {"text": "", "reactive": True} and d["field"]["hint"] == "Password" and d["field"]["focused"],
+          json.dumps([d["entry"], d["field"]]))
+    check(f"{case}: board 13's dialog, shield, header and Details as before the answer",
+          all(d[k] == before[k] for k in ("shield", "title", "description", "details")) and d["box"]["x"] == before["box"]["x"]
+          and d["box"]["width"] == before["box"]["width"], json.dumps([before, d]))
+    flagged = "apex-polkit-error" in d["classes"].split()
+    check(f"{case}: the dialog is flagged apex-polkit-error {'while' if want['error'] else 'only while'} the error shows",
+          flagged is bool(want["error"]) and "apex-polkit-error" not in before["classes"].split(), json.dumps([before["classes"], d["classes"]]))
+    error, info, box, gap = d["error"], d["info"], d["box"], px(t["apex_polkit_body_gap"])
+    check(f"{case}: the error line reads {json.dumps(want['error'])}", error["text"] == want["error"], json.dumps(error))
+    check(f"{case}: the info line reads {json.dumps(want['info'])}", info["text"] == want["info"], json.dumps(info))
+    if want["error"]:
+        red = error_fg("dark" in case)
+        check_message_row(case, "error line", error, d, gap)
+        check(f"{case}: the error line is $apex_error_fg ({red}), at least 4.5:1 on the dialog",
+              red is not None and error["fg"][:7] == red and contrast(red, d["surface"][:7]) >= 4.5, json.dumps([error, d["surface"]]))
+        check(f"{case}: the field's 2 px inset ring is $apex_error_fg",
+              d["ring"] == {"inset": True, "spread": 2, "color": f"{red}ff"}, json.dumps(d["ring"]))
+        check(f"{case}: the error line stays inside the dialog, above Details",
+              error["x"] >= box["x"] and error["x"] + error["width"] <= box["x"] + box["width"] + 1
+              and error["y"] + error["height"] <= d["details"]["y"] + 1, json.dumps([box, error, d["details"]]))
+
+
+def check_polkit_cancel(shots, case):
+    """Esc on board 13 before polkitd answers the vendor lookup: the request is dismissed and the lookup ends."""
+    log = read(shots, f"{case}.log")
+    f = facts(log)
+    check(f"{case}: the dialog and the cancel are reported", "polkit" in f and "cancelled" in f)
+    check(f"{case}: no JS error, no vendor warning",
+          "JS ERROR" not in log and "APEXLOCK-ERROR" not in log and "Apex: polkit: no vendor" not in log)
+    if "polkit" not in f or "cancelled" not in f:
+        return
+    d, c = f["polkit"], f["cancelled"]
+    check(f"{case}: Esc came while the vendor lookup was pending",
+          (d["details"] or {}).get("rows") == [["Action", POLKIT_ACTION]], json.dumps(d["details"]))
+    check(f"{case}: Esc dismisses the request and closes the dialog", c["done"] is True and not c["current"], json.dumps(c))
+    check(f"{case}: the one session is cancelled, never answered", c["sessions"] == [{"responses": 0, "cancelled": True}],
+          json.dumps(c["sessions"]))
+    check(f"{case}: the vendor lookup is cancelled with the dialog", c["lookups"] == [{"cancelled": True}], json.dumps(c["lookups"]))
+
+
+TEXT_RATIO = 4.5  # tests/shots/assert.sh's A11Y_TEXT_RATIO and A11Y_ICON_RATIO
+ICON_RATIO = 3
+CONTRAST_STEPS = {"lock": ("contrast-opened", "contrast-field", "contrast-wrong-answer"),
+                  "greeter": ("contrast-list", "contrast-list-hover", "contrast-prompt", "contrast-field")}
+
+
+def wcag_ratio(a, b):
+    def lum(c):
+        lin = [v / 12.92 if v <= .03928 else ((v + .055) / 1.055) ** 2.4 for v in (int(c[i:i + 2], 16) / 255 for i in (1, 3, 5))]
+        return .2126 * lin[0] + .7152 * lin[1] + .0722 * lin[2]
+    hi, lo = sorted((lum(a), lum(b)), reverse=True)
+    return round((hi + .05) / (lo + .05), 2)
+
+
+def check_greeter_avatars(shots, case, hc):
+    """Board 12's avatars are outlines: a fill under the glyph drops it under 3:1, and under HC's 4.5:1."""
+    f = facts(read(shots, f"{case}.log"))
+    avatars = (f.get("list") or {}).get("avatars") or []
+    check(f"{case}: every list avatar is unfilled, its glyph too", len(avatars) == 2 and
+          all(a["background"][7:] == "00" and (a.get("glyphFill") or "#00000000")[7:] == "00" for a in avatars),
+          json.dumps(avatars))
+    check(f"{case}: a logged-in user's ring keeps upstream's 2 px", all(a["border"] == 2 for a in avatars if a.get("loggedIn")),
+          json.dumps(avatars))
+    if not hc:
+        return
+    targets = (f.get("contrast-list") or {}).get("targets", [])
+    icons = [t for t in targets if t["styleClass"] == "user-icon" and not t["offscreen"]]
+    glyphs = [t["ratio"] for t in icons]
+    rows = [t["backdrop"] for t in icons]
+    check(f"{case}: each avatar is a 1px outline in the glyph's colour, HC's fg",
+          avatars and all(a["border"] == 1 and a["borderColor"] == a["fg"] == "#ffffffff" for a in avatars), json.dumps(avatars))
+    check(f"{case}: each avatar glyph at {TEXT_RATIO}:1 on its row", len(glyphs) == 2 and min(glyphs) >= TEXT_RATIO,
+          json.dumps({"glyphs": glyphs, "rows": rows}))
+    outline = [wcag_ratio(a["borderColor"], row) for a, row in zip(avatars, rows)]
+    check(f"{case}: each avatar outline at {ICON_RATIO}:1 on its row", len(outline) == 2 and min(outline) >= ICON_RATIO,
+          json.dumps(outline))
+
+
+def unboxed(t):
+    return any(v is None for v in (t.get("box") or {"x": None}).values())
+
+
+def low_contrast(report):
+    """G2's rule (assert.sh A11Y_LOW_CONTRAST): text under 4.5:1, glyphs under 3:1, against what the stage drew."""
+    targets = report.get("targets", [])
+    return [f"{t['kind']} {json.dumps(t['name'])}: no box" for t in targets if unboxed(t)] + [
+        f"{t['kind']} {json.dumps(t['name'])} {t['ink']} at {t['alpha']} on {t['backdrop']}: {t['ratio']}"
+        for t in targets if not unboxed(t) and not t["inactive"] and not t["offscreen"]
+        and t["ratio"] < (TEXT_RATIO if t["kind"] == "text" else ICON_RATIO)]
+
+
+def measured_targets(report):
+    return [t for t in report.get("targets", []) if not unboxed(t) and not t["offscreen"] and t["ratio"] is not None]
+
+
+def check_contrast(shots, case, surface):
+    """Every text and glyph of board 20 or 12 over the wallpaper it is drawn on, as G2's a11y rows read them."""
+    f = facts(read(shots, f"{case}.log"))
+    steps = CONTRAST_STEPS[surface]
+    check(f"{case}: contrast measured at {', '.join(steps)}", all(k in f and "targets" in f[k] for k in steps),
+          json.dumps({k: f.get(k, {}).get("error") for k in steps}))
+    low = {step: low_contrast(f[step]) for step in steps if "targets" in f.get(step, {})}
+    measured = sum(len(measured_targets(f[step])) for step in low)
+    failing = {step: lines for step, lines in low.items() if lines}
+    check(f"{case}: all {measured} texts at {TEXT_RATIO}:1 and glyphs at {ICON_RATIO}:1", measured > 0 and not failing,
+          json.dumps(failing))
 
 
 DND_LABEL = "Do Not Disturb"
@@ -841,11 +1036,107 @@ def check_icons(shots):
             check(line[5:], line.startswith("PASS "))
 
 
+# What fixtures.py sets up in this lane; power profiles and accountsservice are G2's opt-ins.
+LANE_FIXTURES = ("battery", "wifi", "keyboard", "gpus")
+
+
+def check_fixtures(shots):
+    text = read(shots, "fixtures.txt")
+    m = re.search(r"^G2-FIXTURES (\{.*\})$", text, re.M)
+    if not m:
+        died = re.findall(r'fixtures\.py", line \d+, in (\w+)', text)
+        last = [line for line in text.splitlines() if line.strip()][-1:] or ["no output"]
+        check("fixtures.py sets up every fixture of the lane", False,
+              f"died in {died[-1] if died else 'its setup'}(): {last[0][:300]}")
+        return
+    report = json.loads(m.group(1))
+    missing = [name for name in LANE_FIXTURES if report.get(name) is None]
+    check("fixtures.py sets up every fixture of the lane", not missing, f"missing: {', '.join(missing)}")
+
+
+def check_bar_cycle(shots, case, apex):
+    log = read(shots, f"{case}.log")
+    f = facts(log)
+    steps = ("before", "logind-locked", "after-logind", "dialog-locked", "after-dialog")
+    for step in steps:
+        check(f"{case}: {step} is reported", step in f)
+    check(f"{case}: no JS error", "JS ERROR" not in until(log, "after-dialog") and "APEXLOCK-ERROR" not in log)
+    check(f"{case}: the layer {'loaded' if apex else 'did not load'}", (LOAD_WITNESS in log) == apex)
+    if not all(step in f for step in steps):
+        return
+    before = f["before"]
+    chip, search = (["EN", "FR"], True) if apex else (["en", "fr"], False)
+    check(f"{case}: before: the user session's bar, its chip {'/'.join(chip)}, {'with' if apex else 'without'} the search button",
+          before["mode"] == "user" and before["chip"] == chip and ("apex-search" in before["right"]) == search, json.dumps(before))
+    check(f"{case}: logind's Lock locks", f["logind-locked"]["locked"] is True)
+    check(f"{case}: the lock's own stage locks{', its prompt up' if apex else ''}",
+          f["dialog-locked"]["locked"] is True and (f["dialog-locked"]["prompt"] or not apex), json.dumps(f["dialog-locked"]))
+    check(f"{case}: before: the overview closed", before["overview"] is False)
+    check(f"{case}: the pointer rests in the hot corner throughout",
+          all(f[step]["pointer"] == [0, 0] for step in ("before", "after-logind", "after-dialog")))
+    def capture(step):
+        with open(os.path.join(shots, os.path.basename(f[f"capture.{step}"])), "rb") as png:
+            return png.read()
+    bar = capture("before")
+    for step in ("after-logind", "after-dialog"):
+        after = f[step]
+        for side in ("left", "center", "right"):
+            check(f"{case}: {step}: the {side} box's items as before", after[side] == before[side],
+                  f"{after[side]} != {before[side]}")
+            check(f"{case}: {step}: as many actors in the {side} box as before ({before['actors'][side]})",
+                  after["actors"][side] == before["actors"][side], str(after["actors"][side]))
+        check(f"{case}: {step}: the chip and Clear as before, the overview still closed",
+              (after["chip"], after["clear"], after["mode"], after["overview"]) ==
+              (before["chip"], before["clear"], before["mode"], before["overview"]), json.dumps(after))
+        check(f"{case}: {step}: the bar's capture is the same as before's", capture(step) == bar, f[f"capture.{step}"])
+
+
+def check_bar_live(shots, case, stock_case):
+    log = read(shots, f"{case}.log")
+    f = facts(log)
+    stock = facts(read(shots, f"{stock_case}.log")).get("before")
+    steps = ("before", "layer-off", "layer-on", "panel-off", "panel-on", "overview-locked", "overview-unlocked")
+    for step in steps:
+        check(f"{case}: {step} is reported", step in f)
+    check(f"{case}: no JS error", "JS ERROR" not in until(log, "overview-unlocked") and "APEXLOCK-ERROR" not in log)
+    if not all(step in f for step in steps) or stock is None:
+        return
+    before = f["before"]
+    def bar(state):
+        return {k: state[k] for k in ("left", "center", "right", "actors", "parts", "chip")}
+    check(f"{case}: layer-enabled=false gives {stock_case}'s stock bar: items, actors by part and chip (Clear below)",
+          bar(f["layer-off"]) == bar(stock), json.dumps({"layer-off": bar(f["layer-off"]), "stock": bar(stock)}))
+    check(f"{case}: layer-enabled=false: Clear hidden over the empty list, as the notifications feature's disable syncs it",
+          f["layer-off"]["clear"] is False, json.dumps(f["layer-off"]["clear"]))
+    check(f"{stock_case}: stock's fresh Clear shows over the empty list (calendar.js:840, which #222 fixes in the layer)",
+          stock["clear"] is True, json.dumps(stock["clear"]))
+    off = f["panel-off"]
+    check(f"{case}: panel in disabled-features: stock's panel items, no search button, stock's chip",
+          off["left"] == stock["left"] and "apex-search" not in off["right"] and off["chip"] == stock["chip"], json.dumps(off))
+    check(f"{case}: the lock from the overview locks", f["overview-locked"]["locked"] is True)
+
+    def capture(step):
+        with open(os.path.join(shots, os.path.basename(f[f"capture.{step}"])), "rb") as png:
+            return png.read()
+    first = capture("before")
+    for step in ("layer-on", "panel-on", "overview-unlocked"):
+        after = f[step]
+        for side in ("left", "center", "right"):
+            check(f"{case}: {step}: the {side} box's items as before", after[side] == before[side],
+                  f"{after[side]} != {before[side]}")
+            check(f"{case}: {step}: as many actors in the {side} box as before ({before['actors'][side]})",
+                  after["actors"][side] == before["actors"][side], str(after["actors"][side]))
+        check(f"{case}: {step}: the chip and Clear as before, the overview closed",
+              (after["chip"], after["clear"], after["overview"]) == (before["chip"], before["clear"], False), json.dumps(after))
+        check(f"{case}: {step}: the bar's capture is the same as before's", capture(step) == first, f[f"capture.{step}"])
+
+
 def main():
     if len(sys.argv) != 2:
         print(__doc__, file=sys.stderr)
         return 2
     shots = sys.argv[1]
+    check_fixtures(shots)
     for case, want in LOCK_CASES.items():
         check_lock(shots, case, want)
     check_refused(shots, "lock-refused")
@@ -858,16 +1149,28 @@ def main():
     check_fingerprint_suspend(shots, "lock-fingerprint-suspend")
     for case in GREETER_CASES:
         check_greeter(shots, case)
+        check_contrast(shots, case, "greeter")
+        check_greeter_avatars(shots, case, hc=False)
+    check_greeter_avatars(shots, HC_GREETER, hc=True)
+    for case in ("lock-contrast-light", "lock-contrast-dark", "lock-fallback-light", "lock-fallback-dark",
+                 "lock-contrast-high-contrast"):
+        check_contrast(shots, case, "lock")
     check_greeter_safe_high_contrast(shots, "greeter-safe-high-contrast")
     check_motion(shots, "lock-motion", reduced=False)
     check_motion(shots, "lock-reduce-motion", reduced=True)
     check_greeter_motion(shots, "greeter-reduce-motion")
     for case, want in POLKIT_CASES.items():
         check_polkit(shots, case, want)
+    for case, want in POLKIT_REFUSED_CASES.items():
+        check_polkit_refused(shots, case, want, tokens())
+    check_polkit_cancel(shots, "polkit-cancel")
     for case, (apex, sleeps) in POLKIT_LOCKED_CASES.items():
         check_polkit_locked(shots, case, apex, sleeps)
     check_date_menu(shots, "date-menu", True)
     check_date_menu(shots, "date-menu-disabled", False)
+    check_bar_cycle(shots, "bar-lock-cycle", True)
+    check_bar_cycle(shots, "bar-lock-cycle-safe", False)
+    check_bar_live(shots, "bar-live", "bar-lock-cycle-safe")
     for case in END_SESSION_CASES:
         check_end_session(shots, case)
     return 1 if failed else 0

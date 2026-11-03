@@ -47,6 +47,8 @@ for tool in gjs jq; do
 done
 
 T=$(mktemp -d "${TMPDIR:-/tmp}/apex-shots-test.XXXXXX")
+# assert.sh lists no shell resource icon since apex-desktop#35: the rows that need one list this name.
+export G2_SHELL_RESOURCE_ICONS=apex-test-resource-icon
 trap 'kill "$(head -n 1 "$T/bus.pid" 2>/dev/null)" 2>/dev/null || true; rm -rf "$T"' EXIT
 # shellcheck source=tests/shots/lib.sh
 . "$HERE/lib.sh"
@@ -362,7 +364,7 @@ REPORT_OF_A_DIALOG_DRAWN_FROM_TOKENS='
     entry: {height: ($t.apex_entry_height | px), radius: 999, background: ($t.apex_button | hex), boxShadow: null,
         padding: {left: ($t.apex_entry_padding | px), right: ($t.apex_entry_padding | px)},
         font: {size: ($t.apex_font_entry_size | px), weight: ($t.apex_font_entry_weight | tonumber)},
-        focus: {boxShadow: {inset: true, spread: ($t.apex_entry_focus_ring | px), color: "#3584e4ff"}}},
+        focus: {boxShadow: {inset: true, spread: ($t.apex_entry_focus_ring | px), color: ($t.apex_fg | hex)}}},
     buttons: [$button + {default: false, background: ($t.apex_button | hex), foreground: ($t.apex_fg | hex), hover: {background: ($t.apex_button_hover | hex)}},
         $button + {default: true, background: "#2863abff", foreground: "#ffffffff"}]}}}'
 # shellcheck disable=SC2016 # a jq program
@@ -562,7 +564,7 @@ REPORT_OF_DERIVED_SURFACES_DRAWN_FROM_TOKENS='
     candidatePopup: ($ring + {background: ($t.apex_panel_solid | hex), radius: ($t.apex_radius_menu | px)}),
     candidateBox: {radius: ($t.apex_radius_menu_row | px), hover: {background: ($t.apex_button_hover | hex)}},
     runEntry: {minHeight: ($t.apex_entry_height | px), background: ($t.apex_button | hex), boxShadow: null,
-        focus: {boxShadow: {inset: true, spread: ($t.apex_entry_focus_ring | px), color: "#3584e4ff"}}},
+        focus: {boxShadow: {inset: true, spread: ($t.apex_entry_focus_ring | px), color: ($t.apex_fg | hex)}}},
     audioDevice: {radius: ($t.apex_radius_switcher_item | px), background: "#00000000", foreground: ($t.apex_fg | hex),
         hover: {background: ($t.apex_button_hover | hex)}},
     monitorLabel: {radius: ($t.apex_radius_osd | px)}}}}'
@@ -790,20 +792,15 @@ REPORT_OF_LEGIBLE_SURFACES='
         + ([range(4)] | map({key: "indicator\(.)", value: {targets: [$icon + {name: "Chat"}], edge: null}}) | from_entries),
         crowded: $s, indicatorMenu: $s},
     focus: ({name: "Control", focused: true, changed: 900, perimeter: 400, ratio: 4} as $ring
-        | {quickSettings: $ring, dock: $ring, dialog: ($ring + {ratio: 2.87}),
+        | {quickSettings: $ring, dock: $ring, dialog: $ring,
             spotlight: ($ring + {changed: 164, ratio: 1})} | {backdrop: ., busy: .})}'
 
 # The label picks the backdrop: dark-style's inactive dot passes 3:1 today, default's is the gap.
-# Each label's focus readings at today's pins, Quick Settings' and the dialog's per wallpaper: four gaps.
-declare -Ar A11Y_FOCUS_FIXTURE=([default]='{"quickSettings":[2.37,2.14],"dialog":[4,4]}'
-    [default-solid]='{"quickSettings":[1.91,2.14],"dialog":[4,4]}' [dark-style]='{"quickSettings":[4,4],"dialog":[2.87,2.87]}')
 
 a11y_run() {
     local assertions=$1 change=${2:-.} label=${3:-dark-style} inactive=${4:-4.24}
     # shellcheck disable=SC2016 # a jq program
-    jq -nc --argjson inactive "$inactive" --argjson today "${A11Y_FOCUS_FIXTURE[$label]}" "$REPORT_OF_LEGIBLE_SURFACES
-        | .focus |= with_entries(.key as \$w | (if \$w == \"busy\" then 1 else 0 end) as \$i
-            | .value.quickSettings.ratio = \$today.quickSettings[\$i] | .value.dialog.ratio = \$today.dialog[\$i]) | $change" |
+    jq -nc --argjson inactive "$inactive" "$REPORT_OF_LEGIBLE_SURFACES | $change" |
         sed 's/^/APEXG2-A11Y /' >"$T/a11y.log"
     # shellcheck disable=SC2016 # expanded by the inner bash
     bash -c '. "$1/assert.sh"; "$2" "$3" "$4" >"$5" 2>&1; summary >>"$5"; echo "$npass $nfail $ngap"' \
@@ -863,9 +860,9 @@ test_inactive_dot_gap() {
             not_ok "inactive dot gap: $what fails $want_failures, $want_gaps gap(s) (passed/failed/gaps $passes/$failures/$open_gaps): $(grep -m3 '^FAIL' "$T/a11y.out" | paste -sd'|' -)"
         fi
     done <<'CHANGES'
-0|6|2.86|default's dot at today's 2.86:1, in the bar and with the unread dot
-2|6|2.85|a dot below today's 2.86:1
-2|4|3|the dot at 3:1: the gap must go
+0|4|2.86|default's dot at today's 2.86:1, in the bar and with the unread dot
+2|4|2.85|a dot below today's 2.86:1
+2|2|3|the dot at 3:1: the gap must go
 CHANGES
 }
 
@@ -881,16 +878,16 @@ test_pill_gaps() {
             not_ok "pill gaps: $what fails $want_failures, $want_gaps gap(s) (passed/failed/gaps $passes/$failures/$open_gaps): $(grep -m3 '^FAIL' "$T/a11y.out" | paste -sd'|' -)"
         fi
     done <<'CHANGES'
-0|9|1.62|default-solid's three pill fills at today's ratios, beside its two inactive-dot gaps
-1|9|1.61|the sharing pill's fill below today's 1.62:1
-1|8|3|the sharing pill's fill at 3:1: its gap must go
+0|7|1.62|default-solid's three pill fills at today's ratios, beside its two inactive-dot gaps
+1|7|1.61|the sharing pill's fill below today's 1.62:1
+1|6|3|the sharing pill's fill at 3:1: its gap must go
 CHANGES
 }
 
 test_a11y() {
     local assertions expected change what passes failures open_gaps want
-    # dark-style's four focus gaps today: its Spotlight entry and dialog entry, each per wallpaper.
-    for assertions in a11y_contrast:93:4 a11y_layout:74:0; do
+    # dark-style's two focus gaps today: its Spotlight entry, per wallpaper.
+    for assertions in a11y_contrast:93:2 a11y_layout:74:0; do
         IFS=: read -r assertions expected gaps <<<"$assertions"
         read -r passes failures open_gaps <<<"$(a11y_run "$assertions")"
         if ((failures == 0 && open_gaps == gaps && passes == expected)); then
@@ -938,7 +935,8 @@ a11y_contrast|1|.barPills.indicatorMenu.targets[0].ratio = 3|the Chat app's menu
 a11y_contrast|2|del(.barPills.pills.overflow, .barPills.pills.indicator0, .barPills.pills.indicator1, .barPills.pills.indicator2, .barPills.pills.indicator3)|no app indicators shown
 a11y_contrast|1|.focus.busy.quickSettings += {ratio: 1}|a focus indicator drawn in its surface's own colour over the busy wallpaper
 a11y_contrast|1|.focus.backdrop.dock += {changed: 0, ratio: 1}|a dock item that shows no focus indicator
-a11y_contrast|1|.focus.busy.dialog.ratio = 2.5|the dialog entry's indicator below today's 2.87:1
+a11y_contrast|1|.focus.busy.dialog.ratio = 2.87|the dialog entry's indicator back at its accent ring's 2.87:1
+a11y_contrast|1|.focus.backdrop.quickSettings.ratio = 2.37|Quick Settings' toggle back at its fill-only 2.37:1
 a11y_contrast|1|.focus.backdrop.dialog.focused = false|key focus that never lands on the dialog's control
 a11y_contrast|4|.focus.busy = {error: "the wallpaper never changed"}|a busy wallpaper that never showed
 a11y_contrast|0|.focus.backdrop.quickSettings.ratio = 3|a focus indicator at 3:1
@@ -1261,7 +1259,7 @@ test_signoff_banners() {
     rm -rf "$dir" && cp -r "$1" "$dir"
     sed -i '/^APEXG2-SESSION /s/"icon-theme":"Apex"}/"icon-theme":"Adwaita"}/' "$dir/g2/dark-style.log"
     if ! "$HERE/signoff.sh" --collect "$dir/g2" "$dir/shots" "$dir/out" >"$T/signoff.out" 2>&1 &&
-        grep -q '^signoff.sh: session defaults: 23 passed, 1 failed$' "$T/signoff.out" &&
+        grep -q '^signoff.sh: session defaults: 25 passed, 1 failed$' "$T/signoff.out" &&
         grep -q 'dark-style: the session reads .*(icon-theme is "Adwaita", not "Apex")' "$T/signoff.out" &&
         grep -q '1 session default check(s) failed' "$T/signoff.out"; then
         ok "signoff: a session default that is not apex-desktop's fails its own check line, naming the key"
@@ -1290,13 +1288,13 @@ test_shell_icons() {
         read -r passes failures <<<"$(assertion_counts shell_icons shell "$dir")"
         expect_eq "shell icons: $what" "$want" "$passes/$failures"
     done <<'CHANGES'
-10/0|.|an Apex icon at every step of the lock, the greeter and polkit's dialog
-9/1|s/"installed":true/"installed":false/|a lock with no Apex theme installed
-9/1|s/"icons":\[.*\]}}/"icons":[]}}/|a lock that drew no icon
-9/1|s#/usr/share/icons/Apex/symbolic/view-reveal#/usr/share/icons/Adwaita/symbolic/actions/view-reveal#|an Adwaita glyph on the lock
-9/1|s#"file":"[^"]*"#"file":null#|a lock icon that resolves nowhere
-10/0|s#"icon":"view-reveal-symbolic","file":"[^"]*"#"icon":"screenshooter-symbolic","file":"/org/gnome/shell/icons/scalable/actions/screenshooter-symbolic.svg"#|a resource icon on SHELL_RESOURCE_ICONS
-9/1|d|a step that reported nothing
+12/0|.|an Apex icon at every step of the lock, the greeter and polkit's dialog
+11/1|s/"installed":true/"installed":false/|a lock with no Apex theme installed
+11/1|s/"icons":\[.*\]}}/"icons":[]}}/|a lock that drew no icon
+11/1|s#/usr/share/icons/Apex/symbolic/view-reveal#/usr/share/icons/Adwaita/symbolic/actions/view-reveal#|an Adwaita glyph on the lock
+11/1|s#"file":"[^"]*"#"file":null#|a lock icon that resolves nowhere
+12/0|s#"icon":"view-reveal-symbolic","file":"[^"]*"#"icon":"apex-test-resource-icon","file":"/org/gnome/shell/icons/scalable/actions/apex-test-resource-icon.svg"#|a resource icon on SHELL_RESOURCE_ICONS
+11/1|d|a step that reported nothing
 CHANGES
     shell_icon_facts "$dir" && sed -i 's#/usr/share/icons/Apex/symbolic/view-reveal#/usr/share/icons/Adwaita/symbolic/actions/view-reveal#' "$dir/polkit-dark.log"
     assertion_counts shell_icons shell "$dir" >/dev/null
@@ -1833,6 +1831,7 @@ del(.surfaces.dialog.endSession.buttons[1])|stock's row, without Restart
 .surfaces.dialog.endSession.rowSpacing = 12|dialog.js's 12 px between the buttons
 .surfaces.dialog.endSession.buttons[1].width = 128|an even row
 .surfaces.dialog.entry.focus.boxShadow.color = "#3584e4cc"|upstream's 80 % focus ring
+.surfaces.dialog.entry.focus.boxShadow.color = "#3584e4ff"|the raw accent ring, 2.87:1 on the dark entry
 .surfaces.dialog.buttons[0].radius = 12|upstream's square-ish buttons
 .surfaces.dialog.buttons[1].background = "#00000a10"|a default button without the accent
 .surfaces.dialog.buttons[1].background = "#3584e4ff"|a default button on the raw accent, 3.8:1 under white
@@ -3487,8 +3486,8 @@ readonly SESSION_REPORT='{"settings": {"font-name": "Adwaita Sans 10.125", "docu
       {"icon": "application-x-executable", "file": "/usr/share/icons/Adwaita/scalable/mimetypes/application-x-executable.svg",
        "app": "io.github.apex_linux.G2Stub1.desktop"}],
     "dash": null,
-    "quickSettings": [{"icon": ". GThemedIcon screenshooter-symbolic screenshooter",
-      "file": "/org/gnome/shell/icons/scalable/actions/screenshooter-symbolic.svg", "app": null}]}}'
+    "quickSettings": [{"icon": ". GThemedIcon apex-test-resource-icon",
+      "file": "/org/gnome/shell/icons/scalable/actions/apex-test-resource-icon.svg", "app": null}]}}'
 
 test_session_defaults() {
     local passes failures change what stubs
@@ -3496,12 +3495,15 @@ test_session_defaults() {
     # shellcheck disable=SC2016 # expanded by the inner bash
     expect_eq "session defaults: assert.sh's fixture apps are direct.sh's STUB_APPS" "$stubs" \
         "$(bash -c '. "$1/assert.sh"; echo "${FIXTURE_APPS[*]}"' _ "$HERE")"
+    # shellcheck disable=SC2016 # expanded by the inner bash
+    expect_eq "session defaults: assert.sh lists no shell resource icon, apex-desktop#35 having shipped the last" "" \
+        "$(env -u G2_SHELL_RESOURCE_ICONS bash -c '. "$1/assert.sh"; echo "${SHELL_RESOURCE_ICONS[*]}"' _ "$HERE")"
     while IFS='|' read -r failures change what; do
         printf 'APEXG2-SESSION %s\n' "$(jq -nc "$SESSION_REPORT | $change")" >"$T/session.log"
         read -r passes _ <<<"$(assertion_counts session_defaults default "$T/session.log")"
         expect_eq "session defaults: $what fails $failures of 7" "$failures" $((7 - passes))
     done <<'CHANGES'
-0|.|apex-desktop's defaults, a fixture app's generic icon and the shell's own screenshooter
+0|.|apex-desktop's defaults, a fixture app's generic icon and a listed shell resource icon
 1|.settings["monospace-font-name"] = "DejaVu Sans Mono 10"|another monospace font in the settings
 1|.settings["icon-theme"] = "Adwaita"|another icon theme in the settings
 1|.shell.iconTheme = "Adwaita"|a shell that draws another icon theme
@@ -3513,7 +3515,7 @@ test_session_defaults() {
 1|.icons.dock[0].file = "/usr/share/icons/hicolor/scalable/apps/org.gnome.Nautilus.svg"|an image app's icon from outside Apex
 1|.icons.quickSettings[0].icon = ". GThemedIcon camera-photo-symbolic"|a shell icon that is not on the list
 1|.icons = {bar: [], dock: null, dash: null, quickSettings: []}|no icons reported
-1|.apexSymbolic = ["battery-level-80-symbolic", "screenshooter-symbolic"]|an icon listed as the shell's own that Apex now ships
+1|.apexSymbolic = ["battery-level-80-symbolic", "apex-test-resource-icon"]|an icon listed as the shell's own that Apex now ships
 1|.apexSymbolic = []|no Apex Symbolic glyphs reported
 7|{error: "sessionDefaultsReport: no panel"}|a probe error
 CHANGES
@@ -3526,10 +3528,10 @@ CHANGES
     assertion_counts session_defaults default "$T/session.log" >/dev/null
     expect_eq "session defaults: a missing JetBrains Mono names the family fontconfig fell back to" 1 \
         "$(grep -c '^FAIL default: fontconfig gives JetBrains Mono .*(got {"family":"Noto Sans",' "$T/assertions.out")"
-    printf 'APEXG2-SESSION %s\n' "$(jq -nc "$SESSION_REPORT | .apexSymbolic += [\"switch-on-symbolic\"]")" >"$T/session.log"
+    printf 'APEXG2-SESSION %s\n' "$(jq -nc "$SESSION_REPORT | .apexSymbolic += [\"apex-test-resource-icon\"]")" >"$T/session.log"
     assertion_counts session_defaults default "$T/session.log" >/dev/null
     expect_eq "session defaults: a listed icon Apex ships is named, so it leaves the list" 1 \
-        "$(grep -c '^FAIL default: no icon listed .*(listed as shell-only, but /usr/share/icons/Apex has it: switch-on-symbolic)$' "$T/assertions.out")"
+        "$(grep -c '^FAIL default: no icon listed .*(listed as shell-only, but /usr/share/icons/Apex has it: apex-test-resource-icon)$' "$T/assertions.out")"
 }
 
 # One icon per surface probe.js's iconSurfaces opens, each resolved under Apex.
@@ -3542,8 +3544,8 @@ readonly SURFACES_REPORT='{
   "surfaces": [{"icon": "user-home-symbolic", "file": "/usr/share/icons/Apex/symbolic/user-home-symbolic.svg", "app": null}],
   "dialog": [{"icon": "dialog-password-symbolic", "file": "/usr/share/icons/Apex/symbolic/dialog-password-symbolic.svg", "app": null}],
   "endSession": [{"icon": "system-shutdown-symbolic", "file": "/usr/share/icons/Apex/symbolic/system-shutdown-symbolic.svg", "app": null}],
-  "screenshot": [{"icon": ". GThemedIcon screenshooter-symbolic screenshooter",
-    "file": "/org/gnome/shell/icons/scalable/actions/screenshooter-symbolic.svg", "app": null}]}'
+  "screenshot": [{"icon": ". GThemedIcon apex-test-resource-icon",
+    "file": "/org/gnome/shell/icons/scalable/actions/apex-test-resource-icon.svg", "app": null}]}'
 
 test_session_surface_icons() {
     local passes failures want change what scenes
@@ -3554,7 +3556,7 @@ test_session_surface_icons() {
         read -r passes failures <<<"$(assertion_counts session_defaults default "$T/surfaces.log")"
         expect_eq "surface icons: $what" "$want" "$passes/$failures"
     done <<'CHANGES'
-16/0|1|.|every surface's icons through Apex, the shell's own screenshooter on the list
+16/0|1|.|every surface's icons through Apex, a listed shell resource icon among them
 15/1|1|.dateMenu[0].file = "/usr/share/icons/Adwaita/symbolic/status/software-update-available-symbolic.svg"|an Adwaita glyph in the date menu
 15/1|1|.dialog[0].file = null|a dialog icon that resolves nowhere
 15/1|1|.switcher[0] = {icon: "org.gnome.Nautilus", file: "/usr/share/icons/hicolor/scalable/apps/org.gnome.Nautilus.svg", app: null}|a hicolor app icon in the switcher

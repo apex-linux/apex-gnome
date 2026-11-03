@@ -204,7 +204,8 @@ the sign-off shells (above). Every case's probe reports them (`session-defaults.
   `/usr/share/icons/Apex/`. Explicit lists, each entry by exact name with its reason, name the
   only others: `FIXTURE_APPS`, G2's own stub apps, which have no icon and draw GNOME's generic
   one; `SHELL_RESOURCE_ICONS`, icons the shell draws from its own resource because board 31
-  has no glyph of that name yet (below, "Open"); and `STAND_IN_ICONS`, a stock icon on one
+  has no glyph of that name, empty since apex-desktop#35 (below; the selftests list
+  `apex-test-resource-icon` through `G2_SHELL_RESOURCE_ICONS`); and `STAND_IN_ICONS`, a stock icon on one
   surface only (`switcher application-x-executable`, G2's switcher stand-in, and
   `spotlight drive-harddisk`, a full-colour device icon a search provider returns, which Apex
   inherits from Adwaita by design). A failure names each icon, where it showed, its app and
@@ -233,12 +234,12 @@ job, `check.py` reports it "not run: no Apex theme", never a pass.
 
 The wallpaper is `backdrop_painted`'s (below).
 
-### Open: glyphs board 31 lacks
+### Closed: glyphs board 31 lacked
 
-Names the shell draws from its own resource today, each on `SHELL_RESOURCE_ICONS`.
-apex-desktop#35 ships all nine in Apex Symbolic, seven as aliases of glyphs the boards already
-draw and the switch's two shapes as new ones. They are pending the `APEX_DESKTOP_REV` bump that
-brings it, which then takes them off the list.
+Names the shell drew from its own resource until `APEX_DESKTOP_REV` reached apex-desktop#35
+(a9c32ef), which ships all nine in Apex Symbolic, seven as aliases of glyphs the boards already
+draw and the switch's two shapes as new ones. That bump took them off `SHELL_RESOURCE_ICONS`,
+which is empty since.
 
 | Name | Surface |
 |---|---|
@@ -843,8 +844,6 @@ shortfalls (`A11Y_FOCUS_TODAY`) are the owner's:
 | Control | Cases | Today |
 |---|---|---|
 | Spotlight's entry | every case | the caret only (1:1) |
-| Quick Settings' first toggle | `default`, `default-solid` | 2.37:1, 1.91:1; 2.14:1 over the busy wallpaper |
-| the dialog's entry | `dark-style`, `dark-style-solid` | 2.87:1 |
 
 The dock's name labels are measured too (`dockLabels`, `dock_labels`). A virtual pointer hovers the
 dock's first, middle and last item in turn, as a person does, and each label, once fully shown, is
@@ -1267,3 +1266,18 @@ lane's RPMs: they call the shell's own polkit component's `_onInitiate()` with a
 `polkit-fingerprint`) and is never answered. They are for captures and style checks only:
 PAM, polkit-agent-helper-1 and polkitd's verdict never run, and polkitd only describes the
 action. The real `pkexec` path is G4's.
+
+The `polkit-refused` cases answer wrongly, and the stub fails the answer in PAM's order. It
+sends PAM's error text if there is one, then `completed(false)`. That is upstream
+`polkitAgent.js`'s `_onSessionShowError()`, then `_onSessionCompleted()`, which shows
+"Sorry, that didn't work" only when no PAM text is showing, wiggles the field and calls
+`_initiateSession()` again. pam_unix sends no text, so `polkit-refused-light` and
+`polkit-refused-dark` show upstream's line. `polkit-refused-faillock` sends pam_faillock's
+lockout text first, so that text stays. In `polkit-refused-fingerprint`, the retry's
+pam_fprintd prompt replaces the error, as `_onSessionShowInfo()` does.
+
+`polkit-cancel` presses Esc while a stubbed `enumerate_actions()` has not yet answered
+Details' vendor lookup. The request must end dismissed, the session must be cancelled, and
+the lookup must be cancelled with the dialog. G4's `polkit-wrong-password` and
+`polkit-cancel` rows check the same paths against real PAM, polkitd and pkexec, but not the
+dialog's look.

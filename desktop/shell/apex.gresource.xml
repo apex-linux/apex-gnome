@@ -48,6 +48,7 @@
     <file alias="glass/derived.js">js/ui/apex/glass/derived.js</file>
     <file alias="lock/feature.js">js/ui/apex/lock/feature.js</file>
     <file alias="lock/stage.js">js/ui/apex/lock/stage.js</file>
+    <file alias="lock/error.js">js/ui/apex/lock/error.js</file>
     <file alias="lock/fingerprint.js">js/ui/apex/lock/fingerprint.js</file>
     <file alias="lock/background.js">js/ui/apex/lock/background.js</file>
     <file alias="lock/question.js">js/ui/apex/lock/question.js</file>
@@ -73,6 +74,7 @@
     <file alias="polkit/header.js">js/ui/apex/polkit/header.js</file>
     <file alias="polkit/fingerprint.js">js/ui/apex/polkit/fingerprint.js</file>
     <file alias="polkit/details.js">js/ui/apex/polkit/details.js</file>
+    <file alias="polkit/error.js">js/ui/apex/polkit/error.js</file>
     <file alias="notifications/feature.js">js/ui/apex/notifications/feature.js</file>
   </gresource>
   <gresource prefix="/org/gnome/shell/theme/apex">

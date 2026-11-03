@@ -4,7 +4,7 @@
 
 const FINGERPRINT_SERVICE = 'gdm-fingerprint';
 // authPrompt.js's setMessage() gives an error this class, before this module hears the message.
-const ERROR_CLASS = 'login-dialog-message-warning';
+export const ERROR_CLASS = 'login-dialog-message-warning';
 const FAILED_CLASS = 'apex-lock-hint-failed';
 
 export const State = {PASSWORD: 'password', SCAN: 'scan', FAILED: 'failed'};

@@ -1083,15 +1083,17 @@ async function exerciseTopBar() {
     Hooks.run('hot-corner', corner, Main.layoutManager);
     fact('hot-corner.zone', `${corner.name ?? 'none'} reactive=${corner.reactive ?? false} ` +
         `x=${corner.x} y=${corner.y} ${corner.width}x${corner.height}`);
-    if (corner.handlers['enter-event']) {
-        corner.handlers['enter-event']();
-        corner.handlers['enter-event']();
+    if (corner.handlers['motion-event']) {
+        corner.handlers['enter-event']?.();
+        fact('hot-corner.after-enter', corner._pressureBarrier._isTriggered);
+        corner.handlers['motion-event']();
+        corner.handlers['motion-event']();
         corner._pressureBarrier._barriers[0]._isHit = true;
         corner.handlers['leave-event']();
         fact('hot-corner.after-leave-on-the-barrier', corner._pressureBarrier._isTriggered);
         corner._pressureBarrier._barriers[0]._isHit = false;
         corner.handlers['leave-event']();
-        corner.handlers['enter-event']();
+        corner.handlers['motion-event']();
     }
 
     if (GLib.getenv('PROBE_CLEAR_SYNCED') === '1') {
@@ -1144,6 +1146,14 @@ async function exerciseFocusedApp() {
             : 'none');
     };
     report('none');
+    const leftBoxOrder = () => Main.panel.leftBox.children.map(c => c.name ?? (c.child?.accessible_name && 'focused-app')).join(',');
+    fact('focused-app.left-box', leftBoxOrder());
+    // panel.js puts its own items back at the box's end at each session-mode change.
+    const activities = Main.panel.statusArea.activities.container;
+    Main.panel.leftBox.remove_child(activities);
+    Main.panel.leftBox.insert_child_at_index(activities, Main.panel.leftBox.children.length);
+    Main.sessionMode.lock(false);
+    fact('focused-app.left-box.after-session-update', leftBoxOrder());
     tracker.focus({get_name: () => 'Files'});
     report('files');
     tracker.focus(null);
@@ -1403,6 +1413,7 @@ async function exerciseLock() {
         .map(c => c.text ?? c.name ?? c.children.map(part => part.text ?? '').join('')).join(',');
     fact('lock.prompt-box', promptBoxChildren());
     fact('lock.hint.password', hintState(dialog));
+    fact('lock.ring.password', `${dialog.has_style_class_name('apex-lock-error')}`);
     for (const [label, service, text, error] of [
         ['fingerprint-scan', 'gdm-fingerprint', '(or place finger on reader)', false],
         ['fingerprint-failed', 'gdm-fingerprint', 'Failed to match fingerprint', true],
@@ -1412,12 +1423,25 @@ async function exerciseLock() {
     ]) {
         say(dialog, service, text, error);
         fact(`lock.hint.${label}`, hintState(dialog));
+        fact(`lock.ring.${label}`, `${dialog.has_style_class_name('apex-lock-error')}`);
+    }
+    const ring = () => `${dialog.has_style_class_name('apex-lock-error')}`;
+    say(dialog, 'gdm-password', "Sorry, that didn't work. Please try again.", true);
+    fact('lock.ring.password-again', ring());
+    const message = dialog._authPrompt?._message;
+    if (message) {
+        message.opacity = 0;
+        fact('lock.ring.message-faded', ring());
+        message.opacity = 255;
+        fact('lock.ring.message-back', ring());
     }
     for (const [label, mode] of [['blank', PowerSave.OFF], ['wake', PowerSave.ON],
         ['standby', PowerSave.STANDBY], ['wake-again', PowerSave.ON],
         ['suspend', PowerSave.SUSPEND], ['unsupported', PowerSave.UNSUPPORTED]]) {
         setScreen(mode);
         fact(`lock.${label}`, lockState(dialog));
+        if (label === 'blank')
+            fact('lock.ring.blank', ring());
         if (label === 'wake')
             fact('lock.wake.keys', dialog._authPrompt?.keys ?? 'none');
     }
@@ -1588,9 +1612,9 @@ function newAuthenticationDialog(St, {
     userBox.add_child(avatar);
     userBox.add_child(userLabel);
     const info = new St.Label({style_class: 'prompt-dialog-info-label', visible: false, text: ''});
+    const error = new St.Label({style_class: 'prompt-dialog-error-label', visible: false, text: ''});
     const warnings = new St.BoxLayout({name: 'warnings'});
-    for (const label of [new St.Label({name: 'caps-lock'}), new St.Label({name: 'error', visible: false}),
-        info, new St.Label({name: 'null'})])
+    for (const label of [new St.Label({name: 'caps-lock'}), error, info, new St.Label({name: 'null'})])
         warnings.add_child(label);
     const body = new St.BoxLayout({name: 'body'});
     for (const part of [userBox, new St.Entry({name: 'password'}), warnings])
@@ -1602,7 +1626,8 @@ function newAuthenticationDialog(St, {
     Object.assign(user, {is_loaded: loaded, get_user_name: () => userName, get_account_type: () => accountType});
     const dialog = new St.Widget({style_class: 'prompt-dialog'});
     Object.assign(dialog, {
-        actionId, contentLayout, _userAvatar: avatar, _userLabel: userLabel, _user: user, _infoMessageLabel: info, warnings,
+        actionId, contentLayout, _userAvatar: avatar, _userLabel: userLabel, _user: user, _infoMessageLabel: info,
+        _errorMessageLabel: error, warnings,
     });
     return dialog;
 }
@@ -1666,6 +1691,12 @@ async function exercisePolkit() {
     info.text = 'Place your left thumb on the fingerprint reader';
     info.visible = false;
     fact('polkit.info.hidden', polkitInfo(dialog));
+    const errorClass = () => `${dialog.has_style_class_name('apex-polkit-error')}`;
+    fact('polkit.error.none', errorClass());
+    dialog._errorMessageLabel.visible = true;
+    fact('polkit.error.shown', errorClass());
+    dialog._errorMessageLabel.visible = false;
+    fact('polkit.error.hidden', errorClass());
 
     for (const [label, who] of [['standard', {accountType: 0}], ['root', {userName: 'root', accountType: 1}]]) {
         const other = newAuthenticationDialog(St, who);

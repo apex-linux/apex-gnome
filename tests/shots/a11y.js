@@ -24,6 +24,7 @@ Gio._promisify(Shell.Screenshot.prototype, 'screenshot_area');
 // Below this share of a target's pixels the backdrop is an outlier: an antialiased corner.
 const BACKDROP_PERCENTILE = 0.05;
 const MAX_SAMPLES = 4000;
+const GLYPH_CHANNEL_STEP = 8;
 const SWITCHER_APPS = ['Text Editor', 'Terminal', 'Web', 'Files', 'Settings'];
 // org.gnome.desktop.interface accent-color: a checked toggle is filled with each.
 export const ACCENTS = ['blue', 'teal', 'green', 'yellow', 'orange', 'red', 'pink', 'purple', 'slate'];
@@ -164,8 +165,12 @@ function snapshot(target, root, cards, unit) {
     const fill = target.kind === 'icon' ? node.get_background_color() : null;
     const label = actor instanceof St.Label ? actor : null;
     const layout = bare ? actor.get_layout() : label?.clutter_text?.get_layout();
-    // A label measured as its own surface, a dock item's name: its rounded corners are not behind its text.
-    const box = extents(label && actor === root ? label.clutter_text : actor);
+    // A label measured as its own surface, a dock item's name, has rounded corners not behind its text; an entry draws
+    // its text in its ClutterText, inside the border and padding.
+    let inked = actor instanceof St.Entry ? target.ink : actor;
+    if (label && actor === root)
+        inked = label.clutter_text;
+    const box = extents(inked);
     return {
         kind: target.kind,
         name: target.name.slice(0, 40),
@@ -188,23 +193,29 @@ function roundedBox(box, unit) {
     return Object.fromEntries(Object.entries(box).map(([k, v]) => [k, Math.round(v / unit.length * 10) / 10]));
 }
 
-// The worst backdrop pixel, after the outliers, for the target's ink composited over each.
-function measure(target, image) {
+// The worst backdrop pixel, after the outliers, for the target's ink over each. An icon's box may hold a ring, so it is
+// read where its glyph changed the drawn capture; a glyph in its backdrop's own colour changes none: its whole box.
+function measure(target, image, shown = null) {
     const {extents: box, rgb, alpha, fill} = target;
     const x0 = Math.max(0, Math.floor((box.x - image.x) * image.scale));
     const y0 = Math.max(0, Math.floor((box.y - image.y) * image.scale));
     const x1 = Math.min(image.width, Math.ceil((box.x + box.width - image.x) * image.scale));
     const y1 = Math.min(image.height, Math.ceil((box.y + box.height - image.y) * image.scale));
     const step = Math.max(1, Math.floor(Math.sqrt((x1 - x0) * (y1 - y0) / MAX_SAMPLES)));
-    const samples = [];
+    const all = [];
+    const glyph = [];
     for (let y = y0; y < y1; y += step) {
         for (let x = x0; x < x1; x += step) {
             const at = (y * image.width + x) * 4;
             const drawn = [image.rgba[at], image.rgba[at + 1], image.rgba[at + 2]];
             const backdrop = fill ? over(fill.slice(0, 3), fill[3], drawn) : drawn;
-            samples.push({backdrop, ratio: ratio(over(rgb, alpha, backdrop), backdrop)});
+            const sample = {backdrop, ratio: ratio(over(rgb, alpha, backdrop), backdrop)};
+            all.push(sample);
+            if (shown && [0, 1, 2].some(c => Math.abs(shown.rgba[at + c] - image.rgba[at + c]) > GLYPH_CHANNEL_STEP))
+                glyph.push(sample);
         }
     }
+    const samples = target.kind === 'icon' && glyph.length > 0 ? glyph : all;
     samples.sort((a, b) => a.ratio - b.ratio);
     const worst = samples[Math.floor(samples.length * BACKDROP_PERCENTILE)];
     const {extents: unusedExtents, rgb: unusedRgb, fill: unusedFill, ...rest} = target;
@@ -229,13 +240,14 @@ function setOpacity(actor, opacity) {
 }
 
 // Each target's ink hidden while the stage draws what is behind it, then shown again.
-async function surfaceReport(root, settle, unit) {
+export async function surfaceReport(root, settle, unit) {
     if (!root?.mapped)
         return {error: 'not shown'};
     const found = targetsOf(root);
     const cards = new Map();
     const targets = found.map(t => snapshot(t, root, cards, unit));
     const box = extents(root);
+    const shown = await stagePixels(box);
     const opacities = found.map(t => t.ink.opacity);
     found.forEach(t => setOpacity(t.ink, 0));
     let image;
@@ -245,7 +257,7 @@ async function surfaceReport(root, settle, unit) {
     } finally {
         found.forEach((t, i) => setOpacity(t.ink, opacities[i]));
     }
-    return {box: roundedBox(box, unit), targets: targets.map(t => measure(t, image))};
+    return {box: roundedBox(box, unit), targets: targets.map(t => measure(t, image, shown))};
 }
 
 // The pixel at stage point x, y of a capture.
@@ -314,6 +326,7 @@ async function pillsReport(settle, unit, report) {
         const found = Object.fromEntries(Object.entries(roots).map(([pill, root]) => [pill, targetsIn(pill, root)]));
         const targets = Object.fromEntries(Object.entries(found).map(([pill, list]) =>
             [pill, list.map(t => snapshot(t, roots[pill], new Map(), unit))]));
+        const shown = await stagePixels(extents(Main.panel));
         const inks = Object.values(found).flat().map(t => t.ink);
         const opacities = inks.map(ink => ink.opacity);
         inks.forEach(ink => setOpacity(ink, 0));
@@ -328,7 +341,8 @@ async function pillsReport(settle, unit, report) {
             if (!root?.mapped)
                 return [pill, {error: 'not shown'}];
             const filled = root.get_theme_node().get_background_color().alpha > 0;
-            return [pill, {targets: targets[pill].map(t => measure(t, image)), edge: filled ? edgeOf(root, image) : null}];
+            const measured = targets[pill].map(t => measure(t, image, shown));
+            return [pill, {targets: measured, edge: filled ? edgeOf(root, image) : null}];
         }));
         const crowded = await report(Main.panel);
         const indicatorMenu = await withOpen(() => items.openMenu(), menu => menu?.close(), menu => menu ? report(menu.box)

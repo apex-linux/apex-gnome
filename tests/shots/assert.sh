@@ -300,19 +300,10 @@ exit_cut() {
 
 # G2's fixture apps (direct.sh's STUB_APPS) have no icon of their own: GNOME draws its generic one.
 readonly FIXTURE_APPS=(io.github.apex_linux.G2Stub1.desktop io.github.apex_linux.G2Stub2.desktop io.github.apex_linux.G2Stub3.desktop)
-# Icons the shell draws from its own resource because Apex Symbolic (board 31) draws none of that name yet: each
-# is one apex-desktop#35 ships, and leaves this list when APEX_DESKTOP_REV reaches it (surface_icons fails it then).
-readonly SHELL_RESOURCE_ICONS=(
-    screenshooter-symbolic
-    notification-expand-symbolic
-    switch-on-symbolic
-    switch-off-symbolic
-    screenshot-ui-area-symbolic
-    screenshot-ui-display-symbolic
-    screenshot-ui-window-symbolic
-    screenshot-ui-show-pointer-symbolic
-    preview-close-symbolic
-)
+# Icons the shell draws from its own resource because Apex Symbolic (board 31) draws none of that name: none since
+# APEX_DESKTOP_REV reached apex-desktop#35. G2_SHELL_RESOURCE_ICONS lists names in their place, for tests.
+read -ra SHELL_RESOURCE_ICONS <<<"${G2_SHELL_RESOURCE_ICONS:-}"
+readonly SHELL_RESOURCE_ICONS
 # Stock icons a surface legitimately draws, "surface name" by exact name, never a pattern.
 readonly STAND_IN_ICONS=(
     # G2's switcher stand-in (probe.js's windowSwitcher) gives its items GNOME's generic app icon.
@@ -403,6 +394,8 @@ readonly SHELL_ICON_STEPS=(
     "polkit-light|opened|board 13's authentication dialog, light"
     "polkit-dark|opened|board 13's authentication dialog, dark"
     "polkit-fingerprint|opened|board 13's dialog with the fingerprint line"
+    "polkit-refused-light|refused|board 13's dialog after a wrong password, light"
+    "polkit-refused-dark|refused|board 13's dialog after a wrong password, dark"
 )
 
 # S1b's rule on tests/shell's own surfaces, from its probe's icons-STEP facts in SHOTS/CASE.log; the theme must be there.
@@ -1239,8 +1232,8 @@ modal_dialog() {
         "$d.entry" '(.height | px_is($t.apex_entry_height)) and .radius >= ($t.apex_entry_height | px) / 2 and (.background | colour_is($t.apex_button)) and .boxShadow == null
             and (.padding.left | px_is($t.apex_entry_padding)) and (.padding.right | px_is($t.apex_entry_padding))
             and (.font.size | px_is($t.apex_font_entry_size)) and .font.weight == ($t.apex_font_entry_weight | tonumber)'
-    "${metric[@]}" 'focused, it draws a $apex_entry_focus_ring ring in the raw accent' \
-        "{e: $d.entry, accent: .topBar.accent}" '.accent as $a | .e.focus.boxShadow | .inset and (.spread | px_is($t.apex_entry_focus_ring)) and (.color | colour_is($a))'
+    "${metric[@]}" 'focused, it draws a $apex_entry_focus_ring ring in $apex_fg' \
+        "$d.entry.focus.boxShadow" '.inset and (.spread | px_is($t.apex_entry_focus_ring)) and (.color | colour_is($t.apex_fg))'
     "${metric[@]}" 'its buttons are $apex_dialog_button_height high, fully round, $apex_font_dialog_button_size at $apex_font_label_weight' \
         "$d.buttons" 'length == 2 and all((.height | px_is($t.apex_dialog_button_height)) and .radius >= ($t.apex_dialog_button_height | px) / 2
             and (.font.size | px_is($t.apex_font_dialog_button_size)) and .font.weight == ($t.apex_font_label_weight | tonumber))'
@@ -1595,9 +1588,9 @@ derived_surfaces() {
     "${metric[@]}" 'the input method'"'"'s candidates take the popup menu: $apex_panel_solid, ring and shadow, radius $apex_radius_menu; rows radius $apex_radius_menu_row, $apex_button_hover when hovered' \
         "$d" "(.candidatePopup | (.background | colour_is(\$t.apex_panel_solid)) and (.radius | px_is(\$t.apex_radius_menu)) and $ring)
             and (.candidateBox | (.radius | px_is(\$t.apex_radius_menu_row)) and (.hover.background | colour_is(\$t.apex_button_hover)))"
-    "${metric[@]}" 'the run dialog'"'"'s entry is the password entry: $apex_entry_height, $apex_button, a $apex_entry_focus_ring raw-accent ring when focused' \
-        "{e: $d.runEntry, accent: .topBar.accent}" '.accent as $a | .e | (.minHeight | px_is($t.apex_entry_height)) and (.background | colour_is($t.apex_button)) and .boxShadow == null
-            and (.focus.boxShadow | .inset and (.spread | px_is($t.apex_entry_focus_ring)) and (.color | colour_is($a)))'
+    "${metric[@]}" 'the run dialog'"'"'s entry is the password entry: $apex_entry_height, $apex_button, a $apex_entry_focus_ring ring in $apex_fg when focused' \
+        "$d.runEntry" '(.minHeight | px_is($t.apex_entry_height)) and (.background | colour_is($t.apex_button)) and .boxShadow == null
+            and (.focus.boxShadow | .inset and (.spread | px_is($t.apex_entry_focus_ring)) and (.color | colour_is($t.apex_fg)))'
     "${metric[@]}" 'an audio device tile takes the switcher'"'"'s: radius $apex_radius_switcher_item, unfilled, $apex_button_hover when hovered, $apex_fg' \
         "$d.audioDevice" '(.radius | px_is($t.apex_radius_switcher_item)) and (.background | rgba | .[3] == 0) and (.hover.background | colour_is($t.apex_button_hover)) and (.foreground | colour_is($t.apex_fg))'
     "${metric[@]}" 'the monitor number takes the OSD'"'"'s radius $apex_radius_osd' \
@@ -2046,12 +2039,8 @@ bar_pills() {
 # focus lands, something changes, and a 1 px line's worth of it changes by 3:1, or it is a pinned gap.
 readonly A11Y_FOCUS_SURFACES=(quickSettings dock dialog spotlight)
 readonly A11Y_FOCUS_GAP="the owner's decision on the focus indicators (2026-10-31)"
-# Today's shortfalls: Spotlight's entry shows no indicator but the caret, so at 1:1 in every
-# case; Quick Settings' toggle in light and the dialog's entry in dark change too little.
-declare -A A11Y_FOCUS_TODAY=([default:backdrop:quickSettings]=2.37 [default:busy:quickSettings]=2.14
-    [default-solid:backdrop:quickSettings]=1.91 [default-solid:busy:quickSettings]=2.14
-    [dark-style:backdrop:dialog]=2.87 [dark-style:busy:dialog]=2.87
-    [dark-style-solid:backdrop:dialog]=2.87 [dark-style-solid:busy:dialog]=2.87)
+# Today's shortfall: Spotlight's entry shows no indicator but the caret, so at 1:1 in every case.
+declare -A A11Y_FOCUS_TODAY=()
 for a11y_case in default dark-style high-contrast default-solid dark-style-solid high-contrast-solid; do
     for a11y_wall in backdrop busy; do
         A11Y_FOCUS_TODAY[$a11y_case:$a11y_wall:spotlight]=1
