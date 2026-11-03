@@ -20,6 +20,9 @@ puts it in the lane; ROADMAP track C, S2c and S2d define its series. The lane,
 
 - Fedora 45 ships gnome-control-center 51.0 (`gnome-control-center-51.0-2.fc45`, in
   `fedora`), on GTK 4.24 and libadwaita 1.10.
+- Absorbed 2026-10-30: GNOME 51.1 (FEDORA-2026-2812a1754d). The five patches apply at
+  fuzz 0 to gnome-control-center-51.1-1.fc45 as well as 51.0-2.fc45, and the lane builds
+  it with the whole update in the buildroot. No patch changed.
 - `Release: %{autorelease}.apexN` gives `51.0-2.fc45.apexN`, above Fedora's build and
   below its next one.
 - `install=` takes `gnome-control-center` and `gnome-control-center-filesystem`, ADR
@@ -98,8 +101,8 @@ active wallpaper as a cue that does not rely on colour; the board shows only the
 The active wallpaper's name sits beside the Background header and a note under the
 chooser says whether it has a dark version and follows the style
 (`panels/apex/cc-apex-background.c`); a wallpaper the chooser does not list shows neither.
-Stock's chooser lays thumbnails out at a fixed size, so the grid holds as many as fit,
-three at the window size the captures use, where the board has four.
+Stock's chooser draws its thumbnails at a fixed 144 px and 4:3, three to a row at the
+window size the captures use; 0004 makes them 120 px and 16:10, the board's four.
 
 ## Power
 
@@ -147,7 +150,7 @@ and polkit asks in the daemon, never in Settings.
   `AdwAlertDialog` once per digest when it shows: the failed checks
   (`HealthFailureChecks`), Keep This Version (`AcknowledgeHealthFailure`) and Go Back…
   (`Rollback(true)`) after a failed check; Show Changes (`GetChangesFor` the set-aside
-  digest, listed in a second dialog) and OK (`AcknowledgeHealthFailure`, which clears
+  digest, listed in a second dialog in What's New's grid) and OK (`AcknowledgeHealthFailure`, which clears
   `LastFallback`) after a fallback, whose hero says so too. These three members, and
   `Kept`, come from apex-system K4; the page reads them through a proxy without the
   compiled interface and offers each only when the daemon has it, so the page also runs
@@ -159,9 +162,13 @@ and polkit asks in the daemon, never in Settings.
   with the reason the daemon gives, and for every `degraded` one. `holds` is read as
   `a(sstbts)` or, from a daemon before apex-system K4, `a(sstbt)`.
 - **What's New**: `GetChanges` for the staged digest, summed up as its GNOME, Linux and
-  Mesa versions (then other packages), with every change in the expanded row.
-- **Versions**: Booted, Staged and Rollback, each as version, short digest and build
-  date, and "Kept by Apex: …" with the `pin-reason` of a deployment the daemon pinned;
+  Mesa versions (then other packages), with every change in the expanded row as one
+  grid of kind, package and versions, the package and versions in monospace; the kind is
+  Update1's token as a `C_("package change", …)` word, an unknown one as the daemon sent it.
+- **Versions**: Booted, Staged and Rollback, each as version and short digest in
+  monospace and the build date, Staged with a "Checked" pill instead (the daemon keeps a
+  staged image only once its signature checks out), and "Kept by Apex: …" with the
+  `pin-reason` of a deployment the daemon pinned;
   a Kept row for each deployment in `Kept`, the daemon's other pinned ones;
   Use at Next Restart… on the previous one calls `Rollback(false)`.
 - **Preferences**: Automatic Downloads (`AutomaticDownloads`, set with
@@ -215,7 +222,7 @@ copy keeps apex-system's bytes and licence, GPL-3.0-or-later, so the built packa
 | `0001-apex-desktop` | `panels/meson.build`, `shell/meson.build`, `shell/cc-panel-loader.c`, `shell/cc-panel-list.c` | +7 | `subdir('apex')` after upstream's panels; `apex_shell_sources` added to `shell_sources`; the panel registered as `apex`; `"apex"` and a separator at the head of `panel_order[]` |
 | `0002-sidebar-tiles` | `shell/cc-panel-list.c` | +8 −7 | the include; each row's icon handed to `cc_apex_sidebar_tile()`; `panel_order[]` in the design's order |
 | `0003-software-updates` | `panels/system/cc-system-panel.c`, `panels/system/cc-system-panel.blp` | +6 −3 | the include; the `software-updates` subpage; the Software Updates group always shown; its row pushes the page (`navigation.push`) instead of spawning gnome-software, with a forward arrow for the external-link one |
-| `0004-appearance` | `panels/background/cc-background-chooser.c` | +4 | the include; the active item's name and whether it has a dark version handed to `cc_apex_background_show()` where the chooser marks it, and cleared when it gets a new one |
+| `0004-appearance` | `panels/background/cc-background-chooser.c` | +6 −2 | the include; the thumbnails 120 px wide and 16:10; the active item's name and whether it has a dark version handed to `cc_apex_background_show()` where the chooser marks it, and cleared when it gets a new one |
 | `0005-power` | `panels/power/cc-power-panel.c` | +2 | the include; `cc_apex_power_add()` after `setup_general_section()`, handed the General page and Power Mode's group |
 
 The resource goes into the executable as sources, not as a static library in
@@ -223,7 +230,7 @@ The resource goes into the executable as sources, not as a static library in
 and nothing upstream does.
 
 Budget (ADR 0014): at most 150 changed lines in upstream files, in hook hunks only; the
-added files under `panels/apex/` do not count. In use: 37 lines in 8 files.
+added files under `panels/apex/` do not count. In use: 41 lines in 8 files.
 
 The patches are `git format-patch` output against Fedora's `%prep` tree, with `a/` and
 `b/` prefixes, applied with `-p1`. Write them with apex-image's
@@ -237,6 +244,9 @@ just control-center-test   # desktop/control-center's licence and paths; the pat
 just control-center-lane   # podman or docker: apex-lane's container half in fedora:45
 just control-center-run    # podman or docker: the built Settings in a headless gnome-shell
 ```
+
+For C, `just app-dev gnome-control-center` in apex-image rebuilds the Apex build the desktop VM runs
+incrementally and runs it there ([desktop/README.md](../../../desktop/README.md#c-in-the-apps-just-app-dev)).
 
 `tests/lib/lane.sh gnome-control-center` builds `apex-lane` from a pinned apex-image commit and
 runs its container half, `apex-lane in-container build gnome-control-center`, as the
@@ -256,15 +266,90 @@ switch or toggle the row offers writes its key (and the second key of the two-ke
 A third run without the schema checks the explanation. CI runs it after the lane and
 keeps the captures as the `control-center-shots` artifact.
 
+Every capture but two comes out byte for byte the same from run to run, and each wait
+below fails its case when it gives up:
+
+- `probe.js` sends the window size until the frame has it, up to 10 times: a resize can
+  land before the window maps, or not stick while Settings is busy.
+- `probe.js` captures again every 250 ms, for up to 90 s, until the capture has not
+  changed for 5 s. Scrolled to the end, a page's bottom edge still fades for a moment,
+  which left a 2 to 4 px strip different from run to run.
+- The Appearance cases also set `APEX_READY=thumbnails.py`, which must pass on that still
+  capture: every wallpaper thumbnail on screen painted. The chooser decodes
+  gnome-backgrounds' JXL files one by one, which takes 30 to 60 s headless, and paints a
+  light/dark pair's dark half after its light one. `thumbnails.py` finds the thumbnails
+  through AT-SPI and calls one blank only while it matches the card colour in the gap
+  beside it, so a one-colour wallpaper such as VNC counts once painted.
+
+Open item: `appearance-light-scrolled` and `appearance-dark-scrolled` vary from one
+Settings process to the next in 1 to 4 pixels of the Appearance note's line ("… has a
+light and a dark version and follows the style."), each by 1 in a channel value. Those two
+are not for approval until it is closed. What is known:
+
+- Not the page. The scrollbar stands at 467.0 of 467.0 and the note at (401, 690, 572×16)
+  in every run, and each frame is still for 5 s. llvmpipe's threads are not it either:
+  `LP_NUM_THREADS=1` spreads the same way.
+- The thumbnails are. With only Amber's entry in gnome-background-properties, 10 runs of
+  10 are byte for byte the same; with all 25, 6 runs give 5 different captures. GTK's GPU
+  renderer (gsk/gpu, GTK 4.24.1) packs glyphs and small textures into one atlas, so the
+  note's glyphs land where the thumbnails, decoded in a different order each run, left
+  room, and sample a shade apart. `GSK_CACHE_TIMEOUT` moves the spread without closing it
+  (default: 5 captures in 6 runs; -1: 4 in 8; 0: 2 in 6).
+- Not fixable from the harness so far: holding the scroll until all 25 thumbnails are
+  painted, with the note out of view, before it first draws, still gave 2 captures in 2
+  runs, as the thumbnails' own places in the atlas already differ.
+
+An upstream report for GTK, not filed (that is the owner's call): "GSK GPU renderer: glyph
+rendering depends on atlas placement. Under llvmpipe, the same text drawn at the same
+whole-pixel position differs by 1 in a channel value in a few antialiased pixels,
+depending on where the glyph cache placed the glyphs, which depends on the order earlier
+textures were uploaded. Reproduce: gnome-control-center 51 Appearance at scale 2 in a
+headless gnome-shell, scroll to the end, capture twice from fresh processes. Expected:
+identical pixels. GSK_CACHE_TIMEOUT changes how often it happens."
+
+For one case the run also installs apex-desktop's `desktop/keybindings/60-apex.xml` in
+`/usr/share/gnome-control-center/keybindings/` and its `90_apex.gschema.override`, from
+the commit `tests/lib/pins.sh` pins (or `APEX_DESKTOP_SRC`, a checkout), and removes them
+after: the override also sets the icon theme, the fonts and the input sources, which no
+other capture may take. That case opens `gnome-control-center keyboard`; that row has no
+AT-SPI action, so `keyboard.py locate` gives `probe.js` the centre of "View and Customize
+Shortcuts" to click, and `keyboard.py` then searches the shortcut list through AT-SPI: Open Spotlight must
+show Super+Space, and Switch to next and previous input source Alt+Super+Space and
+Shift+Alt+Super+Space. A missing row or another key fails.
+
 A second part of the run starts `update1.py`, a stand-in for apex-updated, on the system
 bus, and opens `gnome-control-center system software-updates` on its scenarios: board
 18's "ready" state (captured light and dark, at the top and scrolled), up to date, an
-update available, a download under way, a health failure and a fallback (board 26's
-dialog in each), and no service at all. `updates.py` checks each
-state's texts through AT-SPI, that board 26's dialog shows, and presses each button and
+update available, one waiting on a gate (on battery: "Update Waiting" and Download
+Anyway), a download under way, a health failure and a fallback (board 26's
+dialog in each, captured dark too as `updates-health-failure-dark` and
+`updates-fallback-dark`; `updates-fallback-changes` captures Show Changes' list, opened by
+`APEX_BEFORE=updates.py show-changes` ahead of the capture), and no service at all. `updates.py` checks each
+state's texts through AT-SPI, that board 26's dialog shows, that What's New's grid and
+Show Changes' line up with the long fixture name cut short, and presses each button and
 the Automatic Downloads switch: `update1.py`'s log must show the method call each makes,
 with its arguments, and the switch must go back when `update1.py` refuses it as polkit
-would.
+would. `bounds.py` reads every label on a page off its case's own capture: board 11's top
+(`top-bounds`), board 24 with the dGPU (`power-bounds`), and the "ready" page at the top and
+scrolled to its end (`updates-bounds`, `updates-bounds-end`). GTK 4.24 reports a widget's size
+right but leaves its ancestors' CSS padding out of its place, so the panel insets its content
+with margins, never padding. Each AT-SPI box must hold its text, and no line 3 px outside it
+may run through text: that catches a box cut through its text, not a small shift (a row title
+holds for vertical shifts of −6 to +8 px). Small shifts are held by sizes: each list row hides
+libadwaita's 2 px of padding a side (`list > row`), so every row label sits 2 px left of its
+text, except in What's New's grid row and expander rows, which hide none. And each of What's
+New's kind labels must start its ink exactly where it does today against its AT-SPI box, so a
+hidden shift from any rule fails; the grid's sizes and `apex.css` only name the likely cause.
+libadwaita's own padding leaves some labels off (pill, plain and toggle buttons' labels at
+their button's origin, the GPU pill 2 px off in its list row); each is pinned exactly in one
+list in `bounds.py`, as upstream. Each case names what its page must show (`rows`, `grid`,
+`pills`, `buttons`, `toggles`, `gpu`), and one that is missing fails.
+
+Last, Large Text (`text-scaling-factor` 1.25) on board 11 (`large-light`) and board 18
+(`updates-large-light`): `apex.css` sizes its text in pt, which GTK scales with it, where a px
+size stays put, and `fonts.py` checks that each label it sizes (the titles, the version lines,
+the hero's subtitle and What's New's grid) is drawn at its rule's size times 1.25. These come
+after every other case, as a setting stays from one case to the next.
 
 In these captures the sidebar has no separator under Apex Desktop: the fixtures offer no
 Wi-Fi device, so the Wi-Fi row, the one after the separator in `panel_order[]`, is not

@@ -152,7 +152,7 @@ class Widget {
     }
 
     get_theme_node() {
-        return this._themeNode ?? {get_shadow: () => null, get_border_radius: () => 0};
+        return this._themeNode ?? {get_shadow: () => null, get_border_radius: () => 0, get_length: () => 0};
     }
 
     set_size(width, height) {
@@ -319,6 +319,8 @@ class Widget {
 
     remove_all_transitions() {}
 
+    remove_transition() {}
+
     destroy() {
         if (this.destroyed)
             return;
@@ -329,7 +331,7 @@ class Widget {
     }
 }
 
-// The polkit feature follows upstream's info label through its notify signals.
+// The polkit feature and the lock's error ring follow upstream's labels through their notify signals.
 class Label extends Widget {
     // St.Label's ClutterText ellipsizes at the end.
     get clutter_text() {
@@ -353,6 +355,15 @@ class Label extends Widget {
     set text(text) {
         this._text = text;
         this.emit('notify::text');
+    }
+
+    get opacity() {
+        return this._opacity ?? 255;
+    }
+
+    set opacity(opacity) {
+        this._opacity = opacity;
+        this.emit('notify::opacity');
     }
 }
 class Bin extends Widget {}
@@ -496,6 +507,19 @@ export default {
     Corner: {TOPLEFT: 0, TOPRIGHT: 1, BOTTOMRIGHT: 2, BOTTOMLEFT: 3},
     Settings: {get: () => settings},
     Side: {TOP: 0, RIGHT: 1, BOTTOM: 2, LEFT: 3},
-    ThemeContext: {get_for_stage: () => ({scale_factor: scaleFactor})},
+    ThemeContext: {get_for_stage: () => ({scale_factor: scaleFactor, get_root_node: () => null, get_theme: () => null})},
+    // The lock's sheet properties, in stage pixels as St gives lengths; PROBE_LOCK_SHEET=none drops them.
+    ThemeNode: {
+        new: (_context, _parent, _theme, _type, _id, styleClass, _pseudoClass, inlineStyle) => {
+            if (inlineStyle === null)
+                throw new Error('Argument inline_style may not be null');
+            const sheet = styleClass === 'apex-lock-background' && GLib.getenv('PROBE_LOCK_SHEET') !== 'none'
+                ? {'-apex-lock-blur': 30 * scaleFactor, '-apex-lock-saturation': 1.3} : {};
+            return {
+                lookup_length: p => p in sheet ? [true, sheet[p]] : [false, 0],
+                lookup_double: p => p in sheet ? [true, sheet[p]] : [false, 0],
+            };
+        },
+    },
     Widget,
 };

@@ -5,7 +5,7 @@ $_quick_toggle_width: apex-text-size(($apex_quick_settings_width - 2 * $apex_qui
 $_quick_toggle_checked: st-mix(black, $apex_accent, $apex_quick_toggle_checked_shade);
 $_toggle_states: hover, focus, active;
 
-// Glass, like the OSD: the tint until S2b's glass manager blurs behind it.
+// Glass, like the OSD: the glass manager blurs behind the tint.
 .popup-menu-content.quick-settings {
   @include apex-surface($apex_panel);
   @include apex-shadow-layer;
@@ -71,6 +71,10 @@ $_toggle_states: hover, focus, active;
   @each $state in $_toggle_states {
     &:#{$state} { color: $apex_fg; background-color: $apex_button_hover; }
   }
+
+  // Upstream's accent ring is !important, and 2.37:1 over the light fill.
+  &:focus { box-shadow: inset 0 0 0 $apex_entry_focus_ring $apex_fg !important; }
+  &:checked:focus, .apex-lit &:focus { box-shadow: inset 0 0 0 $apex_entry_focus_ring -st-accent-fg-color !important; }
 
   // apex-lit: the quick-settings feature lights Power Mode at every profile (DESIGN).
   &:checked, &:checked:hover, &:checked:focus, &:checked:active,

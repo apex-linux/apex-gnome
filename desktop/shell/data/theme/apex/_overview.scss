@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
-// The scrim is the tint over the wallpaper until S2b's glass manager blurs behind it.
+// The tint over each monitor's scrim, which the glass manager blurs (glass/scrims.js).
 #overviewGroup {
   background-color: $apex_scrim;
   -apex-dock-clearance: $apex_dock_bottom_gap;

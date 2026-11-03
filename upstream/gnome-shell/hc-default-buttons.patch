@@ -1,0 +1,59 @@
+From 4b19a02619c05078476fa25c25252b717d369c35 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Fri, 30 Oct 2026 15:46:03 +0000
+Subject: [PATCH] theme: Darken default buttons' accent in high contrast
+
+Default buttons draw -st-accent-fg-color, white, on the accent. In the
+high-contrast sheet the button mixin boosts every button's background
+with hc_color_mix(), which mixes it towards $hc_mix_color, a light
+color. For a default button that lowers the contrast of its text:
+
+- a checked quick toggle is 3.12:1 for the default blue, against WCAG
+  1.4.3's 4.5:1, and 2.59:1 for yellow;
+- its menu arrow, the accent mixed 75% with the foreground before
+  that, is 2.31:1 for blue, against 1.4.11's 3:1;
+- the calendar's today is 2.59:1 (yellow) to 3.79:1 (red).
+
+For the default style, mix the accent with black instead: 75% of it at
+rest, 70% hovered or checked, 65% active. White text is then at least
+5.0:1 on all nine accent colors, the menu arrow at least 3.87:1, and
+the arrow stays lighter than the toggle beside it, as elsewhere.
+---
+ data/theme/gnome-shell-sass/_drawing.scss              | 7 +++++++
+ data/theme/gnome-shell-sass/_high-contrast-colors.scss | 5 +++++
+ 2 files changed, 12 insertions(+)
+
+diff --git a/data/theme/gnome-shell-sass/_drawing.scss b/data/theme/gnome-shell-sass/_drawing.scss
+index f2b1a81..80bf9f5 100644
+--- a/data/theme/gnome-shell-sass/_drawing.scss
++++ b/data/theme/gnome-shell-sass/_drawing.scss
+@@ -254,6 +254,13 @@
+ 
+     @if $style == 'default' {
+       @include draw_hc_inset($no_inset: true);
++
++      // Default buttons draw -st-accent-fg-color on the accent: mixing the accent towards a light
++      // color lowers that contrast, so high contrast darkens it, and darkens it more for each state.
++      $button_bg_color: hc_color_mix($c, $hc_default_mix_color, $hc_default_mix_factor);
++      $hover_button_bg_color: hc_color_mix($c, $hc_default_mix_color, $hc_default_mix_factor - 5%);
++      $checked_button_bg_color: hc_color_mix($c, $hc_default_mix_color, $hc_default_mix_factor - 5%);
++      $active_button_bg_color: hc_color_mix($c, $hc_default_mix_color, $hc_default_mix_factor - 10%);
+     }
+   }
+ 
+diff --git a/data/theme/gnome-shell-sass/_high-contrast-colors.scss b/data/theme/gnome-shell-sass/_high-contrast-colors.scss
+index 40c9074..0035187 100644
+--- a/data/theme/gnome-shell-sass/_high-contrast-colors.scss
++++ b/data/theme/gnome-shell-sass/_high-contrast-colors.scss
+@@ -85,3 +85,8 @@ $hc_mix_color: $light_1;
+ 
+ // the mix factor used to boost contrast of a color in the above mixin
+ $hc_mix_factor: 87%;
++
++// color and factor that darken a default button's color (the accent, under white text),
++// keeping that text at 4.5:1 or more on every accent color
++$hc_default_mix_color: $dark_5;
++$hc_default_mix_factor: 75%;
+-- 
+2.43.0
+

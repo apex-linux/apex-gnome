@@ -28,7 +28,8 @@ libs=("$root"/usr/lib64/gnome-shell/libshell-*.so)
 lib=${libs[0]}
 resources=$(gresource list "$lib") || fail "gresource cannot read ${lib##*/}"
 for r in /org/gnome/shell/ui/apex/hooks.js /org/gnome/shell/ui/apex/layer.js \
-    /org/gnome/shell/theme/stock/gnome-shell-light.css /org/gnome/shell/theme/stock/gnome-shell-dark.css; do
+    /org/gnome/shell/theme/stock/gnome-shell-light.css /org/gnome/shell/theme/stock/gnome-shell-dark.css \
+    /org/gnome/shell/theme/stock/gnome-shell-high-contrast.css; do
     grep -Fxq -- "$r" <<<"$resources" || fail "${lib##*/} has no $r"
 done
 ok "${lib##*/} holds the Apex layer and the stock sheets"
@@ -48,13 +49,13 @@ js=$(gresource extract "$lib" /org/gnome/shell/ui/sessionMode.js) || fail "${lib
 grep -Fq "ApexHooks.value('session-mode'" <<<"$js" || fail "sessionMode.js in ${lib##*/} has no session-mode hook"
 ok "main.js loads the layer; sessionMode.js has the session-mode hook"
 
-for v in light dark; do
+for v in light dark high-contrast; do
     gresource extract "$lib" "/org/gnome/shell/theme/stock/gnome-shell-$v.css" >"$CHECK_WORK/stock-$v.css" ||
         fail "${lib##*/} has no theme/stock/gnome-shell-$v.css"
     cmp -s -- "$CHECK_WORK/stock-$v.css" "$PRISTINE/data/theme/gnome-shell-$v.css" ||
         fail "theme/stock/gnome-shell-$v.css differs from the gnome-shell-$v.css upstream ships"
 done
-ok "theme/stock/ holds upstream's shipped light and dark sheets"
+ok "theme/stock/ holds upstream's three shipped sheets"
 
 theme=$root/usr/share/gnome-shell/gnome-shell-theme.gresource
 [[ -f $theme ]] || fail "no ${theme#"$root"} in the package"

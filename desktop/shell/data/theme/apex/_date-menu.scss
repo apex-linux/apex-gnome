@@ -13,7 +13,7 @@ $_calendar_day_width: ($apex_date_menu_column_width - 2 * $apex_calendar_padding
   &:insensitive { color: $apex_fg; background-color: $fill; }
 }
 
-// Glass, like Quick Settings: the tint until S2b's glass manager blurs behind it.
+// Glass, like Quick Settings: the glass manager blurs behind the tint.
 .popup-menu-content.datemenu-popover {
   @include apex-surface($apex_panel);
   @include apex-shadow-layer;
