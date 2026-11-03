@@ -1106,8 +1106,8 @@ def check_bar_live(shots, case, stock_case):
         return {k: state[k] for k in ("left", "center", "right", "actors", "parts", "chip")}
     check(f"{case}: layer-enabled=false gives {stock_case}'s stock bar: items, actors by part and chip (Clear below)",
           bar(f["layer-off"]) == bar(stock), json.dumps({"layer-off": bar(f["layer-off"]), "stock": bar(stock)}))
-    check(f"{case}: layer-enabled=false: Clear hidden over the empty list, as the notifications feature's disable syncs it",
-          f["layer-off"]["clear"] is False, json.dumps(f["layer-off"]["clear"]))
+    check(f"{case}: layer-enabled=false: Clear as {stock_case}'s fresh Clear over the empty list, as clear-sync's disable restores it",
+          f["layer-off"]["clear"] == stock["clear"], json.dumps({"layer-off": f["layer-off"]["clear"], "stock": stock["clear"]}))
     check(f"{stock_case}: stock's fresh Clear shows over the empty list (calendar.js:840, which #222 fixes in the layer)",
           stock["clear"] is True, json.dumps(stock["clear"]))
     off = f["panel-off"]
