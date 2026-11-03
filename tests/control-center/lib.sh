@@ -6,18 +6,26 @@ CC_TESTS=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 readonly CC_TESTS
 # shellcheck source=SCRIPTDIR/../../.github/scripts/lib.sh
 . "$CC_TESTS/../../.github/scripts/lib.sh"
+# shellcheck source=SCRIPTDIR/../lib/pins.sh
+. "$CC_TESTS/../lib/pins.sh"
 
 readonly SHOTS=$CC_TESTS/../shots
+# shellcheck source=SCRIPTDIR/../shots/backtrace.sh
+. "$SHOTS/backtrace.sh"
 readonly USER_NAME=apex
 readonly MONITOR=2880x1800
 readonly SCALE=2
 readonly CLOCK_LIB=/run/apex-control-center-clock.so
+readonly CRASH_LIB=/run/apex-control-center-crash.so
 readonly CLOCK='2026-10-21 14:02:00'
 readonly FIXTURE_NAMES=(org.freedesktop.UPower org.freedesktop.NetworkManager org.bluez net.hadess.SwitcherooControl)
 readonly UPDATE1_NAME=io.github.apex_linux.Apex.Update1
 readonly POWER_PROFILES_NAME=org.freedesktop.UPower.PowerProfiles
 readonly APEX_SCHEMA_FIXTURE=$CC_TESTS/../layer/fixtures/io.github.apex_linux.Apex.Desktop.gschema.xml
 readonly APEX_SCHEMA_DIR=/usr/share/glib-2.0/schemas
+readonly KEYBINDINGS_DIR=/usr/share/gnome-control-center/keybindings
+readonly APEX_KEYBINDINGS=60-apex.xml
+readonly APEX_OVERRIDE=90_apex.gschema.override
 readonly MANIFEST=/usr/share/apex/manifest.json
 readonly IMAGE_VERSION=45.20261008.131
 # apex-desktop's values (schemas/90_apex.gschema.override).
@@ -58,6 +66,27 @@ headless_apex_schema() {
     glib-compile-schemas "$APEX_SCHEMA_DIR" || die "glib-compile-schemas failed"
 }
 
+# headless_apex_desktop yes|no: apex-desktop's Settings keybindings and its schema override, from APEX_DESKTOP_SRC or
+# the pinned commit, or neither. The override also sets the icon theme, fonts and input sources: only Keyboard takes it.
+headless_apex_desktop() {
+    local desktop=${APEX_DESKTOP_SRC:-$APEX_ROOT/_build/control-center/apex-desktop}
+    if [[ $1 == no ]]; then
+        rm -f -- "$KEYBINDINGS_DIR/$APEX_KEYBINDINGS" "$APEX_SCHEMA_DIR/$APEX_OVERRIDE"
+    else
+        if [[ -z ${APEX_DESKTOP_SRC:-} ]]; then
+            git_() { git -c safe.directory='*' "$@"; }
+            [[ -d $desktop/.git ]] || git_ init -q "$desktop"
+            if [[ $(git_ -C "$desktop" rev-parse -q --verify HEAD 2>/dev/null) != "$APEX_DESKTOP_REV" ]]; then
+                git_ -C "$desktop" fetch -q --depth 1 "$APEX_DESKTOP_URL" "$APEX_DESKTOP_REV" || die "cannot fetch apex-desktop"
+                git_ -C "$desktop" checkout -q --detach "$APEX_DESKTOP_REV" || die "cannot check out apex-desktop"
+            fi
+        fi
+        install -D -m 644 "$desktop/desktop/keybindings/$APEX_KEYBINDINGS" "$KEYBINDINGS_DIR/$APEX_KEYBINDINGS"
+        install -m 644 "$desktop/desktop/schemas/$APEX_OVERRIDE" "$APEX_SCHEMA_DIR/"
+    fi
+    glib-compile-schemas "$APEX_SCHEMA_DIR" || die "glib-compile-schemas failed"
+}
+
 # The booted image's manifest, as apexctl build manifest writes it; the header reads only its version.
 headless_manifest() {
     mkdir -p -- "${MANIFEST%/*}"
@@ -92,21 +121,22 @@ headless_bus() {
     python3 -m dbusmock --system --template upower_power_profiles_daemon >"$log_dir/fixture-power-profiles.log" 2>&1 &
     headless_wait_name "$POWER_PROFILES_NAME" || die "dbusmock did not take $POWER_PROFILES_NAME"
     gcc -O2 -Wall -Werror -shared -fPIC -o "$CLOCK_LIB" "$SHOTS/clock.c" || die "cannot build tests/shots/clock.c"
+    crash_lib "$CRASH_LIB" || die "cannot build tests/shots/crash.c"
     CLOCK_EPOCH=$(date -u -d "$CLOCK" +%s)
     held=$(env LD_PRELOAD="$CLOCK_LIB" G2_CLOCK_EPOCH="$CLOCK_EPOCH" date -u '+%F %T' 2>&1)
     [[ $held == "$CLOCK" ]] || die "$CLOCK_LIB does not hold the clock at $CLOCK: $held"
 }
 
-# headless_run LOG PROBE TIMEOUT SETTINGS [NAME=VALUE...]: one shell with PROBE as its automation script.
+# headless_run LOG PROBE TIMEOUT SETTINGS [NAME=VALUE...]: a shell running PROBE; a crash leaves its .bt by LOG.
 headless_run() {
-    local log=$1 probe=$2 timeout=$3 settings=$4 run
+    local log=$1 probe=$2 timeout=$3 settings=$4 run rc=0
     shift 4
     run=$(mktemp -d)
     chown "$USER_NAME:" "$run" && chmod 700 "$run"
     # shellcheck disable=SC2016 # expanded by the user's bash
     runuser -u "$USER_NAME" -- env -i HOME="$HEADLESS_HOME" PATH=/usr/bin:/usr/sbin \
         XDG_RUNTIME_DIR="$run" XDG_SESSION_TYPE=wayland XDG_CURRENT_DESKTOP=GNOME LANG=C.UTF-8 TZ=UTC CLOCK_LIB="$CLOCK_LIB" \
-        G2_CLOCK_EPOCH="$CLOCK_EPOCH" DBUS_SYSTEM_BUS_ADDRESS=unix:path=/run/dbus/system_bus_socket \
+        CRASH_LIB="$CRASH_LIB" G2_CLOCK_EPOCH="$CLOCK_EPOCH" DBUS_SYSTEM_BUS_ADDRESS=unix:path=/run/dbus/system_bus_socket \
         PROBE="$probe" MONITOR="$MONITOR" CC_TESTS="$CC_TESTS" \
         SETTINGS="$APEX_SETTINGS"$'\n'"$CAPTURE_SETTINGS"$'\n'"$settings" "$@" \
         timeout "$timeout" dbus-run-session -- bash -c '
@@ -114,9 +144,12 @@ headless_run() {
                 [[ -n $schema ]] || continue
                 gsettings set "$schema" "$key" "$value" || exit 1
             done <<<"$SETTINGS"
-            exec env LD_PRELOAD="$CLOCK_LIB" gnome-shell --headless --virtual-monitor "$MONITOR" \
+            ulimit -c unlimited 2>/dev/null
+            exec env LD_PRELOAD="$CLOCK_LIB $CRASH_LIB" gnome-shell --headless --virtual-monitor "$MONITOR" \
                 --wayland-display=apex-control-center --automation-script "$PROBE"
-        ' >"$log" 2>&1
+        ' >"$log" 2>&1 || rc=$?
+    case_backtrace "$log" "$rc" "$HEADLESS_HOME" "${log%.log}.bt"
+    return "$rc"
 }
 
 # headless_update1 SCENARIO LOG: update1.py, in place of apex-updated, until headless_update1_stop.

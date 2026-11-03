@@ -111,6 +111,12 @@ The patches are `git format-patch` output against Fedora's `%prep` tree, with `a
 and `just pkg-export nautilus`, as for gnome-shell
 ([its README](../gnome-shell/README.md#changing-a-patch-or-rebasing)).
 
+Fedora updates absorbed:
+
+- 2026-10-30, GNOME 51.1 (FEDORA-2026-2812a1754d, F45 `updates-testing`, request stable):
+  every patch applies at fuzz 0 to `nautilus-51.1-1.fc45` as well as `51.0.1-1.fc45`, and
+  the lane builds it with the whole update in the buildroot. No patch changed.
+
 ## Building it here
 
 ```bash
@@ -118,6 +124,9 @@ just nautilus-test   # desktop/nautilus's licence and paths, the series, the pat
 just nautilus-lane   # podman or docker: apex-lane's container half in fedora:45
 just nautilus-shots  # podman or docker: that nautilus captured in a headless gnome-shell, light and dark
 ```
+
+For C, `just app-dev nautilus` in apex-image rebuilds the Apex build the desktop VM runs
+incrementally and runs it there ([desktop/README.md](../../../desktop/README.md#c-in-the-apps-just-app-dev)).
 
 `tests/lib/lane.sh nautilus` builds
 `apex-lane` from a pinned apex-image commit and runs its container half,

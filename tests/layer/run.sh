@@ -11,9 +11,11 @@ REPO=$(cd -- "$HERE/../.." && pwd)
 if [[ -n ${APEX_DESKTOP_SRC:-} ]]; then
     SCHEMA_DIR=$APEX_DESKTOP_SRC/desktop/schemas
     GUARD_UNIT=$APEX_DESKTOP_SRC/desktop/systemd/user/apex-shell-safe.service
+    GUARD_SCRIPT=$APEX_DESKTOP_SRC/desktop/systemd/apex-shell-guard.sh
 else
     SCHEMA_DIR=$HERE/fixtures
     GUARD_UNIT=$HERE/fixtures/apex-shell-safe.service
+    GUARD_SCRIPT=$HERE/fixtures/apex-shell-guard.sh
 fi
 NO_SKIP=${APEX_LAYER_TESTS_NO_SKIP:-0}
 
@@ -48,13 +50,13 @@ mkdir -p "$T/schemas" "$T/noschema" "$T/nochild" "$T/data" "$T/home" "$T/shell" 
 # main.js and the Meta and Shell typelibs come only with gnome-shell and mutter.
 cp -R "$REPO/desktop/shell/js" "$T/shell/"
 cp "$HERE/main-stub.js" "$T/shell/js/ui/main.js"
-for upstream in panelMenu dash iconGrid popupMenu layout messageList background; do
+for upstream in panelMenu dash iconGrid popupMenu layout messageList background switcherPopup; do
     cp "$HERE/stubs/$upstream.js" "$T/shell/js/ui/$upstream.js"
 done
 # Spotlight's providers: upstream's app search and remote providers, faked.
 cp "$HERE"/stubs/appDisplay.js "$HERE"/stubs/remoteSearch.js "$HERE"/stubs/searchProviders.js "$T/shell/js/ui/"
 mkdir -p "$T/shell/js/misc"
-cp "$HERE/stubs/systemActions.js" "$T/shell/js/misc/"
+cp "$HERE/stubs/systemActions.js" "$HERE/stubs/loginManager.js" "$T/shell/js/misc/"
 cp "$HERE"/stubs/St.js "$HERE"/stubs/Clutter.js "$HERE"/stubs/Shell.js "$HERE"/stubs/Meta.js "$HERE"/stubs/Graphene.js "$HERE"/stubs/Mtk.js "$HERE"/stubs/Pango.js \
     "$HERE"/stubs/GdkPixbuf.js "$HERE"/stubs/Polkit.js "$HERE"/stubs/AccountsService.js "$T/"
 # The shadow cutout and the indicators' mask are GObject subclasses of Clutter.ShaderEffect, which the stubs cannot be.
@@ -114,6 +116,11 @@ awk '/<key name="reduce-transparency"/ { skip = 1 } !skip { print } skip && /<\/
 glib-compile-schemas --strict "$T/noreduce"
 
 readonly CMDLINE_PLAIN='BOOT_IMAGE=(hd0,gpt2)/boot/ostree/apex/vmlinuz root=UUID=0 rw rhgb quiet'
+# The guard counts late failures per deployment, which it reads through ostree='s boot link.
+readonly GUARD_DEPLOYMENT=5e1f00.0
+mkdir -p "$T/ostree-root/ostree/deploy/apex/deploy/$GUARD_DEPLOYMENT" "$T/ostree-root/ostree/boot.1/apex/b007"
+ln -s "../../../deploy/apex/deploy/$GUARD_DEPLOYMENT" "$T/ostree-root/ostree/boot.1/apex/b007/0"
+printf '%s ostree=/ostree/boot.1/apex/b007/0\n' "$CMDLINE_PLAIN" >"$T/cmdline.ostree"
 sandbox=0
 printf '%s\n' "$CMDLINE_PLAIN" >"$T/cmdline.check"
 if command -v bwrap >/dev/null 2>&1 &&
@@ -154,28 +161,30 @@ keybindings_are() {
     if [[ $got == "$2" ]]; then ok "$1"; else not_ok "$1 (the stub saw '$got', expected '$2')"; _show; fi
 }
 
+guard_env() {
+    local dir=$T/$1
+    shift
+    env -i PATH="$PATH" HOME="$T/home" XDG_CONFIG_HOME="$dir/config" XDG_DATA_DIRS="$T/data" \
+        GSETTINGS_BACKEND=keyfile GSETTINGS_SCHEMA_DIR="$T/schemas" "$@"
+}
+guard_layer() { guard_env "$1" gsettings get io.github.apex_linux.Apex.Desktop layer-enabled; }
+
 run_guard_unit_like_systemd() {
-    local dir=$T/$1 key value cond='' line runtime='%t' state='%S'
-    local -a lines=()
+    local dir=$T/$1 key value runtime='%t' state='%S'
+    local -a exec=()
     while IFS='=' read -r key value; do
         value=${value//"$runtime"/$dir/run}
         value=${value//"$state"/$dir/state}
         case $key in
-            ConditionPathExists) cond=$value ;;
             StateDirectory) mkdir -p "$dir/state/$value" ;;
-            ExecStart | ExecStartPost) lines+=("$value") ;;
+            ExecStart) read -ra exec <<<"$value" ;;
         esac
     done < <(grep -E '^[A-Za-z]+=' "$GUARD_UNIT")
-    if [[ -z $cond || ! -e $cond ]]; then
-        printf 'skipped\n'
-        return 0
+    if guard_env "$1" bash "$GUARD_SCRIPT" "${exec[@]:1}" "$T/cmdline.ostree" "$T/ostree-root"; then
+        printf 'acted\n'
+    else
+        printf 'failed (exit %d)\n' "$?"
     fi
-    for line in "${lines[@]}"; do
-        # shellcheck disable=SC2086 # the unit's command lines are plain words
-        env -i PATH="$PATH" HOME="$T/home" XDG_CONFIG_HOME="$dir/config" XDG_DATA_DIRS="$T/data" \
-            GSETTINGS_BACKEND=keyfile GSETTINGS_SCHEMA_DIR="$T/schemas" $line
-    done
-    printf 'acted\n'
 }
 
 probe default "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_PRESS=2
@@ -214,11 +223,20 @@ fact "motion: an ease without parameters passes through" 'motion\.no-params=unde
 fact "motion: the eased hook sets cubic-bezier(.2,.8,.2,1)" 'motion\.curve=0\.2,0\.8 0\.2,1'
 fact "motion: window geometry .3 s, the overview .2 s, popovers .18 s; other roles stock" \
     'motion\.durations=window=300 overview=200 popover=180 unknown=250'
-if [[ $(run_guard_unit_like_systemd default) == skipped ]]; then
-    ok "default: a later shell failure does not trip the guard (no marker)"
+guard_state=$T/default/state/apex
+first=$(run_guard_unit_like_systemd default)
+if [[ $first == acted ]]; then ok "default: a 1st later shell failure runs the guard"; else not_ok "default: a 1st later shell failure runs the guard ($first)"; fi
+if [[ $(cat "$guard_state/shell-guard-trips" 2>/dev/null) == "$GUARD_DEPLOYMENT 1" ]]; then
+    ok "default: which counts it on the booted deployment, shell-guard-trips = $GUARD_DEPLOYMENT 1"
 else
-    not_ok "default: a later shell failure does not trip the guard (no marker)"
+    not_ok "default: which counts it on the booted deployment ($(cat "$guard_state/shell-guard-trips" 2>&1))"
 fi
+if [[ $(guard_layer default) == true && ! -e $guard_state/shell-guard-tripped ]]; then ok "default: and does not trip"; else not_ok "default: and does not trip"; fi
+second=$(run_guard_unit_like_systemd default)
+if [[ $second == acted && $(guard_layer default) == false ]]; then ok "default: a 2nd on the same deployment trips: the layer off"; else not_ok "default: a 2nd on the same deployment trips: the layer off ($second)"; fi
+if [[ -e $guard_state/shell-guard-tripped ]]; then ok "default: the 2nd leaves the agent's marker"; else not_ok "default: the 2nd leaves the agent's marker"; fi
+if [[ ! -e $guard_state/shell-guard-trips ]]; then ok "default: and removes the counter"; else not_ok "default: and removes the counter"; fi
+if [[ ! -e $T/default/run/apex-shell-starting ]]; then ok "default: no layer marker is left"; else not_ok "default: no layer marker is left"; fi
 
 probe envsafe "$CMDLINE_PLAIN" APEX_SHELL_SAFE=1 PROBE_ENABLE=1
 rc_is "APEX_SHELL_SAFE=1: runs" 0
@@ -378,13 +396,18 @@ fact "quick-settings: On or Off under a toggle without a subtitle; a toggle's ow
 fact "quick-settings: Power Mode lit at Balanced, its checked state stock" 'qs\.power=checked=false classes=apex-lit'
 fact "quick-settings: the state follows checked; a subtitle the toggle sets wins" 'qs\.live=dnd=On bluetooth=Headphones'
 fact "quick-settings: once the toggle drops its own, ours follows again" 'qs\.own-subtitle-gone=bluetooth=On'
+fact "quick-settings: a network row's accessible name follows a new best access point's strength" 'qs\.row\.best-ap=names=1'
 fact "quick-settings: the active network's row is :checked, its lock after the name, its name centred on the row" 'qs\.row\.active=children=icons,label,lock,check icons=signal checked=true lock=2/apex-network-lock label=2'
 fact "quick-settings: another network's row is not" 'qs\.row\.other=children=icons,label,lock,check icons=signal checked=false lock=2/apex-network-lock label=2'
 fact "quick-settings: a submenu header's subtitle ends the title's row" 'qs\.menu=3,0 x_align=3'
 fact "quick-settings: :checked follows is-active" 'qs\.row\.switched=children=icons,label,lock,check icons=signal checked=false lock=2/apex-network-lock label=2 \| children=icons,label,lock,check icons=signal checked=true lock=2/apex-network-lock label=2'
+fact "quick-settings: a row whose network holds no access point stays hidden when network.js shows it" 'qs\.row\.empty=visible=false'
+fact "quick-settings: and shows once its network takes one" 'qs\.row\.adopted=visible=true'
+fact "quick-settings: layer off: a row it hid shows again, as stock has it" 'qs\.off\.refused=visible=true'
 fact "quick-settings: layer off: the row stock again" 'qs\.off\.row=children=icons,label,check icons=signal,lock checked=false lock=3/none label=0'
 fact "quick-settings: layer off: the subtitle under the title" 'qs\.off\.menu=1,1 x_align=0'
 fact "quick-settings: layer off: :checked no longer follows" 'qs\.off\.row-unfollowed=checked=false'
+fact "quick-settings: layer back on: a row still without an access point hides again" 'qs\.on\.refused=visible=false'
 fact "quick-settings: layer back on: rows and menus built before it change again" 'qs\.on\.row=children=icons,label,lock,check icons=signal checked=true lock=2/apex-network-lock label=2'
 fact "quick-settings: layer back on: the subtitle on the title's row" 'qs\.on\.menu=3,0 x_align=3'
 fact "quick-settings: layer off: stock order" \
@@ -454,6 +477,8 @@ has "disabled-features=['quick-settings']: skips the feature" 'Apex: feature qui
 fact "disabled-features=['quick-settings']: stock order" \
     'qs\.order=Wi-Fi,VPN,Bluetooth,Power Mode,Night Light,Dark Style,Do Not Disturb,Airplane Mode,Auto Rotate'
 fact "disabled-features=['quick-settings']: Power Mode unlit" 'qs\.power=checked=false classes=none'
+fact "disabled-features=['quick-settings']: stock's name ignores a new best access point" 'qs\.row\.best-ap=names=0'
+fact "disabled-features=['quick-settings']: stock shows a row whose network holds no access point" 'qs\.row\.empty=visible=true'
 fact "disabled-features=['quick-settings']: a network row stays stock" 'qs\.row\.active=children=icons,label,check icons=signal,lock checked=false lock=3/none label=0'
 fact "disabled-features=['quick-settings']: the subtitle stays under the title" 'qs\.menu=1,1 x_align=0'
 
@@ -480,6 +505,10 @@ fact "notifications: a click turns Do Not Disturb off" 'nf\.dnd-click=show-banne
 fact "notifications: the month on the left, both chevrons on the right" 'nf\.calendar=header=month,back,forward align=1 class=true'
 fact "notifications: every day keeps a dot under its number, in an St.Label that takes the day's colour" \
     'nf\.days=Label:27/apex-event-dot Label:28/apex-event-dot Label:29/apex-event-dot own-text=false'
+fact "notifications: layer off: the tray's banner timeouts run as stock's" 'nf\.off\.tray=none'
+fact "notifications: layer back on: still stock's while the session runs" 'nf\.on\.tray=none'
+fact "notifications: at logout the teardown clears them, so gnome-shell's shutdown loop cannot run them on the destroyed tray" \
+    'nf\.teardown\.tray=banner:0,left'
 fact "notifications: layer off: stock's header" 'nf\.off\.calendar=header=back,month,forward align=2 class=false'
 fact "notifications: layer off: stock's day buttons, each with its own text again" 'nf\.off\.days=ButtonText:27 ButtonText:28 ButtonText:29 own-text=true'
 fact "notifications: layer back on: the header and dots again" 'nf\.on\.calendar=header=month,back,forward align=1 class=true'
@@ -695,13 +724,15 @@ fact "screen pills: sharing moves from after the recording to after the input so
     'right-box=screenRecording,a11y,keyboard,screenSharing,indicators,divider,quickSettings,'
 fact "screen pills: right before the status pill again after panel.js re-adds its items" \
     'right-box\.after-session-update=screenRecording,a11y,keyboard,indicators,divider,screenSharing,quickSettings,'
-fact "input chip: the sources' short names in capitals" 'input-chip=EN,VI'
+fact "input chip: an xkb source's short name in capitals, an IBus source's language, not its symbol" 'input-chip=EN,VI'
 fact "input chip: and so after keyboard.js renames one or adds a source" 'input-chip\.changed=EN,VI₂,FR'
 fact "input chip: its short names never ellipsize, whatever Large Text makes of the chip" 'input-chip\.ellipsize=none,none,none'
+fact "date menu: an empty list hides Clear, as calendar.js's binding would with SYNC_CREATE" 'clear=placeholder=true clear=false'
 fact "hot-corner: the corner becomes a reactive 4 x 4 zone at its own position, in scaled px" \
     'hot-corner\.zone=hot-corner reactive=true x=0 y=0 8x8'
 fact "hot-corner: in the chrome, hidden under fullscreen windows" 'chrome\.add=hot-corner trackFullscreen=true'
-count_is "hot-corner: entering it triggers the barrier once, until the pointer leaves it off the barrier" '^probe: hot-corner\.trigger=' 2
+fact "hot-corner: the zone coming back under a resting pointer triggers nothing" 'hot-corner\.after-enter=false'
+count_is "hot-corner: moving in it triggers the barrier once, until the pointer leaves it off the barrier" '^probe: hot-corner\.trigger=' 2
 fact "hot-corner: leaving it while on the barrier keeps the barrier's trigger" 'hot-corner\.after-leave-on-the-barrier=true'
 fact "layer-enabled=false: the dot hooks give stock" 'top-bar\.off\.dots=99 99 99 inactive="stock"'
 fact "layer-enabled=false: the status pill gets every indicator back, in order" "pill\.off=$STOCK_PILL"
@@ -709,18 +740,30 @@ fact "layer-enabled=false: no privacy group, and the pill's start is stock" 'pri
 fact "layer-enabled=false: the recording button is stock's, timer then glyph" 'recording\.off=0:42,screencast-stop-symbolic hidden=none name=Stop Screencast'
 fact "layer-enabled=false: so is sharing, named as stock names it" 'sharing\.off=screen-shared-symbolic,screencast-stop-symbolic hidden=none name=Stop Screen Sharing'
 fact "layer-enabled=false: sharing goes back after the recording" 'right-box\.off=screenRecording,screenSharing,a11y,keyboard,quickSettings,'
-fact "layer-enabled=false: the input chip has stock's names back" 'input-chip\.off=en,vi₂,fr'
+fact "layer-enabled=false: the input chip has stock's names back, the IBus symbol too" 'input-chip\.off=en,Ắ₂,fr'
 fact "layer-enabled=false: and stock's ellipsizing" 'input-chip\.off\.ellipsize=end,end,end'
+fact "layer-enabled=false: Clear as stock left it, shown" 'clear\.off=placeholder=true clear=true'
 fact "layer-enabled=true: the filter again" "pill\.on=$KEPT_PILL"
 fact "layer-enabled=true: the stop squares again" 'recording\.on=square,0:42 hidden=screencast-stop-symbolic name=Stop Screencast'
 fact "layer-enabled=true: and sharing's name" 'sharing\.on=screen-shared-symbolic,square hidden=screencast-stop-symbolic name=Stop screen sharing'
 fact "layer-enabled=true: capitals again" 'input-chip\.on=EN,VI₂,FR'
-count_is "both dots restyle at each enable and disable" '^probe: workspace-dot=restyled$' 6
+fact "layer-enabled=true: Clear hidden again" 'clear\.on=placeholder=true clear=false'
+fact "layer-enabled=false: the sheet's reload leaves the dots as disable left them" 'workspace-dot\.sheet-reloaded=0 handler\(s\)'
+fact "layer-enabled=true: the sheet's reload restyles the dots, its inactive opacity now there" \
+    'workspace-dot\.sheet-reloaded=1 handler\(s\)'
+count_is "both dots restyle at each enable and disable, and at the reload after enable" '^probe: workspace-dot=restyled$' 8
 count_is "the hot corners are rebuilt at each enable and disable" '^probe: hot-corners=rebuilt$' 3
 lacks "top bar: no feature fails or disables uncleanly" 'off for this session|did not disable cleanly|cannot restyle'
 
+probe top-bar-no-inactive-opacity "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_TOP_BAR=1 PROBE_SCALE=2 PROBE_NO_INACTIVE_OPACITY=1
+fact "workspace-dots: a sheet without -apex-inactive-opacity gives stock's inactive dot" \
+    'top-bar\.dots=7 15 22 inactive="stock"'
+
 probe top-bar-rtl "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_TOP_BAR=1 PROBE_SCALE=1 PROBE_RTL=1
 fact "hot-corner, right to left: the zone lies left of the corner" 'hot-corner\.zone=hot-corner reactive=true x=-4 y=0 4x4'
+
+probe top-bar-clear-synced "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_TOP_BAR=1 PROBE_CLEAR_SYNCED=1
+fact "layer-enabled=false once stock's binding has synced Clear: nothing to restore" 'clear\.off=placeholder=true clear=false'
 
 probe top-bar-disabled "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_TOP_BAR=1 PROBE_DISABLED=panel
 has "disabled-features=['panel']: skips the feature" 'Apex: feature panel is in disabled-features'
@@ -728,7 +771,8 @@ fact "disabled-features=['panel']: the dot hooks give stock" 'top-bar\.dots=99 9
 fact "disabled-features=['panel']: the status pill keeps every indicator" "pill=$STOCK_PILL"
 fact "disabled-features=['panel']: the recording button stays stock's" 'recording=0:42,screencast-stop-symbolic hidden=none name=Stop Screencast'
 fact "disabled-features=['panel']: sharing stays where panel.js puts it" 'right-box\.after-session-update=screenRecording,screenSharing,a11y,keyboard,indicators,divider,quickSettings,'
-fact "disabled-features=['panel']: the input chip keeps stock's names" 'input-chip\.changed=en,vi₂,fr'
+fact "disabled-features=['panel']: the input chip keeps stock's names" 'input-chip\.changed=en,Ắ₂,fr'
+fact "disabled-features=['panel']: Clear stays as stock leaves it" 'clear=placeholder=true clear=true'
 fact "disabled-features=['panel']: the corner stays stock" 'hot-corner\.zone=none reactive=false x=undefined y=undefined undefinedxundefined'
 lacks "disabled-features=['panel']: nothing is rebuilt or restyled" 'hot-corners=rebuilt|workspace-dot=restyled'
 
@@ -756,6 +800,8 @@ panel_classes_are "disabled-features=['panel']: the bar stays translucent" \
 probe focused-app "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_FOCUSED_APP=1
 has "focused-app: the panel feature enables" 'Apex: feature panel enabled'
 fact "focused-app: its item follows the Activities pill in the left box" 'panel\.add=apex-focused-app at 1 in left'
+fact "focused-app: after Activities in the left box" 'focused-app\.left-box=activities,focused-app'
+fact "focused-app: and again once panel.js has put Activities back at the box's end" 'focused-app\.left-box\.after-session-update=activities,focused-app'
 fact "focused-app: \"Desktop\" while nothing has focus, a label that takes no clicks" \
     'focused-app\.none=Desktop name=Desktop visible=true reactive=false'
 fact "focused-app: the focused app's name" 'focused-app\.files=Files name=Files visible=true reactive=false'
@@ -774,6 +820,10 @@ lacks "disabled-features=['panel']: no item in the bar" 'panel\.add=apex-focused
 fact "disabled-features=['panel']: nothing follows the focus" 'focused-app\.files=none'
 
 readonly SEARCH_ITEM='Search \(Super\+Space\) pill=apex-search-pill icon=system-search-symbolic'
+probe search-order "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_RIGHT_BOX_ADDS=1 PROBE_SEARCH_ORDER=1
+fact "search-order: the app indicators, their divider, then the search button" 'search-order=indicators,divider,search'
+fact "search-order: and so after panel comes back out of disabled-features on its own" 'search-order\.panel-again=indicators,divider,search'
+
 probe search-button "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_SEARCH_BUTTON=1
 has "search-button: the panel feature enables" 'Apex: feature panel enabled'
 fact "search-button: at the start of the right box" 'panel\.add=apex-search at 0 in right'
@@ -816,6 +866,8 @@ fact "glass: and blurs at the overview's sigma 36 and 1.5, in actor mode, while 
 fact "glass: at the launcher's 40 and 1.6 once the app grid shows" 'glass\.scrim\.launcher=apexGlassScrim:r160/s1\.6/c0/on/actor visible=true'
 fact "glass: the derived glass: the OSD, an Alt+Tab list once its popup adds it, and the screenshot panel (closed) take the popovers' glass" \
     'glass\.derived=osd:r120/s1\.8/c40/on/background switcher:r120/s1\.8/c52/on/background screenshot:r120/s1\.8/c32/paused/background'
+fact "glass: the held input-source switcher, Ctrl+Alt+Tab and Super+P take it too, each under its own name; a popup that is no SwitcherPopup does not, whatever its name" \
+    'glass\.switchers=input-source-switcher:r120/s1\.8/c52/on/background ctrl-alt-tab-switcher:r120/s1\.8/c52/on/background monitor-switcher:r120/s1\.8/c52/on/background unregistered:none'
 fact "glass: the tile preview, as windowManager.js builds it hidden, gets a glass actor below it, unregistered, and the class that hands it the fill and ring" \
     'glass\.tile\.created=apexTilePreviewGlass:none registered=false below=true offsets=12,12,-24,-24 opacity=255 glassed=true'
 fact "glass: shown, it registers as tilePreview at board 22's sigma 20 and 1.6, inset by the preview's clear border" \
@@ -890,6 +942,14 @@ probe search-hint-nokey "$CMDLINE_PLAIN" GSETTINGS_SCHEMA_DIR="$T/nohint" PROBE_
 count_is "search hint: a schema without search-hint-shown shows none" "$SEARCH_HINT" 0
 count_is "search hint: and says so once" 'has no key search-hint-shown: no search hint' 1
 has "search hint: the rest of the panel runs" 'Apex: feature panel enabled'
+probe search-hint-dnd "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_BANNERS_OFF=1
+fact "search hint: not under Do Not Disturb, and search-hint-shown stays false" 'search-hint.dnd=notifies=0 shown=false'
+fact "search hint: banners back on while locked still show none" 'search-hint.locked=notifies=0 shown=false'
+fact "search hint: banners back on, unlocked, show it once" 'search-hint.banners-on=notifies=1 shown=true'
+fact "search hint: and only once" 'search-hint.again=notifies=1 shown=true'
+count_is "search hint: once in the whole run" "$SEARCH_HINT" 1
+probe search-hint-dnd-disabled "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_BANNERS_OFF=1 PROBE_HINT_DISABLE=1
+fact "search hint: banners on after the panel's disable show none" 'search-hint.after-disable=notifies=0 shown=false'
 
 # Only GDM unlocks, after PAM succeeds: no Apex file may name a route to it.
 readonly UNLOCK_ROUTES=("deactivate(" "emit('unlock'" "Unlock" "_onVerificationComplete" "finish(")
@@ -927,6 +987,9 @@ lock_is_stock() {
     fact "$why: the lock screen keeps upstream's two stages" "lock\.layout=$STOCK_LOCK_LAYOUT"
     fact "$why: and opens on the clock, with no conversation" 'lock\.open=page=none prompt=none cancelled=none'
     fact "$why: blanking touches nothing" 'lock\.blank=page=none prompt=none cancelled=none'
+    fact "$why: going idle cancels as upstream's does" 'lock\.idle-cancel=true'
+    fact "$why: upstream lays out the stack" 'lock\.stack-box\.900=-1\.\.-1'
+    fact "$why: so does preparing for sleep" 'lock\.sleep-cancel=true true'
     fact "$why: upstream's blur" 'lock\.blur=\{"brightness":0\.65,"radius":90\}'
     fact "$why: the clock slides away as upstream's" 'lock\.clock-progress=0 0\.5 1'
     fact "$why: upstream's \"Password\"" 'lock\.question\."Password:"="Password"'
@@ -955,6 +1018,15 @@ fact "lock: the password's own problem stays in upstream's message line" \
     "lock\.hint\.password-problem=$HINT_FAILED message=true indicator=false"
 fact "lock: the reader's next prompt brings the line back" "lock\.hint\.fingerprint-again=$HINT_SCAN message=false indicator=false"
 fact "lock: a prompt rebuilt after blank starts on the password's hint" "lock\.hint\.after-wake=$HINT_PASSWORD message=true indicator=true"
+fact "lock: no error ring on the password's prompt" 'lock\.ring\.password=false'
+fact "lock: no error ring while the reader scans" 'lock\.ring\.fingerprint-scan=false'
+fact "lock: a failed scan changes the hint, not the field" 'lock\.ring\.fingerprint-failed=false'
+fact "lock: a wrong password rings the field" 'lock\.ring\.password-problem=true'
+fact "lock: the reader's next prompt takes the ring away" 'lock\.ring\.fingerprint-again=false'
+fact "lock: the ring comes with the next wrong password" 'lock\.ring\.password-again=true'
+fact "lock: and goes when upstream fades the message" 'lock\.ring\.message-faded=false'
+fact "lock: and comes back with it" 'lock\.ring\.message-back=true'
+fact "lock: blanking takes the prompt, and its ring, down" 'lock\.ring\.blank=false'
 fact "lock: blanking tears the prompt down and cancels its verifier" 'lock\.blank=page=clock prompt=none cancelled=conversation-1'
 fact "lock: waking builds a new conversation" 'lock\.wake=page=prompt prompt=conversation-2 cancelled=conversation-1'
 fact "lock: and the key that woke the screen cannot answer it" 'lock\.wake\.keys=false'
@@ -963,8 +1035,9 @@ fact "lock: and waking again builds another" 'lock\.wake-again=page=prompt promp
 fact "lock: suspend is blank too" 'lock\.suspend=page=clock prompt=none cancelled=conversation-1,conversation-2,conversation-3'
 fact "lock: a display without power saving keeps a prompt" \
     'lock\.unsupported=page=prompt prompt=conversation-4 cancelled=conversation-1,conversation-2,conversation-3'
-count_is "lock: each teardown is logged once, for the VM tests" '^.*Apex: lock: screen blank, prompt torn down$' 5
-count_is "lock: each rebuild too" '^.*Apex: lock: screen on, prompt rebuilt$' 4
+count_is "lock: each teardown is logged once, for the VM tests" '^.*Apex: lock: screen blank, prompt torn down$' 6
+count_is "lock: each rebuild too, at resume as at wake" '^.*Apex: lock: screen on, prompt rebuilt$' 8
+count_is "lock: each teardown for sleep is logged once" '^.*Apex: lock: suspend, prompt torn down$' 2
 fact "lock: the hint stays after the rebuilt prompt" 'lock\.prompt-box\.after-wake=conversation-4,Press Enter to unlock'
 fact "lock: locked while blank, the first conversation ends as DisplayConfig answers" \
     'lock\.open-blank=page=clock prompt=none cancelled=conversation-1'
@@ -978,12 +1051,46 @@ fact "lock: which its key does" 'lock\.escaped\.key=page=prompt prompt=conversat
 fact "lock: a key that woke the screen keeps upstream's prompt, and the wake adds none" \
     'lock\.key-wake=page=prompt prompt=conversation-2 cancelled=conversation-1'
 fact "lock: upstream's prompt takes keys at once, as upstream's does" 'lock\.key-wake\.keys=true'
+fact "lock: the session going idle at lock does not cancel the lock's prompt, before DisplayConfig answers too" \
+    'lock\.idle-cancel=false'
+fact "lock: so the prompt is up until blank" 'lock\.idle=page=prompt prompt=conversation-1 cancelled=none'
+fact "lock: blank tears it down" 'lock\.idle\.blank=page=clock prompt=none cancelled=conversation-1'
+fact "lock: and the wake rebuilds it" 'lock\.idle\.wake=page=prompt prompt=conversation-2 cancelled=conversation-1'
+fact "lock: idle with no unlock dialog keeps upstream's cancel, and nothing throws" 'lock\.idle-cancel\.unlocked=true'
+fact "lock: so does a dialog the lock did not set up" 'lock\.idle-cancel\.other-dialog=true'
+fact "lock: at 900 px the stack's box is 51.0's: a tenth of the way down, to the bottom" 'lock\.stack-box\.900=90\.\.900'
+fact "lock: at 1080 px too" 'lock\.stack-box\.1080=108\.\.1080'
+fact "lock: at 1440 px too" 'lock\.stack-box\.1440=144\.\.1440'
+fact "lock: the stack asks for the stage's height, as 51.0's did, so the notifications get none of it" \
+    'lock\.stack-height\.900=810'
+fact "lock: and at 1440 px" 'lock\.stack-height\.1440=1296'
+fact "lock: a stack the lock did not set up keeps upstream's box" 'lock\.stack-box\.other=-1\.\.-1'
+fact "lock: preparing for sleep with no unlock dialog, or one the lock did not set up, cancels as upstream's does" \
+    'lock\.sleep-cancel=true true'
+fact "lock: preparing for sleep takes the lock's prompt down, which ends its conversation, and owes it" \
+    'lock\.sleep=page=clock prompt=none cancelled=conversation-1'
+fact "lock: a wake while the machine goes to sleep builds nothing" \
+    'lock\.sleep\.wake=page=clock prompt=none cancelled=conversation-1'
+fact "lock: resume with the screen on rebuilds it" 'lock\.resume=page=prompt prompt=conversation-2 cancelled=conversation-1'
+fact "lock: and it takes keys once PAM asks" 'lock\.resume\.keys=false'
+fact "lock: a failed scan before sleep does not outlive it: the rebuilt prompt starts on the password's hint" \
+    "lock\.hint\.after-resume=$HINT_PASSWORD message=true indicator=true"
+fact "lock: and the reader's prompt on it is board 20's line again" \
+    "lock\.hint\.after-resume\.scan=$HINT_SCAN message=false indicator=false"
+fact "lock: resume with the screen blank builds nothing" \
+    'lock\.resume-blank=page=clock prompt=none cancelled=conversation-1,conversation-2'
+fact "lock: the wake after it does" 'lock\.resume-blank\.wake=page=prompt prompt=conversation-3 cancelled=conversation-1,conversation-2'
+fact "lock: a lock taken as the machine goes to sleep starts no conversation" \
+    'lock\.locked-for-sleep=page=none prompt=none cancelled=none'
+fact "lock: and its prompt comes at resume" 'lock\.locked-for-sleep\.resume=page=prompt prompt=conversation-1 cancelled=none'
 fact "lock: a DisplayConfig that never answers leaves the prompt up" \
     'lock\.display-config-silent=page=prompt prompt=conversation-1 cancelled=none'
 fact "lock: so does one that fails" 'lock\.display-config-error=page=prompt prompt=conversation-1 cancelled=none'
 has "lock: and says so" 'Apex: lock: no org\.gnome\.Mutter\.DisplayConfig, so the prompt stays at blank'
 fact "lock: the clock never slides away" 'lock\.clock-progress=0 0 0'
-fact "lock: blur sigma 30 (radius 60), saturation 1.3, no darkening" 'lock\.blur=\{"brightness":1,"radius":60,"saturation":1\.3\}'
+fact "lock: blur sigma 30 (radius 60), saturation 1.3, no darkening, as the sheet sets them" 'lock\.blur=\{"brightness":1,"radius":60,"saturation":1\.3\}'
+fact "lock: a sheet without them keeps upstream's blur" 'lock\.blur\.no-sheet=\{"brightness":0\.65,"radius":90\}'
+has "lock: and says so" 'Apex: lock: the sheet sets no -apex-lock-blur or -apex-lock-saturation, so the lock keeps upstream.s blur'
 fact "lock: PAM's exact \"Password:\" reads \"Enter Password\"" 'lock\.question\."Password:"="Enter Password"'
 fact "lock: \"Password: \" with a space is PAM's question verbatim" 'lock\.question\."Password: "="Password: "'
 fact "lock: other questions verbatim" 'lock\.question\."Verification code:"="Verification code:"'
@@ -1041,6 +1148,9 @@ fact "polkit: for a named finger and reader too" "polkit\.info\.swipe-reader=$PO
 fact "polkit: pam_fprintd's other info stays upstream's line" 'polkit\.info\.timed-out=apex-polkit-info visible=true glyph=none'
 fact "polkit: as does another module's" 'polkit\.info\.other-module=apex-polkit-info visible=true glyph=none'
 fact "polkit: and the line goes with upstream's label" 'polkit\.info\.hidden=apex-polkit-info apex-polkit-fingerprint visible=false glyph=auth-fingerprint-symbolic'
+fact "polkit: no error ring until upstream shows its error line" 'polkit\.error\.none=false'
+fact "polkit: the dialog takes the error ring with the line" 'polkit\.error\.shown=true'
+fact "polkit: and drops it when upstream hides the line" 'polkit\.error\.hidden=false'
 fact "polkit: a standard account gets no role" "polkit\.role\.standard=$POLKIT_ON names=Apex/Administrator\(hidden\)"
 fact "polkit: root keeps upstream's \"Administrator\" in the name's place" \
     "polkit\.role\.root=$POLKIT_ON names=Administrator/Administrator\(hidden\)"
@@ -1139,6 +1249,24 @@ fact "dock: its Show Apps opens the overview's app grid" 'dock\.show-apps=overvi
 fact "dock: and follows the overview's own button" 'dock\.overview-show-apps-off=dock-button=false'
 fact "dock: no separator between the dock's favourites and running apps, upstream's elsewhere; a full-colour Show Apps" \
     'dock\.hooks=separator=false stock-separator=true show-apps=view-app-grid'
+dock_labels_are() {
+    local got
+    got=$(sed -n 's/^probe: dock\.labels\.\([a-z-]*\)=\(.*\)$/[\1] \2/p' "$OUT" | paste -sd' ' -)
+    if [[ $got == "$2" ]]; then ok "$1"; else not_ok "$1 (got '$got', expected '$2')"; _show; fi
+}
+dock_label_steps=(
+    '[initial] none focus=none' '[focused] Files focus=Files' '[moved] Web focus=Web' '[hovered] showApps focus=Web'
+    '[hover-ended] Web focus=Web' '[hover-focused] Web focus=Web' '[hover-focused-ended] Web focus=Web faded-in-again=0'
+    '[other-menu-open] none focus=Web' '[other-menu-closed] Web focus=Web' '[trash-menu-open] none focus=Web'
+    '[trash-menu-closed] Web focus=Web' '[unmapped] none focus=Web' '[mapped] Web focus=Web' '[slid-out] none focus=Web'
+    '[slid-back] Web focus=Web' '[activated] Web focus=Web' '[dock-moved] Web focus=Web label-moved=100 faded-in-again=0'
+    '[escape] none focus=none' '[escape-in-overview] none focus=none to-overview=true' '[focused-item-destroyed] none focus=none')
+dock_labels_are "dock: key focus shows an item's name label as a hover does, one at a time: it moves with the focus; \
+a hover elsewhere takes it and gives it back; a hover on the focused item neither fades it in again nor takes it; \
+any open menu, an unmapped item or a dock slid out hides it; activation keeps it; a moved dock places it again; \
+Escape drops the focus and the label, and in the overview passes on to it; a focused item destroyed leaves nothing behind" \
+    "${dock_label_steps[*]}"
+fact "dock: layer-enabled=false comes while a focused item's label is up" 'dock\.focus-label-at-disable=Web'
 fact "dock: layer-enabled=false takes it away and gives the overview its dash back, at its own height" 'dock\.off=none dash=true dash-height=-1'
 fact "dock: a redisplay still pending when the dock goes away never runs, and the overview's dash queues as stock's does again" \
     'dock\.overview-dash-off=redisplays=2 queued=1'

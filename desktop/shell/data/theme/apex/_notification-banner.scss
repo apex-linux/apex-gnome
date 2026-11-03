@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
-// Glass, like the OSD: the tint until S2b's glass manager blurs behind it.
+// Glass, like the OSD: the glass manager blurs behind the tint.
 .notification-banner {
   @include apex-surface($apex_panel);
   @include apex-shadow-layer;

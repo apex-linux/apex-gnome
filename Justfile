@@ -42,9 +42,15 @@ ptyxis-lane:
 ptyxis-shots:
     engine=$(command -v podman || command -v docker) && "$engine" run --rm -v "{{justfile_directory()}}:/apex-gnome:z" -w /apex-gnome {{ptyxis_image}} bash -c 'dnf5 -y -q --setopt=install_weak_deps=False install {{ptyxis_shots_packages}} && tests/ptyxis/shoot.sh _build/ptyxis/out'
 
-# The Ptyxis that ptyxis-lane built: a user palette rewritten under an open terminal must show within 1 s (podman or docker).
+# The Ptyxis that ptyxis-lane built: a rewritten user palette, and apex-session-agent's caret on an accent change, must show within 1 s (podman or docker).
 ptyxis-palette:
-    engine=$(command -v podman || command -v docker) && "$engine" run --rm -v "{{justfile_directory()}}:/apex-gnome:z" -w /apex-gnome {{ptyxis_image}} bash -c 'dnf5 -y -q --setopt=install_weak_deps=False install {{ptyxis_shots_packages}} && tests/ptyxis/palette-test.sh _build/ptyxis/out'
+    engine=$(command -v podman || command -v docker) && "$engine" run --rm -v "{{justfile_directory()}}:/apex-gnome:z" -w /apex-gnome {{ptyxis_image}} \
+        bash -c 'tests/s2c/agent.sh && dnf5 -y -q --setopt=install_weak_deps=False install {{ptyxis_shots_packages}} && tests/ptyxis/palette-test.sh _build/ptyxis/out _build/s2c/apex-session-agent'
+
+# The Ptyxis that ptyxis-lane built: board 33's panes split, focused, closed and each with its own status (podman or docker).
+ptyxis-panes:
+    engine=$(command -v podman || command -v docker) && "$engine" run --rm -v "{{justfile_directory()}}:/apex-gnome:z" -w /apex-gnome {{ptyxis_image}} \
+        bash -c 'dnf5 -y -q --setopt=install_weak_deps=False install {{ptyxis_shots_packages}} python3-gobject at-spi2-core procps-ng && tests/ptyxis/panes-test.sh _build/ptyxis/out'
 
 libadwaita_image := "registry.fedoraproject.org/fedora:45@sha256:1e13e11f63e147a40a935c9046c79d53a30b861a3cf05ebb023bb53c562382cb"
 
@@ -52,9 +58,11 @@ libadwaita_image := "registry.fedoraproject.org/fedora:45@sha256:1e13e11f63e147a
 libadwaita-lane:
     engine=$(command -v podman || command -v docker) && "$engine" run --rm -v "{{justfile_directory()}}:/apex-gnome:z" -w /apex-gnome {{libadwaita_image}} tests/lib/lane.sh libadwaita
 
-# The libadwaita that libadwaita-lane built: an open window must take a rewritten apex.css within 1 s, and Fedora's must not (podman or docker).
+# The libadwaita that libadwaita-lane built: an open window must take a rewritten apex.css within 1 s, and Fedora's must not; and one started before gtk-4.0/ exists must take a first apex.css (podman or docker).
 libadwaita-radius:
-    engine=$(command -v podman || command -v docker) && "$engine" run --rm -v "{{justfile_directory()}}:/apex-gnome:z" -w /apex-gnome {{libadwaita_image}} bash -c 'dnf5 -y -q --setopt=install_weak_deps=False install ptyxis {{ptyxis_shots_packages}} && tests/libadwaita/radius-test.sh --stock && tests/libadwaita/radius-test.sh _build/libadwaita/out'
+    engine=$(command -v podman || command -v docker) && "$engine" run --rm -v "{{justfile_directory()}}:/apex-gnome:z" -w /apex-gnome {{libadwaita_image}} \
+        bash -c 'dnf5 -y -q --setopt=install_weak_deps=False install ptyxis {{ptyxis_shots_packages}} && tests/libadwaita/radius-test.sh --stock && \
+        tests/libadwaita/radius-test.sh _build/libadwaita/out && tests/libadwaita/radius-test.sh --late _build/libadwaita/out'
 
 control_center_image := "registry.fedoraproject.org/fedora:45@sha256:1e13e11f63e147a40a935c9046c79d53a30b861a3cf05ebb023bb53c562382cb"
 
@@ -67,7 +75,7 @@ control-center-test:
 control-center-lane:
     engine=$(command -v podman || command -v docker) && "$engine" run --rm -v "{{justfile_directory()}}:/apex-gnome:z" -w /apex-gnome {{control_center_image}} tests/lib/lane.sh gnome-control-center
 
-control_center_run_packages := "gnome-shell mesa-dri-drivers dbus-daemon python3-dbusmock python3-gobject at-spi2-core gcc util-linux adwaita-sans-fonts python3-dbus systemd gnome-backgrounds umockdev"
+control_center_run_packages := "gnome-shell mesa-dri-drivers dbus-daemon python3-dbusmock python3-gobject at-spi2-core gcc util-linux adwaita-sans-fonts jetbrains-mono-fonts-all python3-dbus systemd gnome-backgrounds umockdev git-core"
 
 # The Settings that control-center-lane built, in a headless gnome-shell: board 11's captures, light and dark, and every row's binding; in _build/control-center/shots.
 control-center-run:

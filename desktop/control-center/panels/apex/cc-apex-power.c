@@ -112,6 +112,11 @@ add_gpu_row (Power *self)
     gtk_widget_set_valign (dot, GTK_ALIGN_CENTER);
     gtk_widget_add_css_class (dot, "apex-gpu-dot");
     self->gpu_status = gtk_label_new (NULL);
+    /* The pill's inset is margin, not CSS padding, which GTK 4.24's AT-SPI bounds leave out;
+     * centred, the label's box keeps to its text, inside the pill. */
+    gtk_widget_set_margin_start (dot, 10);
+    gtk_widget_set_margin_end (self->gpu_status, 10);
+    gtk_widget_set_valign (self->gpu_status, GTK_ALIGN_CENTER);
     gtk_box_append (GTK_BOX (status), dot);
     gtk_box_append (GTK_BOX (status), self->gpu_status);
     adw_action_row_add_suffix (ADW_ACTION_ROW (self->gpu_row), status);
