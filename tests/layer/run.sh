@@ -748,7 +748,10 @@ fact "layer-enabled=true: the stop squares again" 'recording\.on=square,0:42 hid
 fact "layer-enabled=true: and sharing's name" 'sharing\.on=screen-shared-symbolic,square hidden=screencast-stop-symbolic name=Stop screen sharing'
 fact "layer-enabled=true: capitals again" 'input-chip\.on=EN,VI₂,FR'
 fact "layer-enabled=true: Clear hidden again" 'clear\.on=placeholder=true clear=false'
-count_is "both dots restyle at each enable and disable" '^probe: workspace-dot=restyled$' 6
+fact "layer-enabled=false: the sheet's reload leaves the dots as disable left them" 'workspace-dot\.sheet-reloaded=0 handler\(s\)'
+fact "layer-enabled=true: the sheet's reload restyles the dots, its inactive opacity now there" \
+    'workspace-dot\.sheet-reloaded=1 handler\(s\)'
+count_is "both dots restyle at each enable and disable, and at the reload after enable" '^probe: workspace-dot=restyled$' 8
 count_is "the hot corners are rebuilt at each enable and disable" '^probe: hot-corners=rebuilt$' 3
 lacks "top bar: no feature fails or disables uncleanly" 'off for this session|did not disable cleanly|cannot restyle'
 

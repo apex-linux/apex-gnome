@@ -21,10 +21,14 @@ function _width(stock, natural, dot, expansion) {
     return natural.map(v => Math.round(v + (active - v) * expansion));
 }
 
+function _firstDot() {
+    return Main.panel.statusArea.activities.get_first_child().get_first_child()?._dot;
+}
+
 function _inactive(stock) {
     if (!_enabled)
         return stock;
-    const dot = Main.panel.statusArea.activities.get_first_child().get_first_child()?._dot;
+    const dot = _firstDot();
     const [found, opacity] = dot?.peek_theme_node()?.lookup_double(INACTIVE_OPACITY_PROPERTY, false) ?? [false, 0];
     return found ? {opacity, scale: INACTIVE_SCALE} : stock;
 }
@@ -42,12 +46,15 @@ export function configure(featureName) {
     Hooks.provide(featureName, 'workspace-dot-inactive', _inactive);
 }
 
+// layer.js reloads the sheet after enabling the features: the opacity is only in the reloaded one.
 export function enable() {
     _enabled = true;
+    _firstDot()?.connectObject('style-changed', () => _restyleDots(), configure);
     _restyleDots();
 }
 
 export function disable() {
     _enabled = false;
+    _firstDot()?.disconnectObject(configure);
     _restyleDots();
 }

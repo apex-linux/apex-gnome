@@ -532,6 +532,14 @@ function topBarHooks(label) {
     fact(`${label}.dots`, `${widths.join(' ')} inactive=${JSON.stringify(Hooks.value('workspace-dot-inactive', 'stock'))}`);
 }
 
+// As main.js's stylesheet reload after layer.js's toggle restyles the first dot.
+function sheetReloaded(Main) {
+    const dot = Main.panel.statusArea.activities.get_first_child().get_first_child()._dot;
+    fact('workspace-dot.sheet-reloaded', `${dot.styleChanged.size} handler(s)`);
+    for (const handler of dot.styleChanged.values())
+        handler();
+}
+
 function quickSettingsState(label, quickSettings) {
     const grid = quickSettings.menu._grid;
     fact(`${label}.order`, grid.get_children().map(t => t.name).join(','));
@@ -1104,6 +1112,7 @@ async function exerciseTopBar() {
     settings.set_boolean('layer-enabled', false);
     await spin(200);
     topBarHooks('top-bar.off');
+    sheetReloaded(Main);
     fact('pill.off', pillNames(quickSettings));
     fact('privacy.off', privacyState(quickSettings));
     fact('recording.off', screenParts(screenRecording));
@@ -1114,6 +1123,7 @@ async function exerciseTopBar() {
     fact('clear.off', clearState(Main.panel.statusArea.dateMenu));
     settings.set_boolean('layer-enabled', true);
     await spin(200);
+    sheetReloaded(Main);
     fact('pill.on', pillNames(quickSettings));
     fact('recording.on', screenParts(screenRecording));
     fact('sharing.on', screenParts(screenSharing));
