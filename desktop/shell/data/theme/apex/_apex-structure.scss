@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 //
-// Safe mode keeps the high-contrast sheet: rules here match only Apex actors and append.
-// Upstream's high-contrast palette, captured before the tokens, maps onto them.
+// Safe mode keeps high contrast's sheet: these rules append, with its palette, captured first, mapped onto the tokens.
 
 /*! apex-shell-structure */
 
@@ -31,16 +30,37 @@ $apex_dock_border: $_hc_border;
 @import "dock";
 @import "end-session-icon";
 
-// The lock blurs without darkening and leaves that to its overlay (lock/stage.js): without
-// this, high contrast's white text sits on the bright blurred wallpaper.
-.apex-lock-overlay { background-color: rgba(0, 0, 0, .55); }
+// HC's white needs a darker overlay than the blur leaves; upstream's avatar fill and .7 hint held it at 2.96, 3.98:1.
+.apex-lock-overlay { background-color: $apex_lock_overlay_contrast; }
+.unlock-dialog.apex-lock .user-widget .user-icon {
+  border: $apex_surface_border solid $_hc_fg;
+  background-color: transparent;
+  box-shadow: none;
+  color: $_hc_fg;
+}
+.unlock-dialog.apex-lock .login-dialog-prompt-entry StLabel.hint-text { color: $_hc_fg; }
+
+.unlock-dialog.apex-lock.apex-lock-error .login-dialog-prompt-entry {
+  &, &:focus { border-color: $apex_lock_fg; box-shadow: inset 0 0 0 $apex_entry_focus_ring $apex_lock_fg !important; }
+}
+
+.apex-lock-background { -apex-lock-blur: $apex_lock_blur; -apex-lock-saturation: $apex_lock_saturation / 100%; }
 
 // GNOME 51.1's fixed prompt height, as in _lock.scss.
 .unlock-dialog.apex-lock .login-dialog-prompt-layout { height: auto; }
 
-// Upstream's `& :ltr` padding, a stray space, also pads the field's icons; the Apex lock alone ends board 20's eye
-// inside the field's padding, so safe mode keeps upstream's.
+// Upstream's stray-space `& :ltr` also pads the field's icons; only the Apex lock ends board 20's eye inside it.
 .apex-lock .login-dialog-prompt-entry StIcon {
   &:ltr { padding-right: 0; }
   &:rtl { padding-left: 0; }
+}
+
+.login-dialog-user-list-view .login-dialog-user-list .login-dialog-user-list-item {
+  .user-icon {
+    border: $apex_surface_border solid $_hc_fg;
+    background-color: transparent;
+    color: $_hc_fg;
+  }
+  &:logged-in .user-icon { border-width: 2 * $apex_surface_border; }
+  &:logged-in .user-icon StIcon { background-color: transparent; }
 }

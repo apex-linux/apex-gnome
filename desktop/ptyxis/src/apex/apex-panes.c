@@ -11,6 +11,9 @@
 #define FRAME_KEY "apex-pane-frame"
 #define OWNER_KEY "apex-pane-owner"
 #define SECOND_FOCUSED_KEY "apex-second-focused"
+/* The owner's pick (DESIGN, board 33); both keys change here alone. */
+#define FOCUS_OTHER_PANE_ACCEL "<Control><Alt>o"
+#define CLOSE_PANE_ACCEL "<Control><Alt>w"
 
 typedef struct
 {
@@ -130,7 +133,7 @@ pane_frame (GtkWidget   *body,
 
       gtk_widget_add_css_class (close, "flat");
       gtk_widget_set_tooltip_text (close, _("Close Pane"));
-      gtk_actionable_set_action_name (GTK_ACTIONABLE (close), "apex.close-pane");
+      gtk_actionable_set_action_name (GTK_ACTIONABLE (close), "apex.close-second-pane");
       gtk_box_append (GTK_BOX (header), close);
     }
 
@@ -416,6 +419,32 @@ split_down_action (GSimpleAction *action,
   apex_panes_split (self, APEX_SPLIT_DOWN);
 }
 
+/* The second pane's tab takes the first's page, next to it, and the first closes as a tab
+ * does, Ptyxis's prompt for a running command included. */
+static void
+apex_panes_close_first (ApexPanes   *self,
+                        ApexSession *session)
+{
+  g_autoptr(PtyxisTab) tab = g_object_ref (apex_session_get_tab (apex_session_get_second (session)));
+  AdwTabPage *page = adw_tab_view_get_page (self->tab_view, GTK_WIDGET (apex_session_get_tab (session)));
+  GtkWidget *frame = second_frame (session);
+  AdwTabPage *moved;
+
+  g_object_set_data (G_OBJECT (tab), OWNER_KEY, NULL);
+  g_object_set_data (G_OBJECT (tab), FRAME_KEY, NULL);
+  g_object_set_data (G_OBJECT (session), SECOND_FOCUSED_KEY, NULL);
+  apex_session_set_second (session, NULL, APEX_SPLIT_NONE);
+  gtk_box_remove (GTK_BOX (frame), GTK_WIDGET (tab));
+  gtk_stack_remove (GTK_STACK (self->seconds), frame);
+  gtk_widget_remove_css_class (GTK_WIDGET (tab), "apex-pane-body");
+
+  ptyxis_window_add_tab (self->window, tab);
+  moved = adw_tab_view_get_page (self->tab_view, GTK_WIDGET (tab));
+  adw_tab_view_reorder_page (self->tab_view, moved, adw_tab_view_get_page_position (self->tab_view, page) + 1);
+  adw_tab_view_set_selected_page (self->tab_view, moved);
+  adw_tab_view_close_page (self->tab_view, page);
+}
+
 static void
 close_pane_action (GSimpleAction *action,
                    GVariant      *param,
@@ -423,8 +452,36 @@ close_pane_action (GSimpleAction *action,
 {
   ApexPanes *self = data;
 
+  if (self->selected == NULL || apex_session_get_second (self->selected) == NULL)
+    return;
+
+  if (self->second_focused)
+    apex_panes_unsplit (self, self->selected);
+  else
+    apex_panes_close_first (self, self->selected);
+}
+
+static void
+close_second_pane_action (GSimpleAction *action,
+                          GVariant      *param,
+                          gpointer       data)
+{
+  ApexPanes *self = data;
+
   if (self->selected != NULL && apex_session_get_second (self->selected) != NULL)
     apex_panes_unsplit (self, self->selected);
+}
+
+static void
+focus_other_pane_action (GSimpleAction *action,
+                         GVariant      *param,
+                         gpointer       data)
+{
+  ApexPanes *self = data;
+  ApexSession *second = self->selected != NULL ? apex_session_get_second (self->selected) : NULL;
+
+  if (second != NULL)
+    ptyxis_tab_grab_focus (apex_session_get_tab (self->second_focused ? self->selected : second));
 }
 
 static void
@@ -434,10 +491,14 @@ apex_panes_add_actions (ApexPanes *self)
     { "split-right", split_right_action },
     { "split-down", split_down_action },
     { "close-pane", close_pane_action },
+    { "close-second-pane", close_second_pane_action },
+    { "focus-other-pane", focus_other_pane_action },
   };
   static const struct { const char *trigger, *action; } shortcuts[] = {
     { "<Control><Alt>r", "apex.split-right" },
     { "<Control><Alt>d", "apex.split-down" },
+    { FOCUS_OTHER_PANE_ACCEL, "apex.focus-other-pane" },
+    { CLOSE_PANE_ACCEL, "apex.close-pane" },
   };
   g_autoptr(GSimpleActionGroup) group = g_simple_action_group_new ();
   GtkEventController *controller = gtk_shortcut_controller_new ();

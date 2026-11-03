@@ -19,10 +19,10 @@ Fedora's gnome-shell SRPM, rebuilt with the Apex layer inside it
   `51.0-1.fc45` and below Fedora's next build, `51.0-2.fc45`. A pin-only rebuild is
   `.apexN.M`.
 - `Source1` is `apex-shell-<tree>.tar`, the `git archive` of `desktop/shell/`. `%prep`
-  unpacks it at the top of the tree with `tar -xkf`, moves upstream's compiled
-  `gnome-shell-light.css` and `-dark.css` to `data/theme/apex/stock/`, and deletes
-  `gnome-shell-high-contrast.css`. Meson then finds no compiled sheet and runs sassc on
-  all three entry files, whose `@import` hooks pull in the Apex SCSS.
+  unpacks it at the top of the tree with `tar -xkf` and moves upstream's compiled
+  `gnome-shell-light.css`, `-dark.css` and `-high-contrast.css` to `data/theme/apex/stock/`,
+  safe mode's sheets. Meson then finds no compiled sheet and runs sassc on all three
+  entry files, whose `@import` hooks pull in the Apex SCSS.
 - `BuildRequires: mutter-devel = <EVR>` and `Requires: mutter%{?_isa} = <EVR>` sit next
   to Fedora's `>=` lines. The EVR is the newest `mutter-devel` in the lane's
   repositories, so the tested pair moves together. The Fedora-signed `mutter` and

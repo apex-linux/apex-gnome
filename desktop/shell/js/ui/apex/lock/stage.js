@@ -10,6 +10,7 @@ import St from 'gi://St';
 import * as LoginManager from '../../../misc/loginManager.js';
 import * as Hooks from '../hooks.js';
 
+import * as ErrorRing from './error.js';
 import * as Fingerprint from './fingerprint.js';
 
 Gio._promisify(Gio.DBusProxy, 'new_for_bus');
@@ -168,6 +169,7 @@ function _addHint(dialog) {
         } catch (e) {
             console.error(`Apex: lock: no fingerprint states for this prompt: ${e}`);
         }
+        ErrorRing.followPrompt(dialog, child);
     });
 }
 

@@ -54,6 +54,7 @@ $apex_dock_fg: if($variant == 'light', #1d1d21, #f4f4f6);
 $apex_dock_dot: if($variant == 'light', rgba(29, 29, 33, .7), rgba(244, 244, 246, .7));
 $apex_dock_label: if($variant == 'light', #f6f6f8, #2a2a2e);
 $apex_dock_label_border: if($variant == 'light', rgba(255, 255, 255, .65), rgba(255, 255, 255, .09));
+$apex_dock_shadow: rgba(0, 0, 0, .18);
 
 $apex_radius_dock: 24px;
 $apex_radius_dock_label: 13px;
@@ -219,6 +220,8 @@ $apex_dialog_title_tracking: -.2px;
 $apex_destructive: #c01c28;
 $apex_destructive_hover: #a51d2d;
 $apex_destructive_fg: #ffffff;
+// Board 13's wrong password: Adwaita's error pair, 5.66:1 light and 5.63:1 dark on $apex_panel_solid.
+$apex_error_fg: if($variant == 'light', #c01c28, #ff7b63);
 // The end-session feature's icon circle and its power-off row: Cancel, Restart, Power Off.
 $apex_end_session_icon_size: 56px;
 $apex_end_session_icon_glyph_size: 26px;
@@ -388,9 +391,16 @@ $apex_tile_preview_saturation: 160%;
 // The lock screen and the greeter draw white on the blurred wallpaper in both variants.
 $apex_lock_fg: #ffffff;
 $apex_lock_fg_dim: rgba(255, 255, 255, .7);
-$apex_lock_placeholder: rgba(255, 255, 255, .62);
-$apex_lock_overlay: rgba(8, 10, 20, .34);
+// Lock and greeter text at 4.5:1 over Facets and solid colours (light scrim .68, placeholder .96); keyed on the scheme,
+// so a bright photo in dark style gets .34: a scrim from the wallpaper's luminance is S3b's.
+$apex_lock_placeholder: rgba(255, 255, 255, .96);
+$apex_lock_scrim: if($variant == 'light', rgba(8, 10, 20, .68), rgba(8, 10, 20, .34));
+// High contrast's overlay: at least the light scrim's darkness, so its white text holds on a bright wallpaper.
+$apex_lock_overlay_contrast: rgba(0, 0, 0, .68);
+$apex_lock_date_fg: rgba($apex_lock_fg, .92);
 $apex_lock_glass: rgba(255, 255, 255, .18);
+// Board 20's wrong password: the field's 2 px ring, as the canvas draws it.
+$apex_lock_error_ring: if($variant == 'light', #ffcfcf, #ff8a8a);
 $apex_lock_glass_border: rgba(255, 255, 255, .25);
 $apex_lock_glass_strong: rgba(255, 255, 255, .22);
 $apex_lock_avatar_border: rgba(255, 255, 255, .35);
@@ -398,8 +408,12 @@ $apex_lock_avatar_shadow: rgba(0, 0, 0, .25);
 $apex_lock_list: rgba(255, 255, 255, .14);
 $apex_lock_list_border: rgba(255, 255, 255, .22);
 $apex_lock_list_separator: rgba(255, 255, 255, .12);
+// The most a hovered row lightens with its white text still at 4.5:1 over light Facets.
+$apex_lock_list_hover: rgba(255, 255, 255, .06);
+// The least fill St paints a focused row's inset ring on.
+$apex_lock_list_focus: rgba(255, 255, 255, .01);
 $apex_lock_greeter_base: #0c1122;
-// lock/background.js applies the same sigma and saturation to the lock's blur.
+// lock/background.js reads them from the sheet (-apex-lock-blur, -apex-lock-saturation) for the lock's blur.
 $apex_lock_blur: 30px;
 $apex_lock_saturation: 130%;
 

@@ -49,6 +49,11 @@ path `source1_paths` allows; `tests/ptyxis/selftest.sh` checks both.
 | `src/apex/apex-palette.c` | `apex_profile_follow_palette_files()`: a profile notifies `palette` when the palette list reloads a file with its palette id, so open terminals and the window dressing take a rewritten user palette (apex-session-agent's `apex.palette`) |
 | `src/apex/apex-session-row.c`, `apex-glyph.c` | a row (title, subtitle, time, glyph, the 2 px progress bar) and the Apex Symbolic glyphs drawn from their 16 px paths |
 
+In a split, Ctrl+Alt+O moves the focus to the other pane and Ctrl+Alt+W closes the
+focused one (`apex.focus-other-pane`, `apex.close-pane`); closing the first gives its tab
+to the second, through Ptyxis's own close and its prompt for a running command. The pair
+is the owner's pick, in `apex-panes.c`'s `FOCUS_OTHER_PANE_ACCEL` and `CLOSE_PANE_ACCEL`.
+
 ### What a session shows
 
 | Status | From | Subtitle |
@@ -124,6 +129,64 @@ installed as `claude`, `just`, `cargo`, `rpmbuild`, `ssh` and `git`, prints what
 1, or rings the bell, so every status comes from the real shell integration. CI runs
 it after the lane and keeps the captures as the `ptyxis-shots` artifact.
 
+`tests/ptyxis/contrast-test.sh` checks boards 32 and 33's contrast in those captures. With
+`APEX_PTYXIS_TARGETS=1`, as CI sets it, `probe.js` runs `contrast-atspi.py` once each
+capture is taken: over AT-SPI it lists the sidebar's labels and status glyphs (in a row, the
+selected row, a group heading, the footer), the content header's labels, each pane header's,
+and each pane's terminal, the unfocused pane's marked dimmed. GTK's extents leave out each
+ancestor's padding and margin, so `contrast.py` moves each container's boxes by the one offset
+that holds the most strokes. It takes a target's ground as the colour most of its box is and its ink
+as its strongest strokes as drawn, so a translucent ink, the .62 dim or the unfocused pane's .7
+and .62 are measured as they look. Text wants 4.5:1 and a glyph 3:1 (WCAG 1.4.3, 1.4.11),
+and the footer's needs-you and running glyphs CIELAB L* 10 apart (light 42.6 and 54.9, dark
+74.8 and 54.9), so they differ in lightness and not hue alone. A shortfall is a known gap
+at today's ratio, pending the owner: a lower ratio fails, and so does one that reaches its
+threshold, so the fix also removes the pin. The unfocused pane's output passes (4.73:1 light,
+7.24:1 dark). The gaps:
+
+| Capture | Target | Today |
+|---|---|---|
+| light, split-light | the selected row's dim program and time, on its `--apex-selected` fill | 4.26:1 |
+| light, dark | the selected row's running glyph, the accent on that fill | 2.81:1, 2.70:1 |
+| light, split-light | a group's `toolbox` and `ssh` tags, dim on `--apex-btn` | 4.26:1 |
+| light, split-light | the content header's and the focused pane header's tag | 4.39:1 |
+| split-light, split-dark | the unfocused pane header's path, `--apex-dim` at .7 | 2.68:1, 3.96:1 |
+| split-light, split-dark | the unfocused pane header's tag | 2.53:1, 3.53:1 |
+
+The four scenes are taken again with `org.gnome.desktop.a11y.interface high-contrast` on
+(`hc-light`, `hc-dark`, `hc-split-light`, `hc-split-dark`), for this test alone: libadwaita
+switches (14,000 to 25,000 pixels change per capture, its borders and outlines), but
+`apex.css` keeps its own colours, so the same targets fall short there and are pinned the same
+way, as the owner's item 10b. One pair moves, in light: libadwaita's dimming of the unfocused pane's
+header greys its path and tag.
+
+| Capture | Target | Today |
+|---|---|---|
+| hc-light, hc-split-light | the selected row's dim program and time | 4.26:1 |
+| hc-light, hc-dark | the selected row's running glyph | 2.81:1, 2.70:1 |
+| hc-light, hc-split-light | a group's `toolbox` and `ssh` tags | 4.26:1 |
+| hc-light, hc-split-light | the content header's and the focused pane header's tag | 4.39:1 |
+| hc-split-light, hc-split-dark | the unfocused pane header's path | 3.07:1, 3.96:1 |
+| hc-split-light, hc-split-dark | the unfocused pane header's tag | 2.95:1, 3.53:1 |
+
+`contrast.py --selftest` measures a drawn label in the foreground and again in its row's
+fill colour, and the test fails unless its checks catch every session name in its row's
+fill. CI runs it after the captures.
+
+`tests/ptyxis/layout-test.sh` checks boards 32 and 33's layout in the same captures and in two
+more, `large` and `split-large`, taken in light with GNOME's Large Text
+(`org.gnome.desktop.interface text-scaling-factor` 1.25). `contrast-atspi.py` also records
+each label's laid-out text over AT-SPI's text extents, and which row and slot (title, subtitle,
+time) it fills. `layout.py` fails a label whose text runs to its box's right edge, as Pango's
+ellipsized text does, two labels of one row or header over each other, and a label outside the
+window. A row's subtitle may end in an ellipsis: the design cuts it (the rpmbuild row's does).
+Nothing is cut, overlapped or outside the window in any of the six. `apex.css` sizes its text in
+pt, which GTK scales with the setting, where px stays put: under Large Text the sidebar widens
+(176 px to 244 px, as libadwaita sizes it in sp) and a title's text grows from 16 px to 21 px. At
+1.0 each pt size is its old px size exactly (×0.75), and the captures are byte for byte the same.
+The test fails unless the titles grow by 1.15x, and unless its checks catch a session's title cut
+short. CI runs it after `contrast-test.sh`.
+
 `tests/ptyxis/palette-test.sh` runs the same headless shell. Its automation script,
 `palette-probe.js`, opens a terminal on a user palette with a red background, rewrites
 the file with a green one, and samples the terminal's pixels; the test fails unless the
@@ -140,8 +203,10 @@ Ctrl+Alt+R and Ctrl+Alt+D. It focuses each pane by a click and measures the othe
 dimming against DESIGN's .7 header and .62 body. It runs `cargo` and `claude` in the
 second pane and `rpmbuild` and `just` in the first, so each header shows its own
 command, OSC 9;4 progress, exit status and bell. The bell's needs-you clears on focus,
-and the session row keeps the stronger status. Close Pane on the second pane's header
-then unsplits. A `true` typed first, which ends within one VTE batch, must leave the
+and the session row keeps the stronger status. The focus key moves the focus both ways;
+Close Pane on the second pane's header, then the close key on the focused second pane,
+unsplit; and the close key on the focused first pane leaves the second in its tab, the
+first's row gone. A `true` typed first, which ends within one VTE batch, must leave the
 session done. CI runs it after the palette test.
 
 ## S6 (Fedora 46)
