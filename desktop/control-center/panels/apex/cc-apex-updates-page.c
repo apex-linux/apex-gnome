@@ -358,6 +358,7 @@ changes_for_cb (GObject *source, GAsyncResult *result, gpointer user_data)
         GtkWidget *row = adw_preferences_row_new ();
 
         gtk_list_box_row_set_activatable (GTK_LIST_BOX_ROW (row), FALSE);
+        gtk_widget_add_css_class (row, "apex-changes-row");
         gtk_list_box_row_set_child (GTK_LIST_BOX_ROW (row), changes_grid (parsed));
         adw_preferences_group_add (ADW_PREFERENCES_GROUP (group), row);
     } else {
@@ -616,6 +617,7 @@ changes_cb (GObject *source, GAsyncResult *result, gpointer user_data)
 
     grid = changes_grid (parsed);
     adw_expander_row_add_row (self->changes_row, grid);
+    gtk_widget_add_css_class (gtk_widget_get_parent (grid), "apex-changes-row");
     g_ptr_array_add (self->change_rows, grid);
 }
 
