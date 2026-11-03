@@ -183,6 +183,18 @@ parental_controls_ready() {
     fi
 }
 
+# GTK apps read the session's fonts and scaling through the portal's Settings interface; a portal started
+# with no display has no backend for it, and the sign-off part's windows then open at other sizes.
+settings_portal_served() {
+    local label=$1 log=$2 found
+    found=$(grep -ahm1 'Not providing Settings portal' "$log" "${log%.log}.late.log" 2>/dev/null | head -n 1)
+    if [[ -z $found ]]; then
+        pass "$label: xdg-desktop-portal serves the Settings interface, or never started"
+    else
+        fail "$label: xdg-desktop-portal serves no Settings interface: ${found#*WARNING \*\*: [0-9:.]* }"
+    fi
+}
+
 # St drops a declaration it cannot parse with a warning naming the sheet's line, and keeps the cascade's earlier value.
 no_st_css_warning() {
     local label=$1 log=$2 found
@@ -1839,6 +1851,8 @@ fixtures_on_the_bus() {
             "switcheroo-control: an integrated and a discrete GPU"
         expect "fixtures ($part)" "$fixtures" '.accounts | .appsFiltered == [false, []] and .sessionLimit == 0' \
             "accountsservice: the user's parental controls filter no app and limit no session"
+        expect "fixtures ($part)" "$fixtures" '.realtime == {MaxRealtimePriority: 20, MinNiceLevel: -15, RTTimeUSecMax: 200000}' \
+            "RealtimeKit at rtkit-daemon's defaults, so xdg-desktop-portal starts without waiting on the image's rtkit-daemon"
     done
 }
 
@@ -2353,6 +2367,7 @@ direct_cases() {
         no_nan_allocation "$c" "$f"
         no_st_css_warning "$c" "$f"
         parental_controls_ready "$c" "$f"
+        settings_portal_served "$c" "$f"
         no_disposed_apex "$c" "$f"
         no_binding_overwritten "$c" "$f"
         no_spurious_allocation "$c" "$f"
@@ -2718,6 +2733,10 @@ keys_case() {
         and .bindings.overlay == {modes: $SPOTLIGHT_MODES, key: \"Super\"}" \
         "Super+A and the Super tap, GNOME's, in the NORMAL and OVERVIEW modes"
     expect keys "$r" '.pressed | .sources == ["us", "fr"] and .first == "us"' "two input sources, us first"
+    expect keys "$r" '.pressed.sentinel | .before == .after and .a11yChanges == 0' \
+        "the input barrier's F24 tap changes nothing: the input source, the overview, the grabs, the keyboard's a11y state"
+    expect keys "$r" '.pressed.entryKey == {viaInputMethod: true, text: "a"}' \
+        "a BackSpace to an entry, through IBus, has reached it when the input barrier returns"
     expect keys "$r" '.pressed.superSpace == {spotlight: true, source: "us"}' \
         "Super+Space opens Spotlight and leaves the input source alone"
     expect keys "$r" '.pressed | .superAltSpace.source == "fr" and .shiftSuperAltSpace.source == "us"' \
@@ -2800,6 +2819,7 @@ patched_assertions() {
         [[ -e $run/$c.log ]] && no_nan_allocation "$c" "$run/$c.log"
         [[ -e $run/$c.log ]] && no_st_css_warning "$c" "$run/$c.log"
         [[ -e $run/$c.log ]] && parental_controls_ready "$c" "$run/$c.log"
+        [[ -e $run/$c.log ]] && settings_portal_served "$c" "$run/$c.log"
         [[ -e $run/$c.log ]] && no_disposed_apex "$c" "$run/$c.log"
         [[ -e $run/$c.log ]] && no_binding_overwritten "$c" "$run/$c.log"
         [[ -e $run/$c.log ]] && no_spurious_allocation "$c" "$run/$c.log"
