@@ -126,7 +126,18 @@ function describeLock(dialog) {
             .map(e => e && `radius=${e.radius} brightness=${e.brightness.toFixed(2)} saturation=${e.saturation.toFixed(2)}`)[0] ?? null,
         prompt: describePrompt(dialog._authPrompt),
         layout: describeLayout(dialog, hint),
+        errorRing: dialog.has_style_class_name('apex-lock-error'),
+        ring: dialog._authPrompt ? ring(dialog._authPrompt._entry) : null,
     };
+}
+
+// The entry's box-shadow, as its theme node resolves it.
+function ring(entry) {
+    const node = entry.get_theme_node();
+    const shadow = node.get_box_shadow();
+    const border = node.get_border_width(St.Side.TOP) / scale();
+    const borderColor = color(node.get_border_color(St.Side.TOP));
+    return shadow ? {inset: shadow.inset, spread: shadow.spread, color: color(shadow.color), border, borderColor} : null;
 }
 
 // What the eye reads, top to bottom, in logical pixels; only what is on screen.
@@ -336,6 +347,7 @@ async function shootLock() {
     await type(WRONG_ANSWER);
     await Scripting.sleep(STEP_MS * 2);
     fact('wrong-answer', describeLock(dialog));
+    await capture('wrong-answer');
     // The field is insensitive while GDM asks again, which WCAG exempts: the message is what this step adds.
     if (contrast)
         fact('contrast-wrong-answer', await contrastOf(dialog._authPrompt._message));

@@ -40,6 +40,10 @@ $apex_dock_border: $_hc_border;
 }
 .unlock-dialog.apex-lock .login-dialog-prompt-entry StLabel.hint-text { color: $_hc_fg; }
 
+.unlock-dialog.apex-lock.apex-lock-error .login-dialog-prompt-entry {
+  &, &:focus { border-color: $apex_lock_fg; box-shadow: inset 0 0 0 $apex_entry_focus_ring $apex_lock_fg !important; }
+}
+
 .apex-lock-background { -apex-lock-blur: $apex_lock_blur; -apex-lock-saturation: $apex_lock_saturation / 100%; }
 
 // GNOME 51.1's fixed prompt height, as in _lock.scss.
