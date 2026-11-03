@@ -299,6 +299,38 @@ badge_icon (const char *state, const CcApexUpdatesHero *hero)
     return "view-refresh-symbolic";
 }
 
+static GtkWidget *
+change_label (const char *text, const char *style, float xalign)
+{
+    GtkWidget *label = gtk_label_new (text);
+
+    gtk_label_set_xalign (GTK_LABEL (label), xalign);
+    gtk_label_set_ellipsize (GTK_LABEL (label), PANGO_ELLIPSIZE_END);
+    gtk_widget_add_css_class (label, style);
+    return label;
+}
+
+/* Board 18: the staged changes as one grid of kind, package and versions, not a row each. */
+static GtkWidget *
+changes_grid (GPtrArray *changes)
+{
+    GtkWidget *grid = gtk_grid_new ();
+
+    gtk_widget_add_css_class (grid, "apex-changes");
+    gtk_grid_set_column_spacing (GTK_GRID (grid), 14);
+    gtk_grid_set_row_spacing (GTK_GRID (grid), 6);
+    for (guint i = 0; i < changes->len; i++) {
+        CcApexUpdatesChange *c = g_ptr_array_index (changes, i);
+        GtkWidget *name = change_label (c->name, "apex-change-name", 0);
+
+        gtk_widget_set_hexpand (name, TRUE);
+        gtk_grid_attach (GTK_GRID (grid), change_label (c->kind, "apex-change-kind", 0), 0, i, 1, 1);
+        gtk_grid_attach (GTK_GRID (grid), name, 1, i, 1, 1);
+        gtk_grid_attach (GTK_GRID (grid), change_label (c->versions, "apex-change-versions", 1), 2, i, 1, 1);
+    }
+    return grid;
+}
+
 static void
 changes_for_cb (GObject *source, GAsyncResult *result, gpointer user_data)
 {
@@ -322,20 +354,16 @@ changes_for_cb (GObject *source, GAsyncResult *result, gpointer user_data)
     changes = g_variant_get_child_value (reply, 0);
     parsed = cc_apex_updates_changes (changes);
     group = adw_preferences_group_new ();
-    for (guint i = 0; i < parsed->len; i++) {
-        CcApexUpdatesChange *c = g_ptr_array_index (parsed, i);
-        GtkWidget *row = adw_action_row_new ();
-        GtkWidget *kind = gtk_label_new (c->kind);
+    if (parsed->len > 0) {
+        GtkWidget *row = adw_preferences_row_new ();
 
-        adw_preferences_row_set_use_markup (ADW_PREFERENCES_ROW (row), FALSE);
-        adw_preferences_row_set_title (ADW_PREFERENCES_ROW (row), c->name);
-        adw_action_row_set_subtitle (ADW_ACTION_ROW (row), c->versions);
-        gtk_widget_add_css_class (kind, "dim-label");
-        adw_action_row_add_suffix (ADW_ACTION_ROW (row), kind);
+        gtk_list_box_row_set_activatable (GTK_LIST_BOX_ROW (row), FALSE);
+        gtk_widget_add_css_class (row, "apex-changes-row");
+        gtk_list_box_row_set_child (GTK_LIST_BOX_ROW (row), changes_grid (parsed));
         adw_preferences_group_add (ADW_PREFERENCES_GROUP (group), row);
-    }
-    if (parsed->len == 0)
+    } else {
         adw_preferences_group_set_description (ADW_PREFERENCES_GROUP (group), _("No package changes are known."));
+    }
     page = adw_preferences_page_new ();
     adw_preferences_page_add (ADW_PREFERENCES_PAGE (page), ADW_PREFERENCES_GROUP (group));
     view = adw_toolbar_view_new ();
@@ -442,15 +470,23 @@ maybe_alert (CcApexUpdatesPage *self, const char *health_failure, const char *la
 static void
 add_note (CcApexUpdatesPage *self, const char *title, const char *body)
 {
-    GtkWidget *note, *icon, *text, *label;
+    GtkWidget *note, *content, *icon, *text, *label;
 
-    note = gtk_box_new (GTK_ORIENTATION_HORIZONTAL, 12);
+    note = gtk_box_new (GTK_ORIENTATION_HORIZONTAL, 0);
     gtk_widget_add_css_class (note, "apex-note");
     gtk_accessible_update_property (GTK_ACCESSIBLE (note), GTK_ACCESSIBLE_PROPERTY_LABEL, title, -1);
+    /* Margin, not CSS padding: GTK 4.24's AT-SPI bounds leave padding out, as cc-apex-header.c says. */
+    content = gtk_box_new (GTK_ORIENTATION_HORIZONTAL, 12);
+    gtk_widget_set_margin_top (content, 14);
+    gtk_widget_set_margin_start (content, 16);
+    gtk_widget_set_margin_end (content, 16);
+    gtk_widget_set_margin_bottom (content, 14);
+    gtk_widget_set_hexpand (content, TRUE);
+    gtk_box_append (GTK_BOX (note), content);
     icon = gtk_image_new_from_icon_name ("dialog-warning-symbolic");
     gtk_widget_set_valign (icon, GTK_ALIGN_START);
     gtk_widget_add_css_class (icon, "apex-note-icon");
-    gtk_box_append (GTK_BOX (note), icon);
+    gtk_box_append (GTK_BOX (content), icon);
     text = gtk_box_new (GTK_ORIENTATION_VERTICAL, 3);
     label = gtk_label_new (title);
     gtk_label_set_xalign (GTK_LABEL (label), 0);
@@ -463,7 +499,7 @@ add_note (CcApexUpdatesPage *self, const char *title, const char *body)
     gtk_widget_add_css_class (label, "dim-label");
     gtk_widget_add_css_class (label, "caption");
     gtk_box_append (GTK_BOX (text), label);
-    gtk_box_append (GTK_BOX (note), text);
+    gtk_box_append (GTK_BOX (content), text);
     gtk_box_append (self->notes, note);
 }
 
@@ -545,6 +581,7 @@ changes_cb (GObject *source, GAsyncResult *result, gpointer user_data)
     g_autofree char *summary = NULL;
     g_autofree char *built = NULL;
     g_autofree char *subtitle = NULL;
+    GtkWidget *grid;
     guint others = 0;
 
     if (!cc_apex_update1_call_get_changes_finish (CC_APEX_UPDATE1 (source), &changes, result, &error)) {
@@ -578,18 +615,10 @@ changes_cb (GObject *source, GAsyncResult *result, gpointer user_data)
                                     built ? built : "");
     adw_expander_row_set_subtitle (self->changes_row, subtitle);
 
-    for (guint i = 0; i < parsed->len; i++) {
-        CcApexUpdatesChange *c = g_ptr_array_index (parsed, i);
-        GtkWidget *row = adw_action_row_new ();
-        GtkWidget *kind = gtk_label_new (c->kind);
-
-        adw_preferences_row_set_title (ADW_PREFERENCES_ROW (row), c->name);
-        adw_action_row_set_subtitle (ADW_ACTION_ROW (row), c->versions);
-        gtk_widget_add_css_class (kind, "dim-label");
-        adw_action_row_add_suffix (ADW_ACTION_ROW (row), kind);
-        adw_expander_row_add_row (self->changes_row, row);
-        g_ptr_array_add (self->change_rows, row);
-    }
+    grid = changes_grid (parsed);
+    adw_expander_row_add_row (self->changes_row, grid);
+    gtk_widget_add_css_class (gtk_widget_get_parent (grid), "apex-changes-row");
+    g_ptr_array_add (self->change_rows, grid);
 }
 
 static void

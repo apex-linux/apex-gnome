@@ -1,7 +1,2 @@
 # lint/tokens.sh's exceptions to the token rule: FILE:LINE (in desktop/shell/data/theme/apex) or $token,
 # a tab, then why and whose. Each is a no-visual-change move into _apex-tokens.scss for its holder.
-_apex-structure.scss:36	the lock overlay's rgba(0, 0, 0, .55) (lock, 01CTWVja)
-_dock.scss:19	the dock's box-shadow rgba(0, 0, 0, .18) (dock, 01Hwes)
-_lock.scss:138	the lock field's .92 alpha on $apex_lock_fg (lock, 01CTWVja)
-$apex_lock_blur	board 20's σ 30, read from js/ui/apex/lock/background.js:8 (BLUR_SIGMA), a literal, not from the sheet (lock, 01CTWVja)
-$apex_lock_saturation	board 20's 1.3, read from js/ui/apex/lock/background.js:10 (BLUR_SATURATION), a literal, not from the sheet (lock, 01CTWVja)

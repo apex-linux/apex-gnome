@@ -281,6 +281,58 @@ async function until(condition, timeoutMs = 10000) {
     return condition();
 }
 
+function under(actor) {
+    const [x, y] = global.get_pointer();
+    for (let a = global.stage.get_actor_at_pos(Clutter.PickMode.REACTIVE, x, y); a; a = a.get_parent()) {
+        if (a === actor)
+            return true;
+    }
+    return false;
+}
+
+// The headless pointer starts at 0,0, in the hot corner, whose barrier holds a new pointer's first
+// motion: the corner goes for the click, which waits for the pointer over the button and the menu open.
+async function openMenuOf(itemButton) {
+    const iface = new Gio.Settings({schema_id: 'org.gnome.desktop.interface'});
+    const corners = iface.get_boolean('enable-hot-corners');
+    iface.set_boolean('enable-hot-corners', false);
+    try {
+        if (!await until(() => Main.layoutManager.hotCorners.length === 0, 3000))
+            return null;
+        _pointer ??= global.stage.context.get_backend().get_default_seat()
+            .create_virtual_device(Clutter.InputDeviceType.POINTER_DEVICE);
+        const [x, y] = itemButton.get_transformed_position();
+        const [width, height] = itemButton.get_transformed_size();
+        _pointer.notify_absolute_motion(GLib.get_monotonic_time(), x + width / 2, y + height / 2);
+        if (!await until(() => under(itemButton), 3000))
+            return null;
+        _pointer.notify_button(GLib.get_monotonic_time(), Clutter.BUTTON_SECONDARY, Clutter.ButtonState.PRESSED);
+        _pointer.notify_button(GLib.get_monotonic_time(), Clutter.BUTTON_SECONDARY, Clutter.ButtonState.RELEASED);
+        const open = () => Main.panel.menuManager.activeMenu?.isOpen && Main.panel.menuManager.activeMenu.sourceActor === itemButton;
+        return await until(open, 3000) ? Main.panel.menuManager.activeMenu : null;
+    } finally {
+        iface.set_boolean('enable-hot-corners', corners);
+    }
+}
+
+// sni-items.js's five items in the bar, the fifth behind the overflow, for a11y.js: their pills,
+// the overflow's, the Chat item's menu and how to end them.
+export async function showItems() {
+    const log = GLib.build_filenamev([GLib.getenv('G2_CAPTURES'), `${GLib.getenv('G2_CASE')}-a11y-sni.log`]);
+    GLib.file_set_contents(log, '');
+    const items = spawnItems(log, [...FOUR, FIFTH]);
+    await until(() => overflowButton()?.container.visible);
+    return {
+        pills: shownButtons().map(b => b.get_first_child()),
+        overflow: overflowButton()?.get_first_child() ?? null,
+        openMenu: () => openMenuOf(button('Chat')),
+        end: async () => {
+            items.force_exit();
+            await until(() => !indicatorBox()?.visible, 5000);
+        },
+    };
+}
+
 // helpers: the probe's cssUnit, settle and capture.
 export async function indicatorsReport({cssUnit, settle, capture, dropStartupNotifications}) {
     const unit = cssUnit();

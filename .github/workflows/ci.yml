@@ -194,6 +194,7 @@ jobs:
           tests/ptyxis/status-test.sh
 
       - name: tests/ptyxis/shoot.sh on the built RPM
+        timeout-minutes: 15
         env:
           APEX_PTYXIS_TARGETS: "1"
         run: |
@@ -205,13 +206,18 @@ jobs:
       - name: tests/ptyxis/contrast-test.sh on shoot.sh's captures
         run: tests/ptyxis/contrast-test.sh
 
+      - name: tests/ptyxis/layout-test.sh on shoot.sh's captures
+        run: tests/ptyxis/layout-test.sh
+
       - name: tests/s2c/agent.sh
         run: tests/s2c/agent.sh
 
       - name: tests/ptyxis/palette-test.sh on the built RPM
+        timeout-minutes: 10
         run: tests/ptyxis/palette-test.sh _build/ptyxis/out _build/s2c/apex-session-agent
 
       - name: tests/ptyxis/panes-test.sh on the built RPM
+        timeout-minutes: 10
         run: |
           dnf5 -y -q --setopt=install_weak_deps=False --repo=fedora --repo=updates install python3-gobject at-spi2-core procps-ng
           tests/ptyxis/panes-test.sh _build/ptyxis/out
@@ -220,7 +226,10 @@ jobs:
         if: always()
         with:
           name: ptyxis-shots
-          path: _build/ptyxis/shots/
+          path: |
+            _build/ptyxis/shots/
+            _build/ptyxis/palette/
+            _build/ptyxis/panes/
           if-no-files-found: ignore
 
   libadwaita-lane:
@@ -272,19 +281,22 @@ jobs:
           retention-days: 3
 
       - name: tests/libadwaita/radius-test.sh on Fedora's libadwaita
+        timeout-minutes: 10
         run: |
           dnf5 -y -q --setopt=install_weak_deps=False --repo=fedora --repo=updates install \
             ptyxis gnome-shell mesa-dri-drivers dbus-daemon python3-dbusmock gcc util-linux jq
           tests/libadwaita/radius-test.sh --stock
 
       - name: tests/libadwaita/radius-test.sh on the built RPM
+        timeout-minutes: 10
         run: tests/libadwaita/radius-test.sh _build/libadwaita/out
 
       - name: tests/libadwaita/radius-test.sh --late, a first login's apex.css
+        timeout-minutes: 10
         run: tests/libadwaita/radius-test.sh --late _build/libadwaita/out
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        if: failure()
+        if: failure() || cancelled()
         with:
           name: libadwaita-lane
           path: |
@@ -321,7 +333,7 @@ jobs:
         env:
           APEX_CONTROL_CENTER_TESTS_NO_SKIP: "1"
         run: |
-          dnf5 -y -q --setopt=install_weak_deps=False --repo=fedora --repo=updates install gcc glib2-devel pkgconf-pkg-config
+          dnf5 -y -q --setopt=install_weak_deps=False --repo=fedora --repo=updates install gcc gettext glib2-devel pkgconf-pkg-config
           tests/control-center/state-test.sh
 
       - uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
@@ -354,6 +366,7 @@ jobs:
           retention-days: 3
 
       - name: tests/control-center/run.sh on the built RPMs
+        timeout-minutes: 25
         run: |
           dnf5 -y -q --setopt=install_weak_deps=False --repo=fedora --repo=updates install \
             gnome-shell mesa-dri-drivers dbus-daemon python3-dbusmock python3-gobject at-spi2-core gcc util-linux adwaita-sans-fonts jetbrains-mono-fonts-all python3-dbus systemd gnome-backgrounds umockdev
@@ -433,6 +446,7 @@ jobs:
           tests/nautilus/format-test.sh
 
       - name: tests/nautilus/shoot.sh on the built RPMs
+        timeout-minutes: 15
         run: |
           dnf5 -y -q --setopt=install_weak_deps=False --repo=fedora --repo=updates install \
             gnome-shell mesa-dri-drivers dbus-daemon python3-dbusmock gcc util-linux at-spi2-core python3-gobject \
@@ -503,6 +517,7 @@ jobs:
           retention-days: 3
 
       - name: tests/shell/shoot.sh on the built RPMs
+        timeout-minutes: 30
         run: |
           dnf5 -y -q --setopt=install_weak_deps=False --repo=fedora --repo=updates install \
             mesa-dri-drivers dbus-daemon python3-dbusmock python3-gobject gcc accountsservice polkit librsvg2-tools openssl git-core adwaita-sans-fonts jetbrains-mono-fonts-all
@@ -549,12 +564,14 @@ jobs:
           path: _build/shots-patched/rpms
 
       - name: tests/shots/patched.sh on the lane's RPMs, direct.sh pr on a pull request and main otherwise
+        # Inside the job's 45 minutes, so a hung case still leaves time to upload its logs and .bt.
+        timeout-minutes: 40
         env:
           PATCHED_PART: ${{ github.event_name == 'pull_request' && 'pr' || '' }}
         run: PATCHED_RPMS="$PWD/_build/shots-patched/rpms" PATCHED_OUT="$PWD/_build/shots-patched/out" tests/shots/patched.sh
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        if: failure()
+        if: failure() || cancelled()
         with:
           name: shots-patched
           path: _build/shots-patched/out/
@@ -615,6 +632,7 @@ jobs:
             _build/nautilus/out/nautilus-extensions-[0-9]*.x86_64.rpm _build/s2c/rpms/
 
       - name: tests/s2c/radius-test.sh on the lanes' RPMs
+        timeout-minutes: 10
         run: |
           dnf5 -y -q --setopt=install_weak_deps=False --repo=fedora --repo=updates install \
             ptyxis gnome-shell mesa-dri-drivers dbus-daemon dconf python3-dbusmock python3-gobject at-spi2-core \
@@ -665,6 +683,7 @@ jobs:
         run: tests/lib/lane.sh gnome-shell
 
       - name: tests/s7/accent-test.sh on the lane's RPMs
+        timeout-minutes: 10
         run: |
           dnf5 -y -q --setopt=install_weak_deps=False --repo=fedora --repo=updates install \
             nautilus gjs gtk4 ptyxis mesa-dri-drivers dbus-daemon python3-dbusmock python3-gobject \

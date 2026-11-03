@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // gnome-shell's automation script for run.sh: opens a Settings page (APEX_OPEN), captures it, runs a checker (APEX_CHECK).
-// APEX_LAUNCH prefixes the command, as umockdev-run does for Power's graphics card.
+// APEX_LAUNCH prefixes the command (umockdev-run, for Power's graphics card); APEX_BEFORE runs ahead of the capture.
 
 import Clutter from 'gi://Clutter';
 import Gio from 'gi://Gio';
@@ -145,8 +145,12 @@ async function probe() {
         throw new Error(`the Settings window is not ${WINDOW.width}x${WINDOW.height} after ${RESIZE_TRIES} resizes`);
 
     const command = GLib.getenv('APEX_CHECK');
+    const before = GLib.getenv('APEX_BEFORE');
+    const opened = before ? await check(before) : null;
     const top = await settledCapture(window, '');
     const result = {top: top.name, ready: top.ready};
+    if (before)
+        result.before = opened;
     if (GLib.getenv('APEX_SCROLL')) {
         await scrollToEnd(window);
         await Scripting.sleep(SETTLE_MS);

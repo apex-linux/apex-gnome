@@ -26,6 +26,8 @@ SEARCH = 24
 FOOTER = ("needs you", "running", "failed", "done")
 # A header's labels, left to right; a split's content header has its pane count second.
 PARTS = ("title", "path", "tag")
+# A session row's labels: its title, the program and its state, the time.
+ROW_PARTS = ("title", "subtitle", "when")
 
 
 def kids(node):
@@ -67,10 +69,20 @@ def ancestor(node, role):
     return None
 
 
+def laid_out(node):
+    """A label's text as Pango laid it out, in the box's coordinates: an ellipsized one reaches its edge."""
+    text = node.get_text_iface()
+    count = text.get_character_count() if text is not None else 0
+    if not count:
+        return None
+    e = text.get_range_extents(0, count, Atspi.CoordType.WINDOW)
+    return [e.x, e.y, e.width, e.height]
+
+
 def target(node, kind, region, container, reach=(SEARCH, SEARCH)):
     """reach: how far right and down the drawn box may sit from the reported one (contrast.py)."""
     return {"kind": kind, "region": region, "container": container, "name": node.get_name() or "", "box": box(node),
-            "reach": list(reach)}
+            "reach": list(reach), "text": laid_out(node) if kind == "text" else None}
 
 
 def pane_header(terminal):
@@ -110,6 +122,11 @@ def sidebar(nodes):
         else:
             region, container = "footer", "footer"
         found.append(target(n, "glyph" if n.get_role() == R.IMAGE else "text", region, container))
+        if row is not None:
+            found[-1]["row"] = box(row)[1]
+            if n.get_role() == R.LABEL:
+                labels = [k for k in walk(row) if k.get_role() == R.LABEL and k.get_name()]
+                found[-1]["slot"] = ROW_PARTS[labels.index(n)] if labels.index(n) < len(ROW_PARTS) else None
         if n.get_role() == R.IMAGE and row is not None:
             found[-1]["status"] = row_status(row)
         elif n.get_role() == R.IMAGE and region == "group":

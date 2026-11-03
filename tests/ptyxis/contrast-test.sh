@@ -7,9 +7,11 @@ PTYXIS_TESTS=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 readonly PTYXIS_TESTS
 # WCAG 2.2 AA: 1.4.3 for text, 1.4.11 for the status glyphs; CIELAB L* apart for needs you and running.
 readonly TEXT_RATIO=4.5 GLYPH_RATIO=3 STATUS_LIGHTNESS=10
-readonly SHOTS=(light dark split-light split-dark)
+readonly SHOTS=(light dark split-light split-dark hc-light hc-dark hc-split-light hc-split-dark)
 # Apex's own gaps, pending the owner: each under WCAG AA in its capture, at today's ratio.
 readonly GAP="the owner's decision on boards 32 and 33's contrast (2026-10-31)"
+# apex.css keeps its own colours in high contrast, so the same targets fall short there.
+readonly HC_GAP="the owner's decision on boards 32 and 33's contrast in high contrast (2026-10-31, item 10b)"
 readonly PINS='{
   "light selectedRow:just vm-image · running": 4.26, "light selectedRow:now": 4.26, "light selectedRow:running": 2.81,
   "light group:toolbox": 4.26, "light group:ssh": 4.26, "light header:tag": 4.39,
@@ -17,7 +19,14 @@ readonly PINS='{
   "split-light selectedRow:claude · needs you": 4.26, "split-light selectedRow:now": 4.26,
   "split-light group:toolbox": 4.26, "split-light group:ssh": 4.26, "split-light paneHeader:tag": 4.39,
   "split-light dimmedPaneHeader:path": 2.68, "split-light dimmedPaneHeader:tag": 2.53,
-  "split-dark dimmedPaneHeader:path": 3.96, "split-dark dimmedPaneHeader:tag": 3.53
+  "split-dark dimmedPaneHeader:path": 3.96, "split-dark dimmedPaneHeader:tag": 3.53,
+  "hc-light selectedRow:just vm-image · running": 4.26, "hc-light selectedRow:now": 4.26, "hc-light selectedRow:running": 2.81,
+  "hc-light group:toolbox": 4.26, "hc-light group:ssh": 4.26, "hc-light header:tag": 4.39,
+  "hc-dark selectedRow:running": 2.7,
+  "hc-split-light selectedRow:claude · needs you": 4.26, "hc-split-light selectedRow:now": 4.26,
+  "hc-split-light group:toolbox": 4.26, "hc-split-light group:ssh": 4.26, "hc-split-light paneHeader:tag": 4.39,
+  "hc-split-light dimmedPaneHeader:path": 3.07, "hc-split-light dimmedPaneHeader:tag": 2.95,
+  "hc-split-dark dimmedPaneHeader:path": 3.96, "hc-split-dark dimmedPaneHeader:tag": 3.53
 }'
 
 usage() {
@@ -56,7 +65,9 @@ readonly VERDICTS='.[] | select(.kind != "glyph" or .region == "group" or .statu
       else "GAP  \($what), under \($min):1 (\($gap))" end'
 
 verdicts() {
-    jq -r --arg shot "$1" --arg gap "$GAP" --argjson pins "$PINS" --argjson text "$TEXT_RATIO" \
+    local gap=$GAP
+    [[ $1 != hc-* ]] || gap=$HC_GAP
+    jq -r --arg shot "$1" --arg gap "$gap" --argjson pins "$PINS" --argjson text "$TEXT_RATIO" \
         --argjson glyph "$GLYPH_RATIO" "$VERDICTS" "$2"
 }
 
@@ -86,7 +97,7 @@ for shot in "${SHOTS[@]}"; do
          and any(.region == "selectedRow") and any(.region == "header")'
     expect "needs you and running differ in lightness, not hue alone: L* $STATUS_LIGHTNESS apart" \
         "[.[] | select(.region == \"footer\" and .kind == \"glyph\") | .lightness] | (.[0] - .[1]) | fabs >= $STATUS_LIGHTNESS"
-    [[ $shot != split-* ]] ||
+    [[ $shot != *split-* ]] ||
         expect "the unfocused pane's header and output are measured dimmed" \
             'any(.region == "dimmedPaneHeader") and any(.region == "dimmedBody") and any(.region == "paneHeader")'
 done

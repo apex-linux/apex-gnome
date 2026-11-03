@@ -38,6 +38,18 @@
   }
 }
 
+// Stock rings the box in black or white at .15, about 1.5:1 on the solid fill; 1.4.11 asks 3:1.
+.modal-dialog .check-box {
+  StIcon { border-color: $apex_fg_dim; }
+  &:hover StIcon, &:active StIcon { border-color: $apex_fg; }
+
+  &:checked StIcon, &:checked:hover StIcon, &:checked:active StIcon {
+    color: -st-accent-fg-color;
+    background-color: st-mix(black, $apex_accent, $apex_quick_toggle_checked_shade);
+    border-color: transparent;
+  }
+}
+
 .message-dialog-content {
   spacing: $apex_dialog_text_gap;
 
@@ -138,10 +150,10 @@ $_end_session_share: $_end_session_row /
   font-weight: $apex_font_entry_weight;
 
   &:hover { background-color: $apex_button; }
-  // Upstream's focus ring is !important, at 80 % of the accent.
+  // Upstream's focus ring is !important, at 80 % of the accent: the accent's is 2.87:1 in dark.
   &:focus {
     background-color: $apex_button;
-    box-shadow: inset 0 0 0 $apex_entry_focus_ring $apex_accent !important;
+    box-shadow: inset 0 0 0 $apex_entry_focus_ring $apex_fg !important;
   }
 }
 
@@ -152,6 +164,16 @@ $_end_session_share: $_end_session_row /
     font-size: apex-text-size($apex_font_size);
     font-weight: $apex_font_label_weight;
   }
+}
+
+// Board 13's message row: upstream's caption pill, its margin and its centring, gone.
+@mixin apex-polkit-message {
+  margin: 0;
+  padding: 0;
+  border-radius: 0;
+  background-color: transparent;
+  font-size: apex-text-size($apex_font_polkit_hint_size);
+  text-align: left;
 }
 
 .apex-polkit {
@@ -190,7 +212,21 @@ $_end_session_share: $_end_session_row /
     spacing: $apex_polkit_hint_gap;
     color: $apex_fg_dim;
 
-    .prompt-dialog-info-label { color: $apex_fg_dim; font-size: apex-text-size($apex_font_polkit_hint_size); }
+    .prompt-dialog-info-label { @include apex-polkit-message; color: $apex_fg_dim; }
+  }
+
+  // Upstream holds the row with its null label while nothing shows, so it takes the row's height too.
+  .prompt-dialog-null-label { @include apex-polkit-message; }
+
+  // A wrong password takes the hint's row: no glyph, the error colour, and the error ring on the field.
+  .prompt-dialog-error-label {
+    @include apex-polkit-message;
+    padding: 0 $apex_polkit_hint_inset;
+    color: $apex_error_fg;
+  }
+
+  &.apex-polkit-error .prompt-dialog-password-entry {
+    &, &:focus { box-shadow: inset 0 0 0 $apex_entry_focus_ring $apex_error_fg !important; }
   }
 
   .apex-polkit-fingerprint-glyph { icon-size: $apex_polkit_hint_glyph_size; }

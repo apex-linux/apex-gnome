@@ -74,7 +74,9 @@ headless_bus "$out"
 headless_run "$out/radius.log" "$LIBADWAITA_TESTS/radius-probe.js" "$SHELL_TIMEOUT" \
     "org.gnome.Ptyxis interface-style 'light'" \
     APEX_CSS_FILE="$config/apex.css" APEX_CSS_REWRITE="$out/rewrite.css"
-log "radius-test.sh: shell exit $?"
+rc=$?
+log "radius-test.sh: shell exit $rc"
+if crash=$(shell_crash "$out/radius.log" "$rc"); then die "radius-test.sh: $crash"; fi
 
 result=$(sed -n 's/.*APEXRADIUS //p' "$out/radius.log")
 [[ -n $result ]] || die "radius-test.sh: no result; see ${out#"$APEX_ROOT/"}/radius.log"
