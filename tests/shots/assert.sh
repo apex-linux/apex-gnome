@@ -53,11 +53,12 @@ readonly SOLID_BACKDROP='#013b88'
 readonly A11Y_TEXT_RATIO=4.5
 readonly A11Y_ICON_RATIO=3
 readonly A11Y_ACCENTS=(blue teal green yellow orange red pink purple slate)
-readonly A11Y_SURFACES=(bar barUnread dock popupMenu osd banner quickSettings "${A11Y_ACCENTS[@]/#/quickSettingsAccents.}" wifiMenu wifiMenuConnected dateMenu
+readonly A11Y_DOCK_LABELS=(dockLabels.first dockLabels.middle dockLabels.last dockLabelsBusy.first dockLabelsBusy.middle dockLabelsBusy.last)
+readonly A11Y_SURFACES=(bar barUnread dock "${A11Y_DOCK_LABELS[@]}" popupMenu osd banner quickSettings "${A11Y_ACCENTS[@]/#/quickSettingsAccents.}" wifiMenu wifiMenuConnected dateMenu
     "${A11Y_ACCENTS[@]/#/dateMenuAccents.}" switcher inputSourceSwitcher ctrlAltTabSwitcher monitorSwitcher dialog "${A11Y_ACCENTS[@]/#/dialogAccents.}"
     checkBoxDialog "${A11Y_ACCENTS[@]/#/checkBoxDialogAccents.}" endSession screenshot
     spotlight.popup spotlight.toast overview appGrid barPills.indicatorMenu)
-# The failures still open: upstream's high-contrast sheet, which safe mode keeps as Fedora's.
+# The failures still open: upstream's high-contrast rules, which the Apex part does not yet restyle.
 readonly A11Y_HC_TOGGLE="upstream HC sheet: Quick Settings' checked toggle, white on its accent (3.15:1), and its menu arrow (2.31:1)"
 declare -A A11Y_GAPS=([high-contrast:quickSettings]=$A11Y_HC_TOGGLE)
 for a11y_accent in "${A11Y_ACCENTS[@]}"; do
@@ -299,19 +300,10 @@ exit_cut() {
 
 # G2's fixture apps (direct.sh's STUB_APPS) have no icon of their own: GNOME draws its generic one.
 readonly FIXTURE_APPS=(io.github.apex_linux.G2Stub1.desktop io.github.apex_linux.G2Stub2.desktop io.github.apex_linux.G2Stub3.desktop)
-# Icons the shell draws from its own resource because Apex Symbolic (board 31) draws none of that name yet: each
-# is one apex-desktop#35 ships, and leaves this list when APEX_DESKTOP_REV reaches it (surface_icons fails it then).
-readonly SHELL_RESOURCE_ICONS=(
-    screenshooter-symbolic
-    notification-expand-symbolic
-    switch-on-symbolic
-    switch-off-symbolic
-    screenshot-ui-area-symbolic
-    screenshot-ui-display-symbolic
-    screenshot-ui-window-symbolic
-    screenshot-ui-show-pointer-symbolic
-    preview-close-symbolic
-)
+# Icons the shell draws from its own resource because Apex Symbolic (board 31) draws none of that name: none since
+# APEX_DESKTOP_REV reached apex-desktop#35. G2_SHELL_RESOURCE_ICONS lists names in their place, for tests.
+read -ra SHELL_RESOURCE_ICONS <<<"${G2_SHELL_RESOURCE_ICONS:-}"
+readonly SHELL_RESOURCE_ICONS
 # Stock icons a surface legitimately draws, "surface name" by exact name, never a pattern.
 readonly STAND_IN_ICONS=(
     # G2's switcher stand-in (probe.js's windowSwitcher) gives its items GNOME's generic app icon.
@@ -402,6 +394,8 @@ readonly SHELL_ICON_STEPS=(
     "polkit-light|opened|board 13's authentication dialog, light"
     "polkit-dark|opened|board 13's authentication dialog, dark"
     "polkit-fingerprint|opened|board 13's dialog with the fingerprint line"
+    "polkit-refused-light|refused|board 13's dialog after a wrong password, light"
+    "polkit-refused-dark|refused|board 13's dialog after a wrong password, dark"
 )
 
 # S1b's rule on tests/shell's own surfaces, from its probe's icons-STEP facts in SHOTS/CASE.log; the theme must be there.
@@ -1053,6 +1047,13 @@ quick_settings_layer() {
         expect "$label Quick Settings" "$scenes" \
             "$q.wifiMenu.late | .ssid == \"Apex-Late\" and .secure and .strength == 64 and .accessibleName == \"Apex-Late, Secure, Signal strength 64%\"" \
             "a secured network that appears with the menu open is named secure, at its signal, for a screen reader"
+        expect "$label Quick Settings" "$scenes" "$q.wifiMenu.refused | .after == .before and .blank == 0 and .unnamed == 0" \
+            "an access point no security type validates adds no blank or unnamed row"
+        expect "$label Quick Settings" "$scenes" \
+            "$q.wifiMenu.refused.adopted | .ssid == \"Apex-Fixed\" and .secure and .strength == 56 and .accessibleName == \"Apex-Fixed, Secure, Signal strength 56%\"" \
+            "and the next valid network takes that row, shown and named"
+        expect "$label Quick Settings" "$scenes" "$q.wifiMenu.refused | .removed.shown == .before and .removed.rows == .before" \
+            "and with both access points gone, the network and its row go too"
         network_rows_centred "$label" "$scenes" "$q.wifiMenu.rows"
         top_bar_metric "$label Quick Settings" "$scenes" "$(tokens_for "$variant")" \
             'a secure network'"'"'s lock follows its name, $apex_quick_menu_lock_size in $apex_fg at $apex_quick_menu_lock_opacity' \
@@ -1231,8 +1232,8 @@ modal_dialog() {
         "$d.entry" '(.height | px_is($t.apex_entry_height)) and .radius >= ($t.apex_entry_height | px) / 2 and (.background | colour_is($t.apex_button)) and .boxShadow == null
             and (.padding.left | px_is($t.apex_entry_padding)) and (.padding.right | px_is($t.apex_entry_padding))
             and (.font.size | px_is($t.apex_font_entry_size)) and .font.weight == ($t.apex_font_entry_weight | tonumber)'
-    "${metric[@]}" 'focused, it draws a $apex_entry_focus_ring ring in the raw accent' \
-        "{e: $d.entry, accent: .topBar.accent}" '.accent as $a | .e.focus.boxShadow | .inset and (.spread | px_is($t.apex_entry_focus_ring)) and (.color | colour_is($a))'
+    "${metric[@]}" 'focused, it draws a $apex_entry_focus_ring ring in $apex_fg' \
+        "$d.entry.focus.boxShadow" '.inset and (.spread | px_is($t.apex_entry_focus_ring)) and (.color | colour_is($t.apex_fg))'
     "${metric[@]}" 'its buttons are $apex_dialog_button_height high, fully round, $apex_font_dialog_button_size at $apex_font_label_weight' \
         "$d.buttons" 'length == 2 and all((.height | px_is($t.apex_dialog_button_height)) and .radius >= ($t.apex_dialog_button_height | px) / 2
             and (.font.size | px_is($t.apex_font_dialog_button_size)) and .font.weight == ($t.apex_font_label_weight | tonumber))'
@@ -1587,9 +1588,9 @@ derived_surfaces() {
     "${metric[@]}" 'the input method'"'"'s candidates take the popup menu: $apex_panel_solid, ring and shadow, radius $apex_radius_menu; rows radius $apex_radius_menu_row, $apex_button_hover when hovered' \
         "$d" "(.candidatePopup | (.background | colour_is(\$t.apex_panel_solid)) and (.radius | px_is(\$t.apex_radius_menu)) and $ring)
             and (.candidateBox | (.radius | px_is(\$t.apex_radius_menu_row)) and (.hover.background | colour_is(\$t.apex_button_hover)))"
-    "${metric[@]}" 'the run dialog'"'"'s entry is the password entry: $apex_entry_height, $apex_button, a $apex_entry_focus_ring raw-accent ring when focused' \
-        "{e: $d.runEntry, accent: .topBar.accent}" '.accent as $a | .e | (.minHeight | px_is($t.apex_entry_height)) and (.background | colour_is($t.apex_button)) and .boxShadow == null
-            and (.focus.boxShadow | .inset and (.spread | px_is($t.apex_entry_focus_ring)) and (.color | colour_is($a)))'
+    "${metric[@]}" 'the run dialog'"'"'s entry is the password entry: $apex_entry_height, $apex_button, a $apex_entry_focus_ring ring in $apex_fg when focused' \
+        "$d.runEntry" '(.minHeight | px_is($t.apex_entry_height)) and (.background | colour_is($t.apex_button)) and .boxShadow == null
+            and (.focus.boxShadow | .inset and (.spread | px_is($t.apex_entry_focus_ring)) and (.color | colour_is($t.apex_fg)))'
     "${metric[@]}" 'an audio device tile takes the switcher'"'"'s: radius $apex_radius_switcher_item, unfilled, $apex_button_hover when hovered, $apex_fg' \
         "$d.audioDevice" '(.radius | px_is($t.apex_radius_switcher_item)) and (.background | rgba | .[3] == 0) and (.hover.background | colour_is($t.apex_button_hover)) and (.foreground | colour_is($t.apex_fg))'
     "${metric[@]}" 'the monitor number takes the OSD'"'"'s radius $apex_radius_osd' \
@@ -1768,7 +1769,7 @@ high_contrast_is_fedoras() {
         "Fedora's high-contrast sheet has no Apex structure marker"
     expect_report stock-light "$run/stock-light.log" \
         ".highContrastSheet | .structure and .sha256BeforeStructure == \"${fedora:-none}\"" \
-        "the rebuilt high-contrast sheet, which safe mode keeps (it has no stock copy), is Fedora's up to the structure marker: Apex only appends"
+        "the rebuilt high-contrast sheet is Fedora's up to the structure marker: Apex only appends"
 }
 
 fedora_baseline() {
@@ -2038,12 +2039,8 @@ bar_pills() {
 # focus lands, something changes, and a 1 px line's worth of it changes by 3:1, or it is a pinned gap.
 readonly A11Y_FOCUS_SURFACES=(quickSettings dock dialog spotlight)
 readonly A11Y_FOCUS_GAP="the owner's decision on the focus indicators (2026-10-31)"
-# Today's shortfalls: Spotlight's entry shows no indicator but the caret, so at 1:1 in every
-# case; Quick Settings' toggle in light and the dialog's entry in dark change too little.
-declare -A A11Y_FOCUS_TODAY=([default:backdrop:quickSettings]=2.37 [default:busy:quickSettings]=2.14
-    [default-solid:backdrop:quickSettings]=1.91 [default-solid:busy:quickSettings]=2.14
-    [dark-style:backdrop:dialog]=2.87 [dark-style:busy:dialog]=2.87
-    [dark-style-solid:backdrop:dialog]=2.87 [dark-style-solid:busy:dialog]=2.87)
+# Today's shortfall: Spotlight's entry shows no indicator but the caret, so at 1:1 in every case.
+declare -A A11Y_FOCUS_TODAY=()
 for a11y_case in default dark-style high-contrast default-solid dark-style-solid high-contrast-solid; do
     for a11y_wall in backdrop busy; do
         A11Y_FOCUS_TODAY[$a11y_case:$a11y_wall:spotlight]=1
@@ -2112,6 +2109,34 @@ tab_walks() {
     done
 }
 
+# The dock's name labels a hover shows: each whole on the monitor and above the dock, over the case's
+# backdrop and the busy wallpaper; key focus shows one too.
+dock_labels() {
+    local label=$1 report=$2 path
+    for path in "${A11Y_DOCK_LABELS[@]}"; do
+        expect "$label accessibility" "$report" ".monitor as \$m | .${path%.*} as \$d | \$d.${path#*.} as \$l | (\$d.error // \$l.error) == null
+            and \$l.box.x >= \$m.x and \$l.box.x + \$l.box.width <= \$m.x + \$m.width and \$l.box.y >= \$m.y
+            and \$l.box.y + \$l.box.height <= \$d.dock.y" "$path: a hover shows the name label, whole on the monitor and above the dock"
+    done
+    expect "$label accessibility" "$report" '.dockLabels.keyFocus | .hidden and .focused and .shown' \
+        "with every label down, key focus on the dock's first item shows its name label, as a hover does"
+}
+
+# A case that measures the dock's labels alone, at its own scale: their text and their place.
+dock_labels_case() {
+    local label=$1 log=$2 report error s
+    report=$(report_of "$log" APEXG2-DOCK-LABELS)
+    error=$(jq -r '.error // empty' <<<"$report" 2>/dev/null)
+    if [[ -z $report || -n $error ]]; then
+        fail "$label accessibility: dock labels (${error:-no APEXG2-DOCK-LABELS report})"
+        return
+    fi
+    for s in "${A11Y_DOCK_LABELS[@]}"; do
+        a11y_verdict "$label accessibility: $s: text $A11Y_TEXT_RATIO:1 against what is drawn behind it" "$(a11y_low_contrast "$report" "$s")"
+    done
+    dock_labels "$label" "$report"
+}
+
 # The text below 4.5:1 and the glyphs and dots below 3:1 in a report's surface at path; with gapdot
 # true, the inactive workspace dots are left to inactive_dot.
 a11y_low_contrast() {
@@ -2140,6 +2165,7 @@ a11y_contrast() {
     bar_pills "$label" "$report"
     focus_rings "$label" "$report"
     tab_walks "$label" "$report"
+    dock_labels "$label" "$report"
     expect "$label accessibility" "$report" '.wifiMenuConnected.targets | any(.kind == "text" and (.inactive | not))' \
         "the connected network's name is measured over its row's own fill"
     expect "$label accessibility" "$report" '(.bar.targets | map(select(.kind == "dot" and .name == "workspace-dot")) | length >= 2)
@@ -2167,6 +2193,7 @@ a11y_layout() {
     local label=$1 log=$2 report s problems
     report=$(report_of "$log" APEXG2-A11Y)
     expect "$label accessibility" "$report" '.textScalingFactor == 1.25' "text-scaling-factor is 1.25"
+    dock_labels "$label" "$report"
     for s in "${A11Y_SURFACES[@]}"; do
         problems=$(jq -r --arg path "$s" \
             ".monitor as \$m | ([$A11Y_SURFACE] | add // []) as \$e | if (\$e | length) > 0 then \$e else (getpath(\$path | split(\".\")) | $A11Y_LAYOUT) end | join(\"; \")" \
@@ -2456,6 +2483,7 @@ direct_cases() {
     top_bar default-scale1 "$f" light
     top_bar_today default-scale1 "$f" light
     dock_metrics default-scale1 "$f" light
+    dock_labels_case default-scale1 "$f"
     shell_surfaces default-scale1 "$f" light
     quick_settings default-scale1 "$f" light
     quick_settings_layer default-scale1 "$f" apex
@@ -2729,6 +2757,7 @@ dock_external_case() {
     echo "# dock-external: 0014-blurcost.py's ms per scrim re-blur, per monitor against stage-wide (report only):" \
         "both at scale 2 ${cost%%;*}; mixed ${cost#*;}"
     expect dock-external "$r" '.steps.mixedOnExternal.desktopGlass.scrims | length == 2 and all(.enabled == false)' "and the hidden scrims stop blurring"
+    dock_edge_labels "$r"
     expect dock-external "$r" '.steps.mixed | .changed and .primary == 0 and (.window.monitor == .primary) == .dockHidden and
         (.window.monitor == .primary) == .barSolid' \
         "with the panel the primary again, the dock and the bar follow it, and its maximised window hides the dock and turns the bar solid"
@@ -2737,7 +2766,23 @@ dock_external_case() {
         (.glass.dock | blurs(\$t.apex_dock_blur; 2)) and (.glass.bar | .resourceScale == 2 and .radius == 2 * (\$t.apex_bar_blur | px) * 2)"
 }
 
+# Show Apps' name label at a primary's edge that meets the other monitor: shown, and kept to its
+# own monitor, where upstream's dash clamps it to the stage alone.
+dock_edge_labels() {
+    local r=$1 step side
+    for step in mixedOnExternal:left mixed:right; do
+        side=${step#*:}
+        expect dock-external "$r" ".steps.${step%:*}.edgeLabel | .label.width > .item.width and
+            if \"$side\" == \"left\" then .item.x == .monitor.x else .item.x + .item.width == .monitor.x + .monitor.width end" \
+            "Show Apps, its name wider than its icon, stands at the primary's $side edge"
+        expect dock-external "$r" ".steps.${step%:*}.edgeLabel | .shown and .label.x >= .monitor.x
+            and .label.x + .label.width <= .monitor.x + .monitor.width" \
+            "with Show Apps at the primary's $side edge, a hover shows its name label inside the primary, not over the monitor beside it"
+    done
+}
+
 # The keys case: each binding as registered, then pressed through a virtual keyboard.
+# shellcheck disable=SC2016 # jq programs, not shell expansions
 keys_case() {
     local run=$1 f=$1/keys.log r error input backward
     exits "$run" keys 0
@@ -2770,6 +2815,17 @@ keys_case() {
         "Super+Alt+Space switches to the next input source, and Shift+Super+Alt+Space back"
     expect keys "$r" '.pressed.ctrlAltTab | ([.groups[] | select(.dock)] | length == 1) and .dockFocused' \
         "Ctrl+Alt+Tab lists the dock among its groups, and the keyboard focus reaches it"
+    expect keys "$r" '.pressed.ctrlAltTab | .focus != null and .labels == [.focus]' \
+        "and the focused item's name label shows, alone"
+    expect keys "$r" '.pressed.ctrlAltTab.focus as $first | .pressed.dockRight | .focus != null and .focus != $first and .labels == [.focus]' \
+        "Right moves the focus to the next item, and its label goes with it"
+    expect keys "$r" '.pressed.dockEscape | .focus == null and .labels == []' "Escape takes the focus out of the dock, and the label goes"
+    expect keys "$r" '.pressed.ctrlAltTab.focus as $first | .pressed.dockHover | .focused == [$first] and .hovered == [.hoveredName]
+        and .left == [$first]' \
+        "with the first item focused, a hover on the third shows the third's label alone, then the first's once the pointer leaves"
+    expect keys "$r" '.pressed.ctrlAltTab.focus as $first | .pressed.dockHover | .onFocused == [$first] and .offFocused == [$first]
+        and .lowestOpacity == 255' \
+        "and a hover on the focused item, then off it, leaves its label up, never fading it in again"
     expect keys "$r" '.pressed.superTap == {overview: true, apps: false}' "a Super tap opens the overview, on its windows"
     expect keys "$r" '.pressed.superA == {overview: true, apps: true}' "Super+A opens the launcher, the app grid"
     expect keys "$r" '.modals == 0' "and nothing is left holding a grab"
@@ -3194,10 +3250,20 @@ crash_guard() {
     check "window: the layer removed its marker by 65 s" grep -q 'starting marker gone' "$run/guard-window.marker65"
     check "window: SIGABRT after 65 s fails the unit (core-dump) and triggers OnFailure=" \
         bash -c "grep -q 'Failed with result .core-dump.' '$f' && grep -q 'Triggering OnFailure= dependencies' '$f'"
-    check "window: apex-shell-safe.service is skipped (ConditionPathExists=%t/apex-shell-starting unmet)" \
-        grep -q 'apex-shell-safe.service .*skipped, unmet condition check ConditionPathExists=/run/user/1000/apex-shell-starting' "$f"
+    check "window: apex-shell-safe.service runs on the late failure (Starting ... Finished)" \
+        bash -c "grep -q 'Starting apex-shell-safe.service' '$f' && grep -q 'Finished apex-shell-safe.service' '$f'"
+    check "window: and counts it without tripping: shell-guard-trips = none 1 or <deployment> 1" \
+        grep -Eq '^guard counter: (none|[0-9a-f]+\.[0-9]+) 1$' "$run/guard-window.state"
     check "window: layer-enabled stays true" grep -q '^layer-enabled=true$' "$run/guard-window.state"
     check "window: no guard marker" grep -q 'guard marker: .*No such file' "$run/guard-window.state"
+
+    f=$run/guard-second.journal
+    check "second: the layer removed its marker by 65 s again" grep -q 'starting marker gone' "$run/guard-second.marker65"
+    check "second: a 2nd late failure on the same deployment runs apex-shell-safe.service" \
+        bash -c "grep -q 'Starting apex-shell-safe.service' '$f' && grep -q 'Finished apex-shell-safe.service' '$f'"
+    check "second: and trips: layer-enabled is false afterwards" grep -q '^layer-enabled=false$' "$run/guard-second.state"
+    check "second: ~/.local/state/apex/shell-guard-tripped exists" grep -q 'guard marker: -rw' "$run/guard-second.state"
+    check "second: the counter is gone" grep -q 'guard counter: .*No such file' "$run/guard-second.state"
 
     for t in trip trip-warm; do
         f=$run/guard-$t.journal

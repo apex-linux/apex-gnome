@@ -541,9 +541,19 @@ function quickSettingsState(label, quickSettings) {
 }
 
 // NMWirelessNetworkItem's and QuickToggleMenu's actors, as their constructors leave them.
-function networkRow(St, Clutter, active) {
+function networkRow(St, Clutter, active, accessPoints = 1) {
     const row = new St.Widget({name: 'row'});
-    row.network = new St.Widget({is_active: active});
+    row.network = new St.Widget({is_active: active, accessPoints});
+    row.network.hasAccessPoints = () => row.network.accessPoints > 0;
+    // Clutter notifies visible: the stub's plain field does not.
+    let visible = true;
+    Object.defineProperty(row, 'visible', {
+        get: () => visible,
+        set: value => {
+            visible = value;
+            row.emit('notify::visible');
+        },
+    });
     const icons = new St.BoxLayout({name: 'icons'});
     row._secureIcon = new St.Icon({name: 'lock', y_align: Clutter.ActorAlign.END});
     [new St.Icon({name: 'signal'}), row._secureIcon].forEach(i => icons.add_child(i));
@@ -611,17 +621,28 @@ async function exerciseSubmenus(Main) {
     other.network.is_active = true;
     other.network.emit('notify::is-active');
     fact('qs.row.switched', `${rowState(active)} | ${rowState(other)}`);
+    // network.js shows every row after each access point, the one it made for a refused one too.
+    const [empty, refused] = [networkRow(St, Clutter, false, 0), networkRow(St, Clutter, false, 0)];
+    quickSettings.menu.actor.children.push(empty, refused);
+    [empty, refused].forEach(row => Hooks.run('quick-settings-network-item', row));
+    [empty, refused].forEach(row => row.show());
+    fact('qs.row.empty', `visible=${empty.visible}`);
+    empty.network.accessPoints = 1;
+    empty.show();
+    fact('qs.row.adopted', `visible=${empty.visible}`);
     const gone = networkRow(St, Clutter, true);
     Hooks.run('quick-settings-network-item', gone);
     gone.destroy();
     settings.set_boolean('layer-enabled', false);
     await spin(200);
     fact('qs.off.row', rowState(other));
+    fact('qs.off.refused', `visible=${refused.visible}`);
     fact('qs.off.menu', menu.subtitleAt());
     other.network.emit('notify::is-active');
     fact('qs.off.row-unfollowed', `checked=${other.has_style_pseudo_class('checked')}`);
     settings.set_boolean('layer-enabled', true);
     await spin(200);
+    fact('qs.on.refused', `visible=${refused.visible}`);
     fact('qs.on.row', rowState(other));
     fact('qs.on.menu', menu.subtitleAt());
 }
@@ -1062,15 +1083,17 @@ async function exerciseTopBar() {
     Hooks.run('hot-corner', corner, Main.layoutManager);
     fact('hot-corner.zone', `${corner.name ?? 'none'} reactive=${corner.reactive ?? false} ` +
         `x=${corner.x} y=${corner.y} ${corner.width}x${corner.height}`);
-    if (corner.handlers['enter-event']) {
-        corner.handlers['enter-event']();
-        corner.handlers['enter-event']();
+    if (corner.handlers['motion-event']) {
+        corner.handlers['enter-event']?.();
+        fact('hot-corner.after-enter', corner._pressureBarrier._isTriggered);
+        corner.handlers['motion-event']();
+        corner.handlers['motion-event']();
         corner._pressureBarrier._barriers[0]._isHit = true;
         corner.handlers['leave-event']();
         fact('hot-corner.after-leave-on-the-barrier', corner._pressureBarrier._isTriggered);
         corner._pressureBarrier._barriers[0]._isHit = false;
         corner.handlers['leave-event']();
-        corner.handlers['enter-event']();
+        corner.handlers['motion-event']();
     }
 
     if (GLib.getenv('PROBE_CLEAR_SYNCED') === '1') {
@@ -1123,6 +1146,14 @@ async function exerciseFocusedApp() {
             : 'none');
     };
     report('none');
+    const leftBoxOrder = () => Main.panel.leftBox.children.map(c => c.name ?? (c.child?.accessible_name && 'focused-app')).join(',');
+    fact('focused-app.left-box', leftBoxOrder());
+    // panel.js puts its own items back at the box's end at each session-mode change.
+    const activities = Main.panel.statusArea.activities.container;
+    Main.panel.leftBox.remove_child(activities);
+    Main.panel.leftBox.insert_child_at_index(activities, Main.panel.leftBox.children.length);
+    Main.sessionMode.lock(false);
+    fact('focused-app.left-box.after-session-update', leftBoxOrder());
     tracker.focus({get_name: () => 'Files'});
     report('files');
     tracker.focus(null);
@@ -1382,6 +1413,7 @@ async function exerciseLock() {
         .map(c => c.text ?? c.name ?? c.children.map(part => part.text ?? '').join('')).join(',');
     fact('lock.prompt-box', promptBoxChildren());
     fact('lock.hint.password', hintState(dialog));
+    fact('lock.ring.password', `${dialog.has_style_class_name('apex-lock-error')}`);
     for (const [label, service, text, error] of [
         ['fingerprint-scan', 'gdm-fingerprint', '(or place finger on reader)', false],
         ['fingerprint-failed', 'gdm-fingerprint', 'Failed to match fingerprint', true],
@@ -1391,12 +1423,25 @@ async function exerciseLock() {
     ]) {
         say(dialog, service, text, error);
         fact(`lock.hint.${label}`, hintState(dialog));
+        fact(`lock.ring.${label}`, `${dialog.has_style_class_name('apex-lock-error')}`);
+    }
+    const ring = () => `${dialog.has_style_class_name('apex-lock-error')}`;
+    say(dialog, 'gdm-password', "Sorry, that didn't work. Please try again.", true);
+    fact('lock.ring.password-again', ring());
+    const message = dialog._authPrompt?._message;
+    if (message) {
+        message.opacity = 0;
+        fact('lock.ring.message-faded', ring());
+        message.opacity = 255;
+        fact('lock.ring.message-back', ring());
     }
     for (const [label, mode] of [['blank', PowerSave.OFF], ['wake', PowerSave.ON],
         ['standby', PowerSave.STANDBY], ['wake-again', PowerSave.ON],
         ['suspend', PowerSave.SUSPEND], ['unsupported', PowerSave.UNSUPPORTED]]) {
         setScreen(mode);
         fact(`lock.${label}`, lockState(dialog));
+        if (label === 'blank')
+            fact('lock.ring.blank', ring());
         if (label === 'wake')
             fact('lock.wake.keys', dialog._authPrompt?.keys ?? 'none');
     }
@@ -1567,9 +1612,9 @@ function newAuthenticationDialog(St, {
     userBox.add_child(avatar);
     userBox.add_child(userLabel);
     const info = new St.Label({style_class: 'prompt-dialog-info-label', visible: false, text: ''});
+    const error = new St.Label({style_class: 'prompt-dialog-error-label', visible: false, text: ''});
     const warnings = new St.BoxLayout({name: 'warnings'});
-    for (const label of [new St.Label({name: 'caps-lock'}), new St.Label({name: 'error', visible: false}),
-        info, new St.Label({name: 'null'})])
+    for (const label of [new St.Label({name: 'caps-lock'}), error, info, new St.Label({name: 'null'})])
         warnings.add_child(label);
     const body = new St.BoxLayout({name: 'body'});
     for (const part of [userBox, new St.Entry({name: 'password'}), warnings])
@@ -1581,7 +1626,8 @@ function newAuthenticationDialog(St, {
     Object.assign(user, {is_loaded: loaded, get_user_name: () => userName, get_account_type: () => accountType});
     const dialog = new St.Widget({style_class: 'prompt-dialog'});
     Object.assign(dialog, {
-        actionId, contentLayout, _userAvatar: avatar, _userLabel: userLabel, _user: user, _infoMessageLabel: info, warnings,
+        actionId, contentLayout, _userAvatar: avatar, _userLabel: userLabel, _user: user, _infoMessageLabel: info,
+        _errorMessageLabel: error, warnings,
     });
     return dialog;
 }
@@ -1645,6 +1691,12 @@ async function exercisePolkit() {
     info.text = 'Place your left thumb on the fingerprint reader';
     info.visible = false;
     fact('polkit.info.hidden', polkitInfo(dialog));
+    const errorClass = () => `${dialog.has_style_class_name('apex-polkit-error')}`;
+    fact('polkit.error.none', errorClass());
+    dialog._errorMessageLabel.visible = true;
+    fact('polkit.error.shown', errorClass());
+    dialog._errorMessageLabel.visible = false;
+    fact('polkit.error.hidden', errorClass());
 
     for (const [label, who] of [['standard', {accountType: 0}], ['root', {userName: 'root', accountType: 1}]]) {
         const other = newAuthenticationDialog(St, who);
@@ -2215,6 +2267,93 @@ async function exerciseRemoteWatcher() {
     [early, late].forEach(item => item.quit());
 }
 
+// Key focus names a dock item as a hover does, one label at a time.
+async function dockFocusLabels(dock, Main) {
+    const {default: Clutter} = await import(`file://${GLib.path_get_dirname(shellDir)}/Clutter.js`);
+    const box = Main.layoutManager.chrome.find(actor => actor.name === 'apexDockBox' && !actor.destroyed);
+    const items = dock._labelledItems();
+    const [files, web, showApps] = items;
+    const name = item => item?.labelText ?? item?.name ?? 'none';
+    const labels = (step, more = '') => fact(`dock.labels.${step}`,
+        `${items.filter(i => i.label.visible && !i.destroyed).map(name).join(',') || 'none'} focus=${name(dock._focusItem)}${more}`);
+    const focus = (item, inside) => item.child.emit(inside ? 'key-focus-in' : 'key-focus-out');
+    const hover = (item, on) => {
+        item.child.hover = on;
+        dock._syncLabel(item);
+    };
+    const slide = y => {
+        box.translation_y = y;
+        box.emit('notify::translation-y');
+    };
+    const map = (item, mapped) => {
+        item.child.mapped = mapped;
+        item.child.emit('notify::mapped');
+    };
+    const escape = {get_key_symbol: () => Clutter.KEY_Escape};
+    const overviewWas = Main.overview.visible;
+    Main.overview.visible = false;
+    global.stage.set_key_focus = actor => {
+        if (actor === null && dock._focusItem)
+            focus(dock._focusItem, false);
+    };
+    labels('initial');
+    focus(files, true);
+    labels('focused');
+    focus(files, false);
+    focus(web, true);
+    labels('moved');
+    hover(showApps, true);
+    labels('hovered');
+    hover(showApps, false);
+    labels('hover-ended');
+    const shows = web.label.shows;
+    hover(web, true);
+    labels('hover-focused');
+    hover(web, false);
+    labels('hover-focused-ended', ` faded-in-again=${web.label.shows - shows}`);
+    dock._itemMenuStateChanged(files, true);
+    labels('other-menu-open');
+    dock._itemMenuStateChanged(files, false);
+    labels('other-menu-closed');
+    dock.tailItems.trash._menu.open();
+    labels('trash-menu-open');
+    dock.tailItems.trash._menu.close();
+    labels('trash-menu-closed');
+    map(web, false);
+    labels('unmapped');
+    map(web, true);
+    labels('mapped');
+    slide(160);
+    labels('slid-out');
+    slide(0);
+    labels('slid-back');
+    web.child.emit('clicked');
+    labels('activated');
+    const [showsBefore, labelX] = [web.label.shows, web.label.x];
+    web.x += 100;
+    Main.layoutManager.emit('monitors-changed');
+    await spin(50);
+    labels('dock-moved', ` label-moved=${web.label.x - labelX} faded-in-again=${web.label.shows - showsBefore}`);
+    web.x -= 100;
+    web.child.emit('key-press-event', escape);
+    labels('escape');
+    focus(web, true);
+    Main.overview.visible = true;
+    const passed = dock._onKeyPress(escape) === Clutter.EVENT_PROPAGATE;
+    labels('escape-in-overview', ` to-overview=${passed}`);
+    Main.overview.visible = overviewWas;
+    focus(files, true);
+    // Unpinned, its item goes while it has the key focus: no key-focus-out comes.
+    files.destroy();
+    hover(web, true);
+    hover(web, false);
+    slide(160);
+    slide(0);
+    labels('focused-item-destroyed');
+    focus(web, true);
+    delete global.stage.set_key_focus;
+}
+
 async function exerciseDock() {
     if (GLib.getenv('PROBE_DOCK') !== '1')
         return;
@@ -2260,7 +2399,9 @@ async function exerciseDock() {
         fact('dock.hooks', `separator=${Hooks.value('dash-favorites-separator', true, dock)} ` +
             `stock-separator=${Hooks.value('dash-favorites-separator', true, {})} ` +
             `show-apps=${Hooks.value('show-apps-icon-name', 'view-app-grid-symbolic', dock.tailItems.showApps)}`);
+        await dockFocusLabels(dock, Main);
     }
+    fact('dock.focus-label-at-disable', dock?._focusShowing?.name ?? 'none');
     dash._queueRedisplay();
     settings.set_boolean('layer-enabled', false);
     await spin(200);
@@ -2343,6 +2484,40 @@ async function exerciseIntellihide() {
     windows.pop();
 }
 
+// PROBE_BANNERS_OFF: Do Not Disturb at enable, then banners back on while locked, after a
+// layer-enabled=false (PROBE_HINT_DISABLE), and unlocked; each step's notifies and the key.
+async function exerciseSearchHint() {
+    if (GLib.getenv('PROBE_BANNERS_OFF') !== '1')
+        return;
+    const banners = new Gio.Settings({schema_id: 'org.gnome.desktop.notifications'});
+    const state = label => fact(`search-hint.${label}`,
+        `notifies=${mainModule.notifies} shown=${settings.get_boolean('search-hint-shown')}`);
+    const turnOn = async () => {
+        banners.set_boolean('show-banners', false);
+        await spin(50);
+        banners.set_boolean('show-banners', true);
+        await spin(50);
+    };
+    state('dnd');
+    if (GLib.getenv('PROBE_HINT_DISABLE') === '1') {
+        settings.set_boolean('layer-enabled', false);
+        await spin(200);
+        await turnOn();
+        state('after-disable');
+        settings.set_boolean('layer-enabled', true);
+        await spin(200);
+        return;
+    }
+    mainModule.sessionMode.lock(true);
+    await turnOn();
+    state('locked');
+    mainModule.sessionMode.lock(false);
+    await turnOn();
+    state('banners-on');
+    await turnOn();
+    state('again');
+}
+
 async function switchLayer() {
     const cycles = Number(GLib.getenv('PROBE_SWITCH') ?? '0');
     for (let cycle = 1; cycle <= cycles; cycle++) {
@@ -2373,6 +2548,8 @@ globalThis.PROBE_FAVOURITES = ['Files', 'Web'];
 if (layer && GLib.getenv('PROBE_ENABLE') === '1') {
     if (GLib.getenv('PROBE_LOCKED') === '1')
         (await import(`file://${shellDir}/js/ui/main.js`)).sessionMode.isLocked = true;
+    if (GLib.getenv('PROBE_BANNERS_OFF') === '1')
+        new Gio.Settings({schema_id: 'org.gnome.desktop.notifications'}).set_boolean('show-banners', false);
     layer.enable();
     const marker = GLib.build_filenamev([GLib.get_user_runtime_dir(), 'apex-shell-starting']);
     fact('starting-file', GLib.file_test(marker, GLib.FileTest.EXISTS));
@@ -2390,6 +2567,7 @@ if (layer && GLib.getenv('PROBE_ENABLE') === '1') {
         fact('survived', `${waitSeconds}s`);
     }
     mainModule = await import(`file://${shellDir}/js/ui/main.js`);
+    await exerciseSearchHint();
     await pressToggleSpotlight();
     overviewSearchWithoutSpotlight();
     await exerciseLock();

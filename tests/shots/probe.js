@@ -85,6 +85,16 @@ const LATE_NETWORK = {
     name: 'apexlate', ssid: 'Apex-Late', address: '02:A5:E0:00:00:09', frequency: 5745, rate: 866700, strength: 64,
     security: 0x188,
 };
+// RSN PSK without a cipher, then a WPA2 network with them.
+const REFUSED_NETWORK = {
+    name: 'apexodd', ssid: 'Apex-Odd', address: '02:A5:E0:00:00:0A', frequency: 5180, rate: 866700, strength: 70,
+    security: 0x100,
+};
+const ADOPTED_NETWORK = {
+    name: 'apexfixed', ssid: 'Apex-Fixed', address: '02:A5:E0:00:00:0B', frequency: 2462, rate: 300000, strength: 56,
+    security: 0x188,
+};
+const WIFI_REFUSED_MS = 1500;
 const NM_DEVICE = '/org/freedesktop/NetworkManager/Devices/wlan0';
 const TRAY_DRAIN_MS = 3000;
 const SHUTDOWN_HISTORY_DELAY_MS = 300;
@@ -1117,6 +1127,7 @@ async function wifiMenuRows(unit) {
             subtitle: {column: meta.left_attach, row: meta.top_attach, xAlign: subtitle.x_align, end: Clutter.ActorAlign.END},
             rows: listed,
             late: await lateNetworkRow(rows, describe),
+            refused: await refusedNetworkRows(rows, describe),
         };
     } finally {
         wifi.menu.close(BoxPointer.PopupAnimation.NONE);
@@ -1125,10 +1136,8 @@ async function wifiMenuRows(unit) {
     }
 }
 
-// network.js names a new network's row as its first access point arrives, before it is the
-// best one: the name must still end up with the access point's strength.
-async function lateNetworkRow(rows, describe) {
-    const call = (method, signature, args) => new Promise((resolve, reject) => Gio.DBus.system.call(
+function nmMock(method, signature, args) {
+    return new Promise((resolve, reject) => Gio.DBus.system.call(
         'org.freedesktop.NetworkManager', '/org/freedesktop/NetworkManager', 'org.freedesktop.DBus.Mock', method,
         new GLib.Variant(signature, args), null, Gio.DBusCallFlags.NONE, -1, null, (bus, res) => {
             try {
@@ -1137,22 +1146,70 @@ async function lateNetworkRow(rows, describe) {
                 reject(e);
             }
         }));
-    const {name, ssid, address, frequency, rate, strength, security} = LATE_NETWORK;
+}
+
+function addAccessPoint({name, ssid, address, frequency, rate, strength, security}) {
+    return nmMock('AddAccessPoint', '(ssssuuuyu)', [NM_DEVICE, name, ssid, address, 2, frequency, rate, strength, security]);
+}
+
+async function rowFor(rows, ssid) {
+    const row = () => rows().find(r => r.visible && r._label.text === ssid);
+    for (let waited = 0; !row() && waited < WIFI_SCAN_MS; waited += 100)
+        await Scripting.sleep(100); // eslint-disable-line no-await-in-loop
+    await settle();
+    return row();
+}
+
+// network.js names a new network's row as its first access point arrives, before it is the
+// best one: the name must still end up with the access point's strength.
+async function lateNetworkRow(rows, describe) {
     let path;
     try {
-        path = await call('AddAccessPoint', '(ssssuuuyu)',
-            [NM_DEVICE, name, ssid, address, 2, frequency, rate, strength, security]);
-        const late = () => rows().find(row => row._label.text === ssid);
-        for (let waited = 0; !late() && waited < WIFI_SCAN_MS; waited += 100)
-            await Scripting.sleep(100); // eslint-disable-line no-await-in-loop
-        await settle();
-        return late() ? describe(late()) : {error: `no row for ${ssid} within ${WIFI_SCAN_MS} ms`};
+        path = await addAccessPoint(LATE_NETWORK);
+        const late = await rowFor(rows, LATE_NETWORK.ssid);
+        return late ? describe(late) : {error: `no row for ${LATE_NETWORK.ssid} within ${WIFI_SCAN_MS} ms`};
     } catch (e) {
         return {error: e.message};
     } finally {
         if (path)
-            await call('RemoveAccessPoint', '(ss)', [NM_DEVICE, path]).catch(() => {});
+            await nmMock('RemoveAccessPoint', '(ss)', [NM_DEVICE, path]).catch(() => {});
     }
+}
+
+// An access point no security type validates: network.js keeps the row it made for it, blank.
+// The next valid access point goes to that same network, and its row shows.
+async function refusedNetworkRows(rows, describe) {
+    const shown = () => rows().filter(r => r.visible);
+    const paths = [];
+    try {
+        const before = shown().length;
+        paths.push(await addAccessPoint(REFUSED_NETWORK));
+        await Scripting.sleep(WIFI_REFUSED_MS);
+        await settle();
+        const after = shown();
+        const refused = {
+            before, after: after.length,
+            blank: after.filter(r => !r._label.text).length,
+            unnamed: after.filter(r => !r.accessible_name).length,
+        };
+        paths.push(await addAccessPoint(ADOPTED_NETWORK));
+        const adopted = await rowFor(rows, ADOPTED_NETWORK.ssid);
+        refused.adopted = adopted ? describe(adopted) : {error: `no row for ${ADOPTED_NETWORK.ssid}`};
+        // Without access points left, network.js destroys the network and its row.
+        await removeAccessPoints(paths.splice(0));
+        await Scripting.sleep(WIFI_REFUSED_MS);
+        await settle();
+        return {...refused, removed: {shown: shown().length, rows: rows().length}};
+    } catch (e) {
+        return {error: e.message};
+    } finally {
+        await removeAccessPoints(paths);
+    }
+}
+
+async function removeAccessPoints(paths) {
+    for (const path of paths)
+        await nmMock('RemoveAccessPoint', '(ss)', [NM_DEVICE, path]).catch(() => {}); // eslint-disable-line no-await-in-loop
 }
 
 // The quick-settings feature: the toggles' order, Power Mode lit, On/Off subtitles; then two
@@ -2080,6 +2137,55 @@ async function chord(keyboard, modifiers, keyval) {
     await settle();
 }
 
+// The dock items whose name label is up, once every label's fade has run.
+async function dockLabelsShown(dock) {
+    const items = dock?._labelledItems?.() ?? [];
+    await until(() => items.every(i => !i.label.get_transition('opacity')), 3000);
+    return items.filter(i => i.label.visible && i.label.opacity > 0).map(i => i._labelText);
+}
+
+function focusedDockItem(dock) {
+    const focus = global.stage.get_key_focus();
+    return dock?._labelledItems?.().find(i => i.child === focus)?._labelText ?? null;
+}
+
+// The first item key focused while the pointer hovers the third: the hover's label alone, and,
+// the pointer gone, the focused item's again.
+async function hoverWhileFocused(dock) {
+    const items = dock._labelledItems();
+    const pointer = global.stage.context.get_backend().get_default_seat()
+        .create_virtual_device(Clutter.InputDeviceType.POINTER_DEVICE);
+    const moveTo = ([x, y]) => until(() => {
+        const [px, py] = global.get_pointer();
+        if (px === x && py === y)
+            return true;
+        pointer.notify_absolute_motion(GLib.get_monotonic_time(), x, y);
+        return false;
+    }, 3000);
+    const monitor = Main.layoutManager.primaryMonitor;
+    const away = [monitor.x + monitor.width / 2, monitor.y + monitor.height / 4].map(Math.round);
+    items[0].child.grab_key_focus();
+    const focused = await dockLabelsShown(dock);
+    const [x, y] = items[2].child.get_transformed_position();
+    const [width, height] = items[2].child.get_transformed_size();
+    await moveTo([x + width / 2, y + height / 2].map(Math.round));
+    await until(() => items[2].label.visible && items[2].label.opacity === 255, 3000);
+    const hovered = await dockLabelsShown(dock);
+    await moveTo(away);
+    const left = await dockLabelsShown(dock);
+    // The focused item hovered and left: its label stays up, never fading in again.
+    let lowest = items[0].label.opacity;
+    const id = items[0].label.connect('notify::opacity', label => (lowest = Math.min(lowest, label.opacity)));
+    const [fx, fy] = items[0].child.get_transformed_position();
+    const [fw, fh] = items[0].child.get_transformed_size();
+    await moveTo([fx + fw / 2, fy + fh / 2].map(Math.round));
+    const onFocused = await dockLabelsShown(dock);
+    await moveTo(away);
+    const offFocused = await dockLabelsShown(dock);
+    items[0].label.disconnect(id);
+    return {focused, hovered, left, hoveredName: items[2]._labelText, onFocused, offFocused, lowestOpacity: lowest};
+}
+
 // The session's keys, each as registered and then pressed, from the desktop with nothing open.
 async function keysCase() {
     const bindings = {
@@ -2153,7 +2259,16 @@ async function keysCase() {
     pressed.ctrlAltTab = {
         groups: groups.map(item => ({name: item.name, dock: item === dockGroup})),
         dockFocused: !!dock && !!focus && dock.contains(focus),
+        focus: focusedDockItem(dock),
+        labels: await dockLabelsShown(dock),
     };
+    if (pressed.ctrlAltTab.dockFocused) {
+        await pressKeys(keyboard, Clutter.KEY_Right, 1);
+        pressed.dockRight = {focus: focusedDockItem(dock), labels: await dockLabelsShown(dock)};
+        await pressKeys(keyboard, Clutter.KEY_Escape, 1);
+        pressed.dockEscape = {focus: focusedDockItem(dock), labels: await dockLabelsShown(dock)};
+        pressed.dockHover = await hoverWhileFocused(dock);
+    }
     global.stage.set_key_focus(null);
     await settle();
 
@@ -3658,6 +3773,17 @@ async function runProbe() {
             toggled = {error: `${e.message}\n${e.stack}`};
         }
         console.log(`APEXG2-TOGGLED ${JSON.stringify(toggled)}`);
+    }
+
+    if (GLib.getenv('G2_DOCK_LABELS') === '1') {
+        let result;
+        try {
+            const A11y = await import('./a11y.js');
+            result = await A11y.dockLabelsReport({unit: cssUnit(), apexDock});
+        } catch (e) {
+            result = {error: `${e.message}\n${e.stack}`};
+        }
+        console.log(`APEXG2-DOCK-LABELS ${JSON.stringify(result)}`);
     }
 
     if (GLib.getenv('G2_KEYS') === '1') {

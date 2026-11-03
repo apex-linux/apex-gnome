@@ -14,7 +14,7 @@ directory with `git archive` and unpacks it at the top of Fedora's gnome-shell t
 
 | Path | What it is |
 |---|---|
-| `apex.gresource.xml` | the Apex resource: `/org/gnome/shell/ui/apex` (the layer), `/org/gnome/shell/theme/apex` (the sheets' assets) and `/org/gnome/shell/theme/stock` (upstream's compiled light and dark sheets, the safe-mode sheets). Patch 0001-build compiles it and links it into libshell next to upstream's JS resource. |
+| `apex.gresource.xml` | the Apex resource: `/org/gnome/shell/ui/apex` (the layer), `/org/gnome/shell/theme/apex` (the sheets' assets) and `/org/gnome/shell/theme/stock` (upstream's three compiled sheets, the safe-mode sheets). Patch 0001-build compiles it and links it into libshell next to upstream's JS resource. |
 | `js/ui/apex/hooks.js` | the only Apex module upstream files import: `safe()`, `value()`, `run()`, and `loadLayer()` for `main.js` |
 | `js/ui/apex/layer.js` | the layer: the configure and enable phases, one `try/catch` per feature, the session-mode colour hook, the crash guard's marker file |
 | `js/ui/apex/lock/` | the lock screen of S3b (board 20), the `lock` feature: `stage.js` (the single stage: date over time over the prompt and its hint, the overlay, the prompt torn down while `org.gnome.Mutter.DisplayConfig`'s `PowerSaveMode` blanks the screen and rebuilt on wake), `background.js` (the blur, σ 30 and saturation 1.3, without upstream's darkening), `question.js` ("Enter Password" for PAM's exact `Password:` only), `fingerprint.js` (board 20's fingerprint states in the hint's line: "Or touch the fingerprint reader" with the print glyph while GDM's `gdm-fingerprint` conversation prompts, "Fingerprint not recognized. Try again." after a failed scan, upstream's message line and "Unlock with fingerprint" indicator standing aside for those states only; driven by the conversation, so it shows nothing until the image turns fingerprint on) and `avatar.js` (the name's initial in place of the generic icon), through patch 0015's hooks. Unlocking stays upstream's: no Apex code is on its path, which `tests/layer/run.sh`'s unlock guard checks. Stock keeps, until S4: the show-password eye and the chevron button; and the password's failure text on a message line above the hint, where the board puts it in the hint's place with a red ring |
@@ -48,11 +48,11 @@ directory with `git archive` and unpacks it at the top of Fedora's gnome-shell t
 | `data/theme/apex/_derived.scss` | stock surfaces with no board, from their nearest board (DESIGN.md): the workspace switcher and resize popup take the OSD's tint, ring and radius, with `$apex_fg_faint` and `$apex_fg` dots; the input method's candidates the popup menu's; the run dialog's entry the password entry; audio device tiles the switcher's; the monitor number the OSD's radius. Glass surfaces take only the tint here: the glass manager registers them for the blur |
 | `data/theme/apex/_tile-preview.scss` | the edge-tiling preview (board 22): `$apex_tile_preview_inset` inside the tile mutter gives it (a clear border, since mutter sets its size), radius `$apex_radius_tile_preview`, the accent at `$apex_tile_preview_fill_opacity` ringed `$apex_tile_preview_ring` in the accent at `$apex_tile_preview_ring_opacity` (an inset shadow). With glass, a glass actor `glass/derived.js` keeps just below the preview on the inner rect draws the board's blur, `$apex_tile_preview_blur` at `$apex_tile_preview_saturation`, the fill and the ring as a border, even round its corners; the preview, classed `apex-tile-preview-glassed`, draws nothing. Reduce Transparency and high contrast drop only the blur. With `glass` in `disabled-features` the preview's own fill and inset-shadow ring come back, the ring a little thicker at the corners: St cuts the shadow's hole at the radius of the clear border |
 | `data/theme/apex/_spotlight.scss` | Spotlight and its toast (board 38): a 680 px glass panel tinted `$apex_panel`, radius 24, 96 px below the monitor's top edge; the 60 px field with 20/500 text and a 20 px glyph; 11.5/700 uppercase section headers; 48 px rows with 32 px icons, 14/600 titles over 12.5 px subtitles, the selected one in the accent at 16 % with its verb and an Enter chip; the calculator's result at 18/700 in tabular figures; the "Copied" toast a 40 px glass pill 92 px above the screen's bottom edge. Both are glass: `popup.js` and `toast.js` register the panel (`spotlight`) and the toast's pill (`toast`) with `glass/registry.js`, and `_glass.scss` gives them `$apex_spotlight_blur` and `$apex_spotlight_saturation` (σ 34, 1.8) and `$apex_toast_blur` and `$apex_toast_saturation` (σ 30, 1.8, ADR 0014's toast row), `$apex_panel_solid` under Reduce Transparency |
-| `data/theme/apex/_lock.scss` | the lock screen (board 20) and what the greeter (board 12) shares with it, white on the blurred wallpaper in both variants: the date at 22/600 over the time at 118/700, 128 px down; the 92 px avatar circle and its initial; the 250 × 38 glass field with its 38 px round button beside it; "Press Enter to unlock" at 12.5 px, and in its line the fingerprint states with a 16 px print glyph 8 px before the text, the failure in full white; the `$apex_lock_overlay` darkening; the greeter's 380 px glass user list with 48 px avatars |
+| `data/theme/apex/_lock.scss` | the lock screen (board 20) and what the greeter (board 12) shares with it, white on the blurred wallpaper in both variants: the date at 22/600 over the time at 118/700, 128 px down; the 92 px avatar circle and its initial; the 250 × 38 glass field with its 38 px round button beside it; "Press Enter to unlock" at 12.5 px, and in its line the fingerprint states with a 16 px print glyph 8 px before the text, the failure in full white; the `$apex_lock_scrim` darkening (`rgba(8, 10, 20)` at .68 light, .34 dark), which holds every text at 4.5:1 over Facets and solid colours; the greeter's 380 px glass user list with unfilled 48 px avatars in a 1 px outline (2 px for a logged-in user), a focused row filled at .01 under a 2 px ring and a pointed one, which upstream also selects and focuses, at .06 under it |
 | `data/theme/apex/_greeter.scss` | the greeter (board 12) beyond `_lock.scss`: the login dialog over apex-desktop's pre-blurred Facets (`$apex_greeter_background`, rendered at build time since gdm runs no JS), `$apex_greeter_fallback` without the file; the footer is apex-desktop's `org.gnome.login-screen logo`, `$apex_greeter_bottom` above the bottom edge; the back button and the bottom row's session and accessibility buttons are 38 px `$apex_greeter_button` circles ringed in `$apex_greeter_button_border`. Stock lacks the board's "Choose a user" heading, the rows' account type and chevron, the avatars' initials (the lock's JS) and the clock on the left; each needs JS gdm does not run |
 | `data/theme/apex/_screenshot.scss` | the screenshot UI (board 19): glass, which `glass/derived.js` registers; a 440 px `$apex_panel` panel, radius 26, inset 14, 48 px above the bottom edge, with the board's heading row kept for the close button (a 30 px `$apex_button` circle); 64 px area buttons in `$apex_button` (`$apex_button_hover` checked), radius 16, a 20 px glyph over a 12.5/600 name; a 38 px pointer toggle, the accent when on; a 64 px capture button, a 4 px `$apex_fg` ring round a `$apex_fg` dot (a 26 px `$apex_screenshot_record` square while recording); the screenshot/screencast switch in `$apex_button`, the checked button `$apex_panel_solid`; the selection shaded `$apex_screenshot_shade` with 14 px white handles; the chosen screen and window ringed 3 px in the accent. Stock lacks the board's heading text, its 8 px gap between the area buttons (12 px, set in JS), the pointer toggle on the left and the switch on the right (swapped, set in JS), the selection's size label, and the window selector's windows in place (stock lays them out); each needs a hook |
 | `data/theme/apex/_indicators.scss` | the app indicators (board 39): 30 × 24 pills, radius 12, 2 px apart, their 16 px glyphs in `$apex_bar_fg`; the 6 px accent dot 3 px from the top and 5 px from the right; the 1 × 14 divider in `$apex_bar_fg` at .2, 6 px each side; "‹ +N"; an open one in `$apex_button_hover`. Their menus at least 280 px (the overflow's 240), rows padded 12 with radius 9, the title as a 30 px header in `$apex_fg_dim`, separators 5 px from rows and 10 from the sides, shortcuts in `$apex_fg_dim`, 30 × 18 switches with a 14 px knob |
-| `data/theme/apex/_apex-structure.scss` | the high-contrast sheet's Apex part: the tokens with upstream's high-contrast palette mapped onto them, then the Apex-only partials (Spotlight and its toast, the dock, the end-session icon), solid; and the lock overlay's darkening there (black at .55), since the lock's blur leaves that to it |
+| `data/theme/apex/_apex-structure.scss` | the high-contrast sheet's Apex part: the tokens with upstream's high-contrast palette mapped onto them, then the Apex-only partials (Spotlight and its toast, the dock, the end-session icon), solid; the lock overlay's darkening there (black at .68, at least the light scrim's), since the lock's blur leaves that to it; the Apex lock's and the greeter list's avatars unfilled in a 1 px outline of high contrast's foreground, the glyph in it too (upstream's fill held them at 2.3 to 2.96:1) |
 | `data/theme/apex/_apex-base.scss`, `_end-session-icon.scss` | what both sheets share: `apex-text-size()`, the `apex-surface()` and `apex-reset` mixins; the end-session icon's circle |
 | `data/theme/apex/meson.build` | adds the partials to upstream's `theme_sources`, so an edit recompiles the sheets |
 
@@ -163,6 +163,31 @@ stock bar when it is disabled:
   value unless stock's binding has synced it since. It is the panel's, not the notifications', so
   the fix holds with `notifications` in disabled-features.
 
+Upstream's other bindings without `SYNC_CREATE`, audited in gnome-shell 51.0 and 51.1 (every
+`bind_property`/`bind_property_full` under `js/`, the same 23 sites in both). Only calendar.js:840
+shows a user anything; each other target starts at what a sync would give, or an explicit set
+notifies before it shows.
+
+| Site (51.0; 51.1 where it moved) | Binding | At creation |
+|---|---|---|
+| `ui/calendar.js:840` | placeholder `visible` → Clear `visible`, inverted | Clear over an empty list: `panel/clear-sync.js` |
+| `ui/main.js:572` (:559) | the workspaces adjustment | not a site: its flags table has `SYNC_CREATE` |
+| `ui/status/backgroundApps.js:92` | spinner `visible` → close button, inverted | spinner hidden, button shown |
+| `ui/status/network.js:251`, `:254` | section item `name`, `icon-name` → submenu label, icon | bound before either is set |
+| `ui/status/network.js:318`, `:321` | connection item `icon-name` → icon; `radio-mode` → icon `visible` | the icon starts at `!radio_mode` |
+| `ui/status/network.js:1111` | Wi-Fi item `single-device-mode` → `use-submenu`, inverted | the toggle's `_sync` (:1786) sets it as each device is added |
+| `ui/status/network.js:1397` (:1399) | binding group `source` → toggle `title` | the toggle shows only once it has a primary item, which sets the source |
+| `ui/quickSettings.js:371` | toggle `height` → menu constraint `offset` | both 0 |
+| `ui/screenshot.js:1578` | `screencast-in-progress` → area indicator `visible` | both false |
+| `ui/screenshot.js:1769` | shot `checked` ↔ cast `checked`, inverted | true and false |
+| `ui/altTab.js:426` | clone `source` → constraint `source` | both null |
+| `ui/keyboard.js:513` | emoji pager `visible` → swipe `enabled` | both true |
+| `ui/messageList.js:1731` | scroll `value` ↔ internal adjustment | both 0, offset 0 |
+| `ui/swipeTracker.js:396`, `:412`, `:421`, `:424` | `enabled` and `scroll-modifiers` → each gesture | true and 0 on both sides |
+| `gdm/authPrompt.js:293`, `:296` (:294, :297) | auth list `visible`, `opacity` → its title | hidden, 255 |
+| `gdm/loginDialog.js:1135` (:1111) | dialog `opacity` → uiGroup children | unsynced on purpose: the fade follows the dialog |
+| `portalHelper/main.js:77` | secure icon → header `icon-name` | the portal helper app, not the shell |
+
 `panel/solid-bar.js` makes the bar solid while `translucent-top-bar` is off (live), or while
 a window on the primary monitor's active workspace is maximised, showing and not the
 desktop, and the overview is closed. It follows restacking, size changes, minimising,
@@ -188,8 +213,9 @@ Super+Space is its key. Hovered, it shows the tooltip "Search (Super+Space)" bel
 
 `panel/search-hint.js` posts "Press Super+Space to search" once per user (ROADMAP S1b), as
 a stock transient notification, at the first enable of the panel outside the lock screen,
-and sets `search-hint-shown`. A schema without that key means no hint, logged once; the
-rest of the panel runs.
+and sets `search-hint-shown`. Under Do Not Disturb (`show-banners` false) it posts nothing
+and leaves the key alone: it waits for banners to come back on, unlocked, and then posts once.
+A schema without that key means no hint, logged once; the rest of the panel runs.
 
 `motion/feature.js` gives the shell DESIGN's one curve, `cubic-bezier(.2,.8,.2,1)`
 (ROADMAP S3c). Every ease passes through `environment.js`, where patch 0016's `ease` hook
@@ -461,10 +487,10 @@ Kill switches, strongest first: `apex.safe=1` on the kernel command line or
 `APEX_SHELL_SAFE=1` in the shell's environment (every session); `layer-enabled=false`
 (one user); `disabled-features` (one user, per feature). Safe mode loads no layer (only
 `hooks.js` runs, and every hook gives its stock value) and takes the stylesheets from
-`/org/gnome/shell/theme/stock/`. The high-contrast sheet has no stock copy, so safe mode
-with high contrast uses the rebuilt one, whose Apex part styles only Apex actors. G2
-checks that it is Fedora's sheet up to the structure marker, so the Apex part only appends;
-a rule that restyles upstream's actors there would need a stock high-contrast copy.
+`/org/gnome/shell/theme/stock/`: all three sheets, high contrast's included, are upstream's
+there, so safe mode restyles nothing. Outside safe mode the high-contrast sheet's Apex part
+may style upstream's actors as the light and dark sheets' do. G2 checks that the rebuilt
+sheet is Fedora's up to the structure marker, so the Apex part only appends.
 
 `tests/layer/run.sh` (`just layer-test`, and ci.yml) runs `hooks.js` and `layer.js` in
 gjs outside the shell: every kill switch, `apex.safe=1` through a bubblewrap bind over

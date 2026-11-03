@@ -71,13 +71,15 @@ atspi=$out/contrast-atspi.py
 install -m 644 "$PTYXIS_TESTS/contrast-atspi.py" "$atspi"
 
 shoot() {
-    local name=$1 scene=$2 scheme=$3 style=$4 contrast=${5:-false} text=${6:-1.0}
+    local name=$1 scene=$2 scheme=$3 style=$4 contrast=${5:-false} text=${6:-1.0} rc=0 crash
     local settings="org.gnome.desktop.interface color-scheme '$scheme'"$'\n'"org.gnome.Ptyxis interface-style '$style'"
     settings+=$'\n'"org.gnome.desktop.a11y.interface high-contrast $contrast"
     settings+=$'\n'"org.gnome.desktop.interface text-scaling-factor $text"
     headless_run "$out/$name.log" "$PTYXIS_TESTS/probe.js" "$SHELL_TIMEOUT" "$settings" \
-        APEX_SHOTS="$out" APEX_SHOT="$name" APEX_SCENE="$scene" ${APEX_PTYXIS_TARGETS:+APEX_SHOT_ATSPI="$atspi"}
-    log "shoot.sh: $name: exit $?"
+        APEX_SHOTS="$out" APEX_SHOT="$name" APEX_SCENE="$scene" \
+        ${APEX_PTYXIS_TARGETS:+APEX_SHOT_ATSPI="$atspi"} || rc=$?
+    log "shoot.sh: $name: exit $rc"
+    if crash=$(shell_crash "$out/$name.log" "$rc"); then log "shoot.sh: $name: $crash"; return 1; fi
     grep -q 'APEXPTYXIS ' "$out/$name.log" && [[ -s $out/$name.png ]]
 }
 

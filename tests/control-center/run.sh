@@ -56,11 +56,12 @@ headless_bus "$out"
 # run_case NAME SCHEME [NAME=VALUE...]: one shell; libadwaita has no settings portal here, so ADW_DEBUG_COLOR_SCHEME.
 # CASE_SETTINGS holds extra "schema key value" lines for that shell.
 run_case() {
-    local name=$1 scheme=$2
+    local name=$1 scheme=$2 rc=0 crash
     shift 2
     headless_run "$out/$name.log" "$CC_TESTS/probe.js" "$SHELL_TIMEOUT" "${CASE_SETTINGS:-}" \
-        APEX_SHOTS="$out" APEX_SHOT="$name" ADW_DEBUG_COLOR_SCHEME="$scheme" "$@"
-    log "run.sh: $name: exit $?"
+        APEX_SHOTS="$out" APEX_SHOT="$name" ADW_DEBUG_COLOR_SCHEME="$scheme" "$@" || rc=$?
+    log "run.sh: $name: exit $rc"
+    if crash=$(shell_crash "$out/$name.log" "$rc"); then log "run.sh: $name: $crash"; return 1; fi
     grep -q 'APEXCC ' "$out/$name.log" && [[ -s $out/$name.png ]] || return 1
     ! grep -q '"check":false\|"ready":false\|"before":false' "$out/$name.log"
 }
@@ -69,6 +70,7 @@ status=0
 headless_apex_schema yes
 run_case light default APEX_SCROLL=1 "APEX_CHECK=bindings.py rows" || status=1
 run_case dark prefer-dark APEX_SCROLL=1 || status=1
+run_case top-bounds default "APEX_CHECK=bounds.py rows toggles" || status=1
 headless_apex_schema no
 run_case no-schema default "APEX_CHECK=bindings.py no-schema" || status=1
 headless_apex_schema yes
@@ -89,6 +91,7 @@ headless_dgpu "$out/dgpu.devices"
 dgpu="APEX_LAUNCH=umockdev-run -d $out/dgpu.devices --"
 run_case power-light default APEX_OPEN=power APEX_SCROLL=1 "$dgpu" "APEX_CHECK=power.py dgpu" || status=1
 run_case power-dark prefer-dark APEX_OPEN=power APEX_SCROLL=1 "$dgpu" || status=1
+run_case power-bounds default APEX_OPEN=power "$dgpu" "APEX_CHECK=bounds.py rows gpu" || status=1
 run_case power-no-dgpu default APEX_OPEN=power "APEX_CHECK=power.py plain" || status=1
 
 # S1b: Spotlight and the input-source switch in Keyboard's shortcut list, on apex-desktop's keys.
@@ -110,8 +113,9 @@ update_case() {
 
 update_case ready updates-light default APEX_SCROLL=1 "APEX_CHECK=updates.py ready" || status=1
 update_case ready updates-dark prefer-dark APEX_SCROLL=1 || status=1
-# Unscrolled, so bounds.py reads the page off this case's own capture.
-update_case ready updates-bounds default "APEX_CHECK=bounds.py" || status=1
+# bounds.py reads the page off the case's own capture: unscrolled, then scrolled to its end.
+update_case ready updates-bounds default "APEX_CHECK=bounds.py rows grid pills" || status=1
+update_case ready updates-bounds-end default APEX_SCROLL=1 "APEX_CHECK=bounds.py rows grid buttons" || status=1
 for scenario in up-to-date available waiting downloading health-failure fallback unavailable; do
     update_case "$scenario" "updates-$scenario" default "APEX_CHECK=updates.py $scenario" || status=1
 done
@@ -120,6 +124,10 @@ for scenario in health-failure fallback; do
     update_case "$scenario" "updates-$scenario-dark" prefer-dark || status=1
 done
 update_case fallback updates-fallback-changes default "APEX_BEFORE=updates.py show-changes" || status=1
+# Large Text: apex.css's pt sizes grow with it. A setting stays from one case to the next, so these come last.
+large=$'org.gnome.desktop.a11y.interface high-contrast false\norg.gnome.desktop.interface text-scaling-factor 1.25'
+CASE_SETTINGS=$large run_case large-light default "APEX_CHECK=fonts.py apex" || status=1
+CASE_SETTINGS=$large update_case ready updates-large-light default "APEX_CHECK=fonts.py updates" || status=1
 headless_update1_stop
 grep -h '^ok \|^FAIL \|^GAP \|APEXCC-' "$out"/*.log || true
 ((status == 0)) || die "run.sh: a case failed; see ${out#"$APEX_ROOT/"}/*.log"

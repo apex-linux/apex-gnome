@@ -152,7 +152,7 @@ class Widget {
     }
 
     get_theme_node() {
-        return this._themeNode ?? {get_shadow: () => null, get_border_radius: () => 0};
+        return this._themeNode ?? {get_shadow: () => null, get_border_radius: () => 0, get_length: () => 0};
     }
 
     set_size(width, height) {
@@ -319,6 +319,8 @@ class Widget {
 
     remove_all_transitions() {}
 
+    remove_transition() {}
+
     destroy() {
         if (this.destroyed)
             return;
@@ -329,7 +331,7 @@ class Widget {
     }
 }
 
-// The polkit feature follows upstream's info label through its notify signals.
+// The polkit feature and the lock's error ring follow upstream's labels through their notify signals.
 class Label extends Widget {
     // St.Label's ClutterText ellipsizes at the end.
     get clutter_text() {
@@ -353,6 +355,15 @@ class Label extends Widget {
     set text(text) {
         this._text = text;
         this.emit('notify::text');
+    }
+
+    get opacity() {
+        return this._opacity ?? 255;
+    }
+
+    set opacity(opacity) {
+        this._opacity = opacity;
+        this.emit('notify::opacity');
     }
 }
 class Bin extends Widget {}

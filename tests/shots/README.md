@@ -47,7 +47,7 @@ The direct cases:
 | Case | Settings | Asserts |
 |---|---|---|
 | `default` | `color-scheme` `'default'`; six favourites (`SIX_FAVOURITES`), as wide a dock as the image's | the Apex light sheet with its marker, `prefer-light`, no fault feature, the crash guard's marker created and removed; Super+Space (`toggle-spotlight`) registered in the normal and overview modes; the panel showed the one-time search hint (`search-hint-shown` true; until apex-desktop's schema has the key, the shell reports `no-key`); the top bar's, the dock's and the shell surfaces' metrics, light; a maximised `window.js` window turns the bar solid and un-maximising it turns it back (`G2_SOLID_BAR=1`) |
-| `default-scale1` | as `default`, on a 1440x900 virtual monitor at scale 1, as the desktop VM runs | the Apex light sheet; the top bar's, the dock's and the shell surfaces' metrics at scale 1 |
+| `default-scale1` | as `default`, on a 1440x900 virtual monitor at scale 1, as the desktop VM runs; for its last step, Files and Clocks pinned (`G2_DOCK_LABELS`) | the Apex light sheet; the top bar's, the dock's and the shell surfaces' metrics at scale 1; the dock's name labels at scale 1, as in "Accessibility" |
 | `dark-style` | `prefer-dark`; the six favourites | the Apex dark sheet; the top bar's, the dock's and the shell surfaces' metrics, dark, and the solid bar as in `default`; then the probe clicks Quick Settings' Dark Style toggle (its own `clicked` signal): the toggle turns off, writes `color-scheme` `'default'`, and the running shell loads the Apex light sheet |
 | `high-contrast` | the capture settings with `org.gnome.desktop.a11y.interface high-contrast` true | every Apex surface's contrast in the high-contrast sheet (see "Accessibility") |
 | `large-text` | the capture settings with `text-scaling-factor` 1.25, and two input sources as the image's override sets, so the bar carries board 39's input chip | every Apex surface's text whole, on the screen, inside its surface and clear of the rest, the chip's short name among them (see "Accessibility") |
@@ -55,15 +55,15 @@ The direct cases:
 | `dock-one-gpu` | the capture settings, after `fixtures.py --gpus 1` (put back to two after it) | switcheroo-control reports one GPU, and the dock's first app's menu offers no "Launch Using Discrete Graphics Card" |
 | `no-dock`, `no-dock-dark` | the capture settings with `disabled-features` `['dock']`, the second `prefer-dark`; the probe captures the desktop (`G2_DESKTOP=1`), the Apex side of the Fedora comparison, then opens three `window.js` windows and the overview (`G2_OVERVIEW_WINDOWS=1`) | the overview's own dash is back, so the `workspace-bottom` hook gives stock's edge, the monitor's bottom; every caption shows, none over another window's preview or caption; no Apex dock on the captured desktop; in `no-dock`, the bar's contrast over the fixture wallpaper (see "Accessibility") |
 | `dock-dnd` | the capture settings without hot corners, `favorite-apps` Files then Clocks (both in the image); `dock-dnd.js` drags with a virtual pointer and presses Esc with a virtual keyboard | Clocks dragged onto Files' leading quarter comes first; Weather dragged from the app grid onto Files' leading quarter is pinned after Clocks; a favourite dragged over Show Apps labels it Unpin and dropped there is unpinned; dropped off the dock or on Trash it stays where it was (stock's dash unpins only on Show Apps, and Trash takes no app); a running app outside the favourites (`window.js`, given a desktop file) shows after them and, dropped onto Files' leading quarter, is pinned there; a drag cancelled with Esc changes nothing. Each against `favorite-apps` and the dock's drawn order, with the separator, Show Apps and Trash last, and nothing left dragging: no placeholder, grab or modal, the `NORMAL` action mode, every icon opaque, Show Apps named so, no actor left but the 0x0 one DND keeps for its grabs |
-| `dock-external` | the capture settings without hot corners, a second virtual monitor, 1920x1080, right of the 2880x1800 panel (`G2_MONITOR2`), both at scale 2; `dock-external.js` moves `maximised-window.js`'s window between them | the dock and the bar on the primary alone, the dock `$apex_dock_bottom_gap` above its bottom edge and centred; the window maximised on the external display neither hides the dock nor turns the bar solid, on the primary it does both, and back it undoes both; the overview shows a view on each monitor over a scrim per monitor, each at its monitor's box and scale (2 x `$apex_overview_scrim_blur` x 2 on both), in the launcher too (each styled `apex-launcher`); `ApplyMonitorsConfig` on `org.gnome.Mutter.DisplayConfig` makes the external display the primary, and the dock and the bar follow it, the dock hidden and the bar solid exactly while the maximised window is on the new primary; then, at mixed scale (the external display at scale 1 and primary, the panel at 2), the dock and the bar move to it with their glass at scale 1 (radius 2 x `$apex_dock_blur` and 2 x `$apex_bar_blur`, on laid-out boxes), and in the overview a scrim covers each monitor, blurring an unscaled clone of the desktop at 2 x `$apex_overview_scrim_blur` x that monitor's scale (2 on the panel, 1 on the external display), modelled cheaper per re-blur than one stage-wide scrim at scale 2 (0014-blurcost.py; both printed), and stops once it hides; with the panel the primary again, the glass there is back at scale 2. A monitor plugged in at runtime is not covered: mutter's ScreenCast `RecordVirtual` gives a stream, but adds its monitor only once a PipeWire consumer negotiates, and `pipewiresrc` does not connect in G2's container, so the builder VM's G4 covers hotplug |
-| `stock-light`, `stock-dark` | `APEX_SHELL_SAFE=1` with `prefer-light` or `prefer-dark` | upstream's sheet of that variant from `theme/stock/`; the overview's thumbnails at upstream's maximum scale 0.05 and at the effective scale of Fedora's build; the rebuilt high-contrast sheet, which safe mode keeps, is Fedora's up to the structure marker (Apex only appends); no Super+Space binding |
+| `dock-external` | the capture settings without hot corners, a second virtual monitor, 1920x1080, right of the 2880x1800 panel (`G2_MONITOR2`), both at scale 2; `dock-external.js` moves `maximised-window.js`'s window between them | the dock and the bar on the primary alone, the dock `$apex_dock_bottom_gap` above its bottom edge and centred; the window maximised on the external display neither hides the dock nor turns the bar solid, on the primary it does both, and back it undoes both; the overview shows a view on each monitor over a scrim per monitor, each at its monitor's box and scale (2 x `$apex_overview_scrim_blur` x 2 on both), in the launcher too (each styled `apex-launcher`); `ApplyMonitorsConfig` on `org.gnome.Mutter.DisplayConfig` makes the external display the primary, and the dock and the bar follow it, the dock hidden and the bar solid exactly while the maximised window is on the new primary; then, at mixed scale (the external display at scale 1 and primary, the panel at 2), the dock and the bar move to it with their glass at scale 1 (radius 2 x `$apex_dock_blur` and 2 x `$apex_bar_blur`, on laid-out boxes), and in the overview a scrim covers each monitor, blurring an unscaled clone of the desktop at 2 x `$apex_overview_scrim_blur` x that monitor's scale (2 on the panel, 1 on the external display), modelled cheaper per re-blur than one stage-wide scrim at scale 2 (0014-blurcost.py; both printed), and stops once it hides; with the panel the primary again, the glass there is back at scale 2. In each mixed layout, Show Apps, whose name is wider than its icon, is moved to the primary's edge next to the other monitor, as a dock as wide as the monitor puts an end item, and hovered (the window first moved off the primary, so the dock shows): a row checks it stands at that edge, its name wider than its icon, and its name label shows inside the primary: upstream's `showLabel` clamps a label to the stage alone, so it reached 17 px over the other monitor, and Apex's dock clamps it to the item's own monitor. A monitor plugged in at runtime is not covered: mutter's ScreenCast `RecordVirtual` gives a stream, but adds its monitor only once a PipeWire consumer negotiates, and `pipewiresrc` does not connect in G2's container, so the builder VM's G4 covers hotplug |
+| `stock-light`, `stock-dark` | `APEX_SHELL_SAFE=1` with `prefer-light` or `prefer-dark` | upstream's sheet of that variant from `theme/stock/`; the overview's thumbnails at upstream's maximum scale 0.05 and at the effective scale of Fedora's build; the rebuilt high-contrast sheet is Fedora's up to the structure marker (Apex only appends); no Super+Space binding |
 | `safe-env`, `layer-disabled`, `kernel-safe` | the three kill switches | upstream's dark sheet from `theme/stock/`, the stock colour scheme, every hook stock, no Super+Space binding, the reason logged; the same sheet in all three; `safe-env`: no search hint |
 | `layer-cycles` | the capture settings; the probe sets `layer-enabled` false, then true, three times | while off: upstream's dark sheet from `theme/stock/`, the stock colour scheme, every hook stock, no Super+Space binding; while on: the Apex light sheet, `prefer-light` and Super+Space; each time it is on the stage holds the same actors, type by type, as at startup, and each time it is off the same as the first time (the first count waits out main.js's 20 s timeout for deferred work, which fills the overview's hidden dash; an `St.Icon` counts, not the texture child St gives it once it is first styled, which a dash hidden since startup decides); the layer logs each switch |
 | `motion` | the capture settings with `enable-animations` true; the probe lifts the inhibit `main.js` puts on animations without hardware-accelerated rendering, starts `window.js`, a plain GTK 4 window, maximises and restores it once (mutter gives a first size change a 0 × 0 old frame, which stock never animates), maximises it and opens the overview, then sets `enable-animations` false, does both again and plays Locate Pointer | DESIGN's motion (ROADMAP S3c): the window actor's size-change transition and the overview's state transition are `CUBIC_BEZIER` with the control points (.2, .8) and (.2, 1), over 300 and 200 ms; with animations off, neither creates a transition, while Locate Pointer's ripple (`animationRequired`, an a11y aid) still takes stock's 830 ms |
 | `idle` | the capture settings without hot corners, every feature of `layer.js`'s `FEATURES_IN_ENABLE_ORDER` on; `idle.js` lets the session settle, then watches the stage for 10 s, four times: the desktop, Quick Settings open, and both with Reduce Transparency | ROADMAP S3c's and S2b's exits: an idle desktop paints no frame and queues no relayout, glass or not (below, "The idle desktop") |
 | `glass-load` | the capture settings without hot corners, `dock-intellihide` off while it runs; `glass-load.js` runs ADR 0014's scenarios A, B and C with `load-window.js`, once with the glass and once with Reduce Transparency | forwarded damage re-blurs each glass box in the frame its content changes; the bar and idle popovers do not re-blur; glass adds at most 1 % frames over Reduce Transparency in A and B (below, "Glass under load") |
 | `glass-stress` | as `glass-load`, `G2_GLASS_STRESS_SECONDS` long (60 s; 300 s in the VM's G2) | `glass.js`'s stress on its synthetic box, and the real boxes under `load-window.js` for as long (below) |
-| `keys` | the capture settings without hot corners, and two input sources (`us`, `fr`) | every key the session relies on, as registered (accelerators from their schemas and apex-desktop's override, action modes as `windowManager.js` keeps them) and then pressed through a virtual keyboard: Super+Space opens Spotlight and leaves the input source alone; Super+Alt+Space switches to the next input source and Shift+Super+Alt+Space back, in every mode; Ctrl+Alt+Tab, in the session, overview, lock, unlock and login modes, lists the dock among its groups and moves the keyboard focus into it; a Super tap opens the overview and Super+A the launcher (the app grid), both in the session and overview modes; no grab is left behind |
+| `keys` | the capture settings without hot corners, two input sources (`us`, `fr`), and Files then Clocks pinned | every key the session relies on, as registered (accelerators from their schemas and apex-desktop's override, action modes as `windowManager.js` keeps them) and then pressed through a virtual keyboard: Super+Space opens Spotlight and leaves the input source alone; Super+Alt+Space switches to the next input source and Shift+Super+Alt+Space back, in every mode; Ctrl+Alt+Tab, in the session, overview, lock, unlock and login modes, lists the dock among its groups and moves the keyboard focus into it, where the focused item's name label shows, alone; Right moves the focus and the label to the next item; Escape takes both out of the dock; with the first item focused, a hover on the third shows the third's label alone, and the first's comes back once the pointer leaves; a hover on the focused item and off it leaves its label up, never fading it in again; a Super tap opens the overview and Super+A the launcher (the app grid), both in the session and overview modes; no grab is left behind |
 | `fault-configure`, `fault-enable` | `APEX_SHELL_TEST_FAULT` | only the fault feature is off; the `witness` feature after it still enables; the rest of the layer runs, Super+Space included, and the shell survives |
 | `fault-abort` | `abort-after-enable` | SIGABRT (exit 134) with the crash guard's marker left behind |
 | `shutdown-banner` | `G2_SHUTDOWN_BANNER=1` | after the usual reports and the same date-menu cut, a notification for the tray and its banner timeout due 100 ms into a shutdown whose history write is held 300 ms, in which the probe also sends the date menu's three signals: the layer's teardown disables the notifications feature, which clears the tray's banner timeouts before `layout.js` destroys it, so `main.js`'s shutdown loop runs none on the disposed tray, and the cut keeps the signals from the destroyed events section |
@@ -144,7 +144,12 @@ own gnome-shell has none, which it says). gdb is installed on demand, and dnf5 a
 backtrace: gdb ran out of the 120 s budget`). The core is deleted once read, or at once when the
 exit was expected. The shell's `exits` assertion then names the crashing thread's frame past the
 signal trampoline (past `raise`, `abort` and GLib's assertion and log frames, and their GCC clones
-such as `g_assertion_message[cold]`), or that reason, or `no CASE.bt`.
+such as `g_assertion_message[cold]`), or that reason, or `no CASE.bt`. Every other shell a test starts does the
+same: `tests/lib/headless.sh`'s `headless_run` (the S2c, S7, Ptyxis and libadwaita tests), its copy in
+`tests/control-center/lib.sh`, and `tests/nautilus/shoot.sh` and `tests/shell/shoot.sh` preload
+`crash.c` (built by `backtrace.sh`'s `crash_lib`) and write `NAME.bt` beside the shell's `NAME.log`. A
+crash fails that case by name even when its capture was taken: `shell_crash` turns an exit above
+128 into "the shell crashed (SIGx); see NAME.bt".
 
 The layer follows `layer-enabled` live in a shell that started with it on
 ([DESIGN.md](https://github.com/apex-linux/apex/blob/main/docs/DESIGN.md#schema-iogithubapex_linuxapexdesktop): the layer reads
@@ -171,7 +176,13 @@ open); idle and dock-pin assert `NORMAL` after `settleDesktop`. No case is run t
 `direct.sh` lists the late ones in `late-PART.txt` (and `patched.sh` in the job summary),
 and `assert.txt` lists the late guard phases.
 
-The crash-guard phases (`guard.sh`): an abort 65 s after start does not trip the guard;
+The crash-guard phases (`guard.sh`): the guard trips on either of two triggers. A failure
+in the shell's first 60 s, while the layer's marker exists, trips at once. A later one
+only counts, in `~/.local/state/apex/shell-guard-trips` (the booted deployment from
+`ostree=`, or `none`, and a count), and the second on the same deployment trips. So an
+abort 65 s after start runs `apex-shell-safe.service`, which counts 1 and leaves the
+layer on; a second such abort trips (`layer-enabled=false`, the agent's marker, the
+counter gone), and the layer is turned back on for the phases after it.
 `abort-after-enable` trips it (the unit fails, `apex-shell-safe.service` runs,
 `layer-enabled=false`, the agent's marker exists); the next start is stock;
 `layer-enabled=true` brings Apex back; `dark-off`: with `prefer-dark`, the probe clicks
@@ -199,7 +210,8 @@ the sign-off shells (above). Every case's probe reports them (`session-defaults.
   `/usr/share/icons/Apex/`. Explicit lists, each entry by exact name with its reason, name the
   only others: `FIXTURE_APPS`, G2's own stub apps, which have no icon and draw GNOME's generic
   one; `SHELL_RESOURCE_ICONS`, icons the shell draws from its own resource because board 31
-  has no glyph of that name yet (below, "Open"); and `STAND_IN_ICONS`, a stock icon on one
+  has no glyph of that name, empty since apex-desktop#35 (below; the selftests list
+  `apex-test-resource-icon` through `G2_SHELL_RESOURCE_ICONS`); and `STAND_IN_ICONS`, a stock icon on one
   surface only (`switcher application-x-executable`, G2's switcher stand-in, and
   `spotlight drive-harddisk`, a full-colour device icon a search provider returns, which Apex
   inherits from Adwaita by design). A failure names each icon, where it showed, its app and
@@ -228,12 +240,12 @@ job, `check.py` reports it "not run: no Apex theme", never a pass.
 
 The wallpaper is `backdrop_painted`'s (below).
 
-### Open: glyphs board 31 lacks
+### Closed: glyphs board 31 lacked
 
-Names the shell draws from its own resource today, each on `SHELL_RESOURCE_ICONS`.
-apex-desktop#35 ships all nine in Apex Symbolic, seven as aliases of glyphs the boards already
-draw and the switch's two shapes as new ones. They are pending the `APEX_DESKTOP_REV` bump that
-brings it, which then takes them off the list.
+Names the shell drew from its own resource until `APEX_DESKTOP_REV` reached apex-desktop#35
+(a9c32ef), which ships all nine in Apex Symbolic, seven as aliases of glyphs the boards already
+draw and the switch's two shapes as new ones. That bump took them off `SHELL_RESOURCE_ICONS`,
+which is empty since.
 
 | Name | Surface |
 |---|---|
@@ -769,9 +781,9 @@ each of the nine `accent-color` values, since a checked toggle, today and a defa
 take their fill from the accent; the surface stays open while the accent changes under it, and
 each measurement waits for the shell's idle and one painted frame, not a fixed delay. The pass
 records `timingsMs` per step in its report. The failures left are known gaps (`A11Y_GAPS`), all in
-upstream's high-contrast sheet, and they stay gaps: restyling an upstream actor there would
-need a stock copy of the sheet for safe mode. A report for upstream, which is the owner's to
-file:
+upstream's high-contrast sheet. Safe mode now takes that sheet from `theme/stock/`, so the
+Apex part could restyle those actors outside safe mode; until a board asks for it they stay
+gaps. A report for upstream, which is the owner's to file:
 
 > **High contrast: checked quick toggles fall below WCAG AA.** In gnome-shell 51.0's
 > high-contrast sheet, a checked quick toggle draws white text on the accent: 3.15:1 for the
@@ -838,8 +850,19 @@ shortfalls (`A11Y_FOCUS_TODAY`) are the owner's:
 | Control | Cases | Today |
 |---|---|---|
 | Spotlight's entry | every case | the caret only (1:1) |
-| Quick Settings' first toggle | `default`, `default-solid` | 2.37:1, 1.91:1; 2.14:1 over the busy wallpaper |
-| the dialog's entry | `dark-style`, `dark-style-solid` | 2.87:1 |
+
+The dock's name labels are measured too (`dockLabels`, `dock_labels`). A virtual pointer hovers the
+dock's first, middle and last item in turn, as a person does, and each label, once fully shown, is
+measured as its own surface: its text against the pixels behind it (the text's own box, since the
+label's rounded corners are not behind any text), and its box whole on the monitor and above the
+dock. It runs over the case's backdrop and again over the busy wallpaper, in every a11y case and
+in `default-scale1` at scale 1 (`G2_DOCK_LABELS`); a case with nothing pinned gets Files and Clocks
+for the step. Then key focus on the first item must show its label as a hover does, which Apex's
+dock adds (upstream's dash names an item on hover only). The label's fill is opaque, so the
+wallpaper cannot reach the text: 15.16:1 or better in light and 13.01:1 in dark and high
+contrast, over every backdrop, at both scales. The edges are `dock-external`'s: upstream clamps a
+label to the stage, not its monitor, so at a primary's edge that meets another monitor Show Apps'
+label reached 17 px over it; Apex's dock keeps it to its own monitor, either way.
 
 So is reaching every control by Tab (`reach`, WCAG 2.1.1 and 2.1.2). In Quick Settings, the
 polkit-shaped dialog and Spotlight, the probe focuses the first control and presses Tab past the
@@ -988,6 +1011,7 @@ history. `tests/shots/goldens.lock` pins the commit G2 compares with. That commi
 A KEY is a row's `NN-SLUG`. The fifteen shell boards approved before the app boards joined are
 keyed by their number alone (`NN`), with their slug recorded: a legacy key stands for a board
 of one row, and the check matches it by number and slug, so those goldens stay as approved.
+Approving such a row under one of its two keys replaces its golden under the other, entry and files.
 
 The shots hash is the page's: sha256 over the light PNG's bytes, then the dark PNG's, first
 12 hex digits. A light-only row hashes its light PNG alone.
@@ -1258,3 +1282,18 @@ lane's RPMs: they call the shell's own polkit component's `_onInitiate()` with a
 `polkit-fingerprint`) and is never answered. They are for captures and style checks only:
 PAM, polkit-agent-helper-1 and polkitd's verdict never run, and polkitd only describes the
 action. The real `pkexec` path is G4's.
+
+The `polkit-refused` cases answer wrongly, and the stub fails the answer in PAM's order. It
+sends PAM's error text if there is one, then `completed(false)`. That is upstream
+`polkitAgent.js`'s `_onSessionShowError()`, then `_onSessionCompleted()`, which shows
+"Sorry, that didn't work" only when no PAM text is showing, wiggles the field and calls
+`_initiateSession()` again. pam_unix sends no text, so `polkit-refused-light` and
+`polkit-refused-dark` show upstream's line. `polkit-refused-faillock` sends pam_faillock's
+lockout text first, so that text stays. In `polkit-refused-fingerprint`, the retry's
+pam_fprintd prompt replaces the error, as `_onSessionShowInfo()` does.
+
+`polkit-cancel` presses Esc while a stubbed `enumerate_actions()` has not yet answered
+Details' vendor lookup. The request must end dismissed, the session must be cancelled, and
+the lookup must be cancelled with the dialog. G4's `polkit-wrong-password` and
+`polkit-cancel` rows check the same paths against real PAM, polkitd and pkexec, but not the
+dialog's look.
