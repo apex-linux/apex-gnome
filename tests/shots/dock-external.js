@@ -3,6 +3,7 @@
 // G2's dock-external case (G2_DOCK_EXTERNAL=1): two virtual monitors, and a third plugged in at runtime. The dock
 // and the bar stay on the primary, only its windows hide the dock or turn the bar solid, and both follow a new primary.
 
+import Clutter from 'gi://Clutter';
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 
@@ -50,6 +51,39 @@ function layout(apexDock) {
         barSolid: Main.panel.has_style_class_name(SOLID_BAR_STYLE_CLASS),
         window: testWindow() ? {monitor: testWindow().get_monitor(), maximised: testWindow().is_maximized()} : null,
     };
+}
+
+// Show Apps, whose name is wider than its icon, at the primary's edge, as a dock as wide as the monitor puts an
+// end item: upstream's dash clamps the label to the stage (dash.js showLabel), not the monitor.
+async function edgeLabel(apexDock, settle, side) {
+    const dock = apexDock();
+    const box = dock.get_parent();
+    const monitor = Main.layoutManager.primaryMonitor;
+    const pointer = global.stage.context.get_backend().get_default_seat()
+        .create_virtual_device(Clutter.InputDeviceType.POINTER_DEVICE);
+    const moveTo = ([x, y]) => until(() => {
+        const [px, py] = global.get_pointer();
+        if (px === x && py === y)
+            return true;
+        pointer.notify_absolute_motion(GLib.get_monotonic_time(), x, y);
+        return false;
+    }, WINDOW_TIMEOUT_MS);
+    try {
+        const item = dock.tailItems.showApps;
+        if (box.translation_y > 0)
+            return {error: 'the dock is hidden'};
+        const at = transformedRect(item);
+        box.translation_x = side === 'left' ? monitor.x - at.x : monitor.x + monitor.width - at.x - at.width;
+        await settle();
+        const edge = transformedRect(item);
+        await moveTo([edge.x + edge.width / 2, edge.y + edge.height / 2].map(Math.round));
+        const shown = await until(() => item.label.visible && item.label.opacity === 255, WINDOW_TIMEOUT_MS);
+        return {name: item._labelText, shown, item: edge, label: transformedRect(item.label), monitor: rect(monitor)};
+    } finally {
+        await moveTo([monitor.x + monitor.width / 2, monitor.y + monitor.height / 4].map(Math.round));
+        box.translation_x = 0;
+        await settle();
+    }
 }
 
 async function placeWindow(monitor, apexDock) {
@@ -268,9 +302,14 @@ export async function dockExternalReport(helpers) {
         Main.overview.hide();
         await helpers.settle();
         steps.mixedOnExternal.desktopGlass = glassState(apexDock);
+        // The external display's left edge meets the panel.
+        steps.mixedOnExternal.edgeLabel = await edgeLabel(apexDock, helpers.settle, 'left');
 
         steps.mixed = {changed: await relayout(mixed(true), helpers)};
         Object.assign(steps.mixed, layout(apexDock), {dock: helpers.dockReport(), glass: glassState(apexDock)});
+        // The panel's right edge meets the external display; the window goes there, so the dock shows.
+        await placeWindow(Main.layoutManager.monitors.find(m => m.index !== Main.layoutManager.primaryIndex).index, apexDock);
+        steps.mixed.edgeLabel = await edgeLabel(apexDock, helpers.settle, 'right');
 
         steps.hotplug = await hotplug(apexDock, helpers);
     } finally {

@@ -1,11 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
 /*! apex-control-center */
 
-apex-header,
-.apex-updates-hero {
-  padding: 28px 20px 22px;
-}
-
 apex-tile .frame {
   border-radius: 20px;
   background-color: var(--view-bg-color);
@@ -58,14 +53,14 @@ image.apex-tile {
 }
 
 .apex-title {
-  font-size: 20px;
+  font-size: 15pt;
   font-weight: 800;
   letter-spacing: -0.3px;
 }
 
 .apex-versions,
 .apex-updates-hero .apex-subtitle {
-  font-size: 12.5px;
+  font-size: 9.375pt;
 }
 
 .apex-updates-hero .apex-progress trough,
@@ -75,7 +70,6 @@ image.apex-tile {
 }
 
 .apex-note {
-  padding: 14px 16px;
   border-radius: 12px;
   background-color: color-mix(in srgb, var(--warning-bg-color) 14%, transparent);
 }
@@ -88,8 +82,45 @@ image.apex-tile {
   font-weight: 700;
 }
 
-button.apex-link {
+/* Board 18: What's New lists its changes as a compact grid. */
+/* The row around the grid has no padding: GTK 4.24's AT-SPI bounds would leave it out, so the grid's margin holds it. */
+row.apex-changes-row {
+  padding: 0;
+}
+
+.apex-changes {
+  margin: 10px 16px 14px;
+  font-size: 9pt;
+}
+
+.apex-changes .apex-change-kind {
+  min-width: 80px;
+  color: alpha(currentColor, 0.62);
+}
+
+.apex-changes .apex-change-name,
+.apex-changes .apex-change-versions {
+  font-family: monospace;
+  font-size: 8.625pt;
+}
+
+.apex-changes .apex-change-name {
+  font-weight: 600;
+}
+
+.apex-changes .apex-change-versions {
+  color: alpha(currentColor, 0.62);
+}
+
+/* Board 18: a staged image is kept only once its signature checks out. */
+.apex-checked {
+  min-height: 22px;
+  padding: 0 9px;
+  border-radius: 11px;
+  background-color: color-mix(in srgb, var(--accent-bg-color) 16%, transparent);
   color: var(--accent-color);
+  font-size: 0.85em;
+  font-weight: 700;
 }
 
 /* Board 23: stock Appearance's own classes; the panel gains no rows. */
@@ -126,7 +157,6 @@ background-preview .window {
 /* Board 24: the graphics card's state as a pill; green while it sleeps, amber while it draws power. */
 .apex-gpu-status {
   min-height: 24px;
-  padding: 0 10px;
   border-radius: 12px;
   background-color: alpha(currentColor, 0.1);
   font-size: 0.9em;

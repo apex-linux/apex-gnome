@@ -37,7 +37,7 @@ A case that gets no report within `direct.sh`'s timeout stops G2 at once.
 | G1's `image/checks/desktop.sh` | a container of the image | it passes on the image under test, so no text file under `/usr` or `/etc` names `APEX_SHELL_TEST_FAULT` |
 | `direct.sh main` | a container of the image plus `dbus-daemon` (the image has no `dbus-run-session`), `python3-dbusmock` and `gcc` for `clock.c`; `rpm -V` shows the shell's packages unmodified | each case below: one headless shell with a fresh home, dconf and runtime directory, the fixtures on the system bus and the fixed clock (see "Fixtures and the clock") |
 | `direct.sh kernel` | the same, with `apex.safe=1` bound over `/proc/cmdline` | the kernel switch |
-| `direct.sh pr` | CI's `shots-patched` job on a pull request, through `patched.sh` with `PATCHED_PART=pr` on the gnome-shell lane's RPMs | the cases `parts.sh`'s `PR_CASES` names, in `main`'s order (the scenes and every a11y check with their solid-backdrop twins, then the quick dock, indicator, safe-mode and fault cases, `dock-dnd`, `dock-external` and `keys` among them), with their assertions; each listed case must have run and reported (`part_ran`). Before them, `direct.sh fedora` runs only `PR_FEDORA_CASES`, `fedora-light` and `fedora-dark`, so the pull request compares Apex's desktop and safe mode's (`stock-light`, `stock-dark`) with Fedora's (`compare_with_fedora`). A push to `main` and the daily run take `main` with the whole Fedora baseline |
+| `direct.sh pr` | CI's `shots-patched` job on a pull request, through `patched.sh` with `PATCHED_PART=pr` on the gnome-shell lane's RPMs | the cases `parts.sh`'s `PR_CASES` names, in `main`'s order (the scenes and every a11y check with their solid-backdrop twins, then the quick dock, indicator, safe-mode, fault and shutdown cases, `dock-dnd`, `dock-external`, `keys` and `shutdown-banner` among them, and the glass cases `glass`, `glass-scale1` and `glass-views`), with their assertions; each listed case must have run and reported (`part_ran`). Before them, `direct.sh fedora` runs only `PR_FEDORA_CASES`, `fedora-light` and `fedora-dark`, so the pull request compares Apex's desktop and safe mode's (`stock-light`, `stock-dark`) with Fedora's (`compare_with_fedora`). A push to `main` and the daily run take `main` with the whole Fedora baseline |
 | `direct.sh fedora` | the same image with Fedora's own gnome-shell and gnome-shell-common of the tested NVR in place of the Apex build, downloaded from Fedora's repositories; each RPM must report `digests signatures OK` against a keyring that holds Fedora's key alone, so an unsigned RPM fails | the baseline of the captures |
 | `guard.sh` | a container of the image booted with its own systemd; a test user's `systemd --user` with the image's unmodified units | the crash guard, and that neither the user manager nor the shell's unit sets `APEX_SHELL_TEST_FAULT` |
 | `assert.sh` | the builder VM; `compare.js` in a container of the image | everything below |
@@ -47,7 +47,7 @@ The direct cases:
 | Case | Settings | Asserts |
 |---|---|---|
 | `default` | `color-scheme` `'default'`; six favourites (`SIX_FAVOURITES`), as wide a dock as the image's | the Apex light sheet with its marker, `prefer-light`, no fault feature, the crash guard's marker created and removed; Super+Space (`toggle-spotlight`) registered in the normal and overview modes; the panel showed the one-time search hint (`search-hint-shown` true; until apex-desktop's schema has the key, the shell reports `no-key`); the top bar's, the dock's and the shell surfaces' metrics, light; a maximised `window.js` window turns the bar solid and un-maximising it turns it back (`G2_SOLID_BAR=1`) |
-| `default-scale1` | as `default`, on a 1440x900 virtual monitor at scale 1, as the desktop VM runs | the Apex light sheet; the top bar's, the dock's and the shell surfaces' metrics at scale 1 |
+| `default-scale1` | as `default`, on a 1440x900 virtual monitor at scale 1, as the desktop VM runs; for its last step, Files and Clocks pinned (`G2_DOCK_LABELS`) | the Apex light sheet; the top bar's, the dock's and the shell surfaces' metrics at scale 1; the dock's name labels at scale 1, as in "Accessibility" |
 | `dark-style` | `prefer-dark`; the six favourites | the Apex dark sheet; the top bar's, the dock's and the shell surfaces' metrics, dark, and the solid bar as in `default`; then the probe clicks Quick Settings' Dark Style toggle (its own `clicked` signal): the toggle turns off, writes `color-scheme` `'default'`, and the running shell loads the Apex light sheet |
 | `high-contrast` | the capture settings with `org.gnome.desktop.a11y.interface high-contrast` true | every Apex surface's contrast in the high-contrast sheet (see "Accessibility") |
 | `large-text` | the capture settings with `text-scaling-factor` 1.25, and two input sources as the image's override sets, so the bar carries board 39's input chip | every Apex surface's text whole, on the screen, inside its surface and clear of the rest, the chip's short name among them (see "Accessibility") |
@@ -64,11 +64,14 @@ The direct cases:
 | `idle` | the capture settings without hot corners, every feature of `layer.js`'s `FEATURES_IN_ENABLE_ORDER` on; `idle.js` lets the session settle, then watches the stage for 10 s, four times: the desktop, Quick Settings open, and both with Reduce Transparency | ROADMAP S3c's and S2b's exits: an idle desktop paints no frame and queues no relayout, glass or not (below, "The idle desktop") |
 | `glass-load` | the capture settings without hot corners, `dock-intellihide` off while it runs; `glass-load.js` runs ADR 0014's scenarios A, B and C with `load-window.js`, once with the glass and once with Reduce Transparency | forwarded damage re-blurs each glass box in the frame its content changes; the bar and idle popovers do not re-blur; glass adds at most 1 % frames over Reduce Transparency in A and B (below, "Glass under load") |
 | `glass-stress` | as `glass-load`, `G2_GLASS_STRESS_SECONDS` long (60 s; 300 s in the VM's G2) | `glass.js`'s stress on its synthetic box, and the real boxes under `load-window.js` for as long (below) |
-| `keys` | the capture settings without hot corners, and two input sources (`us`, `fr`) | every key the session relies on, as registered (accelerators from their schemas and apex-desktop's override, action modes as `windowManager.js` keeps them) and then pressed through a virtual keyboard: Super+Space opens Spotlight and leaves the input source alone; Super+Alt+Space switches to the next input source and Shift+Super+Alt+Space back, in every mode; Ctrl+Alt+Tab, in the session, overview, lock, unlock and login modes, lists the dock among its groups and moves the keyboard focus into it; a Super tap opens the overview and Super+A the launcher (the app grid), both in the session and overview modes; no grab is left behind |
+| `keys` | the capture settings without hot corners, two input sources (`us`, `fr`), and Files then Clocks pinned | every key the session relies on, as registered (accelerators from their schemas and apex-desktop's override, action modes as `windowManager.js` keeps them) and then pressed through a virtual keyboard: Super+Space opens Spotlight and leaves the input source alone; Super+Alt+Space switches to the next input source and Shift+Super+Alt+Space back, in every mode; Ctrl+Alt+Tab, in the session, overview, lock, unlock and login modes, lists the dock among its groups and moves the keyboard focus into it, where the focused item's name label shows, alone; Right moves the focus and the label to the next item; Escape takes both out of the dock; with the first item focused, a hover on the third shows the third's label alone, and the first's comes back once the pointer leaves; a hover on the focused item and off it leaves its label up, never fading it in again; a Super tap opens the overview and Super+A the launcher (the app grid), both in the session and overview modes; no grab is left behind |
 | `fault-configure`, `fault-enable` | `APEX_SHELL_TEST_FAULT` | only the fault feature is off; the `witness` feature after it still enables; the rest of the layer runs, Super+Space included, and the shell survives |
 | `fault-abort` | `abort-after-enable` | SIGABRT (exit 134) with the crash guard's marker left behind |
+| `shutdown-banner` | `G2_SHUTDOWN_BANNER=1` | after the usual reports and the same date-menu cut, a notification for the tray and its banner timeout due 100 ms into a shutdown whose history write is held 300 ms, in which the probe also sends the date menu's three signals: the layer's teardown disables the notifications feature, which clears the tray's banner timeouts before `layout.js` destroys it, so `main.js`'s shutdown loop runs none on the disposed tray, and the cut keeps the signals from the destroyed events section |
 | `fedora-light`, `fedora-dark` | Fedora's build, `prefer-light` or `prefer-dark` | no Apex module; upstream's sheet at its own path, byte for byte the one safe mode loads from `theme/stock/` |
 | `glass`, `fedora-glass` | the capture settings, `G2_GLASS=1` | patch 0003's glass in the frames the shell drew; the stock unlock blur captured in both shells (see "Glass") |
+| `glass-scale1` | as `glass`, at scale 1 on 1440x900 (`G2_SCALE=1`), as the desktop VM runs | the same glass assertions, every bound read at that scale (see "Glass") |
+| `glass-views` | the capture settings and a second virtual monitor, 1920x1080, right of the panel, both at scale 2 (`G2_MONITOR2`), `G2_GLASS_VIEWS=1` | `glass-views.js`: patch 0003's glass on two stage views, each read from its own framebuffer (see "Glass") |
 
 Every case: the probe ran (so the static import graph loaded), from `startup-complete`, and no `JS ERROR`;
 no key binding overwrites another (mutter's "Overwriting existing binding" warning);
@@ -77,7 +80,15 @@ shadow layer destroyed with its relayout queued twice;
 after "Shutting down GNOME Shell", St styles no actor off the stage ("not in the stage"), as a relayout
 queued by the layer's teardown and run in `main.js`'s shutdown loop did to the panel, and no window
 effect reaches the disposed global (`shell_global_get`'s assertion, `G_IS_OBJECT`), as unmanaging a
-still-connected client's window did before patch 0019;
+still-connected client's window did before patch 0019, and nothing touches a disposed object
+("has been already disposed"), as a banner timeout the tray left armed did when that loop ran it after
+`layout.js` had destroyed the tray (upstream gnome-shell 51). Every case but `shutdown-banner` exits
+only once the tray is empty and its timeouts are cleared. That loop also reaches the date menu's
+destroyed events section (upstream as well) whenever the calendar server or the app list signals in
+it, at any time after startup: the event source's `changed` (`dateMenu.js:297`), its
+`notify::has-calendars` (`:326`) and the app list's `installed-changed` (`:322`). So before it exits,
+every case blocks each handler on those three paths; a path that blocks none, as an upstream rename
+would leave it, fails the case (`APEXG2-EXIT`, `exit_cut`). Stock's shell then cannot meet those races;
 St parsed every declaration (no `St-WARNING` naming a line and column of a sheet: St drops
 such a declaration and keeps the cascade's earlier value);
 the wall clock stands at the fixed time and the top bar's clock shows it (`Mon Sep 28`, EN SPACE, `09:41`).
@@ -92,7 +103,8 @@ Before the first case, `direct.sh` lets root own and call the fixtures' names on
 container's system bus (`/etc/dbus-1/system-local.conf`) and runs `fixtures.py`, which
 starts python-dbusmock's `upower`, `networkmanager` and `bluez5` templates there, a bare
 mock of switcheroo-control and (`G2_ACCOUNTS=1`) one of accountsservice, which have no
-template, and (`G2_POWER_PROFILES=1`) `upower_power_profiles_daemon`. tests/shell's
+template, a bare mock of RealtimeKit (`G2_REALTIME=1`), and (`G2_POWER_PROFILES=1`)
+`upower_power_profiles_daemon`. tests/shell's
 greeter and lock screen run without `G2_ACCOUNTS`, on the real accounts-daemon's users:
 
 | Service | Fixture | The shell shows |
@@ -103,6 +115,7 @@ greeter and lock screen run without `G2_ACCOUNTS`, on the real accounts-daemon's
 | switcheroo-control | the laptop's two GPUs, "AMD Radeon Graphics" the default and "NVIDIA GeForce RTX 3050 Laptop GPU" (`HasDualGpu`); `fixtures.py --gpus 1` leaves the iGPU alone | "Launch Using Discrete Graphics Card" in an app's menu, the dock's included |
 | accountsservice | the user (`FindUserById`) with malcontent's parental controls: no app filtered, no session limit | every app: with malcontent's typelib (the image's `flatpak-libs` brings it), the shell hides all apps until it has read these, and for good if the read fails, which `parental_controls_ready` names in every case |
 | power-profiles-daemon | the Balanced profile, with Power Saver and Performance | the Power Mode toggle, lit at Balanced (the `quick-settings` feature); no glyph in the status pill |
+| RealtimeKit | rtkit-daemon's defaults (`MaxRealtimePriority` 20, `MinNiceLevel` -15, `RTTimeUSecMax` 200000) | nothing: xdg-desktop-portal reads them as it starts. Without it, the system bus activates the image's rtkit-daemon, which cannot start in a container and can stall the portal for the bus's 25 s timeout |
 
 `fixtures-PART.txt` holds what the bus reports afterwards, and `assert.sh` checks it for
 each container. `direct.sh` builds `clock.c` and preloads it into each shell with
@@ -111,6 +124,33 @@ while timers and frames keep the real clocks. It stops before the first case whe
 clock does not hold. libfaketime cannot do this: it converts every absolute timer as if
 it ran on the wall clock, so mutter's frame timer never fired and no shell started.
 The guard's shells, started by systemd, keep the real clock and have no fixtures.
+
+A shell that dies on a signal leaves a backtrace. `direct.sh` also preloads `crash.c`, whose
+handler writes `APEXG2-CRASH` and the signal, then the frames (`backtrace_symbols_fd`), into the
+case's log before it takes the default action, so a synchronous fault (a bad address, an illegal
+instruction) exits as it would without it. It installs only where it finds the default action: a
+signal the process started with another disposition for is left as it is, and one line says so.
+The first signal decides: a fault in the unwinder, or another thread's crash, raises that one. It
+covers SIGSEGV, SIGBUS and SIGILL; gnome-shell's `main.c` replaces its SIGABRT and SIGFPE handler
+with its own (gjs's stack dump), so an abort or a failed `g_assert` leaves that dump and no frames. Its alternate stack is the
+main thread's alone: a stack overflow in another thread prints nothing. There are frames even where
+the core goes to a pipe the container cannot reach, as on CI's runners. Each case's shell runs with
+`ulimit -c unlimited`, from its HOME, where a core lands under core_pattern `core`. After a signal
+exit the case does not expect (`G2_EXPECT_EXIT`, 134 for `fault-abort`), `backtrace.sh`'s
+`case_backtrace` writes `/out/CASE.bt`: those frames, then gdb's `bt` of the core without fetching
+symbols, then `bt` and `thread apply all bt full` with symbols from Fedora's debuginfod (the lane's
+own gnome-shell has none, which it says). gdb is installed on demand, and dnf5 and gdb share one
+120 s budget, each stopped 10 s after a TERM it ignores. Otherwise one line says why there is none
+(`no backtrace: no core in … (core_pattern …, ulimit -Hc …)`, `no backtrace: gdb missing …`, `no
+backtrace: gdb ran out of the 120 s budget`). The core is deleted once read, or at once when the
+exit was expected. The shell's `exits` assertion then names the crashing thread's frame past the
+signal trampoline (past `raise`, `abort` and GLib's assertion and log frames, and their GCC clones
+such as `g_assertion_message[cold]`), or that reason, or `no CASE.bt`. Every other shell a test starts does the
+same: `tests/lib/headless.sh`'s `headless_run` (the S2c, S7, Ptyxis and libadwaita tests), its copy in
+`tests/control-center/lib.sh`, and `tests/nautilus/shoot.sh` and `tests/shell/shoot.sh` preload
+`crash.c` (built by `backtrace.sh`'s `crash_lib`) and write `NAME.bt` beside the shell's `NAME.log`. A
+crash fails that case by name even when its capture was taken: `shell_crash` turns an exit above
+128 into "the shell crashed (SIGx); see NAME.bt".
 
 The layer follows `layer-enabled` live in a shell that started with it on
 ([DESIGN.md](https://github.com/apex-linux/apex/blob/main/docs/DESIGN.md#schema-iogithubapex_linuxapexdesktop): the layer reads
@@ -137,7 +177,13 @@ open); idle and dock-pin assert `NORMAL` after `settleDesktop`. No case is run t
 `direct.sh` lists the late ones in `late-PART.txt` (and `patched.sh` in the job summary),
 and `assert.txt` lists the late guard phases.
 
-The crash-guard phases (`guard.sh`): an abort 65 s after start does not trip the guard;
+The crash-guard phases (`guard.sh`): the guard trips on either of two triggers. A failure
+in the shell's first 60 s, while the layer's marker exists, trips at once. A later one
+only counts, in `~/.local/state/apex/shell-guard-trips` (the booted deployment from
+`ostree=`, or `none`, and a count), and the second on the same deployment trips. So an
+abort 65 s after start runs `apex-shell-safe.service`, which counts 1 and leaves the
+layer on; a second such abort trips (`layer-enabled=false`, the agent's marker, the
+counter gone), and the layer is turned back on for the phases after it.
 `abort-after-enable` trips it (the unit fails, `apex-shell-safe.service` runs,
 `layer-enabled=false`, the agent's marker exists); the next start is stock;
 `layer-enabled=true` brings Apex back; `dark-off`: with `prefer-dark`, the probe clicks
@@ -145,6 +191,71 @@ the Dark Style toggle off, the shell turns light, and afterwards no Apex user un
 active and none, nor an Apex D-Bus service, started (the ROADMAP's "no agent runs");
 the trip again with dconf already running. `direct.sh` and `guard.sh` refuse to run
 outside run.sh's container (`/run/.containerenv`).
+
+## Session defaults
+
+S1b's first exit row, "a new session starts with the Apex theme, Colloid icons, JetBrains Mono
+and the wallpaper", read in the shells that run with apex-desktop installed: the VM's G2
+(`default`, `dark-style`, and `safe-env`, where safe mode keeps the image's fonts and icons) and
+the sign-off shells (above). Every case's probe reports them (`session-defaults.js`,
+`APEXG2-SESSION`); `session_defaults` asserts:
+
+- `org.gnome.desktop.interface`'s `font-name`, `document-font-name`, `monospace-font-name`,
+  `font-hinting` and `icon-theme` are the override's (`parts.sh` keeps their copies, which
+  apex-image's contracts hold equal to apex-desktop's), naming each key that differs;
+- the shell draws with that font and icon theme (`St.Settings`);
+- fontconfig gives Adwaita Sans, with `ss03`, and JetBrains Mono for their families, so a
+  missing JetBrains Mono fails rather than falling back to another monospace font;
+- the bar's clock is drawn in Adwaita Sans, as Pango resolves it;
+- every icon shown in the bar, the dock, the overview's dash and Quick Settings resolves under
+  `/usr/share/icons/Apex/`. Explicit lists, each entry by exact name with its reason, name the
+  only others: `FIXTURE_APPS`, G2's own stub apps, which have no icon and draw GNOME's generic
+  one; `SHELL_RESOURCE_ICONS`, icons the shell draws from its own resource because board 31
+  has no glyph of that name, empty since apex-desktop#35 (below; the selftests list
+  `apex-test-resource-icon` through `G2_SHELL_RESOURCE_ICONS`); and `STAND_IN_ICONS`, a stock icon on one
+  surface only (`switcher application-x-executable`, G2's switcher stand-in, and
+  `spotlight drive-harddisk`, a full-colour device icon a search provider returns, which Apex
+  inherits from Adwaita by design). A failure names each icon, where it showed, its app and
+  the file it resolved to, or "no icon";
+- no name on `SHELL_RESOURCE_ICONS` is one Apex Symbolic ships (the probe lists
+  `/usr/share/icons/Apex/symbolic`): once apex-desktop draws a glyph, the pin bump that brings
+  it fails until the name leaves the list, so the list only shrinks;
+- in a case with the scenes (`G2_SCENES=1`: `default` and `dark-style`, in the VM and in
+  sign-off), every other surface G2 opens, by the same rule. After the last capture, so no
+  scene changes, the probe opens each surface with the openers its scenes use (`probe.js`'s
+  `iconSurfaces`), walks its shown icons, and closes it before the next
+  (`APEXG2-SESSION-SURFACES`): board 34's date menu with a notification, the overview (35),
+  the launcher grid (36), Spotlight's results (38), the window switcher (15), board 16's popup
+  menu, OSD and banner, board 13's dialog, the end-session dialog (14) and the screenshot UI
+  (19). The date menu is walked with Show Status Shapes on, the only state that shows Do Not
+  Disturb's switch glyphs. Each surface passes or fails on its own, naming its board; a surface
+  that did not open, or drew no icon, fails too.
+
+What only `tests/shell` shoots, G2 never opens: the lock screen with its top bar (board 20, and
+its fingerprint line), the greeter's user list and prompt (board 12) and polkit's own
+authentication dialog (board 13, and its fingerprint line). The shell probe records the icons
+each step draws (`icons-STEP` facts in `CASE.log`) and `shell_icons` holds them to the same rule
+and lists, one check per step named by its board. `signoff.sh --collect` runs it on the line
+above, where apex-desktop's theme is installed. Without that theme, as in CI's own `tests/shell`
+job, `check.py` reports it "not run: no Apex theme", never a pass.
+
+The wallpaper is `backdrop_painted`'s (below).
+
+### Closed: glyphs board 31 lacked
+
+Names the shell drew from its own resource until `APEX_DESKTOP_REV` reached apex-desktop#35
+(a9c32ef), which ships all nine in Apex Symbolic, seven as aliases of glyphs the boards already
+draw and the switch's two shapes as new ones. That bump took them off `SHELL_RESOURCE_ICONS`,
+which is empty since.
+
+| Name | Surface |
+|---|---|
+| `screenshooter-symbolic` | Quick Settings (the screenshot button) |
+| `notification-expand-symbolic` | the date menu (34): a notification's expander |
+| `switch-on-symbolic`, `switch-off-symbolic` | the date menu (34): Do Not Disturb's switch, with Show Status Shapes |
+| `screenshot-ui-area-symbolic`, `screenshot-ui-display-symbolic`, `screenshot-ui-window-symbolic` | the screenshot UI (19): its three capture types |
+| `screenshot-ui-show-pointer-symbolic` | the screenshot UI (19): Show Pointer |
+| `preview-close-symbolic` | the screenshot UI (19): its close button |
 
 ## The backdrop
 
@@ -286,7 +397,10 @@ apps are, and registers them with the shell's watcher. Every call an item gets l
   glyphs and place in the status pill, whose start narrows for it and widens again once
   nothing is in use; the recording pill's stop square and tabular timer; the sharing
   pill's glyph, square, name and gap to the status pill; the input chip's "EN", font,
-  tracking and minimum width.
+  tracking and minimum width, and each source's chip: an xkb source's short name in
+  capitals, an IBus source's engine language code. The image's sources here are xkb (us, fr):
+  the IBus mapping is checked against a stub in tests/layer; the real engine is #187's case and
+  the VM run.
 
 The captures `<case>-indicators.png`, `<case>-indicators-everything.png`,
 `<case>-indicator-menu.png` and `<case>-indicator-overflow.png` show the bar, the bar in
@@ -337,6 +451,12 @@ Last, with `update1-mock.py` (python-dbusmock's Update1, started by `direct.sh`)
 update card: its place under the text, inset, radius, gap, fill and ring, the icon, the
 title and the versions, the switch (on, sensitive only when staged) and Restart's label,
 capturing `end-session-update` and `end-session-ready`.
+Then a mount's `ask-password`, through `shellMountOperation.js` as a mount asks it, opens the
+password dialog with its Remember Password check box: unchecked, its 2 px ring is
+`$apex_fg_dim` (`$apex_fg` hovered) and at least 3:1 on the dialog's fill, where stock's black
+or white at .15 is about 1.5:1; checked, the box is the accent shaded
+`$apex_quick_toggle_checked_shade`, the check white and the ring gone. The keyring prompt and
+the portal's access dialog take the same rule.
 
 `date_menu` runs in the same cases. The probe posts two low-urgency notifications (no
 banner), opens the calendar menu at the fixed date, captures it with
@@ -523,6 +643,34 @@ damages the tile alone:
 
 `blur-ref.js` is a clamp-to-edge Gaussian at full resolution, CSS `saturate()` and the
 rounded box's coverage, over the box alone; `blur-ref-test.js` tests it in `selftest.sh`.
+
+`glass-scale1` runs the same case at scale 1, the desktop VM's, against the same references
+computed there: σ, the downscale and every box in device px are the scale-1 ones. The
+tolerances above hold at both scales, by the blur's own choice of downscale: `fine` picks the
+smallest ds with σ / ds ≤ 4, which is 48 / 16 at scale 2 and 24 / 8 at scale 1, so σ, ds, the
+tiles and the box all halve together and the box filter's error against the Gaussian is the
+same problem at half the size. Only the edge band, ds/2, narrows with ds (8 px to 4). The ring
+of the corner check is 4 CSS px (4 device px at scale 1), the tile ring's allowance 0.25 device
+px at both (8-bit rounding, not the grid), and the opacity bound 1 + 64/255 holds per channel at
+any scale. Measured at scale 1 against scale 2: inside 2.89/255 against 3.2, along the edges
+10.53 against 11.67, on average 0.77 against 0.75; screenshots of the corners exact (0) against
+1/255; the opacity blend 1.208 steps at both. The dock past the stage edge, the known gap,
+reads 5033 px off at scale 1.
+
+`glass-views` puts the same glass (σ 24, saturation 1.6, corners 18, `fine`) on two monitors,
+two stage views with a framebuffer each, and reads each view's part of a box from its own.
+A box moved from the left view to the right one and back draws, in both views' frames, what a
+fresh effect draws there: the blur follows it from view to view. A box over the boundary draws
+what a fresh effect draws too, and away from the boundary it is `blur-ref.js`'s blur within the
+bounds above. Within 3 σ of the boundary it is not: `fine` keeps its last result per stage view,
+each in a texture of its own that only that view's blit fills, so each half blurs without the
+other view's pixels and the halves meet at a seam, up to 93.58/255 off the reference. Stock's
+effect has one texture that every view fills its part of, so it shows the seam only in a new
+effect's first frame (77/255) and then 1.28/255. The seam is pinned at today's 93.58/255 within
+1/255 either way, and is a known gap that closes when the seam's columns meet the bounds above,
+4/255 inside and 12/255 in the ds/2 band; a report without the numbers keeps it open. It is not
+the gap the edge fix (15b) closes: that fix makes the pixels past the stage defined, not the
+other view's.
 In the same case the glass manager (`js/ui/apex/glass/`) is read on the live shell, light:
 `glass_manager` asserts that the bar's blur is `$apex_bar_blur` at `$apex_bar_saturation`,
 and Quick Settings', the calendar's (each opened) and a banner's `$apex_panel_blur` at
@@ -536,8 +684,53 @@ mode at `$apex_overview_scrim_blur` and `$apex_overview_scrim_saturation`, and a
 A stand-in window in `window_group` (a `Clutter.Actor`: St restyles no unmapped actor)
 changes colour under the scrim: with the damage forwarded as the manager forwards a
 window's, the frame equals a full redraw; without, the blur's halo stays stale (the control). The derived glass: an
-OSD shown, an Alt+Tab list in a stand-in popup and the screenshot panel (styled while closed)
-each carry the popovers' `$apex_panel_blur` and `$apex_panel_saturation`.
+OSD shown, every switcher popup and the screenshot panel (styled while closed) each carry the
+popovers' `$apex_panel_blur` and `$apex_panel_saturation`. The switchers are `switchers.js`'s, each
+shown as its keybinding shows it, its 1.5 s no-modifier finish stopped as a held modifier would
+stop it, so it stays until destroyed: an Alt+Tab list in a stand-in of
+`switcherPopup.js`'s class, the held Super+Alt+Space switcher with two sources, Ctrl+Alt+Tab over
+the bar's focus group, and Super+P's (through `SwitcherPopup`'s own `show()`, as one monitor
+cannot switch), each list over board 15's 192 px checker from its top-left corner (without it
+the blur reads the wallpaper, and the captured corners measured 1 to 4/255 off the screen). Alt+Tab's
+corner, captured, matches the screen pixel for pixel; the other three to 1/255 a channel, as the
+popovers' do (Super+P's rounds one pixel). `glass/derived.js` matches them by class, so each
+registers under its own name.
+
+Every glass surface conforms, checked from the registry rather than a list: `glass.js` records
+every surface the glass registry gets during the case (the shell's, not its own `emptyTest` and
+`opacityTest`), and a surface the case never checked fails by name, as does one the assertions
+do not know, so a surface a later slice registers is caught until the case checks it. Each surface's blur is
+rounded at its border radius, all four corners alike, over the box St paints its background in
+(`get_background_paint_box` of its allocation). For the dock, Quick Settings, the calendar, a
+banner, the OSD, the Spotlight panel and the toast (each switcher's list as above), a black and white
+checker goes under the surface's bottom-left corner, and that corner square is read with the
+glass on and with the surface unregistered: no pixel past the border's arc changes, every pixel
+in the 4 CSS px band just inside it does (no surface's padding lets content in there), the
+surface carries one glass effect, and a screenshot of the surface matches the screen over the
+square to 1/255 a channel (off stage, the dock, the OSD, the Spotlight panel and the toast
+round a few pixels the other way; the others match exactly). The toast hides itself after 2 s;
+a check it outlives is read again on a new toast, at most three times. A banner check first
+dismisses a banner the case did not post, such as the one-time search hint, which never expires
+while no one types and would hold the case's banner back.
+
+Opacity-following is measured in pixels: a scrim-styled glass the case registers over the tile
+pattern is read at opacity 255 (B), 128 (H) and 0 (D). D equals the pattern, pixel for pixel,
+and B differs from it. Every channel of H lies within 1 + 64/255 steps of (128·B + 127·D) / 255,
+the blend 0003's `follow-opacity` asks for. The bound is three roundings: the blurred colour
+c, multiplied by 128/255, is converted to 8 bits before blending (½ step); the blend's sum is
+written to the 8-bit frame (½ step); and the reference reads c from B, which holds c rounded
+(½ step, carried at 128/255: 64/255). Measured: 1.208 steps; with `follow-opacity` forced off,
+88.651.
+
+A glass that moves blurs where it is. Each move is set by property, not by an animation's
+clock: the dock's box slid half its height up, and Quick Settings' BoxPointer halfway open
+(scale 0.98 from its top edge, half the arrow's rise up). Over the box the glass left and the
+box it took, on the tile pattern, the frame the move itself draws equals a full redraw of the
+same state by a fresh glass. The surface is unregistered and registered again first, because a
+plain full redraw would draw a kept result again, and so would pass a blur that never moves.
+The dock halfway down intellihide's slide reaches past the screen's bottom edge, and there its
+blur reads pixels no one painted (the last frame's for the live glass, a fresh buffer's for the
+new one): a known gap until 0003 clamps its blit to the stage view.
 
 `shadows_under_glass` checks the `shadows` feature against the glass in the same case, light
 and dark: `glass.js` lays the tile grid under Quick Settings, a popup menu and a dialog and
@@ -568,7 +761,8 @@ default: `glass-unlock.png` against `fedora-glass-unlock.png` differs by 0 pixel
 `a11y.js`, which opens each Apex surface in turn: the bar, again with two unread
 notifications so the clock shows its dot, the dock, a popup menu, the OSD,
 a banner, Quick Settings and its Wi-Fi menu, the date menu with two notifications, the
-window switcher, a polkit-shaped dialog, the shell's own power-off dialog, Spotlight with
+window switcher, the held input-source switcher, Ctrl+Alt+Tab and Super+P's (`switchers.js`), a polkit-shaped dialog,
+the mount password dialog with its box checked (under each accent), the shell's own power-off dialog, Spotlight with
 "disk" typed and its toast, the overview and the app grid. Its targets are the visible
 labels, entries and symbolic icons under the surface, and any Clutter.Text outside a label
 or an entry, as a button's own label: St colours that from the button, and board 34's day
@@ -588,9 +782,9 @@ each of the nine `accent-color` values, since a checked toggle, today and a defa
 take their fill from the accent; the surface stays open while the accent changes under it, and
 each measurement waits for the shell's idle and one painted frame, not a fixed delay. The pass
 records `timingsMs` per step in its report. The failures left are known gaps (`A11Y_GAPS`), all in
-upstream's high-contrast sheet, and they stay gaps: restyling an upstream actor there would
-need a stock copy of the sheet for safe mode. A report for upstream, which is the owner's to
-file:
+upstream's high-contrast sheet. Safe mode now takes that sheet from `theme/stock/`, so the
+Apex part could restyle those actors outside safe mode; until a board asks for it they stay
+gaps. A report for upstream, which is the owner's to file:
 
 > **High contrast: checked quick toggles fall below WCAG AA.** In gnome-shell 51.0's
 > high-contrast sheet, a checked quick toggle draws white text on the accent: 3.15:1 for the
@@ -616,6 +810,70 @@ WCAG 1.4.11's 3:1 over the light backdrops.
 `inactive_dot` pins each backdrop's ratio (`A11Y_INACTIVE_DOT_TODAY`, at the report's own
 rounding): a lower one fails. Where it is under 3:1 the dot leaves the plain glyph check for a
 gap line, which fails once the dot reaches 3:1, so the fix also removes the gap.
+
+Board 39's pills are measured on the bar too (`barPills`): with two input sources set for the
+step, the input chip, and, as in `indicators.js`'s "everything", the camera and microphone in
+use, a recording at 0:42 and a share. The chip's and the timer's text want 4.5:1, the share's and
+the privacy group's glyphs 3:1, each over what is drawn behind it, the pill's own fill. A pill
+Apex fills at rest (the recording, the share, the privacy group) is also read against the bar:
+the median of its fill across its middle, clear of the corners, against the bar a pixel or two
+beyond each end, at 3:1 (WCAG 1.4.11). Upstream's high-contrast sheet fills the button instead,
+so there `bar_pills` leaves the edge out. sni-items.js's five apps join them, the fifth behind the
+overflow: each app's glyph, drawn as a mask in the bar's ink, wants 3:1 and the overflow's count
+4.5:1. With everything on the bar it is one surface too (`barPills.crowded`), which `a11y_layout`
+wants whole at Large Text, none of its text cut short, off the screen or over another's. The Chat
+app's menu (`barPills.indicatorMenu`) is measured as the other surfaces are. Its right click waits
+for each step, not a time: the hot corner off, so the new pointer's first motion is not held at 0,0
+by its barrier, then the pointer over the button, then the menu open on it. Every text passes; the gaps (`A11Y_PILL_TODAY`, pinned as
+the inactive dot is) are the owner's to decide:
+
+| Case | Part | Today |
+|---|---|---|
+| `default-solid` | the recording pill's `$apex_recording` against the bar | 2.02:1 |
+| `default-solid` | the sharing pill's and the privacy group's `$apex_privacy` against the bar | 1.62:1 |
+| `dark-style-solid` | the recording pill's fill against the bar | 2.13:1 |
+| `dark-style-solid` | the sharing pill's and the privacy group's fill against the bar | 2.65:1 |
+| `high-contrast`, `high-contrast-solid` | upstream's screen-sharing glyph, white on `#ff7800` | 2.54:1 |
+
+Over the Facets every fill holds 3:1: 5.44:1 and 4.38:1 in `default`, 3.14:1 and 3.90:1 in `dark-style`.
+
+Key focus is measured too (`focus`, WCAG 2.4.11 and 1.4.11). On the first focusable control of
+Quick Settings, the dock, the polkit-shaped dialog and Spotlight, the probe reads the stage with
+nothing focused and again with that control focused, each after the shell's idle and a painted
+frame. The indicator is whatever changed, wherever the control draws it. A 1 px line around the
+control's own box must change by 3:1: the pixel at that count, among the changed pixels sorted by
+how far each moved from its unfocused self. Each control is read twice, over the case's backdrop
+and over a busy wallpaper (fine stripes of black, white and accents), so glass shows the ring
+over a real blurred backdrop. The probe sets that wallpaper only for the step and waits for the
+background to swap each way. `focus_rings` wants focus to land and the 3:1 line; today's
+shortfalls (`A11Y_FOCUS_TODAY`) are the owner's:
+
+| Control | Cases | Today |
+|---|---|---|
+| Spotlight's entry | every case | the caret only (1:1) |
+
+The dock's name labels are measured too (`dockLabels`, `dock_labels`). A virtual pointer hovers the
+dock's first, middle and last item in turn, as a person does, and each label, once fully shown, is
+measured as its own surface: its text against the pixels behind it (the text's own box, since the
+label's rounded corners are not behind any text), and its box whole on the monitor and above the
+dock. It runs over the case's backdrop and again over the busy wallpaper, in every a11y case and
+in `default-scale1` at scale 1 (`G2_DOCK_LABELS`); a case with nothing pinned gets Files and Clocks
+for the step. Then key focus on the first item must show its label as a hover does, which Apex's
+dock adds (upstream's dash names an item on hover only). The label's fill is opaque, so the
+wallpaper cannot reach the text: 15.16:1 or better in light and 13.01:1 in dark and high
+contrast, over every backdrop, at both scales. The edges are `dock-external`'s: upstream clamps a
+label to the stage, not its monitor, so at a primary's edge that meets another monitor Show Apps'
+label reached 17 px over it; Apex's dock keeps it to its own monitor, either way.
+
+So is reaching every control by Tab (`reach`, WCAG 2.1.1 and 2.1.2). In Quick Settings, the
+polkit-shaped dialog and Spotlight, the probe focuses the first control and presses Tab past the
+last with a virtual keyboard. After each press it waits for `inputDelivered()`'s F24 sentinel,
+which proves the press reached the stage, and then a painted frame, since the stage handles its
+queued events at its next frame; key focus is read after both, never after a time. `tab_walks`
+wants each press to move focus to the next control and from the last back to the first, never to
+stop or leave the surface, and Escape to close it. Quick Settings' ten controls and the dialog's
+entry, Cancel and Authenticate pass in every case; Spotlight's entry is its one control. The dock
+joins once its focus ring lands.
 
 The bar is measured the same way over every wallpaper G2 shows it on: the Facets, light in
 `default` and dark in `dark-style`; `#013b88` in the `-solid` twins; and, in `no-dock`
@@ -682,13 +940,39 @@ with `G2_SURFACE_SCENES=1`, the first two with `G2_SIGNOFF=1`, which opens Text 
 manager) and captures the overview and the real app switcher over them, after the
 scenes that want an empty desktop. The launcher's board is its grid, captured before the
 probe opens a folder. `tests/shell/shoot.sh` shoots the greeter, the lock screen, polkit's
-dialog and the power-off dialog with an update staged. Each board's scene is copied to
-`board-NN-SLUG-light.png` and `-dark.png`, and `signoff.json` records its title, its scene
-and fixture state, the apex-gnome and apex-desktop pins, the layer's features enabled, the
-scale and the monitor. `signoff.sh` itself compares nothing. It fails the run, naming the
-board, when:
+dialog and the power-off dialog with an update staged.
 
-- a scene has no capture;
+The app boards come from their lanes' own shooters, on the lanes' RPMs with the lane's
+libadwaita installed over Fedora's: `tests/control-center/run.sh` (boards 11, 18, 23, 24 and
+26), `tests/nautilus/shoot.sh` (27 to 29, with `APEX_DESKTOP_SRC` at the pinned apex-desktop)
+and `tests/ptyxis/shoot.sh` (32 and 33). A board has one row per scene in `signoff.sh`'s
+`BOARDS`, with the board's number and the slug `BOARD-SLUG-SCENE`: board 11 has the rows
+`11-settings-apex-top` and `11-settings-apex-scrolled`, board 26 `26-update-health-health-failure`
+and `26-update-health-fallback`, and each other app board one, its scene the capture's stem
+(`18-settings-updates-updates`). The fifteen shell boards keep one row each, its slug the
+board's. `signoff.sh --collect G2_RUN SHELL_SHOTS OUT` collects the shell's rows, and each
+`APP=SHOTS` (`control-center`, `nautilus`, `ptyxis`, `symbolic`) adds that source's rows from
+its captures.
+
+Board 31, Apex Symbolic's contact sheet, comes from the pinned apex-desktop's own
+`tools/icons/contact-sheet.sh`: every glyph as GTK 4 draws it, recoloured, at scale 2, light
+and dark, one sheet per scene of its `tools/icons/boards.txt` (`core`, `status`, `actions`,
+`everywhere`, `aliases`), so its rows are `31-symbolic-core` to `31-symbolic-aliases`.
+`signoff.sh` draws them from the Apex theme it installed, after the shell's captures, so the
+shell boards' container stays the one their goldens came from; GTK 4 for Python and Xvfb come
+in only then. A glyph that is missing or draws nothing leaves its scene without a sheet, and
+the collection names that row.
+
+Each row's scene is copied to `board-NN-SLUG-light.png` and `-dark.png`. A row its shooter
+captures light only (an empty dark capture in `BOARDS`; no row is one today) has no dark file,
+and its `scene.dark` and `files.dark` are `null`. `signoff.json` records each row's key
+(`NN-SLUG`), number, slug, title, scene and fixture state, the sources collected, the
+apex-gnome and apex-desktop pins, the layer's features enabled, the scale and the monitor.
+`signoff.sh` itself compares nothing. It fails the run, naming the board (and, for an app
+row, its key), when:
+
+- a scene has no capture. This is the only check on an app row: the next three read the
+  shell's own logs, and the app shooters fail their own job when a scene does not open;
 - the probe's three windows never all reached the overview, or brought a notification (a
   focus mutter refused posts "X is ready", so the probe activates them with a fresh server
   timestamp);
@@ -701,8 +985,18 @@ board, when:
   fixtures' keyboard before any shell starts: with no device, nothing can reach the indicator
   late. G2 keeps the connected keyboard, which its top-bar assertion needs.
 
-The `signoff` workflow uploads the set as `signoff-SHA`, then checks it against the approved
-goldens (below).
+Beside the boards, `signoff.sh --collect` runs one more check line on the same shells:
+G2's `session_defaults` on the `default` and `dark-style` logs, printed as
+`signoff.sh: session defaults: N passed, M failed`, with each failure naming its key or icon
+(below, "Session defaults"). It is a check of its own, outside the board count, and the only
+per-PR job whose shells run with apex-desktop's fonts and icon theme: `shots-patched` installs
+just the shell and two of the override's keys.
+
+In the `signoff` workflow, the shell's job runs `signoff.sh` and passes its G2 run, its
+`shoot.sh` captures and board 31's sheets on. Each app's job builds libadwaita and the app through
+`tests/lib/lane.sh`, restoring `ci.yml`'s `lane-` caches without saving them, and runs the
+shooter. One collect job then runs `signoff.sh --collect` over all of them, checks the set
+against the approved goldens (below) and uploads it as `signoff-SHA`.
 
 ## Approved goldens
 
@@ -710,52 +1004,65 @@ The boards the owner approved on the sign-off page are G2's goldens (ADR 0014, t
 They live on the orphan branch `goldens`, so a re-approval never adds images to main's
 history. `tests/shots/goldens.lock` pins the commit G2 compares with. That commit holds:
 
-- `boards/board-NN-light.png` and `-dark.png`, at capture resolution;
-- `manifest.json`, with, per board: its title, slug, scene ids and fixture state, the shots
-  hash, `signoff.json`'s pins, scale and monitor, and the approval record (`status`,
-  `approvedAt`, the decision's `shots`, and its `note`, if any).
+- `boards/board-KEY-light.png` and `-dark.png`, at capture resolution;
+- `manifest.json`, with, per KEY: the board's number, title, slug, scene ids and fixture
+  state, the files, the shots hash, `signoff.json`'s pins, scale and monitor, and the approval
+  record (`status`, `approvedAt`, the decision's `shots`, and its `note`, if any).
+
+A KEY is a row's `NN-SLUG`. The fifteen shell boards approved before the app boards joined are
+keyed by their number alone (`NN`), with their slug recorded: a legacy key stands for a board
+of one row, and the check matches it by number and slug, so those goldens stay as approved.
+Approving such a row under one of its two keys replaces its golden under the other, entry and files.
 
 The shots hash is the page's: sha256 over the light PNG's bytes, then the dark PNG's, first
-12 hex digits.
+12 hex digits. A light-only row hashes its light PNG alone.
+
+The page shows a board as approved only when all its rows are. `goldens.sh` imports and checks
+row by row, so a board of two rows may have one row's golden while the other awaits.
 
 ### Importing after a sign-off
 
 CI never talks to the sign-off page. After the owner decides, the lead:
 
 1. exports the page's decisions as `DECISIONS.json`:
-   `{"boards": {"36": {"status": "approved", "shots": "…", "approvedAt": "…", "note": "…"}}}`;
+   `{"boards": {"11-settings-apex-top": {"status": "approved", "shots": "…", "approvedAt": "…", "note": "…"}}}`,
+   keyed by each row's `NN-SLUG` (a legacy `NN` is valid only for a board of one row);
 2. downloads the run's `signoff-SHA` artifact;
 3. runs `tests/shots/goldens.sh import SIGNOFF_DIR DECISIONS.json`;
 4. pushes the new commit (`git -C _build/goldens push origin HEAD:refs/heads/goldens`), then
    opens a pull request with the `goldens.lock` it moved.
 
-The import takes only the boards whose decision is `approved` with a `shots` hash equal to
-their capture's. It refuses the whole import, naming each board and why, when an approval
-names other captures (a stale approval), a field is unknown or of the wrong type, or no board
-is approved. A board that isn't approved keeps the golden it had, if any. The new commit sits
+The import takes only the rows whose decision is `approved` with a `shots` hash equal to
+their capture's. It refuses the whole import, naming each row and why, when an approval
+names other captures (a stale approval), a key names no row (or a legacy `NN` a board of more
+than one), a field is unknown or of the wrong type, or no row is approved. A board that isn't approved keeps the golden it had, if any. The new commit sits
 on the pinned one, or is the branch's first.
 
 ### The check
 
-`tests/shots/goldens.sh check SIGNOFF_DIR` (or `signoff.sh --goldens`) compares each board
-that has a golden with its capture, light and dark, through `compare.js`. The comparison is
-pixel for pixel outside the masks, as G2's other captures are.
+`tests/shots/goldens.sh check SIGNOFF_DIR` (or `signoff.sh --goldens`) compares each row
+that has a golden with its capture, light and dark (light alone for a light-only row), through
+`compare.js`. The comparison is pixel for pixel outside the masks, as G2's other captures are.
 
-- A board without a golden is reported `AWAIT`: awaiting sign-off, not failed.
-- A board that differs fails, naming the board, the variant, the number of pixels and their
-  box, with a difference image in `SIGNOFF_DIR/goldens-diff/`.
-- A golden for a board the run no longer has fails, and so does a golden whose files don't
-  hash to its manifest.
+- A row without a golden is reported `AWAIT`: awaiting sign-off, not failed.
+- A row that differs fails, naming the board (and the row's key, for a board of more than one
+  row), the variant, the number of pixels and their box, with a difference image in
+  `SIGNOFF_DIR/goldens-diff/`.
+- A golden for a row the run no longer has fails, and so do a golden whose files don't hash
+  to its manifest and one whose variants are not its row's. A golden of a source the run did
+  not collect (`signoff.json`'s `sources`: the shell's alone, say) is out of its scope.
 
-It runs in `signoff.yml`, after the capture:
+It runs in `signoff.yml`'s collect job, after the captures:
 
-- on a push to main that changes the shell, its recipe, `tests/shots`, `tests/shell` or
-  `tests/lib` (apex-desktop's pin);
+- on a push to main that changes the shell or an app (Settings, Files, Terminal), their
+  recipes or libadwaita's, `tests/shots`, `tests/shell`, the apps' tests, `tests/lib` (the
+  pins) or the schema fixture;
 - daily;
 - on dispatch;
-- on a pull request that changes what the captures render: the shell, its recipe, the
-  scenes and fixtures (`tests/shots` but its README, selftest, `assert.sh` and `stable.sh`),
-  `tests/shell`, `tests/lib`, the schema fixture or `signoff.yml`
+- on a pull request that changes what the captures render: the shell and the apps, their
+  recipes and libadwaita's, the scenes and fixtures (`tests/shots` but its README, selftest,
+  `assert.sh` and `stable.sh`), `tests/shell`, the apps' tests, `tests/lib`, the schema fixture
+  or `signoff.yml`
   (`.github/scripts/signoff-paths.sh` decides), and on one labelled `goldens`. A board that
   moves fails before merge, its difference image in the `signoff-SHA` artifact's
   `goldens-diff/`.
@@ -764,8 +1071,9 @@ The goldens come from `signoff.sh`'s container, with its RPM and desktop-entry s
 and `shoot.sh`'s mocks. The builder VM's image draws the launcher and the dock from real
 Flatpaks, so the check runs where the goldens were made, not in G2's VM run.
 
-`golden-masks.json` lists the masks, per board, in capture pixels: `{"boards": {"NN":
-[{"name", "x", "y", "width", "height", "why"}]}}`. A mask may cover at most 5 % of a
+`golden-masks.json` lists the masks, per row, in capture pixels: `{"boards": {"NN-SLUG":
+[{"name", "x", "y", "width", "height", "why"}]}}`, where a legacy `NN` stands for a board of one
+row. A mask may cover at most 5 % of a
 capture. It has none. G2's wall clock is fixed, and nothing live is left in a board: the
 fixtures' Wi-Fi scan finishes as a real one does (`RequestScan` moves `LastScan`), so board
 17's menu is captured after the scan, without its spinner. A capture that still holds live
@@ -830,8 +1138,11 @@ Not asserted here: the volume glyph (the container has no audio server), and wha
 | `direct.sh`, `guard.sh` | containers of the image | the cases and the crash-guard phases |
 | `fixtures.py` | the direct cases' containers | the python-dbusmock services on the system bus |
 | `clock.c` | the direct cases' shells (`LD_PRELOAD`) | the fixed wall clock |
+| `crash.c` | the direct cases' shells (`LD_PRELOAD`) | the frames of a fatal signal, into the case's log |
+| `backtrace.sh` | `direct.sh` | `case_backtrace`: a crashed case's `CASE.bt` |
 | `smoke.sh` | CI's Fedora 45 container | `direct.sh fedora` on Fedora's gnome-shell, and the assertions that need no Apex build |
 | `patched.sh` | a throwaway Fedora 45 container, by hand | the patched shell before a builder VM: rebuilds Fedora's SRPM with this checkout's recipe and `desktop/shell/`, runs `direct.sh main`, and asserts the logs and the top bar (below) |
+| `repeat.sh` | the host, by hand | `patched.sh` N times on one build, each in its own container, then every assertion whose verdict differs between the runs (below) |
 | `maximised-window.js` | the `dock-intellihide` and `dock-external` cases' shells (gjs, GTK 4) | one maximised window, which the probe starts and stops |
 | `dock-dnd.js`, `dock-external.js` | the `dock-dnd` and `dock-external` cases' shells | the dock's drags, and the dock and the bar on two monitors |
 | `probe.js` | the shell (`--automation-script`) | prints `APEXG2 {…}` and, for the capture cases, `APEXG2-SCENES {…}` |
@@ -844,10 +1155,52 @@ Not asserted here: the volume glyph (the container has no audio server), and wha
 | `backdrop.js`, `backdrops.sh` | the shell; a throwaway container | whether the pinned backdrop painted, and the Facets it pins rendered where an image has them |
 | `indicators.js`, `sni-items.js` | the shell; gjs | the app-indicator part of `default`, `default-scale1` and `dark-style`, and the StatusNotifierItems it starts |
 | `privacy.js` | the shell; gjs; PipeWire, WirePlumber and GStreamer as the image ships them | the `privacy` case: a camera node, its viewer and a capture of `g2-mic`, then the privacy group |
+| `session-defaults.js` | every case's shell | the fonts and icon theme the session reads, fontconfig's families for them, the clock's drawn family, and the file each shown icon of the bar, dock, dash and Quick Settings resolves to; with the scenes, the same for every other surface G2 opens |
 | `idle.js` | the `idle` case's shell | the settled desktop, its paints and relayouts over 10 s, and the counter's control |
 | `glass-load.js`, `load-window.js` | the `glass-load` and `glass-stress` cases' shells; gjs, GTK 4 | ADR 0014's scenarios as work counts, and the client that stands in for a video; `tests/laptop` runs both on the laptop, the client with `measure=` |
 | `frame.c`, `G2Frame-1.gir` | the glass cases' shells | `G2Frame.read()`, a region of the frame the shell drew |
 | `selftest.sh`, `png-test.js`, `blur-ref-test.js` | CI and the host | the tests of the above |
+
+## Run to run
+
+A G2 flake that reaches a gate run costs a whole VM run, so a check that passes once is not
+enough. `tests/shots/repeat.sh N` runs `patched.sh` N times on one build: the first run builds
+the RPMs (or `PATCHED_RPMS=DIR` names them) and the others install them, each in a fresh Fedora 45
+container so no run inherits another's state. Each run is a whole `patched.sh`: Fedora's
+gnome-shell in `direct.sh fedora`, then the lane's in `direct.sh main`. It then prints every
+assertion whose verdict differs, one row each with every run's verdict (`P`, `F`, `G` for a known
+gap, `-` when a run never made it) and the assertion, and a count:
+
+```
+P F P P P  shutdown-banner: nothing touches a disposed object once the shell is shutting down
+repeat: 5 runs, 2033 assertions, 1 differ
+```
+
+It exits 1 when any assertion differs. `repeat.sh compare LOG...` does the same for logs already
+kept. A failure's detail (`(got …)`, `(no report)`, `(no line matches …)`) is cut so it shares its
+pass's row, then one closing parenthesis, which on a pass can say what that run saw (a probe
+`(late)` or `(on time)`): rows compare verdicts. An assertion a run makes twice gets a row per time. A differing row is a race to
+root-cause: make it fail on demand first, then make it impossible. A retry, a longer wait, or a
+rerun on failure hides it until a gate run meets it.
+
+Run one G2 container at a time on a host. With `--network=host`, as repeat.sh and the
+`patched.sh` example run them, containers share the abstract socket namespace: X11's
+`@/tmp/.X11-unix/X0` and dbus-run-session's buses. So a second container's helpers can reach the
+first one's display or bus, and its shells then fail in ways no single run shows (a perf helper
+waiting on a portal that is not its own). run.sh's containers each keep their own network
+namespace, and CI's jobs run on separate runners.
+
+The probe waits on events, never on a fixed time. `settle()` is `waitLeisure` (no `begin_work` held:
+no animation) or its 20 s cap, then a `BEFORE_REDRAW` later of its own (laters run in order, so every
+one queued before it has run), then one painted frame (which runs any later those queued), then more
+frames while any mapped `St.Icon` still waits for its texture (St loads it in a thread, at opacity 0
+until then). Leisure does not see
+a pending GLib timeout, another thread or a virtual device's events, so a step that depends on one
+waits for its effect: `typeInSpotlight` awaits Spotlight's own search (after its 50 ms typing pause),
+the sign-off Alt+Tab waits for the popup to show (after switcherPopup.js's 150 ms delay), and
+`chord()` and `pressKeys()` tap F24, bound to nothing, on another virtual keyboard and wait for it in
+a Clutter event filter: mutter's input thread delivers events in the order sent, so the step's own
+came first.
 
 ## The patched shell without a VM
 
@@ -871,6 +1224,58 @@ It also asserts the shell surfaces of the same three cases (below). With
 cases also save a scene per surface group (`surfaces`, `quick-settings`, `switcher`,
 `dialog`, `datemenu`, `appgrid`), for placing beside the boards.
 
+## The next point release
+
+`next-point.yml` runs GNOME's next point release from Fedora 45's updates-testing before the GA
+push makes it stable, so a break shows while it is still in testing. It is report-only: it runs
+on dispatch and weekly (Tuesdays), never on a pull request, and no check requires it.
+
+- **lane:** `next-point.sh image` fetches the pinned apex-image and fills its updates-testing
+  allowlist with the builds updates-testing moves among gnome-shell, mutter, gdm, gjs, glib2,
+  gnome-session, gsettings-desktop-schemas, gtk4, libadwaita, gnome-control-center, nautilus,
+  ptyxis and vte291-gtk4. Admitting every build would overflow apex-lane's dnf5 arguments.
+  `lane.sh` then builds gnome-shell from that SRPM through `APEX_IMAGE_SRC`, without
+  `APEX_LANE_CACHE`, so it reads and writes no lane cache. The job summary lists what moves.
+- **g2:** `patched.sh` runs every case on those RPMs.
+- **signoff:** `signoff.sh --goldens` checks the shell boards against the approved goldens.
+- **apps:** for Settings and Files, the lane's libadwaita and the app from updates-testing,
+  installed under the shim, then `tests/control-center/run.sh` and `tests/nautilus/shoot.sh`.
+- **libadwaita:** the lane's libadwaita from updates-testing, then
+  `tests/libadwaita/radius-test.sh` in its three modes (`--stock`, the rewrite, `--late`).
+- **ptyxis:** the lane's Ptyxis from updates-testing, then as ci.yml runs them
+  `tests/ptyxis/status-test.sh`, `shoot.sh`, `contrast-test.sh`, `layout-test.sh`,
+  `palette-test.sh` (on `tests/s2c/agent.sh`'s agent) and `panes-test.sh`.
+- **report:** one line in the run's summary, passed/failed for each, `?` where a job gave
+  none, then each app's NEVR and its ok/not ok count, and libadwaita's and Ptyxis's NEVR and
+  their test scripts passed/failed: `next-point: gnome-shell-51.1-1.fc45.apex1 g2 1954/0
+  goldens 30/0 shoot 523/0 | gnome-control-center-51.1-1.fc45.apex1 46/0 |
+  nautilus-51.1-1.fc45.apex1 84/0 | libadwaita-1.10.0-2.fc45.apex1 3/0 |
+  ptyxis-50.1-6.fc45.apex1 6/0`.
+
+g2, signoff, apps, libadwaita and ptyxis install `next-point.sh shim` first, a `dnf5` ahead of
+Fedora's on `PATH`. It adds updates-testing beside each `--repo=updates` and
+updates-testing-source beside each `--repo=updates-source`, and enables updates-testing for a
+call that names no repository. So the scripts install what GA brings, unchanged. `lane.sh`,
+`image-args.sh` and every other workflow stay as they are, which `.github/scripts/selftest.sh`
+checks.
+
+After F45's GA, next-point keeps watching updates-testing: each point release after it (51.2
+and on) waits there before an updates push. apex-image's admission cut sets `GA_REACHED=1`, or
+deletes the ARG, and apex-lane then admits nothing from updates-testing, so `next-point.sh
+image` reopens its own copy (`next-point.sh reopen`): `ARG GA_REACHED=0` again, the ARG added
+if the cut deleted it. The real apex-image and every lane cache stay as they are.
+
+Often updates-testing moves none of them, as right after a push: `next-point.sh allowlist`
+then leaves the allowlist empty, apex-lane admits nothing, the lanes build the stable ones, and
+the report line ends `(nothing moves)`. That is not a failure. A query that fails or finds no
+build, on either side, still fails the run with its own message, so an unreachable
+updates-testing never reads as a quiet week.
+
+next-point's lanes number every release `.apex1` (`lane.sh` passes `--n 1`). The builder VM's
+N is the recipe and lane repositories' commit count, so it carries across stock versions:
+`gnome-shell-51.0-1.fc45.apex331` is followed by `51.1-1.fc45.apex33x`, not `.apex1`. Either
+sorts above every build of the version before.
+
 ## The authentication dialog
 
 G2 has no polkit case. `tests/shell/shoot.sh`'s polkit cases capture board 13 from the
@@ -879,3 +1284,18 @@ lane's RPMs: they call the shell's own polkit component's `_onInitiate()` with a
 `polkit-fingerprint`) and is never answered. They are for captures and style checks only:
 PAM, polkit-agent-helper-1 and polkitd's verdict never run, and polkitd only describes the
 action. The real `pkexec` path is G4's.
+
+The `polkit-refused` cases answer wrongly, and the stub fails the answer in PAM's order. It
+sends PAM's error text if there is one, then `completed(false)`. That is upstream
+`polkitAgent.js`'s `_onSessionShowError()`, then `_onSessionCompleted()`, which shows
+"Sorry, that didn't work" only when no PAM text is showing, wiggles the field and calls
+`_initiateSession()` again. pam_unix sends no text, so `polkit-refused-light` and
+`polkit-refused-dark` show upstream's line. `polkit-refused-faillock` sends pam_faillock's
+lockout text first, so that text stays. In `polkit-refused-fingerprint`, the retry's
+pam_fprintd prompt replaces the error, as `_onSessionShowInfo()` does.
+
+`polkit-cancel` presses Esc while a stubbed `enumerate_actions()` has not yet answered
+Details' vendor lookup. The request must end dismissed, the session must be cancelled, and
+the lookup must be cancelled with the dialog. G4's `polkit-wrong-password` and
+`polkit-cancel` rows check the same paths against real PAM, polkitd and pkexec, but not the
+dialog's look.

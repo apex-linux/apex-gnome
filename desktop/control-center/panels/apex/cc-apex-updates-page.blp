@@ -29,93 +29,100 @@ template $CcApexUpdatesPage: Adw.NavigationPage {
               spacing: 26;
 
               Box {
-                orientation: vertical;
-                spacing: 14;
-
                 styles [
                   "card",
                   "apex-updates-hero",
                 ]
 
-                $CcApexTile hero_tile {}
-
                 Box {
                   orientation: vertical;
-                  spacing: 4;
+                  spacing: 14;
+                  hexpand: true;
+                  margin-top: 28;
+                  margin-start: 20;
+                  margin-end: 20;
+                  margin-bottom: 22;
 
-                  Label hero_title {
+                  $CcApexTile hero_tile {}
+
+                  Box {
+                    orientation: vertical;
+                    spacing: 4;
+
+                    Label hero_title {
+                      wrap: true;
+                      justify: center;
+
+                      styles [
+                        "apex-title",
+                      ]
+                    }
+
+                    Label hero_subtitle {
+                      wrap: true;
+                      justify: center;
+                      max-width-chars: 64;
+
+                      styles [
+                        "apex-subtitle",
+                        "dim-label",
+                      ]
+                    }
+                  }
+
+                  Box hero_progress_box {
+                    orientation: vertical;
+                    spacing: 6;
+                    halign: center;
+                    width-request: 320;
+
+                    ProgressBar hero_progress {
+                      styles [
+                        "apex-progress",
+                      ]
+                    }
+
+                    Label hero_progress_label {
+                      styles [
+                        "caption",
+                        "dim-label",
+                        "numeric",
+                      ]
+                    }
+                  }
+
+                  Box {
+                    spacing: 10;
+                    halign: center;
+
+                    Button hero_secondary {
+                      clicked => $hero_button_clicked_cb(template);
+
+                      styles [
+                        "pill",
+                      ]
+                    }
+
+                    Button hero_primary {
+                      clicked => $hero_button_clicked_cb(template);
+
+                      styles [
+                        "pill",
+                        "suggested-action",
+                      ]
+                    }
+                  }
+
+                  Label error_label {
+                    visible: false;
                     wrap: true;
                     justify: center;
 
-                    styles [
-                      "apex-title",
-                    ]
-                  }
-
-                  Label hero_subtitle {
-                    wrap: true;
-                    justify: center;
-                    max-width-chars: 64;
-
-                    styles [
-                      "apex-subtitle",
-                      "dim-label",
-                    ]
-                  }
-                }
-
-                Box hero_progress_box {
-                  orientation: vertical;
-                  spacing: 6;
-                  halign: center;
-                  width-request: 320;
-
-                  ProgressBar hero_progress {
-                    styles [
-                      "apex-progress",
-                    ]
-                  }
-
-                  Label hero_progress_label {
                     styles [
                       "caption",
-                      "dim-label",
-                      "numeric",
+                      "error",
                     ]
                   }
-                }
-
-                Box {
-                  spacing: 10;
-                  halign: center;
-
-                  Button hero_secondary {
-                    clicked => $hero_button_clicked_cb(template);
-
-                    styles [
-                      "pill",
-                    ]
-                  }
-
-                  Button hero_primary {
-                    clicked => $hero_button_clicked_cb(template);
-
-                    styles [
-                      "pill",
-                      "suggested-action",
-                    ]
-                  }
-                }
-
-                Label error_label {
-                  visible: false;
-                  wrap: true;
-                  justify: center;
-
-                  styles [
-                    "caption",
-                    "error",
-                  ]
                 }
               }
 
@@ -154,9 +161,12 @@ template $CcApexUpdatesPage: Adw.NavigationPage {
                     title: _("Next Restart");
 
                     [suffix]
-                    Label staged_built {
+                    Label {
+                      label: _("Checked");
+                      valign: center;
+
                       styles [
-                        "dim-label",
+                        "apex-checked",
                       ]
                     }
                   }
@@ -169,11 +179,6 @@ template $CcApexUpdatesPage: Adw.NavigationPage {
                       label: _("Use at Next Restart…");
                       valign: center;
                       clicked => $rollback_clicked_cb(template);
-
-                      styles [
-                        "flat",
-                        "apex-link",
-                      ]
                     }
                   }
                 }

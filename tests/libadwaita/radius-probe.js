@@ -53,6 +53,8 @@ async function measure() {
 
     const before = await sample(window);
     const [, contents] = GLib.file_get_contents(GLib.getenv('APEX_CSS_REWRITE'));
+    // A first login: apex-session-agent creates gtk-4.0/ itself, after the app has started.
+    GLib.mkdir_with_parents(GLib.path_get_dirname(GLib.getenv('APEX_CSS_FILE')), 0o755);
     GLib.file_set_contents(GLib.getenv('APEX_CSS_FILE'), contents);
     const start = GLib.get_monotonic_time();
 
@@ -64,8 +66,11 @@ async function measure() {
         ms = Math.round((GLib.get_monotonic_time() - start) / 1000);
     }
     const r = window.get_frame_rect();
-    return {before, after, square_before: square(before), square_after: square(after), ms,
-        frame: [r.x, r.y, r.width, r.height]};
+    // A crashed or closed Ptyxis leaves its MetaWindow's last rect, where both samples hit the backdrop.
+    const alive = ptyxisWindow() === window && !!window.get_compositor_private();
+    const steady = after.reference.every((v, i) => Math.abs(v - before.reference[i]) <= TOLERANCE);
+    return {before, after, square_before: square(before), square_after: square(after), ms, alive,
+        reference_steady: steady, frame: [r.x, r.y, r.width, r.height]};
 }
 
 // main.js connects to startup-complete only after importing this module, so a startup that

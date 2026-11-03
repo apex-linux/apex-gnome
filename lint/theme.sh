@@ -1,14 +1,16 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
-# Compiles the three sheets as the rebuilt gnome-shell's meson does: sassc -a on upstream's
-# entry files, with 0001-build's @import hooks and desktop/shell/data/theme/apex/ in place.
+# The token rule (tokens.sh), then the three sheets compiled as the rebuilt gnome-shell's meson
+# does: sassc -a on upstream's entry files, with 0001-build's @import hooks and the Apex theme.
 set -euo pipefail
 
 HERE=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 REPO=$(cd -- "$HERE/.." && pwd)
 NO_SKIP=${APEX_LINT_NO_SKIP:-0}
 SHEETS=(gnome-shell-light gnome-shell-dark gnome-shell-high-contrast)
+
+"$HERE/tokens.sh"
 
 skip() {
     [[ $NO_SKIP == 1 ]] && { printf 'theme: %s, but APEX_LINT_NO_SKIP=1\n' "$*" >&2; exit 1; }

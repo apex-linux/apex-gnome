@@ -22,7 +22,16 @@ let _button = null;
 let _label = null;
 let _connections = [];
 
+// panel.js puts its own items back at the box's end at each session-mode change.
+function _placeAfterActivities() {
+    const activities = Main.panel.statusArea.activities?.container;
+    const box = activities?.get_parent();
+    if (box?.get_children().includes(_button.container))
+        box.set_child_above_sibling(_button.container, activities);
+}
+
 function _sync() {
+    _placeAfterActivities();
     const name = Shell.WindowTracker.get_default().focus_app?.get_name() ?? NO_FOCUS_NAME;
     _label.text = name;
     _button.accessible_name = name;

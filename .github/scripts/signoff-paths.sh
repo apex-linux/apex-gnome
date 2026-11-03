@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: GPL-3.0-or-later
-# signoff.yml's pull-request gate: touches=true when a changed path on stdin can change what signoff.sh
-# captures (the shell, its recipe, the scenes, fixtures and pins); the matches go to the job log.
+# signoff.yml's pull-request gate: touches=true when a changed path on stdin can change what the sign-off
+# captures (the shell and the apps, their recipes, the scenes, fixtures and pins); the matches go to the job log.
 
 set -euo pipefail
 
-readonly RENDERED='^(desktop/shell/|packaging/pkgs/gnome-shell/|tests/shots/|tests/shell/|tests/lib/|tests/layer/fixtures/|\.github/workflows/signoff\.yml$)'
+readonly RENDERED='^(desktop/(shell|control-center|nautilus|ptyxis)/|packaging/pkgs/(gnome-shell|gnome-control-center|nautilus|ptyxis|libadwaita)/|tests/(shots|shell|lib|control-center|nautilus|ptyxis)/|tests/layer/fixtures/|\.github/workflows/signoff\.yml$)'
 readonly NOT_RENDERED='^tests/shots/(README\.md|selftest\.sh|assert\.sh|stable\.sh)$'
 
 rendered=$(grep -E "$RENDERED" | grep -Ev "$NOT_RENDERED" || true)

@@ -87,10 +87,8 @@ fi
 "$lane" --version
 endgroup
 
-containerfile_arg() { sed -n "s/^ARG $1=//p" "$src/image/Containerfile"; }
-repos_base=$(containerfile_arg REPOS_BASE)
-ga_reached=$(containerfile_arg GA_REACHED)
-[[ -n $repos_base && $ga_reached =~ ^[01]$ ]] || die "cannot read REPOS_BASE and GA_REACHED from apex-image"
+image_lines=$("$APEX_ROOT/tests/lib/image-args.sh" "$src/image/Containerfile") || die "cannot read apex-image's Containerfile"
+mapfile -t image_args <<<"$image_lines"
 
 work=$build/work
 rm -rf -- "$work" "$build/store"
@@ -113,8 +111,7 @@ ln -sfn -- "$APEX_ROOT" /recipes
 ln -sfn -- "$work" /work
 ln -sfn -- "$build/store" /store
 
-common=("$PKG" --n 1 --tool "lane.sh-$APEX_IMAGE_REV"
-    --repos-base "$repos_base" --ga-reached "$ga_reached" "${source1_args[@]}")
+common=("$PKG" --n 1 --tool "lane.sh-$APEX_IMAGE_REV" "${image_args[@]}" "${source1_args[@]}")
 in_github_actions && common+=(--github)
 
 # reusable KEY: the cache's build of KEY, if its key and every file the manifest lists check out.

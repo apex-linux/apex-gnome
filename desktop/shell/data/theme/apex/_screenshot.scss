@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
-// Board 19 with tints only: the panel's glass comes with 0017-derived-glass. Stock has no
+// Board 19: the panel is glass, which glass/derived.js registers. Stock has no
 // heading, so the panel keeps the heading row's height for the close button alone.
 $apex_screenshot_heading_row: $apex_screenshot_close_size + $apex_screenshot_gap;
 
