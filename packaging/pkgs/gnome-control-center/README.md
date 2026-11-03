@@ -337,9 +337,9 @@ with margins, never padding. Each AT-SPI box must hold its text, and no line 3 p
 may run through text: that catches a box cut through its text, not a small shift (a row title
 holds for vertical shifts of −6 to +8 px). Small shifts are held by sizes: each list row hides
 libadwaita's 2 px of padding a side (`list > row`), so every row label sits 2 px left of its
-text, except in What's New's grid row and expander rows, which hide none; the grid's row is
-exactly the grid plus its margins in `apex.css`, and the grid exactly its labels' boxes, so
-padding on either, from any rule, fails.
+text, except in What's New's grid row and expander rows, which hide none. And each of What's
+New's kind labels must start its ink exactly where it does today against its AT-SPI box, so a
+hidden shift from any rule fails; the grid's sizes and `apex.css` only name the likely cause.
 libadwaita's own padding leaves some labels off (pill, plain and toggle buttons' labels at
 their button's origin, the GPU pill 2 px off in its list row); each is pinned exactly in one
 list in `bounds.py`, as upstream. Each case names what its page must show (`rows`, `grid`,

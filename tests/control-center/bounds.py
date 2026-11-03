@@ -7,8 +7,9 @@ GTK 4.24 reports a widget's size right but leaves its ancestors' CSS padding out
   text: no more than a quarter as inky as the box's densest row or column, read against the colour most common on the
   lines, so "Checked" is read against the ring around its own fill. This catches a box that cuts through its text, not
   a small shift: a row title holds for vertical shifts of -6 to +8 px.
-- Structure, from sizes: every list row hides libadwaita's 2 px of padding each side (`list > row`), but What's New's
-  grid row and expander rows none; the grid's row is exactly its margins in apex.css bigger than the grid.
+- Structure: every list row hides libadwaita's 2 px of padding each side (`list > row`), by sizes, but What's New's
+  grid row and expander rows none; and each of the grid's kind labels starts its ink exactly where it did, against its
+  box, so a shift from any rule fails. Its sizes and apex.css only name the likely cause.
 - The upstream gaps, each pinned exactly in GAPS.
 
 GROUPs name what the page must show: rows, grid, or a GAPS group. One that is not there fails.
@@ -36,6 +37,9 @@ OUT = 3
 CUT = 0.25
 KINDS = {"upgraded", "downgraded", "added", "removed", "reinstalled"}
 ROW_PADDING = 2
+# Where each kind label's ink starts in its AT-SPI box (Adwaita Sans at run.sh's size and hinting): any hidden shift,
+# from any rule, moves it.
+KIND_INK = (0.5, 3.0)
 UPSTREAM = "upstream GTK 4.24: AT-SPI bounds leave out {}"
 
 # A label's upstream gap, pinned exactly: its box within the ancestor `up` levels above, which draws its fill; that
@@ -114,39 +118,29 @@ def check_rows(pane):
     return bool(found)
 
 
-def check_grid(pane):
-    """The grid's row is the grid plus its margins in apex.css, exactly, and the grid is its labels' boxes exactly: a
-    padding of any rule, the row's or the grid's own, shows in a size."""
+def grid_causes(pane):
+    """Why What's New's grid could be off its text, from sizes and apex.css: diagnostics only, the ink pin decides."""
     (top, right, bottom, left), others = margins(".apex-changes")
+    causes = [f"{', '.join(others)} in apex.css sets a margin or padding read nowhere here"] if others else []
     grids = {}
     for kind in walk(pane):
         if kind.get_role() == Atspi.Role.LABEL and kind.get_name() in KINDS:
             grids[extents(kind.get_parent())] = kind.get_parent()
-    if grids and others:
-        failures.append("change grid")
-        print(f"FAIL bounds: {', '.join(others)} in apex.css sets the grid's margin or padding where this check does "
-              "not read it", flush=True)
     for (gx, gy, gw, gh), grid in grids.items():
-        row = grid.get_parent()
-        rx, ry, rw, rh = extents(row)
+        rx, ry, rw, rh = extents(grid.get_parent())
         got = (gx - rx, gy - ry, rw - gw, rh - gh)
         want = (left, top, left + right, top + bottom)
         boxes = [extents(n) for n in list(walk(grid))[1:]]
         cells = (min(b[0] for b in boxes), min(b[1] for b in boxes), max(b[0] + b[2] for b in boxes),
                  max(b[1] + b[3] for b in boxes))
         if cells != (gx, gy, gx + gw, gy + gh):
-            failures.append("change grid")
-            print(f"FAIL bounds: What's New's grid is {gx},{gy} to {gx + gw},{gy + gh} but its labels {cells}: its own "
-                  "padding is left out of its labels' AT-SPI bounds", flush=True)
-        elif row.get_role() == Atspi.Role.LIST_ITEM and got == want:
-            print(f"ok bounds: What's New's grid sits {got[0]:g},{got[1]:g} into its row, which is {got[2]:g}x"
-                  f"{got[3]:g} bigger: its margins in apex.css and no padding", flush=True)
-        else:
-            failures.append("change grid")
-            print(f"FAIL bounds: What's New's grid sits {got[0]:g},{got[1]:g} into its {row.get_role_name()}, which is "
-                  f"{got[2]:g}x{got[3]:g} bigger, not {want[0]:g},{want[1]:g} and {want[2]:g}x{want[3]:g} from its "
-                  "margins in apex.css: padding there is left out of the grid's AT-SPI bounds", flush=True)
-    return bool(grids)
+            causes.append(f"the grid is {gx},{gy} to {gx + gw},{gy + gh}, its labels {cells}: they don't fill it (its "
+                          "padding, or a label's margin)")
+        if got != want:
+            causes.append(f"the grid sits {got[0]:g},{got[1]:g} into its row, {got[2]:g}x{got[3]:g} smaller, not "
+                          f"{want[0]:g},{want[1]:g} and {want[2]:g}x{want[3]:g} from apex.css's margins (the row's "
+                          "padding)")
+    return causes
 
 
 def main():
@@ -201,6 +195,36 @@ def main():
             return None
         return ends[0][0] / scale, ends[1][1] / scale, (ends[2][0] + 1) / scale, (ends[3][1] + 1) / scale
 
+    def ink_start(x, y, w, h):
+        """Where the ink around an AT-SPI box starts, against the box, read 4 px around it."""
+        points = [(px, py) for py in range((y - 4) * scale, (y + h + 4) * scale)
+                  for px in range((x - 4) * scale, (x + w + 4) * scale)]
+        behind = Counter(rgb(*p) for p in points).most_common(1)[0][0]
+        inked = [p for p in points if max(abs(a - b) for a, b in zip(rgb(*p), behind)) > INK]
+        if not inked:
+            return None
+        return min(p[0] for p in inked) / scale - x, min(p[1] for p in inked) / scale - y
+
+    def check_grid_ink():
+        """Each What's New kind label on screen has its ink where AT-SPI says, exactly."""
+        kinds = [n for n in walk(pane) if n.get_role() == Atspi.Role.LABEL and n.get_name() in KINDS]
+        shown = [(n.get_name(), extents(n)) for n in kinds]
+        shown = [(k, b) for k, b in shown if b[1] - 4 >= vy and b[1] + b[3] + 4 <= vy + vh]
+        off = [(k, b, ink_start(*b)) for k, b in shown]
+        off = [(k, b, at) for k, b, at in off if at != KIND_INK]
+        for kind, (x, y, _, _), at in off:
+            causes = grid_causes(pane)
+            failures.append("change grid")
+            likely = "; likely " + "; ".join(causes) if causes else ""
+            print(f"FAIL bounds: What's New's “{kind}” at {x},{y}: its ink starts {at} into its box, not "
+                  f"{KIND_INK}: AT-SPI puts it off its text{likely}", flush=True)
+        if shown and not off:
+            print(f"ok bounds: What's New's {len(shown)} kind labels on screen each start their ink {KIND_INK} into "
+                  "their box", flush=True)
+            for cause in grid_causes(pane):
+                print(f"note bounds: {cause}, but the ink is where AT-SPI says", flush=True)
+        return bool(shown)
+
     def check_gap(label, name, gap, holds, what):
         x, y, w, h = extents(label)
         owner = label
@@ -244,7 +268,7 @@ def main():
         elif not holds:
             failures.append(name)
             print(f"FAIL bounds: {what}", flush=True)
-    present = {"rows": check_rows(pane), "grid": check_grid(pane)}
+    present = {"rows": check_rows(pane), "grid": check_grid_ink()}
     for group in sorted(groups):
         members = {n for n, g in GAPS.items() if g.group == group}
         if members:
