@@ -2,14 +2,16 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 """usage: fixtures.py LOG_DIR
        fixtures.py --gpus 1|2
+       fixtures.py --names
 
 G2's python-dbusmock fixtures on the system bus (DBUS_SYSTEM_BUS_ADDRESS, or the
 default): UPower with a battery at 87 %, NetworkManager on the Wi-Fi network
 "Apex-5G" with "Apex-2.4G" and the open "Library Guest" in range, and BlueZ with the
 Bluetooth keyboard "Keychron K3" connected, switcheroo-control with an integrated and a
 discrete GPU, with G2_ACCOUNTS=1 accountsservice with the user's parental controls filtering
-nothing (as on the image, where flatpak-libs brings malcontent's gnome-shell support), and
-with G2_POWER_PROFILES=1 power-profiles-daemon at Balanced. The mocks
+nothing (as on the image, where flatpak-libs brings malcontent's gnome-shell support), with
+G2_REALTIME=1 RealtimeKit at rtkit-daemon's defaults, and with G2_POWER_PROFILES=1
+power-profiles-daemon at Balanced. The mocks
 keep running after this exits; each logs to LOG_DIR/fixture-NAME.log and leaves
 its pid in LOG_DIR/fixture-NAME.pid.
 Prints one line, G2-FIXTURES and what the bus then reports, as JSON.
@@ -17,6 +19,8 @@ Prints one line, G2-FIXTURES and what the bus then reports, as JSON.
 --gpus sets the running switcheroo-control mock to the laptop's iGPU alone, as with no
 NVIDIA driver bound (/apex/pair-mode off), or back to both. It prints G2-GPUS and the
 mock's state.
+
+--names prints the bus names LOG_DIR's run would own, one per line, for a bus policy.
 """
 
 import json
@@ -68,6 +72,8 @@ BLUEZ = "org.bluez"
 SWITCHEROO = "net.hadess.SwitcherooControl"
 SWITCHEROO_PATH = "/net/hadess/SwitcherooControl"
 POWER_PROFILES = "org.freedesktop.UPower.PowerProfiles"
+REALTIME = "org.freedesktop.RealtimeKit1"
+REALTIME_PATH = "/org/freedesktop/RealtimeKit1"
 ACCOUNTS = "org.freedesktop.Accounts"
 ACCOUNTS_PATH = "/org/freedesktop/Accounts"
 APP_FILTER = "com.endlessm.ParentalControls.AppFilter"
@@ -85,6 +91,11 @@ OPTIONAL_SERVICES = {"upower_power_profiles_daemon": (POWER_PROFILES, ["--templa
 
 # tests/shell's greeter and lock screen list users from the real accounts-daemon: G2's cases opt in.
 ACCOUNTS_SERVICE = {"accounts": (ACCOUNTS, [ACCOUNTS, ACCOUNTS_PATH, ACCOUNTS])}
+# xdg-desktop-portal reads these as it starts. The image's rtkit-daemon cannot start in a container, so
+# activating it hangs the portal's start for the bus timeout.
+REALTIME_SERVICE = {"realtime": (REALTIME, [REALTIME, REALTIME_PATH, REALTIME])}
+REALTIME_PROPERTIES = {"MaxRealtimePriority": dbus.Int32(20), "MinNiceLevel": dbus.Int32(-15),
+                       "RTTimeUSecMax": dbus.Int64(200000)}
 
 
 def services():
@@ -93,6 +104,8 @@ def services():
         chosen.update(OPTIONAL_SERVICES)
     if os.environ.get("G2_ACCOUNTS") == "1":
         chosen.update(ACCOUNTS_SERVICE)
+    if os.environ.get("G2_REALTIME") == "1":
+        chosen.update(REALTIME_SERVICE)
     return chosen
 
 
@@ -248,6 +261,14 @@ def accounts(bus):
             "sessionLimit": int(service.props(user).Get(SESSION_LIMITS, "LimitType"))}
 
 
+def realtime(bus):
+    if "realtime" not in services():
+        return None
+    service = Service(bus, REALTIME)
+    service.mock(REALTIME_PATH).AddProperties(REALTIME, REALTIME_PROPERTIES)
+    return {key: int(service.props(REALTIME_PATH).Get(REALTIME, key)) for key in REALTIME_PROPERTIES}
+
+
 def power_profiles(bus):
     if "upower_power_profiles_daemon" not in services():
         return None
@@ -257,6 +278,9 @@ def power_profiles(bus):
 
 
 def main():
+    if sys.argv[1:] == ["--names"]:
+        print("\n".join(name for name, _args in services().values()))
+        return 0
     if len(sys.argv) == 3 and sys.argv[1] == "--gpus" and sys.argv[2] in ("1", "2"):
         print("G2-GPUS " + json.dumps(gpus(dbus.SystemBus(), GPUS[:int(sys.argv[2])], update=True)))
         return 0
@@ -266,7 +290,7 @@ def main():
     bus = spawn(sys.argv[1])
     print("G2-FIXTURES " + json.dumps({"battery": battery(bus), "wifi": wifi(bus), "keyboard": keyboard(bus),
                                          "gpus": gpus(bus), "powerProfiles": power_profiles(bus),
-                                         "accounts": accounts(bus)}))
+                                         "accounts": accounts(bus), "realtime": realtime(bus)}))
     return 0
 
 

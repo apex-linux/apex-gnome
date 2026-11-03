@@ -6,13 +6,18 @@ import Clutter from 'gi://Clutter';
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import GObject from 'gi://GObject';
+import Polkit from 'gi://Polkit';
 import PolkitAgent from 'gi://PolkitAgent';
 import Shell from 'gi://Shell';
 import St from 'gi://St';
 
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import * as ModalDialog from 'resource:///org/gnome/shell/ui/modalDialog.js';
+import * as Overview from 'resource:///org/gnome/shell/ui/overview.js';
 import * as Scripting from 'resource:///org/gnome/shell/ui/scripting.js';
+
+import {surfaceReport} from '../shots/a11y.js';
+import {iconsOf, shellIconTheme} from '../shots/session-defaults.js';
 
 Gio._promisify(Shell.Screenshot.prototype, 'screenshot_area');
 Gio._promisify(Gio.DBusConnection.prototype, 'call');
@@ -33,6 +38,7 @@ const POINTER_NUDGE = 4;
 const POLKIT_ACTION = 'io.github.apex-linux.apex.update.rollback';
 const POLKIT_MESSAGE = 'Booting the previous version of Apex at the next restart needs an administrator password.';
 const PAM_FPRINTD_PROMPT = 'Place your finger on the fingerprint reader';
+const PAM_FAILLOCK_ERROR = 'The account is locked due to 3 failed logins.';
 
 let keyboard;
 let pointer;
@@ -122,7 +128,18 @@ function describeLock(dialog) {
             .map(e => e && `radius=${e.radius} brightness=${e.brightness.toFixed(2)} saturation=${e.saturation.toFixed(2)}`)[0] ?? null,
         prompt: describePrompt(dialog._authPrompt),
         layout: describeLayout(dialog, hint),
+        errorRing: dialog.has_style_class_name('apex-lock-error'),
+        ring: dialog._authPrompt ? ring(dialog._authPrompt._entry) : null,
     };
+}
+
+// The entry's box-shadow, as its theme node resolves it.
+function ring(entry) {
+    const node = entry.get_theme_node();
+    const shadow = node.get_box_shadow();
+    const border = node.get_border_width(St.Side.TOP) / scale();
+    const borderColor = color(node.get_border_color(St.Side.TOP));
+    return shadow ? {inset: shadow.inset, spread: shadow.spread, color: color(shadow.color), border, borderColor} : null;
 }
 
 // What the eye reads, top to bottom, in logical pixels; only what is on screen.
@@ -138,6 +155,8 @@ function describeLayout(dialog, hint) {
         if (actor?.mapped && actor.opacity > 0)
             layout[name] = box(actor);
     }
+    // Upstream's message line, empty or not: it sits between the field and the hint.
+    layout.messageLine = prompt?._message?.mapped ? box(prompt._message) : null;
     layout.reveal = describeReveal(prompt?._entry);
     return layout;
 }
@@ -161,8 +180,17 @@ function failScan() {
         'io.github.apex_linux.GdmMock', 'FailScan', null, null, Gio.DBusCallFlags.NONE, -1, null);
 }
 
+// S1b's icon rule on what only this harness shows (tests/shots/assert.sh's shell_icons): with no Apex
+// theme installed, as in CI's own job, the fact says so and check.py reports the check not run.
+function iconFact(step, roots) {
+    const {theme, scale: factor} = shellIconTheme();
+    const installed = GLib.file_test('/usr/share/icons/Apex/index.theme', GLib.FileTest.EXISTS);
+    fact(`icons-${step}`, {installed, icons: roots.flatMap(root => iconsOf(root, theme, factor) ?? [])});
+}
+
 async function shootFingerprint(dialog) {
     fact('opened', describeLock(dialog));
+    iconFact('opened', [dialog, Main.panel]);
     await capture('open');
     await failScan();
     await Scripting.sleep(STEP_MS * 2);
@@ -176,6 +204,55 @@ async function shootFingerprint(dialog) {
     await setPowerSaveMode(POWER_SAVE_ON);
     await Scripting.sleep(STEP_MS * 2);
     fact('wake', describeLock(dialog));
+    await Scripting.sleep(SETTLE_MS);
+    fact('end', {locked: Main.screenShield.locked});
+}
+
+// logind's PrepareForSleep, from its mock: upstream cancels the dialog's conversation before sleep,
+// and the lock's prompt has to come back at resume with no key.
+function prepareForSleep(aboutToSuspend) {
+    return Gio.DBus.system.call('org.freedesktop.login1', '/org/freedesktop/login1', 'org.freedesktop.DBus.Mock',
+        'EmitSignal', new GLib.Variant('(sssav)', ['org.freedesktop.login1.Manager', 'PrepareForSleep', 'b',
+            [new GLib.Variant('b', aboutToSuspend)]]), null, Gio.DBusCallFlags.NONE, -1, null);
+}
+
+// Board 20's reader across sleep: the fingerprint conversation ends with the password one and comes
+// back once at resume, its line the reader's again until a scan fails.
+async function shootFingerprintSuspend(dialog) {
+    fact('opened', describeLock(dialog));
+    await failScan();
+    await Scripting.sleep(STEP_MS * 2);
+    fact('scan-failed', describeLock(dialog));
+    await prepareForSleep(true);
+    await Scripting.sleep(STEP_MS);
+    fact('asleep', describeLock(dialog));
+    await Scripting.sleep(STEP_MS);
+    fact('still-asleep', describeLock(dialog));
+    await prepareForSleep(false);
+    await Scripting.sleep(STEP_MS * 2);
+    fact('resumed', describeLock(dialog));
+    await capture('resumed');
+    await failScan();
+    await Scripting.sleep(STEP_MS * 2);
+    fact('resumed-scan-failed', describeLock(dialog));
+    await Scripting.sleep(SETTLE_MS);
+    fact('end', {locked: Main.screenShield.locked});
+}
+
+async function shootSuspend() {
+    Main.screenShield.lock(false);
+    await Scripting.sleep(STEP_MS);
+    const dialog = Main.screenShield._dialog;
+    const describe = () => ({...describeLock(dialog), status: dialog._authPrompt?.verificationStatus ?? null});
+    fact('locked', describe());
+    await prepareForSleep(true);
+    await Scripting.sleep(STEP_MS);
+    fact('asleep', describe());
+    await Scripting.sleep(STEP_MS);
+    fact('still-asleep', describe());
+    await prepareForSleep(false);
+    await Scripting.sleep(STEP_MS * 2);
+    fact('resumed', describe());
     await Scripting.sleep(SETTLE_MS);
     fact('end', {locked: Main.screenShield.locked});
 }
@@ -234,6 +311,13 @@ async function shootWakeKey(lockedBlank) {
     fact('end', {locked: Main.screenShield.locked});
 }
 
+const CONTRAST_SETTLE_MS = 500;
+
+// G2's text and glyph contrast (tests/shots/a11y.js) over what the stage draws behind ROOT.
+function contrastOf(root) {
+    return surfaceReport(root, () => Scripting.sleep(CONTRAST_SETTLE_MS), {length: scale()});
+}
+
 // Locking fades to black, as before the screen blanks; activity lifts it. A move does not
 // open upstream's prompt, so its lock keeps two stages.
 async function shootLock() {
@@ -245,13 +329,30 @@ async function shootLock() {
         await shootFingerprint(Main.screenShield._dialog);
         return;
     }
+    if (GLib.getenv('APEX_FINGERPRINT') === 'suspend') {
+        await shootFingerprintSuspend(Main.screenShield._dialog);
+        return;
+    }
     const dialog = Main.screenShield._dialog;
     fact('opened', describeLock(dialog));
+    iconFact('opened', [dialog, Main.panel]);
     await capture('open');
+    const contrast = GLib.getenv('APEX_CONTRAST') === '1';
+    if (contrast) {
+        fact('contrast-opened', await contrastOf(dialog));
+        const entry = dialog._authPrompt._entry;
+        entry.set_text(WRONG_ANSWER);
+        fact('contrast-field', await contrastOf(entry));
+        entry.set_text('');
+    }
 
     await type(WRONG_ANSWER);
     await Scripting.sleep(STEP_MS * 2);
     fact('wrong-answer', describeLock(dialog));
+    await capture('wrong-answer');
+    // The field is insensitive while GDM asks again, which WCAG exempts: the message is what this step adds.
+    if (contrast)
+        fact('contrast-wrong-answer', await contrastOf(dialog._authPrompt._message));
 
     await setPowerSaveMode(POWER_SAVE_OFF);
     await Scripting.sleep(STEP_MS);
@@ -270,9 +371,83 @@ async function shootLock() {
     fact('end', {locked: Main.screenShield.locked});
 }
 
+const MOTION_PROPERTIES = ['translation-x', 'translation-y', 'scale-x', 'scale-y', 'opacity'];
+const MOTION_POLL_MS = 10;
+
+// The transitions running on ROOT and every actor under it: what eases, from where to where, for how long.
+function transitionsUnder(root) {
+    const found = [];
+    const walk = actor => {
+        for (const property of MOTION_PROPERTIES) {
+            const transition = actor.get_transition(property) ?? actor.get_transition(property.replace('-', '_'));
+            const interval = transition?.get_interval?.();
+            if (interval) {
+                found.push({
+                    actor: actor === root ? 'root' : `${actor.constructor.name}.${actor.style_class ?? ''}`, property,
+                    from: interval.peek_initial_value(), to: interval.peek_final_value(), duration: transition.get_duration(),
+                });
+            }
+        }
+        actor.get_children().forEach(walk);
+    };
+    if (root)
+        walk(root);
+    return found;
+}
+
+// A sample every MOTION_POLL_MS, in ms from the call, until the returned stop(): transitions run whether or not a frame paints.
+function sampleMotion(sample) {
+    const samples = [];
+    const start = GLib.get_monotonic_time();
+    const id = GLib.timeout_add(GLib.PRIORITY_DEFAULT, MOTION_POLL_MS, () => {
+        samples.push({t: Math.round((GLib.get_monotonic_time() - start) / 1000), ...sample()});
+        return GLib.SOURCE_CONTINUE;
+    });
+    return () => {
+        GLib.source_remove(id);
+        return samples.filter(m => m.transitions.length).concat(samples.slice(-1));
+    };
+}
+
+// main.js inhibits animations without hardware-accelerated rendering, as the headless shell has; G2's motion case lifts it too.
+function motionSettings() {
+    const settings = St.Settings.get();
+    const uninhibited = !settings.enable_animations;
+    if (uninhibited)
+        settings.uninhibit_animations();
+    return {
+        reduced: settings.reducedMotion === St.ReducedMotion.REDUCE, duration: Overview.ANIMATION_TIME,
+        uninhibited, animations: settings.enable_animations,
+    };
+}
+
+// Reduce Motion: upstream fades the lock's curtain instead of sliding it, and nothing under it moves.
+async function shootMotion() {
+    await Scripting.sleep(SETTLE_MS);
+    fact('motion', motionSettings());
+    const shield = Main.screenShield;
+    const group = shield._lockDialogGroup;
+    const curtain = () => ({ty: group.translation_y, opacity: group.opacity, transitions: transitionsUnder(group)});
+    let stop = sampleMotion(curtain);
+    shield.lock(true);
+    await settleMotion(group);
+    fact('opening', stop());
+    stop = sampleMotion(curtain);
+    shield.deactivate(true);
+    await settleMotion(group);
+    fact('closing', stop());
+}
+
+// The prompt fades its entry in when GDM's question arrives, which can be late: the last sample waits for it.
+async function settleMotion(group) {
+    await Scripting.sleep(STEP_MS);
+    for (let waited = 0; waited < STEP_MS && transitionsUnder(group).length; waited += MOTION_POLL_MS)
+        await Scripting.sleep(MOTION_POLL_MS);
+}
+
 // What polkit-agent-helper-1 would send, without the helper: PAM never runs, so nothing the
-// dialog does can authorise. Its answers are only counted.
-function stubSession(sessions, info) {
+// dialog does can authorise. With refuse, an answer fails as PAM's does: its error text if any, then completed(false).
+function stubSession(sessions, info, refuse = null) {
     return GObject.registerClass({
         Properties: {
             'identity': GObject.ParamSpec.object('identity', null, null,
@@ -299,6 +474,14 @@ function stubSession(sessions, info) {
 
         response() {
             sessions.at(-1).responses++;
+            if (!refuse)
+                return;
+            GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
+                if (refuse.error)
+                    this.emit('show-error', refuse.error);
+                this.emit('completed', false);
+                return GLib.SOURCE_REMOVE;
+            });
         }
 
         cancel() {
@@ -309,6 +492,17 @@ function stubSession(sessions, info) {
 
 function visibleText(actor) {
     return actor?.mapped && actor.opacity > 0 ? actor.text : null;
+}
+
+// A label's text and fill, as its theme node resolves them.
+function ink(label) {
+    const node = label.get_theme_node();
+    return {fg: color(node.get_foreground_color()), fill: color(node.get_background_color())};
+}
+
+function entryShadow(entry) {
+    const shadow = entry.get_theme_node().get_box_shadow();
+    return shadow ? {inset: shadow.inset, spread: shadow.spread, color: color(shadow.color)} : null;
 }
 
 function describePolkit(dialog) {
@@ -337,7 +531,11 @@ function describePolkit(dialog) {
             focused: [dialog._passwordEntry, dialog._passwordEntry.clutter_text].includes(global.stage.key_focus),
             focus: global.stage.key_focus?.constructor.name ?? null,
         },
-        info: {text: visibleText(info), line: line.style_class, glyph: line.get_children().find(c => c instanceof St.Icon && c.visible)?.icon_name ?? null},
+        info: {...box(line), ...ink(info), text: visibleText(info), line: line.style_class, glyph: line.get_children().find(c => c instanceof St.Icon && c.visible)?.icon_name ?? null},
+        error: {...box(dialog._errorMessageLabel), ...ink(dialog._errorMessageLabel), text: visibleText(dialog._errorMessageLabel)},
+        row: box(dialog._errorMessageLabel.get_parent()),
+        surface: color(dialog.dialogLayout._dialog.get_theme_node().get_background_color()),
+        ring: entryShadow(dialog._passwordEntry),
         details: details ? {
             ...box(details),
             open: grid.visible,
@@ -347,19 +545,90 @@ function describePolkit(dialog) {
     };
 }
 
-async function shootPolkit() {
+async function openPolkit(refuse = null, settle = SETTLE_MS) {
     await Scripting.sleep(SETTLE_MS);
     Main.overview.hide();
     await Scripting.sleep(STEP_MS);
     const sessions = [];
-    PolkitAgent.Session = stubSession(sessions, GLib.getenv('APEX_POLKIT_INFO') === 'fingerprint' ? PAM_FPRINTD_PROMPT : null);
+    PolkitAgent.Session = stubSession(sessions, GLib.getenv('APEX_POLKIT_INFO') === 'fingerprint' ? PAM_FPRINTD_PROMPT : null, refuse);
     const agent = Main.componentManager._allComponents.polkitAgent;
     agent._onInitiate(agent, POLKIT_ACTION, POLKIT_MESSAGE, '', 'apex-shell-test', [GLib.getenv('APEX_USER')]);
-    await Scripting.sleep(SETTLE_MS);
-    const dialog = agent._currentDialog;
+    await Scripting.sleep(settle);
+    return {agent, dialog: agent._currentDialog, sessions};
+}
+
+// Board 13 after a wrong password: upstream's _onSessionCompleted(false) shows its error, or keeps PAM's, then asks again.
+async function shootPolkitRefused() {
+    const {dialog, sessions} = await openPolkit({error: GLib.getenv('APEX_POLKIT_ERROR') === 'faillock' ? PAM_FAILLOCK_ERROR : null});
     fact('polkit', describePolkit(dialog));
+    await type(WRONG_ANSWER);
+    await Scripting.sleep(STEP_MS);
+    fact('refused', {...describePolkit(dialog), entry: {text: dialog._passwordEntry.text, reactive: dialog._passwordEntry.reactive}});
+    iconFact('refused', [dialog.dialogLayout._dialog]);
+    await capture('refused');
+    fact('polkit-sessions', sessions);
+}
+
+// Esc while polkitd has not yet answered Details' vendor lookup: the dialog ends its session and the lookup.
+async function shootPolkitCancel() {
+    const lookups = [];
+    Polkit.Authority.prototype.enumerate_actions = function (cancellable) {
+        const lookup = {cancelled: false};
+        lookups.push(lookup);
+        return new Promise((resolve, reject) => cancellable.connect(() => {
+            lookup.cancelled = true;
+            reject(new GLib.Error(Gio.IOErrorEnum, Gio.IOErrorEnum.CANCELLED, 'cancelled'));
+        }));
+    };
+    const {agent, dialog, sessions} = await openPolkit(null, STEP_MS);
+    fact('polkit', describePolkit(dialog));
+    // The dialog is destroyed inside its own 'done', so the agent's completion is what records the verdict.
+    let done = null;
+    const complete = agent._completeRequest;
+    agent._completeRequest = dismissed => {
+        done = dismissed;
+        complete.call(agent, dismissed);
+    };
+    tap(Clutter.KEY_Escape);
+    await Scripting.sleep(SETTLE_MS);
+    fact('cancelled', {done, current: agent._currentDialog === dialog, sessions, lookups});
+}
+
+async function shootPolkit() {
+    const {dialog, sessions} = await openPolkit();
+    fact('polkit', describePolkit(dialog));
+    iconFact('opened', [dialog.dialogLayout._dialog]);
     await capture('open');
     fact('polkit-sessions', sessions);
+}
+
+// Board 13's dialog with the screen locking, or the machine sleeping, under it: upstream hides it
+// while locked and keeps its request. deactivate() stands in for GDM's success, which gdm-mock never gives.
+async function shootPolkitLocked(sleeps) {
+    const {agent, dialog, sessions} = await openPolkit();
+    const describe = () => ({
+        polkit: {...describePolkit(dialog), visible: dialog.visible, mapped: dialog.mapped, current: agent._currentDialog === dialog},
+        sessions, locked: Main.screenShield.locked,
+    });
+    fact('polkit', describe());
+    if (sleeps) {
+        await prepareForSleep(true);
+        await Scripting.sleep(STEP_MS);
+        fact('asleep', describe());
+        await prepareForSleep(false);
+        await Scripting.sleep(STEP_MS * 2);
+    } else {
+        Main.screenShield.lock(false);
+        await Scripting.sleep(STEP_MS * 2);
+    }
+    const lock = () => Main.screenShield._dialog;
+    fact('locked', {...describe(), lock: describeLock(lock())});
+    await type(WRONG_ANSWER);
+    await Scripting.sleep(STEP_MS * 2);
+    fact('typed', {...describe(), lock: describeLock(lock())});
+    Main.screenShield.deactivate(false);
+    await Scripting.sleep(SETTLE_MS);
+    fact('unlocked', describe());
 }
 
 function scale() {
@@ -398,12 +667,36 @@ function button(b) {
     };
 }
 
+// Board 12's spacing, in logical pixels: the list's rows, then the prompt's avatar, field and message line.
+function describeGreeterLayout(dialog, items) {
+    const prompt = dialog._authPrompt?.visible ? dialog._authPrompt : null;
+    const shown = actor => actor?.mapped ? box(actor) : null;
+    return {
+        rows: dialog._userList.mapped ? items.map(i => box(i)) : [],
+        avatar: shown(prompt?._userWell), field: shown(prompt?._entry), messageLine: shown(prompt?._message),
+    };
+}
+
+// A list avatar's circle and the glyph's own box, which upstream fills for a logged-in user.
+function avatarOf(item) {
+    const avatar = item._userWidget._avatar;
+    const glyph = avatar.child;
+    return {
+        ...button(avatar), fg: color(avatar.get_theme_node().get_foreground_color()),
+        loggedIn: item.has_style_pseudo_class('logged-in'),
+        glyphFill: glyph ? color(glyph.get_theme_node().get_background_color()) : null,
+    };
+}
+
 function describeGreeter(dialog) {
     const items = [...dialog._userList._items.values()];
     return {
         users: items.map(i => i.user.get_user_name()).join(' '),
         prompt: describePrompt(dialog._authPrompt?.visible ? dialog._authPrompt : null),
         style: describeGreeterStyle(dialog),
+        layout: describeGreeterLayout(dialog, items),
+        avatars: items.map(avatarOf),
+        sheet: St.ThemeContext.get_for_stage(global.stage).get_theme().default_stylesheet?.get_uri() ?? null,
     };
 }
 
@@ -418,11 +711,36 @@ async function shootGreeter() {
         await Scripting.sleep(SETTLE_MS);
     }
     fact('list', describeGreeter(dialog));
+    iconFact('list', [dialog, Main.panel]);
     await capture('list');
+    fact('contrast-list', await contrastOf(dialog));
+    // The unfocused row pointed at, as the pointer does it: upstream selects and focuses a hovered row.
+    const hovered = [...dialog._userList._items.values()].find(item => !item.has_key_focus());
+    if (hovered) {
+        const focused = global.stage.key_focus;
+        hovered.hover = true;
+        // Upstream's avatar rebuilds its glyph on the row's new style: measure once it has.
+        await Scripting.sleep(CONTRAST_SETTLE_MS);
+        fact('list-hover', {selected: hovered.has_style_pseudo_class('selected'), focused: hovered.has_key_focus(),
+            background: color(hovered.get_theme_node().get_background_color())});
+        fact('contrast-list-hover', await contrastOf(dialog._userList));
+        hovered.hover = false;
+        focused?.grab_key_focus();
+    }
+    const settings = GLib.getenv('APEX_MOTION') ? motionSettings() : null;
+    const stop = settings ? sampleMotion(() => ({transitions: transitionsUnder(dialog)})) : null;
     dialog._userList.getItemFromUserName(GLib.getenv('APEX_USER')).emit('activate');
     await Scripting.sleep(SETTLE_MS);
+    if (stop)
+        fact('motion', {...settings, samples: stop()});
     fact('prompt', describeGreeter(dialog));
+    iconFact('prompt', [dialog, Main.panel]);
     await capture('prompt');
+    fact('contrast-prompt', await contrastOf(dialog));
+    const entry = dialog._authPrompt._entry;
+    entry.set_text(WRONG_ANSWER);
+    fact('contrast-field', await contrastOf(entry));
+    entry.set_text('');
 }
 
 const UPDATE1 = ['io.github.apex_linux.Apex.Update1', '/io/github/apex_linux/Apex/Update1'];
@@ -669,6 +987,125 @@ async function shootDateMenu() {
     await capture('cleared');
 }
 
+// The bar as panel.js and the Apex panel parts leave it: each box's items by role, every actor
+// under each box, the input chip's names and Clear. A part rebuilt twice shows in the counts.
+function describeBar() {
+    const {_leftBox: leftBox, _centerBox: centerBox, _rightBox: rightBox, statusArea} = Main.panel;
+    const roleOf = c => Object.keys(statusArea).find(role => statusArea[role].container === c) ?? c.name ?? 'unnamed';
+    const count = actor => actor.get_children().reduce((n, c) => n + 1 + count(c), 0);
+    const boxes = {left: leftBox, center: centerBox, right: rightBox};
+    const qs = statusArea.quickSettings;
+    const fieldOf = c => Object.keys(qs).find(key => qs[key] === c) ?? c.name ?? 'unnamed';
+    return {
+        ...Object.fromEntries(Object.entries(boxes).map(([side, b]) => [side, b.get_children().map(roleOf)])),
+        actors: Object.fromEntries(Object.entries(boxes).map(([side, b]) => [side, count(b)])),
+        parts: {
+            right: rightBox.get_children().map(c => [roleOf(c), count(c)]),
+            indicators: qs?._indicators.get_children().map(c => [fieldOf(c), count(c)]) ?? null,
+        },
+        chip: statusArea.keyboard?._container.get_children().map(label => label.text) ?? null,
+        clear: statusArea.dateMenu._messageList._clearButton.visible,
+        mode: Main.sessionMode.currentMode,
+        overview: Main.overview.visible,
+        pointer: global.get_pointer().slice(0, 2),
+    };
+}
+
+// fixtures.py's Wi-Fi at 90 %: NM's client, then the icon's image, arrive in their own time.
+const NETWORK_ICON = 'network-wireless-signal-excellent-symbolic';
+const NETWORK_WAIT_MS = 20000;
+
+async function settledBar() {
+    const icon = Main.panel.statusArea.quickSettings?._network?._primaryIndicator;
+    const reached = () => icon?.mapped && icon.icon_name === NETWORK_ICON && icon.get_n_children() > 0;
+    for (let waited = 0; !reached(); waited += KEY_MS) {
+        if (waited >= NETWORK_WAIT_MS) {
+            const state = icon && {mapped: icon.mapped, icon: icon.icon_name, children: icon.get_n_children()};
+            throw new Error(`the network indicator never reached the fixture state: ${JSON.stringify(state)}`);
+        }
+        await Scripting.sleep(KEY_MS); // eslint-disable-line no-await-in-loop
+    }
+    return describeBar();
+}
+
+async function captureBar(name) {
+    const path = GLib.build_filenamev([GLib.getenv('APEX_SHOTS'), `${GLib.getenv('APEX_SHOT')}-${name}.png`]);
+    const stream = Gio.File.new_for_path(path).replace(null, false, Gio.FileCreateFlags.NONE, null);
+    try {
+        const [, y] = Main.panel.get_transformed_position();
+        await new Shell.Screenshot().screenshot_area(0, y, global.stage.width, Main.panel.height, stream);
+    } finally {
+        stream.close(null);
+    }
+    fact(`capture.${name}`, path);
+}
+
+// What loginctl lock-session and unlock-session make logind emit on the session.
+function emitSessionSignal(signal) {
+    const path = `/org/freedesktop/login1/session/${GLib.getenv('XDG_SESSION_ID')}`;
+    return Gio.DBus.system.call('org.freedesktop.login1', path, 'org.freedesktop.DBus.Mock', 'EmitSignal',
+        new GLib.Variant('(sssav)', ['org.freedesktop.login1.Session', signal, '', []]),
+        null, Gio.DBusCallFlags.NONE, -1, null);
+}
+
+// The desktop's bar across two locks: logind's Lock and Unlock, then the lock's own stage and GDM's
+// success (deactivate(), as gdm-mock never gives one). Each unlock gives back the same bar.
+async function shootBarCycle() {
+    await Scripting.sleep(SETTLE_MS);
+    Main.overview.hide();
+    Main.messageTray.getSources().forEach(source => source.destroy());
+    await Scripting.sleep(STEP_MS);
+    fact('before', await settledBar());
+    await captureBar('before');
+    await emitSessionSignal('Lock');
+    await Scripting.sleep(STEP_MS * 2);
+    fact('logind-locked', {locked: Main.screenShield.locked, bar: describeBar()});
+    await emitSessionSignal('Unlock');
+    await Scripting.sleep(SETTLE_MS);
+    fact('after-logind', await settledBar());
+    await captureBar('after-logind');
+    Main.screenShield.lock(false);
+    await Scripting.sleep(STEP_MS * 2);
+    const {locked, prompt} = describeLock(Main.screenShield._dialog);
+    fact('dialog-locked', {locked, prompt: prompt !== null});
+    Main.screenShield.deactivate(false);
+    await Scripting.sleep(SETTLE_MS);
+    fact('after-dialog', await settledBar());
+    await captureBar('after-dialog');
+}
+
+// The bar across the layer's own live changes: layer-enabled off and on, panel out of and back in
+// disabled-features, then a lock from the overview. Each return gives back the first bar.
+async function shootBarLive() {
+    const apex = new Gio.Settings({schema_id: 'io.github.apex_linux.Apex.Desktop'});
+    const step = async (name, change) => {
+        change();
+        await Scripting.sleep(SETTLE_MS);
+        fact(name, await settledBar());
+    };
+    await Scripting.sleep(SETTLE_MS);
+    Main.overview.hide();
+    Main.messageTray.getSources().forEach(source => source.destroy());
+    await Scripting.sleep(STEP_MS);
+    fact('before', await settledBar());
+    await captureBar('before');
+    await step('layer-off', () => apex.set_boolean('layer-enabled', false));
+    await step('layer-on', () => apex.reset('layer-enabled'));
+    await captureBar('layer-on');
+    await step('panel-off', () => apex.set_strv('disabled-features', ['panel']));
+    await step('panel-on', () => apex.reset('disabled-features'));
+    await captureBar('panel-on');
+    Main.overview.show();
+    await Scripting.sleep(STEP_MS * 2);
+    Main.screenShield.lock(false);
+    await Scripting.sleep(STEP_MS * 2);
+    fact('overview-locked', {locked: Main.screenShield.locked});
+    Main.screenShield.deactivate(false);
+    await Scripting.sleep(SETTLE_MS);
+    fact('overview-unlocked', await settledBar());
+    await captureBar('overview-unlocked');
+}
+
 // main.js connects to startup-complete only after importing this module, so a startup that
 // completes during the import would never run the script and leave the shell up.
 export function init() {
@@ -687,10 +1124,24 @@ export async function run() {
             await shootGreeter();
         else if (GLib.getenv('APEX_POLKIT') === '1')
             await shootPolkit();
+        else if (GLib.getenv('APEX_POLKIT') === 'refuse')
+            await shootPolkitRefused();
+        else if (GLib.getenv('APEX_POLKIT') === 'cancel')
+            await shootPolkitCancel();
+        else if (['lock', 'suspend'].includes(GLib.getenv('APEX_POLKIT')))
+            await shootPolkitLocked(GLib.getenv('APEX_POLKIT') === 'suspend');
+        else if (GLib.getenv('APEX_MOTION') === 'lock')
+            await shootMotion();
         else if (GLib.getenv('APEX_DATE_MENU') === '1')
             await shootDateMenu();
+        else if (GLib.getenv('APEX_BAR_CYCLE') === '1')
+            await shootBarCycle();
+        else if (GLib.getenv('APEX_BAR_LIVE') === '1')
+            await shootBarLive();
         else if (GLib.getenv('APEX_END_SESSION') === '1')
             await shootEndSession();
+        else if (GLib.getenv('APEX_SUSPEND') === '1')
+            await shootSuspend();
         else if (GLib.getenv('APEX_IDLE') === '1')
             await shootIdleLock();
         else if (GLib.getenv('APEX_WAKE_KEY'))

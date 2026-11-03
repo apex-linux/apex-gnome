@@ -178,6 +178,13 @@ export const screenshotUI = {
 
 export const messageTray = {
     _bannerBin: Object.assign(new StubActor('banner-bin', {parent: uiGroup}), {children: []}),
+    cleared: [],
+    _updateNotificationTimeout(timeout) {
+        this.cleared.push(`banner:${timeout}`);
+    },
+    _resetNotificationLeftTimeout() {
+        this.cleared.push('left');
+    },
     showBanner() {
         const banner = new StubActor('banner', {glass: {...POPOVER_GLASS, radius: 16}, extents: [490, 44, 460, 80], parent: this._bannerBin});
         banner._classes.add('notification-banner');
@@ -255,6 +262,8 @@ const QUICK_SETTINGS_INDICATORS = ['_remoteAccess', '_camera', '_volumeInput', '
 const PRIVACY_INDICATORS = ['_remoteAccess', '_camera', '_volumeInput', '_location'];
 
 const rightBox = box([{name: 'a11y'}, {name: 'keyboard'}]);
+const activitiesContainer = {name: 'activities', get_parent: () => leftBox};
+const leftBox = box([activitiesContainer]);
 
 // remoteAccess.js's screen-recording and screen-sharing buttons, where panel.js puts them,
 // and keyboard.js's input-source labels.
@@ -268,10 +277,20 @@ function newScreenButton(role, accessibleName, index, children) {
     return button;
 }
 
+// IBus Telex's short name is its engine's symbol; its engine's language is Vietnamese.
 function newInputSources() {
-    const keyboard = {_container: new St.Widget()};
-    for (const text of ['en', 'vi'])
-        keyboard._container.add_child(new St.Label({text}));
+    const sources = [{type: 'xkb', id: 'us', shortName: 'en'}, {type: 'ibus', id: 'm17n:vi:telex', shortName: 'Ắ'}];
+    const keyboard = {
+        _container: new St.Widget(),
+        _inputSources: sources.map((is, index) => ({...is, index})),
+        _indicatorLabels: {},
+        _calculateSourceIndicatorIndex: is => is.index,
+        _inputSourceManager: {_ibusManager: {getEngineDesc: id => id === 'm17n:vi:telex' ? {get_language: () => 'vi_VN'} : null}},
+    };
+    for (const is of keyboard._inputSources) {
+        keyboard._indicatorLabels[is.index] = new St.Label({text: is.shortName});
+        keyboard._container.add_child(keyboard._indicatorLabels[is.index]);
+    }
     return keyboard;
 }
 
@@ -412,6 +431,12 @@ export const panel = Object.assign(new StubActor('panel', {glass: PANEL_GLASS, e
             throw new Error(`there is already a status indicator for role ${role}`);
         this.statusArea[role] = indicator;
         indicator.connect('destroy', () => delete this.statusArea[role]);
+        if (boxName === 'right' && GLib.getenv('PROBE_RIGHT_BOX_ADDS') === '1') {
+            rightBox.insert_child_at_index(indicator.container, position);
+            indicator.container._parent = rightBox;
+        }
+        if (boxName === 'left')
+            leftBox.insert_child_at_index(indicator.container, position);
         fact('panel.add', `${role} at ${position} in ${boxName}`);
         return indicator;
     },
@@ -424,9 +449,11 @@ export const panel = Object.assign(new StubActor('panel', {glass: PANEL_GLASS, e
             this.menus = this.menus.filter(m => m !== menu);
         },
     },
+    leftBox,
     rightBox,
     statusArea: {
         activities: {
+            container: activitiesContainer,
             get_first_child: () => ({get_children: () => [0, 1].map(() => workspaceDot)}),
         },
         quickSettings: newQuickSettings(),
@@ -435,7 +462,12 @@ export const panel = Object.assign(new StubActor('panel', {glass: PANEL_GLASS, e
         screenSharing: newScreenButton('screenSharing', 'Stop Screen Sharing', 1,
             [new St.Icon({icon_name: 'screen-shared-symbolic'}), new St.Icon({icon_name: 'screencast-stop-symbolic'})]),
         keyboard: newInputSources(),
-        dateMenu: {menu: {box: new StubActor('calendar', {glass: POPOVER_GLASS, extents: [354, 40, 732, 468], parent: boxPointer})}},
+        // calendar.js's message list as built: its placeholder shows, and Clear, never synced, too.
+        // Labels, the stub's actors that notify visible as GObjects do.
+        dateMenu: {
+            menu: {box: new StubActor('calendar', {glass: POPOVER_GLASS, extents: [354, 40, 732, 468], parent: boxPointer})},
+            _messageList: {_clearButton: new St.Label(), _placeholder: new St.Label()},
+        },
     },
 });
 
@@ -472,6 +504,9 @@ export const layoutManager = {
         return this.testMonitors ?? [this.primaryMonitor];
     },
     getWorkAreaForMonitor: () => ({x: 0, y: 32, width: 1440, height: 868}),
+    findMonitorForActor() {
+        return this.primaryMonitor;
+    },
     chrome: [],
     overviewGroup,
     _bgManagers: [new StubActor('background')],

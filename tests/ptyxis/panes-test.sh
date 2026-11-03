@@ -196,7 +196,9 @@ headless_bus "$out"
 headless_run "$out/panes.log" "$PTYXIS_TESTS/panes-probe.js" "$SHELL_TIMEOUT" \
     "org.gnome.desktop.interface enable-hot-corners false" \
     APEX_PANES_ATSPI="$atspi" APEX_PANES_OUT="$out"
-log "panes-test.sh: shell exit $?"
+rc=$?
+log "panes-test.sh: shell exit $rc"
+if crash=$(shell_crash "$out/panes.log" "$rc"); then die "panes-test.sh: $crash"; fi
 
 result=$(sed -n 's/.*APEXPANES //p' "$out/panes.log" | tail -n 1)
 [[ -n $result ]] || die "panes-test.sh: no result; see ${out#"$APEX_ROOT/"}/panes.log"

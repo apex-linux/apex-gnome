@@ -4,6 +4,7 @@ import Atk from 'gi://Atk';
 import Clutter from 'gi://Clutter';
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
+import GObject from 'gi://GObject';
 import Graphene from 'gi://Graphene';
 import Meta from 'gi://Meta';
 import Mtk from 'gi://Mtk';
@@ -18,13 +19,14 @@ import * as ModalDialog from 'resource:///org/gnome/shell/ui/modalDialog.js';
 import * as OverviewControls from 'resource:///org/gnome/shell/ui/overviewControls.js';
 import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 import * as Scripting from 'resource:///org/gnome/shell/ui/scripting.js';
+import * as ShellMountOperation from 'resource:///org/gnome/shell/ui/shellMountOperation.js';
 import * as Slider from 'resource:///org/gnome/shell/ui/slider.js';
 import * as SwitcherPopup from 'resource:///org/gnome/shell/ui/switcherPopup.js';
 import * as UserWidget from 'resource:///org/gnome/shell/ui/userWidget.js';
 import * as WindowManager from 'resource:///org/gnome/shell/ui/windowManager.js';
 import * as WorkspaceThumbnail from 'resource:///org/gnome/shell/ui/workspaceThumbnail.js';
 
-import {barReport, textColour} from './a11y.js';
+import {barReport, paintedFrame, textColour} from './a11y.js';
 import {actionModeName} from './idle.js';
 import * as Png from './png.js';
 
@@ -43,7 +45,6 @@ const CRASH_GUARD_MARKER = 'apex-shell-starting';
 // Well before APEX_SHELL_TEST_FAULT=abort-after-enable aborts the shell (5 s after enable).
 const REPORT_AFTER_MS = 1500;
 const SETTLE_TIMEOUT_MS = 20000;
-const SETTLE_EXTRA_MS = 500;
 const PERF_HELPER_PING_S = 10;
 const DEFERRED_WORK_TIMEOUT_MS = 21000;
 const OSD_SETTLE_TIMEOUT_MS = 3000;
@@ -75,8 +76,29 @@ const SIGNOFF_APPS = [['gnome-text-editor', '--new-window'], ['gnome-calendar'],
 const SIGNOFF_WINDOWS_MS = 30000;
 const SIGNOFF_FOCUS_ORDER = ['org.gnome.Calendar.desktop', 'org.gnome.TextEditor.desktop', 'org.gnome.Ptyxis.desktop'];
 const SIGNOFF_QUIET_MS = 1500;
+// Well inside the 1.5 s after which a switcher with no modifier held activates its selection.
+const SWITCHER_UNFOCUSED_MS = 1000;
 const SIGNOFF_FOCUS_ATTEMPTS = 3;
 const WIFI_SCAN_MS = 5000;
+// A WPA2 network that appears while the Wi-Fi menu is open (fixtures.py's NM_80211_AP_SEC_WPA2_PSK).
+const LATE_NETWORK = {
+    name: 'apexlate', ssid: 'Apex-Late', address: '02:A5:E0:00:00:09', frequency: 5745, rate: 866700, strength: 64,
+    security: 0x188,
+};
+// RSN PSK without a cipher, then a WPA2 network with them.
+const REFUSED_NETWORK = {
+    name: 'apexodd', ssid: 'Apex-Odd', address: '02:A5:E0:00:00:0A', frequency: 5180, rate: 866700, strength: 70,
+    security: 0x100,
+};
+const ADOPTED_NETWORK = {
+    name: 'apexfixed', ssid: 'Apex-Fixed', address: '02:A5:E0:00:00:0B', frequency: 2462, rate: 300000, strength: 56,
+    security: 0x188,
+};
+const WIFI_REFUSED_MS = 1500;
+const NM_DEVICE = '/org/freedesktop/NetworkManager/Devices/wlan0';
+const TRAY_DRAIN_MS = 3000;
+const SHUTDOWN_HISTORY_DELAY_MS = 300;
+const SHUTDOWN_BANNER_TIMEOUT_MS = 100;
 const AVATAR_SIZE = 32;
 const OVERVIEW_WINDOWS = 3;
 const FIXTURE_WALLPAPER = {width: 160, height: 100};
@@ -568,8 +590,34 @@ async function settle() {
         }),
         Scripting.sleep(SETTLE_TIMEOUT_MS),
     ]);
-    await Scripting.sleep(SETTLE_EXTRA_MS);
+    // Leisure can come while a queued relayout still waits for the frame clock, and with laters queued:
+    // one queued now runs after them, and the frame painted then runs any they queued in turn.
+    await latersRun();
+    await paintedFrame();
+    const deadline = GLib.get_monotonic_time() + SETTLE_TIMEOUT_MS * 1000;
+    while (iconLoading(global.stage) && GLib.get_monotonic_time() < deadline)
+        // eslint-disable-next-line no-await-in-loop
+        await paintedFrame();
     return idle;
+}
+
+function latersRun() {
+    return new Promise(resolve => {
+        global.compositor.get_laters().add(Meta.LaterType.BEFORE_REDRAW, () => {
+            resolve();
+            return GLib.SOURCE_REMOVE;
+        });
+        global.stage.queue_redraw();
+    });
+}
+
+// St loads an icon's texture in a thread, which leisure does not wait for: until then it is at opacity 0.
+function iconLoading(actor) {
+    if (!actor.mapped)
+        return false;
+    if (actor instanceof St.Icon && actor.get_first_child()?.opacity === 0)
+        return true;
+    return actor.get_children().some(iconLoading);
 }
 
 function captureBox(actor, scale) {
@@ -1055,30 +1103,113 @@ async function wifiMenuRows(unit) {
         await settle();
         const {_header: header, _headerSubtitle: subtitle} = wifi.menu;
         const meta = header.layout_manager.get_child_meta(header, subtitle);
-        const rows = findAll(wifi.menu.box, a => a.constructor.name === 'NMWirelessNetworkItem');
+        const rows = () => findAll(wifi.menu.box, a => a.constructor.name === 'NMWirelessNetworkItem');
+        const describe = row => {
+            const lock = row._secureIcon;
+            const children = row.get_children();
+            return {
+                ssid: row._label.text,
+                active: row.network.is_active,
+                checked: row.has_style_pseudo_class('checked'),
+                accessibleName: row.accessible_name ?? null,
+                accessibleChecked: row.get_accessible().ref_state_set().contains_state(Atk.StateType.CHECKED),
+                strength: row.network.signal_strength,
+                secure: !!lock.icon_name,
+                lockAfterName: children.indexOf(lock) === children.indexOf(row._label) + 1,
+                box: boxOf(row, unit), label: boxOf(row._label, unit), signal: boxOf(row._signalIcon, unit),
+                lockBox: lock.icon_name ? boxOf(lock, unit) : null,
+                lockSize: lengthOrNull(lock.get_theme_node(), 'icon-size', unit),
+                lockColor: hex(lock.get_theme_node().get_foreground_color()),
+            };
+        };
+        const listed = rows().map(describe);
         return {
             subtitle: {column: meta.left_attach, row: meta.top_attach, xAlign: subtitle.x_align, end: Clutter.ActorAlign.END},
-            rows: rows.map(row => {
-                const lock = row._secureIcon;
-                const children = row.get_children();
-                return {
-                    ssid: row._label.text,
-                    active: row.network.is_active,
-                    checked: row.has_style_pseudo_class('checked'),
-                    secure: !!lock.icon_name,
-                    lockAfterName: children.indexOf(lock) === children.indexOf(row._label) + 1,
-                    box: boxOf(row, unit), label: boxOf(row._label, unit), signal: boxOf(row._signalIcon, unit),
-                    lockBox: lock.icon_name ? boxOf(lock, unit) : null,
-                    lockSize: lengthOrNull(lock.get_theme_node(), 'icon-size', unit),
-                    lockColor: hex(lock.get_theme_node().get_foreground_color()),
-                };
-            }),
+            rows: listed,
+            late: await lateNetworkRow(rows, describe),
+            refused: await refusedNetworkRows(rows, describe),
         };
     } finally {
         wifi.menu.close(BoxPointer.PopupAnimation.NONE);
         menu.close(BoxPointer.PopupAnimation.NONE);
         await settle();
     }
+}
+
+function nmMock(method, signature, args) {
+    return new Promise((resolve, reject) => Gio.DBus.system.call(
+        'org.freedesktop.NetworkManager', '/org/freedesktop/NetworkManager', 'org.freedesktop.DBus.Mock', method,
+        new GLib.Variant(signature, args), null, Gio.DBusCallFlags.NONE, -1, null, (bus, res) => {
+            try {
+                resolve(bus.call_finish(res).deepUnpack()[0]);
+            } catch (e) {
+                reject(e);
+            }
+        }));
+}
+
+function addAccessPoint({name, ssid, address, frequency, rate, strength, security}) {
+    return nmMock('AddAccessPoint', '(ssssuuuyu)', [NM_DEVICE, name, ssid, address, 2, frequency, rate, strength, security]);
+}
+
+async function rowFor(rows, ssid) {
+    const row = () => rows().find(r => r.visible && r._label.text === ssid);
+    for (let waited = 0; !row() && waited < WIFI_SCAN_MS; waited += 100)
+        await Scripting.sleep(100); // eslint-disable-line no-await-in-loop
+    await settle();
+    return row();
+}
+
+// network.js names a new network's row as its first access point arrives, before it is the
+// best one: the name must still end up with the access point's strength.
+async function lateNetworkRow(rows, describe) {
+    let path;
+    try {
+        path = await addAccessPoint(LATE_NETWORK);
+        const late = await rowFor(rows, LATE_NETWORK.ssid);
+        return late ? describe(late) : {error: `no row for ${LATE_NETWORK.ssid} within ${WIFI_SCAN_MS} ms`};
+    } catch (e) {
+        return {error: e.message};
+    } finally {
+        if (path)
+            await nmMock('RemoveAccessPoint', '(ss)', [NM_DEVICE, path]).catch(() => {});
+    }
+}
+
+// An access point no security type validates: network.js keeps the row it made for it, blank.
+// The next valid access point goes to that same network, and its row shows.
+async function refusedNetworkRows(rows, describe) {
+    const shown = () => rows().filter(r => r.visible);
+    const paths = [];
+    try {
+        const before = shown().length;
+        paths.push(await addAccessPoint(REFUSED_NETWORK));
+        await Scripting.sleep(WIFI_REFUSED_MS);
+        await settle();
+        const after = shown();
+        const refused = {
+            before, after: after.length,
+            blank: after.filter(r => !r._label.text).length,
+            unnamed: after.filter(r => !r.accessible_name).length,
+        };
+        paths.push(await addAccessPoint(ADOPTED_NETWORK));
+        const adopted = await rowFor(rows, ADOPTED_NETWORK.ssid);
+        refused.adopted = adopted ? describe(adopted) : {error: `no row for ${ADOPTED_NETWORK.ssid}`};
+        // Without access points left, network.js destroys the network and its row.
+        await removeAccessPoints(paths.splice(0));
+        await Scripting.sleep(WIFI_REFUSED_MS);
+        await settle();
+        return {...refused, removed: {shown: shown().length, rows: rows().length}};
+    } catch (e) {
+        return {error: e.message};
+    } finally {
+        await removeAccessPoints(paths);
+    }
+}
+
+async function removeAccessPoints(paths) {
+    for (const path of paths)
+        await nmMock('RemoveAccessPoint', '(ss)', [NM_DEVICE, path]).catch(() => {}); // eslint-disable-line no-await-in-loop
 }
 
 // The quick-settings feature: the toggles' order, Power Mode lit, On/Off subtitles; then two
@@ -1140,6 +1271,26 @@ function layerReport(Registry, surface, unit) {
     });
 }
 
+// registry.js builds a surface's layers a later after it maps (a ModalDialog's a later after that), then shows them.
+const LAYERS_BUILT_TIMEOUT_MS = 3000;
+async function layersBuilt(Registry, surfaces) {
+    const built = await until(() => surfaces.every(surface => {
+        const layers = Registry.layersOf(surface);
+        return layers.length > 0 && layers.every(layer => layer.mapped);
+    }), LAYERS_BUILT_TIMEOUT_MS);
+    await settle();
+    return built;
+}
+
+// What shadows/feature.js registers under root: each St widget whose style draws a layer, not below it.
+function shadowedSurfaces(Registry, root) {
+    if (root instanceof St.Widget && root.get_stage() && root.get_theme_node().get_shadow(Registry.LAYER_PROPERTIES[0]))
+        return [root];
+    return root.get_children().flatMap(child => shadowedSurfaces(Registry, child));
+}
+
+const windowPreviews = actor => actor.get_children().flatMap(c => c.window_container !== undefined ? [c] : windowPreviews(c));
+
 async function shadowLayers(unit) {
     const Registry = await import(SHADOW_REGISTRY);
     const result = {};
@@ -1147,7 +1298,7 @@ async function shadowLayers(unit) {
         ['dateMenu', Main.panel.statusArea.dateMenu.menu]]) {
         menu.open(BoxPointer.PopupAnimation.NONE);
         // eslint-disable-next-line no-await-in-loop
-        await settle();
+        await layersBuilt(Registry, [menu.box]);
         result[name] = layerReport(Registry, menu.box, unit);
         menu.close(BoxPointer.PopupAnimation.NONE);
         // eslint-disable-next-line no-await-in-loop
@@ -1163,7 +1314,7 @@ async function shadowLayers(unit) {
     for (let opening = 0; opening < 2; opening++) {
         popup.open(BoxPointer.PopupAnimation.NONE);
         // eslint-disable-next-line no-await-in-loop
-        await settle();
+        await layersBuilt(Registry, [popup.box]);
         result.popupMenu = layerReport(Registry, popup.box, unit);
         if (opening === 0) {
             popup.close(BoxPointer.PopupAnimation.NONE);
@@ -1178,8 +1329,8 @@ async function shadowLayers(unit) {
     const dialog = new ModalDialog.ModalDialog();
     dialog.contentLayout.add_child(new St.Label({text: 'Shadow'}));
     dialog.open();
-    await settle();
     const surface = dialog.dialogLayout._dialog;
+    await layersBuilt(Registry, [surface]);
     result.dialog = layerReport(Registry, surface, unit)
         .map((layer, i) => ({...layer, besideBox: Registry.layersOf(surface)[i].get_parent() === surface.get_parent()}));
     dialog.close();
@@ -1436,6 +1587,39 @@ async function modalDialog(unit) {
     }
 }
 
+// The mount password dialog, as a mount's ask-password opens it: its Remember Password is a check box.
+function openMountPasswordDialog() {
+    const operation = new ShellMountOperation.ShellMountOperation({get_drive: () => null});
+    operation.mountOp.emit('ask-password', 'Password Required\nEnter the password for the G2 share', 'apex', 'WORKGROUP',
+        Gio.AskPasswordFlags.NEED_PASSWORD | Gio.AskPasswordFlags.SAVING_SUPPORTED);
+    const dialog = operation._dialog;
+    return {
+        root: dialog.dialogLayout._dialog,
+        check: dialog._rememberChoice,
+        close: () => operation.close(),
+    };
+}
+
+async function checkBoxDialog(unit) {
+    const opened = openMountPasswordDialog();
+    const {check} = opened;
+    const state = checked => {
+        check.checked = checked;
+        return {
+            ...styleOf(check._check, unit),
+            hover: underPseudoClass(check, 'hover', () => ({borderColor: hex(check._check.get_theme_node().get_border_color(St.Side.TOP))})),
+        };
+    };
+    try {
+        await settle();
+        global.stage.set_key_focus(null);
+        return {background: styleOf(opened.root, unit).background, label: check.getLabelActor().text, unchecked: state(false), checked: state(true)};
+    } finally {
+        opened.close();
+        await settle();
+    }
+}
+
 // The calendar's day buttons, and the colour each one's number is drawn in, which St gives a
 // Clutter.Text only as the button's own child.
 function calendarDays(calendar, unit) {
@@ -1670,9 +1854,25 @@ function glassOf(actor, unit) {
     };
 }
 
-async function spotlightScene(popup, name, text) {
-    popup.panel.get_children()[0].get_children()[1].set_text(text);
+// Spotlight searches after a typing pause, a GLib timeout that leisure does not wait for.
+async function typeInSpotlight(popup, text) {
+    const entry = popup.panel.get_children()[0].get_children()[1];
+    if (entry.get_text() !== text) {
+        const runSearch = popup._runSearch;
+        const searched = new Promise(resolve => {
+            popup._runSearch = typed => {
+                popup._runSearch = runSearch;
+                return runSearch.call(popup, typed).finally(resolve);
+            };
+        });
+        entry.set_text(text);
+        await searched;
+    }
     await settle();
+}
+
+async function spotlightScene(popup, name, text) {
+    await typeInSpotlight(popup, text);
     global.stage.set_key_focus(null);
     const scene = name && GLib.getenv('G2_SURFACE_SCENES') === '1' ? await capture(`spotlight-${name}`) : null;
     if (scene)
@@ -1815,6 +2015,53 @@ function spotlightSections(popup) {
     };
 }
 
+// A virtual device's events reach the stage through mutter's input thread, which leisure does not
+// wait for. They arrive in the order sent, so an F24 (bound to nothing) tapped after them follows them.
+let sentinelKeyboard = null;
+// While an entry has the input method's focus, IBus takes the keys and the shell sends them on once
+// it answers, in order: when it took the F24, the barrier waits for the copy it sends on too.
+const IBUS_RELEASE_MASK = 1 << 30;
+let lastBarrierViaInputMethod = false;
+
+async function inputDelivered() {
+    sentinelKeyboard ??= global.stage.context.get_backend().get_default_seat()
+        .create_virtual_device(Clutter.InputDeviceType.KEYBOARD_DEVICE);
+    const context = Main.inputMethod?._context ?? null;
+    let seen = 0, taken = 0, resolve;
+    const delivered = new Promise(r => (resolve = r));
+    if (context) {
+        const process = context.process_key_event_async;
+        context.process_key_event_async = function (keyval, keycode, state, ...rest) {
+            if (keyval === Clutter.KEY_F24 && state & IBUS_RELEASE_MASK)
+                taken++;
+            return process.call(this, keyval, keycode, state, ...rest);
+        };
+    }
+    // The stage's filters see an event as it is queued; its next frame dispatches it, and the input method
+    // takes it then, before that frame's laters run.
+    const filterId = Clutter.Event.add_filter(global.stage, event => {
+        if (event.type() === Clutter.EventType.KEY_RELEASE && event.get_key_symbol() === Clutter.KEY_F24) {
+            seen++;
+            latersRun().then(() => {
+                if (seen >= 1 + taken)
+                    resolve(true);
+            });
+        }
+        return Clutter.EVENT_PROPAGATE;
+    });
+    sentinelKeyboard.notify_keyval(GLib.get_monotonic_time(), Clutter.KEY_F24, Clutter.KeyState.PRESSED);
+    sentinelKeyboard.notify_keyval(GLib.get_monotonic_time(), Clutter.KEY_F24, Clutter.KeyState.RELEASED);
+    try {
+        if (!await Promise.race([delivered, Scripting.sleep(SETTLE_TIMEOUT_MS).then(() => false)]))
+            throw new Error(`a virtual key event did not reach the stage in ${SETTLE_TIMEOUT_MS} ms`);
+    } finally {
+        Clutter.Event.remove_filter(filterId);
+        if (context)
+            delete context.process_key_event_async;
+        lastBarrierViaInputMethod = taken > 0;
+    }
+}
+
 async function pressKeys(keyboard, keyval, times) {
     for (let i = 0; i < times; i++) {
         keyboard.notify_keyval(GLib.get_monotonic_time(), keyval, Clutter.KeyState.PRESSED);
@@ -1822,6 +2069,7 @@ async function pressKeys(keyboard, keyval, times) {
         // eslint-disable-next-line no-await-in-loop
         await Scripting.sleep(20);
     }
+    await inputDelivered();
     await settle();
 }
 
@@ -1885,7 +2133,57 @@ async function chord(keyboard, modifiers, keyval) {
         keyboard.notify_keyval(at(), keyval, Clutter.KeyState.RELEASED);
     }
     [...modifiers].reverse().forEach(m => keyboard.notify_keyval(at(), m, Clutter.KeyState.RELEASED));
+    await inputDelivered();
     await settle();
+}
+
+// The dock items whose name label is up, once every label's fade has run.
+async function dockLabelsShown(dock) {
+    const items = dock?._labelledItems?.() ?? [];
+    await until(() => items.every(i => !i.label.get_transition('opacity')), 3000);
+    return items.filter(i => i.label.visible && i.label.opacity > 0).map(i => i._labelText);
+}
+
+function focusedDockItem(dock) {
+    const focus = global.stage.get_key_focus();
+    return dock?._labelledItems?.().find(i => i.child === focus)?._labelText ?? null;
+}
+
+// The first item key focused while the pointer hovers the third: the hover's label alone, and,
+// the pointer gone, the focused item's again.
+async function hoverWhileFocused(dock) {
+    const items = dock._labelledItems();
+    const pointer = global.stage.context.get_backend().get_default_seat()
+        .create_virtual_device(Clutter.InputDeviceType.POINTER_DEVICE);
+    const moveTo = ([x, y]) => until(() => {
+        const [px, py] = global.get_pointer();
+        if (px === x && py === y)
+            return true;
+        pointer.notify_absolute_motion(GLib.get_monotonic_time(), x, y);
+        return false;
+    }, 3000);
+    const monitor = Main.layoutManager.primaryMonitor;
+    const away = [monitor.x + monitor.width / 2, monitor.y + monitor.height / 4].map(Math.round);
+    items[0].child.grab_key_focus();
+    const focused = await dockLabelsShown(dock);
+    const [x, y] = items[2].child.get_transformed_position();
+    const [width, height] = items[2].child.get_transformed_size();
+    await moveTo([x + width / 2, y + height / 2].map(Math.round));
+    await until(() => items[2].label.visible && items[2].label.opacity === 255, 3000);
+    const hovered = await dockLabelsShown(dock);
+    await moveTo(away);
+    const left = await dockLabelsShown(dock);
+    // The focused item hovered and left: its label stays up, never fading in again.
+    let lowest = items[0].label.opacity;
+    const id = items[0].label.connect('notify::opacity', label => (lowest = Math.min(lowest, label.opacity)));
+    const [fx, fy] = items[0].child.get_transformed_position();
+    const [fw, fh] = items[0].child.get_transformed_size();
+    await moveTo([fx + fw / 2, fy + fh / 2].map(Math.round));
+    const onFocused = await dockLabelsShown(dock);
+    await moveTo(away);
+    const offFocused = await dockLabelsShown(dock);
+    items[0].label.disconnect(id);
+    return {focused, hovered, left, hoveredName: items[2]._labelText, onFocused, offFocused, lowestOpacity: lowest};
 }
 
 // The session's keys, each as registered and then pressed, from the desktop with nothing open.
@@ -1908,6 +2206,31 @@ async function keysCase() {
     const seat = global.stage.context.get_backend().get_default_seat();
     const keyboard = seat.create_virtual_device(Clutter.InputDeviceType.KEYBOARD_DEVICE);
     const pressed = {sources: Object.values(sources.inputSources).map(s => s.id), first: source()};
+
+    // The barrier's own tap, alone on the idle desktop, must leave everything as it was.
+    const state = () => ({source: source(), overview: Main.overview.visible, modals: Main.modalCount});
+    const a11ySignals = ['kbd-a11y-flags-changed', 'kbd-a11y-mods-state-changed'];
+    let a11yChanges = 0;
+    const a11yIds = a11ySignals.map(signal => seat.connect(signal, () => a11yChanges++));
+    const before = state();
+    await inputDelivered();
+    await settle();
+    a11yIds.forEach(id => seat.disconnect(id));
+    pressed.sentinel = {before, after: state(), a11yChanges};
+
+    // A key to an entry, which IBus takes and sends on (it commits printable ones as text instead),
+    // has reached it by the time the barrier returns.
+    const entry = new St.Entry({can_focus: true, text: 'ab'});
+    Main.uiGroup.add_child(entry);
+    entry.grab_key_focus();
+    entry.clutter_text.set_cursor_position(-1);
+    await settle();
+    keyboard.notify_keyval(GLib.get_monotonic_time(), Clutter.KEY_BackSpace, Clutter.KeyState.PRESSED);
+    keyboard.notify_keyval(GLib.get_monotonic_time(), Clutter.KEY_BackSpace, Clutter.KeyState.RELEASED);
+    await inputDelivered();
+    pressed.entryKey = {viaInputMethod: lastBarrierViaInputMethod, text: entry.get_text()};
+    entry.destroy();
+    await settle();
 
     await chord(keyboard, [Clutter.KEY_Super_L], Clutter.KEY_space);
     pressed.superSpace = {spotlight: spotlight?.isOpen ?? null, source: source()};
@@ -1936,7 +2259,16 @@ async function keysCase() {
     pressed.ctrlAltTab = {
         groups: groups.map(item => ({name: item.name, dock: item === dockGroup})),
         dockFocused: !!dock && !!focus && dock.contains(focus),
+        focus: focusedDockItem(dock),
+        labels: await dockLabelsShown(dock),
     };
+    if (pressed.ctrlAltTab.dockFocused) {
+        await pressKeys(keyboard, Clutter.KEY_Right, 1);
+        pressed.dockRight = {focus: focusedDockItem(dock), labels: await dockLabelsShown(dock)};
+        await pressKeys(keyboard, Clutter.KEY_Escape, 1);
+        pressed.dockEscape = {focus: focusedDockItem(dock), labels: await dockLabelsShown(dock)};
+        pressed.dockHover = await hoverWhileFocused(dock);
+    }
     global.stage.set_key_focus(null);
     await settle();
 
@@ -1961,8 +2293,7 @@ async function withSpotlight(read) {
     popup.open();
     try {
         return await read(popup, async () => {
-            popup.panel.get_children()[0].get_children()[1].set_text('2880 / 1.5');
-            await settle();
+            await typeInSpotlight(popup, '2880 / 1.5');
             popup.activateSelected();
             await settle();
             return Toast.current()?.get_first_child() ?? null;
@@ -2473,7 +2804,10 @@ async function scenes() {
         surfaces.idleRepaints = await idleRepaints();
     }
     surfaces.switcher = await windowSwitcher(unit);
-    surfaces.dialog = {...await modalDialog(unit), endSession: await endSessionDialog(unit), updateCard: await updateCard(unit)};
+    surfaces.dialog = {
+        ...await modalDialog(unit), endSession: await endSessionDialog(unit), updateCard: await updateCard(unit),
+        checkBox: await checkBoxDialog(unit),
+    };
     surfaces.dateMenu = await calendarMenu(unit);
     surfaces.notificationsLayer = await notificationsLayer(unit);
     surfaces.derived = derivedSurfaces(unit);
@@ -2673,8 +3007,8 @@ async function previewShadows() {
     const unit = cssUnit();
     Main.overview.show();
     await settle();
-    const find = actor => actor.get_children().flatMap(c => c.window_container !== undefined ? [c] : find(c));
-    const previews = find(Main.layoutManager.overviewGroup).map(preview => ({
+    await layersBuilt(Registry, windowPreviews(Main.layoutManager.overviewGroup));
+    const previews = windowPreviews(Main.layoutManager.overviewGroup).map(preview => ({
         styled: preview.has_style_class_name('apex-window-preview'),
         layers: Registry.layersOf(preview).map(layer => ({
             shown: layer.mapped,
@@ -2951,6 +3285,8 @@ async function signoffWindows() {
     // A window still mapping joins the overview's workspace late: wait for its preview.
     const previews = await until(() => countDescendants(Main.layoutManager.overviewGroup,
         a => a.constructor.name === 'WindowPreview' && a.mapped) >= SIGNOFF_APPS.length, SIGNOFF_WINDOWS_MS);
+    const Registry = await apexModule(SHADOW_REGISTRY).catch(() => null);
+    const shadowsBuilt = {overview: Registry ? await layersBuilt(Registry, windowPreviews(Main.layoutManager.overviewGroup)) : null};
     await settle();
     await windowsRedrawn("the overview's");
     global.stage.set_key_focus(null);
@@ -2964,8 +3300,19 @@ async function signoffWindows() {
     await settle();
     const {AppSwitcherPopup} = await import('resource:///org/gnome/shell/ui/altTab.js');
     const popup = new AppSwitcherPopup();
+    // The switcher's grab takes the keyboard from the focused window, which then draws itself unfocused
+    // (a hollow terminal caret): the capture shows that state, not whichever frame came first.
+    const focused = global.display.focus_window?.get_compositor_private() ?? null;
+    let unfocusedDrawn = !focused;
+    const damagedId = focused?.connect('damaged', () => (unfocusedDrawn = true));
     // No modifier mask: nothing held down, so the popup stays until it is destroyed.
     popup.show(false, 'switch-applications', 0);
+    // switcherPopup.js shows it after POPUP_DELAY_TIMEOUT, a GLib timeout that leisure does not wait for.
+    const altTabShown = await until(() => popup.opacity === 255, 3000);
+    shadowsBuilt.altTab = Registry ? await layersBuilt(Registry, shadowedSurfaces(Registry, popup)) : null;
+    const altTabUnfocused = await until(() => unfocusedDrawn, SWITCHER_UNFOCUSED_MS);
+    if (damagedId)
+        focused.disconnect(damagedId);
     await settle();
     keepOrder("the switcher's");
     const altTab = withoutBytes(await capture('signoff-alt-tab', [], {switcher: popup._items.map(item => item.app.get_id())}));
@@ -2973,7 +3320,7 @@ async function signoffWindows() {
     await settle();
     drawn.destroy();
     return {
-        shown, previews, apps: appsShown(), overview: overview.file, altTab: altTab.file,
+        shown, previews, apps: appsShown(), overview: overview.file, altTab: altTab.file, altTabShown, altTabUnfocused, shadowsBuilt,
         loaded, quiet, focusAttempts, pointerPlaced, notified, drawn: drawn.report(),
         atOverview: {pointer: [pointerX, pointerY], panelStates: Object.fromEntries(panelStates)},
     };
@@ -3169,6 +3516,134 @@ function keepPerfHelperAwake() {
     });
 }
 
+// The surfaces G2's scenes open, as they open them, for session-defaults.js's icon walk: board 34's date
+// menu, 35, 36, Spotlight's results (38), the switcher (15), board 16's three, 13's dialog, 14 and 19.
+function iconSurfaces() {
+    const overview = async state => {
+        Main.overview.show();
+        await settle();
+        Main.overview.dash.showAppsButton.checked = state === 'apps';
+        return {
+            root: Main.overview._overview,
+            close: () => {
+                Main.overview.dash.showAppsButton.checked = false;
+                Main.overview.hide();
+            },
+        };
+    };
+    return {
+        // Do Not Disturb's switch draws its on and off glyphs only with Show Status Shapes on.
+        dateMenu: () => {
+            const a11y = new Gio.Settings({schema_id: 'org.gnome.desktop.a11y.interface'});
+            const shapes = a11y.get_boolean('show-status-shapes');
+            a11y.set_boolean('show-status-shapes', true);
+            const source = new MessageTray.Source({title: 'G2 Updates', iconName: 'software-update-available-symbolic'});
+            Main.messageTray.add(source);
+            source.addNotification(new MessageTray.Notification({
+                source, title: 'Update ready', body: 'Starts after the next restart.', urgency: MessageTray.Urgency.LOW,
+            }));
+            const {menu} = Main.panel.statusArea.dateMenu;
+            menu.open(BoxPointer.PopupAnimation.NONE);
+            return {
+                root: menu.box,
+                close: () => {
+                    menu.close(BoxPointer.PopupAnimation.NONE);
+                    source.destroy();
+                    a11y.set_boolean('show-status-shapes', shapes);
+                },
+            };
+        },
+        overview: () => overview('windows'),
+        launcher: () => overview('apps'),
+        spotlight: async () => {
+            if ((await apexHooks())?.safe() !== false)
+                return null;
+            const {Popup} = await import('resource:///org/gnome/shell/ui/apex/spotlight/popup.js');
+            const popup = new Popup(spotlightProviders, 0);
+            popup.open();
+            await typeInSpotlight(popup, 'disk');
+            return {root: popup.panel, close: () => popup.destroy()};
+        },
+        switcher: () => {
+            const list = new SwitcherPopup.SwitcherList(true);
+            for (const name of SWITCHER_APPS) {
+                const app = new St.BoxLayout({style_class: 'alt-tab-app', orientation: Clutter.Orientation.VERTICAL});
+                app.add_child(new St.Icon({icon_name: 'application-x-executable', icon_size: SWITCHER_ICON_SIZE}));
+                app.add_child(new St.Label({text: name}));
+                list.addItem(app, app.get_last_child());
+            }
+            Main.uiGroup.add_child(list);
+            return {root: list, close: () => list.destroy()};
+        },
+        surfaces: async () => {
+            const opened = [openPopupMenu(), await openOsd(), openBanner()];
+            return {
+                roots: [opened[0].root, opened[1].root, () => Main.messageTray._banner],
+                close: () => opened.forEach(o => o.close()),
+            };
+        },
+        dialog: () => openPromptDialog({avatar: true}),
+        endSession: async () => {
+            const dialog = await openShellEndSession();
+            return {root: dialog.dialogLayout._dialog, close: () => dialog.cancel()};
+        },
+        screenshot: async () => {
+            await Main.screenshotUI.open();
+            return {root: Main.screenshotUI, close: () => Main.screenshotUI.close(true)};
+        },
+    };
+}
+
+// gnome-shell 51's shutdown destroys the tray, then runs a main loop that fires any banner timeout
+// still armed; every case but shutdown-banner exits with the tray idle, Apex's notifications or not.
+async function drainMessageTray() {
+    dropStartupNotifications();
+    const idle = await until(() => Main.messageTray._banner === null, TRAY_DRAIN_MS);
+    Main.messageTray._updateNotificationTimeout(0);
+    Main.messageTray._resetNotificationLeftTimeout();
+    return idle;
+}
+
+// That loop also reaches the date menu's destroyed events section whenever the calendar server or the app
+// list signals in it: the event source's changes (dateMenu.js:297), its HasCalendars (:326), the apps (:322).
+const DATE_MENU_SIGNALS = [['source', 'changed'], ['source', 'notify', 'has-calendars'], ['apps', 'installed-changed']];
+
+function dateMenuSources() {
+    return {source: Main.panel.statusArea.dateMenu._eventSource, apps: Shell.AppSystem.get_default()};
+}
+
+// Every case blocks each handler on those paths before the shell exits, so none can run in that loop.
+function cutDateMenu() {
+    const objects = dateMenuSources();
+    return Object.fromEntries(DATE_MENU_SIGNALS.map(([object, signalId, detail]) => [
+        detail ? `${signalId}::${detail}` : signalId,
+        GObject.signal_handlers_block_matched(objects[object], detail ? {signalId, detail} : {signalId}),
+    ]));
+}
+
+// The races made certain: the tray's timeout due in a slowed shutdown loop, each date-menu signal sent in it.
+// The shell exits here, not after scripting.js's helper round trip, which could outlast the timeout.
+async function shutdownWithBanner() {
+    const cut = cutDateMenu();
+    Main.notify('G2 banner', 'shown as the shell exits');
+    await settle();
+    const {source, apps} = dateMenuSources();
+    const writeHistory = Main.timeLimitsManager.shutdown.bind(Main.timeLimitsManager);
+    Main.timeLimitsManager.shutdown = async () => {
+        await Scripting.sleep(SHUTDOWN_HISTORY_DELAY_MS);
+        source.emit('changed');
+        source.notify('has-calendars');
+        apps.emit('installed-changed');
+        await writeHistory();
+    };
+    Main.messageTray._updateNotificationTimeout(SHUTDOWN_BANNER_TIMEOUT_MS);
+    const tray = Main.messageTray;
+    console.log(`APEXG2-SHUTDOWN-BANNER ${JSON.stringify({
+        pending: tray._banner !== null || tray._notificationQueue.length > 0, armed: tray._notificationTimeoutId !== 0, cut,
+    })}`);
+    global.context.terminate();
+}
+
 export async function run() {
     actionModeAtRun = actionModeName();
     const pingId = keepPerfHelperAwake();
@@ -3177,6 +3652,10 @@ export async function run() {
     } finally {
         GLib.source_remove(pingId);
     }
+    if (GLib.getenv('G2_SHUTDOWN_BANNER') === '1')
+        await shutdownWithBanner();
+    else
+        console.log(`APEXG2-EXIT ${JSON.stringify({tray: await drainMessageTray(), cut: cutDateMenu()})}`);
 }
 
 async function runProbe() {
@@ -3189,6 +3668,13 @@ async function runProbe() {
         backdrop = {error: `${e.message}\n${e.stack}`};
     }
     console.log(`APEXG2-BACKDROP ${JSON.stringify(backdrop)}`);
+    let defaults;
+    try {
+        defaults = (await import('./session-defaults.js')).sessionDefaultsReport({apexDock});
+    } catch (e) {
+        defaults = {error: `${e.message}\n${e.stack}`};
+    }
+    console.log(`APEXG2-SESSION ${JSON.stringify(defaults)}`);
 
     if (GLib.getenv('G2_SCENES') === '1') {
         let result;
@@ -3240,6 +3726,7 @@ async function runProbe() {
             result = await A11y.a11yReport({
                 settle, unit: cssUnit(), apexDock, findDescendant, openPopupMenu, openOsd, openBanner,
                 openModalDialog: () => openPromptDialog({avatar: true}), openEndSessionDialog: openShellEndSession, withSpotlight,
+                openMountPasswordDialog, typeInSpotlight,
             });
         } catch (e) {
             result = {error: `${e.message}\n${e.stack}`};
@@ -3286,6 +3773,17 @@ async function runProbe() {
             toggled = {error: `${e.message}\n${e.stack}`};
         }
         console.log(`APEXG2-TOGGLED ${JSON.stringify(toggled)}`);
+    }
+
+    if (GLib.getenv('G2_DOCK_LABELS') === '1') {
+        let result;
+        try {
+            const A11y = await import('./a11y.js');
+            result = await A11y.dockLabelsReport({unit: cssUnit(), apexDock});
+        } catch (e) {
+            result = {error: `${e.message}\n${e.stack}`};
+        }
+        console.log(`APEXG2-DOCK-LABELS ${JSON.stringify(result)}`);
     }
 
     if (GLib.getenv('G2_KEYS') === '1') {
@@ -3399,6 +3897,17 @@ async function runProbe() {
         console.log(`APEXG2-DOCK-EXTERNAL ${JSON.stringify(result)}`);
     }
 
+    if (GLib.getenv('G2_GLASS_VIEWS') === '1') {
+        let result;
+        try {
+            const GlassViews = await import('./glass-views.js');
+            result = await GlassViews.glassViewsReport();
+        } catch (e) {
+            result = {error: `${e.message}\n${e.stack}`};
+        }
+        console.log(`APEXG2-GLASS-VIEWS ${JSON.stringify(result)}`);
+    }
+
     if (GLib.getenv('G2_DOCK') === '1') {
         let result;
         try {
@@ -3407,6 +3916,16 @@ async function runProbe() {
             result = {error: `${e.message}\n${e.stack}`};
         }
         console.log(`APEXG2-DOCK ${JSON.stringify(result)}`);
+    }
+
+    if (GLib.getenv('G2_SCENES') === '1') {
+        let result;
+        try {
+            result = await (await import('./session-defaults.js')).surfaceIconsReport({settle, surfaces: iconSurfaces()});
+        } catch (e) {
+            result = {error: `${e.message}\n${e.stack}`};
+        }
+        console.log(`APEXG2-SESSION-SURFACES ${JSON.stringify(result)}`);
     }
 
     console.log(`APEXG2-MODES ${JSON.stringify({

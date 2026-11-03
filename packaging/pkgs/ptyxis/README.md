@@ -129,6 +129,64 @@ installed as `claude`, `just`, `cargo`, `rpmbuild`, `ssh` and `git`, prints what
 1, or rings the bell, so every status comes from the real shell integration. CI runs
 it after the lane and keeps the captures as the `ptyxis-shots` artifact.
 
+`tests/ptyxis/contrast-test.sh` checks boards 32 and 33's contrast in those captures. With
+`APEX_PTYXIS_TARGETS=1`, as CI sets it, `probe.js` runs `contrast-atspi.py` once each
+capture is taken: over AT-SPI it lists the sidebar's labels and status glyphs (in a row, the
+selected row, a group heading, the footer), the content header's labels, each pane header's,
+and each pane's terminal, the unfocused pane's marked dimmed. GTK's extents leave out each
+ancestor's padding and margin, so `contrast.py` moves each container's boxes by the one offset
+that holds the most strokes. It takes a target's ground as the colour most of its box is and its ink
+as its strongest strokes as drawn, so a translucent ink, the .62 dim or the unfocused pane's .7
+and .62 are measured as they look. Text wants 4.5:1 and a glyph 3:1 (WCAG 1.4.3, 1.4.11),
+and the footer's needs-you and running glyphs CIELAB L* 10 apart (light 42.6 and 54.9, dark
+74.8 and 54.9), so they differ in lightness and not hue alone. A shortfall is a known gap
+at today's ratio, pending the owner: a lower ratio fails, and so does one that reaches its
+threshold, so the fix also removes the pin. The unfocused pane's output passes (4.73:1 light,
+7.24:1 dark). The gaps:
+
+| Capture | Target | Today |
+|---|---|---|
+| light, split-light | the selected row's dim program and time, on its `--apex-selected` fill | 4.26:1 |
+| light, dark | the selected row's running glyph, the accent on that fill | 2.81:1, 2.70:1 |
+| light, split-light | a group's `toolbox` and `ssh` tags, dim on `--apex-btn` | 4.26:1 |
+| light, split-light | the content header's and the focused pane header's tag | 4.39:1 |
+| split-light, split-dark | the unfocused pane header's path, `--apex-dim` at .7 | 2.68:1, 3.96:1 |
+| split-light, split-dark | the unfocused pane header's tag | 2.53:1, 3.53:1 |
+
+The four scenes are taken again with `org.gnome.desktop.a11y.interface high-contrast` on
+(`hc-light`, `hc-dark`, `hc-split-light`, `hc-split-dark`), for this test alone: libadwaita
+switches (14,000 to 25,000 pixels change per capture, its borders and outlines), but
+`apex.css` keeps its own colours, so the same targets fall short there and are pinned the same
+way, as the owner's item 10b. One pair moves, in light: libadwaita's dimming of the unfocused pane's
+header greys its path and tag.
+
+| Capture | Target | Today |
+|---|---|---|
+| hc-light, hc-split-light | the selected row's dim program and time | 4.26:1 |
+| hc-light, hc-dark | the selected row's running glyph | 2.81:1, 2.70:1 |
+| hc-light, hc-split-light | a group's `toolbox` and `ssh` tags | 4.26:1 |
+| hc-light, hc-split-light | the content header's and the focused pane header's tag | 4.39:1 |
+| hc-split-light, hc-split-dark | the unfocused pane header's path | 3.07:1, 3.96:1 |
+| hc-split-light, hc-split-dark | the unfocused pane header's tag | 2.95:1, 3.53:1 |
+
+`contrast.py --selftest` measures a drawn label in the foreground and again in its row's
+fill colour, and the test fails unless its checks catch every session name in its row's
+fill. CI runs it after the captures.
+
+`tests/ptyxis/layout-test.sh` checks boards 32 and 33's layout in the same captures and in two
+more, `large` and `split-large`, taken in light with GNOME's Large Text
+(`org.gnome.desktop.interface text-scaling-factor` 1.25). `contrast-atspi.py` also records
+each label's laid-out text over AT-SPI's text extents, and which row and slot (title, subtitle,
+time) it fills. `layout.py` fails a label whose text runs to its box's right edge, as Pango's
+ellipsized text does, two labels of one row or header over each other, and a label outside the
+window. A row's subtitle may end in an ellipsis: the design cuts it (the rpmbuild row's does).
+Nothing is cut, overlapped or outside the window in any of the six. `apex.css` sizes its text in
+pt, which GTK scales with the setting, where px stays put: under Large Text the sidebar widens
+(176 px to 244 px, as libadwaita sizes it in sp) and a title's text grows from 16 px to 21 px. At
+1.0 each pt size is its old px size exactly (×0.75), and the captures are byte for byte the same.
+The test fails unless the titles grow by 1.15x, and unless its checks catch a session's title cut
+short. CI runs it after `contrast-test.sh`.
+
 `tests/ptyxis/palette-test.sh` runs the same headless shell. Its automation script,
 `palette-probe.js`, opens a terminal on a user palette with a red background, rewrites
 the file with a green one, and samples the terminal's pixels; the test fails unless the
@@ -150,3 +208,42 @@ Close Pane on the second pane's header, then the close key on the focused second
 unsplit; and the close key on the focused first pane leaves the second in its tab, the
 first's row gone. A `true` typed first, which ends within one VTE batch, must leave the
 session done. CI runs it after the palette test.
+
+## S6 (Fedora 46)
+
+Checked 2026-10-30 against rawhide, the base of apex-image's `next` lane
+(`image/fedora/46.env`, `REPOS_BASE`). Rawhide has not rebuilt Ptyxis or VTE yet:
+
+| Package | Fedora 45 | Rawhide (46) |
+|---|---|---|
+| ptyxis | 50.1-6.fc45 | 50.1-6.fc45, F45's build signed with F46's key |
+| vte291-gtk4 | 0.84.1-1.fc45 | 0.84.1-1.fc45 |
+| libadwaita | 1.10.0-2.fc45 | 1.10.0-3.fc46 |
+| gtk4, glib2 | F45's | 4.24.1-1.fc46, 2.90.1-1.fc46 |
+| gnome-shell, mutter | 51.1 | 51.1-1.fc46, 51.1-2.fc46 |
+
+- **The lane:** `tests/lib/lane.sh ptyxis` in that container (`APEX_FEDORA=46`)
+  downloads and verifies the SRPM, then stops: "stock release 6.fc45 does not end in
+  the container's %dist .fc46". apex-lane builds only a stock release of the
+  container's own Fedora, so the `next` lane builds Ptyxis once Fedora rebuilds it for
+  46 (the mass rebuild, or Ptyxis 52). Whether it should also take an inherited build is
+  apex-image's call.
+- **The series, built by hand there:** the F45 lane's Apex SRPM
+  (`ptyxis-50.1-6.fc45.apex1.src.rpm`), rebuilt with `rpmbuild --rebuild` in the same
+  container, applies its four patches at fuzz 0. `src/apex/` compiles with no warning
+  against rawhide's libadwaita, GTK and GLib; the build's one warning, an unused `self`
+  in `ptyxis-window.c` when `g_assert` compiles out, is upstream's and F45's too.
+  Fedora's `%check` passes.
+- **The tests**, on that build in that container: `status-test.sh` 18 of 18;
+  `palette-test.sh` takes the rewritten palette in 57 ms and the accent's caret in
+  52 ms (apex-session-agent 70fa599); `panes-test.sh` passes all 23 checks, its
+  dimming included.
+
+Nothing needed fixing for 46. Left for S6:
+- the first real F46 Ptyxis and VTE: re-run this, then rebase the series. Ptyxis 52's
+  `ptyxis-window.c` and `ptyxis-tab.c` are where the hunks' contexts can move;
+- apex-session reads a batch of shell marks in VTE's termprop id order
+  (`VTE_PROPERTY_ID_SHELL_PRECMD` 6, `PREEXEC` 7, `POSTEXEC` 8): a VTE that renumbers
+  them, or emits them apart, is checked by `status-test.sh` and the panes test's `true`;
+- the lane's stop on an inherited build, above, if 46 branches before Fedora rebuilds
+  Ptyxis.

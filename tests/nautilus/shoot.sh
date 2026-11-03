@@ -5,6 +5,8 @@ set -uo pipefail
 HERE=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 readonly SHOTS=$HERE/../shots
 . "$HERE/../../.github/scripts/lib.sh"
+# shellcheck source=SCRIPTDIR/../shots/backtrace.sh
+. "$SHOTS/backtrace.sh"
 
 readonly APEX_DESKTOP_URL=https://github.com/apex-linux/apex-desktop
 readonly APEX_DESKTOP_REV=c8afa2efaf597c6183932ff77cfde38a550e54f8
@@ -37,6 +39,7 @@ esac
 readonly USER_NAME=apex
 readonly SHELL_TIMEOUT=120
 readonly CLOCK_LIB=/run/apex-files-clock.so
+readonly CRASH_LIB=/run/apex-files-crash.so
 readonly FIXTURE_NAMES=(org.freedesktop.UPower org.freedesktop.NetworkManager org.bluez net.hadess.SwitcherooControl)
 readonly CLOCK='2026-10-21 10:24:00'
 readonly MONITOR=2880x1800
@@ -123,12 +126,13 @@ mkdir -p /run/dbus /etc/dbus-1 /tmp/.X11-unix && chmod 1777 /tmp/.X11-unix
 [[ -S /run/dbus/system_bus_socket ]] || dbus-daemon --system --fork || log "no system bus"
 python3 "$SHOTS/fixtures.py" "$out" >"$out/fixtures.txt" 2>&1 || log "fixtures.py: exit $?"
 gcc -O2 -Wall -Werror -shared -fPIC -o "$CLOCK_LIB" "$SHOTS/clock.c" || die "cannot build tests/shots/clock.c"
+crash_lib "$CRASH_LIB" || die "cannot build tests/shots/crash.c"
 clock_epoch=$(date -u -d "$CLOCK" +%s)
 held=$(env LD_PRELOAD="$CLOCK_LIB" G2_CLOCK_EPOCH="$clock_epoch" date -u '+%F %T' 2>&1)
 [[ $held == "$CLOCK" ]] || die "$CLOCK_LIB does not hold the clock at $CLOCK: $held"
 
 shoot() {
-    local name=$1 scheme=$2 viewer=$3 args=$4 extra=$5 query=$6 schemas=$7 press=${8:-} run rc settings
+    local crash name=$1 scheme=$2 viewer=$3 args=$4 extra=$5 query=$6 schemas=$7 press=${8:-} run rc settings
     run=$(mktemp -d)
     chown "$USER_NAME:" "$run" && chmod 700 "$run"
     rm -rf "$home/.config/dconf" "$home/.local/share/gvfs-metadata" "$home/.cache/thumbnails"
@@ -139,17 +143,20 @@ shoot() {
     runuser -u "$USER_NAME" -- env -i HOME="$home" PATH="/usr/bin:/usr/sbin" XDG_RUNTIME_DIR="$run" \
         LANG=C.UTF-8 TZ=UTC APEX_SHOTS="$out" APEX_SHOT="$name" APEX_FILES_ARGS="$args" APEX_A11Y="$HERE/a11y.py" \
         APEX_FILES_SEARCH="$query" APEX_A11Y_PRESS="$press" ${schemas:+GSETTINGS_SCHEMA_DIR="$schemas"} \
-        CLOCK_LIB="$CLOCK_LIB" G2_CLOCK_EPOCH="$clock_epoch" GTK_A11Y=atspi \
+        CLOCK_LIB="$CLOCK_LIB" CRASH_LIB="$CRASH_LIB" G2_CLOCK_EPOCH="$clock_epoch" GTK_A11Y=atspi \
         DBUS_SYSTEM_BUS_ADDRESS=unix:path=/run/dbus/system_bus_socket SETTINGS="$settings" \
         timeout "$SHELL_TIMEOUT" dbus-run-session -- bash -c '
             while read -r schema key value; do
                 gsettings set "$schema" "$key" "$value" || exit 1
             done <<<"$SETTINGS"
-            exec env LD_PRELOAD="$CLOCK_LIB" gnome-shell --headless --virtual-monitor '"$MONITOR"' --wayland-display=apex-files \
-                --automation-script '"$HERE"'/probe.js
+            ulimit -c unlimited 2>/dev/null
+            exec env LD_PRELOAD="$CLOCK_LIB $CRASH_LIB" gnome-shell --headless --virtual-monitor '"$MONITOR"' \
+                --wayland-display=apex-files --automation-script '"$HERE"'/probe.js
         ' >"$out/$name.log" 2>&1
     rc=$?
+    case_backtrace "$out/$name.log" "$rc" "$home" "$out/$name.bt"
     log "shoot.sh: $name: exit $rc"
+    if crash=$(shell_crash "$out/$name.log" "$rc"); then log "shoot.sh: $name: $crash"; return 1; fi
     grep -q '^.*APEXFILES ' "$out/$name.log" && [[ -s $out/$name.png ]]
 }
 

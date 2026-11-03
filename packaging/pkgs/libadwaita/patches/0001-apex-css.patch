@@ -12,14 +12,16 @@ radius.
 The style manager of a display that loads the Adwaita stylesheet now
 also loads apex.css at GTK_STYLE_PROVIDER_PRIORITY_USER + 1 and reloads
 it when the file is created, replaced or removed, through a monitor on
-its directory. Without the file there is no provider and no warning;
-with GTK_THEME set or Granite present nothing changes.
+its directory. A monitor on the config directory re-arms that one when
+gtk-4.0/ is created or removed, so an app started before the first
+apex.css follows it too. Without the file there is no provider and no
+warning; with GTK_THEME set or Granite present nothing changes.
 ---
- src/adw-style-manager.c | 59 +++++++++++++++++++++++++++++++++++++++++
- 1 file changed, 59 insertions(+)
+ src/adw-style-manager.c | 79 +++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 79 insertions(+)
 
 diff --git a/src/adw-style-manager.c b/src/adw-style-manager.c
-index daa4e8b..6e6cdd0 100644
+index daa4e8b..acea496 100644
 --- a/src/adw-style-manager.c
 +++ b/src/adw-style-manager.c
 @@ -58,6 +58,8 @@
@@ -31,17 +33,18 @@ index daa4e8b..6e6cdd0 100644
  struct _AdwStyleManager
  {
    GObject parent_instance;
-@@ -76,6 +78,9 @@ struct _AdwStyleManager
+@@ -76,6 +78,10 @@ struct _AdwStyleManager
  
    GtkCssProvider *animations_provider;
    guint animation_timeout_id;
 +
 +  GtkCssProvider *apex_provider;
 +  GFileMonitor *apex_monitor;
++  GFileMonitor *apex_config_monitor;
  };
  
  G_DEFINE_FINAL_TYPE (AdwStyleManager, adw_style_manager, G_TYPE_OBJECT);
-@@ -441,6 +446,56 @@ notify_high_contrast_cb (AdwStyleManager *self)
+@@ -441,6 +447,74 @@ notify_high_contrast_cb (AdwStyleManager *self)
    g_object_notify_by_pspec (G_OBJECT (self), props[PROP_HIGH_CONTRAST]);
  }
  
@@ -68,6 +71,8 @@ index daa4e8b..6e6cdd0 100644
 +  gtk_css_provider_load_from_path (self->apex_provider, path);
 +}
 +
++static void watch_apex_dir (AdwStyleManager *self);
++
 +static void
 +apex_css_changed_cb (AdwStyleManager   *self,
 +                     GFile             *file,
@@ -77,17 +82,21 @@ index daa4e8b..6e6cdd0 100644
 +  g_autofree char *name = g_file_get_basename (file);
 +  g_autofree char *other_name = other_file ? g_file_get_basename (other_file) : NULL;
 +
-+  if (event != G_FILE_MONITOR_EVENT_CHANGED &&
-+      (!g_strcmp0 (name, "apex.css") || !g_strcmp0 (other_name, "apex.css")))
++  if (event == G_FILE_MONITOR_EVENT_CHANGED)
++    return;
++  if (!g_strcmp0 (name, "gtk-4.0") || !g_strcmp0 (other_name, "gtk-4.0"))
++    watch_apex_dir (self);
++  else if (!g_strcmp0 (name, "apex.css") || !g_strcmp0 (other_name, "apex.css"))
 +    load_apex_css (self);
 +}
 +
 +static void
-+watch_apex_css (AdwStyleManager *self)
++watch_apex_dir (AdwStyleManager *self)
 +{
 +  g_autoptr (GFile) file = g_file_new_build_filename (g_get_user_config_dir (), APEX_CSS, NULL);
 +  g_autoptr (GFile) dir = g_file_get_parent (file);
 +
++  g_clear_object (&self->apex_monitor);
 +  self->apex_monitor = g_file_monitor_directory (dir, G_FILE_MONITOR_WATCH_MOVES, NULL, NULL);
 +  if (self->apex_monitor)
 +    g_signal_connect_object (self->apex_monitor, "changed",
@@ -95,10 +104,22 @@ index daa4e8b..6e6cdd0 100644
 +  load_apex_css (self);
 +}
 +
++static void
++watch_apex_css (AdwStyleManager *self)
++{
++  g_autoptr (GFile) config = g_file_new_for_path (g_get_user_config_dir ());
++
++  self->apex_config_monitor = g_file_monitor_directory (config, G_FILE_MONITOR_WATCH_MOVES, NULL, NULL);
++  if (self->apex_config_monitor)
++    g_signal_connect_object (self->apex_config_monitor, "changed",
++                             G_CALLBACK (apex_css_changed_cb), self, G_CONNECT_SWAPPED);
++  watch_apex_dir (self);
++}
++
  static void
  adw_style_manager_constructed (GObject *object)
  {
-@@ -470,6 +525,8 @@ adw_style_manager_constructed (GObject *object)
+@@ -470,6 +544,8 @@ adw_style_manager_constructed (GObject *object)
        gtk_style_context_add_provider_for_display (self->display,
                                                    GTK_STYLE_PROVIDER (self->fonts_provider),
                                                    GTK_STYLE_PROVIDER_PRIORITY_THEME);
@@ -107,10 +128,11 @@ index daa4e8b..6e6cdd0 100644
      }
  
      self->animations_provider = gtk_css_provider_new ();
-@@ -546,6 +603,8 @@ adw_style_manager_dispose (GObject *object)
+@@ -546,6 +622,9 @@ adw_style_manager_dispose (GObject *object)
    g_clear_object (&self->animations_provider);
    g_clear_object (&self->accent_provider);
    g_clear_object (&self->fonts_provider);
++  g_clear_object (&self->apex_config_monitor);
 +  g_clear_object (&self->apex_monitor);
 +  g_clear_object (&self->apex_provider);
    g_clear_pointer (&self->document_font_name, g_free);

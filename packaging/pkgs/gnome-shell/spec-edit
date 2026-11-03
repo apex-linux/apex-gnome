@@ -28,10 +28,10 @@ end
 # With no CSS left meson runs sassc on all three sheets; keep pkg.env's prep_* in step.
 after ^%autosetup[[:space:]]
 	# Apex: the layer, the SCSS and the resource list (Source1, desktop/shell/ in
-	# apex-fedora). Upstream's compiled light and dark sheets become the safe-mode
-	# sheets, and the shipped high-contrast sheet goes, so sassc builds all three.
+	# apex-fedora). Upstream's three compiled sheets become the safe-mode sheets, so
+	# sassc builds all three.
 	tar -xkf %{SOURCE1}
 	mkdir data/theme/apex/stock
-	mv data/theme/gnome-shell-light.css data/theme/gnome-shell-dark.css data/theme/apex/stock/
-	rm data/theme/gnome-shell-high-contrast.css
+	mv data/theme/gnome-shell-light.css data/theme/gnome-shell-dark.css data/theme/gnome-shell-high-contrast.css \
+	    data/theme/apex/stock/
 end

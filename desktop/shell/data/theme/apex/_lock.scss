@@ -118,16 +118,39 @@
   .apex-lock-hint-failed .apex-lock-hint, .apex-lock-hint-failed .apex-lock-hint-glyph { color: $apex_lock_fg; }
 }
 
-.apex-lock-overlay { background-color: $apex_lock_overlay; }
+// Board 20's wrong password rings the field (lock/error.js), the border its outer pixel; upstream's ring is !important.
+.unlock-dialog.apex-lock.apex-lock-error .login-dialog-prompt-entry {
+  &, &:focus {
+    border-color: $apex_lock_error_ring;
+    box-shadow: inset 0 0 0 ($apex_entry_focus_ring - $apex_surface_border) $apex_lock_error_ring !important;
+  }
+}
+
+.apex-lock-overlay { background-color: $apex_lock_scrim; }
+
+.apex-lock-background {
+  -apex-lock-blur: $apex_lock_blur;
+  -apex-lock-saturation: $apex_lock_saturation / 100%;
+}
 
 .apex-lock-stage { spacing: $apex_lock_stage_gap; }
+
+// GNOME 51.1 gives the prompt a fixed 550px and margins round the field and message, which push the hint below
+// the stage; the lock and greeter keep board 20's and 12's spacing. On 51.0 these are upstream's values already.
+.unlock-dialog.apex-lock,
+.login-dialog {
+  .login-dialog-input-well { margin: 0; }
+  .login-dialog-message { margin-top: 0; }
+}
+
+.unlock-dialog.apex-lock .login-dialog-prompt-layout { height: auto; }
 
 .unlock-dialog-clock.apex-lock-clock {
   margin-top: $apex_lock_clock_top;
   spacing: $apex_lock_clock_gap;
 
   .unlock-dialog-clock-date {
-    color: rgba($apex_lock_fg, .92);
+    color: $apex_lock_date_fg;
     font-size: apex-text-size($apex_font_lock_date_size);
     font-weight: $apex_font_lock_date_weight;
   }
@@ -170,7 +193,15 @@
 
       &:first-child { border-top-width: 0; border-radius: $apex_radius_lock_list $apex_radius_lock_list 0 0; }
       &:last-child { border-radius: 0 0 $apex_radius_lock_list $apex_radius_lock_list; }
-      &:hover, &:focus { background-color: $apex_lock_list_separator; }
+      // Board 12's rows keep 4.5:1: a pointed row is hovered, selected and focused (loginDialog.js), so upstream's
+      // compound states take the hover fill too. St paints the inset ring only over a background.
+      &:selected, &:focus {
+        background-color: $apex_lock_list_focus;
+        box-shadow: inset 0 0 0 $apex_entry_focus_ring $apex_lock_fg !important;
+      }
+      &:hover, &:selected:hover, &:focus:hover, &:active, &:active:hover, &:active:focus {
+        background-color: $apex_lock_list_hover;
+      }
 
       .user-widget.horizontal { spacing: $apex_lock_prompt_gap; }
 
@@ -183,8 +214,11 @@
         icon-size: $apex_lock_list_avatar_size;
         border: $apex_surface_border solid $apex_lock_avatar_border;
         border-radius: $apex_lock_list_avatar_size / 2;
-        background-color: $apex_lock_glass_strong;
+        // An outline only: upstream's default glyph holds 3:1 on the row, not on a lighter circle.
+        background-color: transparent;
       }
+      &:logged-in .user-icon { border-width: 2 * $apex_surface_border; }
+      &:logged-in .user-icon StIcon { background-color: transparent; }
     }
   }
 }

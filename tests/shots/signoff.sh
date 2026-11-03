@@ -89,8 +89,9 @@ readonly BOARDS="12|greeter|GDM greeter|$SHOOT|greeter-light-list|greeter-dark-l
 18|settings-updates-updates|Settings: Software Updates|$CONTROL_CENTER|updates-light|updates-dark|System > Software Updates with an update staged and ready (update1.py ready)
 23|settings-appearance-appearance|Settings: Appearance|$CONTROL_CENTER|appearance-light|appearance-dark|Appearance on gnome-backgrounds' Amber wallpaper
 24|settings-power-power|Settings: Power|$CONTROL_CENTER|power-light|power-dark|Power with an NVIDIA card under umockdev: the Graphics and Display group
-26|update-health-health-failure|Update health failure|$CONTROL_CENTER|updates-health-failure||Software Updates after an update whose health check failed (update1.py health-failure)
-26|update-health-fallback|Update health failure|$CONTROL_CENTER|updates-fallback||Software Updates booted back into the previous version (update1.py fallback)
+26|update-health-health-failure|Update health failure|$CONTROL_CENTER|updates-health-failure|updates-health-failure-dark|Software Updates after an update whose health check failed (update1.py health-failure)
+26|update-health-fallback|Update health failure|$CONTROL_CENTER|updates-fallback|updates-fallback-dark|Software Updates booted back into the previous version (update1.py fallback)
+26|update-health-fallback-changes|Update health failure|$CONTROL_CENTER|updates-fallback-changes||the set-aside version's changes from Show Changes, in board 18's grid (update1.py fallback)
 27|files-home-home|Files: Home|$NAUTILUS|home-light|home-dark|the home folder of home.py in the icon view
 28|files-list-documents|Files: list and details|$NAUTILUS|documents-light|documents-dark|Documents in the list view, the spec selected, details on
 29|files-search-search|Files: search|$NAUTILUS|search-light|search-dark|a search for \"apex\" from the home folder, in the list view
@@ -134,7 +135,7 @@ banners_of() {
 
 collect() {
     local g2=$1 shots=$2 out=$3 number slug title source light dark fixture variant scene from missing=() boards=()
-    local commit features dock banners banner live app label
+    local commit features dock banners banner live app label defaults wrong
     local -A dirs=([$G2]=$g2/captures [$SHOOT]=$shots)
     shift 3
     for app in "$@"; do
@@ -184,13 +185,30 @@ collect() {
         { cat "$g2/$variant.log" "$g2/$variant.late.log" 2>/dev/null || :; } | sed -n 's/.*APEXG2-SIGNOFF //p' |
             jq -se 'any(.previews == true)' >/dev/null ||
             missing+=("boards 15 and 35, $variant: the sign-off windows never all showed in the overview")
+        { cat "$g2/$variant.log" "$g2/$variant.late.log" 2>/dev/null || :; } | sed -n 's/.*APEXG2-SIGNOFF //p' |
+            jq -se 'any(.altTabShown == true)' >/dev/null ||
+            missing+=("board 15, $variant: the Alt+Tab switcher never showed")
+        { cat "$g2/$variant.log" "$g2/$variant.late.log" 2>/dev/null || :; } | sed -n 's/.*APEXG2-SIGNOFF //p' |
+            jq -se 'any(.altTabUnfocused == true)' >/dev/null ||
+            missing+=("board 15, $variant: the focused window never drew itself unfocused under the switcher")
         scene=$(sed -n 's/.*APEXG2-SIGNOFF //p' "$g2/$variant.log" 2>/dev/null | jq -r '.error // empty' 2>/dev/null | head -n 1)
         [[ -z $scene ]] || missing+=("boards 15 and 35, $variant: $scene")
     done
+    # S1b's session defaults on the same shells, a check of its own beside the boards: G2's session_defaults.
+    defaults=$(for variant in default dark-style; do
+        # shellcheck disable=SC2016 # expanded by the inner bash
+        bash -c '. "$1/assert.sh"; session_defaults "$2" "$3"' _ "$HERE" "$variant" "$g2/$variant.log"
+    done
+    # shellcheck disable=SC2016 # expanded by the inner bash
+    bash -c '. "$1/assert.sh"; shell_icons shell "$2"' _ "$HERE" "$shots")
+    wrong=$(sed -n 's/^FAIL //p' <<<"$defaults")
+    echo "signoff.sh: session defaults: $(grep -c '^PASS' <<<"$defaults") passed, $(grep -c '^FAIL' <<<"$defaults") failed"
+    [[ -z $wrong ]] || printf 'signoff.sh: session defaults: %s\n' "$wrong" >&2
     if ((${#missing[@]})); then
         printf 'signoff.sh: %s\n' "${missing[@]}" >&2
         die "${#missing[@]} scene(s) did not open as their boards need"
     fi
+    [[ -z $wrong ]] || die "$(grep -c . <<<"$wrong") session default check(s) failed: the shells did not start with apex-desktop's fonts and icons"
     commit=$(git -c safe.directory='*' -C "$REPO" rev-parse HEAD 2>/dev/null || echo "${GITHUB_SHA:-unknown}")
     features=$(sed -n 's/.*Apex: feature \([a-z-]*\) enabled.*/\1/p' "$g2/default.log" 2>/dev/null | sort -u | jq -Rsc 'split("\n") | map(select(. != ""))')
     dock=$({ cat "$g2/default.log" "$g2/default.late.log" 2>/dev/null || :; } | sed -n 's/.*APEXG2[A-Z-]* \({.*\)/\1/p' |

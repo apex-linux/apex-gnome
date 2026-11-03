@@ -6,10 +6,11 @@
 import * as Hooks from '../hooks.js';
 
 import * as Details from './details.js';
+import * as ErrorState from './error.js';
 import * as Fingerprint from './fingerprint.js';
 import * as Header from './header.js';
 
-const PARTS = [Header, Fingerprint, Details];
+const PARTS = [Header, Fingerprint, Details, ErrorState];
 
 let _enabled = false;
 
