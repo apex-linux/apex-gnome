@@ -53,7 +53,8 @@ readonly SOLID_BACKDROP='#013b88'
 readonly A11Y_TEXT_RATIO=4.5
 readonly A11Y_ICON_RATIO=3
 readonly A11Y_ACCENTS=(blue teal green yellow orange red pink purple slate)
-readonly A11Y_SURFACES=(bar barUnread dock popupMenu osd banner quickSettings "${A11Y_ACCENTS[@]/#/quickSettingsAccents.}" wifiMenu wifiMenuConnected dateMenu
+readonly A11Y_DOCK_LABELS=(dockLabels.first dockLabels.middle dockLabels.last dockLabelsBusy.first dockLabelsBusy.middle dockLabelsBusy.last)
+readonly A11Y_SURFACES=(bar barUnread dock "${A11Y_DOCK_LABELS[@]}" popupMenu osd banner quickSettings "${A11Y_ACCENTS[@]/#/quickSettingsAccents.}" wifiMenu wifiMenuConnected dateMenu
     "${A11Y_ACCENTS[@]/#/dateMenuAccents.}" switcher inputSourceSwitcher ctrlAltTabSwitcher monitorSwitcher dialog "${A11Y_ACCENTS[@]/#/dialogAccents.}"
     checkBoxDialog "${A11Y_ACCENTS[@]/#/checkBoxDialogAccents.}" endSession screenshot
     spotlight.popup spotlight.toast overview appGrid barPills.indicatorMenu)
@@ -2086,6 +2087,34 @@ focus_rings() {
     done
 }
 
+# The dock's name labels a hover shows: each whole on the monitor and above the dock, over the case's
+# backdrop and the busy wallpaper; key focus shows one too.
+dock_labels() {
+    local label=$1 report=$2 path
+    for path in "${A11Y_DOCK_LABELS[@]}"; do
+        expect "$label accessibility" "$report" ".monitor as \$m | .${path%.*} as \$d | \$d.${path#*.} as \$l | (\$d.error // \$l.error) == null
+            and \$l.box.x >= \$m.x and \$l.box.x + \$l.box.width <= \$m.x + \$m.width and \$l.box.y >= \$m.y
+            and \$l.box.y + \$l.box.height <= \$d.dock.y" "$path: a hover shows the name label, whole on the monitor and above the dock"
+    done
+    expect "$label accessibility" "$report" '.dockLabels.keyFocus | .hidden and .focused and .shown' \
+        "with every label down, key focus on the dock's first item shows its name label, as a hover does"
+}
+
+# A case that measures the dock's labels alone, at its own scale: their text and their place.
+dock_labels_case() {
+    local label=$1 log=$2 report error s
+    report=$(report_of "$log" APEXG2-DOCK-LABELS)
+    error=$(jq -r '.error // empty' <<<"$report" 2>/dev/null)
+    if [[ -z $report || -n $error ]]; then
+        fail "$label accessibility: dock labels (${error:-no APEXG2-DOCK-LABELS report})"
+        return
+    fi
+    for s in "${A11Y_DOCK_LABELS[@]}"; do
+        a11y_verdict "$label accessibility: $s: text $A11Y_TEXT_RATIO:1 against what is drawn behind it" "$(a11y_low_contrast "$report" "$s")"
+    done
+    dock_labels "$label" "$report"
+}
+
 # The text below 4.5:1 and the glyphs and dots below 3:1 in a report's surface at path; with gapdot
 # true, the inactive workspace dots are left to inactive_dot.
 a11y_low_contrast() {
@@ -2113,6 +2142,7 @@ a11y_contrast() {
     done
     bar_pills "$label" "$report"
     focus_rings "$label" "$report"
+    dock_labels "$label" "$report"
     expect "$label accessibility" "$report" '.wifiMenuConnected.targets | any(.kind == "text" and (.inactive | not))' \
         "the connected network's name is measured over its row's own fill"
     expect "$label accessibility" "$report" '(.bar.targets | map(select(.kind == "dot" and .name == "workspace-dot")) | length >= 2)
@@ -2140,6 +2170,7 @@ a11y_layout() {
     local label=$1 log=$2 report s problems
     report=$(report_of "$log" APEXG2-A11Y)
     expect "$label accessibility" "$report" '.textScalingFactor == 1.25' "text-scaling-factor is 1.25"
+    dock_labels "$label" "$report"
     for s in "${A11Y_SURFACES[@]}"; do
         problems=$(jq -r --arg path "$s" \
             ".monitor as \$m | ([$A11Y_SURFACE] | add // []) as \$e | if (\$e | length) > 0 then \$e else (getpath(\$path | split(\".\")) | $A11Y_LAYOUT) end | join(\"; \")" \
@@ -2429,6 +2460,7 @@ direct_cases() {
     top_bar default-scale1 "$f" light
     top_bar_today default-scale1 "$f" light
     dock_metrics default-scale1 "$f" light
+    dock_labels_case default-scale1 "$f"
     shell_surfaces default-scale1 "$f" light
     quick_settings default-scale1 "$f" light
     quick_settings_layer default-scale1 "$f" apex
@@ -2702,6 +2734,7 @@ dock_external_case() {
     echo "# dock-external: 0014-blurcost.py's ms per scrim re-blur, per monitor against stage-wide (report only):" \
         "both at scale 2 ${cost%%;*}; mixed ${cost#*;}"
     expect dock-external "$r" '.steps.mixedOnExternal.desktopGlass.scrims | length == 2 and all(.enabled == false)' "and the hidden scrims stop blurring"
+    dock_edge_labels "$r"
     expect dock-external "$r" '.steps.mixed | .changed and .primary == 0 and (.window.monitor == .primary) == .dockHidden and
         (.window.monitor == .primary) == .barSolid' \
         "with the panel the primary again, the dock and the bar follow it, and its maximised window hides the dock and turns the bar solid"
@@ -2710,7 +2743,23 @@ dock_external_case() {
         (.glass.dock | blurs(\$t.apex_dock_blur; 2)) and (.glass.bar | .resourceScale == 2 and .radius == 2 * (\$t.apex_bar_blur | px) * 2)"
 }
 
+# Show Apps' name label at a primary's edge that meets the other monitor: shown, and kept to its
+# own monitor, where upstream's dash clamps it to the stage alone.
+dock_edge_labels() {
+    local r=$1 step side
+    for step in mixedOnExternal:left mixed:right; do
+        side=${step#*:}
+        expect dock-external "$r" ".steps.${step%:*}.edgeLabel | .label.width > .item.width and
+            if \"$side\" == \"left\" then .item.x == .monitor.x else .item.x + .item.width == .monitor.x + .monitor.width end" \
+            "Show Apps, its name wider than its icon, stands at the primary's $side edge"
+        expect dock-external "$r" ".steps.${step%:*}.edgeLabel | .shown and .label.x >= .monitor.x
+            and .label.x + .label.width <= .monitor.x + .monitor.width" \
+            "with Show Apps at the primary's $side edge, a hover shows its name label inside the primary, not over the monitor beside it"
+    done
+}
+
 # The keys case: each binding as registered, then pressed through a virtual keyboard.
+# shellcheck disable=SC2016 # jq programs, not shell expansions
 keys_case() {
     local run=$1 f=$1/keys.log r error input backward
     exits "$run" keys 0
@@ -2743,6 +2792,17 @@ keys_case() {
         "Super+Alt+Space switches to the next input source, and Shift+Super+Alt+Space back"
     expect keys "$r" '.pressed.ctrlAltTab | ([.groups[] | select(.dock)] | length == 1) and .dockFocused' \
         "Ctrl+Alt+Tab lists the dock among its groups, and the keyboard focus reaches it"
+    expect keys "$r" '.pressed.ctrlAltTab | .focus != null and .labels == [.focus]' \
+        "and the focused item's name label shows, alone"
+    expect keys "$r" '.pressed.ctrlAltTab.focus as $first | .pressed.dockRight | .focus != null and .focus != $first and .labels == [.focus]' \
+        "Right moves the focus to the next item, and its label goes with it"
+    expect keys "$r" '.pressed.dockEscape | .focus == null and .labels == []' "Escape takes the focus out of the dock, and the label goes"
+    expect keys "$r" '.pressed.ctrlAltTab.focus as $first | .pressed.dockHover | .focused == [$first] and .hovered == [.hoveredName]
+        and .left == [$first]' \
+        "with the first item focused, a hover on the third shows the third's label alone, then the first's once the pointer leaves"
+    expect keys "$r" '.pressed.ctrlAltTab.focus as $first | .pressed.dockHover | .onFocused == [$first] and .offFocused == [$first]
+        and .lowestOpacity == 255' \
+        "and a hover on the focused item, then off it, leaves its label up, never fading it in again"
     expect keys "$r" '.pressed.superTap == {overview: true, apps: false}' "a Super tap opens the overview, on its windows"
     expect keys "$r" '.pressed.superA == {overview: true, apps: true}' "Super+A opens the launcher, the app grid"
     expect keys "$r" '.modals == 0' "and nothing is left holding a grab"
