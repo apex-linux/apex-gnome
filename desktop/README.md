@@ -14,7 +14,7 @@ directory with `git archive` and unpacks it at the top of Fedora's gnome-shell t
 
 | Path | What it is |
 |---|---|
-| `apex.gresource.xml` | the Apex resource: `/org/gnome/shell/ui/apex` (the layer), `/org/gnome/shell/theme/apex` (the sheets' assets) and `/org/gnome/shell/theme/stock` (upstream's compiled light and dark sheets, the safe-mode sheets). Patch 0001-build compiles it and links it into libshell next to upstream's JS resource. |
+| `apex.gresource.xml` | the Apex resource: `/org/gnome/shell/ui/apex` (the layer), `/org/gnome/shell/theme/apex` (the sheets' assets) and `/org/gnome/shell/theme/stock` (upstream's three compiled sheets, the safe-mode sheets). Patch 0001-build compiles it and links it into libshell next to upstream's JS resource. |
 | `js/ui/apex/hooks.js` | the only Apex module upstream files import: `safe()`, `value()`, `run()`, and `loadLayer()` for `main.js` |
 | `js/ui/apex/layer.js` | the layer: the configure and enable phases, one `try/catch` per feature, the session-mode colour hook, the crash guard's marker file |
 | `js/ui/apex/lock/` | the lock screen of S3b (board 20), the `lock` feature: `stage.js` (the single stage: date over time over the prompt and its hint, the overlay, the prompt torn down while `org.gnome.Mutter.DisplayConfig`'s `PowerSaveMode` blanks the screen and rebuilt on wake), `background.js` (the blur, σ 30 and saturation 1.3, without upstream's darkening), `question.js` ("Enter Password" for PAM's exact `Password:` only), `fingerprint.js` (board 20's fingerprint states in the hint's line: "Or touch the fingerprint reader" with the print glyph while GDM's `gdm-fingerprint` conversation prompts, "Fingerprint not recognized. Try again." after a failed scan, upstream's message line and "Unlock with fingerprint" indicator standing aside for those states only; driven by the conversation, so it shows nothing until the image turns fingerprint on) and `avatar.js` (the name's initial in place of the generic icon), through patch 0015's hooks. Unlocking stays upstream's: no Apex code is on its path, which `tests/layer/run.sh`'s unlock guard checks. Stock keeps, until S4: the show-password eye and the chevron button; and the password's failure text on a message line above the hint, where the board puts it in the hint's place with a red ring |
@@ -461,10 +461,10 @@ Kill switches, strongest first: `apex.safe=1` on the kernel command line or
 `APEX_SHELL_SAFE=1` in the shell's environment (every session); `layer-enabled=false`
 (one user); `disabled-features` (one user, per feature). Safe mode loads no layer (only
 `hooks.js` runs, and every hook gives its stock value) and takes the stylesheets from
-`/org/gnome/shell/theme/stock/`. The high-contrast sheet has no stock copy, so safe mode
-with high contrast uses the rebuilt one, whose Apex part styles only Apex actors. G2
-checks that it is Fedora's sheet up to the structure marker, so the Apex part only appends;
-a rule that restyles upstream's actors there would need a stock high-contrast copy.
+`/org/gnome/shell/theme/stock/`: all three sheets, high contrast's included, are upstream's
+there, so safe mode restyles nothing. Outside safe mode the high-contrast sheet's Apex part
+may style upstream's actors as the light and dark sheets' do. G2 checks that the rebuilt
+sheet is Fedora's up to the structure marker, so the Apex part only appends.
 
 `tests/layer/run.sh` (`just layer-test`, and ci.yml) runs `hooks.js` and `layer.js` in
 gjs outside the shell: every kill switch, `apex.safe=1` through a bubblewrap bind over

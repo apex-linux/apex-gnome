@@ -622,6 +622,7 @@ function describeGreeter(dialog) {
         style: describeGreeterStyle(dialog),
         layout: describeGreeterLayout(dialog, items),
         avatars: items.map(avatarOf),
+        sheet: St.ThemeContext.get_for_stage(global.stage).get_theme().default_stylesheet?.get_uri() ?? null,
     };
 }
 

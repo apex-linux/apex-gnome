@@ -1053,6 +1053,32 @@ test_goldens() {
     else
         not_ok "goldens import: a later approval adds to the pinned commit, and both boards pass: $(tail -n 3 "$T/goldens.out")"
     fi
+
+    cp "$dir/moved-dark.png" "$dir/board-36-launcher-dark.png"
+    hash=$(cat "$dir/board-36-launcher-light.png" "$dir/board-36-launcher-dark.png" | sha256sum | cut -c 1-12)
+    jq -n --arg h "$hash" '{boards: {"36-launcher": {status: "approved", shots: $h, approvedAt: "2026-10-27T10:00:00Z"}}}' >"$T/decisions3.json"
+    if goldens import "$dir" "$T/decisions3.json" && grep -qx "goldens.sh: board 36-launcher replaces the same row's golden 36" "$T/goldens.out" &&
+        jq -e --arg h "$hash" '.boards | keys == ["14", "36-launcher"] and .["36-launcher"].shots == $h' "$T/goldens-work/manifest.json" >/dev/null &&
+        [[ $(git -C "$T/goldens-work" ls-files | paste -sd' ') == 'boards/board-14-dark.png boards/board-14-light.png boards/board-36-launcher-dark.png boards/board-36-launcher-light.png manifest.json' ]] &&
+        git -C "$T/goldens-work" push -q "$T/goldens-remote" HEAD:refs/heads/goldens && goldens check "$dir" &&
+        grep -q '^PASS captures board 36 (Launcher), dark: equal' "$T/goldens.out"; then
+        ok "goldens import: a row's NN-SLUG approval replaces its board's legacy NN golden and files, and the check passes"
+    else
+        not_ok "goldens import: a row's NN-SLUG approval replaces its board's legacy NN golden and files, and the check passes: $(tail -n 3 "$T/goldens.out")"
+    fi
+    cp "$T/dark.png" "$dir/board-36-launcher-dark.png"
+
+    hash=$(cat "$dir/board-36-launcher-light.png" "$dir/board-36-launcher-dark.png" | sha256sum | cut -c 1-12)
+    jq -n --arg h "$hash" '{boards: {"36": {status: "approved", shots: $h, approvedAt: "2026-10-28T10:00:00Z"}}}' >"$T/decisions4.json"
+    if goldens import "$dir" "$T/decisions4.json" && grep -qx "goldens.sh: board 36 replaces the same row's golden 36-launcher" "$T/goldens.out" &&
+        jq -e --arg h "$hash" '.boards | keys == ["14", "36"] and .["36"].shots == $h' "$T/goldens-work/manifest.json" >/dev/null &&
+        [[ $(git -C "$T/goldens-work" ls-files | paste -sd' ') == 'boards/board-14-dark.png boards/board-14-light.png boards/board-36-dark.png boards/board-36-light.png manifest.json' ]] &&
+        git -C "$T/goldens-work" push -q "$T/goldens-remote" HEAD:refs/heads/goldens && goldens check "$dir" &&
+        grep -q '^PASS captures board 36 (Launcher), dark: equal' "$T/goldens.out"; then
+        ok "goldens import: a row's legacy NN approval replaces its NN-SLUG golden and files, and the check passes"
+    else
+        not_ok "goldens import: a row's legacy NN approval replaces its NN-SLUG golden and files, and the check passes: $(tail -n 3 "$T/goldens.out")"
+    fi
 }
 
 rows_goldens() {
@@ -3232,6 +3258,59 @@ test_shutdown_banner_case() {
 CHANGES
 }
 
+# The lines that load crash.c into each shell a test starts, keep its status, and fail its case on a crash.
+STARTER_LINES=$(cat <<'LINES'
+lib/headless.sh	. "$SHOTS/backtrace.sh"
+lib/headless.sh	crash_lib "$CRASH_LIB" || die "cannot build tests/shots/crash.c"
+lib/headless.sh	SETTINGS="$APEX_SETTINGS"$'\n'"$CAPTURE_SETTINGS"$'\n'"$settings" CRASH_LIB="$CRASH_LIB" "$@" \
+lib/headless.sh	ulimit -c unlimited 2>/dev/null
+lib/headless.sh	exec env LD_PRELOAD="$CLOCK_LIB $CRASH_LIB" gnome-shell --headless --virtual-monitor "$MONITOR" \
+lib/headless.sh	' >"$log" 2>&1 || rc=$?
+lib/headless.sh	case_backtrace "$log" "$rc" "$HEADLESS_HOME" "${log%.log}.bt"
+lib/headless.sh	return "$rc"
+control-center/lib.sh	. "$SHOTS/backtrace.sh"
+control-center/lib.sh	crash_lib "$CRASH_LIB" || die "cannot build tests/shots/crash.c"
+control-center/lib.sh	CRASH_LIB="$CRASH_LIB" G2_CLOCK_EPOCH="$CLOCK_EPOCH" DBUS_SYSTEM_BUS_ADDRESS=unix:path=/run/dbus/system_bus_socket \
+control-center/lib.sh	ulimit -c unlimited 2>/dev/null
+control-center/lib.sh	exec env LD_PRELOAD="$CLOCK_LIB $CRASH_LIB" gnome-shell --headless --virtual-monitor "$MONITOR" \
+control-center/lib.sh	' >"$log" 2>&1 || rc=$?
+control-center/lib.sh	case_backtrace "$log" "$rc" "$HEADLESS_HOME" "${log%.log}.bt"
+control-center/lib.sh	return "$rc"
+nautilus/shoot.sh	. "$SHOTS/backtrace.sh"
+nautilus/shoot.sh	crash_lib "$CRASH_LIB" || die "cannot build tests/shots/crash.c"
+nautilus/shoot.sh	CLOCK_LIB="$CLOCK_LIB" CRASH_LIB="$CRASH_LIB" G2_CLOCK_EPOCH="$clock_epoch" GTK_A11Y=atspi \
+nautilus/shoot.sh	ulimit -c unlimited 2>/dev/null
+nautilus/shoot.sh	exec env LD_PRELOAD="$CLOCK_LIB $CRASH_LIB" gnome-shell --headless --virtual-monitor '"$MONITOR"' \
+nautilus/shoot.sh	rc=$?
+nautilus/shoot.sh	case_backtrace "$out/$name.log" "$rc" "$home" "$out/$name.bt"
+nautilus/shoot.sh	if crash=$(shell_crash "$out/$name.log" "$rc"); then log "shoot.sh: $name: $crash"; return 1; fi
+shell/shoot.sh	. "$SHOTS/backtrace.sh"
+shell/shoot.sh	crash_lib "$CRASH_LIB" || die "cannot build tests/shots/crash.c"
+shell/shoot.sh	CLOCK_LIB="$CLOCK_LIB" CRASH_LIB="$CRASH_LIB" G2_CLOCK_EPOCH="$clock_epoch" "$LOAD_WITNESS" "$@" \
+shell/shoot.sh	ulimit -c unlimited 2>/dev/null
+shell/shoot.sh	exec env LD_PRELOAD="$CLOCK_LIB $CRASH_LIB" gnome-shell --headless --virtual-monitor '"$MONITOR"' \
+shell/shoot.sh	rc=$?
+shell/shoot.sh	case_backtrace "$out/$name.log" "$rc" "$home" "$out/$name.bt"
+shell/shoot.sh	if crash=$(shell_crash "$out/$name.log" "$rc"); then log "shoot.sh: $name: $crash"; return 1; fi
+s7/accent-test.sh	log "accent-test.sh: $name shell exit $rc"
+s7/accent-test.sh	if crash=$(shell_crash "$out/$name.log" "$rc"); then log "accent-test.sh: $name: $crash"; return 1; fi
+s7/accent-test.sh	run_shell control || status=1
+s2c/radius-test.sh	rc=$?
+s2c/radius-test.sh	if crash=$(shell_crash "$out/s2c.log" "$rc"); then die "radius-test.sh: $crash"; fi
+libadwaita/radius-test.sh	rc=$?
+libadwaita/radius-test.sh	if crash=$(shell_crash "$out/radius.log" "$rc"); then die "radius-test.sh: $crash"; fi
+ptyxis/palette-test.sh	rc=$?
+ptyxis/palette-test.sh	if crash=$(shell_crash "$out/palette.log" "$rc"); then die "palette-test.sh: $crash"; fi
+ptyxis/panes-test.sh	rc=$?
+ptyxis/panes-test.sh	if crash=$(shell_crash "$out/panes.log" "$rc"); then die "panes-test.sh: $crash"; fi
+ptyxis/shoot.sh	log "shoot.sh: $name: exit $rc"
+ptyxis/shoot.sh	if crash=$(shell_crash "$out/$name.log" "$rc"); then log "shoot.sh: $name: $crash"; return 1; fi
+control-center/run.sh	log "run.sh: $name: exit $rc"
+control-center/run.sh	if crash=$(shell_crash "$out/$name.log" "$rc"); then log "run.sh: $name: $crash"; return 1; fi
+LINES
+)
+readonly STARTER_LINES
+
 # A shell that died on a signal leaves a backtrace, or one line saying why it has none, and its
 # exit assertion names it; a clean exit leaves nothing.
 test_case_backtrace() {
@@ -3277,6 +3356,26 @@ test_case_backtrace() {
         -e '[[ $arg == G2_EXPECT_EXIT=* ]] && expected=${arg#G2_EXPECT_EXIT=}' \
         -e 'run_and_record_case fault-abort '"''"' APEX_SHELL_TEST_FAULT=abort-after-enable PROBE_WAIT=20 G2_EXPECT_EXIT=134' \
         -e 'case_backtrace "/out/$name.log" "$rc" "$home" "/out/$name.bt" "$expected"')"
+    # Every other shell a test starts does the same, whole lines: it builds crash.c, passes and preloads it, keeps the
+    # shell's status through case_backtrace, and its caller fails the case on a crash.
+    local file count
+    while read -r file count; do
+        expect_eq "backtrace: tests/$file has its $count crash lines" "$count" \
+            "$(sed 's/^[[:space:]]*//' "$HERE/../$file" | grep -cxF -f <(sed -n "s|^$file\t||p" <<<"$STARTER_LINES"))"
+    done < <(cut -f1 <<<"$STARTER_LINES" | sort | uniq -c | awk '{ print $2, $1 }')
+    # shellcheck disable=SC2016 # expanded by the inner bash
+    expect_eq "backtrace: shell_crash names a signal exit and its .bt, and passes a clean or timed-out one" \
+        "the shell crashed (SIGSEGV); see x/a.bt|the shell crashed (SIGABRT); see x/a.bt|1 1" \
+        "$(bash -c '. "$1/backtrace.sh"; APEX_ROOT=/r; shell_crash /r/x/a.log 139; shell_crash /r/x/a.log 134
+            shell_crash /r/x/a.log 0; a=$?; shell_crash /r/x/a.log 124; echo "$a $?"' _ "$HERE" | paste -sd'|' -)"
+    # headless_run with a shell that dies on SIGSEGV returns 139 and leaves its .bt.
+    mkdir -p "$run/headless"
+    # shellcheck disable=SC2016 # expanded by the inner bash
+    got=$(bash -c 'ulimit -c 0; . "$1/../lib/headless.sh"; HEADLESS_HOME=$2
+        runuser() { bash -c "kill -SEGV \$\$"; }
+        headless_run "$2/x.log" /dev/null 5 "" 2>/dev/null; echo "$?"' _ "$HERE" "$run/headless")
+    expect_eq "backtrace: headless_run returns a crashed shell's 139 and writes its .bt" "139 1" \
+        "$got $(grep -c '^signal 11, the shell exited 139$' "$run/headless/x.bt" 2>/dev/null)"
     echo 'x exit=139 secs=4 marker-after-exit=yes' >"$run/results-pr.txt"
     mv "$run/none.bt" "$run/x.bt"
     assertion_counts exits "$run" x 0 >/dev/null
