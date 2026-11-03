@@ -37,13 +37,15 @@ LOCK_CASES = {
     "lock-light": {"apex": True, "question": "Enter Password"},
     "lock-dark": {"apex": True, "question": "Enter Password", "dark": True},
     "lock-question": {"apex": True, "question": "Verification code:"},
-    "lock-high-contrast": {"apex": True, "question": "Enter Password", "overlay_alpha": 0x8c},
+    "lock-high-contrast": {"apex": True, "question": "Enter Password", "hc": True},
     "lock-large-text": {"apex": True, "question": "Enter Password"},
     "lock-disabled": {"apex": False, "question": "Password", "layer": True},
     "lock-safe": {"apex": False, "question": "Password", "layer": False},
 }
 GREETER_CASES = ["greeter-light", "greeter-dark"]
 HC_GREETER = "greeter-high-contrast"
+STOCK_HC = "resource:///org/gnome/shell/theme/stock/gnome-shell-high-contrast.css"
+UPSTREAM_HC_AVATAR = "rgba(255, 255, 255, .3)"  # transparentize($_gdm_fg, .7)
 # dbus-daemon logs each activation: a mode that cannot screencast has no use for the service (patch 0020).
 SCREENCAST_STARTED = "Activating service name='org.gnome.Shell.Screencast'"
 # Per polkit case: board 13's dialog or upstream's, and the info line PAM sent.
@@ -159,7 +161,7 @@ def lock_scrim(dark):
     return "#" + "".join(f"{int(v):02x}" for v in (r, g, b)) + f"{min(255, int(float(a) * 256)):02x}"
 
 
-def check_layout(case, layout, overlay_alpha=None, dark=False):
+def check_layout(case, layout, hc=False, dark=False):
     screen = layout.get("screen") or {}
     parts = [(name, layout[name]) for name in LAYOUT_ORDER if name in layout]
     off = [name for name, b in parts if b["x"] < screen.get("x", 0) or b["y"] < screen.get("y", 0)
@@ -169,15 +171,16 @@ def check_layout(case, layout, overlay_alpha=None, dark=False):
           {"date", "time", "avatar", "field", "hint"} <= dict(parts).keys() and not off, json.dumps(layout))
     overlaps = [f"{a}/{b}" for (a, ba), (b, bb) in itertools.pairwise(parts) if ba["y"] + ba["height"] > bb["y"] + 1]
     check(f"{case}: top to bottom, nothing overlaps", not overlaps, ", ".join(overlaps))
-    if overlay_alpha is None and {"avatar", "field", "hint"} <= dict(parts).keys():
+    if not hc and {"avatar", "field", "hint"} <= dict(parts).keys():
         check_spacing(case, layout)
     got = layout.get("overlay") or ""
-    if overlay_alpha is None:
+    if not hc:
         want = lock_scrim(dark)
         check(f"{case}: the overlay darkens as $apex_lock_scrim's {'dark' if dark else 'light'} {want}", got == want, got)
     else:
-        check(f"{case}: high contrast darkens more, to alpha {overlay_alpha:#x}",
-              got[:7] == "#000000" and len(got) == 9 and int(got[7:], 16) >= overlay_alpha, got)
+        floor = int(lock_scrim(False)[7:], 16)
+        check(f"{case}: high contrast's black darkens at least as the light scrim, alpha {floor:#x}",
+              got[:7] == "#000000" and len(got) == 9 and int(got[7:], 16) >= floor, got)
 
 
 def check_spacing(case, layout):
@@ -209,6 +212,27 @@ def check_reveal(case, reveal):
           abs(icon["y"] + icon["height"] / 2 - centre) <= 1, json.dumps(reveal))
 
 
+def check_error_ring(case, opened, wrong, wake, dark):
+    """Board 20's wrong password rings the field in $apex_lock_error_ring; high contrast's in its own white."""
+    want = "#ffffffff" if case == "lock-high-contrast" else f"{lock_error_ring(dark)}ff"
+    check(f"{case}: no error ring before the wrong answer", not opened.get("errorRing"), json.dumps([opened.get("errorRing"), opened.get("ring")]))
+    r = wrong.get("ring") or {}
+    check(f"{case}: the wrong answer rings the field: 2 px inset, {want}, the border its outer pixel",
+          wrong.get("errorRing") is True and (r.get("inset"), r.get("color")) == (True, want)
+          and r.get("spread", 0) + r.get("border", 0) == 2,
+          json.dumps([wrong.get("errorRing"), r]))
+    # A border of its own colour between the ring and the scrim drops board 20's ring under 3:1 on #013b88.
+    check(f"{case}: no other border beside the ring", r.get("border", 0) == 0 or r.get("borderColor") == want,
+          json.dumps(r))
+    check(f"{case}: the prompt rebuilt after blank has no ring", not wake.get("errorRing"), json.dumps([wake.get("errorRing"), wake.get("ring")]))
+
+
+def lock_error_ring(dark):
+    with open(TOKENS, encoding="utf-8") as f:
+        m = re.search(r"^\$apex_lock_error_ring: if\(\$variant == 'light', (#[0-9a-f]{6}), (#[0-9a-f]{6})\);", f.read(), re.M)
+    return m.group(2 if dark else 1) if m else None
+
+
 def check_lock(shots, case, want):
     log = read(shots, f"{case}.log")
     gdm = read(shots, f"{case}.gdm.log")
@@ -238,6 +262,8 @@ def check_lock(shots, case, want):
           json.dumps(wrong["prompt"]))
     check(f"{case}: the question", (wrong["prompt"] or {}).get("question") == want["question"],
           json.dumps(wrong["prompt"]))
+    if not want["apex"]:
+        check(f"{case}: upstream's lock takes no Apex error ring", not wrong.get("errorRing"), json.dumps(wrong.get("errorRing")))
     if want["apex"]:
         check(f"{case}: one stage", "apex-lock" in opened["classes"].split())
         check(f"{case}: sigma 30, saturation 1.3, no darkening", opened["blur"] == APEX_BLUR, str(opened["blur"]))
@@ -247,9 +273,10 @@ def check_lock(shots, case, want):
         check(f"{case}: the initial-letter avatar", (opened["prompt"] or {}).get("avatar") == "initial A",
               json.dumps(opened["prompt"]))
         check(f"{case}: the user's name", (opened["prompt"] or {}).get("name") == "Apex")
-        check_layout(case, opened.get("layout") or {}, want.get("overlay_alpha"), want.get("dark", False))
+        check_layout(case, opened.get("layout") or {}, want.get("hc", False), want.get("dark", False))
         if want["question"] == "Enter Password":
             check_reveal(case, (opened.get("layout") or {}).get("reveal"))
+        check_error_ring(case, opened, wrong, f["wake"], want.get("dark", False))
         check(f"{case}: blanking takes the prompt down", blank["prompt"] is None, json.dumps(blank["prompt"]))
         if answered:
             check(f"{case}: and cancels its conversation", "Cancel" in calls[answered[0]])
@@ -456,6 +483,17 @@ def check_suspend(shots, case):
           (log.count(torn), log.count(rebuilt)) == (1, 1) and log.index(torn) < log.index(rebuilt))
 
 
+def check_greeter_safe_high_contrast(shots, case):
+    """Safe mode with high contrast takes upstream's sheet from theme/stock/: the Apex part restyles no greeter actor."""
+    listed = facts(read(shots, f"{case}.log")).get("list") or {}
+    check(f"{case}: the greeter loads upstream's high-contrast sheet from theme/stock/",
+          listed.get("sheet") == STOCK_HC, str(listed.get("sheet")))
+    avatars = listed.get("avatars") or []
+    check(f"{case}: the list's avatars are upstream's: a .3 fill and a 2 px clear border", len(avatars) == 2 and all(
+        same_colour(a["background"], UPSTREAM_HC_AVATAR) and a["border"] == 2 and a["borderColor"][7:] == "00"
+        for a in avatars), json.dumps(avatars))
+
+
 def check_greeter(shots, case):
     log = read(shots, f"{case}.log")
     f = facts(log)
@@ -472,6 +510,11 @@ def check_greeter(shots, case):
     check(f"{case}: upstream's question", prompt.get("question") == "Password", json.dumps(prompt))
     check(f"{case}: upstream's avatar icon", prompt.get("avatar") == "avatar-default-symbolic", json.dumps(prompt))
     check_greeter_style(case, f["list"].get("style") or {}, tokens())
+    hover = f.get("list-hover") or {}
+    want = tokens()["apex_lock_list_hover"]
+    check(f"{case}: a pointed row is selected and focused, as upstream makes it, and takes {want}",
+          (hover.get("selected"), hover.get("focused")) == (True, True) and same_colour(hover.get("background", "#0"), want),
+          json.dumps(hover))
     check_back_button(case, (f["prompt"].get("style") or {}).get("back"), tokens())
     check_greeter_spacing(case, f["list"].get("layout") or {},
                           {**(f["prompt"].get("layout") or {}), "back": (f["prompt"].get("style") or {}).get("back")}, tokens())
@@ -842,14 +885,17 @@ def check_greeter_avatars(shots, case, hc):
     """Board 12's avatars are outlines: a fill under the glyph drops it under 3:1, and under HC's 4.5:1."""
     f = facts(read(shots, f"{case}.log"))
     avatars = (f.get("list") or {}).get("avatars") or []
-    check(f"{case}: every list avatar is unfilled", len(avatars) == 2 and all(a["background"][7:] == "00" for a in avatars),
+    check(f"{case}: every list avatar is unfilled, its glyph too", len(avatars) == 2 and
+          all(a["background"][7:] == "00" and (a.get("glyphFill") or "#00000000")[7:] == "00" for a in avatars),
+          json.dumps(avatars))
+    check(f"{case}: a logged-in user's ring keeps upstream's 2 px", all(a["border"] == 2 for a in avatars if a.get("loggedIn")),
           json.dumps(avatars))
     if not hc:
         return
-    # The glyph's square box crosses its own ring, so the row is read where the stage draws it under the row's name.
-    targets = [t for t in (f.get("contrast-list") or {}).get("targets", []) if not t["offscreen"]]
-    rows = [t["backdrop"] for t in targets if t["styleClass"] == "user-widget-label"]
-    glyphs = [wcag_ratio(t["ink"], row) for t, row in zip([t for t in targets if t["styleClass"] == "user-icon"], rows)]
+    targets = (f.get("contrast-list") or {}).get("targets", [])
+    icons = [t for t in targets if t["styleClass"] == "user-icon" and not t["offscreen"]]
+    glyphs = [t["ratio"] for t in icons]
+    rows = [t["backdrop"] for t in icons]
     check(f"{case}: each avatar is a 1px outline in the glyph's colour, HC's fg",
           avatars and all(a["border"] == 1 and a["borderColor"] == a["fg"] == "#ffffffff" for a in avatars), json.dumps(avatars))
     check(f"{case}: each avatar glyph at {TEXT_RATIO}:1 on its row", len(glyphs) == 2 and min(glyphs) >= TEXT_RATIO,
@@ -859,11 +905,21 @@ def check_greeter_avatars(shots, case, hc):
           json.dumps(outline))
 
 
+def unboxed(t):
+    return any(v is None for v in (t.get("box") or {"x": None}).values())
+
+
 def low_contrast(report):
     """G2's rule (assert.sh A11Y_LOW_CONTRAST): text under 4.5:1, glyphs under 3:1, against what the stage drew."""
-    return [f"{t['kind']} {json.dumps(t['name'])} {t['ink']} at {t['alpha']} on {t['backdrop']}: {t['ratio']}"
-            for t in report.get("targets", []) if not t["inactive"] and not t["offscreen"]
-            and t["ratio"] < (TEXT_RATIO if t["kind"] == "text" else ICON_RATIO)]
+    targets = report.get("targets", [])
+    return [f"{t['kind']} {json.dumps(t['name'])}: no box" for t in targets if unboxed(t)] + [
+        f"{t['kind']} {json.dumps(t['name'])} {t['ink']} at {t['alpha']} on {t['backdrop']}: {t['ratio']}"
+        for t in targets if not unboxed(t) and not t["inactive"] and not t["offscreen"]
+        and t["ratio"] < (TEXT_RATIO if t["kind"] == "text" else ICON_RATIO)]
+
+
+def measured_targets(report):
+    return [t for t in report.get("targets", []) if not unboxed(t) and not t["offscreen"] and t["ratio"] is not None]
 
 
 def check_contrast(shots, case, surface):
@@ -873,7 +929,7 @@ def check_contrast(shots, case, surface):
     check(f"{case}: contrast measured at {', '.join(steps)}", all(k in f and "targets" in f[k] for k in steps),
           json.dumps({k: f.get(k, {}).get("error") for k in steps}))
     low = {step: low_contrast(f[step]) for step in steps if "targets" in f.get(step, {})}
-    measured = sum(len(f[step]["targets"]) for step in low)
+    measured = sum(len(measured_targets(f[step])) for step in low)
     failing = {step: lines for step, lines in low.items() if lines}
     check(f"{case}: all {measured} texts at {TEXT_RATIO}:1 and glyphs at {ICON_RATIO}:1", measured > 0 and not failing,
           json.dumps(failing))
@@ -1096,8 +1152,10 @@ def main():
         check_contrast(shots, case, "greeter")
         check_greeter_avatars(shots, case, hc=False)
     check_greeter_avatars(shots, HC_GREETER, hc=True)
-    for case in ("lock-contrast-light", "lock-contrast-dark", "lock-fallback-light", "lock-fallback-dark"):
+    for case in ("lock-contrast-light", "lock-contrast-dark", "lock-fallback-light", "lock-fallback-dark",
+                 "lock-contrast-high-contrast"):
         check_contrast(shots, case, "lock")
+    check_greeter_safe_high_contrast(shots, "greeter-safe-high-contrast")
     check_motion(shots, "lock-motion", reduced=False)
     check_motion(shots, "lock-reduce-motion", reduced=True)
     check_greeter_motion(shots, "greeter-reduce-motion")

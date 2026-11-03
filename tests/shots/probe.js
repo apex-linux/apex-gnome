@@ -2137,6 +2137,55 @@ async function chord(keyboard, modifiers, keyval) {
     await settle();
 }
 
+// The dock items whose name label is up, once every label's fade has run.
+async function dockLabelsShown(dock) {
+    const items = dock?._labelledItems?.() ?? [];
+    await until(() => items.every(i => !i.label.get_transition('opacity')), 3000);
+    return items.filter(i => i.label.visible && i.label.opacity > 0).map(i => i._labelText);
+}
+
+function focusedDockItem(dock) {
+    const focus = global.stage.get_key_focus();
+    return dock?._labelledItems?.().find(i => i.child === focus)?._labelText ?? null;
+}
+
+// The first item key focused while the pointer hovers the third: the hover's label alone, and,
+// the pointer gone, the focused item's again.
+async function hoverWhileFocused(dock) {
+    const items = dock._labelledItems();
+    const pointer = global.stage.context.get_backend().get_default_seat()
+        .create_virtual_device(Clutter.InputDeviceType.POINTER_DEVICE);
+    const moveTo = ([x, y]) => until(() => {
+        const [px, py] = global.get_pointer();
+        if (px === x && py === y)
+            return true;
+        pointer.notify_absolute_motion(GLib.get_monotonic_time(), x, y);
+        return false;
+    }, 3000);
+    const monitor = Main.layoutManager.primaryMonitor;
+    const away = [monitor.x + monitor.width / 2, monitor.y + monitor.height / 4].map(Math.round);
+    items[0].child.grab_key_focus();
+    const focused = await dockLabelsShown(dock);
+    const [x, y] = items[2].child.get_transformed_position();
+    const [width, height] = items[2].child.get_transformed_size();
+    await moveTo([x + width / 2, y + height / 2].map(Math.round));
+    await until(() => items[2].label.visible && items[2].label.opacity === 255, 3000);
+    const hovered = await dockLabelsShown(dock);
+    await moveTo(away);
+    const left = await dockLabelsShown(dock);
+    // The focused item hovered and left: its label stays up, never fading in again.
+    let lowest = items[0].label.opacity;
+    const id = items[0].label.connect('notify::opacity', label => (lowest = Math.min(lowest, label.opacity)));
+    const [fx, fy] = items[0].child.get_transformed_position();
+    const [fw, fh] = items[0].child.get_transformed_size();
+    await moveTo([fx + fw / 2, fy + fh / 2].map(Math.round));
+    const onFocused = await dockLabelsShown(dock);
+    await moveTo(away);
+    const offFocused = await dockLabelsShown(dock);
+    items[0].label.disconnect(id);
+    return {focused, hovered, left, hoveredName: items[2]._labelText, onFocused, offFocused, lowestOpacity: lowest};
+}
+
 // The session's keys, each as registered and then pressed, from the desktop with nothing open.
 async function keysCase() {
     const bindings = {
@@ -2210,7 +2259,16 @@ async function keysCase() {
     pressed.ctrlAltTab = {
         groups: groups.map(item => ({name: item.name, dock: item === dockGroup})),
         dockFocused: !!dock && !!focus && dock.contains(focus),
+        focus: focusedDockItem(dock),
+        labels: await dockLabelsShown(dock),
     };
+    if (pressed.ctrlAltTab.dockFocused) {
+        await pressKeys(keyboard, Clutter.KEY_Right, 1);
+        pressed.dockRight = {focus: focusedDockItem(dock), labels: await dockLabelsShown(dock)};
+        await pressKeys(keyboard, Clutter.KEY_Escape, 1);
+        pressed.dockEscape = {focus: focusedDockItem(dock), labels: await dockLabelsShown(dock)};
+        pressed.dockHover = await hoverWhileFocused(dock);
+    }
     global.stage.set_key_focus(null);
     await settle();
 
@@ -3715,6 +3773,17 @@ async function runProbe() {
             toggled = {error: `${e.message}\n${e.stack}`};
         }
         console.log(`APEXG2-TOGGLED ${JSON.stringify(toggled)}`);
+    }
+
+    if (GLib.getenv('G2_DOCK_LABELS') === '1') {
+        let result;
+        try {
+            const A11y = await import('./a11y.js');
+            result = await A11y.dockLabelsReport({unit: cssUnit(), apexDock});
+        } catch (e) {
+            result = {error: `${e.message}\n${e.stack}`};
+        }
+        console.log(`APEXG2-DOCK-LABELS ${JSON.stringify(result)}`);
     }
 
     if (GLib.getenv('G2_KEYS') === '1') {

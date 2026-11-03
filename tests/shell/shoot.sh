@@ -5,6 +5,8 @@ set -uo pipefail
 HERE=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 readonly SHOTS=$HERE/../shots
 . "$HERE/../../.github/scripts/lib.sh"
+# shellcheck source=SCRIPTDIR/../shots/backtrace.sh
+. "$SHOTS/backtrace.sh"
 
 readonly APEX_DESKTOP_URL=https://github.com/apex-linux/apex-desktop
 readonly APEX_DESKTOP_REV=44d889fe455a4dd3e62bfa33796fb89d9bc2ff4f
@@ -23,10 +25,12 @@ case locks, answers wrongly (lock-fingerprint fails a scan), blanks and wakes th
 but lock-wake-key: after Esc and a blank, a Return that arrives after the wake, and
 lock-wake-key-blank the same, locked while blank; lock-idle sends gnome-session's
 IDLE at lock, as every real lock does, then blanks and wakes with no key; lock-suspend
-has logind's mock prepare for sleep and resume; lock-contrast and lock-fallback (over GNOME's #013b88) measure
-each text and glyph of the lock as G2's a11y rows do; lock-motion and lock-reduce-motion record every frame of
+has logind's mock prepare for sleep and resume; lock-contrast, lock-fallback (over GNOME's #013b88) and
+lock-contrast-high-contrast measure each text and glyph of the lock, opened, typed in and failed, as G2's a11y rows do; lock-motion and lock-reduce-motion record every frame of
 the lock's opening and closing, without and with Reduce Motion; each greeter case (--mode=gdm) shows the user list,
-then the prompt, and greeter-reduce-motion records each frame between the two. Each polkit case opens the shell's own authentication dialog through the polkit
+then the prompt, measuring the list (as is and with a row pointed at), the prompt and the field, and
+greeter-reduce-motion records each frame between the two; greeter-high-contrast also checks the list's avatars, and
+greeter-safe-high-contrast shows the list in safe mode with high contrast, on upstream's sheet from theme/stock/. Each polkit case opens the shell's own authentication dialog through the polkit
 component's _onInitiate(), with a stubbed PolkitAgent.Session that PAM never answers, for
 captures and style checks only (pkexec end to end is G4's); each polkit-refused case answers wrongly
 and the session fails as PAM's does (pam_faillock's text first in polkit-refused-faillock), and
@@ -67,6 +71,7 @@ readonly USER_NAME=apex
 readonly GREETER_USER=gdm-greeter
 readonly SHELL_TIMEOUT=120
 readonly CLOCK_LIB=/run/apex-lock-clock.so
+readonly CRASH_LIB=/run/apex-lock-crash.so
 # fixtures.py's keyboard, at its KEYBOARD_ADDRESS.
 readonly KEYBOARD_PATH=/org/bluez/hci0/dev_DC_2C_26_4B_33_01
 readonly GDM_NAME=org.gnome.DisplayManager
@@ -191,13 +196,14 @@ gdbus call --system -d "$LOGIND_NAME" -o "/org/freedesktop/login1/session/$(sess
     -m org.freedesktop.DBus.Mock.UpdateProperties org.freedesktop.login1.Session "{'Class': <'greeter'>}" >/dev/null ||
     die "cannot make $GREETER_USER's logind session a greeter's"
 gcc -O2 -Wall -Werror -shared -fPIC -o "$CLOCK_LIB" "$SHOTS/clock.c" || die "cannot build tests/shots/clock.c"
+crash_lib "$CRASH_LIB" || die "cannot build tests/shots/crash.c"
 clock_epoch=$(date -u -d "$CLOCK" +%s)
 held=$(env LD_PRELOAD="$CLOCK_LIB" G2_CLOCK_EPOCH="$clock_epoch" date -u '+%F %T' 2>&1)
 [[ $held == "$CLOCK" ]] || die "$CLOCK_LIB does not hold the clock at $CLOCK: $held"
 
 # shoot NAME USER MODE SCHEME QUESTION [SETTING...] [-- ENV...]
 shoot() {
-    local name=$1 user=$2 mode=$3 scheme=$4 question=$5 run rc settings home mock fprintd=''
+    local crash name=$1 user=$2 mode=$3 scheme=$4 question=$5 run rc settings home mock fprintd=''
     local -a fingerprint=()
     shift 5
     settings="$APEX_SETTINGS"$'\n'"$CAPTURE_SETTINGS"$'\n'"org.gnome.desktop.interface color-scheme '$scheme'"
@@ -222,19 +228,22 @@ shoot() {
     # shellcheck disable=SC2016 # expanded by the user's bash
     runuser -u "$user" -- env -i HOME="$home" PATH="/usr/bin:/usr/sbin" XDG_RUNTIME_DIR="$run" \
         LANG=C.UTF-8 TZ=UTC XDG_SESSION_ID="$(session_of "$user")" APEX_SHOTS="$out" APEX_SHOT="$name" APEX_USER="$USER_NAME" \
-        CLOCK_LIB="$CLOCK_LIB" G2_CLOCK_EPOCH="$clock_epoch" "$LOAD_WITNESS" "$@" \
+        CLOCK_LIB="$CLOCK_LIB" CRASH_LIB="$CRASH_LIB" G2_CLOCK_EPOCH="$clock_epoch" "$LOAD_WITNESS" "$@" \
         DBUS_SYSTEM_BUS_ADDRESS=unix:path=/run/dbus/system_bus_socket SETTINGS="$settings" \
         timeout "$SHELL_TIMEOUT" dbus-run-session -- bash -c '
             while read -r schema key value; do
                 gsettings set "$schema" "$key" "$value" || exit 1
             done <<<"$SETTINGS"
-            exec env LD_PRELOAD="$CLOCK_LIB" gnome-shell --headless --virtual-monitor '"$MONITOR"' \
+            ulimit -c unlimited 2>/dev/null
+            exec env LD_PRELOAD="$CLOCK_LIB $CRASH_LIB" gnome-shell --headless --virtual-monitor '"$MONITOR"' \
                 --wayland-display=apex-lock --mode='"$mode"' --automation-script '"$HERE"'/probe.js
         ' >"$out/$name.log" 2>&1
     rc=$?
+    case_backtrace "$out/$name.log" "$rc" "$home" "$out/$name.bt"
     kill "$mock" ${fprintd:+"$fprintd"} 2>/dev/null
     wait "$mock" 2>/dev/null
     log "shoot.sh: $name: exit $rc"
+    if crash=$(shell_crash "$out/$name.log" "$rc"); then log "shoot.sh: $name: $crash"; return 1; fi
     grep -q '^.*APEXLOCK ' "$out/$name.log"
 }
 
@@ -259,6 +268,8 @@ done
 shoot lock-question "$USER_NAME" user default 'Verification code:' || status=1
 shoot lock-disabled "$USER_NAME" user default 'Password:' "$lock_off" || status=1
 shoot lock-safe "$USER_NAME" user default 'Password:' -- APEX_SHELL_SAFE=1 || status=1
+shoot greeter-safe-high-contrast "$GREETER_USER" gdm default 'Password:' \
+    "org.gnome.desktop.a11y.interface high-contrast true" -- GDM_GREETER_TEST=1 APEX_SHELL_SAFE=1 || status=1
 shoot lock-refused "$USER_NAME" user default '' || status=1
 shoot lock-wake-key "$USER_NAME" user default 'Password:' -- APEX_WAKE_KEY=clock || status=1
 shoot lock-wake-key-blank "$USER_NAME" user default 'Password:' -- APEX_WAKE_KEY=locked-blank || status=1
@@ -280,6 +291,8 @@ shoot bar-lock-cycle "$USER_NAME" user default 'Password:' "$two_sources" -- APE
 shoot bar-lock-cycle-safe "$USER_NAME" user default 'Password:' "$two_sources" -- APEX_BAR_CYCLE=1 APEX_SHELL_SAFE=1 || status=1
 shoot bar-live "$USER_NAME" user default 'Password:' "$two_sources" -- APEX_BAR_LIVE=1 || status=1
 shoot lock-high-contrast "$USER_NAME" user default 'Password:' "org.gnome.desktop.a11y.interface high-contrast true" || status=1
+shoot lock-contrast-high-contrast "$USER_NAME" user default 'Password:' "org.gnome.desktop.a11y.interface high-contrast true" -- \
+    APEX_CONTRAST=1 || status=1
 shoot lock-large-text "$USER_NAME" user default 'Password:' "org.gnome.desktop.interface text-scaling-factor 1.25" || status=1
 # authselect locks GDM's fingerprint key off; an image with a reader enables the feature.
 if ! authselect enable-feature with-fingerprint >"$out/authselect.log" 2>&1 || ! dconf update; then

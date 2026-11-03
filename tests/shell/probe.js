@@ -128,7 +128,18 @@ function describeLock(dialog) {
             .map(e => e && `radius=${e.radius} brightness=${e.brightness.toFixed(2)} saturation=${e.saturation.toFixed(2)}`)[0] ?? null,
         prompt: describePrompt(dialog._authPrompt),
         layout: describeLayout(dialog, hint),
+        errorRing: dialog.has_style_class_name('apex-lock-error'),
+        ring: dialog._authPrompt ? ring(dialog._authPrompt._entry) : null,
     };
+}
+
+// The entry's box-shadow, as its theme node resolves it.
+function ring(entry) {
+    const node = entry.get_theme_node();
+    const shadow = node.get_box_shadow();
+    const border = node.get_border_width(St.Side.TOP) / scale();
+    const borderColor = color(node.get_border_color(St.Side.TOP));
+    return shadow ? {inset: shadow.inset, spread: shadow.spread, color: color(shadow.color), border, borderColor} : null;
 }
 
 // What the eye reads, top to bottom, in logical pixels; only what is on screen.
@@ -338,6 +349,7 @@ async function shootLock() {
     await type(WRONG_ANSWER);
     await Scripting.sleep(STEP_MS * 2);
     fact('wrong-answer', describeLock(dialog));
+    await capture('wrong-answer');
     // The field is insensitive while GDM asks again, which WCAG exempts: the message is what this step adds.
     if (contrast)
         fact('contrast-wrong-answer', await contrastOf(dialog._authPrompt._message));
@@ -418,12 +430,19 @@ async function shootMotion() {
     const curtain = () => ({ty: group.translation_y, opacity: group.opacity, transitions: transitionsUnder(group)});
     let stop = sampleMotion(curtain);
     shield.lock(true);
-    await Scripting.sleep(STEP_MS);
+    await settleMotion(group);
     fact('opening', stop());
     stop = sampleMotion(curtain);
     shield.deactivate(true);
-    await Scripting.sleep(STEP_MS);
+    await settleMotion(group);
     fact('closing', stop());
+}
+
+// The prompt fades its entry in when GDM's question arrives, which can be late: the last sample waits for it.
+async function settleMotion(group) {
+    await Scripting.sleep(STEP_MS);
+    for (let waited = 0; waited < STEP_MS && transitionsUnder(group).length; waited += MOTION_POLL_MS)
+        await Scripting.sleep(MOTION_POLL_MS);
 }
 
 // What polkit-agent-helper-1 would send, without the helper: PAM never runs, so nothing the
@@ -658,6 +677,17 @@ function describeGreeterLayout(dialog, items) {
     };
 }
 
+// A list avatar's circle and the glyph's own box, which upstream fills for a logged-in user.
+function avatarOf(item) {
+    const avatar = item._userWidget._avatar;
+    const glyph = avatar.child;
+    return {
+        ...button(avatar), fg: color(avatar.get_theme_node().get_foreground_color()),
+        loggedIn: item.has_style_pseudo_class('logged-in'),
+        glyphFill: glyph ? color(glyph.get_theme_node().get_background_color()) : null,
+    };
+}
+
 function describeGreeter(dialog) {
     const items = [...dialog._userList._items.values()];
     return {
@@ -665,7 +695,8 @@ function describeGreeter(dialog) {
         prompt: describePrompt(dialog._authPrompt?.visible ? dialog._authPrompt : null),
         style: describeGreeterStyle(dialog),
         layout: describeGreeterLayout(dialog, items),
-        avatars: items.map(i => i._userWidget._avatar).map(a => ({...button(a), fg: color(a.get_theme_node().get_foreground_color())})),
+        avatars: items.map(avatarOf),
+        sheet: St.ThemeContext.get_for_stage(global.stage).get_theme().default_stylesheet?.get_uri() ?? null,
     };
 }
 
@@ -683,13 +714,18 @@ async function shootGreeter() {
     iconFact('list', [dialog, Main.panel]);
     await capture('list');
     fact('contrast-list', await contrastOf(dialog));
-    // The unfocused row hovered: the focused one shows its ring instead.
+    // The unfocused row pointed at, as the pointer does it: upstream selects and focuses a hovered row.
     const hovered = [...dialog._userList._items.values()].find(item => !item.has_key_focus());
-    // track_hover would reset .hover from the pointer, which never comes near: the pseudo-class itself.
     if (hovered) {
-        hovered.add_style_pseudo_class('hover');
+        const focused = global.stage.key_focus;
+        hovered.hover = true;
+        // Upstream's avatar rebuilds its glyph on the row's new style: measure once it has.
+        await Scripting.sleep(CONTRAST_SETTLE_MS);
+        fact('list-hover', {selected: hovered.has_style_pseudo_class('selected'), focused: hovered.has_key_focus(),
+            background: color(hovered.get_theme_node().get_background_color())});
         fact('contrast-list-hover', await contrastOf(dialog._userList));
-        hovered.remove_style_pseudo_class('hover');
+        hovered.hover = false;
+        focused?.grab_key_focus();
     }
     const settings = GLib.getenv('APEX_MOTION') ? motionSettings() : null;
     const stop = settings ? sampleMotion(() => ({transitions: transitionsUnder(dialog)})) : null;

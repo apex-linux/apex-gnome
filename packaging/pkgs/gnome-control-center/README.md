@@ -329,11 +329,21 @@ state's texts through AT-SPI, that board 26's dialog shows, that What's New's gr
 Show Changes' line up with the long fixture name cut short, and presses each button and
 the Automatic Downloads switch: `update1.py`'s log must show the method call each makes,
 with its arguments, and the switch must go back when `update1.py` refuses it as polkit
-would. `updates-bounds`, the "ready" page unscrolled, has `bounds.py` read every label on it off
-its own capture: each AT-SPI box must hold its text, and no edge may run through text.
-GTK 4.24 leaves an ancestor's CSS padding out of a widget's AT-SPI bounds, so the panel's
-cards inset their content with margins, never padding; a pill button's label is off by
-libadwaita's button padding, a known gap upstream.
+would. `bounds.py` reads every label on a page off its case's own capture: board 11's top
+(`top-bounds`), board 24 with the dGPU (`power-bounds`), and the "ready" page at the top and
+scrolled to its end (`updates-bounds`, `updates-bounds-end`). GTK 4.24 reports a widget's size
+right but leaves its ancestors' CSS padding out of its place, so the panel insets its content
+with margins, never padding. Each AT-SPI box must hold its text, and no line 3 px outside it
+may run through text: that catches a box cut through its text, not a small shift (a row title
+holds for vertical shifts of −6 to +8 px). Small shifts are held by sizes: each list row hides
+libadwaita's 2 px of padding a side (`list > row`), so every row label sits 2 px left of its
+text, except in What's New's grid row and expander rows, which hide none. And each of What's
+New's kind labels must start its ink exactly where it does today against its AT-SPI box, so a
+hidden shift from any rule fails; the grid's sizes and `apex.css` only name the likely cause.
+libadwaita's own padding leaves some labels off (pill, plain and toggle buttons' labels at
+their button's origin, the GPU pill 2 px off in its list row); each is pinned exactly in one
+list in `bounds.py`, as upstream. Each case names what its page must show (`rows`, `grid`,
+`pills`, `buttons`, `toggles`, `gpu`), and one that is missing fails.
 
 Last, Large Text (`text-scaling-factor` 1.25) on board 11 (`large-light`) and board 18
 (`updates-large-light`): `apex.css` sizes its text in pt, which GTK scales with it, where a px

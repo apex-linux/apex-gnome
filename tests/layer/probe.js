@@ -1413,6 +1413,7 @@ async function exerciseLock() {
         .map(c => c.text ?? c.name ?? c.children.map(part => part.text ?? '').join('')).join(',');
     fact('lock.prompt-box', promptBoxChildren());
     fact('lock.hint.password', hintState(dialog));
+    fact('lock.ring.password', `${dialog.has_style_class_name('apex-lock-error')}`);
     for (const [label, service, text, error] of [
         ['fingerprint-scan', 'gdm-fingerprint', '(or place finger on reader)', false],
         ['fingerprint-failed', 'gdm-fingerprint', 'Failed to match fingerprint', true],
@@ -1422,12 +1423,25 @@ async function exerciseLock() {
     ]) {
         say(dialog, service, text, error);
         fact(`lock.hint.${label}`, hintState(dialog));
+        fact(`lock.ring.${label}`, `${dialog.has_style_class_name('apex-lock-error')}`);
+    }
+    const ring = () => `${dialog.has_style_class_name('apex-lock-error')}`;
+    say(dialog, 'gdm-password', "Sorry, that didn't work. Please try again.", true);
+    fact('lock.ring.password-again', ring());
+    const message = dialog._authPrompt?._message;
+    if (message) {
+        message.opacity = 0;
+        fact('lock.ring.message-faded', ring());
+        message.opacity = 255;
+        fact('lock.ring.message-back', ring());
     }
     for (const [label, mode] of [['blank', PowerSave.OFF], ['wake', PowerSave.ON],
         ['standby', PowerSave.STANDBY], ['wake-again', PowerSave.ON],
         ['suspend', PowerSave.SUSPEND], ['unsupported', PowerSave.UNSUPPORTED]]) {
         setScreen(mode);
         fact(`lock.${label}`, lockState(dialog));
+        if (label === 'blank')
+            fact('lock.ring.blank', ring());
         if (label === 'wake')
             fact('lock.wake.keys', dialog._authPrompt?.keys ?? 'none');
     }
@@ -2253,6 +2267,93 @@ async function exerciseRemoteWatcher() {
     [early, late].forEach(item => item.quit());
 }
 
+// Key focus names a dock item as a hover does, one label at a time.
+async function dockFocusLabels(dock, Main) {
+    const {default: Clutter} = await import(`file://${GLib.path_get_dirname(shellDir)}/Clutter.js`);
+    const box = Main.layoutManager.chrome.find(actor => actor.name === 'apexDockBox' && !actor.destroyed);
+    const items = dock._labelledItems();
+    const [files, web, showApps] = items;
+    const name = item => item?.labelText ?? item?.name ?? 'none';
+    const labels = (step, more = '') => fact(`dock.labels.${step}`,
+        `${items.filter(i => i.label.visible && !i.destroyed).map(name).join(',') || 'none'} focus=${name(dock._focusItem)}${more}`);
+    const focus = (item, inside) => item.child.emit(inside ? 'key-focus-in' : 'key-focus-out');
+    const hover = (item, on) => {
+        item.child.hover = on;
+        dock._syncLabel(item);
+    };
+    const slide = y => {
+        box.translation_y = y;
+        box.emit('notify::translation-y');
+    };
+    const map = (item, mapped) => {
+        item.child.mapped = mapped;
+        item.child.emit('notify::mapped');
+    };
+    const escape = {get_key_symbol: () => Clutter.KEY_Escape};
+    const overviewWas = Main.overview.visible;
+    Main.overview.visible = false;
+    global.stage.set_key_focus = actor => {
+        if (actor === null && dock._focusItem)
+            focus(dock._focusItem, false);
+    };
+    labels('initial');
+    focus(files, true);
+    labels('focused');
+    focus(files, false);
+    focus(web, true);
+    labels('moved');
+    hover(showApps, true);
+    labels('hovered');
+    hover(showApps, false);
+    labels('hover-ended');
+    const shows = web.label.shows;
+    hover(web, true);
+    labels('hover-focused');
+    hover(web, false);
+    labels('hover-focused-ended', ` faded-in-again=${web.label.shows - shows}`);
+    dock._itemMenuStateChanged(files, true);
+    labels('other-menu-open');
+    dock._itemMenuStateChanged(files, false);
+    labels('other-menu-closed');
+    dock.tailItems.trash._menu.open();
+    labels('trash-menu-open');
+    dock.tailItems.trash._menu.close();
+    labels('trash-menu-closed');
+    map(web, false);
+    labels('unmapped');
+    map(web, true);
+    labels('mapped');
+    slide(160);
+    labels('slid-out');
+    slide(0);
+    labels('slid-back');
+    web.child.emit('clicked');
+    labels('activated');
+    const [showsBefore, labelX] = [web.label.shows, web.label.x];
+    web.x += 100;
+    Main.layoutManager.emit('monitors-changed');
+    await spin(50);
+    labels('dock-moved', ` label-moved=${web.label.x - labelX} faded-in-again=${web.label.shows - showsBefore}`);
+    web.x -= 100;
+    web.child.emit('key-press-event', escape);
+    labels('escape');
+    focus(web, true);
+    Main.overview.visible = true;
+    const passed = dock._onKeyPress(escape) === Clutter.EVENT_PROPAGATE;
+    labels('escape-in-overview', ` to-overview=${passed}`);
+    Main.overview.visible = overviewWas;
+    focus(files, true);
+    // Unpinned, its item goes while it has the key focus: no key-focus-out comes.
+    files.destroy();
+    hover(web, true);
+    hover(web, false);
+    slide(160);
+    slide(0);
+    labels('focused-item-destroyed');
+    focus(web, true);
+    delete global.stage.set_key_focus;
+}
+
 async function exerciseDock() {
     if (GLib.getenv('PROBE_DOCK') !== '1')
         return;
@@ -2298,7 +2399,9 @@ async function exerciseDock() {
         fact('dock.hooks', `separator=${Hooks.value('dash-favorites-separator', true, dock)} ` +
             `stock-separator=${Hooks.value('dash-favorites-separator', true, {})} ` +
             `show-apps=${Hooks.value('show-apps-icon-name', 'view-app-grid-symbolic', dock.tailItems.showApps)}`);
+        await dockFocusLabels(dock, Main);
     }
+    fact('dock.focus-label-at-disable', dock?._focusShowing?.name ?? 'none');
     dash._queueRedisplay();
     settings.set_boolean('layer-enabled', false);
     await spin(200);

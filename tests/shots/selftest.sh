@@ -772,6 +772,8 @@ REPORT_OF_LEGIBLE_SURFACES='
 | ($dot + {alpha: 0.447, ratio: $inactive}) as $inactiveDot
 | {box: {x: 0, y: 0, width: 200, height: 100}, targets: [$text, $icon]} as $s
 | {fill: "#c01c28", bar: "#f3f3f5", ratio: 5.2} as $edge
+| {count: 8, dock: {x: 400, y: 820, width: 640, height: 70}, first: ($s + {name: "Files"}), middle: ($s + {name: "Clocks"}),
+    last: ($s + {name: "Trash"})} as $labels
 | {textScalingFactor: 1.25, monitor: {x: 0, y: 0, width: 1440, height: 900},
     quickSettingsAccents: (["blue", "teal", "green", "yellow", "orange", "red", "pink", "purple", "slate"] | map({key: ., value: $s}) | from_entries),
     dateMenuAccents: (["blue", "teal", "green", "yellow", "orange", "red", "pink", "purple", "slate"] | map({key: ., value: $s}) | from_entries),
@@ -782,6 +784,7 @@ REPORT_OF_LEGIBLE_SURFACES='
 
     bar: ($s | .targets += [$dot, $inactiveDot]), barUnread: ($s | .targets += [$dot + {name: "messages-indicator"}, $inactiveDot]), dock: $s, popupMenu: $s, osd: $s, banner: $s, quickSettings: $s, wifiMenu: $s, wifiMenuConnected: $s, dateMenu: $s, switcher: $s, inputSourceSwitcher: $s, ctrlAltTabSwitcher: $s, monitorSwitcher: $s,
     dialog: $s, endSession: $s, spotlight: {popup: $s, toast: $s}, overview: $s, appGrid: $s,
+    dockLabels: ($labels + {keyFocus: {name: "Files", hidden: true, focused: true, shown: true}}), dockLabelsBusy: $labels,
     barPills: {box: $s.box, pills: {input: {targets: [$text + {name: "EN"}], edge: null},
         recording: {targets: [$text + {name: "0:42", ink: "#ffffff", backdrop: "#c01c28", ratio: 5.6}], edge: $edge},
         sharing: {targets: [$icon + {name: "screen-shared-symbolic"}], edge: $edge}, privacy: {targets: [$icon, $icon], edge: $edge},
@@ -822,6 +825,30 @@ CHANGES
         "$(grep -c "^FAIL dark-style accessibility: board 39's crowded bar .* (error: not shown)$" "$T/a11y.out")"
 }
 
+# default-scale1's dock labels alone (G2_DOCK_LABELS): each bad change fails one row of 13.
+test_dock_labels_case() {
+    local want change what passes failures
+    while IFS='|' read -r want change what; do
+        # shellcheck disable=SC2016 # a jq program
+        jq -nc --argjson inactive 4 "$REPORT_OF_LEGIBLE_SURFACES | {monitor, dockLabels, dockLabelsBusy} | $change" |
+            sed 's/^/APEXG2-DOCK-LABELS /' >"$T/dock-labels.log"
+        read -r passes failures <<<"$(assertion_counts dock_labels_case default-scale1 "$T/dock-labels.log")"
+        expect_eq "dock labels at scale 1: $what fails $want" "$want/$((13 - want))" "$failures/$passes"
+    done <<'CHANGES'
+0|.|the labels as measured
+1|.dockLabels.first.targets[0].ratio = 4.4|a label's text at 4.4:1
+1|.dockLabelsBusy.middle.box.x = -5|a label past the monitor's left edge
+1|.dockLabels.middle.box.x = 1300|a label past the monitor's right edge
+1|.dockLabels.last.box.y = 800|a label over the dock
+1|.dockLabels.keyFocus.shown = false|key focus that shows no label
+1|.dockLabels.keyFocus.hidden = false|a hover's label still up when key focus comes
+CHANGES
+    printf 'APEXG2-DOCK-LABELS %s\n' '{"error":"dockLabelsReport: no dock"}' >"$T/dock-labels.log"
+    read -r passes failures <<<"$(assertion_counts dock_labels_case default-scale1 "$T/dock-labels.log")"
+    expect_eq "dock labels at scale 1: a probe error fails once, naming it" "1/0 1" \
+        "$failures/$passes $(grep -c 'no dock' "$T/assertions.out")"
+}
+
 # default's inactive dot is Apex's known gap: pinned at 2.86:1, and failing once it reaches 3:1.
 test_inactive_dot_gap() {
     local want_failures want_gaps inactive what passes failures open_gaps
@@ -860,7 +887,7 @@ CHANGES
 test_a11y() {
     local assertions expected change what passes failures open_gaps want
     # dark-style's two focus gaps today: its Spotlight entry, per wallpaper.
-    for assertions in a11y_contrast:80:2 a11y_layout:61:0; do
+    for assertions in a11y_contrast:93:2 a11y_layout:74:0; do
         IFS=: read -r assertions expected gaps <<<"$assertions"
         read -r passes failures open_gaps <<<"$(a11y_run "$assertions")"
         if ((failures == 0 && open_gaps == gaps && passes == expected)); then
@@ -895,6 +922,13 @@ a11y_contrast|1|.barPills.pills.sharing.edge.ratio = 2.9|the sharing pill's fill
 a11y_contrast|2|.barPills.pills.privacy = {error: "not shown"}|a pill that never showed
 a11y_contrast|10|del(.barPills)|no pills, app indicators or app menu measured
 a11y_contrast|0|.barPills.pills.recording.targets[0].ratio = 4.5|the timer's text at 4.5:1
+a11y_contrast|1|.dockLabels.first.box.x = -20|a dock label past the monitor's left edge
+a11y_contrast|1|.dockLabelsBusy.last.box.y = 800|a dock label over the dock
+a11y_contrast|2|.dockLabels.middle = {error: "Clocks's label never showed"}|a dock label that never showed
+a11y_contrast|1|.dockLabels.keyFocus.shown = false|key focus that shows no dock label
+a11y_contrast|1|.dockLabels.keyFocus.hidden = false|a hover's label still up when key focus comes
+a11y_contrast|1|.dockLabelsBusy.last.targets[0].ratio = 4.4|a dock label's text at 4.4:1 over the busy wallpaper
+a11y_layout|1|.dockLabels.first.targets[0].ellipsized = true|a dock label cut short
 a11y_contrast|1|.barPills.pills.indicator2.targets[0] += {ink: "#16161a", ratio: 1}|an app indicator's glyph drawn in the bar's own colour
 a11y_contrast|1|.barPills.pills.overflow.targets[0].ratio = 4.4|the overflow's +1 at 4.4:1
 a11y_contrast|1|.barPills.indicatorMenu.targets[0].ratio = 3|the Chat app's menu text at 3:1
@@ -1050,6 +1084,32 @@ test_goldens() {
         ok "goldens import: a later approval adds to the pinned commit, and both boards pass"
     else
         not_ok "goldens import: a later approval adds to the pinned commit, and both boards pass: $(tail -n 3 "$T/goldens.out")"
+    fi
+
+    cp "$dir/moved-dark.png" "$dir/board-36-launcher-dark.png"
+    hash=$(cat "$dir/board-36-launcher-light.png" "$dir/board-36-launcher-dark.png" | sha256sum | cut -c 1-12)
+    jq -n --arg h "$hash" '{boards: {"36-launcher": {status: "approved", shots: $h, approvedAt: "2026-10-27T10:00:00Z"}}}' >"$T/decisions3.json"
+    if goldens import "$dir" "$T/decisions3.json" && grep -qx "goldens.sh: board 36-launcher replaces the same row's golden 36" "$T/goldens.out" &&
+        jq -e --arg h "$hash" '.boards | keys == ["14", "36-launcher"] and .["36-launcher"].shots == $h' "$T/goldens-work/manifest.json" >/dev/null &&
+        [[ $(git -C "$T/goldens-work" ls-files | paste -sd' ') == 'boards/board-14-dark.png boards/board-14-light.png boards/board-36-launcher-dark.png boards/board-36-launcher-light.png manifest.json' ]] &&
+        git -C "$T/goldens-work" push -q "$T/goldens-remote" HEAD:refs/heads/goldens && goldens check "$dir" &&
+        grep -q '^PASS captures board 36 (Launcher), dark: equal' "$T/goldens.out"; then
+        ok "goldens import: a row's NN-SLUG approval replaces its board's legacy NN golden and files, and the check passes"
+    else
+        not_ok "goldens import: a row's NN-SLUG approval replaces its board's legacy NN golden and files, and the check passes: $(tail -n 3 "$T/goldens.out")"
+    fi
+    cp "$T/dark.png" "$dir/board-36-launcher-dark.png"
+
+    hash=$(cat "$dir/board-36-launcher-light.png" "$dir/board-36-launcher-dark.png" | sha256sum | cut -c 1-12)
+    jq -n --arg h "$hash" '{boards: {"36": {status: "approved", shots: $h, approvedAt: "2026-10-28T10:00:00Z"}}}' >"$T/decisions4.json"
+    if goldens import "$dir" "$T/decisions4.json" && grep -qx "goldens.sh: board 36 replaces the same row's golden 36-launcher" "$T/goldens.out" &&
+        jq -e --arg h "$hash" '.boards | keys == ["14", "36"] and .["36"].shots == $h' "$T/goldens-work/manifest.json" >/dev/null &&
+        [[ $(git -C "$T/goldens-work" ls-files | paste -sd' ') == 'boards/board-14-dark.png boards/board-14-light.png boards/board-36-dark.png boards/board-36-light.png manifest.json' ]] &&
+        git -C "$T/goldens-work" push -q "$T/goldens-remote" HEAD:refs/heads/goldens && goldens check "$dir" &&
+        grep -q '^PASS captures board 36 (Launcher), dark: equal' "$T/goldens.out"; then
+        ok "goldens import: a row's legacy NN approval replaces its NN-SLUG golden and files, and the check passes"
+    else
+        not_ok "goldens import: a row's legacy NN approval replaces its NN-SLUG golden and files, and the check passes: $(tail -n 3 "$T/goldens.out")"
     fi
 }
 
@@ -2767,11 +2827,15 @@ readonly DOCK_EXTERNAL_REPORT='def lay($p; $window; $hidden; $solid): {primary: 
        glass: {dock: glass(56; 1; {x: 2276, y: 1010, width: 249, height: 70}), bar: glass(48; 1; {x: 1440, y: 0, width: 1920, height: 32}),
          scrims: [(glass(144; 2; mon0) + unscaled), (glass(72; 1; ext1) + unscaled)], cost: {perMonitor: 6.6, wholeStage: 13.18}},
        desktopGlass: {dock: glass(56; 1; {x: 2276, y: 1010, width: 249, height: 70}), bar: glass(48; 1; {x: 1440, y: 0, width: 1920, height: 32}),
-         scrims: [(glass(144; 2; mon0) + {enabled: false}), (glass(72; 1; ext1) + {enabled: false})]}}),
+         scrims: [(glass(144; 2; mon0) + {enabled: false}), (glass(72; 1; ext1) + {enabled: false})]},
+       edgeLabel: {name: "Show Apps", shown: true, item: {x: 1440, y: 1005, width: 56, height: 62},
+         label: {x: 1440, y: 965, width: 89, height: 28}, monitor: ext1}}),
      mixed: (lay(0; {monitor: 0, maximised: true}; true; true) + {changed: true,
        monitors: [{x: 0, y: 0, width: 1440, height: 900, index: 0}, {x: 1440, y: 0, width: 1920, height: 1080, index: 1}],
        dockBox: {x: 596, y: 980, width: 249, height: 80},
-       glass: {dock: glass(112; 2; {x: 596, y: 990, width: 249, height: 70}), bar: (glass(96; 2; {x: 0, y: 0, width: 1440, height: 32}) + {enabled: false})}})}}'
+       glass: {dock: glass(112; 2; {x: 596, y: 990, width: 249, height: 70}), bar: (glass(96; 2; {x: 0, y: 0, width: 1440, height: 32}) + {enabled: false})},
+       edgeLabel: {name: "Show Apps", shown: true, item: {x: 1384, y: 825, width: 56, height: 62},
+         label: {x: 1351, y: 785, width: 89, height: 28}, monitor: mon0}})}}'
 
 test_dock_external() {
     local change what passes failures all
@@ -2815,6 +2879,13 @@ test_dock_external() {
 .steps.mixedOnExternal.desktopGlass.scrims[1].enabled = true|a hidden scrim still blurring
 .steps.mixed.barSolid = false|a bar translucent over the panel's maximised window
 .steps.mixed.glass.dock.resourceScale = 1|dock glass left at scale 1 back on the panel
+.steps.mixedOnExternal.edgeLabel.shown = false|Show Apps at the external display's left edge showing no label
+.steps.mixed.edgeLabel.label.x = 3300|an end item's label off the stage's right edge
+.steps.mixedOnExternal.edgeLabel.label.x = 1423|Show Apps' label 17 px over the panel, where upstream's stage clamp leaves it
+.steps.mixed.edgeLabel.label.x = 1367|Show Apps' label 16 px over the external display
+.steps.mixedOnExternal.edgeLabel.item.x = 1500|Show Apps short of the external display's left edge
+.steps.mixed.edgeLabel.item.x = 1000|Show Apps short of the panel's right edge
+.steps.mixed.edgeLabel.label.width = 40|a label narrower than its item, which no clamp could move
 CHANGES
     write_report_run dock-external DOCK-EXTERNAL '{error: "G2 runs 1 monitor(s), not two\ndock-external.js:98"}' .
     read -r passes failures <<<"$(assertion_counts dock_external_case "$T/dock-external")"
@@ -3262,6 +3333,59 @@ test_shutdown_banner_case() {
 CHANGES
 }
 
+# The lines that load crash.c into each shell a test starts, keep its status, and fail its case on a crash.
+STARTER_LINES=$(cat <<'LINES'
+lib/headless.sh	. "$SHOTS/backtrace.sh"
+lib/headless.sh	crash_lib "$CRASH_LIB" || die "cannot build tests/shots/crash.c"
+lib/headless.sh	SETTINGS="$APEX_SETTINGS"$'\n'"$CAPTURE_SETTINGS"$'\n'"$settings" CRASH_LIB="$CRASH_LIB" "$@" \
+lib/headless.sh	ulimit -c unlimited 2>/dev/null
+lib/headless.sh	exec env LD_PRELOAD="$CLOCK_LIB $CRASH_LIB" gnome-shell --headless --virtual-monitor "$MONITOR" \
+lib/headless.sh	' >"$log" 2>&1 || rc=$?
+lib/headless.sh	case_backtrace "$log" "$rc" "$HEADLESS_HOME" "${log%.log}.bt"
+lib/headless.sh	return "$rc"
+control-center/lib.sh	. "$SHOTS/backtrace.sh"
+control-center/lib.sh	crash_lib "$CRASH_LIB" || die "cannot build tests/shots/crash.c"
+control-center/lib.sh	CRASH_LIB="$CRASH_LIB" G2_CLOCK_EPOCH="$CLOCK_EPOCH" DBUS_SYSTEM_BUS_ADDRESS=unix:path=/run/dbus/system_bus_socket \
+control-center/lib.sh	ulimit -c unlimited 2>/dev/null
+control-center/lib.sh	exec env LD_PRELOAD="$CLOCK_LIB $CRASH_LIB" gnome-shell --headless --virtual-monitor "$MONITOR" \
+control-center/lib.sh	' >"$log" 2>&1 || rc=$?
+control-center/lib.sh	case_backtrace "$log" "$rc" "$HEADLESS_HOME" "${log%.log}.bt"
+control-center/lib.sh	return "$rc"
+nautilus/shoot.sh	. "$SHOTS/backtrace.sh"
+nautilus/shoot.sh	crash_lib "$CRASH_LIB" || die "cannot build tests/shots/crash.c"
+nautilus/shoot.sh	CLOCK_LIB="$CLOCK_LIB" CRASH_LIB="$CRASH_LIB" G2_CLOCK_EPOCH="$clock_epoch" GTK_A11Y=atspi \
+nautilus/shoot.sh	ulimit -c unlimited 2>/dev/null
+nautilus/shoot.sh	exec env LD_PRELOAD="$CLOCK_LIB $CRASH_LIB" gnome-shell --headless --virtual-monitor '"$MONITOR"' \
+nautilus/shoot.sh	rc=$?
+nautilus/shoot.sh	case_backtrace "$out/$name.log" "$rc" "$home" "$out/$name.bt"
+nautilus/shoot.sh	if crash=$(shell_crash "$out/$name.log" "$rc"); then log "shoot.sh: $name: $crash"; return 1; fi
+shell/shoot.sh	. "$SHOTS/backtrace.sh"
+shell/shoot.sh	crash_lib "$CRASH_LIB" || die "cannot build tests/shots/crash.c"
+shell/shoot.sh	CLOCK_LIB="$CLOCK_LIB" CRASH_LIB="$CRASH_LIB" G2_CLOCK_EPOCH="$clock_epoch" "$LOAD_WITNESS" "$@" \
+shell/shoot.sh	ulimit -c unlimited 2>/dev/null
+shell/shoot.sh	exec env LD_PRELOAD="$CLOCK_LIB $CRASH_LIB" gnome-shell --headless --virtual-monitor '"$MONITOR"' \
+shell/shoot.sh	rc=$?
+shell/shoot.sh	case_backtrace "$out/$name.log" "$rc" "$home" "$out/$name.bt"
+shell/shoot.sh	if crash=$(shell_crash "$out/$name.log" "$rc"); then log "shoot.sh: $name: $crash"; return 1; fi
+s7/accent-test.sh	log "accent-test.sh: $name shell exit $rc"
+s7/accent-test.sh	if crash=$(shell_crash "$out/$name.log" "$rc"); then log "accent-test.sh: $name: $crash"; return 1; fi
+s7/accent-test.sh	run_shell control || status=1
+s2c/radius-test.sh	rc=$?
+s2c/radius-test.sh	if crash=$(shell_crash "$out/s2c.log" "$rc"); then die "radius-test.sh: $crash"; fi
+libadwaita/radius-test.sh	rc=$?
+libadwaita/radius-test.sh	if crash=$(shell_crash "$out/radius.log" "$rc"); then die "radius-test.sh: $crash"; fi
+ptyxis/palette-test.sh	rc=$?
+ptyxis/palette-test.sh	if crash=$(shell_crash "$out/palette.log" "$rc"); then die "palette-test.sh: $crash"; fi
+ptyxis/panes-test.sh	rc=$?
+ptyxis/panes-test.sh	if crash=$(shell_crash "$out/panes.log" "$rc"); then die "panes-test.sh: $crash"; fi
+ptyxis/shoot.sh	log "shoot.sh: $name: exit $rc"
+ptyxis/shoot.sh	if crash=$(shell_crash "$out/$name.log" "$rc"); then log "shoot.sh: $name: $crash"; return 1; fi
+control-center/run.sh	log "run.sh: $name: exit $rc"
+control-center/run.sh	if crash=$(shell_crash "$out/$name.log" "$rc"); then log "run.sh: $name: $crash"; return 1; fi
+LINES
+)
+readonly STARTER_LINES
+
 # A shell that died on a signal leaves a backtrace, or one line saying why it has none, and its
 # exit assertion names it; a clean exit leaves nothing.
 test_case_backtrace() {
@@ -3307,6 +3431,26 @@ test_case_backtrace() {
         -e '[[ $arg == G2_EXPECT_EXIT=* ]] && expected=${arg#G2_EXPECT_EXIT=}' \
         -e 'run_and_record_case fault-abort '"''"' APEX_SHELL_TEST_FAULT=abort-after-enable PROBE_WAIT=20 G2_EXPECT_EXIT=134' \
         -e 'case_backtrace "/out/$name.log" "$rc" "$home" "/out/$name.bt" "$expected"')"
+    # Every other shell a test starts does the same, whole lines: it builds crash.c, passes and preloads it, keeps the
+    # shell's status through case_backtrace, and its caller fails the case on a crash.
+    local file count
+    while read -r file count; do
+        expect_eq "backtrace: tests/$file has its $count crash lines" "$count" \
+            "$(sed 's/^[[:space:]]*//' "$HERE/../$file" | grep -cxF -f <(sed -n "s|^$file\t||p" <<<"$STARTER_LINES"))"
+    done < <(cut -f1 <<<"$STARTER_LINES" | sort | uniq -c | awk '{ print $2, $1 }')
+    # shellcheck disable=SC2016 # expanded by the inner bash
+    expect_eq "backtrace: shell_crash names a signal exit and its .bt, and passes a clean or timed-out one" \
+        "the shell crashed (SIGSEGV); see x/a.bt|the shell crashed (SIGABRT); see x/a.bt|1 1" \
+        "$(bash -c '. "$1/backtrace.sh"; APEX_ROOT=/r; shell_crash /r/x/a.log 139; shell_crash /r/x/a.log 134
+            shell_crash /r/x/a.log 0; a=$?; shell_crash /r/x/a.log 124; echo "$a $?"' _ "$HERE" | paste -sd'|' -)"
+    # headless_run with a shell that dies on SIGSEGV returns 139 and leaves its .bt.
+    mkdir -p "$run/headless"
+    # shellcheck disable=SC2016 # expanded by the inner bash
+    got=$(bash -c 'ulimit -c 0; . "$1/../lib/headless.sh"; HEADLESS_HOME=$2
+        runuser() { bash -c "kill -SEGV \$\$"; }
+        headless_run "$2/x.log" /dev/null 5 "" 2>/dev/null; echo "$?"' _ "$HERE" "$run/headless")
+    expect_eq "backtrace: headless_run returns a crashed shell's 139 and writes its .bt" "139 1" \
+        "$got $(grep -c '^signal 11, the shell exited 139$' "$run/headless/x.bt" 2>/dev/null)"
     echo 'x exit=139 secs=4 marker-after-exit=yes' >"$run/results-pr.txt"
     mv "$run/none.bt" "$run/x.bt"
     assertion_counts exits "$run" x 0 >/dev/null
@@ -3485,7 +3629,11 @@ readonly KEYS_REPORT="{bindings: {
     sentinel: {before: {source: \"us\", overview: false, modals: 0}, after: {source: \"us\", overview: false, modals: 0}, a11yChanges: 0},
     entryKey: {viaInputMethod: true, text: \"a\"},
     superAltSpace: {source: \"fr\"}, shiftSuperAltSpace: {source: \"us\"},
-    ctrlAltTab: {groups: [{name: \"Windows\", dock: false}, {name: \"Top Bar\", dock: false}, {name: \"Dash\", dock: true}], dockFocused: true},
+    ctrlAltTab: {groups: [{name: \"Windows\", dock: false}, {name: \"Top Bar\", dock: false}, {name: \"Dash\", dock: true}], dockFocused: true,
+      focus: \"Files\", labels: [\"Files\"]},
+    dockRight: {focus: \"Clocks\", labels: [\"Clocks\"]}, dockEscape: {focus: null, labels: []},
+    dockHover: {focused: [\"Files\"], hovered: [\"Show Apps\"], left: [\"Files\"], hoveredName: \"Show Apps\",
+      onFocused: [\"Files\"], offFocused: [\"Files\"], lowestOpacity: 255},
     superTap: {overview: true, apps: false}, superA: {overview: true, apps: true}},
   modals: 0}"
 
@@ -3496,7 +3644,7 @@ test_keys_case() {
     while IFS='|' read -r failures change what; do
         printf 'APEXG2-KEYS %s\n' "$(jq -nc "$KEYS_REPORT | $change")" >"$run/keys.log"
         read -r passes _ <<<"$(assertion_counts keys_case "$run")"
-        expect_eq "keys: $what fails $failures of 15" "$failures" $((15 - passes))
+        expect_eq "keys: $what fails $failures of 20" "$failures" $((20 - passes))
     done <<'CHANGES'
 0|.|the keys as registered and pressed
 1|.bindings.inputSource.accelerators = ["<Super>space", "XF86Keyboard"]|GNOME's input source key, on Spotlight's Super+Space
@@ -3512,10 +3660,18 @@ test_keys_case() {
 1|.pressed.shiftSuperAltSpace.source = "fr"|a Shift variant that does not go back
 1|.pressed.ctrlAltTab.groups[2].dock = false|Ctrl+Alt+Tab without the dock
 1|.pressed.ctrlAltTab.dockFocused = false|a dock group the focus never reaches
+1|.pressed.ctrlAltTab.labels = []|focus in the dock that names nothing, as without the focus-in hook
+1|.pressed.dockRight.labels = ["Files", "Clocks"]|a label left behind when the focus moves on, as without the focus-out hook
+1|.pressed.dockEscape.labels = ["Clocks"]|Escape that leaves the label up
+1|.pressed.dockHover.hovered = ["Files", "Show Apps"]|the focused item's label still up under a hover elsewhere
+1|.pressed.dockHover.left = []|the focused item's label not back once the hover ends
+1|.pressed.dockEscape.focus = "Clocks"|Escape that hides the label but keeps the focus
+1|.pressed.dockHover.lowestOpacity = 0|the focused item's label fading in again under a hover on it
+1|.pressed.dockHover.offFocused = []|the focused item's label gone once a hover on it ends
 1|.pressed.superTap.overview = false|a Super tap that opens nothing
 1|.pressed.superA.apps = false|Super+A that opens the windows, not the launcher
 1|.modals = 1|a grab left behind
-12|{error: "keysCase: no keyboard"}|a probe error
+17|{error: "keysCase: no keyboard"}|a probe error
 CHANGES
 }
 
@@ -4278,6 +4434,7 @@ test_modal_dialog
 test_a11y
 test_inactive_dot_gap
 test_a11y_surface_errors
+test_dock_labels_case
 test_pill_gaps
 test_signoff
 test_shell_icons

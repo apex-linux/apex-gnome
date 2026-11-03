@@ -985,6 +985,15 @@ fact "lock: the password's own problem stays in upstream's message line" \
     "lock\.hint\.password-problem=$HINT_FAILED message=true indicator=false"
 fact "lock: the reader's next prompt brings the line back" "lock\.hint\.fingerprint-again=$HINT_SCAN message=false indicator=false"
 fact "lock: a prompt rebuilt after blank starts on the password's hint" "lock\.hint\.after-wake=$HINT_PASSWORD message=true indicator=true"
+fact "lock: no error ring on the password's prompt" 'lock\.ring\.password=false'
+fact "lock: no error ring while the reader scans" 'lock\.ring\.fingerprint-scan=false'
+fact "lock: a failed scan changes the hint, not the field" 'lock\.ring\.fingerprint-failed=false'
+fact "lock: a wrong password rings the field" 'lock\.ring\.password-problem=true'
+fact "lock: the reader's next prompt takes the ring away" 'lock\.ring\.fingerprint-again=false'
+fact "lock: the ring comes with the next wrong password" 'lock\.ring\.password-again=true'
+fact "lock: and goes when upstream fades the message" 'lock\.ring\.message-faded=false'
+fact "lock: and comes back with it" 'lock\.ring\.message-back=true'
+fact "lock: blanking takes the prompt, and its ring, down" 'lock\.ring\.blank=false'
 fact "lock: blanking tears the prompt down and cancels its verifier" 'lock\.blank=page=clock prompt=none cancelled=conversation-1'
 fact "lock: waking builds a new conversation" 'lock\.wake=page=prompt prompt=conversation-2 cancelled=conversation-1'
 fact "lock: and the key that woke the screen cannot answer it" 'lock\.wake\.keys=false'
@@ -1207,6 +1216,24 @@ fact "dock: its Show Apps opens the overview's app grid" 'dock\.show-apps=overvi
 fact "dock: and follows the overview's own button" 'dock\.overview-show-apps-off=dock-button=false'
 fact "dock: no separator between the dock's favourites and running apps, upstream's elsewhere; a full-colour Show Apps" \
     'dock\.hooks=separator=false stock-separator=true show-apps=view-app-grid'
+dock_labels_are() {
+    local got
+    got=$(sed -n 's/^probe: dock\.labels\.\([a-z-]*\)=\(.*\)$/[\1] \2/p' "$OUT" | paste -sd' ' -)
+    if [[ $got == "$2" ]]; then ok "$1"; else not_ok "$1 (got '$got', expected '$2')"; _show; fi
+}
+dock_label_steps=(
+    '[initial] none focus=none' '[focused] Files focus=Files' '[moved] Web focus=Web' '[hovered] showApps focus=Web'
+    '[hover-ended] Web focus=Web' '[hover-focused] Web focus=Web' '[hover-focused-ended] Web focus=Web faded-in-again=0'
+    '[other-menu-open] none focus=Web' '[other-menu-closed] Web focus=Web' '[trash-menu-open] none focus=Web'
+    '[trash-menu-closed] Web focus=Web' '[unmapped] none focus=Web' '[mapped] Web focus=Web' '[slid-out] none focus=Web'
+    '[slid-back] Web focus=Web' '[activated] Web focus=Web' '[dock-moved] Web focus=Web label-moved=100 faded-in-again=0'
+    '[escape] none focus=none' '[escape-in-overview] none focus=none to-overview=true' '[focused-item-destroyed] none focus=none')
+dock_labels_are "dock: key focus shows an item's name label as a hover does, one at a time: it moves with the focus; \
+a hover elsewhere takes it and gives it back; a hover on the focused item neither fades it in again nor takes it; \
+any open menu, an unmapped item or a dock slid out hides it; activation keeps it; a moved dock places it again; \
+Escape drops the focus and the label, and in the overview passes on to it; a focused item destroyed leaves nothing behind" \
+    "${dock_label_steps[*]}"
+fact "dock: layer-enabled=false comes while a focused item's label is up" 'dock\.focus-label-at-disable=Web'
 fact "dock: layer-enabled=false takes it away and gives the overview its dash back, at its own height" 'dock\.off=none dash=true dash-height=-1'
 fact "dock: a redisplay still pending when the dock goes away never runs, and the overview's dash queues as stock's does again" \
     'dock\.overview-dash-off=redisplays=2 queued=1'
