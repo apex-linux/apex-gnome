@@ -42,6 +42,8 @@ LOCK_CASES = {
     "lock-safe": {"apex": False, "question": "Password", "layer": False},
 }
 GREETER_CASES = ["greeter-light", "greeter-dark"]
+STOCK_HC = "resource:///org/gnome/shell/theme/stock/gnome-shell-high-contrast.css"
+UPSTREAM_HC_AVATAR = "rgba(255, 255, 255, .3)"  # transparentize($_gdm_fg, .7)
 # dbus-daemon logs each activation: a mode that cannot screencast has no use for the service (patch 0020).
 SCREENCAST_STARTED = "Activating service name='org.gnome.Shell.Screencast'"
 # Per polkit case: board 13's dialog or upstream's, and the info line PAM sent.
@@ -437,6 +439,17 @@ def check_suspend(shots, case):
     torn, rebuilt = "Apex: lock: suspend, prompt torn down", "Apex: lock: screen on, prompt rebuilt"
     check(f"{case}: both logged once, the rebuild as qualify.sh's screen-on line after the teardown",
           (log.count(torn), log.count(rebuilt)) == (1, 1) and log.index(torn) < log.index(rebuilt))
+
+
+def check_greeter_safe_high_contrast(shots, case):
+    """Safe mode with high contrast takes upstream's sheet from theme/stock/: the Apex part restyles no greeter actor."""
+    listed = facts(read(shots, f"{case}.log")).get("list") or {}
+    check(f"{case}: the greeter loads upstream's high-contrast sheet from theme/stock/",
+          listed.get("sheet") == STOCK_HC, str(listed.get("sheet")))
+    avatars = listed.get("avatars") or []
+    check(f"{case}: the list's avatars are upstream's: a .3 fill and a 2 px clear border", len(avatars) == 2 and all(
+        same_colour(a["background"], UPSTREAM_HC_AVATAR) and a["border"] == 2 and a["borderColor"][7:] == "00"
+        for a in avatars), json.dumps(avatars))
 
 
 def check_greeter(shots, case):
@@ -845,6 +858,7 @@ def main():
     check_fingerprint_suspend(shots, "lock-fingerprint-suspend")
     for case in GREETER_CASES:
         check_greeter(shots, case)
+    check_greeter_safe_high_contrast(shots, "greeter-safe-high-contrast")
     check_motion(shots, "lock-motion", reduced=False)
     check_motion(shots, "lock-reduce-motion", reduced=True)
     check_greeter_motion(shots, "greeter-reduce-motion")

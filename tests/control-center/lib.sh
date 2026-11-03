@@ -10,10 +10,13 @@ readonly CC_TESTS
 . "$CC_TESTS/../lib/pins.sh"
 
 readonly SHOTS=$CC_TESTS/../shots
+# shellcheck source=SCRIPTDIR/../shots/backtrace.sh
+. "$SHOTS/backtrace.sh"
 readonly USER_NAME=apex
 readonly MONITOR=2880x1800
 readonly SCALE=2
 readonly CLOCK_LIB=/run/apex-control-center-clock.so
+readonly CRASH_LIB=/run/apex-control-center-crash.so
 readonly CLOCK='2026-10-21 14:02:00'
 readonly FIXTURE_NAMES=(org.freedesktop.UPower org.freedesktop.NetworkManager org.bluez net.hadess.SwitcherooControl)
 readonly UPDATE1_NAME=io.github.apex_linux.Apex.Update1
@@ -118,21 +121,22 @@ headless_bus() {
     python3 -m dbusmock --system --template upower_power_profiles_daemon >"$log_dir/fixture-power-profiles.log" 2>&1 &
     headless_wait_name "$POWER_PROFILES_NAME" || die "dbusmock did not take $POWER_PROFILES_NAME"
     gcc -O2 -Wall -Werror -shared -fPIC -o "$CLOCK_LIB" "$SHOTS/clock.c" || die "cannot build tests/shots/clock.c"
+    crash_lib "$CRASH_LIB" || die "cannot build tests/shots/crash.c"
     CLOCK_EPOCH=$(date -u -d "$CLOCK" +%s)
     held=$(env LD_PRELOAD="$CLOCK_LIB" G2_CLOCK_EPOCH="$CLOCK_EPOCH" date -u '+%F %T' 2>&1)
     [[ $held == "$CLOCK" ]] || die "$CLOCK_LIB does not hold the clock at $CLOCK: $held"
 }
 
-# headless_run LOG PROBE TIMEOUT SETTINGS [NAME=VALUE...]: one shell with PROBE as its automation script.
+# headless_run LOG PROBE TIMEOUT SETTINGS [NAME=VALUE...]: a shell running PROBE; a crash leaves its .bt by LOG.
 headless_run() {
-    local log=$1 probe=$2 timeout=$3 settings=$4 run
+    local log=$1 probe=$2 timeout=$3 settings=$4 run rc=0
     shift 4
     run=$(mktemp -d)
     chown "$USER_NAME:" "$run" && chmod 700 "$run"
     # shellcheck disable=SC2016 # expanded by the user's bash
     runuser -u "$USER_NAME" -- env -i HOME="$HEADLESS_HOME" PATH=/usr/bin:/usr/sbin \
         XDG_RUNTIME_DIR="$run" XDG_SESSION_TYPE=wayland XDG_CURRENT_DESKTOP=GNOME LANG=C.UTF-8 TZ=UTC CLOCK_LIB="$CLOCK_LIB" \
-        G2_CLOCK_EPOCH="$CLOCK_EPOCH" DBUS_SYSTEM_BUS_ADDRESS=unix:path=/run/dbus/system_bus_socket \
+        CRASH_LIB="$CRASH_LIB" G2_CLOCK_EPOCH="$CLOCK_EPOCH" DBUS_SYSTEM_BUS_ADDRESS=unix:path=/run/dbus/system_bus_socket \
         PROBE="$probe" MONITOR="$MONITOR" CC_TESTS="$CC_TESTS" \
         SETTINGS="$APEX_SETTINGS"$'\n'"$CAPTURE_SETTINGS"$'\n'"$settings" "$@" \
         timeout "$timeout" dbus-run-session -- bash -c '
@@ -140,9 +144,12 @@ headless_run() {
                 [[ -n $schema ]] || continue
                 gsettings set "$schema" "$key" "$value" || exit 1
             done <<<"$SETTINGS"
-            exec env LD_PRELOAD="$CLOCK_LIB" gnome-shell --headless --virtual-monitor "$MONITOR" \
+            ulimit -c unlimited 2>/dev/null
+            exec env LD_PRELOAD="$CLOCK_LIB $CRASH_LIB" gnome-shell --headless --virtual-monitor "$MONITOR" \
                 --wayland-display=apex-control-center --automation-script "$PROBE"
-        ' >"$log" 2>&1
+        ' >"$log" 2>&1 || rc=$?
+    case_backtrace "$log" "$rc" "$HEADLESS_HOME" "${log%.log}.bt"
+    return "$rc"
 }
 
 # headless_update1 SCENARIO LOG: update1.py, in place of apex-updated, until headless_update1_stop.
