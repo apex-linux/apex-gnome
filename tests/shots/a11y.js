@@ -32,6 +32,7 @@ export const ACCENTS = ['blue', 'teal', 'green', 'yellow', 'orange', 'red', 'pin
 const DOTS = ['workspace-dot', 'messages-indicator'];
 // Board 39's two input sources, as direct.sh's TWO_SOURCES.
 const TWO_SOURCES = [['xkb', 'us'], ['xkb', 'fr']];
+const DOCK_LABEL_FAVOURITES = ['org.gnome.Nautilus.desktop', 'org.gnome.clocks.desktop'];
 const CHIP_TIMEOUT_MS = 5000;
 
 function srgb(channel) {
@@ -164,6 +165,12 @@ function snapshot(target, root, cards, unit) {
     const fill = target.kind === 'icon' ? node.get_background_color() : null;
     const label = actor instanceof St.Label ? actor : null;
     const layout = bare ? actor.get_layout() : label?.clutter_text?.get_layout();
+    // A label measured as its own surface, a dock item's name, has rounded corners not behind its text; an entry draws
+    // its text in its ClutterText, inside the border and padding.
+    let inked = actor instanceof St.Entry ? target.ink : actor;
+    if (label && actor === root)
+        inked = label.clutter_text;
+    const box = extents(inked);
     return {
         kind: target.kind,
         name: target.name.slice(0, 40),
@@ -173,9 +180,8 @@ function snapshot(target, root, cards, unit) {
         fill: fill?.alpha ? [fill.red, fill.green, fill.blue, fill.alpha / 255] : null,
         rgb: [color.red, color.green, color.blue],
         alpha: color.alpha / 255 * actor.get_paint_opacity() / 255,
-        // An entry draws its text in its ClutterText, inside the border and padding.
-        extents: extents(actor instanceof St.Entry ? target.ink : actor),
-        box: roundedBox(extents(actor instanceof St.Entry ? target.ink : actor), unit),
+        extents: box,
+        box: roundedBox(box, unit),
         ellipsized: layout?.is_ellipsized() ?? false,
         // A collapsed notification's body, whole once the notification expands.
         expandable: !!label?.has_style_class_name('message-body') && !!ancestor(actor, root, a => a.has_style_class_name?.('message')),
@@ -477,6 +483,89 @@ async function focusReport(h, settle, unit) {
     return {backdrop: await surfaces(), busy: await withWallpaper(busyWallpaper(), surfaces)};
 }
 
+// The dock's name labels as a hover shows them: the first, middle and last item's text over its
+// fill and box against the monitor's and the dock's; with keyFocus, then key focus's alone.
+async function dockLabels(h, settle, unit, report, keyFocus = false) {
+    const dock = h.apexDock();
+    if (!dock?.mapped)
+        return {error: 'no dock'};
+    const items = [...dock._box.get_children(), ...dock._dashContainer.get_children().slice(1)]
+        .filter(item => item.visible && item.label && item._labelText);
+    if (items.length < 3)
+        return {error: `${items.length} labelled items`};
+    const pointer = global.stage.context.get_backend().get_default_seat()
+        .create_virtual_device(Clutter.InputDeviceType.POINTER_DEVICE);
+    const monitor = Main.layoutManager.primaryMonitor;
+    const away = [monitor.x + monitor.width / 2, monitor.y + monitor.height / 4].map(Math.round);
+    // A new device can drop one axis of its first motion.
+    const moveTo = to => until(() => {
+        const [x, y] = global.get_pointer();
+        if (x === to[0] && y === to[1])
+            return true;
+        pointer.notify_absolute_motion(GLib.get_monotonic_time(), ...to);
+        return false;
+    });
+    const out = {count: items.length, dock: roundedBox(extents(dock._background), unit)};
+    const picked = [['first', items[0]], ['middle', items[Math.floor(items.length / 2)]], ['last', items.at(-1)]];
+    try {
+        for (const [key, item] of picked) {
+            const {x, y, width, height} = extents(item.child);
+            /* eslint-disable no-await-in-loop */
+            await moveTo([x + width / 2, y + height / 2].map(Math.round));
+            out[key] = await until(() => item.label.visible && item.label.opacity === 255)
+                ? {...await report(item.label), name: item._labelText}
+                : {error: `${item._labelText}'s label never showed`};
+            await moveTo(away);
+            await until(() => !item.label.visible);
+            /* eslint-enable no-await-in-loop */
+        }
+        const [, first] = picked[0];
+        if (!keyFocus)
+            return out;
+        // A hover's label still up would pass for key focus's.
+        const hidden = items.every(i => !i.label.visible);
+        first.child.grab_key_focus();
+        out.keyFocus = {
+            name: first._labelText,
+            hidden,
+            focused: global.stage.get_key_focus() === first.child,
+            shown: await until(() => first.label.visible && first.label.opacity > 0),
+        };
+    } finally {
+        global.stage.set_key_focus(null);
+        await moveTo(away);
+        await settle();
+    }
+    return out;
+}
+
+// A dock with a first, a middle and a last item: a case with none pinned gets two for read.
+async function withDockItems(h, read) {
+    if (h.apexDock()?._labelledItems().length >= 3)
+        return read();
+    const shell = new Gio.Settings({schema_id: 'org.gnome.shell'});
+    shell.set_strv('favorite-apps', DOCK_LABEL_FAVOURITES);
+    try {
+        await until(() => h.apexDock()?._labelledItems().length >= DOCK_LABEL_FAVOURITES.length + 2);
+        return await read();
+    } finally {
+        shell.reset('favorite-apps');
+        await quiet();
+    }
+}
+
+// The dock's name labels alone, for a case that measures nothing else (G2_DOCK_LABELS=1).
+export function dockLabelsReport(h) {
+    const {unit} = h;
+    const report = root => quiet().then(() => surfaceReport(root, quiet, unit));
+    const m = Main.layoutManager.primaryMonitor;
+    return withDockItems(h, async () => ({
+        monitor: {x: m.x / unit.length, y: m.y / unit.length, width: m.width / unit.length, height: m.height / unit.length},
+        dockLabels: await dockLabels(h, quiet, unit, report, true),
+        dockLabelsBusy: await withWallpaper(busyWallpaper(), () => dockLabels(h, quiet, unit, report)),
+    }));
+}
+
 // The bar over whatever the stage draws now, as a11yReport measures it.
 export async function barReport(settle, unit) {
     await settle();
@@ -520,12 +609,10 @@ function notifications() {
     return source;
 }
 
-// Every Apex surface in turn; h holds probe.js's openers and helpers.
-// The shell idle, then one frame painted after it: what the stage shows is what it last drew.
+// One frame painted from now: what the stage shows is what it last drew.
 const FRAME_TIMEOUT_MS = 1000;
-async function quiet() {
-    await Scripting.waitLeisure();
-    await new Promise(resolve => {
+export function paintedFrame() {
+    return new Promise(resolve => {
         let id = 0;
         const done = () => {
             if (!id)
@@ -540,6 +627,12 @@ async function quiet() {
     });
 }
 
+async function quiet() {
+    await Scripting.waitLeisure();
+    await paintedFrame();
+}
+
+// Every Apex surface in turn; h holds probe.js's openers and helpers.
 export async function a11yReport(h) {
     const {unit} = h;
     const waits = {count: 0, ms: 0};
@@ -577,6 +670,11 @@ export async function a11yReport(h) {
     lap('barPills');
     out.dock = await report(h.apexDock());
     lap('dock');
+    await withDockItems(h, async () => {
+        out.dockLabels = await dockLabels(h, settle, unit, report, true);
+        out.dockLabelsBusy = await withWallpaper(busyWallpaper(), () => dockLabels(h, settle, unit, report));
+    });
+    lap('dockLabels');
     out.popupMenu = await withOpen(() => h.openPopupMenu(), s => s.close(), s => report(s.root));
     lap('popupMenu');
     out.osd = await withOpen(() => h.openOsd(), s => s.close(), s => report(s.root));
@@ -678,7 +776,7 @@ export async function a11yReport(h) {
     out.endSession = await withOpen(() => h.openEndSessionDialog(), d => d?.cancel(), d => report(d?.dialogLayout._dialog));
     lap('endSession');
     out.spotlight = await h.withSpotlight(async (popup, toast) => {
-        popup.panel.get_children()[0].get_children()[1].set_text('disk');
+        await h.typeInSpotlight(popup, 'disk');
         return {popup: await report(popup.panel), toast: await report(await toast())};
     }) ?? {error: 'no Spotlight'};
     lap('spotlight');

@@ -498,6 +498,9 @@ export const layoutManager = {
         return this.testMonitors ?? [this.primaryMonitor];
     },
     getWorkAreaForMonitor: () => ({x: 0, y: 32, width: 1440, height: 868}),
+    findMonitorForActor() {
+        return this.primaryMonitor;
+    },
     chrome: [],
     overviewGroup,
     _bgManagers: [new StubActor('background')],
