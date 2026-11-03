@@ -310,8 +310,10 @@ export async function dockExternalReport(helpers) {
         // The panel's right edge meets the external display; the window goes there, so the dock shows.
         await placeWindow(Main.layoutManager.monitors.find(m => m.index !== Main.layoutManager.primaryIndex).index, apexDock);
         steps.mixed.edgeLabel = await edgeLabel(apexDock, helpers.settle, 'right');
-        // Mutter moves the window to the primary at the plug, which hides the dock: it starts there instead.
-        await placeWindow(primary, apexDock);
+        // At a plug mutter moves the window to the monitor it last chose, which hides or shows the dock.
+        testWindow().minimize();
+        await until(() => testWindow().minimized, WINDOW_TIMEOUT_MS);
+        await Scripting.sleep(SLIDE_MS);
 
         steps.hotplug = await hotplug(apexDock, helpers);
     } finally {
