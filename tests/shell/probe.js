@@ -500,7 +500,7 @@ function ink(label) {
     return {fg: color(node.get_foreground_color()), fill: color(node.get_background_color())};
 }
 
-function ring(entry) {
+function entryShadow(entry) {
     const shadow = entry.get_theme_node().get_box_shadow();
     return shadow ? {inset: shadow.inset, spread: shadow.spread, color: color(shadow.color)} : null;
 }
@@ -535,7 +535,7 @@ function describePolkit(dialog) {
         error: {...box(dialog._errorMessageLabel), ...ink(dialog._errorMessageLabel), text: visibleText(dialog._errorMessageLabel)},
         row: box(dialog._errorMessageLabel.get_parent()),
         surface: color(dialog.dialogLayout._dialog.get_theme_node().get_background_color()),
-        ring: ring(dialog._passwordEntry),
+        ring: entryShadow(dialog._passwordEntry),
         details: details ? {
             ...box(details),
             open: grid.visible,
