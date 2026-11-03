@@ -1,6 +1,7 @@
 {
   "boards": {
     "12": {
+      "board": 12,
       "title": "GDM greeter",
       "slug": "greeter",
       "source": "tests/shell/shoot.sh",
@@ -9,25 +10,26 @@
         "light": "greeter-light-list",
         "dark": "greeter-dark-list"
       },
-      "shots": "ae7b2615cf7d",
+      "shots": "9950a9cf03cc",
       "files": {
         "light": "boards/board-12-light.png",
         "dark": "boards/board-12-dark.png"
       },
       "pins": {
-        "apexGnome": "07d15805e98a7bf3a8d3267c6f88b410fa08142b",
-        "apexDesktop": "8f064873e18b4ffd6a7399c2ab9d040fd7e797ee"
+        "apexGnome": "64a6d0388fe81f06dbeb72afdcd7cf7b8faf805f",
+        "apexDesktop": "44d889fe455a4dd3e62bfa33796fb89d9bc2ff4f"
       },
       "scale": 2,
       "monitor": "2880x1800",
       "approval": {
         "status": "approved",
-        "approvedAt": "2026-10-25T01:44:13.857Z",
-        "shots": "ae7b2615cf7d",
-        "note": "Decided on c05b3e4's capture, of the same shots hash ae7b2615cf7d."
+        "approvedAt": "2026-11-03T12:20:00Z",
+        "shots": "9950a9cf03cc",
+        "note": "batch-1 (apex-gnome#267, 565c171), owner approved all 12 boards"
       }
     },
     "13": {
+      "board": 13,
       "title": "Authentication dialog",
       "slug": "polkit",
       "source": "tests/shell/shoot.sh",
@@ -36,24 +38,26 @@
         "light": "polkit-light-open",
         "dark": "polkit-dark-open"
       },
-      "shots": "8860d5d94dca",
+      "shots": "ae21b5238f79",
       "files": {
         "light": "boards/board-13-light.png",
         "dark": "boards/board-13-dark.png"
       },
       "pins": {
-        "apexGnome": "0f1d211fe841fd526f8baeb09fbec02f3f80a635",
-        "apexDesktop": "8f064873e18b4ffd6a7399c2ab9d040fd7e797ee"
+        "apexGnome": "64a6d0388fe81f06dbeb72afdcd7cf7b8faf805f",
+        "apexDesktop": "44d889fe455a4dd3e62bfa33796fb89d9bc2ff4f"
       },
       "scale": 2,
       "monitor": "2880x1800",
       "approval": {
         "status": "approved",
-        "approvedAt": "2026-10-26T14:40:08.500Z",
-        "shots": "8860d5d94dca"
+        "approvedAt": "2026-11-03T12:20:00Z",
+        "shots": "ae21b5238f79",
+        "note": "batch-1 (apex-gnome#267, 565c171), owner approved all 12 boards"
       }
     },
     "14": {
+      "board": 14,
       "title": "Power off dialog",
       "slug": "power-off",
       "source": "tests/shell/shoot.sh",
@@ -62,24 +66,26 @@
         "light": "end-session-light-power-off",
         "dark": "end-session-dark-power-off"
       },
-      "shots": "be11476639b5",
+      "shots": "0f6dc6c1561e",
       "files": {
         "light": "boards/board-14-light.png",
         "dark": "boards/board-14-dark.png"
       },
       "pins": {
-        "apexGnome": "0f1d211fe841fd526f8baeb09fbec02f3f80a635",
-        "apexDesktop": "8f064873e18b4ffd6a7399c2ab9d040fd7e797ee"
+        "apexGnome": "64a6d0388fe81f06dbeb72afdcd7cf7b8faf805f",
+        "apexDesktop": "44d889fe455a4dd3e62bfa33796fb89d9bc2ff4f"
       },
       "scale": 2,
       "monitor": "2880x1800",
       "approval": {
         "status": "approved",
-        "approvedAt": "2026-10-26T14:40:10.197Z",
-        "shots": "be11476639b5"
+        "approvedAt": "2026-11-03T12:20:00Z",
+        "shots": "0f6dc6c1561e",
+        "note": "batch-1 (apex-gnome#267, 565c171), owner approved all 12 boards"
       }
     },
     "19": {
+      "board": 19,
       "title": "Screenshot UI",
       "slug": "screenshot",
       "source": "tests/shots/direct.sh signoff",
@@ -88,24 +94,26 @@
         "light": "default-screenshot",
         "dark": "dark-style-screenshot"
       },
-      "shots": "370c457419e5",
+      "shots": "165f42c21aa8",
       "files": {
         "light": "boards/board-19-light.png",
         "dark": "boards/board-19-dark.png"
       },
       "pins": {
-        "apexGnome": "0f1d211fe841fd526f8baeb09fbec02f3f80a635",
-        "apexDesktop": "8f064873e18b4ffd6a7399c2ab9d040fd7e797ee"
+        "apexGnome": "64a6d0388fe81f06dbeb72afdcd7cf7b8faf805f",
+        "apexDesktop": "44d889fe455a4dd3e62bfa33796fb89d9bc2ff4f"
       },
       "scale": 2,
       "monitor": "2880x1800",
       "approval": {
         "status": "approved",
-        "approvedAt": "2026-10-26T14:40:27.965Z",
-        "shots": "370c457419e5"
+        "approvedAt": "2026-11-03T12:20:00Z",
+        "shots": "165f42c21aa8",
+        "note": "batch-1 (apex-gnome#267, 565c171), owner approved all 12 boards"
       }
     },
     "34": {
+      "board": 34,
       "title": "Calendar and notifications",
       "slug": "date-menu",
       "source": "tests/shots/direct.sh signoff",
@@ -114,24 +122,26 @@
         "light": "default-datemenu",
         "dark": "dark-style-datemenu"
       },
-      "shots": "3a4a557fdb11",
+      "shots": "3c18957838ef",
       "files": {
         "light": "boards/board-34-light.png",
         "dark": "boards/board-34-dark.png"
       },
       "pins": {
-        "apexGnome": "0f1d211fe841fd526f8baeb09fbec02f3f80a635",
-        "apexDesktop": "8f064873e18b4ffd6a7399c2ab9d040fd7e797ee"
+        "apexGnome": "64a6d0388fe81f06dbeb72afdcd7cf7b8faf805f",
+        "apexDesktop": "44d889fe455a4dd3e62bfa33796fb89d9bc2ff4f"
       },
       "scale": 2,
       "monitor": "2880x1800",
       "approval": {
         "status": "approved",
-        "approvedAt": "2026-10-26T14:40:52.727Z",
-        "shots": "3a4a557fdb11"
+        "approvedAt": "2026-11-03T12:20:00Z",
+        "shots": "3c18957838ef",
+        "note": "batch-1 (apex-gnome#267, 565c171), owner approved all 12 boards"
       }
     },
     "35": {
+      "board": 35,
       "title": "Overview",
       "slug": "overview",
       "source": "tests/shots/direct.sh signoff",
@@ -140,24 +150,26 @@
         "light": "default-signoff-overview",
         "dark": "dark-style-signoff-overview"
       },
-      "shots": "2eba994b1702",
+      "shots": "7db2dff1ee50",
       "files": {
         "light": "boards/board-35-light.png",
         "dark": "boards/board-35-dark.png"
       },
       "pins": {
-        "apexGnome": "0f1d211fe841fd526f8baeb09fbec02f3f80a635",
-        "apexDesktop": "8f064873e18b4ffd6a7399c2ab9d040fd7e797ee"
+        "apexGnome": "64a6d0388fe81f06dbeb72afdcd7cf7b8faf805f",
+        "apexDesktop": "44d889fe455a4dd3e62bfa33796fb89d9bc2ff4f"
       },
       "scale": 2,
       "monitor": "2880x1800",
       "approval": {
         "status": "approved",
-        "approvedAt": "2026-10-26T14:40:56.625Z",
-        "shots": "2eba994b1702"
+        "approvedAt": "2026-11-03T12:20:00Z",
+        "shots": "7db2dff1ee50",
+        "note": "batch-1 (apex-gnome#267, 565c171), owner approved all 12 boards"
       }
     },
     "36": {
+      "board": 36,
       "title": "Launcher",
       "slug": "launcher",
       "source": "tests/shots/direct.sh signoff",
@@ -166,21 +178,22 @@
         "light": "default-launcher",
         "dark": "dark-style-launcher"
       },
-      "shots": "e2fc4eebc0ff",
+      "shots": "804407b86a0f",
       "files": {
         "light": "boards/board-36-light.png",
         "dark": "boards/board-36-dark.png"
       },
       "pins": {
-        "apexGnome": "0f1d211fe841fd526f8baeb09fbec02f3f80a635",
-        "apexDesktop": "8f064873e18b4ffd6a7399c2ab9d040fd7e797ee"
+        "apexGnome": "64a6d0388fe81f06dbeb72afdcd7cf7b8faf805f",
+        "apexDesktop": "44d889fe455a4dd3e62bfa33796fb89d9bc2ff4f"
       },
       "scale": 2,
       "monitor": "2880x1800",
       "approval": {
         "status": "approved",
-        "approvedAt": "2026-10-26T14:41:00.368Z",
-        "shots": "e2fc4eebc0ff"
+        "approvedAt": "2026-11-03T12:20:00Z",
+        "shots": "804407b86a0f",
+        "note": "batch-1 (apex-gnome#267, 565c171), owner approved all 12 boards"
       }
     },
     "37": {
@@ -210,6 +223,7 @@
       }
     },
     "38": {
+      "board": 38,
       "title": "Spotlight",
       "slug": "spotlight",
       "source": "tests/shots/direct.sh signoff",
@@ -218,21 +232,22 @@
         "light": "default-spotlight-search",
         "dark": "dark-style-spotlight-search"
       },
-      "shots": "b576f91201aa",
+      "shots": "46dbae5e428a",
       "files": {
         "light": "boards/board-38-light.png",
         "dark": "boards/board-38-dark.png"
       },
       "pins": {
-        "apexGnome": "0f1d211fe841fd526f8baeb09fbec02f3f80a635",
-        "apexDesktop": "8f064873e18b4ffd6a7399c2ab9d040fd7e797ee"
+        "apexGnome": "64a6d0388fe81f06dbeb72afdcd7cf7b8faf805f",
+        "apexDesktop": "44d889fe455a4dd3e62bfa33796fb89d9bc2ff4f"
       },
       "scale": 2,
       "monitor": "2880x1800",
       "approval": {
         "status": "approved",
-        "approvedAt": "2026-10-26T14:41:10.988Z",
-        "shots": "b576f91201aa"
+        "approvedAt": "2026-11-03T12:20:00Z",
+        "shots": "46dbae5e428a",
+        "note": "batch-1 (apex-gnome#267, 565c171), owner approved all 12 boards"
       }
     },
     "39": {
@@ -262,6 +277,7 @@
       }
     },
     "15": {
+      "board": 15,
       "title": "Window switcher",
       "slug": "alt-tab",
       "source": "tests/shots/direct.sh signoff",
@@ -270,22 +286,22 @@
         "light": "default-signoff-alt-tab",
         "dark": "dark-style-signoff-alt-tab"
       },
-      "shots": "5fdac7cc4c67",
+      "shots": "69265c11ef2d",
       "files": {
         "light": "boards/board-15-light.png",
         "dark": "boards/board-15-dark.png"
       },
       "pins": {
-        "apexGnome": "0f1d211fe841fd526f8baeb09fbec02f3f80a635",
-        "apexDesktop": "8f064873e18b4ffd6a7399c2ab9d040fd7e797ee"
+        "apexGnome": "64a6d0388fe81f06dbeb72afdcd7cf7b8faf805f",
+        "apexDesktop": "44d889fe455a4dd3e62bfa33796fb89d9bc2ff4f"
       },
       "scale": 2,
       "monitor": "2880x1800",
       "approval": {
         "status": "approved",
-        "approvedAt": "2026-10-26T14:40:12.970Z",
-        "shots": "5fdac7cc4c67",
-        "note": "please check the 4 corner color of light theme"
+        "approvedAt": "2026-11-03T12:20:00Z",
+        "shots": "69265c11ef2d",
+        "note": "batch-1 (apex-gnome#267, 565c171), owner approved all 12 boards"
       }
     },
     "16": {
@@ -316,6 +332,7 @@
       }
     },
     "17": {
+      "board": 17,
       "title": "Quick Settings: Wi-Fi submenu",
       "slug": "wifi-menu",
       "source": "tests/shots/direct.sh signoff",
@@ -324,25 +341,26 @@
         "light": "default-quick-settings",
         "dark": "dark-style-quick-settings"
       },
-      "shots": "fdd8c9e781be",
+      "shots": "fc7b2361cf7b",
       "files": {
         "light": "boards/board-17-light.png",
         "dark": "boards/board-17-dark.png"
       },
       "pins": {
-        "apexGnome": "0f1d211fe841fd526f8baeb09fbec02f3f80a635",
-        "apexDesktop": "8f064873e18b4ffd6a7399c2ab9d040fd7e797ee"
+        "apexGnome": "64a6d0388fe81f06dbeb72afdcd7cf7b8faf805f",
+        "apexDesktop": "44d889fe455a4dd3e62bfa33796fb89d9bc2ff4f"
       },
       "scale": 2,
       "monitor": "2880x1800",
       "approval": {
         "status": "approved",
-        "approvedAt": "2026-10-26T14:40:23.869Z",
-        "shots": "fdd8c9e781be",
-        "note": "please check the text alignment"
+        "approvedAt": "2026-11-03T12:20:00Z",
+        "shots": "fc7b2361cf7b",
+        "note": "batch-1 (apex-gnome#267, 565c171), owner approved all 12 boards"
       }
     },
     "20": {
+      "board": 20,
       "title": "Lock screen",
       "slug": "lock",
       "source": "tests/shell/shoot.sh",
@@ -351,25 +369,26 @@
         "light": "lock-light-open",
         "dark": "lock-dark-open"
       },
-      "shots": "6e21c086f33d",
+      "shots": "d8fd01a51de2",
       "files": {
         "light": "boards/board-20-light.png",
         "dark": "boards/board-20-dark.png"
       },
       "pins": {
-        "apexGnome": "0f1d211fe841fd526f8baeb09fbec02f3f80a635",
-        "apexDesktop": "8f064873e18b4ffd6a7399c2ab9d040fd7e797ee"
+        "apexGnome": "64a6d0388fe81f06dbeb72afdcd7cf7b8faf805f",
+        "apexDesktop": "44d889fe455a4dd3e62bfa33796fb89d9bc2ff4f"
       },
       "scale": 2,
       "monitor": "2880x1800",
       "approval": {
         "status": "approved",
-        "approvedAt": "2026-10-26T14:40:33.993Z",
-        "shots": "6e21c086f33d",
-        "note": "please check the eye icon \"show password\" position, it not place at the end of password box"
+        "approvedAt": "2026-11-03T12:20:00Z",
+        "shots": "d8fd01a51de2",
+        "note": "batch-1 (apex-gnome#267, 565c171), owner approved all 12 boards"
       }
     },
     "22": {
+      "board": 22,
       "title": "Edge tiling",
       "slug": "tiling",
       "source": "tests/shots/direct.sh signoff",
@@ -378,22 +397,22 @@
         "light": "default-tile-preview",
         "dark": "dark-style-tile-preview"
       },
-      "shots": "fb150ba803d6",
+      "shots": "df5fe11bcddb",
       "files": {
         "light": "boards/board-22-light.png",
         "dark": "boards/board-22-dark.png"
       },
       "pins": {
-        "apexGnome": "0f1d211fe841fd526f8baeb09fbec02f3f80a635",
-        "apexDesktop": "8f064873e18b4ffd6a7399c2ab9d040fd7e797ee"
+        "apexGnome": "64a6d0388fe81f06dbeb72afdcd7cf7b8faf805f",
+        "apexDesktop": "44d889fe455a4dd3e62bfa33796fb89d9bc2ff4f"
       },
       "scale": 2,
       "monitor": "2880x1800",
       "approval": {
         "status": "approved",
-        "approvedAt": "2026-10-26T17:24:52.083Z",
-        "shots": "fb150ba803d6",
-        "note": "check the corner border, it has bolder than actual border"
+        "approvedAt": "2026-11-03T12:20:00Z",
+        "shots": "df5fe11bcddb",
+        "note": "batch-1 (apex-gnome#267, 565c171), owner approved all 12 boards"
       }
     }
   }
