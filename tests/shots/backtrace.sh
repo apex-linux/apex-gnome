@@ -3,11 +3,18 @@
 
 readonly BACKTRACE_BUDGET_S=${BACKTRACE_BUDGET_S:-120}
 readonly BACKTRACE_KILL_S=${BACKTRACE_KILL_S:-10}
-BACKTRACE_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+BACKTRACE_DIR=$(cd -- "${BASH_SOURCE[0]%/*}" && pwd)
 readonly BACKTRACE_DIR
 
 crash_lib() {
     gcc -O2 -Wall -Werror -shared -fPIC -o "$1" "$BACKTRACE_DIR/crash.c"
+}
+
+# shell_crash LOG RC: when RC is a signal exit, says so and where its .bt is, and succeeds; a crash fails its case.
+shell_crash() {
+    local bt=${1%.log}.bt
+    (($2 > 128)) || return 1
+    printf 'the shell crashed (SIG%s); see %s\n' "$(kill -l "$(($2 - 128))")" "${bt#"${APEX_ROOT:-}/"}"
 }
 
 # case_backtrace LOG RC HOME BT [EXPECTED]: a shell that died on a signal it was not expected to (RC above

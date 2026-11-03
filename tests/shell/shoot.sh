@@ -189,7 +189,7 @@ held=$(env LD_PRELOAD="$CLOCK_LIB" G2_CLOCK_EPOCH="$clock_epoch" date -u '+%F %T
 
 # shoot NAME USER MODE SCHEME QUESTION [SETTING...] [-- ENV...]
 shoot() {
-    local name=$1 user=$2 mode=$3 scheme=$4 question=$5 run rc settings home mock fprintd=''
+    local crash name=$1 user=$2 mode=$3 scheme=$4 question=$5 run rc settings home mock fprintd=''
     local -a fingerprint=()
     shift 5
     settings="$APEX_SETTINGS"$'\n'"$CAPTURE_SETTINGS"$'\n'"org.gnome.desktop.interface color-scheme '$scheme'"
@@ -229,6 +229,7 @@ shoot() {
     kill "$mock" ${fprintd:+"$fprintd"} 2>/dev/null
     wait "$mock" 2>/dev/null
     log "shoot.sh: $name: exit $rc"
+    if crash=$(shell_crash "$out/$name.log" "$rc"); then log "shoot.sh: $name: $crash"; return 1; fi
     grep -q '^.*APEXLOCK ' "$out/$name.log"
 }
 

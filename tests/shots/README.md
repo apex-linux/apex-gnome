@@ -145,7 +145,9 @@ signal trampoline (past `raise`, `abort` and GLib's assertion and log frames, an
 such as `g_assertion_message[cold]`), or that reason, or `no CASE.bt`. Every other shell a test starts does the
 same: `tests/lib/headless.sh`'s `headless_run` (the S2c, S7, Ptyxis and libadwaita tests), its copy in
 `tests/control-center/lib.sh`, and `tests/nautilus/shoot.sh` and `tests/shell/shoot.sh` preload
-`crash.c` (built by `backtrace.sh`'s `crash_lib`) and write `NAME.bt` beside the shell's `NAME.log`.
+`crash.c` (built by `backtrace.sh`'s `crash_lib`) and write `NAME.bt` beside the shell's `NAME.log`. A
+crash fails that case by name even when its capture was taken: `shell_crash` turns an exit above
+128 into "the shell crashed (SIGx); see NAME.bt".
 
 The layer follows `layer-enabled` live in a shell that started with it on
 ([DESIGN.md](https://github.com/apex-linux/apex/blob/main/docs/DESIGN.md#schema-iogithubapex_linuxapexdesktop): the layer reads

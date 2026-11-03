@@ -100,21 +100,21 @@ settings="org.gnome.desktop.interface icon-theme 'Apex'
 org.gnome.desktop.interface accent-color '${ACCENTS[0]}'
 org.gnome.nautilus.preferences default-folder-viewer 'icon-view'"
 run_shell() {
-    local name=$1
+    local name=$1 rc=0 crash
     shift
     # The container has no settings portal, so GTK reads icon-theme from GSettings.
     headless_run "$out/$name.log" "$S7_TESTS/probe.js" "$SHELL_TIMEOUT" "$settings" \
         XDG_SESSION_TYPE=wayland XDG_CURRENT_DESKTOP=GNOME APEX_SHOTS="$out" APEX_RUN="$name" APEX_FOLDER="$FOLDER" \
-        APEX_ACCENTS="$accents_json" APEX_CHOOSER="$S7_TESTS/chooser.js" "$@"
-    log "accent-test.sh: $name shell exit $?"
+        APEX_ACCENTS="$accents_json" APEX_CHOOSER="$S7_TESTS/chooser.js" "$@" || rc=$?
+    log "accent-test.sh: $name shell exit $rc"
     jq -nc --argjson accents "$accents_json" --argjson deadline "$DEADLINE_MS" --arg folder "$FOLDER" \
         --argjson result "$(sed -n 's/.*APEXS7 //p' "$out/$name.log" | tail -n 1 | grep . || echo null)" \
         '{accents: $accents, deadlineMs: $deadline, folder: $folder, result: $result}' >"$out/$name.json"
+    if crash=$(shell_crash "$out/$name.log" "$rc"); then log "accent-test.sh: $name: $crash"; return 1; fi
 }
-run_shell main RUST_LOG=info APEX_AGENT="$AGENT" APEX_AGENT_LOG="$out/agent.log"
-run_shell control
-
 status=0
+run_shell main RUST_LOG=info APEX_AGENT="$AGENT" APEX_AGENT_LOG="$out/agent.log" || status=1
+run_shell control || status=1
 "$S7_TESTS/check.sh" main "$out/main.json" || status=1
 "$S7_TESTS/check.sh" control "$out/control.json" || status=1
 ((status == 0)) || die "accent-test.sh: see ${out#"$APEX_ROOT/"}"

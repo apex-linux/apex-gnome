@@ -84,7 +84,9 @@ io.github.apex_linux.Apex.Desktop window-corner-radius 14" \
     RUST_LOG=info APEX_SHELL_GUARD_MARKER=/tmp/apex-s2c-guard APEX_AGENT="$AGENT" \
     APEX_AGENT_LOG="$out/agent.log" APEX_CLICK="$S2C_TESTS/click.py" APEX_RED_PROFILE="$RED_UUID" APEX_SHOTS="$out" \
     APEX_CSS_FILE="$home/.config/gtk-4.0/apex.css"
-log "radius-test.sh: shell exit $?"
+rc=$?
+log "radius-test.sh: shell exit $rc"
+if crash=$(shell_crash "$out/s2c.log" "$rc"); then die "radius-test.sh: $crash"; fi
 
 result=$(sed -n 's/.*APEXS2C //p' "$out/s2c.log")
 [[ -n $result ]] || die "radius-test.sh: no result; see ${out#"$APEX_ROOT/"}/s2c.log"

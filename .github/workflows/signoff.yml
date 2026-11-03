@@ -129,6 +129,7 @@ jobs:
             _build/signoff-work/g2/run/
             _build/gnome-shell/shots/
           if-no-files-found: ignore
+          retention-days: 3
 
   apps:
     name: ${{ matrix.shoot }} (Fedora 45, the ${{ matrix.app }} boards, light and dark)

@@ -132,7 +132,7 @@ held=$(env LD_PRELOAD="$CLOCK_LIB" G2_CLOCK_EPOCH="$clock_epoch" date -u '+%F %T
 [[ $held == "$CLOCK" ]] || die "$CLOCK_LIB does not hold the clock at $CLOCK: $held"
 
 shoot() {
-    local name=$1 scheme=$2 viewer=$3 args=$4 extra=$5 query=$6 schemas=$7 press=${8:-} run rc settings
+    local crash name=$1 scheme=$2 viewer=$3 args=$4 extra=$5 query=$6 schemas=$7 press=${8:-} run rc settings
     run=$(mktemp -d)
     chown "$USER_NAME:" "$run" && chmod 700 "$run"
     rm -rf "$home/.config/dconf" "$home/.local/share/gvfs-metadata" "$home/.cache/thumbnails"
@@ -156,6 +156,7 @@ shoot() {
     rc=$?
     case_backtrace "$out/$name.log" "$rc" "$home" "$out/$name.bt"
     log "shoot.sh: $name: exit $rc"
+    if crash=$(shell_crash "$out/$name.log" "$rc"); then log "shoot.sh: $name: $crash"; return 1; fi
     grep -q '^.*APEXFILES ' "$out/$name.log" && [[ -s $out/$name.png ]]
 }
 
