@@ -3440,7 +3440,7 @@ test_case_backtrace() {
     expect_eq "backtrace: direct.sh loads backtrace.sh, builds and preloads crash.c and calls case_backtrace" 7 \
         "$(sed 's/^[[:space:]]*//' "$HERE/direct.sh" | grep -cxF -e '. "$(dirname -- "${BASH_SOURCE[0]}")/backtrace.sh"' \
         -e 'gcc -O2 -Wall -Werror -shared -fPIC -o "$CRASH_LIB" /w/crash.c || { echo "direct.sh: cannot build crash.c" >&2; exit 1; }' \
-        -e 'G2_CRASH_LIB="$CRASH_LIB" \' -e 'exec env LD_PRELOAD="$G2_CLOCK_LIB $G2_CRASH_LIB" \' \
+        -e 'G2_CRASH_LIB="$CRASH_LIB" \' -e 'set -- env LD_PRELOAD="$G2_CLOCK_LIB $G2_CRASH_LIB" \' \
         -e '[[ $arg == G2_EXPECT_EXIT=* ]] && expected=${arg#G2_EXPECT_EXIT=}' \
         -e 'run_and_record_case fault-abort '"''"' APEX_SHELL_TEST_FAULT=abort-after-enable PROBE_WAIT=20 G2_EXPECT_EXIT=134' \
         -e 'case_backtrace "/out/$name.log" "$rc" "$home" "/out/$name.bt" "$expected"')"
@@ -3721,6 +3721,41 @@ test_keys_case() {
 1|.pressed.superA.apps = false|Super+A that opens the windows, not the launcher
 1|.modals = 1|a grab left behind
 17|{error: "keysCase: no keyboard"}|a probe error
+CHANGES
+}
+
+# A privacy case on main's RPMs: both indicators on real streams, then gone.
+readonly PRIVACY_REPORT='{unit: {length: 1, fontSize: 1024}, before: {camera: false, microphone: false}, viewerStarts: 1, shown: true,
+    inUse: {pill: {x: 1261, y: 4, width: 171, height: 24, paddingLeft: 4},
+        privacy: {x: 1265, y: 6, width: 48, height: 20, radius: 10, colour: "#c64600ff", next: {x: 1323, y: 4, width: 16, height: 24},
+            glyphs: [{x: 1272, y: 6, width: 14, height: 20, iconName: "camera-web-symbolic", colour: "#ffffffff"},
+                {x: 1292, y: 6, width: 14, height: 20, iconName: "microphone-sensitivity-high-symbolic", colour: "#ffffffff"}]},
+        microphone: "microphone-sensitivity-high-symbolic", stream: {name: "g2-mic", volume: 65536, muted: false, normal: 65536}},
+    hidden: true, after: {pill: {x: 1313, y: 4, width: 119, height: 24, paddingLeft: 10}, privacy: null}}'
+
+test_privacy_case() {
+    local run=$T/privacy passes failures change what
+    mkdir -p "$run"
+    echo 'privacy exit=0 secs=30 marker-after-exit=no' >"$run/results-main.txt"
+    while IFS='|' read -r failures change what; do
+        printf 'APEXG2-PRIVACY %s\n' "$(jq -nc "$PRIVACY_REPORT | $change")" >"$run/privacy.log"
+        read -r passes _ <<<"$(assertion_counts privacy_case "$run")"
+        expect_eq "privacy: $what fails $failures of 9" "$failures" $((9 - passes))
+    done <<'CHANGES'
+0|.|both indicators on real streams, then gone
+1|.before.camera = true|a camera shown before any stream
+1|.shown = false|streams that never showed both
+1|.inUse.privacy.height = 24|a group taller than $apex_privacy_height
+1|.inUse.privacy.glyphs[1].x = 1294|glyphs further apart than $apex_privacy_gap
+1|.inUse.microphone = "microphone-sensitivity-medium-symbolic"|a microphone icon volume.js would not give the stream
+1|.inUse.stream.muted = true|a muted stream under a live microphone icon
+1|.inUse.stream.name = "auto_null"|the microphone of another source than g2-mic
+1|.inUse.privacy.glyphs = [.inUse.privacy.glyphs[0] + {iconName: .inUse.microphone}, .inUse.privacy.glyphs[1] + {iconName: "camera-web-symbolic"}]|the microphone before the camera
+1|.inUse.privacy.glyphs[0].iconName = "camera-disabled-symbolic"|another camera glyph
+1|.hidden = false|an indicator left after the streams stop
+1|.after.privacy = .inUse.privacy|a group left after the streams stop
+1|.after.pill.paddingLeft = 4|a pill still padded for the group
+6|{error: "privacyReport: no PipeWire"}|a probe error
 CHANGES
 }
 
@@ -4535,6 +4570,7 @@ test_session_surface_icons
 test_no_disposed_at_shutdown
 test_exit_cut
 test_keys_case
+test_privacy_case
 test_shutdown_banner_case
 test_startup_handler_ran
 test_network_rows_centred
