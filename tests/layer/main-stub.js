@@ -409,7 +409,18 @@ export function newQuickSettings() {
     return quickSettings;
 }
 
+const inactiveOpacity = GLib.getenv('PROBE_NO_INACTIVE_OPACITY') === '1' ? [false, 0] : [true, 0.45];
 const workspaceDot = {
+    _dot: {
+        peek_theme_node: () => ({lookup_double: p => p === '-apex-inactive-opacity' ? inactiveOpacity : [false, 0]}),
+        styleChanged: new Map(),
+        connectObject(signal, handler, owner) {
+            this.styleChanged.set(owner, handler);
+        },
+        disconnectObject(owner) {
+            this.styleChanged.delete(owner);
+        },
+    },
     _updateVisuals: () => fact('workspace-dot', 'restyled'),
     queue_relayout: () => {},
 };
@@ -454,7 +465,7 @@ export const panel = Object.assign(new StubActor('panel', {glass: PANEL_GLASS, e
     statusArea: {
         activities: {
             container: activitiesContainer,
-            get_first_child: () => ({get_children: () => [0, 1].map(() => workspaceDot)}),
+            get_first_child: () => ({get_children: () => [0, 1].map(() => workspaceDot), get_first_child: () => workspaceDot}),
         },
         quickSettings: newQuickSettings(),
         screenRecording: newScreenButton('screenRecording', 'Stop Screencast', 0,
