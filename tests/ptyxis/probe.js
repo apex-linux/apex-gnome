@@ -10,6 +10,7 @@ import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import * as Scripting from 'resource:///org/gnome/shell/ui/scripting.js';
 
 Gio._promisify(Shell.Screenshot.prototype, 'screenshot_area');
+Gio._promisify(Gio.Subprocess.prototype, 'communicate_utf8_async');
 
 const WINDOW = {x: 100, y: 48, width: 1240, height: 762};
 const SHELL_START_MS = 2500;
@@ -109,7 +110,22 @@ async function shoot() {
     window.move_resize_frame(false, WINDOW.x, WINDOW.y, WINDOW.width, WINDOW.height);
     await Scripting.sleep(SETTLE_MS);
     const r = window.get_frame_rect();
-    console.log(`APEXPTYXIS ${JSON.stringify({shot: await capture(window), frame: [r.x, r.y, r.width, r.height]})}`);
+    const shot = await capture(window);
+    await writeTargets();
+    console.log(`APEXPTYXIS ${JSON.stringify({shot, frame: [r.x, r.y, r.width, r.height]})}`);
+}
+
+// contrast-test.sh's targets, read over AT-SPI once the capture is taken, when shoot.sh asks.
+async function writeTargets() {
+    const helper = GLib.getenv('APEX_SHOT_ATSPI');
+    if (!helper)
+        return;
+    const proc = Gio.Subprocess.new(['python3', helper], Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_PIPE);
+    const [stdout, stderr] = await proc.communicate_utf8_async(null, null);
+    if (!proc.get_successful())
+        throw new Error(`${helper} exited ${proc.get_exit_status()}: ${stderr}`);
+    const path = GLib.build_filenamev([GLib.getenv('APEX_SHOTS'), `${GLib.getenv('APEX_SHOT')}.targets.json`]);
+    GLib.file_set_contents(path, stdout);
 }
 
 // main.js connects to startup-complete only after importing this module, so a startup that

@@ -48,7 +48,7 @@ mkdir -p "$T/schemas" "$T/noschema" "$T/nochild" "$T/data" "$T/home" "$T/shell" 
 # main.js and the Meta and Shell typelibs come only with gnome-shell and mutter.
 cp -R "$REPO/desktop/shell/js" "$T/shell/"
 cp "$HERE/main-stub.js" "$T/shell/js/ui/main.js"
-for upstream in panelMenu dash iconGrid popupMenu layout messageList background; do
+for upstream in panelMenu dash iconGrid popupMenu layout messageList background switcherPopup; do
     cp "$HERE/stubs/$upstream.js" "$T/shell/js/ui/$upstream.js"
 done
 # Spotlight's providers: upstream's app search and remote providers, faked.
@@ -378,13 +378,18 @@ fact "quick-settings: On or Off under a toggle without a subtitle; a toggle's ow
 fact "quick-settings: Power Mode lit at Balanced, its checked state stock" 'qs\.power=checked=false classes=apex-lit'
 fact "quick-settings: the state follows checked; a subtitle the toggle sets wins" 'qs\.live=dnd=On bluetooth=Headphones'
 fact "quick-settings: once the toggle drops its own, ours follows again" 'qs\.own-subtitle-gone=bluetooth=On'
+fact "quick-settings: a network row's accessible name follows a new best access point's strength" 'qs\.row\.best-ap=names=1'
 fact "quick-settings: the active network's row is :checked, its lock after the name, its name centred on the row" 'qs\.row\.active=children=icons,label,lock,check icons=signal checked=true lock=2/apex-network-lock label=2'
 fact "quick-settings: another network's row is not" 'qs\.row\.other=children=icons,label,lock,check icons=signal checked=false lock=2/apex-network-lock label=2'
 fact "quick-settings: a submenu header's subtitle ends the title's row" 'qs\.menu=3,0 x_align=3'
 fact "quick-settings: :checked follows is-active" 'qs\.row\.switched=children=icons,label,lock,check icons=signal checked=false lock=2/apex-network-lock label=2 \| children=icons,label,lock,check icons=signal checked=true lock=2/apex-network-lock label=2'
+fact "quick-settings: a row whose network holds no access point stays hidden when network.js shows it" 'qs\.row\.empty=visible=false'
+fact "quick-settings: and shows once its network takes one" 'qs\.row\.adopted=visible=true'
+fact "quick-settings: layer off: a row it hid shows again, as stock has it" 'qs\.off\.refused=visible=true'
 fact "quick-settings: layer off: the row stock again" 'qs\.off\.row=children=icons,label,check icons=signal,lock checked=false lock=3/none label=0'
 fact "quick-settings: layer off: the subtitle under the title" 'qs\.off\.menu=1,1 x_align=0'
 fact "quick-settings: layer off: :checked no longer follows" 'qs\.off\.row-unfollowed=checked=false'
+fact "quick-settings: layer back on: a row still without an access point hides again" 'qs\.on\.refused=visible=false'
 fact "quick-settings: layer back on: rows and menus built before it change again" 'qs\.on\.row=children=icons,label,lock,check icons=signal checked=true lock=2/apex-network-lock label=2'
 fact "quick-settings: layer back on: the subtitle on the title's row" 'qs\.on\.menu=3,0 x_align=3'
 fact "quick-settings: layer off: stock order" \
@@ -454,6 +459,8 @@ has "disabled-features=['quick-settings']: skips the feature" 'Apex: feature qui
 fact "disabled-features=['quick-settings']: stock order" \
     'qs\.order=Wi-Fi,VPN,Bluetooth,Power Mode,Night Light,Dark Style,Do Not Disturb,Airplane Mode,Auto Rotate'
 fact "disabled-features=['quick-settings']: Power Mode unlit" 'qs\.power=checked=false classes=none'
+fact "disabled-features=['quick-settings']: stock's name ignores a new best access point" 'qs\.row\.best-ap=names=0'
+fact "disabled-features=['quick-settings']: stock shows a row whose network holds no access point" 'qs\.row\.empty=visible=true'
 fact "disabled-features=['quick-settings']: a network row stays stock" 'qs\.row\.active=children=icons,label,check icons=signal,lock checked=false lock=3/none label=0'
 fact "disabled-features=['quick-settings']: the subtitle stays under the title" 'qs\.menu=1,1 x_align=0'
 
@@ -706,7 +713,8 @@ fact "date menu: an empty list hides Clear, as calendar.js's binding would with 
 fact "hot-corner: the corner becomes a reactive 4 x 4 zone at its own position, in scaled px" \
     'hot-corner\.zone=hot-corner reactive=true x=0 y=0 8x8'
 fact "hot-corner: in the chrome, hidden under fullscreen windows" 'chrome\.add=hot-corner trackFullscreen=true'
-count_is "hot-corner: entering it triggers the barrier once, until the pointer leaves it off the barrier" '^probe: hot-corner\.trigger=' 2
+fact "hot-corner: the zone coming back under a resting pointer triggers nothing" 'hot-corner\.after-enter=false'
+count_is "hot-corner: moving in it triggers the barrier once, until the pointer leaves it off the barrier" '^probe: hot-corner\.trigger=' 2
 fact "hot-corner: leaving it while on the barrier keeps the barrier's trigger" 'hot-corner\.after-leave-on-the-barrier=true'
 fact "layer-enabled=false: the dot hooks give stock" 'top-bar\.off\.dots=99 99 99 inactive="stock"'
 fact "layer-enabled=false: the status pill gets every indicator back, in order" "pill\.off=$STOCK_PILL"
@@ -767,6 +775,8 @@ panel_classes_are "disabled-features=['panel']: the bar stays translucent" \
 probe focused-app "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_FOCUSED_APP=1
 has "focused-app: the panel feature enables" 'Apex: feature panel enabled'
 fact "focused-app: its item follows the Activities pill in the left box" 'panel\.add=apex-focused-app at 1 in left'
+fact "focused-app: after Activities in the left box" 'focused-app\.left-box=activities,focused-app'
+fact "focused-app: and again once panel.js has put Activities back at the box's end" 'focused-app\.left-box\.after-session-update=activities,focused-app'
 fact "focused-app: \"Desktop\" while nothing has focus, a label that takes no clicks" \
     'focused-app\.none=Desktop name=Desktop visible=true reactive=false'
 fact "focused-app: the focused app's name" 'focused-app\.files=Files name=Files visible=true reactive=false'
@@ -785,6 +795,10 @@ lacks "disabled-features=['panel']: no item in the bar" 'panel\.add=apex-focused
 fact "disabled-features=['panel']: nothing follows the focus" 'focused-app\.files=none'
 
 readonly SEARCH_ITEM='Search \(Super\+Space\) pill=apex-search-pill icon=system-search-symbolic'
+probe search-order "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_RIGHT_BOX_ADDS=1 PROBE_SEARCH_ORDER=1
+fact "search-order: the app indicators, their divider, then the search button" 'search-order=indicators,divider,search'
+fact "search-order: and so after panel comes back out of disabled-features on its own" 'search-order\.panel-again=indicators,divider,search'
+
 probe search-button "$CMDLINE_PLAIN" PROBE_ENABLE=1 PROBE_SEARCH_BUTTON=1
 has "search-button: the panel feature enables" 'Apex: feature panel enabled'
 fact "search-button: at the start of the right box" 'panel\.add=apex-search at 0 in right'
@@ -827,6 +841,8 @@ fact "glass: and blurs at the overview's sigma 36 and 1.5, in actor mode, while 
 fact "glass: at the launcher's 40 and 1.6 once the app grid shows" 'glass\.scrim\.launcher=apexGlassScrim:r160/s1\.6/c0/on/actor visible=true'
 fact "glass: the derived glass: the OSD, an Alt+Tab list once its popup adds it, and the screenshot panel (closed) take the popovers' glass" \
     'glass\.derived=osd:r120/s1\.8/c40/on/background switcher:r120/s1\.8/c52/on/background screenshot:r120/s1\.8/c32/paused/background'
+fact "glass: the held input-source switcher, Ctrl+Alt+Tab and Super+P take it too, each under its own name; a popup that is no SwitcherPopup does not, whatever its name" \
+    'glass\.switchers=input-source-switcher:r120/s1\.8/c52/on/background ctrl-alt-tab-switcher:r120/s1\.8/c52/on/background monitor-switcher:r120/s1\.8/c52/on/background unregistered:none'
 fact "glass: the tile preview, as windowManager.js builds it hidden, gets a glass actor below it, unregistered, and the class that hands it the fill and ring" \
     'glass\.tile\.created=apexTilePreviewGlass:none registered=false below=true offsets=12,12,-24,-24 opacity=255 glassed=true'
 fact "glass: shown, it registers as tilePreview at board 22's sigma 20 and 1.6, inset by the preview's clear border" \
@@ -977,6 +993,15 @@ fact "lock: the password's own problem stays in upstream's message line" \
     "lock\.hint\.password-problem=$HINT_FAILED message=true indicator=false"
 fact "lock: the reader's next prompt brings the line back" "lock\.hint\.fingerprint-again=$HINT_SCAN message=false indicator=false"
 fact "lock: a prompt rebuilt after blank starts on the password's hint" "lock\.hint\.after-wake=$HINT_PASSWORD message=true indicator=true"
+fact "lock: no error ring on the password's prompt" 'lock\.ring\.password=false'
+fact "lock: no error ring while the reader scans" 'lock\.ring\.fingerprint-scan=false'
+fact "lock: a failed scan changes the hint, not the field" 'lock\.ring\.fingerprint-failed=false'
+fact "lock: a wrong password rings the field" 'lock\.ring\.password-problem=true'
+fact "lock: the reader's next prompt takes the ring away" 'lock\.ring\.fingerprint-again=false'
+fact "lock: the ring comes with the next wrong password" 'lock\.ring\.password-again=true'
+fact "lock: and goes when upstream fades the message" 'lock\.ring\.message-faded=false'
+fact "lock: and comes back with it" 'lock\.ring\.message-back=true'
+fact "lock: blanking takes the prompt, and its ring, down" 'lock\.ring\.blank=false'
 fact "lock: blanking tears the prompt down and cancels its verifier" 'lock\.blank=page=clock prompt=none cancelled=conversation-1'
 fact "lock: waking builds a new conversation" 'lock\.wake=page=prompt prompt=conversation-2 cancelled=conversation-1'
 fact "lock: and the key that woke the screen cannot answer it" 'lock\.wake\.keys=false'
@@ -1038,7 +1063,9 @@ fact "lock: a DisplayConfig that never answers leaves the prompt up" \
 fact "lock: so does one that fails" 'lock\.display-config-error=page=prompt prompt=conversation-1 cancelled=none'
 has "lock: and says so" 'Apex: lock: no org\.gnome\.Mutter\.DisplayConfig, so the prompt stays at blank'
 fact "lock: the clock never slides away" 'lock\.clock-progress=0 0 0'
-fact "lock: blur sigma 30 (radius 60), saturation 1.3, no darkening" 'lock\.blur=\{"brightness":1,"radius":60,"saturation":1\.3\}'
+fact "lock: blur sigma 30 (radius 60), saturation 1.3, no darkening, as the sheet sets them" 'lock\.blur=\{"brightness":1,"radius":60,"saturation":1\.3\}'
+fact "lock: a sheet without them keeps upstream's blur" 'lock\.blur\.no-sheet=\{"brightness":0\.65,"radius":90\}'
+has "lock: and says so" 'Apex: lock: the sheet sets no -apex-lock-blur or -apex-lock-saturation, so the lock keeps upstream.s blur'
 fact "lock: PAM's exact \"Password:\" reads \"Enter Password\"" 'lock\.question\."Password:"="Enter Password"'
 fact "lock: \"Password: \" with a space is PAM's question verbatim" 'lock\.question\."Password: "="Password: "'
 fact "lock: other questions verbatim" 'lock\.question\."Verification code:"="Verification code:"'
@@ -1096,6 +1123,9 @@ fact "polkit: for a named finger and reader too" "polkit\.info\.swipe-reader=$PO
 fact "polkit: pam_fprintd's other info stays upstream's line" 'polkit\.info\.timed-out=apex-polkit-info visible=true glyph=none'
 fact "polkit: as does another module's" 'polkit\.info\.other-module=apex-polkit-info visible=true glyph=none'
 fact "polkit: and the line goes with upstream's label" 'polkit\.info\.hidden=apex-polkit-info apex-polkit-fingerprint visible=false glyph=auth-fingerprint-symbolic'
+fact "polkit: no error ring until upstream shows its error line" 'polkit\.error\.none=false'
+fact "polkit: the dialog takes the error ring with the line" 'polkit\.error\.shown=true'
+fact "polkit: and drops it when upstream hides the line" 'polkit\.error\.hidden=false'
 fact "polkit: a standard account gets no role" "polkit\.role\.standard=$POLKIT_ON names=Apex/Administrator\(hidden\)"
 fact "polkit: root keeps upstream's \"Administrator\" in the name's place" \
     "polkit\.role\.root=$POLKIT_ON names=Administrator/Administrator\(hidden\)"
@@ -1194,6 +1224,24 @@ fact "dock: its Show Apps opens the overview's app grid" 'dock\.show-apps=overvi
 fact "dock: and follows the overview's own button" 'dock\.overview-show-apps-off=dock-button=false'
 fact "dock: no separator between the dock's favourites and running apps, upstream's elsewhere; a full-colour Show Apps" \
     'dock\.hooks=separator=false stock-separator=true show-apps=view-app-grid'
+dock_labels_are() {
+    local got
+    got=$(sed -n 's/^probe: dock\.labels\.\([a-z-]*\)=\(.*\)$/[\1] \2/p' "$OUT" | paste -sd' ' -)
+    if [[ $got == "$2" ]]; then ok "$1"; else not_ok "$1 (got '$got', expected '$2')"; _show; fi
+}
+dock_label_steps=(
+    '[initial] none focus=none' '[focused] Files focus=Files' '[moved] Web focus=Web' '[hovered] showApps focus=Web'
+    '[hover-ended] Web focus=Web' '[hover-focused] Web focus=Web' '[hover-focused-ended] Web focus=Web faded-in-again=0'
+    '[other-menu-open] none focus=Web' '[other-menu-closed] Web focus=Web' '[trash-menu-open] none focus=Web'
+    '[trash-menu-closed] Web focus=Web' '[unmapped] none focus=Web' '[mapped] Web focus=Web' '[slid-out] none focus=Web'
+    '[slid-back] Web focus=Web' '[activated] Web focus=Web' '[dock-moved] Web focus=Web label-moved=100 faded-in-again=0'
+    '[escape] none focus=none' '[escape-in-overview] none focus=none to-overview=true' '[focused-item-destroyed] none focus=none')
+dock_labels_are "dock: key focus shows an item's name label as a hover does, one at a time: it moves with the focus; \
+a hover elsewhere takes it and gives it back; a hover on the focused item neither fades it in again nor takes it; \
+any open menu, an unmapped item or a dock slid out hides it; activation keeps it; a moved dock places it again; \
+Escape drops the focus and the label, and in the overview passes on to it; a focused item destroyed leaves nothing behind" \
+    "${dock_label_steps[*]}"
+fact "dock: layer-enabled=false comes while a focused item's label is up" 'dock\.focus-label-at-disable=Web'
 fact "dock: layer-enabled=false takes it away and gives the overview its dash back, at its own height" 'dock\.off=none dash=true dash-height=-1'
 fact "dock: a redisplay still pending when the dock goes away never runs, and the overview's dash queues as stock's does again" \
     'dock\.overview-dash-off=redisplays=2 queued=1'

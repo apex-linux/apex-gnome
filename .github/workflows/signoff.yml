@@ -107,6 +107,7 @@ jobs:
 
       - name: tests/shots/signoff.sh
         id: capture
+        timeout-minutes: 60
         run: tests/shots/signoff.sh _build/gnome-shell/out _build/signoff
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -121,13 +122,14 @@ jobs:
           retention-days: 3
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        if: failure()
+        if: failure() || cancelled()
         with:
           name: signoff-logs-${{ github.sha }}
           path: |
             _build/signoff-work/g2/run/
             _build/gnome-shell/shots/
           if-no-files-found: ignore
+          retention-days: 3
 
   apps:
     name: ${{ matrix.shoot }} (Fedora 45, the ${{ matrix.app }} boards, light and dark)
@@ -230,6 +232,7 @@ jobs:
           echo "APEX_DESKTOP_SRC=$PWD/_build/apex-desktop" >>"$GITHUB_ENV"
 
       - name: ${{ matrix.shoot }} on the lane's RPMs
+        timeout-minutes: 45
         env:
           SHOOT: ${{ matrix.shoot }}
           PKG: ${{ matrix.pkg }}

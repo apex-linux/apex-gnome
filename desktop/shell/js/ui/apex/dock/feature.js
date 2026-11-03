@@ -31,6 +31,7 @@ let _connections = [];
 let _dashLater = 0;
 let _laters = null;
 let _dashDestroyId = 0;
+let _relabelLater = 0;
 
 function _iconSize() {
     return ICON_SIZES[_settings.get_string(ICON_SIZE_KEY)] ?? ICON_SIZES.medium;
@@ -45,6 +46,12 @@ function _place() {
         Math.round(monitor.y + monitor.height - _box.height));
     // The overview lays its views out above its own dash's height, hidden or not.
     Main.overview.dash.height = _box.height;
+    // The focused item's label follows once the box is laid out where it now stands.
+    _relabelLater ||= global.compositor.get_laters().add(Meta.LaterType.IDLE, () => {
+        _relabelLater = 0;
+        _dock?.replaceFocusLabel();
+        return GLib.SOURCE_REMOVE;
+    });
 }
 
 function _syncSettings() {
@@ -146,6 +153,7 @@ export function enable() {
         [_box, 'notify::width', _place],
         [_box, 'notify::height', _place],
         [_box, 'style-changed', _place],
+        [_box, 'notify::translation-y', () => _dock.setSlidOut(_box.translation_y > 0)],
         [Main.layoutManager, 'monitors-changed', _place],
         [Main.sessionMode, 'updated', _syncLock],
         [_dock.showAppsButton, 'notify::checked', _dockShowAppsToggled],
@@ -159,11 +167,14 @@ export function enable() {
 }
 
 export function disable() {
-    _intellihide?.destroy();
-    _intellihide = null;
     for (const [emitter, id] of _connections)
         emitter.disconnect(id);
     _connections = [];
+    if (_relabelLater)
+        global.compositor.get_laters().remove(_relabelLater);
+    _relabelLater = 0;
+    _intellihide?.destroy();
+    _intellihide = null;
     if (Main.overview.dash) {
         Main.overview.dash.height = -1;
         Main.overview.dash.show();

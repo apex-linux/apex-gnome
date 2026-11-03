@@ -35,15 +35,19 @@ reads that once, at start.
 The style manager of a display that loads the Adwaita stylesheet also loads `apex.css`
 in a provider at `GTK_STYLE_PROVIDER_PRIORITY_USER + 1`, above the user's `gtk.css`, and
 reloads it from a `GFileMonitor` on `gtk-4.0/` whenever the file is created, replaced,
-moved or removed. A missing file means no provider and no warning. With `GTK_THEME` set,
+moved or removed. A second monitor, on the config directory, re-arms the first when
+`gtk-4.0/` is created or removed and loads the file then. Without it, an app started
+before the first login's `apex.css` (and its `gtk-4.0/`) kept the stock radius: GLib
+watches a missing directory by polling every few seconds and then reports the directory,
+not the file. A missing file means no provider and no warning. With `GTK_THEME` set,
 or Granite present, libadwaita loads no stylesheet of its own, and the patch adds nothing.
 Flatpak apps use their runtime's libadwaita and read the file only at start.
 
 | Patch | Upstream files | Changed lines | Hunks |
 |---|---|---|---|
-| `0001-apex-css` | `src/adw-style-manager.c` | +59 | `APEX_CSS`; the provider and monitor in the struct; `load_apex_css()`, its monitor callback and `watch_apex_css()`; the call in `constructed()`, beside the Adwaita providers; both cleared in `dispose()` |
+| `0001-apex-css` | `src/adw-style-manager.c` | +79 | `APEX_CSS`; the provider and both monitors in the struct; `load_apex_css()`, the monitors' callback, `watch_apex_dir()` and `watch_apex_css()`; the call in `constructed()`, beside the Adwaita providers; all three cleared in `dispose()` |
 
-Budget: at most 80 changed lines in upstream files, in hook hunks only. In use: 59 lines
+Budget: at most 80 changed lines in upstream files, in hook hunks only. In use: 79 lines
 in 1 file. The patch is `git format-patch` output against Fedora's `%prep` tree, with
 `a/` and `b/` prefixes, applied with `-p1` (apex-image's `just pkg-prep libadwaita` and
 `just pkg-export libadwaita`).
@@ -52,7 +56,7 @@ in 1 file. The patch is `git format-patch` output against Fedora's `%prep` tree,
 
 ```bash
 just libadwaita-lane    # podman or docker: apex-lane's container half in fedora:45
-just libadwaita-radius  # Fedora's libadwaita, then the built one, under an open Ptyxis
+just libadwaita-radius  # --stock, the built RPM's rewrite case, then its --late case, under an open Ptyxis
 ```
 
 `tests/lib/lane.sh libadwaita` runs `apex-lane in-container build libadwaita` as the
@@ -65,4 +69,41 @@ Its automation script, `radius-probe.js`, samples a pixel inside the window's to
 corner and one on the header bar on the same row, rewrites `apex.css` with 0 px through
 `g_file_set_contents()`, and polls. On the built RPM the corner must match the header
 bar within 1 s; with `--stock`, on Fedora's libadwaita, it must still differ after 3 s.
-CI runs both after the lane.
+With `--late`, a first login, Ptyxis starts with no `gtk-4.0/` at all and must be
+stock-rounded; the script then creates `gtk-4.0/` and writes `apex.css` at 0 px, and the
+corner must match within 1 s. No Ptyxis warning or critical may show during `--late` but
+VTE's own `columns >= 1` one, which `--stock` shows too. In every mode the window must
+still be Ptyxis's at the end and the header-bar sample unchanged, so a crashed or closed
+window cannot pass. Each run starts without a `gtk-4.0/`. CI runs `--stock`, the rewrite
+case and `--late` after the lane.
+
+## S6 (Fedora 46)
+
+Checked 2026-10-31 against rawhide, the base of apex-image's `next` lane
+(`image/fedora/46.env`, `REPOS_BASE`), with `0001-apex-css` at main's +79 lines:
+
+| Package | Fedora 45 | Rawhide (46) |
+|---|---|---|
+| libadwaita | 1.10.0-2.fc45 | 1.10.0-3.fc46 |
+| gtk4, glib2 | 4.24.1-1.fc45, 2.90.0-1.fc45 | 4.24.1-1.fc46, 2.90.1-1.fc46 |
+| gnome-shell, mutter | 51.0 | 51.1-1.fc46, 51.1-2.fc46 |
+| ptyxis, vte291-gtk4 | 50.1-6.fc45, 0.84.1-1.fc45 | F45's builds |
+
+- **The lane:** `tests/lib/lane.sh libadwaita` in that container builds
+  `1.10.0-3.fc46.apex1` from rawhide's SRPM, which verifies against Fedora 46's key
+  (`91211FCE`). The `%prep` tree is exactly Fedora's plus the series, so the patch
+  applies at fuzz 0; the build warns nothing, and the three lane checks pass. Rawhide's
+  `-3` also builds `mingw32-` and `mingw64-libadwaita`, which F45's `-2` does not: the
+  build dependencies grow (`mingw32-gcc-c++` and the rest) and the lane takes 932 s
+  rather than 677. The image installs only `libadwaita`, so nothing else changes.
+- **The tests,** on that build in that container: `--stock` keeps the window rounded,
+  the rewrite turns it square in 53 ms and `--late` in 55 ms, with no warning, the
+  window alive and the header bar steady in all three.
+- **Run by hand:** `tests/lib/headless.sh` installs with `--repo=fedora --repo=updates`,
+  which rawhide's repository ids (`rawhide`) do not match, so the tests ran there behind
+  a local `dnf5` wrapper that maps them. The `next` lane needs that mapping in the test
+  harness, or its own repository ids, before CI can run these tests on 46.
+
+Nothing needed fixing for 46. Left for S6: the first libadwaita 1.11 (GNOME 52), where
+`adw-style-manager.c`'s `constructed()` and `dispose()`, the hunks' contexts, can move;
+and the budget, at 79 of 80, has one line for a rebase.

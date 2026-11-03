@@ -71,7 +71,9 @@ org.gnome.Ptyxis cursor-blink-mode 'off'
 org.gnome.desktop.interface accent-color '$CARET_FROM'" \
     APEX_PALETTE_FILE="$palettes/apex.palette" APEX_PALETTE_REWRITE="$out/rewrite.palette" \
     APEX_AGENT="$AGENT" APEX_AGENT_LOG="$out/agent.log" APEX_CARET_ACCENTS="$caret_accents" RUST_LOG=info
-log "palette-test.sh: shell exit $?"
+rc=$?
+log "palette-test.sh: shell exit $rc"
+if crash=$(shell_crash "$out/palette.log" "$rc"); then die "palette-test.sh: $crash"; fi
 
 result=$(sed -n 's/.*APEXPALETTE //p' "$out/palette.log")
 [[ -n $result ]] || die "palette-test.sh: no result; see ${out#"$APEX_ROOT/"}/palette.log"

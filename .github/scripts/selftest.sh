@@ -128,12 +128,68 @@ check "next-point: counts shoot counts shoot.sh's TAP lines" 2/1 "$(np_counts sh
 check "next-point: a log without a summary counts ?" "? ?" \
     "$(np_counts goldens "$TMP/dnf5") $(np_counts shoot "$TMP/np-g2.log")"
 check "next-point: a missing log counts ?" "? ?" "$(np_counts g2 "$TMP/none") $(np_counts shoot "$TMP/none")"
+for cut in "ARG GA_REACHED=0" "ARG GA_REACHED=1" "ARG GA_REACHED=1|FROM x|ARG GA_REACHED" ""; do
+    tr '|' '\n' <<<"ARG REPOS_BASE=https://dl.fedoraproject.org/pub/fedora/linux|$cut|FROM x" >"$TMP/np-Containerfile"
+    "$APEX_ROOT/.github/scripts/next-point.sh" reopen "$TMP/np-Containerfile" 2>/dev/null
+    check "next-point: reopen after '${cut:-the ARG deleted}' gives apex-lane GA_REACHED=0" \
+        "--repos-base https://dl.fedoraproject.org/pub/fedora/linux --ga-reached 0" \
+        "$("$APEX_ROOT/tests/lib/image-args.sh" "$TMP/np-Containerfile" 2>/dev/null | paste -sd ' ')"
+done
+# shellcheck disable=SC2016 # the fake's own script, expanded when it runs
+printf '%s\n' '#!/bin/sh' 'case $NP_FAKE in fail) exit 1 ;; empty) exit 0 ;; esac' \
+    'case " $* " in *" --repo=updates-testing "*) echo "$NP_TESTING" ;; *) echo pkg-1.0-1.fc45 ;; esac' >"$TMP/np-repoquery"
+chmod +x "$TMP/np-repoquery"
+np_allow() {
+    env NEXT_POINT_DNF5="$TMP/np-repoquery" NP_FAKE="$1" NP_TESTING="$2" \
+        "$APEX_ROOT/.github/scripts/next-point.sh" allowlist "$TMP/np-allow" 2>"$TMP/np-allow.err"
+}
+check_true "next-point: allowlist, something moves" np_allow ok pkg-1.1-1.fc45
+check "next-point: allowlist names the moved build" pkg-1.1-1.fc45 "$(sort -u "$TMP/np-allow")"
+check_true "next-point: allowlist, nothing moves, is not a failure" np_allow ok pkg-1.0-1.fc45
+check "next-point: nothing moves leaves the allowlist empty and says so" "0 1" \
+    "$(wc -c <"$TMP/np-allow") $(grep -c '(nothing moves)' "$TMP/np-allow.err")"
+check_false "next-point: allowlist, dnf5 failing, dies" np_allow fail ''
+check "next-point: a failed query says it could not ask" 1 "$(grep -c 'cannot ask' "$TMP/np-allow.err")"
+check_false "next-point: allowlist, dnf5 finding no build, dies" np_allow empty ''
+check_false "next-point: reopen of no Containerfile dies" "$APEX_ROOT/.github/scripts/next-point.sh" reopen "$TMP/none"
 check "next-point.yml: dispatch and schedule only, no lane cache" "" \
     "$(grep -nE 'pull_request|push:|actions/cache|APEX_LANE_CACHE' "$APEX_ROOT/.github/workflows/next-point.yml" | grep -vE '^[0-9]+: *#')"
+check "next-point.yml: the report waits on and prints every job's result" "1 1" \
+    "$(grep -c 'needs: \[lane, g2, signoff, apps, libadwaita, ptyxis\]' "$APEX_ROOT/.github/workflows/next-point.yml") \
+$(grep -cE 'app (libadwaita|ptyxis)\)' "$APEX_ROOT/.github/workflows/next-point.yml")"
 check "next-point.sh: run by next-point.yml alone" ".github/workflows/next-point.yml" \
     "$(cd "$APEX_ROOT" && grep -l 'next-point.sh' .github/workflows/*.yml | paste -sd ' ')"
 check "the stable lane names no updates-testing: lane.sh and image-args.sh fetch as before" "" \
     "$(grep -l 'updates-testing' "$APEX_ROOT/tests/lib/lane.sh" "$APEX_ROOT/tests/lib/image-args.sh")"
+
+# --- lint/tokens.sh: colours stay in _apex-tokens.scss, and every token is used ---------------
+TK=$TMP/tokens
+TAB=$'\t'
+mkdir -p "$TK/root/theme"
+tokens_case() {
+    printf '%s\n' "\$apex_fg: #1d1d21;" "\$apex_dim: .5;" "\$apex_spare: 1px;" >"$TK/root/theme/_apex-tokens.scss"
+    printf '%s\n' "#panel { color: \$apex_fg; }" ".a { color: rgba(\$apex_fg, \$apex_dim); }" "$@" >"$TK/root/theme/_x.scss"
+    printf '%s\n' "\`\$apex_spare\` in the README only" >"$TK/root/README.md"
+}
+tokens_allow() { printf '%s\n' "\$apex_spare${TAB}unused, for the test" "$@" >"$TK/allow"; }
+tokens_run() { APEX_TOKENS_THEME="$TK/root/theme" APEX_TOKENS_ROOT="$TK/root" APEX_TOKENS_ALLOW="$TK/allow" "$APEX_ROOT/lint/tokens.sh"; }
+tokens_case
+tokens_allow
+check_true "tokens: tokens only, an id selector and an allowed unused token pass" tokens_run
+printf '' >"$TK/allow"
+check_false "tokens: a token used only in a README is unused" tokens_run
+tokens_allow
+for bad in '.b { color: #fff; }' '.b { box-shadow: 0 1px 2px rgba(0, 0, 0, .2); }' ".b { color: rgba(\$apex_fg, .9); }" \
+    '.b { color: rgb(1, 2, 3); }'; do
+    tokens_case "$bad"
+    check_false "tokens: '$bad' is a colour literal" tokens_run
+done
+tokens_case ".b { color: transparentize(\$apex_fg, 1 - \$apex_dim); }" '.c { color: #fff; } // #000 in a comment'
+tokens_allow "_x.scss:4${TAB}the white, for the test"
+check_true "tokens: an allowed FILE:LINE passes, a comment and a token-only expression do not count" tokens_run
+tokens_allow "_x.scss:4${TAB}the white, for the test" "_x.scss:9${TAB}gone"
+check_false "tokens: a stale entry fails" tokens_run
+check_true "tokens: the repository's theme passes with lint/tokens.allow" "$APEX_ROOT/lint/tokens.sh"
 
 if ((FAILS > 0)); then
     die "selftest: $FAILS failure(s)"
