@@ -27,7 +27,8 @@ lock-wake-key-blank the same, locked while blank; lock-idle sends gnome-session'
 IDLE at lock, as every real lock does, then blanks and wakes with no key; lock-suspend
 has logind's mock prepare for sleep and resume; lock-motion and lock-reduce-motion record every frame of
 the lock's opening and closing, without and with Reduce Motion; each greeter case (--mode=gdm) shows the user list,
-then the prompt, and greeter-reduce-motion records each frame between the two. Each polkit case opens the shell's own authentication dialog through the polkit
+then the prompt, and greeter-reduce-motion records each frame between the two; greeter-safe-high-contrast shows
+the list in safe mode with high contrast, on upstream's sheet from theme/stock/. Each polkit case opens the shell's own authentication dialog through the polkit
 component's _onInitiate(), with a stubbed PolkitAgent.Session that PAM never answers, for
 captures and style checks only (pkexec end to end is G4's); polkit-lock and polkit-suspend
 lock the screen, or sleep and resume, under the open dialog, type at the lock, then end the lock,
@@ -245,6 +246,8 @@ done
 shoot lock-question "$USER_NAME" user default 'Verification code:' || status=1
 shoot lock-disabled "$USER_NAME" user default 'Password:' "$lock_off" || status=1
 shoot lock-safe "$USER_NAME" user default 'Password:' -- APEX_SHELL_SAFE=1 || status=1
+shoot greeter-safe-high-contrast "$GREETER_USER" gdm default 'Password:' \
+    "org.gnome.desktop.a11y.interface high-contrast true" -- GDM_GREETER_TEST=1 APEX_SHELL_SAFE=1 || status=1
 shoot lock-refused "$USER_NAME" user default '' || status=1
 shoot lock-wake-key "$USER_NAME" user default 'Password:' -- APEX_WAKE_KEY=clock || status=1
 shoot lock-wake-key-blank "$USER_NAME" user default 'Password:' -- APEX_WAKE_KEY=locked-blank || status=1
