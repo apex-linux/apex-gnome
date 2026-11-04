@@ -14,6 +14,7 @@ DOMAINS=(
     "apex-control-center|desktop/control-center|panels/apex/po|panels/apex|\bN?C?_\(|--keyword=_ --keyword=N_ --keyword=C_:1c,2 --keyword=NC_:1c,2"
     "apex-shell|desktop/shell|data/theme/apex/po|js/ui/apex|from '\.\./i18n\.js'|--language=JavaScript --keyword=_"
     "apex-nautilus|desktop/nautilus|src/apex/po|src/apex|\bN?_\(|--keyword=_ --keyword=N_"
+    "apex-ptyxis|desktop/ptyxis|src/apex/po|src/apex|\bN?_\(|--keyword=_ --keyword=N_"
 )
 
 for tool in xgettext msgmerge msgfmt msgattrib; do

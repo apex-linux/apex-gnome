@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 
 #include "apex-session-state.h"
+#include "apex-i18n.h"
 
 #include <string.h>
 
@@ -153,17 +154,17 @@ status_word (const ApexSessionState *state,
   switch (apex_session_state_status (state))
     {
     case APEX_STATUS_RUNNING:
-      return "running";
+      return _("running");
 
     case APEX_STATUS_DONE:
-      return "done";
+      return _("done");
 
     case APEX_STATUS_FAILED:
-      g_snprintf (buf, len, "exit %d", state->exit_code);
+      g_snprintf (buf, len, _("exit %d"), state->exit_code);
       return buf;
 
     case APEX_STATUS_NEEDS_YOU:
-      return "needs you";
+      return _("needs you");
 
     case APEX_STATUS_IDLE:
     default:
@@ -217,12 +218,12 @@ apex_relative_time (gint64 then,
   gint64 secs = MAX (0, (now - then) / G_USEC_PER_SEC);
 
   if (secs < 60)
-    return g_strdup ("now");
+    return g_strdup (_("now"));
   if (secs < 60 * 60)
-    return g_strdup_printf ("%" G_GINT64_FORMAT "m", secs / 60);
+    return g_strdup_printf (_("%dm"), (int) (secs / 60));
   if (secs < 24 * 60 * 60)
-    return g_strdup_printf ("%" G_GINT64_FORMAT "h", secs / (60 * 60));
-  return g_strdup_printf ("%" G_GINT64_FORMAT "d", secs / (24 * 60 * 60));
+    return g_strdup_printf (_("%dh"), (int) (secs / (60 * 60)));
+  return g_strdup_printf (_("%dd"), (int) MIN (secs / (24 * 60 * 60), G_MAXINT));
 }
 
 /* ssh(1)'s options that take an argument, so the destination is the first word after them. */

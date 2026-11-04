@@ -2,7 +2,7 @@
 
 #include "config.h"
 
-#include <glib/gi18n.h>
+#include "apex-i18n.h"
 
 #include "apex-glyph.h"
 #include "apex-panes.h"

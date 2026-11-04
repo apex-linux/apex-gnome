@@ -45,8 +45,12 @@ headless_install_rpm() {
     rpms=("$dir/$name"-[0-9]*.x86_64.rpm)
     shopt -u nullglob
     ((${#rpms[@]} == 1)) || die "expected one $name x86_64 RPM in $dir"
+    rm -f /etc/rpm/macros.image-language-conf
     dnf5 -y -q --setopt=install_weak_deps=False --repo=fedora --repo=updates install "${rpms[0]}" ||
         die "cannot install ${rpms[0]}"
+    [[ $(rpm -ql "$name") == */LC_MESSAGES/* ]] ||
+        dnf5 -y -q --setopt=install_weak_deps=False --repo=fedora --repo=updates reinstall "${rpms[0]}" ||
+        die "cannot reinstall ${rpms[0]} with its translations"
 }
 
 # Sets HEADLESS_HOME, the user's home.

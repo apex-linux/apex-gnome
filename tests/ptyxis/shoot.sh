@@ -22,7 +22,8 @@ terminals by a virtual keyboard, so the statuses come from bash's shell integrat
 logs land in _build/ptyxis/shots/. With APEX_PTYXIS_TARGETS=1 each capture also writes
 contrast-test.sh's targets, read over AT-SPI (python3-gobject, at-spi2-core), and the four
 scenes are taken again in high contrast (hc-light, hc-dark, hc-split-light, hc-split-dark)
-and, light, with GNOME's Large Text (large, split-large) for layout-test.sh.
+and, light, with GNOME's Large Text (large, split-large) for layout-test.sh; vi runs under
+vi_VN.UTF-8, and i18n-atspi.py reads the sidebar's Apex strings in Vietnamese (glibc-langpack-vi).
 
 It needs gnome-shell, mesa-dri-drivers, dbus-daemon, python3-dbusmock, gcc, util-linux and
 the Apex fonts (jetbrains-mono-fonts-all, adwaita-sans-fonts). G2's clock.c and fixtures.py
@@ -40,6 +41,10 @@ rm -rf -- "$out"
 mkdir -p -- "$out"
 chmod 777 "$out"
 [[ -z ${1:-} ]] || headless_install_rpm "$1" ptyxis
+if [[ -n ${1:-} && -n ${APEX_PTYXIS_TARGETS:-} ]]; then
+    [[ -e /usr/share/locale/vi/LC_MESSAGES/apex-ptyxis.mo ]] || die "the ptyxis RPM installs no vi apex-ptyxis.mo"
+    [[ $(LC_ALL=vi_VN.UTF-8 locale charmap 2>/dev/null) == UTF-8 ]] || die "the vi_VN.UTF-8 locale is missing (glibc-langpack-vi)"
+fi
 rpm -q ptyxis >"$out/ptyxis.txt"
 
 headless_user
@@ -71,13 +76,13 @@ atspi=$out/contrast-atspi.py
 install -m 644 "$PTYXIS_TESTS/contrast-atspi.py" "$atspi"
 
 shoot() {
-    local name=$1 scene=$2 scheme=$3 style=$4 contrast=${5:-false} text=${6:-1.0} rc=0 crash
+    local name=$1 scene=$2 scheme=$3 style=$4 contrast=${5:-false} text=${6:-1.0} lang=${7:-C.UTF-8} helper=${8:-$atspi} rc=0 crash
     local settings="org.gnome.desktop.interface color-scheme '$scheme'"$'\n'"org.gnome.Ptyxis interface-style '$style'"
     settings+=$'\n'"org.gnome.desktop.a11y.interface high-contrast $contrast"
     settings+=$'\n'"org.gnome.desktop.interface text-scaling-factor $text"
     headless_run "$out/$name.log" "$PTYXIS_TESTS/probe.js" "$SHELL_TIMEOUT" "$settings" \
         APEX_SHOTS="$out" APEX_SHOT="$name" APEX_SCENE="$scene" \
-        ${APEX_PTYXIS_TARGETS:+APEX_SHOT_ATSPI="$atspi"} || rc=$?
+        LANG="$lang" ${APEX_PTYXIS_TARGETS:+APEX_SHOT_ATSPI="$helper"} || rc=$?
     log "shoot.sh: $name: exit $rc"
     if crash=$(shell_crash "$out/$name.log" "$rc"); then log "shoot.sh: $name: $crash"; return 1; fi
     grep -q 'APEXPTYXIS ' "$out/$name.log" && [[ -s $out/$name.png ]]
@@ -97,6 +102,7 @@ if [[ -n ${APEX_PTYXIS_TARGETS:-} ]]; then
     shoot hc-split-dark split prefer-dark dark true || status=1
     shoot large sessions default light false 1.25 || status=1
     shoot split-large split default light false 1.25 || status=1
+    shoot vi sessions default light false 1.0 vi_VN.UTF-8 "$PTYXIS_TESTS/i18n-atspi.py" || status=1
 fi
 ((status == 0)) || die "shoot.sh: a capture failed; see ${out#"$APEX_ROOT/"}/*.log"
 log "shoot.sh: captures in ${out#"$APEX_ROOT/"}"
