@@ -3380,9 +3380,9 @@ control-center/lib.sh	case_backtrace "$log" "$rc" "$HEADLESS_HOME" "${log%.log}.
 control-center/lib.sh	return "$rc"
 nautilus/shoot.sh	. "$SHOTS/backtrace.sh"
 nautilus/shoot.sh	crash_lib "$CRASH_LIB" || die "cannot build tests/shots/crash.c"
-nautilus/shoot.sh	CLOCK_LIB="$CLOCK_LIB" CRASH_LIB="$CRASH_LIB" G2_CLOCK_EPOCH="$clock_epoch" GTK_A11Y=atspi \
+nautilus/shoot.sh	CLOCK_LIB="$CLOCK_LIB" CRASH_LIB="$CRASH_LIB" DISK_LIB="$DISK_LIB" G2_CLOCK_EPOCH="$clock_epoch" GTK_A11Y=atspi \
 nautilus/shoot.sh	ulimit -c unlimited 2>/dev/null
-nautilus/shoot.sh	exec env LD_PRELOAD="$CLOCK_LIB $CRASH_LIB" gnome-shell --headless --virtual-monitor '"$MONITOR"' \
+nautilus/shoot.sh	exec env LD_PRELOAD="$CLOCK_LIB $CRASH_LIB $DISK_LIB" gnome-shell --headless --virtual-monitor '"$MONITOR"' \
 nautilus/shoot.sh	rc=$?
 nautilus/shoot.sh	case_backtrace "$out/$name.log" "$rc" "$home" "$out/$name.bt"
 nautilus/shoot.sh	if crash=$(shell_crash "$out/$name.log" "$rc"); then log "shoot.sh: $name: $crash"; return 1; fi
@@ -4313,43 +4313,34 @@ REPORTS
 REPORTS
 }
 
-# glass_views: two moves and the straddling box exact against a fresh effect, the box within the
-# glass bounds away from the boundary, the seam pinned at today's and a known gap no report closes.
+# glass_views: two moves exact against a fresh effect, the straddling box within the glass bounds
+# away from the boundary and at it; a report without the numbers fails.
 test_glass_views() {
-    local report failures gap what change passes fails state
+    local report failures what change passes fails
     report='{"views": 2, "scale": 2, "boundary": 1440,
-        "straddling": {"views": 2, "liveDifferingFromFresh": 0,
-            "live": {"band": 8, "seamMax": 93.581, "seamInteriorMax": 93.581, "seamEdgeMax": 88.731,
+        "straddling": {"views": 2, "liveDifferingFromFresh": 23267,
+            "live": {"band": 8, "seamMax": 9.581, "seamInteriorMax": 3.089, "seamEdgeMax": 9.581,
                 "interiorMax": 2.913, "edgeMax": 9.829, "mean": 0.773},
-            "fresh": {"band": 8, "seamMax": 93.581, "seamInteriorMax": 93.581, "seamEdgeMax": 88.731,
+            "fresh": {"band": 8, "seamMax": 91.07, "seamInteriorMax": 91.07, "seamEdgeMax": 88.731,
                 "interiorMax": 2.913, "edgeMax": 9.829, "mean": 0.773}},
         "across": {"views": 2, "differingFromFresh": 0, "pixels": 235520},
         "back": {"views": 2, "differingFromFresh": 0, "pixels": 235520}}'
-    while IFS='|' read -r failures gap what change; do
+    while IFS='|' read -r failures what change; do
         jq -c "$change" <<<"$report" | sed 's/^/APEXG2-GLASS-VIEWS /' >"$T/glass-views.log"
         read -r passes fails <<<"$(assertion_counts glass_views glass-views "$T/glass-views.log")"
-        expect_eq "glass views: $what fails $failures of 4" "$failures" "$fails"
-        if ((failures == 0)); then
-            expect_eq "glass views: $what passes 3 of 4, the 4th its known gap" 3 "$passes"
-        fi
-        state=open
-        grep -q 'but it holds now' "$T/assertions.out" && state=holds
-        grep -q '^GAP ' "$T/assertions.out" || [[ $state == holds ]] || state=none
-        expect_eq "glass views: $what leaves the seam's gap $gap" "$gap" "$state"
+        expect_eq "glass views: $what fails $failures of 3" "$failures" "$fails"
+        expect_eq "glass views: $what passes $((3 - failures)) of 3" $((3 - failures)) "$passes"
     done <<'CHANGES'
-0|open|both moves exact, the straddling box deterministic and within bounds away from its seam|.
-1|open|a box that keeps its blur on the view it left|.across.differingFromFresh = 9200
-1|open|a box moved back that one view never repainted|.back.views = 1
-1|open|a straddling box that a fresh effect draws otherwise|.straddling.liveDifferingFromFresh = 640
-1|open|a box off the reference by 9/255 away from the seam|.straddling.live.interiorMax = 9
-2|holds|a seam fixed, 2.51 inside and 9.18 in its band: off its pin, and a gap that holds now|.straddling.live += {seamMax: 9.18, seamInteriorMax: 2.51, seamEdgeMax: 9.18}
-1|open|a seam fixed inside but 14/255 in its band: off its pin, still a gap|.straddling.live += {seamMax: 14, seamInteriorMax: 2.51, seamEdgeMax: 14}
-1|open|a seam 2/255 wider than its pin|.straddling.live.seamMax = 95.6
-1|open|a seam 2/255 narrower than its pin, still a gap|.straddling.live.seamMax = 91.5
-3|open|one view only, the probe's early return|{views: 1, scales: [2]}
-3|open|two views at two scales, the probe's early return|{views: 2, scales: [2, 1]}
-3|open|the probe's error report|{error: "No property fine on ShellBlurEffect"}
-3|open|no report|del(.views, .straddling, .across, .back)
+0|both moves exact, the straddling box within bounds away from the boundary and at it|.
+1|a box that keeps its blur on the view it left|.across.differingFromFresh = 9200
+1|a box moved back that one view never repainted|.back.views = 1
+1|a box off the reference by 9/255 away from the boundary|.straddling.live.interiorMax = 9
+1|the seam per-view textures leave, 93.58/255 inside the boundary's columns|.straddling.live += {seamMax: 93.581, seamInteriorMax: 93.581, seamEdgeMax: 88.731}
+1|a seam within bounds inside but 14/255 in its band|.straddling.live += {seamMax: 14, seamEdgeMax: 14}
+3|one view only, the probe's early return|{views: 1, scales: [2]}
+3|two views at two scales, the probe's early return|{views: 2, scales: [2, 1]}
+3|the probe's error report|{error: "No property fine on ShellBlurEffect"}
+3|no report|del(.views, .straddling, .across, .back)
 CHANGES
 }
 

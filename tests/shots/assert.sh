@@ -127,10 +127,6 @@ readonly ALWAYS_LOADED_USER_UNIT=default.target
 readonly GLASS_INTERIOR_MAX=4
 readonly GLASS_EDGE_MAX=12
 readonly GLASS_MEAN_ERROR=1
-# glass-views' seam, 0003's per-view texture over two monitors (15c), pinned at its first run's
-# value: it fails if the seam moves either way, so a change to 0003 shows here first.
-readonly GLASS_VIEWS_SEAM_TODAY=93.58
-readonly GLASS_VIEWS_SEAM_PIN=1
 # Board 22's ring width from its coverage (glass.js ringWidths): 8-bit rounding moves it under 0.05
 # device px; St's inset-shadow ring inside a clear border measures 8 px at its corners against 4.
 readonly TILE_RING_ALLOWANCE=0.25
@@ -3172,19 +3168,15 @@ glass_frames() {
 # The glass-views case: patch 0003's glass on two stage views, as glass-views.js reads each one.
 glass_views() {
     local label=$1 log=$2 views
-    views=$(report_of "$log" APEXG2-GLASS-VIEWS | jq -r '.straddling.live | "seam \(.seamMax)/255; away from it \(.interiorMax) inside, \(.edgeMax) at the edges, \(.mean) on average"' 2>/dev/null)
-    expect_report "$label" "$log" '.views == 2 and ([.across, .back] | all(.views == 2 and .pixels > 0 and .differingFromFresh == 0))
-        and (.straddling | .views == 2 and .liveDifferingFromFresh == 0)' \
-        "a glass box moved from one monitor's view to the other's and back draws, in both views' frames, what a fresh effect draws; one over their boundary draws what a fresh effect draws there too" APEXG2-GLASS-VIEWS
+    views=$(report_of "$log" APEXG2-GLASS-VIEWS | jq -r '.straddling.live | "seam \(.seamInteriorMax) inside, \(.seamEdgeMax) in the band; away from it \(.interiorMax) inside, \(.edgeMax) in the band, \(.mean) on average"' 2>/dev/null)
+    expect_report "$label" "$log" '.views == 2 and .straddling.views == 2 and ([.across, .back] | all(.views == 2 and .pixels > 0 and .differingFromFresh == 0))' \
+        "a glass box moved from one monitor's view to the other's and back draws, in both views' frames, what a fresh effect draws" APEXG2-GLASS-VIEWS
     expect_report "$label" "$log" ".straddling.live | .band > 0 and ([.interiorMax, .edgeMax, .mean] | all(type == \"number\"))
         and .interiorMax <= $GLASS_INTERIOR_MAX and .edgeMax <= $GLASS_EDGE_MAX and .mean <= $GLASS_MEAN_ERROR" \
-        "over the boundary, away from it, the box is blur-ref.js's blur within $GLASS_INTERIOR_MAX/255 inside, $GLASS_EDGE_MAX/255 in the ds/2 band, $GLASS_MEAN_ERROR/255 on average (${views:-no report})" APEXG2-GLASS-VIEWS
-    expect_report "$label" "$log" ".straddling.live.seamMax | type == \"number\" and (. - $GLASS_VIEWS_SEAM_TODAY | fabs) <= $GLASS_VIEWS_SEAM_PIN" \
-        "within 3 sigma of the boundary the seam is today's, $GLASS_VIEWS_SEAM_TODAY/255 within $GLASS_VIEWS_SEAM_PIN/255 either way" APEXG2-GLASS-VIEWS
-    known_gap "0003: fine mode's per-view texture never gets the other view's pixels, a seam over two monitors; not 15b's fix" \
-        expect_report "$label" "$log" ".straddling.live | ([.seamInteriorMax, .seamEdgeMax] | all(type == \"number\"))
-            and .seamInteriorMax <= $GLASS_INTERIOR_MAX and .seamEdgeMax <= $GLASS_EDGE_MAX" \
-        "and within 3 sigma of the boundary, too, by the same bounds inside and in the ds/2 band" APEXG2-GLASS-VIEWS
+        "one over their boundary is, away from it, blur-ref.js's blur within $GLASS_INTERIOR_MAX/255 inside, $GLASS_EDGE_MAX/255 in the ds/2 band, $GLASS_MEAN_ERROR/255 on average (${views:-no report})" APEXG2-GLASS-VIEWS
+    expect_report "$label" "$log" ".straddling.live | ([.seamInteriorMax, .seamEdgeMax] | all(type == \"number\"))
+        and .seamInteriorMax <= $GLASS_INTERIOR_MAX and .seamEdgeMax <= $GLASS_EDGE_MAX" \
+        "and within 3 sigma of the boundary by the same bounds, as stock's effect blurs it: each view takes the other's part from its last blit" APEXG2-GLASS-VIEWS
 }
 
 shadows_under_glass() {

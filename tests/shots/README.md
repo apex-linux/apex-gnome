@@ -660,17 +660,13 @@ any scale. Measured at scale 1 against scale 2: inside 2.89/255 against 3.2, alo
 `glass-views` puts the same glass (σ 24, saturation 1.6, corners 18, `fine`) on two monitors,
 two stage views with a framebuffer each, and reads each view's part of a box from its own.
 A box moved from the left view to the right one and back draws, in both views' frames, what a
-fresh effect draws there: the blur follows it from view to view. A box over the boundary draws
-what a fresh effect draws too, and away from the boundary it is `blur-ref.js`'s blur within the
-bounds above. Within 3 σ of the boundary it is not: `fine` keeps its last result per stage view,
-each in a texture of its own that only that view's blit fills, so each half blurs without the
-other view's pixels and the halves meet at a seam, up to 93.58/255 off the reference. Stock's
-effect has one texture that every view fills its part of, so it shows the seam only in a new
-effect's first frame (77/255) and then 1.28/255. The seam is pinned at today's 93.58/255 within
-1/255 either way, and is a known gap that closes when the seam's columns meet the bounds above,
-4/255 inside and 12/255 in the ds/2 band; a report without the numbers keeps it open. It is not
-the gap the edge fix (15b) closes: that fix makes the pixels past the stage defined, not the
-other view's.
+fresh effect draws there: the blur follows it from view to view. A box over the boundary is
+`blur-ref.js`'s blur within the bounds above, away from the boundary and within 3 σ of it,
+4/255 inside and 12/255 in the ds/2 band. Stock's effect has one texture that every view blits
+its part into; `fine` keeps its last result per view, each in a texture of its own, so each view
+also blits the other views' parts from their last blit and the halves meet without a seam
+(3.09/255 inside, 9.58 in the band; without it, 93.58). As on stock, a new effect's first frame
+shows the boundary until the other view has painted.
 In the same case the glass manager (`js/ui/apex/glass/`) is read on the live shell, light:
 `glass_manager` asserts that the bar's blur is `$apex_bar_blur` at `$apex_bar_saturation`,
 and Quick Settings', the calendar's (each opened) and a banner's `$apex_panel_blur` at
