@@ -7,15 +7,16 @@ import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 
 import {tileOf} from './tiles.js';
+import {_} from '../i18n.js';
 
 export const BUDGET_MS = 1000;
 export const CALCULATOR_APP = 'org.gnome.Calculator.desktop';
 
 export const SECTIONS = [
-    {name: 'Calculator', cap: 1, provider: CALCULATOR_APP},
-    {name: 'Applications', cap: 4, provider: 'applications'},
-    {name: 'Settings', cap: 3, provider: 'org.gnome.Settings.desktop'},
-    {name: 'Files', cap: 4, provider: 'org.gnome.Nautilus.desktop'},
+    {name: 'Calculator', label: _('Calculator'), cap: 1, provider: CALCULATOR_APP},
+    {name: 'Applications', label: _('Applications'), cap: 4, provider: 'applications'},
+    {name: 'Settings', label: _('Settings'), cap: 3, provider: 'org.gnome.Settings.desktop'},
+    {name: 'Files', label: _('Files'), cap: 4, provider: 'org.gnome.Nautilus.desktop'},
 ];
 
 export function termsOf(text) {
@@ -135,7 +136,7 @@ export class Search {
                 let metas = result?.metas ?? [];
                 if (section.name === 'Applications' && sum && result?.calculator)
                     metas = [result.calculator, ...metas.filter(m => m.id !== CALCULATOR_APP)];
-                return {name: section.name, rows: rowsOf(section, this._providers.get(section.provider), metas, terms)};
+                return {name: section.name, label: section.label, rows: rowsOf(section, this._providers.get(section.provider), metas, terms)};
             })
             .filter(section => section.rows.length > 0);
     }

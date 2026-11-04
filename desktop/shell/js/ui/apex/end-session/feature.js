@@ -11,6 +11,7 @@ import St from 'gi://St';
 import * as Hooks from '../hooks.js';
 import {UpdateCard} from './card.js';
 import * as Update from './update.js';
+import {_} from '../i18n.js';
 
 export const ICON_STYLE_CLASS = 'apex-end-session-icon';
 export const RESTART_STYLE_CLASS = 'apex-end-session-restart';
@@ -19,7 +20,7 @@ export const ROW_STYLE_CLASS = 'apex-end-session-row';
 const POWER_OFF = 'ConfirmedShutdown';
 const REBOOT = 'ConfirmedReboot';
 const STOCK_BUTTON_SPACING = 12;
-export const RESTART_UPDATE_LABEL = 'Restart & Update';
+export const RESTART_UPDATE_LABEL = _('Restart & Update');
 // logind unsets the one-shot boot menu for UINT64_MAX (logind-dbus.c), past a JS number.
 const UNSET_BOOT_LOADER_MENU = GLib.Variant.parse(new GLib.VariantType('(t)'), '(18446744073709551615,)', null, null);
 

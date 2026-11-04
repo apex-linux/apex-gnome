@@ -1,0 +1,163 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) YEAR THE PACKAGE'S COPYRIGHT HOLDER
+# This file is distributed under the same license as the apex-shell package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: apex-shell\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-11-04 16:52+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"Language: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+#: js/ui/apex/dock/trash.js:32 js/ui/apex/dock/trash.js:51
+msgid "Trash"
+msgstr ""
+
+#: js/ui/apex/dock/trash.js:54 js/ui/apex/spotlight/popup.js:278
+msgid "Open"
+msgstr ""
+
+#: js/ui/apex/dock/trash.js:55
+msgid "Empty Trash"
+msgstr ""
+
+#: js/ui/apex/end-session/card.js:14
+msgid "Start the new version next time"
+msgstr ""
+
+#: js/ui/apex/end-session/card.js:15
+msgid ""
+"The update could not be prepared. Software Updates in Settings has the "
+"details."
+msgstr ""
+
+#: js/ui/apex/end-session/feature.js:23
+msgid "Restart & Update"
+msgstr ""
+
+#: js/ui/apex/lock/fingerprint.js:16
+msgid "Or touch the fingerprint reader"
+msgstr ""
+
+#: js/ui/apex/lock/fingerprint.js:18
+msgid "Fingerprint not recognized. Try again."
+msgstr ""
+
+#: js/ui/apex/lock/fingerprint.js:19
+msgid "Press Enter to unlock"
+msgstr ""
+
+#: js/ui/apex/lock/question.js:15
+msgid "Enter Password"
+msgstr ""
+
+#: js/ui/apex/notifications/feature.js:13
+msgid "Do Not Disturb"
+msgstr ""
+
+#: js/ui/apex/overview/workspaces.js:13
+msgid "No open windows"
+msgstr ""
+
+#: js/ui/apex/panel/focused-app.js:18
+msgid "Desktop"
+msgstr ""
+
+#: js/ui/apex/panel/screen-pills.js:13
+msgid "Stop screen sharing"
+msgstr ""
+
+#: js/ui/apex/panel/search-button.js:15
+msgid "Search (Super+Space)"
+msgstr ""
+
+#: js/ui/apex/panel/search-hint.js:13
+msgid "Press Super+Space to search"
+msgstr ""
+
+#: js/ui/apex/polkit/details.js:57 js/ui/apex/polkit/details.js:62
+msgid "Details"
+msgstr ""
+
+#: js/ui/apex/polkit/details.js:69
+msgid "Vendor"
+msgstr ""
+
+#: js/ui/apex/polkit/details.js:71
+msgid "Action"
+msgstr ""
+
+#: js/ui/apex/polkit/header.js:44
+msgid "Administrator"
+msgstr ""
+
+#: js/ui/apex/quick-settings/feature.js:9
+msgid "On"
+msgstr ""
+
+#: js/ui/apex/quick-settings/feature.js:10
+msgid "Off"
+msgstr ""
+
+#: js/ui/apex/spotlight/launcher-search.js:15
+msgid "Search apps"
+msgstr ""
+
+#: js/ui/apex/spotlight/launcher-search.js:16
+msgid "No Results"
+msgstr ""
+
+#: js/ui/apex/spotlight/launcher-search.js:17
+msgid "The launcher searches apps only. Super+Space searches everything."
+msgstr ""
+
+#: js/ui/apex/spotlight/popup.js:17
+msgid "Search apps, settings and files, or type a sum"
+msgstr ""
+
+#: js/ui/apex/spotlight/popup.js:146
+msgid "Search"
+msgstr ""
+
+#: js/ui/apex/spotlight/popup.js:158
+msgid "Clear"
+msgstr ""
+
+#: js/ui/apex/spotlight/popup.js:232
+#, javascript-format
+msgid "No results for “%s”"
+msgstr ""
+
+#: js/ui/apex/spotlight/popup.js:278
+msgid "Copy"
+msgstr ""
+
+#: js/ui/apex/spotlight/popup.js:320
+#, javascript-format
+msgid "Copied %s"
+msgstr ""
+
+#: js/ui/apex/spotlight/search.js:16
+msgid "Calculator"
+msgstr ""
+
+#: js/ui/apex/spotlight/search.js:17
+msgid "Applications"
+msgstr ""
+
+#: js/ui/apex/spotlight/search.js:18
+msgid "Settings"
+msgstr ""
+
+#: js/ui/apex/spotlight/search.js:19
+msgid "Files"
+msgstr ""

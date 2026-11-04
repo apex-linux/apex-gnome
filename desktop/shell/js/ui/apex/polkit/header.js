@@ -5,6 +5,7 @@
 import AccountsService from 'gi://AccountsService';
 import Clutter from 'gi://Clutter';
 import St from 'gi://St';
+import {_} from '../i18n.js';
 
 const SHIELD_GLYPH = 'dialog-password-symbolic';
 const ROOT = 'root';

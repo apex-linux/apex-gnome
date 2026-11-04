@@ -3,6 +3,7 @@
 // "Enter Password" for PAM's exact "Password:" only; every other question as PAM asks it.
 
 import * as Hooks from '../hooks.js';
+import {_} from '../i18n.js';
 
 export const PAM_PASSWORD_QUESTION = 'Password:';
 

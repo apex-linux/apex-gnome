@@ -7,9 +7,10 @@ import Clutter from 'gi://Clutter';
 import St from 'gi://St';
 
 import * as Main from '../../main.js';
+import {_} from '../i18n.js';
 
 const STOP_ICON = 'screencast-stop-symbolic';
-const SHARING_NAME = 'Stop screen sharing';
+const SHARING_NAME = _('Stop screen sharing');
 // The square leads the recording's timer and follows the sharing glyph.
 const PILLS = [{role: 'screenRecording', squareFirst: true}, {role: 'screenSharing', squareFirst: false}];
 

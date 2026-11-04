@@ -46,12 +46,13 @@ bar-live does the same across layer-enabled off and on, panel out of and back in
 and a lock from the overview; the layer off must give bar-lock-cycle-safe's stock bar.
 Each end-session case opens the end-session dialog over D-Bus against update1-mock.py's
 Update1 (tests/shots), from up to date through staged and ready-for-reboot to failing Applies.
+i18n-vi runs under vi_VN.UTF-8 and opens the overview, whose empty workspace is the layer's.
 check.py asserts the cases' logs and the mock's. The users apex and guest come
 from accounts-daemon; the wallpapers, the greeter's background and its logo are apex-desktop's ($APEX_DESKTOP_REV, or
 APEX_DESKTOP_SRC, a checkout). Captures and logs land in _build/gnome-shell/shots/.
 
 It needs mesa-dri-drivers, dbus-daemon, python3-dbusmock, python3-gobject, gcc,
-accountsservice, polkit, librsvg2-tools, openssl, git-core and the Apex fonts (adwaita-sans-fonts,
+accountsservice, polkit, librsvg2-tools, openssl, git-core, glibc-langpack-vi and the Apex fonts (adwaita-sans-fonts,
 jetbrains-mono-fonts-all). G2's clock.c and fixtures.py (tests/shots) are used as they are.
 The system bus lets root own the services that fixtures.py --names lists for this run, and the
 shells reach them as G2's do. Power profiles and accountsservice stay off, as G2's opt-ins: the
@@ -104,12 +105,18 @@ out=$APEX_ROOT/_build/gnome-shell/shots
 rm -rf -- "$out"
 mkdir -p -- "$out"
 
+rm -f /etc/rpm/macros.image-language-conf
 shopt -s nullglob
 rpms=("$1"/gnome-shell-[0-9]*.x86_64.rpm "$1"/gnome-shell-common-[0-9]*.noarch.rpm)
 ((${#rpms[@]} == 2)) || die "expected the gnome-shell and gnome-shell-common RPMs in $1"
 dnf5 -y -q --setopt=install_weak_deps=False --repo=fedora --repo=updates install "${rpms[@]}" ||
     die "cannot install ${rpms[*]}"
+[[ -e /usr/share/locale/vi/LC_MESSAGES/apex-shell.mo ]] ||
+    dnf5 -y -q --setopt=install_weak_deps=False --repo=fedora --repo=updates reinstall "${rpms[@]}" ||
+    die "cannot reinstall ${rpms[*]} with their translations"
 rpm -q gnome-shell gnome-shell-common >"$out/gnome-shell.txt"
+[[ -e /usr/share/locale/vi/LC_MESSAGES/apex-shell.mo ]] || die "the gnome-shell RPMs install no vi apex-shell.mo"
+[[ $(LC_ALL=vi_VN.UTF-8 locale charmap 2>/dev/null) == UTF-8 ]] || die "the vi_VN.UTF-8 locale is missing (glibc-langpack-vi)"
 grep -q '\.apex' "$out/gnome-shell.txt" ||
     die "the installed gnome-shell is not an Apex build: $(rpm -q gnome-shell)"
 # What apex-desktop ships for the layer: its schema (the layer tests' fixture).
@@ -333,6 +340,7 @@ for scheme in light dark; do
     kill "$update1" 2>/dev/null
     wait "$update1" 2>/dev/null
 done
+shoot i18n-vi "$USER_NAME" user default 'Password:' -- LANG=vi_VN.UTF-8 APEX_I18N=1 || status=1
 ((status == 0)) || die "shoot.sh: a case failed; see ${out#"$APEX_ROOT/"}/*.log"
 python3 "$HERE/check.py" "$out" || die "shoot.sh: the cases' assertions failed"
 log "shoot.sh: captures in ${out#"$APEX_ROOT/"}"

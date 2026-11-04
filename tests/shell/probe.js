@@ -1106,6 +1106,21 @@ async function shootBarLive() {
     await captureBar('overview-unlocked');
 }
 
+// Under vi_VN.UTF-8: the overview's empty workspace, a layer string from its apex-shell domain.
+async function shootI18n() {
+    await Scripting.sleep(SETTLE_MS);
+    Main.overview.show();
+    await Scripting.sleep(STEP_MS * 2);
+    const empty = [];
+    const walk = actor => {
+        if (actor instanceof St.Label && actor.has_style_class_name('apex-workspace-empty') && actor.visible)
+            empty.push(actor.text);
+        actor.get_children().forEach(walk);
+    };
+    walk(Main.layoutManager.overviewGroup);
+    fact('i18n', {lang: GLib.getenv('LANG'), empty});
+}
+
 // main.js connects to startup-complete only after importing this module, so a startup that
 // completes during the import would never run the script and leave the shell up.
 export function init() {
@@ -1144,6 +1159,8 @@ export async function run() {
             await shootSuspend();
         else if (GLib.getenv('APEX_IDLE') === '1')
             await shootIdleLock();
+        else if (GLib.getenv('APEX_I18N') === '1')
+            await shootI18n();
         else if (GLib.getenv('APEX_WAKE_KEY'))
             await shootWakeKey(GLib.getenv('APEX_WAKE_KEY') === 'locked-blank');
         else

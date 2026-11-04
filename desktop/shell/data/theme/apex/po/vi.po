@@ -1,0 +1,166 @@
+# Vietnamese translation of the Apex layer of GNOME Shell (apex-shell).
+# Bản dịch tiếng Việt cho lớp Apex của GNOME Shell.
+# SPDX-License-Identifier: GPL-2.0-or-later
+#
+# Glossary, following GNOME's existing Vietnamese where upstream already translates the word:
+#   Settings = Cài đặt; Files = Tệp; Software Updates = Cập nhật phần mềm;
+#   Trash = Thùng rác; Empty Trash = Đổ rác; Do Not Disturb = Đừng làm phiền;
+#   Search = Tìm kiếm; Copy = Chép; Clear = Xóa; Desktop = Màn hình nền;
+#   unlock = mở khóa; restart = khởi động lại; Administrator = Quản trị viên.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: apex-shell\n"
+"Report-Msgid-Bugs-To: https://github.com/apex-linux/apex-gnome/issues\n"
+"PO-Revision-Date: 2026-11-04 00:00+0000\n"
+"Last-Translator: Apex <noreply@apex-linux.github.io>\n"
+"Language-Team: Vietnamese <gnome-vi-list@gnome.org>\n"
+"Language: vi\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+
+#: js/ui/apex/dock/trash.js:32 js/ui/apex/dock/trash.js:51
+msgid "Trash"
+msgstr "Thùng rác"
+
+#: js/ui/apex/dock/trash.js:54 js/ui/apex/spotlight/popup.js:278
+msgid "Open"
+msgstr "Mở"
+
+#: js/ui/apex/dock/trash.js:55
+msgid "Empty Trash"
+msgstr "Đổ rác"
+
+#: js/ui/apex/end-session/card.js:14
+msgid "Start the new version next time"
+msgstr "Dùng phiên bản mới từ lần khởi động sau"
+
+#: js/ui/apex/end-session/card.js:15
+msgid ""
+"The update could not be prepared. Software Updates in Settings has the "
+"details."
+msgstr "Không thể chuẩn bị bản cập nhật. Xem chi tiết trong Cập nhật phần mềm của Cài đặt."
+
+#: js/ui/apex/end-session/feature.js:23
+msgid "Restart & Update"
+msgstr "Khởi động lại & cập nhật"
+
+#: js/ui/apex/lock/fingerprint.js:16
+msgid "Or touch the fingerprint reader"
+msgstr "Hoặc chạm vào đầu đọc vân tay"
+
+#: js/ui/apex/lock/fingerprint.js:18
+msgid "Fingerprint not recognized. Try again."
+msgstr "Không nhận ra vân tay. Hãy thử lại."
+
+#: js/ui/apex/lock/fingerprint.js:19
+msgid "Press Enter to unlock"
+msgstr "Nhấn Enter để mở khóa"
+
+#: js/ui/apex/lock/question.js:15
+msgid "Enter Password"
+msgstr "Nhập mật khẩu"
+
+#: js/ui/apex/notifications/feature.js:13
+msgid "Do Not Disturb"
+msgstr "Đừng làm phiền"
+
+#: js/ui/apex/overview/workspaces.js:13
+msgid "No open windows"
+msgstr "Không có cửa sổ nào đang mở"
+
+#: js/ui/apex/panel/focused-app.js:18
+msgid "Desktop"
+msgstr "Màn hình nền"
+
+#: js/ui/apex/panel/screen-pills.js:13
+msgid "Stop screen sharing"
+msgstr "Dừng chia sẻ màn hình"
+
+#: js/ui/apex/panel/search-button.js:15
+msgid "Search (Super+Space)"
+msgstr "Tìm kiếm (Super+Space)"
+
+#: js/ui/apex/panel/search-hint.js:13
+msgid "Press Super+Space to search"
+msgstr "Nhấn Super+Space để tìm kiếm"
+
+#: js/ui/apex/polkit/details.js:57 js/ui/apex/polkit/details.js:62
+msgid "Details"
+msgstr "Chi tiết"
+
+#: js/ui/apex/polkit/details.js:69
+msgid "Vendor"
+msgstr "Nhà cung cấp"
+
+#: js/ui/apex/polkit/details.js:71
+msgid "Action"
+msgstr "Hành động"
+
+#: js/ui/apex/polkit/header.js:44
+msgid "Administrator"
+msgstr "Quản trị viên"
+
+#: js/ui/apex/quick-settings/feature.js:9
+msgid "On"
+msgstr "Bật"
+
+#: js/ui/apex/quick-settings/feature.js:10
+msgid "Off"
+msgstr "Tắt"
+
+#: js/ui/apex/spotlight/launcher-search.js:15
+msgid "Search apps"
+msgstr "Tìm ứng dụng"
+
+#: js/ui/apex/spotlight/launcher-search.js:16
+msgid "No Results"
+msgstr "Không có kết quả"
+
+#: js/ui/apex/spotlight/launcher-search.js:17
+msgid "The launcher searches apps only. Super+Space searches everything."
+msgstr "Trình khởi chạy chỉ tìm ứng dụng. Super+Space tìm mọi thứ."
+
+#: js/ui/apex/spotlight/popup.js:17
+msgid "Search apps, settings and files, or type a sum"
+msgstr "Tìm ứng dụng, cài đặt và tệp, hoặc gõ một phép tính"
+
+#: js/ui/apex/spotlight/popup.js:146
+msgid "Search"
+msgstr "Tìm kiếm"
+
+#: js/ui/apex/spotlight/popup.js:158
+msgid "Clear"
+msgstr "Xóa"
+
+#: js/ui/apex/spotlight/popup.js:232
+#, javascript-format
+msgid "No results for “%s”"
+msgstr "Không có kết quả cho “%s”"
+
+#: js/ui/apex/spotlight/popup.js:278
+msgid "Copy"
+msgstr "Chép"
+
+#: js/ui/apex/spotlight/popup.js:320
+#, javascript-format
+msgid "Copied %s"
+msgstr "Đã chép %s"
+
+#: js/ui/apex/spotlight/search.js:16
+msgid "Calculator"
+msgstr "Máy tính"
+
+#: js/ui/apex/spotlight/search.js:17
+msgid "Applications"
+msgstr "Ứng dụng"
+
+#: js/ui/apex/spotlight/search.js:18
+msgid "Settings"
+msgstr "Cài đặt"
+
+#: js/ui/apex/spotlight/search.js:19
+msgid "Files"
+msgstr "Tệp"
