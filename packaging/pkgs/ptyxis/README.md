@@ -40,8 +40,8 @@ path `source1_paths` allows; `tests/ptyxis/selftest.sh` checks both.
 |---|---|
 | `src/apex/meson.build` | adds the Apex sources and resource to `ptyxis_sources` |
 | `src/apex/apex.gresource.xml` | the Apex resource, `/org/gnome/Ptyxis/apex`; outside the resource base path, so libadwaita loads nothing from it by itself |
-| `src/apex/apex.css` | the sheet: board 32's colours as variables on `window.apex`, dark ones on `window.apex.apex-dark` |
-| `src/apex/apex-window.c` | `apex_window_attach()`: an `AdwOverlaySplitView` with the sidebar beside the window's content, the header bar restyled (session title, path and tag; Find; the session menu), the sheet loaded, and `apex-dark` following `AdwStyleManager:dark`. `APEX_PTYXIS_STOCK=1` keeps the stock window |
+| `src/apex/apex.css` | the sheet: board 32's colours as variables on `window.apex`, dark ones on `window.apex.apex-dark`, libadwaita's own in high contrast on `window.apex.apex-hc` |
+| `src/apex/apex-window.c` | `apex_window_attach()`: an `AdwOverlaySplitView` with the sidebar beside the window's content, the header bar restyled (session title, path and tag; Find; the session menu), the sheet loaded, and `apex-dark` and `apex-hc` following `AdwStyleManager:dark` and `:high-contrast`. `APEX_PTYXIS_STOCK=1` keeps the stock window |
 | `src/apex/apex-sidebar.c` | the "Terminal" header (New Session, the main menu), the sessions grouped by where they run, the group headers with "N needs you", and the footer counts |
 | `src/apex/apex-session.c` | one session per tab: it feeds the status logic from the terminal's precmd, preexec and postexec signals, the bell, the agent's foreground command line and leader kind, the container termprops, OSC 7 and OSC 9;4 |
 | `src/apex/apex-session-state.c` | the status logic, without GTK: idle, running, done, failed, needs you; the subtitle; the relative time; the ssh host |
@@ -136,38 +136,36 @@ selected row, a group heading, the footer), the content header's labels, each pa
 and each pane's terminal, the unfocused pane's marked dimmed. GTK's extents leave out each
 ancestor's padding and margin, so `contrast.py` moves each container's boxes by the one offset
 that holds the most strokes. It takes a target's ground as the colour most of its box is and its ink
-as its strongest strokes as drawn, so a translucent ink, the .62 dim or the unfocused pane's .7
+as its strongest strokes as drawn, so a translucent ink, the .66 dim or the unfocused pane's .7
 and .62 are measured as they look. Text wants 4.5:1 and a glyph 3:1 (WCAG 1.4.3, 1.4.11),
 and the footer's needs-you and running glyphs CIELAB L* 10 apart (light 42.6 and 54.9, dark
-74.8 and 54.9), so they differ in lightness and not hue alone. A shortfall is a known gap
-at today's ratio, pending the owner: a lower ratio fails, and so does one that reaches its
-threshold, so the fix also removes the pin. The unfocused pane's output passes (4.73:1 light,
-7.24:1 dark). The gaps:
+74.8 and 54.9), so they differ in lightness and not hue alone. A target under its threshold
+fails. The unfocused pane's output passes (4.73:1 light, 7.24:1 dark).
 
-| Capture | Target | Today |
-|---|---|---|
-| light, split-light | the selected row's dim program and time, on its `--apex-selected` fill | 4.26:1 |
-| light, dark | the selected row's running glyph, the accent on that fill | 2.81:1, 2.70:1 |
-| light, split-light | a group's `toolbox` and `ssh` tags, dim on `--apex-btn` | 4.26:1 |
-| light, split-light | the content header's and the focused pane header's tag | 4.39:1 |
-| split-light, split-dark | the unfocused pane header's path, `--apex-dim` at .7 | 2.68:1, 3.96:1 |
-| split-light, split-dark | the unfocused pane header's tag | 2.53:1, 3.53:1 |
+The scenes are taken again with `org.gnome.desktop.a11y.interface high-contrast` on
+(`hc-light`, `hc-dark`, `hc-split-light`, `hc-split-dark`), for this test alone. GTK's
+`prefers-contrast` media query does not follow Ptyxis's style manager, so `apex-hc` does, as
+`apex-dark` does for the colour scheme: the surfaces are libadwaita's sidebar and header bar,
+the dim, borders and the unfocused header's dimming take its high-contrast opacities, and the
+selected row its outline.
 
-The four scenes are taken again with `org.gnome.desktop.a11y.interface high-contrast` on
-(`hc-light`, `hc-dark`, `hc-split-light`, `hc-split-dark`), for this test alone: libadwaita
-switches (14,000 to 25,000 pixels change per capture, its borders and outlines), but
-`apex.css` keeps its own colours, so the same targets fall short there and are pinned the same
-way, as the owner's item 10b. One pair moves, in light: libadwaita's dimming of the unfocused pane's
-header greys its path and tag.
+Sixteen targets fell short in each set until the owner's decision of 2026-11-04 brought them
+to AA. Each is held at its ratio since (`PINS`): a lower one fails.
 
-| Capture | Target | Today |
-|---|---|---|
-| hc-light, hc-split-light | the selected row's dim program and time | 4.26:1 |
-| hc-light, hc-dark | the selected row's running glyph | 2.81:1, 2.70:1 |
-| hc-light, hc-split-light | a group's `toolbox` and `ssh` tags | 4.26:1 |
-| hc-light, hc-split-light | the content header's and the focused pane header's tag | 4.39:1 |
-| hc-split-light, hc-split-dark | the unfocused pane header's path | 3.07:1, 3.96:1 |
-| hc-split-light, hc-split-dark | the unfocused pane header's tag | 2.95:1, 3.53:1 |
+| Capture | Target | Was | Now |
+|---|---|---|---|
+| light, split-light | the selected row's dim program and time: `--apex-dim` .62 to .66 | 4.26:1 | 4.74:1 |
+| light, dark | the selected row's running glyph: libadwaita's standalone `--accent-color` | 2.81:1, 2.70:1 | 4.53:1, 6.01:1 |
+| light, split-light | a group's `toolbox` and `ssh` tags | 4.26:1 | 4.80:1 |
+| light, split-light | the content header's and the focused pane header's tag | 4.39:1 | 5.01:1 |
+| split-light, split-dark | the unfocused pane header's path: `--apex-fg` at .7 | 2.68:1, 3.96:1 | 6.02:1, 7.66:1 |
+| split-light, split-dark | the unfocused pane header's tag | 2.53:1, 3.53:1 | 5.42:1, 6.38:1 |
+| hc-light, hc-split-light | the selected row's dim program and time | 4.26:1 | 7.78:1 |
+| hc-light, hc-dark | the selected row's running glyph | 2.81:1, 2.70:1 | 4.30:1, 5.81:1 |
+| hc-light, hc-split-light | a group's `toolbox` and `ssh` tags | 4.26:1 | 7.78:1 |
+| hc-light, hc-split-light | the content header's and the focused pane header's tag | 4.39:1 | 8.52:1 |
+| hc-split-light, hc-split-dark | the unfocused pane header's path | 3.07:1, 3.96:1 | 9.25:1, 11.45:1 |
+| hc-split-light, hc-split-dark | the unfocused pane header's tag | 2.95:1, 3.53:1 | 8.33:1, 8.63:1 |
 
 `contrast.py --selftest` measures a drawn label in the foreground and again in its row's
 fill colour, and the test fails unless its checks catch every session name in its row's
