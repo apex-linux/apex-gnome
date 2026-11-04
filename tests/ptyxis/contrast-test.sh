@@ -9,7 +9,25 @@ readonly PTYXIS_TESTS
 readonly TEXT_RATIO=4.5 GLYPH_RATIO=3 STATUS_LIGHTNESS=10
 readonly SHOTS=(light dark split-light split-dark hc-light hc-dark hc-split-light hc-split-dark)
 # The targets the owner's 2026-11-04 decision brought to AA, each held at its ratio since.
-readonly PINS='{}'
+readonly PINS='{
+  "light group:ssh": 4.8, "light group:toolbox": 4.8, "light header:tag": 5.01,
+  "light selectedRow:just vm-image · running": 4.74, "light selectedRow:now": 4.74,
+  "light selectedRow:running": 4.53,
+  "dark selectedRow:running": 6.01,
+  "split-light dimmedPaneHeader:path": 6.02, "split-light dimmedPaneHeader:tag": 5.42,
+  "split-light group:ssh": 4.8, "split-light group:toolbox": 4.8, "split-light paneHeader:tag": 5.01,
+  "split-light selectedRow:claude · needs you": 4.74, "split-light selectedRow:now": 4.74,
+  "split-dark dimmedPaneHeader:path": 7.66, "split-dark dimmedPaneHeader:tag": 6.38,
+  "hc-light group:ssh": 7.78, "hc-light group:toolbox": 7.78, "hc-light header:tag": 8.52,
+  "hc-light selectedRow:just vm-image · running": 7.78, "hc-light selectedRow:now": 7.78,
+  "hc-light selectedRow:running": 4.3,
+  "hc-dark selectedRow:running": 5.81,
+  "hc-split-light dimmedPaneHeader:path": 9.25, "hc-split-light dimmedPaneHeader:tag": 8.33,
+  "hc-split-light group:ssh": 7.78, "hc-split-light group:toolbox": 7.78,
+  "hc-split-light paneHeader:tag": 8.52, "hc-split-light selectedRow:claude · needs you": 7.78,
+  "hc-split-light selectedRow:now": 7.78,
+  "hc-split-dark dimmedPaneHeader:path": 11.45, "hc-split-dark dimmedPaneHeader:tag": 8.63
+}'
 
 usage() {
     cat <<EOF
