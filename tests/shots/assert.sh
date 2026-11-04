@@ -23,8 +23,8 @@ readonly STOCK_SHEETS=resource:///org/gnome/shell/theme/stock
 readonly FEDORA_SHEETS=resource:///org/gnome/shell/theme
 readonly DIRECT_CASES=(default default-scale1 dark-style high-contrast large-text default-solid dark-style-solid high-contrast-solid
     large-text-solid dock-intellihide dock-intellihide-dark dock-one-gpu no-dock no-dock-dark stock-light stock-dark safe-env
-    layer-disabled layer-cycles motion idle dock-pin dock-dnd dock-external keys input-sources glass-load glass-stress fault-configure fault-enable fault-abort
-    shutdown-banner kernel-safe
+    layer-disabled layer-cycles motion idle dock-pin dock-dnd dock-external keys input-sources glass-load glass-stress fault-configure fault-enable fault-abort shutdown-banner
+    kernel-safe
     fedora-light fedora-dark glass glass-scale1 glass-views fedora-glass
     indicators indicators-scale1 indicators-dark privacy)
 readonly DIRECT_PARTS=(main kernel fedora)
