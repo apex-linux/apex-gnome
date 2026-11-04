@@ -42,16 +42,19 @@ esac
 
 # shellcheck source=tests/shots/parts.sh
 . "$(dirname -- "${BASH_SOURCE[0]}")/parts.sh"
+# shellcheck source=tests/shots/backtrace.sh
+. "$(dirname -- "${BASH_SOURCE[0]}")/backtrace.sh"
 readonly SHELL_TIMEOUT=150
 readonly GLASS_STRESS_SECONDS=${G2_GLASS_STRESS_SECONDS:-60}
 readonly EXIT_HUNG=3
 readonly CLOCK_LIB=/run/g2-clock.so
+readonly CRASH_LIB=/run/g2-crash.so
 readonly FRAME_DIR=/run/g2-frame
 readonly G2_CLOCK='2026-09-28 09:41:00'
 G2_CLOCK_EPOCH=$(date -u -d "$G2_CLOCK" +%s)
 readonly G2_CLOCK_EPOCH
 readonly FIXTURE_NAMES=(org.freedesktop.UPower org.freedesktop.NetworkManager org.bluez net.hadess.SwitcherooControl
-    org.freedesktop.UPower.PowerProfiles io.github.apex_linux.Apex.Update1)
+    org.freedesktop.UPower.PowerProfiles io.github.apex_linux.Apex.Update1 org.freedesktop.RealtimeKit1)
 # Two fixed workspaces: stock widens the active workspace dot by a factor that depends on
 # the count. A 24-hour clock: in 12 hours a one-digit hour adds a figure space.
 readonly NO_HOT_CORNER='org.gnome.desktop.interface enable-hot-corners false'
@@ -92,13 +95,14 @@ mkdir -p /etc/dbus-1
 } >/etc/dbus-1/system-local.conf
 dbus-daemon --system --fork || echo "no system bus"
 mkdir -p "/out/fixtures-$part"
-G2_POWER_PROFILES=1 G2_ACCOUNTS=1 python3 /w/fixtures.py "/out/fixtures-$part" >"/out/fixtures-$part.txt" 2>&1 || echo "fixtures.py: exit $?"
+G2_POWER_PROFILES=1 G2_ACCOUNTS=1 G2_REALTIME=1 python3 /w/fixtures.py "/out/fixtures-$part" >"/out/fixtures-$part.txt" 2>&1 || echo "fixtures.py: exit $?"
 setsid python3 /w/update1-mock.py "/out/update1-$part.log" >"/out/update1-$part.out" 2>&1 </dev/null &
 mkdir -p /tmp/.X11-unix && chmod 1777 /tmp/.X11-unix
 gcc -O2 -Wall -Werror -shared -fPIC -o "$CLOCK_LIB" /w/clock.c || { echo "direct.sh: cannot build clock.c" >&2; exit 1; }
 # ld.so only warns when a preload is missing, and the shells would keep the real clock.
 held=$(env LD_PRELOAD="$CLOCK_LIB" G2_CLOCK_EPOCH="$G2_CLOCK_EPOCH" date -u '+%F %T' 2>&1)
 [[ $held == "$G2_CLOCK" ]] || { echo "direct.sh: $CLOCK_LIB does not hold the clock at $G2_CLOCK: $held" >&2; exit 1; }
+gcc -O2 -Wall -Werror -shared -fPIC -o "$CRASH_LIB" /w/crash.c || { echo "direct.sh: cannot build crash.c" >&2; exit 1; }
 # The glass cases read the frames the shell drew through frame.c (G2Frame-1.gir).
 mkdir -p "$FRAME_DIR"
 # shellcheck disable=SC2046 # pkg-config prints several flags
@@ -109,10 +113,11 @@ if ! gcc -O2 -Wall -Werror -shared -fPIC $(pkg-config --cflags glib-2.0) -o "$FR
 fi
 
 run_case() {
-    local name=$1 gsettings_triples=$2 limit=$SHELL_TIMEOUT arg
+    local name=$1 gsettings_triples=$2 limit=$SHELL_TIMEOUT expected=0 arg secs
     shift 2
     for arg in "$@"; do
         [[ $arg == G2_TIMEOUT=* ]] && limit=${arg#G2_TIMEOUT=}
+        [[ $arg == G2_EXPECT_EXIT=* ]] && expected=${arg#G2_EXPECT_EXIT=}
     done
     local home=/tmp/g2/$name/home run=/tmp/g2/$name/run start=$SECONDS rc left=no
     rm -rf "/tmp/g2/$name"
@@ -123,6 +128,7 @@ run_case() {
         DBUS_SYSTEM_BUS_ADDRESS=unix:path=/run/dbus/system_bus_socket \
         G2_CASE="$name" G2_CAPTURES=/out/captures G2_SETTINGS="$gsettings_triples" \
         G2_SCALE=2 G2_MONITOR=2880x1800 TZ=UTC G2_CLOCK_LIB="$CLOCK_LIB" G2_CLOCK_EPOCH="$G2_CLOCK_EPOCH" \
+        G2_CRASH_LIB="$CRASH_LIB" \
         G2_SURFACE_SCENES="${G2_SURFACE_SCENES:-0}" G2_WAYLAND_DISPLAY=apex-g2 G2_FACETS_DIR="$FACETS_DIR" \
         G2_BACKDROP=facets G2_SOLID_BACKDROP="$SOLID_BACKDROP" "$@" \
         timeout "$limit" dbus-run-session -- bash -c '
@@ -155,14 +161,30 @@ run_case() {
                 "color-scheme=$(gsettings get org.gnome.desktop.interface color-scheme)" \
                 "layer-enabled=$(gsettings get io.github.apex_linux.Apex.Desktop layer-enabled)" \
                 "backdrop=$G2_BACKDROP picture-uri=$(gsettings get org.gnome.desktop.background picture-uri)"
+            # The shell runs from HOME, so a crash leaves its core there for case_backtrace.
+            ulimit -c unlimited 2>/dev/null
             # Only reads of the wall clock stand still: timers and frames keep the real clocks.
-            exec env LD_PRELOAD="$G2_CLOCK_LIB" \
+            set -- env LD_PRELOAD="$G2_CLOCK_LIB $G2_CRASH_LIB" \
                 gnome-shell --headless --virtual-monitor "$G2_MONITOR" ${G2_MONITOR2:+--virtual-monitor "$G2_MONITOR2"} \
                 --wayland-display="$G2_WAYLAND_DISPLAY" --automation-script /w/probe.js
+            [ "${G2_PIPEWIRE:-0}" = 1 ] || exec "$@"
+            # The camera monitor connects to PipeWire once, as the shell starts; g2-mic is the null source.
+            mkdir -p "$HOME/.config/pipewire/pipewire.conf.d"
+            printf "%s\n" "context.objects = [ { factory = adapter args = { factory.name = support.null-audio-sink" \
+                "node.name = g2-mic media.class = Audio/Source/Virtual audio.position = [ MONO ] } } ]" \
+                >"$HOME/.config/pipewire/pipewire.conf.d/g2-mic.conf"
+            pipewire & pipewire-pulse & wireplumber &
+            for _ in $(seq 50); do [ -S "$XDG_RUNTIME_DIR/pipewire-0" ] && [ -S "$XDG_RUNTIME_DIR/pulse/native" ] && break; sleep 0.1; done
+            "$@"
+            rc=$?
+            kill $(jobs -p) 2>/dev/null
+            exit "$rc"
         ' >"/out/$name.log" 2>&1
     rc=$?
+    secs=$((SECONDS - start))
+    case_backtrace "/out/$name.log" "$rc" "$home" "/out/$name.bt" "$expected"
     [[ -e $run/apex-shell-starting ]] && left=yes
-    RESULT="$name exit=$rc secs=$((SECONDS - start)) marker-after-exit=$left"
+    RESULT="$name exit=$rc secs=$secs marker-after-exit=$left"
     LIMIT=$limit
     echo "== $name: exit $rc, marker after exit: $left"
 }
@@ -204,7 +226,7 @@ case $part in
 esac
 
 run_and_record_case default "$CAPTURE_SETTINGS;$SIX_FAVOURITES" G2_SCENES=1 G2_A11Y=1 G2_SOLID_BAR=1 G2_STUB_APPS="$STUB_APPS"
-run_and_record_case default-scale1 "$CAPTURE_SETTINGS" G2_SCENES=1 G2_SCALE=1 G2_MONITOR=1440x900
+run_and_record_case default-scale1 "$CAPTURE_SETTINGS" G2_SCENES=1 G2_SCALE=1 G2_MONITOR=1440x900 G2_DOCK_LABELS=1
 run_and_record_case dark-style "$CAPTURE_SETTINGS;org.gnome.desktop.interface color-scheme prefer-dark;$SIX_FAVOURITES" G2_SCENES=1 G2_A11Y=1 G2_SOLID_BAR=1 \
     G2_TURN_DARK_OFF=1 G2_STUB_APPS="$STUB_APPS"
 run_and_record_case high-contrast "$CAPTURE_SETTINGS;org.gnome.desktop.a11y.interface high-contrast true" G2_A11Y=1
@@ -227,6 +249,8 @@ run_and_record_case no-dock-dark "$CAPTURE_SETTINGS;$DARK;io.github.apex_linux.A
 run_and_record_case indicators "$CAPTURE_SETTINGS;$NO_HOT_CORNER;$TWO_SOURCES" G2_INDICATORS=1
 run_and_record_case indicators-scale1 "$CAPTURE_SETTINGS;$NO_HOT_CORNER;$TWO_SOURCES" G2_INDICATORS=1 G2_SCALE=1 G2_MONITOR=1440x900
 run_and_record_case indicators-dark "$CAPTURE_SETTINGS;$NO_HOT_CORNER;$TWO_SOURCES;org.gnome.desktop.interface color-scheme prefer-dark" G2_INDICATORS=1
+# The camera and microphone indicators on real PipeWire streams, started before the shell.
+run_and_record_case privacy "$CAPTURE_SETTINGS;$NO_HOT_CORNER" G2_PRIVACY=1 G2_PIPEWIRE=1
 run_and_record_case stock-light "$CAPTURE_SETTINGS;org.gnome.desktop.interface color-scheme prefer-light" APEX_SHELL_SAFE=1 G2_SCENES=1
 run_and_record_case stock-dark "$CAPTURE_SETTINGS;org.gnome.desktop.interface color-scheme prefer-dark" APEX_SHELL_SAFE=1 G2_SCENES=1
 run_and_record_case safe-env '' APEX_SHELL_SAFE=1
@@ -240,12 +264,14 @@ run_and_record_case glass-stress "$CAPTURE_SETTINGS;$NO_HOT_CORNER" G2_GLASS=1 G
 run_and_record_case dock-pin "$CAPTURE_SETTINGS;$NO_HOT_CORNER" G2_DOCK_PIN=1
 run_and_record_case dock-dnd "$CAPTURE_SETTINGS;$NO_HOT_CORNER;$TWO_FAVOURITES" G2_DOCK_DND=1
 # A 1920x1080 external display right of the 2880x1800 panel, as a laptop on a desk has.
-run_and_record_case dock-external "$CAPTURE_SETTINGS;$NO_HOT_CORNER" G2_DOCK_EXTERNAL=1 G2_MONITOR2=1920x1080
+run_and_record_case dock-external "$CAPTURE_SETTINGS;$NO_HOT_CORNER" G2_DOCK_EXTERNAL=1 G2_MONITOR2=1920x1080 G2_PIPEWIRE=1
 # Two input sources, so Super+Alt+Space has one to switch to.
-run_and_record_case keys "$CAPTURE_SETTINGS;$NO_HOT_CORNER;$TWO_SOURCES" G2_KEYS=1
+run_and_record_case keys "$CAPTURE_SETTINGS;$NO_HOT_CORNER;$TWO_SOURCES;$TWO_FAVOURITES" G2_KEYS=1
 run_and_record_case input-sources "$CAPTURE_SETTINGS;$NO_HOT_CORNER;$IMAGE_SOURCES" G2_INPUT_SOURCES=1
 run_and_record_case fault-configure '' APEX_SHELL_TEST_FAULT=configure
 run_and_record_case fault-enable '' APEX_SHELL_TEST_FAULT=enable PROBE_WAIT=10
-run_and_record_case fault-abort '' APEX_SHELL_TEST_FAULT=abort-after-enable PROBE_WAIT=20
+run_and_record_case fault-abort '' APEX_SHELL_TEST_FAULT=abort-after-enable PROBE_WAIT=20 G2_EXPECT_EXIT=134
 run_and_record_case shutdown-banner '' G2_SHUTDOWN_BANNER=1
 run_and_record_case glass "$CAPTURE_SETTINGS" G2_GLASS=1 GI_TYPELIB_PATH="$FRAME_DIR"
+run_and_record_case glass-scale1 "$CAPTURE_SETTINGS" G2_GLASS=1 G2_SCALE=1 G2_MONITOR=1440x900 GI_TYPELIB_PATH="$FRAME_DIR"
+run_and_record_case glass-views "$CAPTURE_SETTINGS" G2_GLASS_VIEWS=1 G2_MONITOR2=1920x1080 GI_TYPELIB_PATH="$FRAME_DIR"

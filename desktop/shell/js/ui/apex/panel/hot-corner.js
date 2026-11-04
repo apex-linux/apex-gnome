@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 //
-// DESIGN's 4 x 4 hot corner next to the stock pressure barrier: a pointer that reaches the
-// corner without pushing, as in a VM, opens the overview too. Both follow enable-hot-corners.
+// DESIGN's 4 x 4 hot corner beside the stock barrier: a pointer that moves into it without pushing,
+// as in a VM, opens the overview too; one resting there does not. Both follow enable-hot-corners.
 
 import Clutter from 'gi://Clutter';
 import Shell from 'gi://Shell';
@@ -31,7 +31,7 @@ function _addZone(corner, layoutManager) {
     });
     // Triggered through the barrier, so the pressure that follows does not toggle it back.
     const barrier = corner._pressureBarrier;
-    corner.connect('enter-event', () => {
+    corner.connect('motion-event', () => {
         if (!barrier._isTriggered && (Main.actionMode & ZONE_ACTION_MODES))
             barrier._trigger();
         return Clutter.EVENT_PROPAGATE;

@@ -150,7 +150,7 @@ and polkit asks in the daemon, never in Settings.
   `AdwAlertDialog` once per digest when it shows: the failed checks
   (`HealthFailureChecks`), Keep This Version (`AcknowledgeHealthFailure`) and Go Back…
   (`Rollback(true)`) after a failed check; Show Changes (`GetChangesFor` the set-aside
-  digest, listed in a second dialog) and OK (`AcknowledgeHealthFailure`, which clears
+  digest, listed in a second dialog in What's New's grid) and OK (`AcknowledgeHealthFailure`, which clears
   `LastFallback`) after a fallback, whose hero says so too. These three members, and
   `Kept`, come from apex-system K4; the page reads them through a proxy without the
   compiled interface and offers each only when the daemon has it, so the page also runs
@@ -162,7 +162,9 @@ and polkit asks in the daemon, never in Settings.
   with the reason the daemon gives, and for every `degraded` one. `holds` is read as
   `a(sstbts)` or, from a daemon before apex-system K4, `a(sstbt)`.
 - **What's New**: `GetChanges` for the staged digest, summed up as its GNOME, Linux and
-  Mesa versions (then other packages), with every change in the expanded row.
+  Mesa versions (then other packages), with every change in the expanded row as one
+  grid of kind, package and versions, the package and versions in monospace; the kind is
+  Update1's token as a `C_("package change", …)` word, an unknown one as the daemon sent it.
 - **Versions**: Booted, Staged and Rollback, each as version and short digest in
   monospace and the build date, Staged with a "Checked" pill instead (the daemon keeps a
   staged image only once its signature checks out), and "Kept by Apex: …" with the
@@ -321,11 +323,33 @@ bus, and opens `gnome-control-center system software-updates` on its scenarios: 
 update available, one waiting on a gate (on battery: "Update Waiting" and Download
 Anyway), a download under way, a health failure and a fallback (board 26's
 dialog in each, captured dark too as `updates-health-failure-dark` and
-`updates-fallback-dark`), and no service at all. `updates.py` checks each
-state's texts through AT-SPI, that board 26's dialog shows, and presses each button and
+`updates-fallback-dark`; `updates-fallback-changes` captures Show Changes' list, opened by
+`APEX_BEFORE=updates.py show-changes` ahead of the capture), and no service at all. `updates.py` checks each
+state's texts through AT-SPI, that board 26's dialog shows, that What's New's grid and
+Show Changes' line up with the long fixture name cut short, and presses each button and
 the Automatic Downloads switch: `update1.py`'s log must show the method call each makes,
 with its arguments, and the switch must go back when `update1.py` refuses it as polkit
-would.
+would. `bounds.py` reads every label on a page off its case's own capture: board 11's top
+(`top-bounds`), board 24 with the dGPU (`power-bounds`), and the "ready" page at the top and
+scrolled to its end (`updates-bounds`, `updates-bounds-end`). GTK 4.24 reports a widget's size
+right but leaves its ancestors' CSS padding out of its place, so the panel insets its content
+with margins, never padding. Each AT-SPI box must hold its text, and no line 3 px outside it
+may run through text: that catches a box cut through its text, not a small shift (a row title
+holds for vertical shifts of −6 to +8 px). Small shifts are held by sizes: each list row hides
+libadwaita's 2 px of padding a side (`list > row`), so every row label sits 2 px left of its
+text, except in What's New's grid row and expander rows, which hide none. And each of What's
+New's kind labels must start its ink exactly where it does today against its AT-SPI box, so a
+hidden shift from any rule fails; the grid's sizes and `apex.css` only name the likely cause.
+libadwaita's own padding leaves some labels off (pill, plain and toggle buttons' labels at
+their button's origin, the GPU pill 2 px off in its list row); each is pinned exactly in one
+list in `bounds.py`, as upstream. Each case names what its page must show (`rows`, `grid`,
+`pills`, `buttons`, `toggles`, `gpu`), and one that is missing fails.
+
+Last, Large Text (`text-scaling-factor` 1.25) on board 11 (`large-light`) and board 18
+(`updates-large-light`): `apex.css` sizes its text in pt, which GTK scales with it, where a px
+size stays put, and `fonts.py` checks that each label it sizes (the titles, the version lines,
+the hero's subtitle and What's New's grid) is drawn at its rule's size times 1.25. These come
+after every other case, as a setting stays from one case to the next.
 
 In these captures the sidebar has no separator under Apex Desktop: the fixtures offer no
 Wi-Fi device, so the Wi-Fi row, the one after the separator in `panel_order[]`, is not

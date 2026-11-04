@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
-// G2's dock-external case (G2_DOCK_EXTERNAL=1): two virtual monitors. The dock and the bar stay on the
-// primary, only its windows hide the dock or turn the bar solid, and both follow a new primary.
+// G2's dock-external case (G2_DOCK_EXTERNAL=1): two virtual monitors, and a third plugged in at runtime. The dock
+// and the bar stay on the primary, only its windows hide the dock or turn the bar solid, and both follow a new primary.
 
+import Clutter from 'gi://Clutter';
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 
@@ -22,6 +23,9 @@ const GLASS_EFFECT = 'apex-glass';
 const DISPLAY_CONFIG = ['org.gnome.Mutter.DisplayConfig', '/org/gnome/Mutter/DisplayConfig', 'org.gnome.Mutter.DisplayConfig'];
 // ApplyMonitorsConfig's method: temporary, as Settings applies before the user keeps it.
 const TEMPORARY = 1;
+const SCREEN_CAST = ['org.gnome.Mutter.ScreenCast', 'org.gnome.Mutter.ScreenCast.Session'];
+// The size the consumer asks for: mutter gives the virtual monitor the negotiated size.
+const PLUGGED = {width: 1280, height: 720};
 
 const rect = ({x, y, width, height}) => ({x, y, width, height});
 
@@ -47,6 +51,39 @@ function layout(apexDock) {
         barSolid: Main.panel.has_style_class_name(SOLID_BAR_STYLE_CLASS),
         window: testWindow() ? {monitor: testWindow().get_monitor(), maximised: testWindow().is_maximized()} : null,
     };
+}
+
+// Show Apps, whose name is wider than its icon, at the primary's edge, as a dock as wide as the monitor puts an
+// end item: upstream's dash clamps the label to the stage (dash.js showLabel), not the monitor.
+async function edgeLabel(apexDock, settle, side) {
+    const dock = apexDock();
+    const box = dock.get_parent();
+    const monitor = Main.layoutManager.primaryMonitor;
+    const pointer = global.stage.context.get_backend().get_default_seat()
+        .create_virtual_device(Clutter.InputDeviceType.POINTER_DEVICE);
+    const moveTo = ([x, y]) => until(() => {
+        const [px, py] = global.get_pointer();
+        if (px === x && py === y)
+            return true;
+        pointer.notify_absolute_motion(GLib.get_monotonic_time(), x, y);
+        return false;
+    }, WINDOW_TIMEOUT_MS);
+    try {
+        const item = dock.tailItems.showApps;
+        if (box.translation_y > 0)
+            return {error: 'the dock is hidden'};
+        const at = transformedRect(item);
+        box.translation_x = side === 'left' ? monitor.x - at.x : monitor.x + monitor.width - at.x - at.width;
+        await settle();
+        const edge = transformedRect(item);
+        await moveTo([edge.x + edge.width / 2, edge.y + edge.height / 2].map(Math.round));
+        const shown = await until(() => item.label.visible && item.label.opacity === 255, WINDOW_TIMEOUT_MS);
+        return {name: item._labelText, shown, item: edge, label: transformedRect(item.label), monitor: rect(monitor)};
+    } finally {
+        await moveTo([monitor.x + monitor.width / 2, monitor.y + monitor.height / 4].map(Math.round));
+        box.translation_x = 0;
+        await settle();
+    }
 }
 
 async function placeWindow(monitor, apexDock) {
@@ -75,8 +112,8 @@ function overviewState() {
     };
 }
 
-function call(method, parameters) {
-    return new Promise((resolve, reject) => Gio.DBus.session.call(...DISPLAY_CONFIG, method, parameters, null,
+function call(method, parameters, target = DISPLAY_CONFIG) {
+    return new Promise((resolve, reject) => Gio.DBus.session.call(...target, method, parameters, null,
         Gio.DBusCallFlags.NONE, -1, null, (bus, result) => {
             try {
                 resolve(bus.call_finish(result).deepUnpack());
@@ -159,6 +196,71 @@ function glassState(apexDock) {
     return {dock: glass(apexDock()._background), bar: glass(Main.panel), scrims, cost: scrimCost(scrims)};
 }
 
+function monitorsChanged() {
+    return new Promise(resolve => {
+        const id = Main.layoutManager.connect('monitors-changed', () => {
+            Main.layoutManager.disconnect(id);
+            resolve(true);
+        });
+    });
+}
+
+function monitorScales() {
+    return Main.layoutManager.monitors.map(m => m.geometry_scale);
+}
+
+// A monitor plugged in at runtime: ScreenCast's RecordVirtual, which mutter adds once a PipeWire
+// consumer negotiates its stream. The consumer runs without the shell's still wall clock.
+async function plugIn() {
+    const [sessionPath] = await call('CreateSession', new GLib.Variant('(a{sv})', [{}]),
+        [SCREEN_CAST[0], '/org/gnome/Mutter/ScreenCast', SCREEN_CAST[0]]);
+    const session = [SCREEN_CAST[0], sessionPath, SCREEN_CAST[1]];
+    const [streamPath] = await call('RecordVirtual', new GLib.Variant('(a{sv})', [{'cursor-mode': new GLib.Variant('u', 0)}]), session);
+    let node = null;
+    const id = Gio.DBus.session.signal_subscribe(SCREEN_CAST[0], `${SCREEN_CAST[0]}.Stream`, 'PipeWireStreamAdded', streamPath, null,
+        Gio.DBusSignalFlags.NONE, (...args) => (node = args[5].deepUnpack()[0]));
+    await call('Start', null, session);
+    await until(() => node !== null, WINDOW_TIMEOUT_MS);
+    Gio.DBus.session.signal_unsubscribe(id);
+    if (node === null)
+        throw new Error('RecordVirtual gave no PipeWire stream');
+    const launcher = new Gio.SubprocessLauncher({flags: Gio.SubprocessFlags.STDOUT_SILENCE});
+    launcher.unsetenv('LD_PRELOAD');
+    launcher.set_stderr_file_path(GLib.build_filenamev([GLib.getenv('G2_CAPTURES'), `${GLib.getenv('G2_CASE')}-plugged.log`]));
+    const consumer = launcher.spawnv(['gst-launch-1.0', '-q', 'pipewiresrc', `path=${node}`, '!',
+        `video/x-raw,width=${PLUGGED.width},height=${PLUGGED.height}`, '!', 'fakesink', 'sync=false']);
+    return {session, consumer};
+}
+
+async function unplug({session, consumer}) {
+    consumer.send_signal(15);
+    await new Promise(resolve => consumer.wait_async(null, () => resolve()));
+    await call('Stop', null, session);
+}
+
+async function settledChange(change, helpers) {
+    const changed = monitorsChanged();
+    const handle = await change();
+    const seen = await Promise.race([changed, Scripting.sleep(WINDOW_TIMEOUT_MS).then(() => false)]);
+    await Scripting.sleep(SLIDE_MS);
+    await helpers.settle();
+    return {seen, handle};
+}
+
+async function hotplug(apexDock, helpers) {
+    const before = {...layout(apexDock), scales: monitorScales(), scrims: scrimActors().length};
+    const {seen: added, handle} = await settledChange(plugIn, helpers);
+    const plugged = {changed: added, ...layout(apexDock), scales: monitorScales()};
+    Main.overview.show();
+    await helpers.settle();
+    Object.assign(plugged, {overview: overviewState(), glass: glassState(apexDock)});
+    Main.overview.hide();
+    await helpers.settle();
+    const {seen: removed} = await settledChange(() => unplug(handle), helpers);
+    const unplugged = {changed: removed, ...layout(apexDock), scales: monitorScales(), scrims: scrimActors().map(rect)};
+    return {asked: PLUGGED, before, plugged, unplugged};
+}
+
 export async function dockExternalReport(helpers) {
     const settled = await settleDesktop(helpers);
     const {apexDock} = helpers;
@@ -200,9 +302,20 @@ export async function dockExternalReport(helpers) {
         Main.overview.hide();
         await helpers.settle();
         steps.mixedOnExternal.desktopGlass = glassState(apexDock);
+        // The external display's left edge meets the panel.
+        steps.mixedOnExternal.edgeLabel = await edgeLabel(apexDock, helpers.settle, 'left');
 
         steps.mixed = {changed: await relayout(mixed(true), helpers)};
         Object.assign(steps.mixed, layout(apexDock), {dock: helpers.dockReport(), glass: glassState(apexDock)});
+        // The panel's right edge meets the external display; the window goes there, so the dock shows.
+        await placeWindow(Main.layoutManager.monitors.find(m => m.index !== Main.layoutManager.primaryIndex).index, apexDock);
+        steps.mixed.edgeLabel = await edgeLabel(apexDock, helpers.settle, 'right');
+        // At a plug mutter moves the window to the monitor it last chose, which hides or shows the dock.
+        testWindow().minimize();
+        await until(() => testWindow().minimized, WINDOW_TIMEOUT_MS);
+        await Scripting.sleep(SLIDE_MS);
+
+        steps.hotplug = await hotplug(apexDock, helpers);
     } finally {
         client.force_exit();
     }

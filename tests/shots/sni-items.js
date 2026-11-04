@@ -112,22 +112,29 @@ function exportItem(name) {
         Event: (id, eventId) => record(`${name} Event ${id} ${eventId}`),
         AboutToShow: () => false,
     }).export(conn, MENU_PATH);
-    // As libappindicator does: register with every watcher that appears.
-    Gio.bus_watch_name_on_connection(conn, WATCHER, Gio.BusNameWatcherFlags.NONE, () => {
-        conn.call(WATCHER, WATCHER_PATH, WATCHER, 'RegisterStatusNotifierItem',
-            new GLib.Variant('(s)', [ITEM_PATH]), null, Gio.DBusCallFlags.NONE, -1, null,
-            (c, res) => {
-                try {
-                    c.call_finish(res);
-                    record(`${name} registered`);
-                } catch (e) {
-                    record(`${name} register-error ${e.message}`);
-                }
-            });
-    }, null);
     return conn;
 }
 
+// As libappindicator does, each registers with every watcher that appears; one after another, so the
+// watcher sees them in the order given whatever the bus does with parallel calls.
+function registerFrom(connections, i) {
+    if (i >= connections.length)
+        return;
+    connections[i].call(WATCHER, WATCHER_PATH, WATCHER, 'RegisterStatusNotifierItem',
+        new GLib.Variant('(s)', [ITEM_PATH]), null, Gio.DBusCallFlags.NONE, -1, null,
+        (c, res) => {
+            try {
+                c.call_finish(res);
+                record(`${names[i]} registered`);
+            } catch (e) {
+                record(`${names[i]} register-error ${e.message}`);
+            }
+            registerFrom(connections, i + 1);
+        });
+}
+
 const connections = names.map(exportItem);
+Gio.bus_watch_name_on_connection(connections[0], WATCHER, Gio.BusNameWatcherFlags.NONE,
+    () => registerFrom(connections, 0), null);
 new GLib.MainLoop(null, false).run();
 connections.forEach(conn => conn.close_sync(null));

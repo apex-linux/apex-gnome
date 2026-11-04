@@ -76,3 +76,34 @@ VTE's own `columns >= 1` one, which `--stock` shows too. In every mode the windo
 still be Ptyxis's at the end and the header-bar sample unchanged, so a crashed or closed
 window cannot pass. Each run starts without a `gtk-4.0/`. CI runs `--stock`, the rewrite
 case and `--late` after the lane.
+
+## S6 (Fedora 46)
+
+Checked 2026-10-31 against rawhide, the base of apex-image's `next` lane
+(`image/fedora/46.env`, `REPOS_BASE`), with `0001-apex-css` at main's +79 lines:
+
+| Package | Fedora 45 | Rawhide (46) |
+|---|---|---|
+| libadwaita | 1.10.0-2.fc45 | 1.10.0-3.fc46 |
+| gtk4, glib2 | 4.24.1-1.fc45, 2.90.0-1.fc45 | 4.24.1-1.fc46, 2.90.1-1.fc46 |
+| gnome-shell, mutter | 51.0 | 51.1-1.fc46, 51.1-2.fc46 |
+| ptyxis, vte291-gtk4 | 50.1-6.fc45, 0.84.1-1.fc45 | F45's builds |
+
+- **The lane:** `tests/lib/lane.sh libadwaita` in that container builds
+  `1.10.0-3.fc46.apex1` from rawhide's SRPM, which verifies against Fedora 46's key
+  (`91211FCE`). The `%prep` tree is exactly Fedora's plus the series, so the patch
+  applies at fuzz 0; the build warns nothing, and the three lane checks pass. Rawhide's
+  `-3` also builds `mingw32-` and `mingw64-libadwaita`, which F45's `-2` does not: the
+  build dependencies grow (`mingw32-gcc-c++` and the rest) and the lane takes 932 s
+  rather than 677. The image installs only `libadwaita`, so nothing else changes.
+- **The tests,** on that build in that container: `--stock` keeps the window rounded,
+  the rewrite turns it square in 53 ms and `--late` in 55 ms, with no warning, the
+  window alive and the header bar steady in all three.
+- **Run by hand:** `tests/lib/headless.sh` installs with `--repo=fedora --repo=updates`,
+  which rawhide's repository ids (`rawhide`) do not match, so the tests ran there behind
+  a local `dnf5` wrapper that maps them. The `next` lane needs that mapping in the test
+  harness, or its own repository ids, before CI can run these tests on 46.
+
+Nothing needed fixing for 46. Left for S6: the first libadwaita 1.11 (GNOME 52), where
+`adw-style-manager.c`'s `constructed()` and `dispose()`, the hunks' contexts, can move;
+and the budget, at 79 of 80, has one line for a rebase.
