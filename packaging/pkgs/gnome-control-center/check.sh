@@ -48,7 +48,7 @@ members=$(tar -tf "$SOURCE1") || cannot "cannot list $SOURCE1"
 n=0
 while IFS= read -r m; do
     [[ $m == "$SOURCE1_DIR"* && $m != */ ]] || continue
-    case ${m#"$SOURCE1_DIR"} in meson.build | *.gresource.xml | *.[ch] | *.blp | *.desktop.in | icons/* | io.github.*.xml) continue ;; esac
+    case ${m#"$SOURCE1_DIR"} in meson.build | *.gresource.xml | *.[ch] | *.blp | *.desktop.in | icons/* | io.github.*.xml | po/*) continue ;; esac
     grep -Fxq -- "$APEX_PREFIX/${m#"$SOURCE1_DIR"}" <<<"$resources" ||
         fail "$m is in desktop/control-center but not in the resource (apex.gresource.xml)"
     n=$((n + 1))
@@ -72,6 +72,11 @@ grep -Fxq 'Exec=gnome-control-center apex' "$apps/io.github.apex_linux.Apex.Twea
 [[ -f $root/usr/share/icons/hicolor/scalable/apps/org.gnome.Settings-apex-symbolic.svg ]] ||
     fail "the panel's icon is not installed"
 ok "the Apex Desktop panel, its desktop file, the Apex Tweaks entry and its icon are installed"
+
+# Apex's own domain, packaged by the spec's %find_lang --all-name.
+[[ -f $root/usr/share/locale/vi/LC_MESSAGES/apex-control-center.mo ]] || fail "apex-control-center's vi catalogue is not installed"
+grep -q '^Name\[vi\]=' "$apps/gnome-apex-panel.desktop" || fail "gnome-apex-panel.desktop has no Vietnamese name"
+ok "apex-control-center.mo (vi) and the panel's Vietnamese desktop entry are installed"
 
 for d in /usr/share/gnome-control-center/keybindings /usr/share/gnome/wm-properties; do
     [[ -d $root$d ]] || fail "gnome-control-center-filesystem has lost $d"

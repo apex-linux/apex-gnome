@@ -17,8 +17,8 @@ trap 'rm -rf -- "$work"' EXIT
 printf '#define GETTEXT_PACKAGE "gnome-control-center-2.0"\n' >"$work/config.h"
 # shellcheck disable=SC2046 # pkg-config prints separate flags
 gcc -std=gnu11 -Wall -Wextra -Werror -Wno-unused-parameter -o "$work/state-test" \
-    "$APEX_ROOT/tests/control-center/state-test.c" "$src/cc-apex-updates-state.c" "$src/cc-apex-power-state.c" \
-    -I"$src" -I"$work" -lm \
+    "$APEX_ROOT/tests/control-center/state-test.c" "$src/cc-apex-updates-state.c" "$src/cc-apex-power-state.c" "$src/cc-apex-i18n.c" \
+    -I"$src" -I"$work" -DGNOMELOCALEDIR=\"/usr/share/locale\" -lm \
     $(pkg-config --cflags --libs glib-2.0)
 TZ=UTC "$work/state-test"
 

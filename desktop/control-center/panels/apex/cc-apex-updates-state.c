@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
 #include <config.h>
 
-#include <glib/gi18n.h>
+#include "cc-apex-i18n.h"
 #include <string.h>
 
 #include "cc-apex-updates-state.h"
@@ -194,6 +194,7 @@ cc_apex_updates_when (gint64 unix_seconds, gint64 now)
         return g_strdup_printf (_("today at %s"), time);
     if (g_date_time_get_year (today) == g_date_time_get_year (when) && days == 1)
         return g_strdup_printf (_("yesterday at %s"), time);
+    /* xgettext:no-c-format */
     return g_date_time_format (when, _("%b %-d at %H:%M"));
 }
 
@@ -344,6 +345,7 @@ cc_apex_updates_built (gint64 unix_seconds)
 
     if (when == NULL)
         return NULL;
+    /* xgettext:no-c-format */
     day = g_date_time_format (when, _("%b %-d"));
     return g_strdup_printf (_("built %s"), day);
 }

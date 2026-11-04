@@ -209,16 +209,21 @@ restyle_header (PtyxisWindow *window,
 }
 
 /* Ptyxis sets its own color-scheme on the style manager, which GTK's
- * prefers-color-scheme media query does not follow. */
+ * prefers-color-scheme and prefers-contrast media queries do not follow. */
 static void
-style_dark_cb (AdwStyleManager *style_manager,
-               GParamSpec      *pspec,
-               GtkWidget       *window)
+style_cb (AdwStyleManager *style_manager,
+          GParamSpec      *pspec,
+          GtkWidget       *window)
 {
   if (adw_style_manager_get_dark (style_manager))
     gtk_widget_add_css_class (window, "apex-dark");
   else
     gtk_widget_remove_css_class (window, "apex-dark");
+
+  if (adw_style_manager_get_high_contrast (style_manager))
+    gtk_widget_add_css_class (window, "apex-hc");
+  else
+    gtk_widget_remove_css_class (window, "apex-hc");
 }
 
 void
@@ -253,8 +258,9 @@ apex_window_attach (PtyxisWindow *window)
 
 
   gtk_widget_add_css_class (GTK_WIDGET (window), "apex");
-  g_signal_connect_object (adw_style_manager_get_default (), "notify::dark", G_CALLBACK (style_dark_cb), window, 0);
-  style_dark_cb (adw_style_manager_get_default (), NULL, GTK_WIDGET (window));
+  g_signal_connect_object (adw_style_manager_get_default (), "notify::dark", G_CALLBACK (style_cb), window, 0);
+  g_signal_connect_object (adw_style_manager_get_default (), "notify::high-contrast", G_CALLBACK (style_cb), window, 0);
+  style_cb (adw_style_manager_get_default (), NULL, GTK_WIDGET (window));
 }
 
 PtyxisTab *

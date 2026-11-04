@@ -15,7 +15,8 @@ scale 2, as root in a throwaway fedora:$APEX_FEDORA container (just control-cent
 RPM_DIR holds the lane's built RPMs (_build/gnome-control-center/out); without it the installed
 gnome-control-center runs. For a user '$USER_NAME', with apex-desktop's schema from
 tests/layer/fixtures, it captures board 11 at both scroll positions, light and dark, and
-checks every row against its key both ways through AT-SPI (bindings.py). Without the
+checks every row against its key both ways through AT-SPI (bindings.py); under
+LANG=vi_VN.UTF-8, i18n.py finds the panel's titles in Vietnamese. Without the
 schema it captures and checks the explanation the panel shows instead. It captures
 Appearance (board 23) light and dark on a gnome-backgrounds wallpaper, and appearance.py
 checks that the name and note follow the wallpaper. It captures Power (board 24) with an
@@ -32,7 +33,7 @@ _build/control-center/shots/.
 
 It needs gnome-shell, mesa-dri-drivers, dbus-daemon, python3-dbusmock, python3-gobject,
 at-spi2-core, gcc, util-linux, adwaita-sans-fonts, python3-dbus, systemd,
-gnome-backgrounds, umockdev and git-core. G2's clock.c and fixtures.py
+gnome-backgrounds, umockdev, glibc-langpack-vi and git-core. G2's clock.c and fixtures.py
 (tests/shots) are used as they are.
 EOF
 }
@@ -71,6 +72,7 @@ headless_apex_schema yes
 run_case light default APEX_SCROLL=1 APEX_UNSAFE=1 "APEX_CHECK=bindings.py rows; a11y.py apex" || status=1
 run_case dark prefer-dark APEX_SCROLL=1 APEX_UNSAFE=1 "APEX_CHECK=a11y.py apex" || status=1
 run_case top-bounds default "APEX_CHECK=bounds.py rows toggles" || status=1
+run_case vi default LANG=vi_VN.UTF-8 "APEX_CHECK=i18n.py" || status=1
 headless_apex_schema no
 run_case no-schema default "APEX_CHECK=bindings.py no-schema" || status=1
 headless_apex_schema yes
