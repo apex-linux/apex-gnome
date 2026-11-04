@@ -12,6 +12,7 @@ SPDX='# SPDX-License-Identifier: GPL-2.0-or-later'
 
 # domain|source root|po dir under it|sources it covers|what marks a file's strings|xgettext's extra arguments
 DOMAINS=(
+    "apex-control-center|desktop/control-center|panels/apex/po|panels/apex|\bN?C?_\(|--keyword=_ --keyword=N_ --keyword=C_:1c,2 --keyword=NC_:1c,2"
     "apex-shell|desktop/shell|data/theme/apex/po|js/ui/apex|from '\.\./i18n\.js'|--language=JavaScript --keyword=_"
 )
 

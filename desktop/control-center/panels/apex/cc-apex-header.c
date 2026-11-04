@@ -2,7 +2,7 @@
 #include <config.h>
 
 #include <adwaita.h>
-#include <glib/gi18n.h>
+#include "cc-apex-i18n.h"
 #include <json-glib/json-glib.h>
 
 #include "cc-apex-header.h"
