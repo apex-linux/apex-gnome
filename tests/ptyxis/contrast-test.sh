@@ -8,25 +8,25 @@ readonly PTYXIS_TESTS
 # WCAG 2.2 AA: 1.4.3 for text, 1.4.11 for the status glyphs; CIELAB L* apart for needs you and running.
 readonly TEXT_RATIO=4.5 GLYPH_RATIO=3 STATUS_LIGHTNESS=10
 readonly SHOTS=(light dark split-light split-dark hc-light hc-dark hc-split-light hc-split-dark)
-# Apex's own gaps, pending the owner: each under WCAG AA in its capture, at today's ratio.
-readonly GAP="the owner's decision on boards 32 and 33's contrast (2026-10-31)"
-# apex.css keeps its own colours in high contrast, so the same targets fall short there.
-readonly HC_GAP="the owner's decision on boards 32 and 33's contrast in high contrast (2026-10-31, item 10b)"
+# The targets the owner's 2026-11-04 decision brought to AA, each held at its ratio since.
 readonly PINS='{
-  "light selectedRow:just vm-image · running": 4.26, "light selectedRow:now": 4.26, "light selectedRow:running": 2.81,
-  "light group:toolbox": 4.26, "light group:ssh": 4.26, "light header:tag": 4.39,
-  "dark selectedRow:running": 2.7,
-  "split-light selectedRow:claude · needs you": 4.26, "split-light selectedRow:now": 4.26,
-  "split-light group:toolbox": 4.26, "split-light group:ssh": 4.26, "split-light paneHeader:tag": 4.39,
-  "split-light dimmedPaneHeader:path": 2.68, "split-light dimmedPaneHeader:tag": 2.53,
-  "split-dark dimmedPaneHeader:path": 3.96, "split-dark dimmedPaneHeader:tag": 3.53,
-  "hc-light selectedRow:just vm-image · running": 4.26, "hc-light selectedRow:now": 4.26, "hc-light selectedRow:running": 2.81,
-  "hc-light group:toolbox": 4.26, "hc-light group:ssh": 4.26, "hc-light header:tag": 4.39,
-  "hc-dark selectedRow:running": 2.7,
-  "hc-split-light selectedRow:claude · needs you": 4.26, "hc-split-light selectedRow:now": 4.26,
-  "hc-split-light group:toolbox": 4.26, "hc-split-light group:ssh": 4.26, "hc-split-light paneHeader:tag": 4.39,
-  "hc-split-light dimmedPaneHeader:path": 3.07, "hc-split-light dimmedPaneHeader:tag": 2.95,
-  "hc-split-dark dimmedPaneHeader:path": 3.96, "hc-split-dark dimmedPaneHeader:tag": 3.53
+  "light group:ssh": 4.8, "light group:toolbox": 4.8, "light header:tag": 5.01,
+  "light selectedRow:just vm-image · running": 4.74, "light selectedRow:now": 4.74,
+  "light selectedRow:running": 4.53,
+  "dark selectedRow:running": 6.01,
+  "split-light dimmedPaneHeader:path": 6.02, "split-light dimmedPaneHeader:tag": 5.42,
+  "split-light group:ssh": 4.8, "split-light group:toolbox": 4.8, "split-light paneHeader:tag": 5.01,
+  "split-light selectedRow:claude · needs you": 4.74, "split-light selectedRow:now": 4.74,
+  "split-dark dimmedPaneHeader:path": 7.66, "split-dark dimmedPaneHeader:tag": 6.38,
+  "hc-light group:ssh": 7.78, "hc-light group:toolbox": 7.78, "hc-light header:tag": 8.52,
+  "hc-light selectedRow:just vm-image · running": 7.78, "hc-light selectedRow:now": 7.78,
+  "hc-light selectedRow:running": 4.3,
+  "hc-dark selectedRow:running": 5.81,
+  "hc-split-light dimmedPaneHeader:path": 9.25, "hc-split-light dimmedPaneHeader:tag": 8.33,
+  "hc-split-light group:ssh": 7.78, "hc-split-light group:toolbox": 7.78,
+  "hc-split-light paneHeader:tag": 8.52, "hc-split-light selectedRow:claude · needs you": 7.78,
+  "hc-split-light selectedRow:now": 7.78,
+  "hc-split-dark dimmedPaneHeader:path": 11.45, "hc-split-dark dimmedPaneHeader:tag": 8.63
 }'
 
 usage() {
@@ -39,9 +39,8 @@ _build/ptyxis/shots). contrast.py measures each target's ink against its ground 
 sidebar's labels and status glyphs, the content header's and each pane header's labels, and
 each pane's terminal output, in light and dark, the unfocused pane dimmed. Text wants
 $TEXT_RATIO:1 and a glyph $GLYPH_RATIO:1; the footer's needs-you and running glyphs want L* $STATUS_LIGHTNESS apart, so
-they differ in lightness and not hue alone. A target under its ratio is a known gap at
-today's ratio (PINS): a lower one fails, and so does one that reaches its ratio, so the fix
-also removes the pin. It needs python3 and jq.
+they differ in lightness and not hue alone. A target under its ratio fails, and so does one of
+the targets brought to it (PINS) that falls under its held ratio. It needs python3 and jq.
 EOF
 }
 
@@ -52,26 +51,23 @@ shots=${1:-$APEX_ROOT/_build/ptyxis/shots}
 
 python3 "$PTYXIS_TESTS/contrast.py" --selftest || die "contrast-test.sh: contrast.py's selftest failed"
 
-# VERDICTS: a line per target of a contrast.json, PASS, FAIL or GAP, for the shot named by $shot.
+# VERDICTS: a line per target of a contrast.json, PASS or FAIL, for the shot named by $shot.
 # shellcheck disable=SC2016 # a jq program
 readonly VERDICTS='.[] | select(.kind != "glyph" or .region == "group" or .status != null)
     | (if .kind == "glyph" then $glyph else $text end) as $min
-    | "\(.region):\(.part // .status // .name)" as $key | $pins["\($shot) \($key)"] as $today
+    | "\(.region):\(.part // .status // .name)" as $key | $pins["\($shot) \($key)"] as $held
     | "\($shot) \($key): \(.ink) on \(.ground) at \(.ratio):1" as $what
     | if .ratio == null then "FAIL \($what), not measured"
-      elif $today == null then (if .ratio >= $min then "PASS \($what), at least \($min):1" else "FAIL \($what), under \($min):1" end)
-      elif .ratio < $today then "FAIL \($what), under today'"'"'s \($today):1"
-      elif .ratio >= $min then "FAIL \($what) reaches \($min):1: a known gap until \($gap), but it holds now: remove its pin"
-      else "GAP  \($what), under \($min):1 (\($gap))" end'
+      elif .ratio < $min then "FAIL \($what), under \($min):1"
+      elif $held != null and .ratio < $held then "FAIL \($what), under its held \($held):1"
+      else "PASS \($what), at least \($held // $min):1" end'
 
 verdicts() {
-    local gap=$GAP
-    [[ $1 != hc-* ]] || gap=$HC_GAP
-    jq -r --arg shot "$1" --arg gap "$gap" --argjson pins "$PINS" --argjson text "$TEXT_RATIO" \
+    jq -r --arg shot "$1" --argjson pins "$PINS" --argjson text "$TEXT_RATIO" \
         --argjson glyph "$GLYPH_RATIO" "$VERDICTS" "$2"
 }
 
-failures=0 gaps=0
+failures=0
 fail() {
     failures=$((failures + 1))
     log "FAIL - $*"
@@ -88,7 +84,6 @@ for shot in "${SHOTS[@]}"; do
     while IFS= read -r line; do
         case $line in
             PASS*) log "ok - ${line#PASS }" ;;
-            GAP*) gaps=$((gaps + 1)); log "gap - ${line#GAP  }" ;;
             *) fail "${line#FAIL }" ;;
         esac
     done < <(verdicts "$shot" "$shots/$shot.contrast.json")
@@ -111,4 +106,4 @@ else
 fi
 
 ((failures == 0)) || die "contrast-test.sh: $failures check(s) failed; see ${shots#"$APEX_ROOT/"}/*.contrast.json"
-log "contrast-test.sh: boards 32 and 33 hold AA but for $gaps known gap(s)"
+log "contrast-test.sh: boards 32 and 33 hold AA"

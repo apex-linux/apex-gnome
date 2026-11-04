@@ -119,10 +119,11 @@ function alpha(undimmed, dimmed) {
     return Math.round(cov / variance * 1000) / 1000;
 }
 
-// The header, and the body's upper half: the output above the prompt, away from the caret.
+// The header up to its path, which dimmed takes another colour, and the body's upper half, away from the caret.
 function regions(pane) {
     const [x, y, width, height] = pane.body;
-    return {header: pane.header, body: [x + 4, y + 4, width - 8, Math.floor(height / 2)]};
+    const [hx, hy, , hh] = pane.header;
+    return {header: [hx, hy, pane.pathAt - hx, hh], body: [x + 4, y + 4, width - 8, Math.floor(height / 2)]};
 }
 
 // The pointer, and the overlay scrollbar it shows, would differ between the two captures.
