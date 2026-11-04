@@ -51,6 +51,7 @@ chmod 777 "$out"
 rpm -q gnome-control-center >"$out/gnome-control-center.txt"
 
 headless_manifest
+headless_wallpapers
 headless_user
 headless_bus "$out"
 
@@ -77,8 +78,8 @@ headless_apex_schema no
 run_case no-schema default "APEX_CHECK=bindings.py no-schema" || status=1
 headless_apex_schema yes
 # Board 23: amber.xml's wallpaper as it lists it, so the chooser has an active item to ring.
-amber="org.gnome.desktop.background picture-uri 'file:///usr/share/backgrounds/gnome/amber-l.jxl'
-org.gnome.desktop.background picture-uri-dark 'file:///usr/share/backgrounds/gnome/amber-d.jxl'
+amber="org.gnome.desktop.background picture-uri 'file:///usr/share/backgrounds/apex-test/amber-l.png'
+org.gnome.desktop.background picture-uri-dark 'file:///usr/share/backgrounds/apex-test/amber-d.png'
 org.gnome.desktop.background primary-color '#F57511'
 org.gnome.desktop.background secondary-color '#DD4C38'"
 CASE_SETTINGS=$amber run_case appearance-light default APEX_OPEN=background APEX_SCROLL=1 APEX_READY=thumbnails.py \

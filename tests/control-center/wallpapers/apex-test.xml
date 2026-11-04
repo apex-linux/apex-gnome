@@ -1,0 +1,229 @@
+<?xml version="1.0"?>
+<!DOCTYPE wallpapers SYSTEM "gnome-wp-list.dtd">
+<wallpapers>
+  <wallpaper deleted="false">
+    <name>Default Background</name>
+    <filename>/usr/share/backgrounds/apex-test/adwaita-l.png</filename>
+    <filename-dark>/usr/share/backgrounds/apex-test/adwaita-d.png</filename-dark>
+    <options>zoom</options>
+    <shade_type>solid</shade_type>
+    <pcolor>#044BFD</pcolor>
+    <scolor>#0234E5</scolor>
+  </wallpaper>
+  <wallpaper deleted="false">
+    <name>Amber</name>
+    <filename>/usr/share/backgrounds/apex-test/amber-l.png</filename>
+    <filename-dark>/usr/share/backgrounds/apex-test/amber-d.png</filename-dark>
+    <options>zoom</options>
+    <shade_type>solid</shade_type>
+    <pcolor>#F57511</pcolor>
+    <scolor>#DD4C38</scolor>
+  </wallpaper>
+  <wallpaper deleted="false">
+    <name>Balls</name>
+    <filename>/usr/share/backgrounds/apex-test/balls-l.png</filename>
+    <filename-dark>/usr/share/backgrounds/apex-test/balls-d.png</filename-dark>
+    <options>zoom</options>
+    <shade_type>solid</shade_type>
+    <pcolor>#3C3635</pcolor>
+    <scolor>#E4DAC4</scolor>
+  </wallpaper>
+  <wallpaper deleted="false">
+    <name>Blendpills</name>
+    <filename>/usr/share/backgrounds/apex-test/blendpills-l.png</filename>
+    <filename-dark>/usr/share/backgrounds/apex-test/blendpills-d.png</filename-dark>
+    <options>zoom</options>
+    <shade_type>solid</shade_type>
+    <pcolor>#BE9F4D</pcolor>
+    <scolor>#8A4B61</scolor>
+  </wallpaper>
+  <wallpaper deleted="false">
+    <name>Blobs</name>
+    <filename>/usr/share/backgrounds/apex-test/blobs-l.png</filename>
+    <filename-dark>/usr/share/backgrounds/apex-test/blobs-d.png</filename-dark>
+    <options>zoom</options>
+    <shade_type>solid</shade_type>
+    <pcolor>#322842</pcolor>
+    <scolor>#B82B4F</scolor>
+  </wallpaper>
+  <wallpaper deleted="false">
+    <name>Curvaturingster</name>
+    <filename>/usr/share/backgrounds/apex-test/curvaturingster-l.png</filename>
+    <filename-dark>/usr/share/backgrounds/apex-test/curvaturingster-d.png</filename-dark>
+    <options>zoom</options>
+    <shade_type>solid</shade_type>
+    <pcolor>#8B6571</pcolor>
+    <scolor>#A4818C</scolor>
+  </wallpaper>
+  <wallpaper deleted="false">
+    <name>Curvy</name>
+    <filename>/usr/share/backgrounds/apex-test/curvy-l.png</filename>
+    <filename-dark>/usr/share/backgrounds/apex-test/curvy-d.png</filename-dark>
+    <options>zoom</options>
+    <shade_type>solid</shade_type>
+    <pcolor>#8A8988</pcolor>
+    <scolor>#B8B7B6</scolor>
+  </wallpaper>
+  <wallpaper deleted="false">
+    <name>Dithered Sun</name>
+    <filename>/usr/share/backgrounds/apex-test/dithered-sun-l.png</filename>
+    <filename-dark>/usr/share/backgrounds/apex-test/dithered-sun-d.png</filename-dark>
+    <options>zoom</options>
+    <shade_type>solid</shade_type>
+    <pcolor>#CCFCAF</pcolor>
+    <scolor>#7BDECB</scolor>
+  </wallpaper>
+  <wallpaper deleted="false">
+    <name>Drool</name>
+    <filename>/usr/share/backgrounds/apex-test/drool-l.png</filename>
+    <filename-dark>/usr/share/backgrounds/apex-test/drool-d.png</filename-dark>
+    <options>zoom</options>
+    <shade_type>solid</shade_type>
+    <pcolor>#89B7EF</pcolor>
+    <scolor>#3678C9</scolor>
+  </wallpaper>
+  <wallpaper deleted="false">
+    <name>Fold</name>
+    <filename>/usr/share/backgrounds/apex-test/fold-l.png</filename>
+    <filename-dark>/usr/share/backgrounds/apex-test/fold-d.png</filename-dark>
+    <options>zoom</options>
+    <shade_type>solid</shade_type>
+    <pcolor>#EE9526</pcolor>
+    <scolor>#AE433B</scolor>
+  </wallpaper>
+  <wallpaper deleted="false">
+    <name>Fold</name>
+    <filename>/usr/share/backgrounds/apex-test/glass-chip-l.png</filename>
+    <filename-dark>/usr/share/backgrounds/apex-test/glass-chip-d.png</filename-dark>
+    <options>zoom</options>
+    <shade_type>solid</shade_type>
+    <pcolor>#24364E</pcolor>
+    <scolor>#445171</scolor>
+  </wallpaper>
+  <wallpaper deleted="false">
+    <name>Fold</name>
+    <filename>/usr/share/backgrounds/apex-test/glass-stripes-l.png</filename>
+    <filename-dark>/usr/share/backgrounds/apex-test/glass-stripes-d.png</filename-dark>
+    <options>zoom</options>
+    <shade_type>solid</shade_type>
+    <pcolor>#EF9A49</pcolor>
+    <scolor>#B86A3F</scolor>
+  </wallpaper>
+  <wallpaper deleted="false">
+    <name>LCD Rainbow</name>
+    <filename>/usr/share/backgrounds/apex-test/lcd-rainbow-l.png</filename>
+    <filename-dark>/usr/share/backgrounds/apex-test/lcd-rainbow-d.png</filename-dark>
+    <options>zoom</options>
+    <shade_type>solid</shade_type>
+    <pcolor>#DBDBDB</pcolor>
+    <scolor>#E5E5E5</scolor>
+  </wallpaper>
+  <wallpaper deleted="false">
+    <name>Map</name>
+    <filename>/usr/share/backgrounds/apex-test/map-l.png</filename>
+    <filename-dark>/usr/share/backgrounds/apex-test/map-d.png</filename-dark>
+    <options>zoom</options>
+    <shade_type>solid</shade_type>
+    <pcolor>#EFF5FF</pcolor>
+    <scolor>#35A975</scolor>
+  </wallpaper>
+  <wallpaper deleted="false">
+    <name>Morphogenesis</name>
+    <filename>/usr/share/backgrounds/apex-test/morphogenesis-l.png</filename>
+    <filename-dark>/usr/share/backgrounds/apex-test/morphogenesis-d.png</filename-dark>
+    <options>zoom</options>
+    <shade_type>solid</shade_type>
+    <pcolor>#E48579</pcolor>
+    <scolor>#F5928A</scolor>
+  </wallpaper>
+  <wallpaper deleted="false">
+    <name>Pills</name>
+    <filename>/usr/share/backgrounds/apex-test/pills-l.png</filename>
+    <filename-dark>/usr/share/backgrounds/apex-test/pills-d.png</filename-dark>
+    <options>zoom</options>
+    <shade_type>solid</shade_type>
+    <pcolor>#B03546</pcolor>
+    <scolor>#BE5960</scolor>
+  </wallpaper>
+  <wallpaper deleted="false">
+    <name>Pixel Pusher</name>
+    <filename>/usr/share/backgrounds/apex-test/pixel-pusher-l.png</filename>
+    <filename-dark>/usr/share/backgrounds/apex-test/pixel-pusher-d.png</filename-dark>
+    <options>zoom</options>
+    <shade_type>solid</shade_type>
+    <pcolor>#1A1427</pcolor>
+    <scolor>#6A0E1A</scolor>
+  </wallpaper>
+  <wallpaper deleted="false">
+    <name>Pixels</name>
+    <filename>/usr/share/backgrounds/apex-test/pixels-l.png</filename>
+    <filename-dark>/usr/share/backgrounds/apex-test/pixels-d.png</filename-dark>
+    <options>zoom</options>
+    <shade_type>solid</shade_type>
+    <pcolor>#92B1F3</pcolor>
+    <scolor>#8AA5F6</scolor>
+  </wallpaper>
+  <wallpaper deleted="false">
+    <name>Pixels</name>
+    <filename>/usr/share/backgrounds/apex-test/progress-l.png</filename>
+    <filename-dark>/usr/share/backgrounds/apex-test/progress-d.png</filename-dark>
+    <options>zoom</options>
+    <shade_type>solid</shade_type>
+    <pcolor>#D3C9DF</pcolor>
+    <scolor>#E3823A</scolor>
+  </wallpaper>
+  <wallpaper deleted="false">
+    <name>Series of Tubes</name>
+    <filename>/usr/share/backgrounds/apex-test/tubes-l.png</filename>
+    <filename-dark>/usr/share/backgrounds/apex-test/tubes-d.png</filename-dark>
+    <options>zoom</options>
+    <shade_type>solid</shade_type>
+    <pcolor>#010000</pcolor>
+    <scolor>#270F06</scolor>
+  </wallpaper>
+  <wallpaper deleted="false">
+    <name>Swoosh</name>
+    <filename>/usr/share/backgrounds/apex-test/sheet-l.png</filename>
+    <filename-dark>/usr/share/backgrounds/apex-test/sheet-d.png</filename-dark>
+    <options>zoom</options>
+    <shade_type>solid</shade_type>
+    <pcolor>#10499F</pcolor>
+    <scolor>#3849B9</scolor>
+  </wallpaper>
+  <wallpaper deleted="false">
+    <name>Symbolics</name>
+    <filename>/usr/share/backgrounds/apex-test/symbolic-l.png</filename>
+    <filename-dark>/usr/share/backgrounds/apex-test/symbolic-d.png</filename-dark>
+    <options>zoom</options>
+    <shade_type>solid</shade_type>
+    <pcolor>#2C78CB</pcolor>
+    <scolor>#6D94C9</scolor>
+  </wallpaper>
+  <wallpaper deleted="false">
+    <name>Tarkov Pills</name>
+    <filename>/usr/share/backgrounds/apex-test/tarkov-pills-l.png</filename>
+    <filename-dark>/usr/share/backgrounds/apex-test/tarkov-pills-d.png</filename-dark>
+    <options>zoom</options>
+    <shade_type>solid</shade_type>
+    <pcolor>#9997AC</pcolor>
+    <scolor>#605556</scolor>
+  </wallpaper>
+  <wallpaper deleted="false">
+    <name>Truchet</name>
+    <filename>/usr/share/backgrounds/apex-test/tarka-l.png</filename>
+    <filename-dark>/usr/share/backgrounds/apex-test/tarka-d.png</filename-dark>
+    <options>zoom</options>
+    <shade_type>solid</shade_type>
+    <pcolor>#B8B2B4</pcolor>
+    <scolor>#DDD6DB</scolor>
+  </wallpaper>
+  <wallpaper deleted="false">
+    <name>VNC</name>
+    <filename>/usr/share/backgrounds/apex-test/vnc-l.png</filename>
+    <filename-dark>/usr/share/backgrounds/apex-test/vnc-d.png</filename-dark>
+    <options>zoom</options>
+    <shade_type>solid</shade_type>
+    <pcolor>#77767B</pcolor>
+    <scolor>#000000</scolor>
+  </wallpaper>
+</wallpapers>
