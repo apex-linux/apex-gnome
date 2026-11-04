@@ -4267,43 +4267,34 @@ REPORTS
 REPORTS
 }
 
-# glass_views: two moves and the straddling box exact against a fresh effect, the box within the
-# glass bounds away from the boundary, the seam pinned at today's and a known gap no report closes.
+# glass_views: two moves exact against a fresh effect, the straddling box within the glass bounds
+# away from the boundary and at it; a report without the numbers fails.
 test_glass_views() {
-    local report failures gap what change passes fails state
+    local report failures what change passes fails
     report='{"views": 2, "scale": 2, "boundary": 1440,
-        "straddling": {"views": 2, "liveDifferingFromFresh": 0,
-            "live": {"band": 8, "seamMax": 93.581, "seamInteriorMax": 93.581, "seamEdgeMax": 88.731,
+        "straddling": {"views": 2, "liveDifferingFromFresh": 23267,
+            "live": {"band": 8, "seamMax": 9.581, "seamInteriorMax": 3.089, "seamEdgeMax": 9.581,
                 "interiorMax": 2.913, "edgeMax": 9.829, "mean": 0.773},
-            "fresh": {"band": 8, "seamMax": 93.581, "seamInteriorMax": 93.581, "seamEdgeMax": 88.731,
+            "fresh": {"band": 8, "seamMax": 91.07, "seamInteriorMax": 91.07, "seamEdgeMax": 88.731,
                 "interiorMax": 2.913, "edgeMax": 9.829, "mean": 0.773}},
         "across": {"views": 2, "differingFromFresh": 0, "pixels": 235520},
         "back": {"views": 2, "differingFromFresh": 0, "pixels": 235520}}'
-    while IFS='|' read -r failures gap what change; do
+    while IFS='|' read -r failures what change; do
         jq -c "$change" <<<"$report" | sed 's/^/APEXG2-GLASS-VIEWS /' >"$T/glass-views.log"
         read -r passes fails <<<"$(assertion_counts glass_views glass-views "$T/glass-views.log")"
-        expect_eq "glass views: $what fails $failures of 4" "$failures" "$fails"
-        if ((failures == 0)); then
-            expect_eq "glass views: $what passes 3 of 4, the 4th its known gap" 3 "$passes"
-        fi
-        state=open
-        grep -q 'but it holds now' "$T/assertions.out" && state=holds
-        grep -q '^GAP ' "$T/assertions.out" || [[ $state == holds ]] || state=none
-        expect_eq "glass views: $what leaves the seam's gap $gap" "$gap" "$state"
+        expect_eq "glass views: $what fails $failures of 3" "$failures" "$fails"
+        expect_eq "glass views: $what passes $((3 - failures)) of 3" $((3 - failures)) "$passes"
     done <<'CHANGES'
-0|open|both moves exact, the straddling box deterministic and within bounds away from its seam|.
-1|open|a box that keeps its blur on the view it left|.across.differingFromFresh = 9200
-1|open|a box moved back that one view never repainted|.back.views = 1
-1|open|a straddling box that a fresh effect draws otherwise|.straddling.liveDifferingFromFresh = 640
-1|open|a box off the reference by 9/255 away from the seam|.straddling.live.interiorMax = 9
-2|holds|a seam fixed, 2.51 inside and 9.18 in its band: off its pin, and a gap that holds now|.straddling.live += {seamMax: 9.18, seamInteriorMax: 2.51, seamEdgeMax: 9.18}
-1|open|a seam fixed inside but 14/255 in its band: off its pin, still a gap|.straddling.live += {seamMax: 14, seamInteriorMax: 2.51, seamEdgeMax: 14}
-1|open|a seam 2/255 wider than its pin|.straddling.live.seamMax = 95.6
-1|open|a seam 2/255 narrower than its pin, still a gap|.straddling.live.seamMax = 91.5
-3|open|one view only, the probe's early return|{views: 1, scales: [2]}
-3|open|two views at two scales, the probe's early return|{views: 2, scales: [2, 1]}
-3|open|the probe's error report|{error: "No property fine on ShellBlurEffect"}
-3|open|no report|del(.views, .straddling, .across, .back)
+0|both moves exact, the straddling box within bounds away from the boundary and at it|.
+1|a box that keeps its blur on the view it left|.across.differingFromFresh = 9200
+1|a box moved back that one view never repainted|.back.views = 1
+1|a box off the reference by 9/255 away from the boundary|.straddling.live.interiorMax = 9
+1|the seam per-view textures leave, 93.58/255 inside the boundary's columns|.straddling.live += {seamMax: 93.581, seamInteriorMax: 93.581, seamEdgeMax: 88.731}
+1|a seam within bounds inside but 14/255 in its band|.straddling.live += {seamMax: 14, seamEdgeMax: 14}
+3|one view only, the probe's early return|{views: 1, scales: [2]}
+3|two views at two scales, the probe's early return|{views: 2, scales: [2, 1]}
+3|the probe's error report|{error: "No property fine on ShellBlurEffect"}
+3|no report|del(.views, .straddling, .across, .back)
 CHANGES
 }
 
@@ -4430,15 +4421,14 @@ CHANGES
                     tilePreview: {radius: 80, saturation: 1.6, cornerRadius: 28, enabled: true, fine: true, followOpacity: true, background: true,
                         allocation: [372, 180], painted: {box: [0, 0, 372, 180], radii: [28, 28, 28, 28]}}}},
             motion: {dock: {moved: true, enabled: true, covered: true, differingFromFull: 0, pixels: 86136},
-                dockPastEdge: {moved: true, enabled: true, covered: true, differingFromFull: 19672, pixels: 62080},
+                dockPastEdge: {moved: true, enabled: true, covered: true, differingFromFull: 0, pixels: 62080},
                 popover: {moved: true, enabled: true, covered: true, differingFromFull: 0, pixels: 316008}}}}')
     while IFS='|' read -r failures what change; do
         jq -c "$change" <<<"$manager" | sed 's/^/APEXG2-GLASS /' >"$T/glass.log"
         read -r passes fails <<<"$(assertion_counts glass_manager glass "$T/glass.log" light)"
-        # The dock past the stage edge is a known gap: neither a pass nor a failure while it stays open.
-        expect_eq "glass manager: $what fails $failures of 28" "$failures" "$fails"
+        expect_eq "glass manager: $what fails $failures of 27" "$failures" "$fails"
         if ((failures == 0)); then
-            expect_eq "glass manager: $what passes 27 of 28, the 28th its known gap" 27 "$passes"
+            expect_eq "glass manager: $what passes all 27" 27 "$passes"
         fi
     done <<'CHANGES'
 0|the bar, the dock and the popovers at their tokens, every switch honoured|.
@@ -4506,7 +4496,7 @@ CHANGES
 1|a dock corner a screenshot draws otherwise|.manager.conformance.checked.dock.corner.capturedMax = 2
 3|a toast never checked|.manager.conformance.checked.toast = null
 1|a dock whose blur stays where the slide began|.manager.motion.dock.differingFromFull = 18400
-1|the dock past the edge blurred as on screen, a gap that holds now|.manager.motion.dockPastEdge.differingFromFull = 0
+1|a dock past the screen's edge whose blur reads pixels no one painted|.manager.motion.dockPastEdge.differingFromFull = 19672
 1|a popover blurred at its open size while it scales|.manager.motion.popover.differingFromFull = 2210
 1|a dock that never moved|.manager.motion.dock.moved = false
 1|a moved popover without its glass|.manager.motion.popover.enabled = false
