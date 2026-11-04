@@ -27,7 +27,7 @@ strings in Vietnamese. Captures, trees and logs land in _build/nautilus/shots/.
 It needs gnome-shell, mesa-dri-drivers, dbus-daemon, python3-dbusmock, gcc, util-linux,
 at-spi2-core, python3-gobject, inkscape, git-core, glycin-thumbnailer, glibc-langpack-vi and the Apex fonts
 (adwaita-sans-fonts, jetbrains-mono-fonts-all). G2's clock.c and fixtures.py (tests/shots)
-are used as they are.
+are used as they are; disk.c pins the home's disk at the board's "588 GB free of 1 TB".
 EOF
 }
 
@@ -41,6 +41,7 @@ readonly USER_NAME=apex
 readonly SHELL_TIMEOUT=120
 readonly CLOCK_LIB=/run/apex-files-clock.so
 readonly CRASH_LIB=/run/apex-files-crash.so
+readonly DISK_LIB=/run/apex-files-disk.so
 readonly FIXTURE_NAMES=(org.freedesktop.UPower org.freedesktop.NetworkManager org.bluez net.hadess.SwitcherooControl)
 readonly CLOCK='2026-10-21 10:24:00'
 readonly MONITOR=2880x1800
@@ -134,6 +135,9 @@ mkdir -p /run/dbus /etc/dbus-1 /tmp/.X11-unix && chmod 1777 /tmp/.X11-unix
 python3 "$SHOTS/fixtures.py" "$out" >"$out/fixtures.txt" 2>&1 || log "fixtures.py: exit $?"
 gcc -O2 -Wall -Werror -shared -fPIC -o "$CLOCK_LIB" "$SHOTS/clock.c" || die "cannot build tests/shots/clock.c"
 crash_lib "$CRASH_LIB" || die "cannot build tests/shots/crash.c"
+gcc -O2 -Wall -Werror -shared -fPIC -o "$DISK_LIB" "$HERE/disk.c" || die "cannot build tests/nautilus/disk.c"
+disk=$(env LD_PRELOAD="$DISK_LIB" HOME="$home" stat -f -c '%S %b %a' "$home" 2>&1)
+[[ $disk == '4096 244140625 143554688' ]] || die "$DISK_LIB does not pin $home's disk: $disk"
 clock_epoch=$(date -u -d "$CLOCK" +%s)
 held=$(env LD_PRELOAD="$CLOCK_LIB" G2_CLOCK_EPOCH="$clock_epoch" date -u '+%F %T' 2>&1)
 [[ $held == "$CLOCK" ]] || die "$CLOCK_LIB does not hold the clock at $CLOCK: $held"
@@ -150,14 +154,14 @@ shoot() {
     runuser -u "$USER_NAME" -- env -i HOME="$home" PATH="/usr/bin:/usr/sbin" XDG_RUNTIME_DIR="$run" \
         LANG="$lang" TZ=UTC APEX_SHOTS="$out" APEX_SHOT="$name" APEX_FILES_ARGS="$args" APEX_A11Y="$HERE/a11y.py" \
         APEX_FILES_SEARCH="$query" APEX_A11Y_PRESS="$press" ${schemas:+GSETTINGS_SCHEMA_DIR="$schemas"} \
-        CLOCK_LIB="$CLOCK_LIB" CRASH_LIB="$CRASH_LIB" G2_CLOCK_EPOCH="$clock_epoch" GTK_A11Y=atspi \
+        CLOCK_LIB="$CLOCK_LIB" CRASH_LIB="$CRASH_LIB" DISK_LIB="$DISK_LIB" G2_CLOCK_EPOCH="$clock_epoch" GTK_A11Y=atspi \
         DBUS_SYSTEM_BUS_ADDRESS=unix:path=/run/dbus/system_bus_socket SETTINGS="$settings" \
         timeout "$SHELL_TIMEOUT" dbus-run-session -- bash -c '
             while read -r schema key value; do
                 gsettings set "$schema" "$key" "$value" || exit 1
             done <<<"$SETTINGS"
             ulimit -c unlimited 2>/dev/null
-            exec env LD_PRELOAD="$CLOCK_LIB $CRASH_LIB" gnome-shell --headless --virtual-monitor '"$MONITOR"' \
+            exec env LD_PRELOAD="$CLOCK_LIB $CRASH_LIB $DISK_LIB" gnome-shell --headless --virtual-monitor '"$MONITOR"' \
                 --wayland-display=apex-files --automation-script '"$HERE"'/probe.js
         ' >"$out/$name.log" 2>&1
     rc=$?

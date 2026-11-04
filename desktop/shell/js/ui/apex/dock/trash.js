@@ -11,6 +11,7 @@ import * as Dash from '../../dash.js';
 import * as IconGrid from '../../iconGrid.js';
 import * as Main from '../../main.js';
 import * as PopupMenu from '../../popupMenu.js';
+import {_} from '../i18n.js';
 
 const TRASH_URI = 'trash:///';
 const ITEM_COUNT_ATTRIBUTE = 'trash::item-count';
@@ -28,7 +29,7 @@ class TrashItem extends Dash.DashItemContainer {
             can_focus: true,
             button_mask: St.ButtonMask.ONE | St.ButtonMask.THREE,
         });
-        this.icon = new IconGrid.BaseIcon('Trash', {
+        this.icon = new IconGrid.BaseIcon(_('Trash'), {
             setSizeManually: true,
             showLabel: false,
             createIcon: size => new St.Icon({
@@ -47,11 +48,11 @@ class TrashItem extends Dash.DashItemContainer {
                 this._open();
         });
         this.setChild(button);
-        this.setLabelText('Trash');
+        this.setLabelText(_('Trash'));
 
         this._menu = new PopupMenu.PopupMenu(button, 0.5, St.Side.BOTTOM);
-        this._menu.addAction('Open', () => this._open());
-        this._emptyItem = this._menu.addAction('Empty Trash', () => this._emptyTrash());
+        this._menu.addAction(_('Open'), () => this._open());
+        this._emptyItem = this._menu.addAction(_('Empty Trash'), () => this._emptyTrash());
         Main.uiGroup.add_child(this._menu.actor);
         this._menu.actor.hide();
         this._menuManager = new PopupMenu.PopupMenuManager(button);

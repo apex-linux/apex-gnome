@@ -7,9 +7,10 @@ import Clutter from 'gi://Clutter';
 import St from 'gi://St';
 
 import * as Hooks from '../hooks.js';
+import {_} from '../i18n.js';
 
 const EMPTY_STYLE_CLASS = 'apex-workspace-empty';
-const EMPTY_TEXT = 'No open windows';
+const EMPTY_TEXT = _('No open windows');
 
 let _enabled = false;
 

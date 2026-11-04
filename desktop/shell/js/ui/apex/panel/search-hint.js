@@ -6,10 +6,11 @@
 import Gio from 'gi://Gio';
 
 import * as Main from '../../main.js';
+import {_} from '../i18n.js';
 
 const SCHEMA_ID = 'io.github.apex_linux.Apex.Desktop';
 const SHOWN_KEY = 'search-hint-shown';
-const HINT = 'Press Super+Space to search';
+const HINT = _('Press Super+Space to search');
 const BANNERS_SCHEMA_ID = 'org.gnome.desktop.notifications';
 const BANNERS_KEY = 'show-banners';
 

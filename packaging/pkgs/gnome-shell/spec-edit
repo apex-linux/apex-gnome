@@ -35,3 +35,9 @@ after ^%autosetup[[:space:]]
 	mv data/theme/gnome-shell-light.css data/theme/gnome-shell-dark.css data/theme/gnome-shell-high-contrast.css \
 	    data/theme/apex/stock/
 end
+
+# The layer's own gettext domain (desktop/shell/data/theme/apex/po), in the main package's list.
+after ^%find_lang[[:space:]]+%\{name\}$
+	%find_lang apex-shell
+	cat apex-shell.lang >> %{name}.lang
+end

@@ -13,6 +13,7 @@ import os
 import re
 import sys
 
+DISK = "588 GB free of 1 TB"
 FOOTER = re.compile(r"^\d+(\.\d)? (B|kB|MB|GB|TB|PB) free of \d+(\.\d)? (B|kB|MB|GB|TB|PB)$")
 SPEC_ODT = "Apex Fedora — Spec.odt"
 RECENT = ["Apex Fedora — Spec.odt", "mockup-2880x1800.png", "HIG Notes.md", "Fedora-Workstation-Live-45.iso"]
@@ -91,7 +92,7 @@ def check_case(name, tree, expect):
 
     labels = [n["name"] for n in tree if "showing" in n["states"]]
     footer = [t for t in labels if FOOTER.match(t)]
-    claim(len(footer) == 1, f"the disk footer reads {footer}")
+    claim(footer == [DISK], f"the disk footer reads “{DISK}”, the disk disk.c pins: {footer}")
     claim(showing(tree, "Disk usage", "level bar"), "the disk meter is labelled “Disk usage”")
 
     if "count" in expect:

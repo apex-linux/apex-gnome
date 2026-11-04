@@ -7,9 +7,10 @@ import St from 'gi://St';
 import * as Hooks from '../hooks.js';
 import * as Main from '../../main.js';
 import * as PopupMenu from '../../popupMenu.js';
+import {_} from '../i18n.js';
 
 export const DND_STYLE_CLASS = 'apex-dnd-button';
-export const DND_LABEL = 'Do Not Disturb';
+export const DND_LABEL = _('Do Not Disturb');
 export const SEPARATOR_STYLE_CLASS = 'apex-message-separator';
 export const CALENDAR_STYLE_CLASS = 'apex-calendar';
 export const EVENT_DOT_STYLE_CLASS = 'apex-event-dot';

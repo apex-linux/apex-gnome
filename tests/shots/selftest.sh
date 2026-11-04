@@ -3381,9 +3381,9 @@ control-center/lib.sh	case_backtrace "$log" "$rc" "$HEADLESS_HOME" "${log%.log}.
 control-center/lib.sh	return "$rc"
 nautilus/shoot.sh	. "$SHOTS/backtrace.sh"
 nautilus/shoot.sh	crash_lib "$CRASH_LIB" || die "cannot build tests/shots/crash.c"
-nautilus/shoot.sh	CLOCK_LIB="$CLOCK_LIB" CRASH_LIB="$CRASH_LIB" G2_CLOCK_EPOCH="$clock_epoch" GTK_A11Y=atspi \
+nautilus/shoot.sh	CLOCK_LIB="$CLOCK_LIB" CRASH_LIB="$CRASH_LIB" DISK_LIB="$DISK_LIB" G2_CLOCK_EPOCH="$clock_epoch" GTK_A11Y=atspi \
 nautilus/shoot.sh	ulimit -c unlimited 2>/dev/null
-nautilus/shoot.sh	exec env LD_PRELOAD="$CLOCK_LIB $CRASH_LIB" gnome-shell --headless --virtual-monitor '"$MONITOR"' \
+nautilus/shoot.sh	exec env LD_PRELOAD="$CLOCK_LIB $CRASH_LIB $DISK_LIB" gnome-shell --headless --virtual-monitor '"$MONITOR"' \
 nautilus/shoot.sh	rc=$?
 nautilus/shoot.sh	case_backtrace "$out/$name.log" "$rc" "$home" "$out/$name.bt"
 nautilus/shoot.sh	if crash=$(shell_crash "$out/$name.log" "$rc"); then log "shoot.sh: $name: $crash"; return 1; fi

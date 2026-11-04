@@ -164,6 +164,8 @@ from an empty dconf database and no gvfs metadata.
 `probe.js` types the search with a virtual keyboard (Ctrl+F, "apex"), and `a11y.py
 OUT PRESS...` presses chips by their accessible names, in order, before the dump.
 
-The footer's numbers are the container's filesystem, so `check.py` asserts their form
-and `format-test.c` the board's own "588 GB free of 1 TB". CI keeps the captures, trees
-and logs as the `nautilus-shots` artifact.
+`tests/nautilus/disk.c`, preloaded into the shell and Files, gives the home's filesystem
+the board's 1 TB with 588 GB free, whatever the runner's disk, so `check.py` asserts the
+footer's exact "588 GB free of 1 TB" and the captures don't drift between runners.
+`format-test.c` checks the formatting itself. CI keeps the captures, trees and logs as
+the `nautilus-shots` artifact.
