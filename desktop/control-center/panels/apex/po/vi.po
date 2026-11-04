@@ -1,6 +1,6 @@
 # Vietnamese translation of Apex's Settings panels (apex-control-center).
 # Bản dịch tiếng Việt cho các bảng Cài đặt của Apex.
-# This file is distributed under the same license as Apex.
+# SPDX-License-Identifier: GPL-2.0-or-later
 #
 # Glossary, following GNOME's existing Vietnamese where upstream already translates the word:
 #   Settings = Cài đặt; Files = Tệp; Software Updates = Cập nhật phần mềm;

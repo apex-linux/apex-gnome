@@ -72,7 +72,6 @@ headless_apex_schema yes
 run_case light default APEX_SCROLL=1 "APEX_CHECK=bindings.py rows" || status=1
 run_case dark prefer-dark APEX_SCROLL=1 || status=1
 run_case top-bounds default "APEX_CHECK=bounds.py rows toggles" || status=1
-# Every other case runs in C; this one proves apex-control-center.mo is installed and bound.
 run_case vi default LANG=vi_VN.UTF-8 "APEX_CHECK=i18n.py" || status=1
 headless_apex_schema no
 run_case no-schema default "APEX_CHECK=bindings.py no-schema" || status=1

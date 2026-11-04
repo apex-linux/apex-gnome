@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
 panels/apex/cc-apex-background.c
 panels/apex/cc-apex-header.c
 panels/apex/cc-apex-panel.blp

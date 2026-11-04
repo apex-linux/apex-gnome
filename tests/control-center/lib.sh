@@ -57,6 +57,7 @@ headless_install_rpms() {
     dnf5 -y -q --setopt=install_weak_deps=False --repo=fedora --repo=updates install "${rpms[@]}" ||
         die "cannot install ${rpms[*]}"
     [[ -f /usr/share/locale/vi/LC_MESSAGES/apex-control-center.mo ]] || die "apex-control-center.mo (vi) is not installed"
+    locale -a 2>/dev/null | grep -qx vi_VN.utf8 || die "the vi_VN.UTF-8 locale is missing (glibc-langpack-vi)"
 }
 
 # headless_apex_schema yes|no: installs apex-desktop's schema, as tests/layer/fixtures holds it, or removes it.
