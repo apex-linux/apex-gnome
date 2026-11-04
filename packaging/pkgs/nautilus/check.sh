@@ -39,6 +39,7 @@ members=$(tar -tf "$SOURCE1") || cannot "cannot list $SOURCE1"
 n=0
 while IFS= read -r m; do
     [[ $m == "$SOURCE1_DIR"* && $m != */ ]] || continue
+    [[ $m == "${SOURCE1_DIR}po/"* ]] && continue
     case ${m##*/} in meson.build | *.gresource.xml | *.[ch]) continue ;; esac
     grep -Fxq -- "$APEX_PREFIX/${m#"$SOURCE1_DIR"}" <<<"$resources" ||
         fail "$m is in desktop/nautilus but not in the resource (apex.gresource.xml)"
@@ -53,6 +54,9 @@ for selector in apex-disk-footer apex-count-bar apex-details-pane apex-recent-st
     grep -Fq "$selector" <<<"$css" || fail "$APEX_PREFIX/apex.css has no $selector rules"
 done
 ok "$APEX_PREFIX/apex.css carries the Apex marker and the sheet of every Apex widget"
+
+[[ -f $root/usr/share/locale/vi/LC_MESSAGES/apex-nautilus.mo ]] || fail "the nautilus RPM has no vi apex-nautilus.mo"
+ok "the nautilus RPM carries Apex's vi catalogue"
 
 schema=$root/usr/share/glib-2.0/schemas/org.gnome.nautilus.gschema.xml
 for line in 'nick="apex"' "<default>'apex'</default>"; do

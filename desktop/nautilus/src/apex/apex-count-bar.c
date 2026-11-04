@@ -5,7 +5,7 @@
 #include "apex-format.h"
 #include "apex-slot-watch.h"
 
-#include <glib/gi18n.h>
+#include "apex-i18n.h"
 
 #include "nautilus-file.h"
 #include "nautilus-floating-bar.h"

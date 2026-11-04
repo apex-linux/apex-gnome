@@ -3,7 +3,7 @@
 #include "apex-view-controls.h"
 
 #include <adwaita.h>
-#include <glib/gi18n.h>
+#include "apex-i18n.h"
 
 #include "nautilus-view-info.h"
 

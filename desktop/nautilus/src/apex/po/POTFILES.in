@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+src/apex/apex-count-bar.c
+src/apex/apex-details-pane.c
+src/apex/apex-disk-footer.c
+src/apex/apex-format.c
+src/apex/apex-recent-strip.c
+src/apex/apex-search-chips.c
+src/apex/apex-view-controls.c
+src/apex/apex-window.c

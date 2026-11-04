@@ -8,11 +8,11 @@ set -euo pipefail
 HERE=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 REPO=$(cd -- "$HERE/.." && pwd)
 NO_SKIP=${APEX_LINT_NO_SKIP:-0}
-SPDX='# SPDX-License-Identifier: GPL-2.0-or-later'
 
 # domain|source root|po dir under it|sources it covers|what marks a file's strings|xgettext's extra arguments
 DOMAINS=(
     "apex-control-center|desktop/control-center|panels/apex/po|panels/apex|\bN?C?_\(|--keyword=_ --keyword=N_ --keyword=C_:1c,2 --keyword=NC_:1c,2"
+    "apex-nautilus|desktop/nautilus|src/apex/po|src/apex|\bN?_\(|--keyword=_ --keyword=N_"
 )
 
 for tool in xgettext msgmerge msgfmt msgattrib; do
@@ -35,6 +35,7 @@ for entry in "${DOMAINS[@]}"; do
     podir=$src/$po
     pot=$T/$domain.pot
     listed=$(entries "$podir/POTFILES.in")
+    spdx=$(grep -m1 '^# SPDX-License-Identifier: ' "$podir/meson.build") || fail "$domain: $po/meson.build has no SPDX line"
 
     while IFS= read -r f; do
         grep -Fxq -- "${f#"$src"/}" <<<"$listed" || fail "$domain: ${f#"$REPO"/} marks strings but is not in POTFILES.in"
@@ -42,7 +43,7 @@ for entry in "${DOMAINS[@]}"; do
 
     # shellcheck disable=SC2086 # the extra arguments are words
     (cd "$src" && xgettext --from-code=UTF-8 --add-comments --sort-by-file --package-name="$domain" \
-        -f "$podir/POTFILES.in" -o - $args 2>"$T/$domain.xgettext") | { printf '%s\n' "$SPDX"; cat; } >"$pot"
+        -f "$podir/POTFILES.in" -o - $args 2>"$T/$domain.xgettext") | { printf '%s\n' "$spdx"; cat; } >"$pot"
     grep -v "extension 'blp' is unknown; will try C" "$T/$domain.xgettext" >&2 || true
     [[ ${1:-} == --update ]] && cp "$pot" "$podir/$domain.pot"
     [[ $(body "$pot") == "$(body "$podir/$domain.pot")" ]] ||
