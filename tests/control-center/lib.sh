@@ -52,8 +52,11 @@ headless_install_rpms() {
     rpms=("$dir"/gnome-control-center-[0-9]*.x86_64.rpm "$dir"/gnome-control-center-filesystem-[0-9]*.noarch.rpm)
     shopt -u nullglob
     ((${#rpms[@]} == 2)) || die "expected the gnome-control-center and -filesystem RPMs in $dir"
+    # Fedora's container image installs only C and English catalogues (%_install_langs); the vi case needs vi's.
+    rm -f /etc/rpm/macros.image-language-conf
     dnf5 -y -q --setopt=install_weak_deps=False --repo=fedora --repo=updates install "${rpms[@]}" ||
         die "cannot install ${rpms[*]}"
+    [[ -f /usr/share/locale/vi/LC_MESSAGES/apex-control-center.mo ]] || die "apex-control-center.mo (vi) is not installed"
 }
 
 # headless_apex_schema yes|no: installs apex-desktop's schema, as tests/layer/fixtures holds it, or removes it.

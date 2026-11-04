@@ -1,0 +1,13 @@
+panels/apex/cc-apex-background.c
+panels/apex/cc-apex-header.c
+panels/apex/cc-apex-panel.blp
+panels/apex/cc-apex-panel.c
+panels/apex/cc-apex-power-state.c
+panels/apex/cc-apex-power.c
+panels/apex/cc-apex-sidebar.c
+panels/apex/cc-apex-tile.c
+panels/apex/cc-apex-updates-page.blp
+panels/apex/cc-apex-updates-page.c
+panels/apex/cc-apex-updates-state.c
+panels/apex/gnome-apex-panel.desktop.in
+panels/apex/io.github.apex_linux.Apex.Tweaks.desktop.in

@@ -1,0 +1,747 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) YEAR THE PACKAGE'S COPYRIGHT HOLDER
+# This file is distributed under the same license as the apex-control-center package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: apex-control-center\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-11-04 15:33+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"Language: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+#: panels/apex/cc-apex-background.c:64
+#, c-format
+msgid "%s has a light and a dark version and follows the style."
+msgstr ""
+
+#: panels/apex/cc-apex-background.c:65
+#, c-format
+msgid "%s is one picture for both styles."
+msgstr ""
+
+#: panels/apex/cc-apex-header.c:33
+#, c-format
+msgid "Version %s"
+msgstr ""
+
+#: panels/apex/cc-apex-header.c:37
+#, c-format
+msgid "GNOME Shell %s on Wayland"
+msgstr ""
+
+#: panels/apex/cc-apex-header.c:39
+#, c-format
+msgid "GNOME Shell %s on X11"
+msgstr ""
+
+#: panels/apex/cc-apex-header.c:41
+#, c-format
+msgid "GNOME Shell %s"
+msgstr ""
+
+#: panels/apex/cc-apex-header.c:174 panels/apex/gnome-apex-panel.desktop.in:3
+msgid "Apex Desktop"
+msgstr ""
+
+#: panels/apex/cc-apex-panel.blp:33
+msgid "Top Bar"
+msgstr ""
+
+#: panels/apex/cc-apex-panel.blp:36
+msgid "Translucent Top Bar"
+msgstr ""
+
+#: panels/apex/cc-apex-panel.blp:37
+msgid "Turns solid when a window is maximized"
+msgstr ""
+
+#: panels/apex/cc-apex-panel.blp:41
+msgid "Show Focused App Name"
+msgstr ""
+
+#: panels/apex/cc-apex-panel.blp:45
+msgid "Show Date in Clock"
+msgstr ""
+
+#: panels/apex/cc-apex-panel.blp:49
+msgid "Show Battery Percentage"
+msgstr ""
+
+#: panels/apex/cc-apex-panel.blp:53
+msgid "Hot Corner"
+msgstr ""
+
+#: panels/apex/cc-apex-panel.blp:54
+msgid "Touch the top-left corner to open the overview"
+msgstr ""
+
+#: panels/apex/cc-apex-panel.blp:59
+msgid "Dock"
+msgstr ""
+
+#: panels/apex/cc-apex-panel.blp:62
+msgid "Icon Size"
+msgstr ""
+
+#: panels/apex/cc-apex-panel.blp:71
+msgctxt "dock icon size"
+msgid "S"
+msgstr ""
+
+#: panels/apex/cc-apex-panel.blp:72
+msgid "Small"
+msgstr ""
+
+#: panels/apex/cc-apex-panel.blp:77
+msgctxt "dock icon size"
+msgid "M"
+msgstr ""
+
+#: panels/apex/cc-apex-panel.blp:78
+msgid "Medium"
+msgstr ""
+
+#: panels/apex/cc-apex-panel.blp:83
+msgctxt "dock icon size"
+msgid "L"
+msgstr ""
+
+#: panels/apex/cc-apex-panel.blp:84
+msgid "Large"
+msgstr ""
+
+#: panels/apex/cc-apex-panel.blp:90
+msgid "Hide Behind Maximized Windows"
+msgstr ""
+
+#: panels/apex/cc-apex-panel.blp:91
+msgid "Move the pointer to the bottom edge to reveal it"
+msgstr ""
+
+#: panels/apex/cc-apex-panel.blp:95
+msgid "Show Running Indicators"
+msgstr ""
+
+#: panels/apex/cc-apex-panel.blp:99
+msgid "Show Trash"
+msgstr ""
+
+#: panels/apex/cc-apex-panel.blp:104
+msgid "Windows"
+msgstr ""
+
+#: panels/apex/cc-apex-panel.blp:107
+msgid "Corner Radius"
+msgstr ""
+
+#: panels/apex/cc-apex-panel.blp:108
+msgid "Maximized windows are always square"
+msgstr ""
+
+#: panels/apex/cc-apex-panel.blp:138
+msgid "Titlebar Buttons"
+msgstr ""
+
+#: panels/apex/cc-apex-panel.blp:146
+msgid "All"
+msgstr ""
+
+#: panels/apex/cc-apex-panel.blp:151
+msgid "Close only"
+msgstr ""
+
+#: panels/apex/cc-apex-panel.blp:157
+msgid "Drag to Top Edge to Maximize"
+msgstr ""
+
+#: panels/apex/cc-apex-panel.blp:162
+msgid "Effects"
+msgstr ""
+
+#: panels/apex/cc-apex-panel.blp:165
+msgid "Reduce Transparency"
+msgstr ""
+
+#: panels/apex/cc-apex-panel.blp:166
+msgid "Replace glass surfaces with solid colors"
+msgstr ""
+
+#: panels/apex/cc-apex-panel.blp:170
+msgid "Reduce Motion"
+msgstr ""
+
+#: panels/apex/cc-apex-panel.blp:171
+msgid "Disable window and dock animations"
+msgstr ""
+
+#: panels/apex/cc-apex-panel.blp:184
+msgid "Apex Desktop Settings Are Missing"
+msgstr ""
+
+#: panels/apex/cc-apex-panel.blp:185
+msgid ""
+"The settings schema io.github.apex_linux.Apex.Desktop is not installed, so "
+"this panel cannot change the top bar, the dock or the window corners. It "
+"ships in the apex-desktop package."
+msgstr ""
+
+#: panels/apex/cc-apex-power-state.c:30
+msgctxt "graphics card"
+msgid "Off"
+msgstr ""
+
+#: panels/apex/cc-apex-power-state.c:32
+msgctxt "graphics card"
+msgid "Waking"
+msgstr ""
+
+#: panels/apex/cc-apex-power-state.c:34
+msgctxt "graphics card"
+msgid "Powering Down"
+msgstr ""
+
+#: panels/apex/cc-apex-power-state.c:38
+msgctxt "graphics card"
+msgid "On"
+msgstr ""
+
+#: panels/apex/cc-apex-power-state.c:48
+msgid "Powered down until an app asks for it"
+msgstr ""
+
+#: panels/apex/cc-apex-power-state.c:51
+msgid "Powered up for an app"
+msgstr ""
+
+#: panels/apex/cc-apex-power-state.c:54
+msgid "Its driver keeps it powered"
+msgstr ""
+
+#: panels/apex/cc-apex-power-state.c:69
+msgid "NVIDIA Graphics"
+msgstr ""
+
+#: panels/apex/cc-apex-power-state.c:134
+msgid ""
+"The built-in display's lowest rate on battery, its highest when plugged in"
+msgstr ""
+
+#: panels/apex/cc-apex-power-state.c:136
+#, c-format
+msgid "The built-in display runs at %d Hz either way"
+msgstr ""
+
+#: panels/apex/cc-apex-power-state.c:137
+#, c-format
+msgid "%d Hz on battery, %d Hz when plugged in"
+msgstr ""
+
+#: panels/apex/cc-apex-power.c:189
+msgid "Lower Refresh Rate on Battery"
+msgstr ""
+
+#: panels/apex/cc-apex-power.c:207
+msgid "Graphics and Display"
+msgstr ""
+
+#: panels/apex/cc-apex-updates-page.blp:8
+msgid "Software Updates"
+msgstr ""
+
+#: panels/apex/cc-apex-updates-page.blp:137
+msgid "What’s New"
+msgstr ""
+
+#: panels/apex/cc-apex-updates-page.blp:149
+msgid "Versions"
+msgstr ""
+
+#: panels/apex/cc-apex-updates-page.blp:152
+#: panels/apex/cc-apex-updates-page.c:439
+msgid "Running"
+msgstr ""
+
+#: panels/apex/cc-apex-updates-page.blp:163
+msgid "Next Restart"
+msgstr ""
+
+#: panels/apex/cc-apex-updates-page.blp:167
+msgid "Checked"
+msgstr ""
+
+#: panels/apex/cc-apex-updates-page.blp:177
+#: panels/apex/cc-apex-updates-page.c:445
+msgid "Previous"
+msgstr ""
+
+#: panels/apex/cc-apex-updates-page.blp:181
+msgid "Use at Next Restart…"
+msgstr ""
+
+#: panels/apex/cc-apex-updates-page.blp:189
+msgid ""
+"If a new version keeps failing to start, Apex goes back to the previous one "
+"by itself."
+msgstr ""
+
+#: panels/apex/cc-apex-updates-page.blp:203
+msgid "Preferences"
+msgstr ""
+
+#: panels/apex/cc-apex-updates-page.blp:206
+msgid "Automatic Downloads"
+msgstr ""
+
+#: panels/apex/cc-apex-updates-page.blp:207
+msgid "Waits for mains power and an unmetered network"
+msgstr ""
+
+#: panels/apex/cc-apex-updates-page.blp:212
+msgid "Update Channel"
+msgstr ""
+
+#: panels/apex/cc-apex-updates-page.blp:216
+msgid "Last Checked"
+msgstr ""
+
+#: panels/apex/cc-apex-updates-page.blp:220
+#: panels/apex/cc-apex-updates-state.c:158
+msgid "Check Now"
+msgstr ""
+
+#: panels/apex/cc-apex-updates-page.blp:236
+msgid "Software Updates Are Unavailable"
+msgstr ""
+
+#: panels/apex/cc-apex-updates-page.blp:237
+msgid ""
+"apex-updated, the Apex update service, is not installed or does not answer, "
+"so this page cannot show or change the system’s updates."
+msgstr ""
+
+#: panels/apex/cc-apex-updates-page.c:365
+msgid "No package changes are known."
+msgstr ""
+
+#: panels/apex/cc-apex-updates-page.c:373
+msgid "Changes in the Set-Aside Version"
+msgstr ""
+
+#: panels/apex/cc-apex-updates-page.c:437
+msgid "Failed check"
+msgstr ""
+
+#: panels/apex/cc-apex-updates-page.c:441
+#: panels/apex/cc-apex-updates-state.c:110
+msgid "Update Failed Its Startup Check"
+msgstr ""
+
+#: panels/apex/cc-apex-updates-page.c:442
+msgid ""
+"This version is running, but a required check did not pass. Going back to "
+"the version you had before is the safe choice. Nothing restarts until you "
+"say so."
+msgstr ""
+
+#: panels/apex/cc-apex-updates-page.c:446
+#: panels/apex/cc-apex-updates-state.c:169
+msgid "Keep This Version"
+msgstr ""
+
+#: panels/apex/cc-apex-updates-page.c:447
+#: panels/apex/cc-apex-updates-state.c:167
+msgid "Go Back…"
+msgstr ""
+
+#: panels/apex/cc-apex-updates-page.c:452
+#: panels/apex/cc-apex-updates-state.c:44
+msgid "Apex Went Back to the Previous Version"
+msgstr ""
+
+#: panels/apex/cc-apex-updates-page.c:453
+#: panels/apex/cc-apex-updates-state.c:45
+msgid ""
+"The update did not start properly three times in a row, so Apex started the "
+"version you had before. That build will not be offered again; a newer one "
+"will be."
+msgstr ""
+
+#: panels/apex/cc-apex-updates-page.c:457
+msgid "Set aside"
+msgstr ""
+
+#: panels/apex/cc-apex-updates-page.c:458
+msgid "Your files"
+msgstr ""
+
+#: panels/apex/cc-apex-updates-page.c:458
+msgid "unchanged"
+msgstr ""
+
+#: panels/apex/cc-apex-updates-page.c:460
+msgid "Show Changes"
+msgstr ""
+
+#: panels/apex/cc-apex-updates-page.c:461
+#: panels/apex/cc-apex-updates-state.c:173
+msgid "OK"
+msgstr ""
+
+#: panels/apex/cc-apex-updates-page.c:562
+#, c-format
+msgid "%s runs Fedora’s own build"
+msgstr ""
+
+#: panels/apex/cc-apex-updates-page.c:563
+msgid "This version ships it without Apex’s changes."
+msgstr ""
+
+#: panels/apex/cc-apex-updates-page.c:566
+#, c-format
+msgid "%s runs without Apex’s changes"
+msgstr ""
+
+#: panels/apex/cc-apex-updates-page.c:567
+#, c-format
+msgid "This version ships Fedora’s own %s."
+msgstr ""
+
+#: panels/apex/cc-apex-updates-page.c:607
+msgid "Package changes"
+msgstr ""
+
+#: panels/apex/cc-apex-updates-page.c:653
+#, c-format
+msgid ""
+"%s\n"
+"Kept by Apex: %s"
+msgstr ""
+
+#: panels/apex/cc-apex-updates-page.c:675
+msgid "Kept"
+msgstr ""
+
+#: panels/apex/cc-apex-updates-page.c:766
+msgid "Testing: candidate builds signed with the CI key"
+msgstr ""
+
+#: panels/apex/cc-apex-updates-page.c:767
+msgid "Stable: qualified builds signed with the release key"
+msgstr ""
+
+#: panels/apex/cc-apex-updates-page.c:769
+msgid "Never"
+msgstr ""
+
+#: panels/apex/cc-apex-updates-state.c:31
+msgid "The new version"
+msgstr ""
+
+#: panels/apex/cc-apex-updates-state.c:52
+msgid "Apex Is Up to Date"
+msgstr ""
+
+#: panels/apex/cc-apex-updates-state.c:54
+#, c-format
+msgid "%s is the newest build on the %s channel. Checked %s."
+msgstr ""
+
+#: panels/apex/cc-apex-updates-state.c:58
+#, c-format
+msgid "%s is the newest build on the %s channel."
+msgstr ""
+
+#: panels/apex/cc-apex-updates-state.c:63
+msgid "Update Waiting"
+msgstr ""
+
+#: panels/apex/cc-apex-updates-state.c:64
+#, c-format
+msgid "%s %s waits until then."
+msgstr ""
+
+#: panels/apex/cc-apex-updates-state.c:72
+msgid "Update Available"
+msgstr ""
+
+#: panels/apex/cc-apex-updates-state.c:73
+#, c-format
+msgid ""
+"%s. It downloads in the background and nothing changes until you restart."
+msgstr ""
+
+#: panels/apex/cc-apex-updates-state.c:78
+msgid "Downloading Update"
+msgstr ""
+
+#: panels/apex/cc-apex-updates-state.c:79
+#, c-format
+msgid "%s. You can keep working; Apex checks the signature before keeping it."
+msgstr ""
+
+#: panels/apex/cc-apex-updates-state.c:83
+msgid "Update Not Offered"
+msgstr ""
+
+#: panels/apex/cc-apex-updates-state.c:88
+msgid "Update Downloaded"
+msgstr ""
+
+#: panels/apex/cc-apex-updates-state.c:89
+#, c-format
+msgid "%s waits until you restart into it. Your current version keeps running."
+msgstr ""
+
+#: panels/apex/cc-apex-updates-state.c:93
+#: panels/apex/cc-apex-updates-state.c:100
+msgid "Restart to Finish Updating"
+msgstr ""
+
+#: panels/apex/cc-apex-updates-state.c:94
+#, c-format
+msgid ""
+"%s is downloaded and its signature checked. Your current version stays in "
+"place until you restart."
+msgstr ""
+
+#: panels/apex/cc-apex-updates-state.c:101
+#: panels/apex/cc-apex-updates-state.c:105
+#, c-format
+msgid "%s starts the next time you restart."
+msgstr ""
+
+#: panels/apex/cc-apex-updates-state.c:104
+msgid "The Previous Version Starts Next"
+msgstr ""
+
+#: panels/apex/cc-apex-updates-state.c:107
+msgid "The previous version"
+msgstr ""
+
+#: panels/apex/cc-apex-updates-state.c:111
+#, c-format
+msgid ""
+"%s is running, but a required check did not pass. Going back to the version "
+"you had before is the safe choice. Nothing restarts until you say so."
+msgstr ""
+
+#: panels/apex/cc-apex-updates-state.c:119
+#: panels/apex/cc-apex-updates-state.c:124
+msgid "Updates Paused"
+msgstr ""
+
+#: panels/apex/cc-apex-updates-state.c:120
+msgid ""
+"System files are writable for development. Updates resume after the next "
+"restart."
+msgstr ""
+
+#: panels/apex/cc-apex-updates-state.c:126
+msgid "This system is not set up to follow Apex updates."
+msgstr ""
+
+#: panels/apex/cc-apex-updates-state.c:129
+msgid "The Update Did Not Finish"
+msgstr ""
+
+#: panels/apex/cc-apex-updates-state.c:131
+msgid ""
+"The update could not be applied at restart. Your current version is still in "
+"place."
+msgstr ""
+
+#: panels/apex/cc-apex-updates-state.c:136
+msgid "Updates Could Not Be Checked"
+msgstr ""
+
+#: panels/apex/cc-apex-updates-state.c:137
+msgid "Apex could not reach its updates."
+msgstr ""
+
+#: panels/apex/cc-apex-updates-state.c:141
+msgid "Checking for Updates"
+msgstr ""
+
+#: panels/apex/cc-apex-updates-state.c:142
+msgid "Apex is reading the state of this system."
+msgstr ""
+
+#: panels/apex/cc-apex-updates-state.c:160
+msgid "Download"
+msgstr ""
+
+#: panels/apex/cc-apex-updates-state.c:162
+msgid "Download Anyway"
+msgstr ""
+
+#: panels/apex/cc-apex-updates-state.c:165
+msgid "Restart Now"
+msgstr ""
+
+#: panels/apex/cc-apex-updates-state.c:171
+msgid "Keep Current Version"
+msgstr ""
+
+#: panels/apex/cc-apex-updates-state.c:194
+#, c-format
+msgid "today at %s"
+msgstr ""
+
+#: panels/apex/cc-apex-updates-state.c:196
+#, c-format
+msgid "yesterday at %s"
+msgstr ""
+
+#: panels/apex/cc-apex-updates-state.c:198
+#, no-c-format
+msgid "%b %-d at %H:%M"
+msgstr ""
+
+#: panels/apex/cc-apex-updates-state.c:223
+#, c-format
+msgid "%s B"
+msgstr ""
+
+#: panels/apex/cc-apex-updates-state.c:223
+#, c-format
+msgid "%s GB"
+msgstr ""
+
+#: panels/apex/cc-apex-updates-state.c:223
+#, c-format
+msgid "%s MB"
+msgstr ""
+
+#: panels/apex/cc-apex-updates-state.c:223
+#, c-format
+msgid "%s kB"
+msgstr ""
+
+#: panels/apex/cc-apex-updates-state.c:243
+#, c-format
+msgid "%.0f %% downloaded"
+msgstr ""
+
+#: panels/apex/cc-apex-updates-state.c:248
+#, c-format
+msgid "%s of %s"
+msgstr ""
+
+#: panels/apex/cc-apex-updates-state.c:252
+msgid "less than a minute left"
+msgstr ""
+
+#: panels/apex/cc-apex-updates-state.c:264
+msgid "Settings"
+msgstr ""
+
+#: panels/apex/cc-apex-updates-state.c:265
+msgid "GNOME Shell"
+msgstr ""
+
+#: panels/apex/cc-apex-updates-state.c:266
+msgid "Files"
+msgstr ""
+
+#: panels/apex/cc-apex-updates-state.c:267
+msgid "Terminal"
+msgstr ""
+
+#: panels/apex/cc-apex-updates-state.c:268
+#: panels/apex/cc-apex-updates-state.c:269
+#: panels/apex/cc-apex-updates-state.c:300
+msgid "Linux"
+msgstr ""
+
+#: panels/apex/cc-apex-updates-state.c:302
+msgid "The NVIDIA driver"
+msgstr ""
+
+#: panels/apex/cc-apex-updates-state.c:305
+#, c-format
+msgid "%s %s is held back"
+msgstr ""
+
+#: panels/apex/cc-apex-updates-state.c:306
+#, c-format
+msgid ""
+"Apex’s %s changes do not apply to %s yet, so this update keeps the last good "
+"build."
+msgstr ""
+
+#: panels/apex/cc-apex-updates-state.c:310
+msgid "It holds back a security update."
+msgstr ""
+
+#: panels/apex/cc-apex-updates-state.c:310
+msgid "Not a security update."
+msgstr ""
+
+#: panels/apex/cc-apex-updates-state.c:312
+#, c-format
+msgid "%s is held back"
+msgstr ""
+
+#: panels/apex/cc-apex-updates-state.c:313
+#, c-format
+msgid ""
+"Apex’s %s changes do not apply to Fedora’s newest build yet, so this update "
+"keeps the last good build."
+msgstr ""
+
+#: panels/apex/cc-apex-updates-state.c:349
+#, no-c-format
+msgid "%b %-d"
+msgstr ""
+
+#: panels/apex/cc-apex-updates-state.c:350
+#, c-format
+msgid "built %s"
+msgstr ""
+
+#: panels/apex/cc-apex-updates-state.c:406
+msgctxt "package change"
+msgid "added"
+msgstr ""
+
+#: panels/apex/cc-apex-updates-state.c:408
+msgctxt "package change"
+msgid "removed"
+msgstr ""
+
+#: panels/apex/cc-apex-updates-state.c:410
+msgctxt "package change"
+msgid "upgraded"
+msgstr ""
+
+#: panels/apex/cc-apex-updates-state.c:412
+msgctxt "package change"
+msgid "downgraded"
+msgstr ""
+
+#: panels/apex/gnome-apex-panel.desktop.in:4
+#: panels/apex/io.github.apex_linux.Apex.Tweaks.desktop.in:4
+msgid "Change the top bar, the dock, windows and effects of the Apex desktop"
+msgstr ""
+
+#: panels/apex/gnome-apex-panel.desktop.in:13
+msgid ""
+"Apex;Tweaks;Top "
+"Bar;Dock;Corner;Radius;Titlebar;Buttons;Transparency;Motion;Animations;Clock;Battery;"
+msgstr ""
+
+#: panels/apex/io.github.apex_linux.Apex.Tweaks.desktop.in:3
+msgid "Apex Tweaks"
+msgstr ""
+
+#: panels/apex/io.github.apex_linux.Apex.Tweaks.desktop.in:12
+msgid "Apex;Tweaks;Settings;Top Bar;Dock;Corner;Radius;"
+msgstr ""
