@@ -18,15 +18,15 @@ usage: tests/ptyxis/panes-test.sh [RPM_DIR]
 Board 33's panes in a real Ptyxis, in a headless gnome-shell at scale 2, as root in a
 throwaway fedora:$APEX_FEDORA container (just ptyxis-panes). RPM_DIR holds the lane's built
 RPMs (_build/ptyxis/out); without it the installed ptyxis is tested. A user '$USER_NAME'
-splits a session right and down from the header's toggles (over AT-SPI) and from
-Ctrl+Alt+R and Ctrl+Alt+D; focuses each pane by a click, the other dimmed ($HEADER_ALPHA
-header, $BODY_ALPHA body); runs board 32's programs (fixture.c, sessions.sh) in the two
-panes, whose statuses come from bash's shell integration, and checks each pane's own:
-the running command, OSC 9;4 progress, exit status and the bell's needs-you, which focus
-clears. The footer's counts show the session at the stronger of its two panes. Close
-Pane, on the second pane's header, ends the split. It needs gnome-shell, mesa-dri-drivers,
-dbus-daemon, python3-dbusmock, python3-gobject, at-spi2-core, gcc, util-linux, jq and the
-Apex fonts; the log and result land in _build/ptyxis/panes/.
+splits a session right and down from the header's toggles (over AT-SPI) and from Ctrl+Alt+R
+and Ctrl+Alt+D; focuses each pane by a click, the other dimmed ($HEADER_ALPHA header up to
+its path, as the path and tag take the foreground for AA; $BODY_ALPHA body); runs board 32's
+programs (fixture.c, sessions.sh) in the two panes, whose statuses come from bash's shell
+integration, and checks each pane's own: the running command, OSC 9;4 progress, exit status
+and the bell's needs-you, which focus clears. The footer's counts show the session at the
+stronger of its two panes. Close Pane, on the second pane's header, ends the split. It needs
+gnome-shell, mesa-dri-drivers, dbus-daemon, python3-dbusmock, python3-gobject, at-spi2-core,
+gcc, util-linux, jq and the Apex fonts; the log and result land in _build/ptyxis/panes/.
 EOF
 }
 
@@ -131,7 +131,7 @@ def pane(terminal):
             labels = [k for k in kids(header) if k.get_role() == R.LABEL]
             return {
                 "title": labels[0].get_name(), "path": labels[1].get_name(), "tag": labels[2].get_name(),
-                "header": box(header), "body": box(terminal),
+                "header": box(header), "pathAt": box(labels[1])[0], "body": box(terminal),
                 "needsYou": any(k.get_role() == R.IMAGE and showing(k) for k in kids(header)),
                 "close": any(k.get_name() == "Close Pane" and showing(k) for k in kids(header)),
                 "focused": terminal.get_state_set().contains(S.FOCUSED), "prompted": prompted(terminal),
