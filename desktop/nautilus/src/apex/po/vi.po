@@ -157,7 +157,7 @@ msgstr "Tùy chọn xem"
 
 #: src/apex/apex-window.c:102
 msgid "_Details Pane"
-msgstr "Ô _chi tiết"
+msgstr "Khung _chi tiết"
 
 #: src/apex/apex-window.c:103
 msgid "_Recent Files on Home"
