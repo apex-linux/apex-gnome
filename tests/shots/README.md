@@ -179,8 +179,8 @@ and `assert.txt` lists the late guard phases.
 
 The crash-guard phases (`guard.sh`): the guard trips on either of two triggers. A failure
 in the shell's first 60 s, while the layer's marker exists, trips at once. A later one
-only counts, in `~/.local/state/apex/shell-guard-trips` (the booted deployment from
-`ostree=`, or `none`, and a count), and the second on the same deployment trips. So an
+only counts, in `~/.local/state/apex/shell-guard-trips` (the booted deployment
+apex-booted-deployment recorded from `ostree=` at boot, or `none`, and a count), and the second on the same deployment trips. So an
 abort 65 s after start runs `apex-shell-safe.service`, which counts 1 and leaves the
 layer on; a second such abort trips (`layer-enabled=false`, the agent's marker, the
 counter gone), and the layer is turned back on for the phases after it.

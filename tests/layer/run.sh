@@ -12,10 +12,12 @@ if [[ -n ${APEX_DESKTOP_SRC:-} ]]; then
     SCHEMA_DIR=$APEX_DESKTOP_SRC/desktop/schemas
     GUARD_UNIT=$APEX_DESKTOP_SRC/desktop/systemd/user/apex-shell-safe.service
     GUARD_SCRIPT=$APEX_DESKTOP_SRC/desktop/systemd/apex-shell-guard.sh
+    BOOTED_SCRIPT=$APEX_DESKTOP_SRC/desktop/systemd/apex-booted-deployment.sh
 else
     SCHEMA_DIR=$HERE/fixtures
     GUARD_UNIT=$HERE/fixtures/apex-shell-safe.service
     GUARD_SCRIPT=$HERE/fixtures/apex-shell-guard.sh
+    BOOTED_SCRIPT=$HERE/fixtures/apex-booted-deployment.sh
 fi
 NO_SKIP=${APEX_LAYER_TESTS_NO_SKIP:-0}
 
@@ -116,11 +118,14 @@ awk '/<key name="reduce-transparency"/ { skip = 1 } !skip { print } skip && /<\/
 glib-compile-schemas --strict "$T/noreduce"
 
 readonly CMDLINE_PLAIN='BOOT_IMAGE=(hd0,gpt2)/boot/ostree/apex/vmlinuz root=UUID=0 rw rhgb quiet'
-# The guard counts late failures per deployment, which it reads through ostree='s boot link.
+# The guard counts late failures per deployment, which apex-booted-deployment reads at boot through
+# ostree='s boot link into the file the guard is given.
 readonly GUARD_DEPLOYMENT=5e1f00.0
+readonly GUARD_BOOTED=$T/run-apex/booted-deployment
 mkdir -p "$T/ostree-root/ostree/deploy/apex/deploy/$GUARD_DEPLOYMENT" "$T/ostree-root/ostree/boot.1/apex/b007"
 ln -s "../../../deploy/apex/deploy/$GUARD_DEPLOYMENT" "$T/ostree-root/ostree/boot.1/apex/b007/0"
 printf '%s ostree=/ostree/boot.1/apex/b007/0\n' "$CMDLINE_PLAIN" >"$T/cmdline.ostree"
+bash "$BOOTED_SCRIPT" "$GUARD_BOOTED" "$T/cmdline.ostree" "$T/ostree-root"
 sandbox=0
 printf '%s\n' "$CMDLINE_PLAIN" >"$T/cmdline.check"
 if command -v bwrap >/dev/null 2>&1 &&
@@ -180,7 +185,7 @@ run_guard_unit_like_systemd() {
             ExecStart) read -ra exec <<<"$value" ;;
         esac
     done < <(grep -E '^[A-Za-z]+=' "$GUARD_UNIT")
-    if guard_env "$1" bash "$GUARD_SCRIPT" "${exec[@]:1}" "$T/cmdline.ostree" "$T/ostree-root"; then
+    if guard_env "$1" bash "$GUARD_SCRIPT" "${exec[@]:1}" "$GUARD_BOOTED"; then
         printf 'acted\n'
     else
         printf 'failed (exit %d)\n' "$?"
@@ -232,8 +237,21 @@ else
     not_ok "default: which counts it on the booted deployment ($(cat "$guard_state/shell-guard-trips" 2>&1))"
 fi
 if [[ $(guard_layer default) == true && ! -e $guard_state/shell-guard-tripped ]]; then ok "default: and does not trip"; else not_ok "default: and does not trip"; fi
+# As bootc staging an update: ostree='s boot.1 entry now names the next deployment, not the booted one.
+mkdir -p "$T/ostree-root/ostree/deploy/apex/deploy/0dd5e7.0"
+ln -sfn "../../../deploy/apex/deploy/0dd5e7.0" "$T/ostree-root/ostree/boot.1/apex/b007/0"
+if [[ $(basename -- "$(realpath -- "$T/ostree-root/ostree/boot.1/apex/b007/0")") == 0dd5e7.0 && $(cat "$GUARD_BOOTED") == "$GUARD_DEPLOYMENT" ]]; then
+    ok "default: the boot entry rewritten after boot, the booted-deployment file still names $GUARD_DEPLOYMENT"
+else
+    not_ok "default: the boot entry rewritten after boot, the booted-deployment file still names $GUARD_DEPLOYMENT ($(cat "$GUARD_BOOTED" 2>&1))"
+fi
 second=$(run_guard_unit_like_systemd default)
 if [[ $second == acted && $(guard_layer default) == false ]]; then ok "default: a 2nd on the same deployment trips: the layer off"; else not_ok "default: a 2nd on the same deployment trips: the layer off ($second)"; fi
+if [[ $second == acted && -e $guard_state/shell-guard-tripped ]]; then
+    ok "default: the 2nd keyed the booted deployment, not the rewritten boot entry's"
+else
+    not_ok "default: the 2nd keyed the booted deployment, not the rewritten boot entry's ($second)"
+fi
 if [[ -e $guard_state/shell-guard-tripped ]]; then ok "default: the 2nd leaves the agent's marker"; else not_ok "default: the 2nd leaves the agent's marker"; fi
 if [[ ! -e $guard_state/shell-guard-trips ]]; then ok "default: and removes the counter"; else not_ok "default: and removes the counter"; fi
 if [[ ! -e $T/default/run/apex-shell-starting ]]; then ok "default: no layer marker is left"; else not_ok "default: no layer marker is left"; fi

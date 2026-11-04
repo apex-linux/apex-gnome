@@ -2,28 +2,19 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
 # Run by apex-shell-safe.service when GNOME Shell's unit fails: turns the layer off on a failure in
-# its first 60 s, or the second later one on a deployment (none without ostree=, as in a container).
+# its first 60 s, or the second later one on the deployment recorded at boot in BOOTED, else none.
 
 set -euo pipefail
 
-(($# >= 2 && $# <= 4)) || { echo "usage: apex-shell-guard MARKER STATE_DIR [CMDLINE [ROOT]]" >&2; exit 2; }
-marker=$1 state=$2 cmdline=${3:-/proc/cmdline} root=${4:-}
+(($# >= 2 && $# <= 3)) || { echo "usage: apex-shell-guard MARKER STATE_DIR [BOOTED]" >&2; exit 2; }
+marker=$1 state=$2 booted=${3:-/run/apex/booted-deployment}
 counter=$state/shell-guard-trips
 schema=io.github.apex_linux.Apex.Desktop
 
-# The booted deployment as ostree names it, <checksum>.<serial>: boot.N paths and their
-# bootcsum repeat across updates that keep the kernel, the deploy directory does not.
 deployment() {
-    local args arg target
-    read -ra args <"$cmdline"
-    for arg in "${args[@]}"; do
-        [[ $arg == ostree=* ]] && target=${arg#ostree=}
-    done
-    if [[ -n ${target:-} ]] && target=$(realpath -e -- "$root$target" 2>/dev/null); then
-        basename -- "$target"
-    else
-        echo none
-    fi
+    local id=
+    [[ -r $booted ]] && read -r id <"$booted"
+    [[ $id =~ ^[0-9a-f]+\.[0-9]+$ ]] && echo "$id" || echo none
 }
 
 trip() {
