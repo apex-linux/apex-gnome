@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
 #include <config.h>
 
-#include <glib/gi18n.h>
+#include "cc-apex-i18n.h"
 #include <math.h>
 #include <string.h>
 

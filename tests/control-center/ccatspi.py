@@ -47,7 +47,7 @@ def find_app():
         desktop = Atspi.get_desktop(0)
         for i in range(desktop.get_child_count()):
             app = desktop.get_child_at_index(i)
-            if app is not None and app.get_name() in ("Settings", "gnome-control-center"):
+            if app is not None and app.get_name() in ("Settings", "Cài đặt", "gnome-control-center"):
                 return app
         time.sleep(0.5)
     sys.exit(f"{sys.argv[0]}: Settings is not on the accessibility bus")
