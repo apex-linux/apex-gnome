@@ -103,6 +103,11 @@ chooser says whether it has a dark version and follows the style
 (`panels/apex/cc-apex-background.c`); a wallpaper the chooser does not list shows neither.
 Stock's chooser draws its thumbnails at a fixed 144 px and 4:3, three to a row at the
 window size the captures use; 0004 makes them 120 px and 16:10, the board's four.
+In `run.sh` the chooser lists `tests/control-center/wallpapers/`: PNG copies of
+gnome-backgrounds' wallpapers in one fixed list (`apex-test.xml`), and `appearance.py` checks
+the chooser shows them in that order. The system's JXLs decode a few pixels differently on
+different CPUs, so board 23's capture no longer covers the JXL decode through glycin; no test
+reads a JXL.
 
 ## Power
 

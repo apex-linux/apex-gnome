@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 """Checks board 23's wallpaper name and note in Appearance through AT-SPI, and that they follow a new wallpaper."""
 
+import re
 import sys
 
 from ccatspi import Atspi, checked, find, find_app, finish, wait_for, walk
@@ -8,9 +9,20 @@ from gi.repository import Gio
 
 NOTE = "{} has a light and a dark version and follows the style."
 # balls.xml's entry; the chooser's tiles have no AT-SPI action, so the settings change as a click would make them.
-BALLS = {"picture-uri": "file:///usr/share/backgrounds/gnome/balls-l.jxl",
-         "picture-uri-dark": "file:///usr/share/backgrounds/gnome/balls-d.jxl",
+BALLS = {"picture-uri": "file:///usr/share/backgrounds/apex-test/balls-l.png",
+         "picture-uri-dark": "file:///usr/share/backgrounds/apex-test/balls-d.png",
          "primary-color": "#3C3635", "secondary-color": "#E4DAC4"}
+# apex-test.xml lists them as the chooser shows them: the default first, the rest by name, and equal names in the
+# order of the one file.
+LIST = "/usr/share/gnome-background-properties/apex-test.xml"
+WALLPAPERS = re.findall(r"<name>([^<]*)</name>", open(LIST, encoding="utf-8").read())
+
+
+def tile_order(app):
+    """The chooser's tile names in reading order, top row first."""
+    tiles = [n for n in walk(app) if n.get_role() == Atspi.Role.TOGGLE_BUTTON and n.get_name() in WALLPAPERS]
+    boxes = [(n.get_extents(Atspi.CoordType.WINDOW), n.get_name()) for n in tiles]
+    return [name for e, name in sorted(boxes, key=lambda b: (b[0].y, b[0].x))]
 
 
 def labels(app):
@@ -33,6 +45,10 @@ def main():
         finish()
     if wait_for("amber: shows “Amber” and its note, its tile checked", lambda: shows(app, "Amber")):
         print("ok amber: the header and note name Amber", flush=True)
+    if wait_for(f"amber: the chooser shows {LIST}'s wallpapers in its order", lambda: tile_order(app) == WALLPAPERS):
+        print(f"ok amber: the chooser shows the {len(WALLPAPERS)} wallpapers of apex-test.xml in its order", flush=True)
+    else:
+        print(f"FAIL amber: the chooser's order is {tile_order(app)}", flush=True)
     settings = Gio.Settings.new("org.gnome.desktop.background")
     for key, value in BALLS.items():
         settings.set_string(key, value)

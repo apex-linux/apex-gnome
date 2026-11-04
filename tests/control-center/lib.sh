@@ -27,6 +27,9 @@ readonly KEYBINDINGS_DIR=/usr/share/gnome-control-center/keybindings
 readonly APEX_KEYBINDINGS=60-apex.xml
 readonly APEX_OVERRIDE=90_apex.gschema.override
 readonly MANIFEST=/usr/share/apex/manifest.json
+readonly WALLPAPERS=$CC_TESTS/wallpapers
+readonly WALLPAPER_DIR=/usr/share/backgrounds/apex-test
+readonly WALLPAPER_LISTS=/usr/share/gnome-background-properties
 readonly IMAGE_VERSION=45.20261008.131
 # apex-desktop's values (schemas/90_apex.gschema.override).
 readonly APEX_SETTINGS="org.gnome.desktop.interface font-name 'Adwaita Sans 10.125'
@@ -89,6 +92,15 @@ headless_apex_desktop() {
         install -m 644 "$desktop/desktop/schemas/$APEX_OVERRIDE" "$APEX_SCHEMA_DIR/"
     fi
     glib-compile-schemas "$APEX_SCHEMA_DIR" || die "glib-compile-schemas failed"
+}
+
+# headless_wallpapers: the chooser lists apex-test.xml's PNG copies only, in its order. The system's JXLs decode a few
+# pixels differently on different CPUs (libjxl's SIMD), and their lists load in no set order.
+headless_wallpapers() {
+    install -d "$WALLPAPER_DIR"
+    install -m 644 "$WALLPAPERS"/*.png "$WALLPAPER_DIR/"
+    rm -f -- "$WALLPAPER_LISTS"/*.xml
+    install -m 644 "$WALLPAPERS/apex-test.xml" "$WALLPAPER_LISTS/"
 }
 
 # The booted image's manifest, as apexctl build manifest writes it; the header reads only its version.
