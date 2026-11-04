@@ -229,7 +229,7 @@ export class Popup {
         }
         this._results.visible = this._rows.length > 0;
         this._empty.visible = text !== '' && this._rows.length === 0;
-        this._emptyLabel.text = _('No results for “%s”').format(text);
+        this._emptyLabel.text = _('No results for “%s”').replace('%s', () => text);
         const kept = this._rows.findIndex(({row}) => row.key === selectedKey);
         if (kept >= 0)
             this._select(kept);
@@ -317,6 +317,6 @@ export class Popup {
             return;
         }
         St.Clipboard.get_default().set_text(St.ClipboardType.CLIPBOARD, row.copyText);
-        Toast.show(_('Copied %s').format(row.copyText));
+        Toast.show(_('Copied %s').replace('%s', () => row.copyText));
     }
 }

@@ -111,6 +111,9 @@ rpms=("$1"/gnome-shell-[0-9]*.x86_64.rpm "$1"/gnome-shell-common-[0-9]*.noarch.r
 ((${#rpms[@]} == 2)) || die "expected the gnome-shell and gnome-shell-common RPMs in $1"
 dnf5 -y -q --setopt=install_weak_deps=False --repo=fedora --repo=updates install "${rpms[@]}" ||
     die "cannot install ${rpms[*]}"
+[[ -e /usr/share/locale/vi/LC_MESSAGES/apex-shell.mo ]] ||
+    dnf5 -y -q --setopt=install_weak_deps=False --repo=fedora --repo=updates reinstall "${rpms[@]}" ||
+    die "cannot reinstall ${rpms[*]} with their translations"
 rpm -q gnome-shell gnome-shell-common >"$out/gnome-shell.txt"
 [[ -e /usr/share/locale/vi/LC_MESSAGES/apex-shell.mo ]] || die "the gnome-shell RPMs install no vi apex-shell.mo"
 locale -a 2>/dev/null | grep -qx vi_VN.utf8 || die "the vi_VN.UTF-8 locale is missing (glibc-langpack-vi)"
