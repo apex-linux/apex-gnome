@@ -116,7 +116,7 @@ dnf5 -y -q --setopt=install_weak_deps=False --repo=fedora --repo=updates install
     die "cannot reinstall ${rpms[*]} with their translations"
 rpm -q gnome-shell gnome-shell-common >"$out/gnome-shell.txt"
 [[ -e /usr/share/locale/vi/LC_MESSAGES/apex-shell.mo ]] || die "the gnome-shell RPMs install no vi apex-shell.mo"
-locale -a 2>/dev/null | grep -qx vi_VN.utf8 || die "the vi_VN.UTF-8 locale is missing (glibc-langpack-vi)"
+[[ $(LC_ALL=vi_VN.UTF-8 locale charmap 2>/dev/null) == UTF-8 ]] || die "the vi_VN.UTF-8 locale is missing (glibc-langpack-vi)"
 grep -q '\.apex' "$out/gnome-shell.txt" ||
     die "the installed gnome-shell is not an Apex build: $(rpm -q gnome-shell)"
 # What apex-desktop ships for the layer: its schema (the layer tests' fixture).
