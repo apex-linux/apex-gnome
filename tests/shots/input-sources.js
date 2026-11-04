@@ -20,6 +20,22 @@ const POPUP_WAIT_MS = 2000;
 const HELD_MS = 500;
 const TYPED = [Clutter.KEY_V, Clutter.KEY_i, Clutter.KEY_e, Clutter.KEY_e, Clutter.KEY_t, Clutter.KEY_j];
 
+// The shell sends IBus FocusIn without waiting for it, and keys typed before IBus handles it pass
+// through uncomposed. IBus answers a context's calls in order, so a reply sent after it follows it.
+async function inputMethodFocused(text) {
+    const im = Main.inputMethod;
+    if (!text || !await until(() => Main.uiGroup.get_stage().key_focus === text && im.currentFocus && im._context, IBUS_WAIT_MS))
+        return false;
+    const name = await new Promise(resolve => im._context.get_engine_async(-1, null, (context, result) => {
+        try {
+            resolve(context.get_engine_async_finish(result)?.get_name() ?? null);
+        } catch {
+            resolve(null);
+        }
+    }));
+    return name === TELEX;
+}
+
 export async function inputSourcesReport({settle, chord, spotlight}) {
     const ibus = getIBusManager();
     const sources = getInputSourceManager();
@@ -100,9 +116,13 @@ export async function inputSourcesReport({settle, chord, spotlight}) {
     await settled(TELEX);
     popup?.open();
     await settle();
-    for (const keyval of TYPED)
-        // eslint-disable-next-line no-await-in-loop
-        await chord(keyboard, [], keyval);
+    report.imFocused = await inputMethodFocused(popup?.panel.get_children()[0].get_children()[1].clutter_text);
+    // Telex composes across keys, and chord's input barrier taps a key of its own, which IBus would take
+    // between them: only the space, which commits, goes through it.
+    for (const keyval of TYPED) {
+        keyboard.notify_keyval(GLib.get_monotonic_time(), keyval, Clutter.KeyState.PRESSED);
+        keyboard.notify_keyval(GLib.get_monotonic_time(), keyval, Clutter.KeyState.RELEASED);
+    }
     await chord(keyboard, [], Clutter.KEY_space);
     report.typed = {engine: engine(), text: popup?.panel.get_children()[0].get_children()[1].get_text() ?? null};
     popup?.close();
