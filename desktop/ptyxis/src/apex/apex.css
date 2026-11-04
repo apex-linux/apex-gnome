@@ -28,22 +28,19 @@ window.apex.apex-dark {
 }
 
 /* In high contrast the surfaces, the dim and the borders are libadwaita's own. */
-@media (prefers-contrast: more) {
-  window.apex,
-  window.apex.apex-dark {
-    --apex-side: var(--sidebar-bg-color);
-    --apex-head: var(--headerbar-bg-color);
-    --apex-fg: var(--window-fg-color);
-    --apex-dim: color-mix(in srgb, var(--window-fg-color) var(--dim-opacity), transparent);
-    --apex-border: color-mix(in srgb, var(--window-fg-color) var(--border-opacity), transparent);
-    --apex-btn: color-mix(in srgb, var(--window-fg-color) 10%, transparent);
-    --apex-btn-hover: color-mix(in srgb, var(--window-fg-color) 15%, transparent);
-    --apex-selected: color-mix(in srgb, var(--window-fg-color) 10%, transparent);
-  }
+window.apex.apex-hc {
+  --apex-side: var(--sidebar-bg-color);
+  --apex-head: var(--headerbar-bg-color);
+  --apex-fg: var(--window-fg-color);
+  --apex-dim: color-mix(in srgb, var(--window-fg-color) var(--dim-opacity), transparent);
+  --apex-border: color-mix(in srgb, var(--window-fg-color) var(--border-opacity), transparent);
+  --apex-btn: color-mix(in srgb, var(--window-fg-color) 10%, transparent);
+  --apex-btn-hover: color-mix(in srgb, var(--window-fg-color) 15%, transparent);
+  --apex-selected: color-mix(in srgb, var(--window-fg-color) 10%, transparent);
+}
 
-  .apex-sessions > row.apex-session:selected {
-    box-shadow: inset 0 0 0 1px var(--apex-border);
-  }
+window.apex.apex-hc .apex-sessions > row.apex-session:selected {
+  box-shadow: inset 0 0 0 1px var(--apex-border);
 }
 
 overlay-split-view > .sidebar-pane {
