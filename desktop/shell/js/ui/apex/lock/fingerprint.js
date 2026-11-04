@@ -2,6 +2,8 @@
 //
 // Board 20's fingerprint states in the hint's line, driven by GDM's gdm-fingerprint conversation.
 
+import {_} from '../i18n.js';
+
 const FINGERPRINT_SERVICE = 'gdm-fingerprint';
 // authPrompt.js's setMessage() gives an error this class, before this module hears the message.
 export const ERROR_CLASS = 'login-dialog-message-warning';

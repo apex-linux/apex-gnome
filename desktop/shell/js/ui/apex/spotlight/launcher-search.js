@@ -10,10 +10,11 @@ import St from 'gi://St';
 import * as AppDisplay from '../../appDisplay.js';
 import * as IconGrid from '../../iconGrid.js';
 import * as Main from '../../main.js';
+import {_} from '../i18n.js';
 
-const HINT = 'Search apps';
-const NO_RESULTS = 'No Results';
-const NO_RESULTS_HINT = 'The launcher searches apps only. Super+Space searches everything.';
+const HINT = _('Search apps');
+const NO_RESULTS = _('No Results');
+const NO_RESULTS_HINT = _('The launcher searches apps only. Super+Space searches everything.');
 const GRID_MODES = [{rows: 4, columns: 7}];
 const ICON_SIZE = 88;
 const MAX_RESULTS = GRID_MODES[0].rows * GRID_MODES[0].columns;

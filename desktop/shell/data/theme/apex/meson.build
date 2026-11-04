@@ -28,3 +28,4 @@ theme_sources += files(
   '_indicators.scss',
   '_apex-structure.scss',
 )
+subdir('po')

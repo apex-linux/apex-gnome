@@ -147,7 +147,7 @@ jobs:
         run: >-
           dnf5 -y -q --setopt=install_weak_deps=False --repo=fedora --repo=updates install
           mesa-dri-drivers dbus-daemon python3-dbusmock python3-gobject gcc accountsservice polkit librsvg2-tools
-          openssl git-core adwaita-sans-fonts jetbrains-mono-fonts-all procps-ng jq
+          openssl git-core adwaita-sans-fonts jetbrains-mono-fonts-all procps-ng jq glibc-langpack-vi
 
       - name: tests/shots/signoff.sh --goldens
         run: |
@@ -190,7 +190,7 @@ jobs:
             shoot: tests/control-center/run.sh
             packages: >-
               gnome-shell mesa-dri-drivers dbus-daemon python3-dbusmock python3-gobject at-spi2-core gcc util-linux
-              adwaita-sans-fonts python3-dbus systemd gnome-backgrounds umockdev
+              adwaita-sans-fonts python3-dbus systemd gnome-backgrounds umockdev glibc-langpack-vi
           - app: nautilus
             key: files
             pkg: nautilus

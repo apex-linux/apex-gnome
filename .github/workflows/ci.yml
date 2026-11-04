@@ -143,6 +143,27 @@ jobs:
       - name: lint/theme.sh
         run: lint/theme.sh
 
+  i18n:
+    name: lint/i18n.sh (Fedora 45)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    container:
+      image: registry.fedoraproject.org/fedora:45@sha256:1e13e11f63e147a40a935c9046c79d53a30b861a3cf05ebb023bb53c562382cb
+    env:
+      APEX_LINT_NO_SKIP: "1"
+    steps:
+      - name: gettext
+        run: dnf5 -y --setopt=install_weak_deps=False --repo=fedora --repo=updates install gettext bash coreutils grep sed
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: lint/i18n.sh
+        run: lint/i18n.sh
+
   ptyxis-lane:
     # The ptyxis recipe through apex-lane's own container half, built from a pinned
     # apex-image; the builder VM adds only the signing and the store.
@@ -309,7 +330,7 @@ jobs:
     # a pinned apex-image; the builder VM adds only the signing and the store.
     name: tests/lib/lane.sh gnome-control-center (Fedora 45, gnome-control-center rebuilt)
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    timeout-minutes: 75
     permissions:
       contents: read
     container:
@@ -366,10 +387,10 @@ jobs:
           retention-days: 3
 
       - name: tests/control-center/run.sh on the built RPMs
-        timeout-minutes: 25
+        timeout-minutes: 40
         run: |
           dnf5 -y -q --setopt=install_weak_deps=False --repo=fedora --repo=updates install \
-            gnome-shell mesa-dri-drivers dbus-daemon python3-dbusmock python3-gobject at-spi2-core gcc util-linux adwaita-sans-fonts jetbrains-mono-fonts-all python3-dbus systemd gnome-backgrounds umockdev
+            gnome-shell mesa-dri-drivers dbus-daemon python3-dbusmock python3-gobject at-spi2-core gcc util-linux adwaita-sans-fonts jetbrains-mono-fonts-all python3-dbus systemd gnome-backgrounds umockdev glibc-langpack-vi
           tests/control-center/run.sh _build/gnome-control-center/out
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -520,7 +541,7 @@ jobs:
         timeout-minutes: 30
         run: |
           dnf5 -y -q --setopt=install_weak_deps=False --repo=fedora --repo=updates install \
-            mesa-dri-drivers dbus-daemon python3-dbusmock python3-gobject gcc accountsservice polkit librsvg2-tools openssl git-core adwaita-sans-fonts jetbrains-mono-fonts-all
+            mesa-dri-drivers dbus-daemon python3-dbusmock python3-gobject gcc accountsservice polkit librsvg2-tools openssl git-core adwaita-sans-fonts jetbrains-mono-fonts-all glibc-langpack-vi
           tests/shell/shoot.sh _build/gnome-shell/out
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

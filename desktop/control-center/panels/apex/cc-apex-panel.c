@@ -1,6 +1,8 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
 #include <config.h>
 
+#include "cc-apex-i18n.h"
+
 #include <adwaita.h>
 
 #include "cc-apex-header.h"
@@ -173,6 +175,7 @@ cc_apex_panel_class_init (CcApexPanelClass *klass)
 
     g_type_ensure (CC_TYPE_APEX_HEADER);
 
+    cc_apex_i18n_init ();
     gtk_widget_class_set_template_from_resource (widget_class, "/org/gnome/Settings/apex/cc-apex-panel.ui");
 
     gtk_widget_class_bind_template_child (widget_class, CcApexPanel, stack);

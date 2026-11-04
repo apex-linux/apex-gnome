@@ -345,11 +345,22 @@ their button's origin, the GPU pill 2 px off in its list row); each is pinned ex
 list in `bounds.py`, as upstream. Each case names what its page must show (`rows`, `grid`,
 `pills`, `buttons`, `toggles`, `gpu`), and one that is missing fails.
 
-Last, Large Text (`text-scaling-factor` 1.25) on board 11 (`large-light`) and board 18
-(`updates-large-light`): `apex.css` sizes its text in pt, which GTK scales with it, where a px
-size stays put, and `fonts.py` checks that each label it sizes (the titles, the version lines,
-the hero's subtitle and What's New's grid) is drawn at its rule's size times 1.25. These come
-after every other case, as a setting stays from one case to the next.
+`a11y.py` measures accessibility on boards 11 and 18 as they are, and on boards 11, 18, 23
+and 24 in high contrast (`hc-*`) and at Large Text (`large-*`, `text-scaling-factor` 1.25),
+each light and dark.
+It reads each value off frames it screenshots through `org.gnome.Shell` (so these cases run
+with `APEX_UNSAFE=1`) into the shots' `a11y/`, and lists every value in `CASE-a11y.json`:
+text at 4.5:1 against what is drawn behind it, board 11's sidebar tile glyphs at 3:1 against
+their tiles, each label's ink inside its box at Large Text, Tab from the sidebar through every
+Apex Desktop row in order, Tab to every button of board 18's "ready" state and to
+"available"'s Download, and each focus indicator at 3:1 by `tests/shots/a11y.js`'s rule,
+ported in `contrast.py` (`selftest.sh` keeps the two the same). Every value must meet its
+threshold, with no exceptions: `apex.css` lifts libadwaita's dimmed text to 75% outside high
+contrast, draws every focus ring in the full accent colour (a row's 2 px wide, inside its
+list's border line), and mixes suggested buttons' accent with black so white text on them holds
+4.5:1 whatever the accent. At Large Text `fonts.py` also checks that each label
+`apex.css` sizes in pt is drawn at its rule's size times 1.25, where a px size would stay
+put. These cases come after every other, as a setting stays from one case to the next.
 
 In these captures the sidebar has no separator under Apex Desktop: the fixtures offer no
 Wi-Fi device, so the Wi-Fi row, the one after the separator in `panel_order[]`, is not

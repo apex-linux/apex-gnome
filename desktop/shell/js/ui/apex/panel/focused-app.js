@@ -10,11 +10,12 @@ import St from 'gi://St';
 
 import * as Main from '../../main.js';
 import * as PanelMenu from '../../panelMenu.js';
+import {_} from '../i18n.js';
 
 const SCHEMA_ID = 'io.github.apex_linux.Apex.Desktop';
 const SHOW_KEY = 'show-focused-app-name';
 const ROLE = 'apex-focused-app';
-const NO_FOCUS_NAME = 'Desktop';
+const NO_FOCUS_NAME = _('Desktop');
 const AFTER_ACTIVITIES = 1;
 
 let _settings = null;

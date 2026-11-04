@@ -161,8 +161,15 @@ async function probe() {
     const click = GLib.getenv('APEX_CLICK');
     if (click)
         result.clicked = await clickLocated(window, click);
-    if (command)
-        result.check = result.clicked !== false && await check(command);
+    // The accessibility checker screenshots and types through org.gnome.Shell, which only unsafe mode lets it call.
+    if (GLib.getenv('APEX_UNSAFE'))
+        global.context.unsafe_mode = true;
+    if (command) {
+        result.check = result.clicked !== false;
+        // Several checkers, ";" apart, run in turn and each must pass.
+        for (const one of command.split(';').map(c => c.trim()).filter(c => c))
+            result.check = await check(one) && result.check;
+    }
     const r = window.get_frame_rect();
     result.frame = [r.x, r.y, r.width, r.height];
     console.log(`APEXCC ${JSON.stringify(result)}`);

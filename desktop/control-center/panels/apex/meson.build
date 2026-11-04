@@ -23,12 +23,14 @@ apex_update1 = gnome.gdbus_codegen(
 
 panels_list += 'apex'
 
+subdir('po')
+
 foreach desktop : ['gnome-apex-panel.desktop', 'io.github.apex_linux.Apex.Tweaks.desktop']
   i18n.merge_file(
     type: 'desktop',
     input: desktop + '.in',
     output: desktop,
-    po_dir: po_dir,
+    po_dir: meson.current_source_dir() / 'po',
     install: true,
     install_dir: control_center_desktopdir,
   )
@@ -39,6 +41,7 @@ panels_libs += static_library(
   sources: files(
     'cc-apex-background.c',
     'cc-apex-header.c',
+    'cc-apex-i18n.c',
     'cc-apex-panel.c',
     'cc-apex-power-state.c',
     'cc-apex-power.c',
@@ -49,7 +52,11 @@ panels_libs += static_library(
   ) + apex_update1,
   include_directories: [top_inc, common_inc],
   dependencies: common_deps + [gudev_dep, json_glib_dep, m_dep],
-  c_args: ['-DG_LOG_DOMAIN="cc-apex-panel"', '-DPANEL_ID="apex"'],
+  c_args: [
+    '-DG_LOG_DOMAIN="cc-apex-panel"',
+    '-DPANEL_ID="apex"',
+    '-DGNOMELOCALEDIR="@0@"'.format(control_center_localedir),
+  ],
 )
 
 install_data(
