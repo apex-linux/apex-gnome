@@ -237,6 +237,10 @@ apex-panes paned > separator {
   opacity: 0.7;
 }
 
+window.apex.apex-hc .apex-pane.apex-dimmed > .apex-pane-header {
+  opacity: var(--dim-opacity);
+}
+
 .apex-pane.apex-dimmed > .apex-pane-header .apex-path,
 .apex-pane.apex-dimmed > .apex-pane-header .apex-tag {
   color: var(--apex-fg);
