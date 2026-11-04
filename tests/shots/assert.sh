@@ -1994,12 +1994,9 @@ inactive_dot() {
 # at 3:1, and a pill Apex fills against the bar at 3:1; upstream's high-contrast sheet fills the button instead.
 readonly A11Y_PILL_PARTS=(input:text recording:text sharing:icon privacy:icon overflow:text indicators:icon recording:edge sharing:edge
     privacy:edge)
-readonly A11Y_PILL_GAP="the owner's decision on board 39's pill fills over #013b88 (2026-10-31)"
 readonly A11Y_PILL_HC_GAP="upstream HC sheet: the screen-sharing glyph, white on its #ff7800 fill (2.54:1)"
 # Each part under WCAG AA today, at the report's own rounding: a lower one fails.
-declare -Ar A11Y_PILL_TODAY=([default-solid:recording:edge]=2.02 [default-solid:sharing:edge]=1.62 [default-solid:privacy:edge]=1.62
-    [dark-style-solid:recording:edge]=2.13 [dark-style-solid:sharing:edge]=2.65 [dark-style-solid:privacy:edge]=2.65
-    [high-contrast:sharing:icon]=2.54 [high-contrast-solid:sharing:icon]=2.54)
+declare -Ar A11Y_PILL_TODAY=([high-contrast:sharing:icon]=2.54 [high-contrast-solid:sharing:icon]=2.54)
 
 # A pill part's worst ratio in an APEXG2-A11Y report, or nothing when it was not measured.
 pill_ratio() {
@@ -2020,10 +2017,9 @@ pill_verdict() {
 
 # Each pill part at its threshold, or, pinned, at least today's ratio and still a gap.
 bar_pills() {
-    local label=$1 report=$2 p worst threshold today desc gap=$A11Y_PILL_GAP
+    local label=$1 report=$2 p worst threshold today desc gap=$A11Y_PILL_HC_GAP
     local -A part_desc=([text]="text over what is drawn behind it" [icon]="glyphs over its fill" [edge]="fill against the bar beside it")
     local -A part_noun=([text]=text [icon]=glyphs [edge]=fill)
-    [[ $label == high-contrast* ]] && gap=$A11Y_PILL_HC_GAP
     for p in "${A11Y_PILL_PARTS[@]}"; do
         [[ $label == high-contrast* && $p == *:edge ]] && continue
         threshold=$A11Y_ICON_RATIO
