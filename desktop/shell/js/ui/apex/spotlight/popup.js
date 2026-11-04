@@ -12,8 +12,9 @@ import * as Glass from '../glass/registry.js';
 import * as Main from '../../main.js';
 import * as Toast from './toast.js';
 import {Search, termsOf} from './search.js';
+import {_} from '../i18n.js';
 
-const HINT = 'Search apps, settings and files, or type a sum';
+const HINT = _('Search apps, settings and files, or type a sum');
 const SEARCH_GLYPH = 'system-search-symbolic';
 const CLEAR_GLYPH = 'edit-clear-symbolic';
 const ICON_SIZE = 32;
@@ -142,7 +143,7 @@ export class Popup {
         this._entry = new St.Entry({
             style_class: 'apex-spotlight-entry',
             hint_text: HINT,
-            accessible_name: 'Search',
+            accessible_name: _('Search'),
             can_focus: true,
             x_expand: true,
             y_align: Clutter.ActorAlign.CENTER,
@@ -154,7 +155,7 @@ export class Popup {
         field.add_child(this._entry);
         this._clear = new St.Button({
             style_class: 'apex-spotlight-clear',
-            accessible_name: 'Clear',
+            accessible_name: _('Clear'),
             child: new St.Icon({icon_name: CLEAR_GLYPH}),
             visible: false,
             y_align: Clutter.ActorAlign.CENTER,
@@ -217,7 +218,7 @@ export class Popup {
             const header = new St.Bin({
                 style_class: 'apex-spotlight-header',
                 child: new St.Label({
-                    text: section.name.toUpperCase(),
+                    text: section.label.toUpperCase(),
                     x_align: Clutter.ActorAlign.START,
                     y_align: Clutter.ActorAlign.END,
                 }),
@@ -228,7 +229,7 @@ export class Popup {
         }
         this._results.visible = this._rows.length > 0;
         this._empty.visible = text !== '' && this._rows.length === 0;
-        this._emptyLabel.text = `No results for “${text}”`;
+        this._emptyLabel.text = _('No results for “%s”').format(text);
         const kept = this._rows.findIndex(({row}) => row.key === selectedKey);
         if (kept >= 0)
             this._select(kept);
@@ -274,7 +275,7 @@ export class Popup {
         text.add_child(new St.Label({style_class: 'apex-spotlight-subtitle', text: row.subtitle}));
         actor.add_child(text);
         const action = new St.BoxLayout({style_class: 'apex-spotlight-action', visible: false, y_align: Clutter.ActorAlign.CENTER});
-        action.add_child(new St.Label({text: row.copyText === null ? 'Open' : 'Copy', y_align: Clutter.ActorAlign.CENTER}));
+        action.add_child(new St.Label({text: row.copyText === null ? _('Open') : _('Copy'), y_align: Clutter.ActorAlign.CENTER}));
         action.add_child(new St.Bin({
             style_class: 'apex-spotlight-chip',
             y_align: Clutter.ActorAlign.CENTER,
@@ -316,6 +317,6 @@ export class Popup {
             return;
         }
         St.Clipboard.get_default().set_text(St.ClipboardType.CLIPBOARD, row.copyText);
-        Toast.show(`Copied ${row.copyText}`);
+        Toast.show(_('Copied %s').format(row.copyText));
     }
 }

@@ -8,10 +8,11 @@ import St from 'gi://St';
 
 import * as PopupMenu from '../../popupMenu.js';
 import * as Update from './update.js';
+import {_} from '../i18n.js';
 
 export const CARD_STYLE_CLASS = 'apex-update-card';
-export const TITLE = 'Start the new version next time';
-export const GENERIC_ERROR = 'The update could not be prepared. Software Updates in Settings has the details.';
+export const TITLE = _('Start the new version next time');
+export const GENERIC_ERROR = _('The update could not be prepared. Software Updates in Settings has the details.');
 const ICON_NAME = 'system-software-update';
 
 export const UpdateCard = GObject.registerClass({

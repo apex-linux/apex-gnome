@@ -3,10 +3,11 @@
 import * as Hooks from '../hooks.js';
 import * as Main from '../../main.js';
 import * as Submenu from './submenu.js';
+import {_} from '../i18n.js';
 
 export const LIT_STYLE_CLASS = 'apex-lit';
-export const ON = 'On';
-export const OFF = 'Off';
+export const ON = _('On');
+export const OFF = _('Off');
 
 let _enabled = false;
 let _applied = false;

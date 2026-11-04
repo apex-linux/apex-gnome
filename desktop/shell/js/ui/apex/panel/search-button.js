@@ -9,9 +9,10 @@ import St from 'gi://St';
 import * as Main from '../../main.js';
 import * as PanelMenu from '../../panelMenu.js';
 import {toggleSpotlight} from '../spotlight/feature.js';
+import {_} from '../i18n.js';
 
 const ROLE = 'apex-search';
-const NAME = 'Search (Super+Space)';
+const NAME = _('Search (Super+Space)');
 const ICON_NAME = 'system-search-symbolic';
 
 let _button = null;

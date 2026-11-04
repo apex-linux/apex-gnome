@@ -6,6 +6,7 @@ import Clutter from 'gi://Clutter';
 import Gio from 'gi://Gio';
 import Polkit from 'gi://Polkit';
 import St from 'gi://St';
+import {_} from '../i18n.js';
 
 Gio._promisify(Polkit.Authority, 'get_async', 'get_finish');
 Gio._promisify(Polkit.Authority.prototype, 'enumerate_actions', 'enumerate_actions_finish');

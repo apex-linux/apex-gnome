@@ -1,0 +1,18 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
+js/ui/apex/dock/trash.js
+js/ui/apex/end-session/card.js
+js/ui/apex/end-session/feature.js
+js/ui/apex/lock/fingerprint.js
+js/ui/apex/lock/question.js
+js/ui/apex/notifications/feature.js
+js/ui/apex/overview/workspaces.js
+js/ui/apex/panel/focused-app.js
+js/ui/apex/panel/screen-pills.js
+js/ui/apex/panel/search-button.js
+js/ui/apex/panel/search-hint.js
+js/ui/apex/polkit/details.js
+js/ui/apex/polkit/header.js
+js/ui/apex/quick-settings/feature.js
+js/ui/apex/spotlight/launcher-search.js
+js/ui/apex/spotlight/popup.js
+js/ui/apex/spotlight/search.js

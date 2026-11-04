@@ -11,7 +11,8 @@ stock and safe mode keep upstream's lock, and that the greeter runs no Apex JS a
 authentication dialog shows, from a stubbed polkit session that is never answered or that refuses an answer, and that
 Esc dismisses it; and board 34's
 date menu: flat cards headed "app · time" with the app's icon, Clear on the right, Do Not Disturb;
-and what the end-session dialog's update card does with update1-mock.py's Apply.
+what the end-session dialog's update card does with update1-mock.py's Apply; and the layer's
+Vietnamese under vi_VN.UTF-8.
 Prints one line per assertion and exits 1 when one fails.
 """
 
@@ -1131,6 +1132,19 @@ def check_bar_live(shots, case, stock_case):
         check(f"{case}: {step}: the bar's capture is the same as before's", capture(step) == first, f[f"capture.{step}"])
 
 
+VI_EMPTY = "Không có cửa sổ nào đang mở"
+
+
+def check_i18n(shots, case):
+    log = read(shots, f"{case}.log")
+    f = facts(log).get("i18n", {})
+    empty = f.get("empty", [])
+    check(f"{case}: the shell ran under vi_VN.UTF-8", f.get("lang") == "vi_VN.UTF-8", str(f.get("lang")))
+    check(f"{case}: the overview's empty workspace says {VI_EMPTY!r}", bool(empty) and all(t == VI_EMPTY for t in empty),
+          json.dumps(empty, ensure_ascii=False))
+    check(f"{case}: no JS error", "JS ERROR" not in log and "APEXLOCK-ERROR" not in log)
+
+
 def main():
     if len(sys.argv) != 2:
         print(__doc__, file=sys.stderr)
@@ -1173,6 +1187,7 @@ def main():
     check_bar_live(shots, "bar-live", "bar-lock-cycle-safe")
     for case in END_SESSION_CASES:
         check_end_session(shots, case)
+    check_i18n(shots, "i18n-vi")
     return 1 if failed else 0
 
 
