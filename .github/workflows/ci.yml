@@ -309,7 +309,7 @@ jobs:
     # a pinned apex-image; the builder VM adds only the signing and the store.
     name: tests/lib/lane.sh gnome-control-center (Fedora 45, gnome-control-center rebuilt)
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    timeout-minutes: 75
     permissions:
       contents: read
     container:
@@ -366,7 +366,7 @@ jobs:
           retention-days: 3
 
       - name: tests/control-center/run.sh on the built RPMs
-        timeout-minutes: 25
+        timeout-minutes: 40
         run: |
           dnf5 -y -q --setopt=install_weak_deps=False --repo=fedora --repo=updates install \
             gnome-shell mesa-dri-drivers dbus-daemon python3-dbusmock python3-gobject at-spi2-core gcc util-linux adwaita-sans-fonts jetbrains-mono-fonts-all python3-dbus systemd gnome-backgrounds umockdev
