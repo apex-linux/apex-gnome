@@ -654,8 +654,7 @@ of the corner check is 4 CSS px (4 device px at scale 1), the tile ring's allowa
 px at both (8-bit rounding, not the grid), and the opacity bound 1 + 64/255 holds per channel at
 any scale. Measured at scale 1 against scale 2: inside 2.89/255 against 3.2, along the edges
 10.53 against 11.67, on average 0.77 against 0.75; screenshots of the corners exact (0) against
-1/255; the opacity blend 1.208 steps at both. The dock past the stage edge, the known gap,
-reads 5033 px off at scale 1.
+1/255; the opacity blend 1.208 steps at both.
 
 `glass-views` puts the same glass (σ 24, saturation 1.6, corners 18, `fine`) on two monitors,
 two stage views with a framebuffer each, and reads each view's part of a box from its own.
@@ -724,13 +723,13 @@ written to the 8-bit frame (½ step); and the reference reads c from B, which ho
 
 A glass that moves blurs where it is. Each move is set by property, not by an animation's
 clock: the dock's box slid half its height up, and Quick Settings' BoxPointer halfway open
-(scale 0.98 from its top edge, half the arrow's rise up). Over the box the glass left and the
+(scale 0.98 from its top edge, half the arrow's rise up), and the dock halfway down
+intellihide's slide, past the screen's bottom edge. Over the box the glass left and the
 box it took, on the tile pattern, the frame the move itself draws equals a full redraw of the
 same state by a fresh glass. The surface is unregistered and registered again first, because a
 plain full redraw would draw a kept result again, and so would pass a blur that never moves.
-The dock halfway down intellihide's slide reaches past the screen's bottom edge, and there its
-blur reads pixels no one painted (the last frame's for the live glass, a fresh buffer's for the
-new one): a known gap until 0003 clamps its blit to the stage view.
+Past the edge, 0003 blits only the part of the box the view holds and clears the rest, so the
+blur reads no pixels an earlier frame left there (stock leaves them, 19672 of 62080 px off).
 
 `shadows_under_glass` checks the `shadows` feature against the glass in the same case, light
 and dark: `glass.js` lays the tile grid under Quick Settings, a popup menu and a dialog and
