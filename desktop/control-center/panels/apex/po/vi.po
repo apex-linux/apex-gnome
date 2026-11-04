@@ -207,12 +207,12 @@ msgstr "Tắt"
 #: panels/apex/cc-apex-power-state.c:32
 msgctxt "graphics card"
 msgid "Waking"
-msgstr "Đang khởi động"
+msgstr "Đang bật nguồn"
 
 #: panels/apex/cc-apex-power-state.c:34
 msgctxt "graphics card"
 msgid "Powering Down"
-msgstr "Đang tắt"
+msgstr "Đang tắt nguồn"
 
 #: panels/apex/cc-apex-power-state.c:38
 msgctxt "graphics card"
@@ -453,7 +453,7 @@ msgstr "Phiên bản mới"
 
 #: panels/apex/cc-apex-updates-state.c:52
 msgid "Apex Is Up to Date"
-msgstr "Apex đã được cập nhật"
+msgstr "Apex đã là phiên bản mới nhất"
 
 #: panels/apex/cc-apex-updates-state.c:54
 #, c-format
