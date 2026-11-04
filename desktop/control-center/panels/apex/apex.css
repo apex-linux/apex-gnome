@@ -1,6 +1,28 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
 /*! apex-control-center */
 
+/* WCAG 2 (owner, 2026-11-04): text at 4.5:1 and focus indicators at 3:1 on every Settings board. */
+@media (prefers-contrast: no-preference) {
+  :root {
+    --dim-opacity: 75%;
+  }
+}
+
+*:focus:focus-visible {
+  outline-color: var(--accent-color);
+}
+
+/* A row's ring 2 px wide and inside its list's border line, which high contrast draws: so it changes the row's fill. */
+row:focus:focus-visible {
+  outline-width: 2px;
+  outline-offset: -3px;
+}
+
+/* White text on the bare accent is under 4.5:1 for most accents; mixed with black it holds for each. */
+button.suggested-action {
+  background-color: color-mix(in srgb, var(--accent-bg-color) 75%, black);
+}
+
 apex-tile .frame {
   border-radius: 20px;
   background-color: var(--view-bg-color);
@@ -95,7 +117,7 @@ row.apex-changes-row {
 
 .apex-changes .apex-change-kind {
   min-width: 80px;
-  color: alpha(currentColor, 0.62);
+  color: alpha(currentColor, 0.75);
 }
 
 .apex-changes .apex-change-name,
@@ -109,7 +131,7 @@ row.apex-changes-row {
 }
 
 .apex-changes .apex-change-versions {
-  color: alpha(currentColor, 0.62);
+  color: alpha(currentColor, 0.75);
 }
 
 /* Board 18: a staged image is kept only once its signature checks out. */

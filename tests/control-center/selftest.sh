@@ -49,6 +49,20 @@ while IFS= read -r p; do
     grep -Fxq -- "$OWNER_FROM" "$RECIPE/patches/$p" || flunk "$p is not from the owner ($OWNER_FROM)"
 done < <(sed -e 's/#.*//' -e '/^[[:space:]]*$/d' "$RECIPE/series")
 
+# a11y.py ports tests/shots/a11y.js's focus rule and contrast ratio: the rule's numbers must match, the ratio known pairs.
+python3 -B - "$APEX_ROOT/tests/shots/a11y.js" "$APEX_ROOT/tests/control-center" <<'PY' || flunk "contrast.py drifted from tests/shots/a11y.js"
+import re, sys
+js = open(sys.argv[1], encoding="utf-8").read()
+sys.path.insert(0, sys.argv[2])
+import contrast
+for name in ("FOCUS_MARGIN", "FOCUS_CHANGED"):
+    assert int(re.search(rf"const {name} = (\d+);", js)[1]) == getattr(contrast, name), name
+assert int(re.search(r"Math\.round\((\d+) \* \(width \+ height\) \* after\.scale\)", js)[1]) == contrast.PERIMETER_SIDES
+for fg, bg, want in (((255, 255, 255), (0, 0, 0), 21.0), ((0x76, 0x76, 0x76), (255, 255, 255), 4.54),
+                     ((0x35, 0x84, 0xe4), (255, 255, 255), 3.77)):
+    assert round(contrast.ratio(fg, bg), 2) == want, (fg, bg, contrast.ratio(fg, bg))
+PY
+
 if ((fails > 0)); then
     die "tests/control-center/selftest.sh: $fails failure(s)"
 fi
