@@ -21,10 +21,11 @@ lane's built RPMs (_build/nautilus/out); without it the installed nautilus is ca
 A user 'apex' has board 27's home (home.py), apex-desktop's Apex icon theme and schema
 (from $APEX_DESKTOP_REV, or APEX_DESKTOP_SRC, a checkout) and its fonts. Each case also
 dumps the window's accessible tree (a11y.py), and check.py asserts what the board says:
-the footer, the item count. Captures, trees and logs land in _build/nautilus/shots/.
+the footer, the item count. With RPM_DIR, home-vi runs under vi_VN.UTF-8 and finds Apex's
+strings in Vietnamese. Captures, trees and logs land in _build/nautilus/shots/.
 
 It needs gnome-shell, mesa-dri-drivers, dbus-daemon, python3-dbusmock, gcc, util-linux,
-at-spi2-core, python3-gobject, inkscape, git-core, glycin-thumbnailer and the Apex fonts
+at-spi2-core, python3-gobject, inkscape, git-core, glycin-thumbnailer, glibc-langpack-vi and the Apex fonts
 (adwaita-sans-fonts, jetbrains-mono-fonts-all). G2's clock.c and fixtures.py (tests/shots)
 are used as they are; disk.c pins the home's disk at the board's "588 GB free of 1 TB".
 EOF
@@ -70,8 +71,14 @@ if [[ -n ${1:-} ]]; then
     shopt -s nullglob
     rpms=("$1"/nautilus-[0-9]*.x86_64.rpm "$1"/nautilus-extensions-[0-9]*.x86_64.rpm)
     ((${#rpms[@]} == 2)) || die "expected the nautilus and nautilus-extensions x86_64 RPMs in $1"
+    rm -f /etc/rpm/macros.image-language-conf
     dnf5 -y -q --setopt=install_weak_deps=False --repo=fedora --repo=updates install "${rpms[@]}" ||
         die "cannot install ${rpms[*]}"
+    [[ -e /usr/share/locale/vi/LC_MESSAGES/apex-nautilus.mo ]] ||
+        dnf5 -y -q --setopt=install_weak_deps=False --repo=fedora --repo=updates reinstall "${rpms[@]}" ||
+        die "cannot reinstall ${rpms[*]} with their translations"
+    [[ -e /usr/share/locale/vi/LC_MESSAGES/apex-nautilus.mo ]] || die "the nautilus RPMs install no vi apex-nautilus.mo"
+    [[ $(LC_ALL=vi_VN.UTF-8 locale charmap 2>/dev/null) == UTF-8 ]] || die "the vi_VN.UTF-8 locale is missing (glibc-langpack-vi)"
 fi
 rpm -q nautilus nautilus-extensions >"$out/nautilus.txt"
 
@@ -136,7 +143,7 @@ held=$(env LD_PRELOAD="$CLOCK_LIB" G2_CLOCK_EPOCH="$clock_epoch" date -u '+%F %T
 [[ $held == "$CLOCK" ]] || die "$CLOCK_LIB does not hold the clock at $CLOCK: $held"
 
 shoot() {
-    local crash name=$1 scheme=$2 viewer=$3 args=$4 extra=$5 query=$6 schemas=$7 press=${8:-} run rc settings
+    local crash name=$1 scheme=$2 viewer=$3 args=$4 extra=$5 query=$6 schemas=$7 press=${8:-} lang=${9:-C.UTF-8} run rc settings
     run=$(mktemp -d)
     chown "$USER_NAME:" "$run" && chmod 700 "$run"
     rm -rf "$home/.config/dconf" "$home/.local/share/gvfs-metadata" "$home/.cache/thumbnails"
@@ -145,7 +152,7 @@ shoot() {
     [[ -z $extra ]] || settings+=$'\n'"$extra"
     # shellcheck disable=SC2016 # expanded by the user's bash
     runuser -u "$USER_NAME" -- env -i HOME="$home" PATH="/usr/bin:/usr/sbin" XDG_RUNTIME_DIR="$run" \
-        LANG=C.UTF-8 TZ=UTC APEX_SHOTS="$out" APEX_SHOT="$name" APEX_FILES_ARGS="$args" APEX_A11Y="$HERE/a11y.py" \
+        LANG="$lang" TZ=UTC APEX_SHOTS="$out" APEX_SHOT="$name" APEX_FILES_ARGS="$args" APEX_A11Y="$HERE/a11y.py" \
         APEX_FILES_SEARCH="$query" APEX_A11Y_PRESS="$press" ${schemas:+GSETTINGS_SCHEMA_DIR="$schemas"} \
         CLOCK_LIB="$CLOCK_LIB" CRASH_LIB="$CRASH_LIB" DISK_LIB="$DISK_LIB" G2_CLOCK_EPOCH="$clock_epoch" GTK_A11Y=atspi \
         DBUS_SYSTEM_BUS_ADDRESS=unix:path=/run/dbus/system_bus_socket SETTINGS="$settings" \
@@ -180,6 +187,7 @@ done
 shoot search-documents-light default list-view "$home_args" "" "$SEARCH_QUERY" "$APEX_SCHEMAS" "Documents 3" || status=1
 shoot search-again-light default list-view "$home_args" "" "$SEARCH_QUERY" "$APEX_SCHEMAS" "Documents 3|All 11" || status=1
 shoot noschema-light default icon-view "$home_args" "" "" "" || status=1
+[[ -z ${1:-} ]] || shoot home-vi default icon-view "$home_args" "" "" "$APEX_SCHEMAS" "" vi_VN.UTF-8 || status=1
 ((status == 0)) || die "shoot.sh: a capture failed; see ${out#"$APEX_ROOT/"}/*.log"
 python3 "$HERE/check.py" "$out" || die "shoot.sh: the captures' assertions failed"
 log "shoot.sh: captures in ${out#"$APEX_ROOT/"}"

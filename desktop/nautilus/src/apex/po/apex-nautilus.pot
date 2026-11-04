@@ -1,0 +1,166 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) YEAR THE PACKAGE'S COPYRIGHT HOLDER
+# This file is distributed under the same license as the apex-nautilus package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: apex-nautilus\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-11-04 19:17+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"Language: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=INTEGER; plural=EXPRESSION;\n"
+
+#: src/apex/apex-count-bar.c:77
+msgid "Loading…"
+msgstr ""
+
+#: src/apex/apex-count-bar.c:77
+msgid "Searching…"
+msgstr ""
+
+#: src/apex/apex-details-pane.c:117 src/apex/apex-recent-strip.c:84
+msgid "Home"
+msgstr ""
+
+#: src/apex/apex-details-pane.c:124
+msgid "Star"
+msgstr ""
+
+#: src/apex/apex-details-pane.c:124
+msgid "Unstar"
+msgstr ""
+
+#: src/apex/apex-details-pane.c:175
+msgid "Location"
+msgstr ""
+
+#: src/apex/apex-details-pane.c:175
+msgid "Modified"
+msgstr ""
+
+#: src/apex/apex-details-pane.c:175
+msgid "Size"
+msgstr ""
+
+#: src/apex/apex-details-pane.c:203
+msgid "Open"
+msgstr ""
+
+#: src/apex/apex-disk-footer.c:134
+msgid "Disk usage"
+msgstr ""
+
+#. Translators: the free space and the size of the disk holding the home folder, "588 GB free of 1 TB".
+#: src/apex/apex-format.c:39
+#, c-format
+msgid "%s free of %s"
+msgstr ""
+
+#: src/apex/apex-format.c:64
+#, c-format
+msgid "%u result"
+msgid_plural "%u results"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/apex/apex-format.c:68
+#, c-format
+msgid "%u item"
+msgid_plural "%u items"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/apex/apex-format.c:73
+#, c-format
+msgid "%s · “%s” selected"
+msgstr ""
+
+#: src/apex/apex-format.c:78
+#, c-format
+msgid "%s · %u selected"
+msgid_plural "%s · %u selected"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/apex/apex-format.c:158
+msgid "Today"
+msgstr ""
+
+#: src/apex/apex-format.c:164
+msgid "Yesterday"
+msgstr ""
+
+#. Translators: a day this year, "Oct 18"; see the GDateTime format.
+#: src/apex/apex-format.c:169
+#, no-c-format
+msgid "%b %-d"
+msgstr ""
+
+#: src/apex/apex-format.c:169
+msgid "%b %-d, %Y"
+msgstr ""
+
+#: src/apex/apex-recent-strip.c:226
+msgid "Recent"
+msgstr ""
+
+#: src/apex/apex-recent-strip.c:228 src/apex/apex-search-chips.c:20
+msgid "Folders"
+msgstr ""
+
+#: src/apex/apex-search-chips.c:19
+msgid "All"
+msgstr ""
+
+#: src/apex/apex-search-chips.c:21
+msgid "Documents"
+msgstr ""
+
+#: src/apex/apex-search-chips.c:22
+msgid "Images"
+msgstr ""
+
+#: src/apex/apex-search-chips.c:23
+msgid "Audio & Video"
+msgstr ""
+
+#: src/apex/apex-search-chips.c:223
+msgid "Filter results"
+msgstr ""
+
+#: src/apex/apex-view-controls.c:95
+msgid "Grid View"
+msgstr ""
+
+#: src/apex/apex-view-controls.c:96
+msgid "List View"
+msgstr ""
+
+#: src/apex/apex-view-controls.c:97
+msgid "View"
+msgstr ""
+
+#: src/apex/apex-view-controls.c:102
+msgid "Details"
+msgstr ""
+
+#: src/apex/apex-view-controls.c:116
+msgid "View Options"
+msgstr ""
+
+#: src/apex/apex-window.c:102
+msgid "_Details Pane"
+msgstr ""
+
+#: src/apex/apex-window.c:103
+msgid "_Recent Files on Home"
+msgstr ""

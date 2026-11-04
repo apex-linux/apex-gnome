@@ -2,7 +2,7 @@
 
 #include "apex-window.h"
 
-#include <glib/gi18n.h>
+#include "apex-i18n.h"
 
 #include "apex-count-bar.h"
 #include "apex-details-pane.h"

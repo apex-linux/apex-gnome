@@ -124,6 +124,17 @@ def check_case(name, tree, expect):
     return results
 
 
+# Under vi_VN.UTF-8 (shoot.sh's home-vi, with the lane's RPMs): Apex's own strings in its apex-nautilus domain.
+VI = {"Gần đây": None, "Dung lượng đĩa": "level bar", "Xem dạng lưới": None}
+
+
+def check_vi(tree):
+    results = [(showing(tree, name, role), f"home-vi: “{name}” shows") for name, role in VI.items()]
+    results.append((checked(tree, "Xem dạng lưới"), "home-vi: the view toggle is on “Xem dạng lưới”"))
+    results.append((not showing(tree, "Recent") and not showing(tree, "Grid View"), "home-vi: no “Recent” or “Grid View”"))
+    return results
+
+
 def main():
     if len(sys.argv) != 2:
         print(__doc__, file=sys.stderr)
@@ -141,6 +152,15 @@ def main():
                 for ok, text in check_case(f"{case}-{scheme}", json.load(f), expect):
                     print(f"ok {text}" if ok else f"not ok: {text}", file=sys.stdout if ok else sys.stderr)
                     failures += not ok
+    path = os.path.join(shots, "home-vi.a11y.json")
+    if os.path.exists(path):
+        with open(path) as f:
+            for ok, text in check_vi(json.load(f)):
+                print(f"ok {text}" if ok else f"not ok: {text}", file=sys.stdout if ok else sys.stderr)
+                failures += not ok
+    elif os.path.exists(os.path.join(shots, "home-vi.log")):
+        print("not ok: home-vi: no accessible tree", file=sys.stderr)
+        failures += 1
     return 1 if failures else 0
 
 

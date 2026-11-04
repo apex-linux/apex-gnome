@@ -4,7 +4,7 @@
 
 #include "apex-format.h"
 
-#include <glib/gi18n.h>
+#include "apex-i18n.h"
 
 #define REFRESH_SECONDS 30
 #define FILESYSTEM_ATTRIBUTES G_FILE_ATTRIBUTE_FILESYSTEM_SIZE "," G_FILE_ATTRIBUTE_FILESYSTEM_FREE

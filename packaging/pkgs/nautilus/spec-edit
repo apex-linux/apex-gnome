@@ -14,3 +14,9 @@ after ^%autosetup[[:space:]]
 	# Apex: src/apex/ (Source1, desktop/nautilus/ in apex-gnome); -k never clobbers upstream.
 	tar -xkf %{SOURCE1}
 end
+
+# Apex's own gettext domain (desktop/nautilus/src/apex/po), in the main package's list.
+after ^%find_lang[[:space:]]+%\{name\}$
+	%find_lang apex-nautilus
+	cat apex-nautilus.lang >> %{name}.lang
+end

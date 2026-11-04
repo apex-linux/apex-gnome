@@ -166,7 +166,7 @@ jobs:
             shots: _build/nautilus/shots
             packages: >-
               gnome-shell mesa-dri-drivers dbus-daemon python3-dbusmock gcc util-linux at-spi2-core python3-gobject
-              inkscape glycin-thumbnailer adwaita-sans-fonts jetbrains-mono-fonts-all
+              inkscape glycin-thumbnailer adwaita-sans-fonts jetbrains-mono-fonts-all glibc-langpack-vi
           - app: ptyxis
             pkg: ptyxis
             shoot: tests/ptyxis/shoot.sh
