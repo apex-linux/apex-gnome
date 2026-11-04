@@ -2,7 +2,7 @@
 
 #include "apex-format.h"
 
-#include <glib/gi18n.h>
+#include "apex-i18n.h"
 #include <math.h>
 #include <string.h>
 
@@ -165,6 +165,7 @@ apex_format_day (GDateTime *when,
     }
 
     /* Translators: a day this year, "Oct 18"; see the GDateTime format. */
+    /* xgettext:no-c-format */
     return g_date_time_format (when, year == g_date_time_get_year (now) ? _("%b %-d") : _("%b %-d, %Y"));
 }
 

@@ -197,7 +197,7 @@ jobs:
             shoot: tests/nautilus/shoot.sh
             packages: >-
               gnome-shell mesa-dri-drivers dbus-daemon python3-dbusmock gcc util-linux at-spi2-core python3-gobject
-              inkscape glycin-thumbnailer adwaita-sans-fonts jetbrains-mono-fonts-all
+              inkscape glycin-thumbnailer adwaita-sans-fonts jetbrains-mono-fonts-all glibc-langpack-vi
     steps:
       - name: git for the checkout and the Source1 archive
         run: >-
