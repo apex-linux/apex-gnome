@@ -68,8 +68,8 @@ run_case() {
 
 status=0
 headless_apex_schema yes
-run_case light default APEX_SCROLL=1 "APEX_CHECK=bindings.py rows" || status=1
-run_case dark prefer-dark APEX_SCROLL=1 || status=1
+run_case light default APEX_SCROLL=1 APEX_UNSAFE=1 "APEX_CHECK=bindings.py rows; a11y.py apex" || status=1
+run_case dark prefer-dark APEX_SCROLL=1 APEX_UNSAFE=1 "APEX_CHECK=a11y.py apex" || status=1
 run_case top-bounds default "APEX_CHECK=bounds.py rows toggles" || status=1
 headless_apex_schema no
 run_case no-schema default "APEX_CHECK=bindings.py no-schema" || status=1
@@ -111,12 +111,16 @@ update_case() {
     run_case "$name" "$scheme" "APEX_OPEN=system software-updates" APEX_UPDATE1_LOG="$log" "$@"
 }
 
-update_case ready updates-light default APEX_SCROLL=1 "APEX_CHECK=updates.py ready" || status=1
-update_case ready updates-dark prefer-dark APEX_SCROLL=1 || status=1
+# a11y.py goes first: updates.py presses the buttons it tabs to.
+update_case ready updates-light default APEX_SCROLL=1 APEX_UNSAFE=1 "APEX_CHECK=a11y.py updates-ready; updates.py ready" \
+    || status=1
+update_case ready updates-dark prefer-dark APEX_SCROLL=1 APEX_UNSAFE=1 "APEX_CHECK=a11y.py updates-ready" || status=1
 # bounds.py reads the page off the case's own capture: unscrolled, then scrolled to its end.
 update_case ready updates-bounds default "APEX_CHECK=bounds.py rows grid pills" || status=1
 update_case ready updates-bounds-end default APEX_SCROLL=1 "APEX_CHECK=bounds.py rows grid buttons" || status=1
-for scenario in up-to-date available waiting downloading health-failure fallback unavailable; do
+update_case available updates-available default APEX_UNSAFE=1 "APEX_CHECK=a11y.py updates-available; updates.py available" \
+    || status=1
+for scenario in up-to-date waiting downloading health-failure fallback unavailable; do
     update_case "$scenario" "updates-$scenario" default "APEX_CHECK=updates.py $scenario" || status=1
 done
 # Board 26 dark: its two dialogs.
@@ -124,10 +128,31 @@ for scenario in health-failure fallback; do
     update_case "$scenario" "updates-$scenario-dark" prefer-dark || status=1
 done
 update_case fallback updates-fallback-changes default "APEX_BEFORE=updates.py show-changes" || status=1
-# Large Text: apex.css's pt sizes grow with it. A setting stays from one case to the next, so these come last.
-large=$'org.gnome.desktop.a11y.interface high-contrast false\norg.gnome.desktop.interface text-scaling-factor 1.25'
-CASE_SETTINGS=$large run_case large-light default "APEX_CHECK=fonts.py apex" || status=1
-CASE_SETTINGS=$large update_case ready updates-large-light default "APEX_CHECK=fonts.py updates" || status=1
+
+# C-a11y: boards 11, 18, 23 and 24 in high contrast and at Large Text, light and dark. A setting stays from one case
+# to the next, so these come last and each sets both.
+a11y_settings() {
+    printf 'org.gnome.desktop.a11y.interface high-contrast %s\norg.gnome.desktop.interface text-scaling-factor %s\n' "$1" "$2"
+}
+for a11y in "hc true 1.0" "large false 1.25"; do
+    read -r tag contrast scaling <<<"$a11y"
+    for scheme in default prefer-dark; do
+        variant=$tag-light
+        [[ $scheme == default ]] || variant=$tag-dark
+        settings=$(a11y_settings "$contrast" "$scaling")
+        apex="a11y.py apex" updates="a11y.py updates-ready"
+        if [[ $tag == large ]]; then
+            apex+="; fonts.py apex" updates+="; fonts.py updates"
+        fi
+        CASE_SETTINGS=$settings run_case "$variant" "$scheme" APEX_SCROLL=1 APEX_UNSAFE=1 "APEX_CHECK=$apex" || status=1
+        CASE_SETTINGS=$settings update_case ready "updates-$variant" "$scheme" APEX_SCROLL=1 APEX_UNSAFE=1 \
+            "APEX_CHECK=$updates" || status=1
+        CASE_SETTINGS=$amber$'\n'$settings run_case "appearance-$variant" "$scheme" APEX_OPEN=background APEX_SCROLL=1 \
+            APEX_READY=thumbnails.py APEX_UNSAFE=1 "APEX_CHECK=a11y.py page" || status=1
+        CASE_SETTINGS=$settings run_case "power-$variant" "$scheme" APEX_OPEN=power APEX_SCROLL=1 "$dgpu" APEX_UNSAFE=1 \
+            "APEX_CHECK=a11y.py page" || status=1
+    done
+done
 headless_update1_stop
 grep -h '^ok \|^FAIL \|^GAP \|APEXCC-' "$out"/*.log || true
 ((status == 0)) || die "run.sh: a case failed; see ${out#"$APEX_ROOT/"}/*.log"
