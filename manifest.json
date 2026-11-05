@@ -56,309 +56,6 @@
         "note": "batch-1 (apex-gnome#267, 565c171), owner approved all 12 boards"
       }
     },
-    "14": {
-      "board": 14,
-      "title": "Power off dialog",
-      "slug": "power-off",
-      "source": "tests/shell/shoot.sh",
-      "fixture": "power off with an update staged (update1-mock.py), the update card on; no other user logged in, the greeter's session being of class greeter",
-      "scene": {
-        "light": "end-session-light-power-off",
-        "dark": "end-session-dark-power-off"
-      },
-      "shots": "0f6dc6c1561e",
-      "files": {
-        "light": "boards/board-14-light.png",
-        "dark": "boards/board-14-dark.png"
-      },
-      "pins": {
-        "apexGnome": "64a6d0388fe81f06dbeb72afdcd7cf7b8faf805f",
-        "apexDesktop": "44d889fe455a4dd3e62bfa33796fb89d9bc2ff4f"
-      },
-      "scale": 2,
-      "monitor": "2880x1800",
-      "approval": {
-        "status": "approved",
-        "approvedAt": "2026-11-03T12:20:00Z",
-        "shots": "0f6dc6c1561e",
-        "note": "batch-1 (apex-gnome#267, 565c171), owner approved all 12 boards"
-      }
-    },
-    "19": {
-      "board": 19,
-      "title": "Screenshot UI",
-      "slug": "screenshot",
-      "source": "tests/shots/direct.sh signoff",
-      "fixture": "the screenshot UI over the desktop",
-      "scene": {
-        "light": "default-screenshot",
-        "dark": "dark-style-screenshot"
-      },
-      "shots": "165f42c21aa8",
-      "files": {
-        "light": "boards/board-19-light.png",
-        "dark": "boards/board-19-dark.png"
-      },
-      "pins": {
-        "apexGnome": "64a6d0388fe81f06dbeb72afdcd7cf7b8faf805f",
-        "apexDesktop": "44d889fe455a4dd3e62bfa33796fb89d9bc2ff4f"
-      },
-      "scale": 2,
-      "monitor": "2880x1800",
-      "approval": {
-        "status": "approved",
-        "approvedAt": "2026-11-03T12:20:00Z",
-        "shots": "165f42c21aa8",
-        "note": "batch-1 (apex-gnome#267, 565c171), owner approved all 12 boards"
-      }
-    },
-    "34": {
-      "board": 34,
-      "title": "Calendar and notifications",
-      "slug": "date-menu",
-      "source": "tests/shots/direct.sh signoff",
-      "fixture": "Monday 28 September 2026, two low-urgency notifications",
-      "scene": {
-        "light": "default-datemenu",
-        "dark": "dark-style-datemenu"
-      },
-      "shots": "3c18957838ef",
-      "files": {
-        "light": "boards/board-34-light.png",
-        "dark": "boards/board-34-dark.png"
-      },
-      "pins": {
-        "apexGnome": "64a6d0388fe81f06dbeb72afdcd7cf7b8faf805f",
-        "apexDesktop": "44d889fe455a4dd3e62bfa33796fb89d9bc2ff4f"
-      },
-      "scale": 2,
-      "monitor": "2880x1800",
-      "approval": {
-        "status": "approved",
-        "approvedAt": "2026-11-03T12:20:00Z",
-        "shots": "3c18957838ef",
-        "note": "batch-1 (apex-gnome#267, 565c171), owner approved all 12 boards"
-      }
-    },
-    "35": {
-      "board": 35,
-      "title": "Overview",
-      "slug": "overview",
-      "source": "tests/shots/direct.sh signoff",
-      "fixture": "the overview with Text Editor, Calendar and Terminal open, two workspaces",
-      "scene": {
-        "light": "default-signoff-overview",
-        "dark": "dark-style-signoff-overview"
-      },
-      "shots": "7db2dff1ee50",
-      "files": {
-        "light": "boards/board-35-light.png",
-        "dark": "boards/board-35-dark.png"
-      },
-      "pins": {
-        "apexGnome": "64a6d0388fe81f06dbeb72afdcd7cf7b8faf805f",
-        "apexDesktop": "44d889fe455a4dd3e62bfa33796fb89d9bc2ff4f"
-      },
-      "scale": 2,
-      "monitor": "2880x1800",
-      "approval": {
-        "status": "approved",
-        "approvedAt": "2026-11-03T12:20:00Z",
-        "shots": "7db2dff1ee50",
-        "note": "batch-1 (apex-gnome#267, 565c171), owner approved all 12 boards"
-      }
-    },
-    "36": {
-      "board": 36,
-      "title": "Launcher",
-      "slug": "launcher",
-      "source": "tests/shots/direct.sh signoff",
-      "fixture": "the app grid's first page, no folder open: the image's apps outside the dock",
-      "scene": {
-        "light": "default-launcher",
-        "dark": "dark-style-launcher"
-      },
-      "shots": "804407b86a0f",
-      "files": {
-        "light": "boards/board-36-light.png",
-        "dark": "boards/board-36-dark.png"
-      },
-      "pins": {
-        "apexGnome": "64a6d0388fe81f06dbeb72afdcd7cf7b8faf805f",
-        "apexDesktop": "44d889fe455a4dd3e62bfa33796fb89d9bc2ff4f"
-      },
-      "scale": 2,
-      "monitor": "2880x1800",
-      "approval": {
-        "status": "approved",
-        "approvedAt": "2026-11-03T12:20:00Z",
-        "shots": "804407b86a0f",
-        "note": "batch-1 (apex-gnome#267, 565c171), owner approved all 12 boards"
-      }
-    },
-    "37": {
-      "title": "Desktop: dock and top bar",
-      "slug": "desktop",
-      "source": "tests/shots/direct.sh signoff",
-      "fixture": "the desktop with the dock and the bar, no window open",
-      "scene": {
-        "light": "default-desktop",
-        "dark": "dark-style-desktop"
-      },
-      "shots": "5389e6f551a3",
-      "files": {
-        "light": "boards/board-37-light.png",
-        "dark": "boards/board-37-dark.png"
-      },
-      "pins": {
-        "apexGnome": "0f1d211fe841fd526f8baeb09fbec02f3f80a635",
-        "apexDesktop": "8f064873e18b4ffd6a7399c2ab9d040fd7e797ee"
-      },
-      "scale": 2,
-      "monitor": "2880x1800",
-      "approval": {
-        "status": "approved",
-        "approvedAt": "2026-10-26T14:41:06.705Z",
-        "shots": "5389e6f551a3"
-      }
-    },
-    "38": {
-      "board": 38,
-      "title": "Spotlight",
-      "slug": "spotlight",
-      "source": "tests/shots/direct.sh signoff",
-      "fixture": "Spotlight with \"disk\" typed",
-      "scene": {
-        "light": "default-spotlight-search",
-        "dark": "dark-style-spotlight-search"
-      },
-      "shots": "46dbae5e428a",
-      "files": {
-        "light": "boards/board-38-light.png",
-        "dark": "boards/board-38-dark.png"
-      },
-      "pins": {
-        "apexGnome": "64a6d0388fe81f06dbeb72afdcd7cf7b8faf805f",
-        "apexDesktop": "44d889fe455a4dd3e62bfa33796fb89d9bc2ff4f"
-      },
-      "scale": 2,
-      "monitor": "2880x1800",
-      "approval": {
-        "status": "approved",
-        "approvedAt": "2026-11-03T12:20:00Z",
-        "shots": "46dbae5e428a",
-        "note": "batch-1 (apex-gnome#267, 565c171), owner approved all 12 boards"
-      }
-    },
-    "39": {
-      "title": "Top bar: indicators",
-      "slug": "indicators",
-      "source": "tests/shots/direct.sh signoff",
-      "fixture": "everything: two input sources and the StatusNotifierItems sni-items.js starts",
-      "scene": {
-        "light": "indicators-indicators-everything",
-        "dark": "indicators-dark-indicators-everything"
-      },
-      "shots": "bd78f6acfa8d",
-      "files": {
-        "light": "boards/board-39-light.png",
-        "dark": "boards/board-39-dark.png"
-      },
-      "pins": {
-        "apexGnome": "a4ec5be44914ac3df947c72e8e295bfcf3e2e8c6",
-        "apexDesktop": "8f064873e18b4ffd6a7399c2ab9d040fd7e797ee"
-      },
-      "scale": 2,
-      "monitor": "2880x1800",
-      "approval": {
-        "status": "approved",
-        "approvedAt": "2026-10-27T02:36:52.884Z",
-        "shots": "bd78f6acfa8d"
-      }
-    },
-    "15": {
-      "board": 15,
-      "title": "Window switcher",
-      "slug": "alt-tab",
-      "source": "tests/shots/direct.sh signoff",
-      "fixture": "Text Editor, Calendar and Terminal open, the app switcher up",
-      "scene": {
-        "light": "default-signoff-alt-tab",
-        "dark": "dark-style-signoff-alt-tab"
-      },
-      "shots": "69265c11ef2d",
-      "files": {
-        "light": "boards/board-15-light.png",
-        "dark": "boards/board-15-dark.png"
-      },
-      "pins": {
-        "apexGnome": "64a6d0388fe81f06dbeb72afdcd7cf7b8faf805f",
-        "apexDesktop": "44d889fe455a4dd3e62bfa33796fb89d9bc2ff4f"
-      },
-      "scale": 2,
-      "monitor": "2880x1800",
-      "approval": {
-        "status": "approved",
-        "approvedAt": "2026-11-03T12:20:00Z",
-        "shots": "69265c11ef2d",
-        "note": "batch-1 (apex-gnome#267, 565c171), owner approved all 12 boards"
-      }
-    },
-    "16": {
-      "title": "OSD, banner and popup menu",
-      "slug": "transients",
-      "source": "tests/shots/direct.sh signoff",
-      "fixture": "the volume OSD at 62 %, a banner with an action, a three-row popup menu",
-      "scene": {
-        "light": "default-surfaces",
-        "dark": "dark-style-surfaces"
-      },
-      "shots": "84d2e49ad098",
-      "files": {
-        "light": "boards/board-16-light.png",
-        "dark": "boards/board-16-dark.png"
-      },
-      "pins": {
-        "apexGnome": "0f1d211fe841fd526f8baeb09fbec02f3f80a635",
-        "apexDesktop": "8f064873e18b4ffd6a7399c2ab9d040fd7e797ee"
-      },
-      "scale": 2,
-      "monitor": "2880x1800",
-      "approval": {
-        "status": "approved",
-        "approvedAt": "2026-10-26T14:40:19.618Z",
-        "shots": "84d2e49ad098",
-        "note": "what happens with the context menu? why it has 2 difference shapes?"
-      }
-    },
-    "17": {
-      "board": 17,
-      "title": "Quick Settings: Wi-Fi submenu",
-      "slug": "wifi-menu",
-      "source": "tests/shots/direct.sh signoff",
-      "fixture": "Quick Settings with the Wi-Fi menu open: Apex-5G connected, three networks in range, battery at 87 %",
-      "scene": {
-        "light": "default-quick-settings",
-        "dark": "dark-style-quick-settings"
-      },
-      "shots": "fc7b2361cf7b",
-      "files": {
-        "light": "boards/board-17-light.png",
-        "dark": "boards/board-17-dark.png"
-      },
-      "pins": {
-        "apexGnome": "64a6d0388fe81f06dbeb72afdcd7cf7b8faf805f",
-        "apexDesktop": "44d889fe455a4dd3e62bfa33796fb89d9bc2ff4f"
-      },
-      "scale": 2,
-      "monitor": "2880x1800",
-      "approval": {
-        "status": "approved",
-        "approvedAt": "2026-11-03T12:20:00Z",
-        "shots": "fc7b2361cf7b",
-        "note": "batch-1 (apex-gnome#267, 565c171), owner approved all 12 boards"
-      }
-    },
     "20": {
       "board": 20,
       "title": "Lock screen",
@@ -387,7 +84,147 @@
         "note": "batch-1 (apex-gnome#267, 565c171), owner approved all 12 boards"
       }
     },
-    "22": {
+    "14-power-off": {
+      "board": 14,
+      "title": "Power off dialog",
+      "slug": "power-off",
+      "source": "tests/shell/shoot.sh",
+      "fixture": "power off with an update staged (update1-mock.py), the update card on; no other user logged in, the greeter's session being of class greeter",
+      "scene": {
+        "light": "end-session-light-power-off",
+        "dark": "end-session-dark-power-off"
+      },
+      "shots": "920599428802",
+      "files": {
+        "light": "boards/board-14-power-off-light.png",
+        "dark": "boards/board-14-power-off-dark.png"
+      },
+      "pins": {
+        "apexGnome": "da4b9a1544b8d43d0380995404c1ba6a1af61fcc",
+        "apexDesktop": "44d889fe455a4dd3e62bfa33796fb89d9bc2ff4f"
+      },
+      "scale": 2,
+      "monitor": "2880x1800",
+      "approval": {
+        "status": "approved",
+        "approvedAt": "2026-11-05T01:00:00Z",
+        "shots": "920599428802",
+        "note": "batch-2 (apex-gnome#284, 2ef7e44), owner approved all"
+      }
+    },
+    "15-alt-tab": {
+      "board": 15,
+      "title": "Window switcher",
+      "slug": "alt-tab",
+      "source": "tests/shots/direct.sh signoff",
+      "fixture": "Text Editor, Calendar and Terminal open, the app switcher up",
+      "scene": {
+        "light": "default-signoff-alt-tab",
+        "dark": "dark-style-signoff-alt-tab"
+      },
+      "shots": "5b555626a139",
+      "files": {
+        "light": "boards/board-15-alt-tab-light.png",
+        "dark": "boards/board-15-alt-tab-dark.png"
+      },
+      "pins": {
+        "apexGnome": "da4b9a1544b8d43d0380995404c1ba6a1af61fcc",
+        "apexDesktop": "44d889fe455a4dd3e62bfa33796fb89d9bc2ff4f"
+      },
+      "scale": 2,
+      "monitor": "2880x1800",
+      "approval": {
+        "status": "approved",
+        "approvedAt": "2026-11-05T01:00:00Z",
+        "shots": "5b555626a139",
+        "note": "batch-2 (apex-gnome#284, 2ef7e44), owner approved all"
+      }
+    },
+    "16-transients": {
+      "board": 16,
+      "title": "OSD, banner and popup menu",
+      "slug": "transients",
+      "source": "tests/shots/direct.sh signoff",
+      "fixture": "the volume OSD at 62 %, a banner with an action, a three-row popup menu",
+      "scene": {
+        "light": "default-surfaces",
+        "dark": "dark-style-surfaces"
+      },
+      "shots": "cef8b1f41c2a",
+      "files": {
+        "light": "boards/board-16-transients-light.png",
+        "dark": "boards/board-16-transients-dark.png"
+      },
+      "pins": {
+        "apexGnome": "da4b9a1544b8d43d0380995404c1ba6a1af61fcc",
+        "apexDesktop": "44d889fe455a4dd3e62bfa33796fb89d9bc2ff4f"
+      },
+      "scale": 2,
+      "monitor": "2880x1800",
+      "approval": {
+        "status": "approved",
+        "approvedAt": "2026-11-05T01:00:00Z",
+        "shots": "cef8b1f41c2a",
+        "note": "batch-2 (apex-gnome#284, 2ef7e44), owner approved all"
+      }
+    },
+    "17-wifi-menu": {
+      "board": 17,
+      "title": "Quick Settings: Wi-Fi submenu",
+      "slug": "wifi-menu",
+      "source": "tests/shots/direct.sh signoff",
+      "fixture": "Quick Settings with the Wi-Fi menu open: Apex-5G connected, three networks in range, battery at 87 %",
+      "scene": {
+        "light": "default-quick-settings",
+        "dark": "dark-style-quick-settings"
+      },
+      "shots": "7220b5b8e1d8",
+      "files": {
+        "light": "boards/board-17-wifi-menu-light.png",
+        "dark": "boards/board-17-wifi-menu-dark.png"
+      },
+      "pins": {
+        "apexGnome": "da4b9a1544b8d43d0380995404c1ba6a1af61fcc",
+        "apexDesktop": "44d889fe455a4dd3e62bfa33796fb89d9bc2ff4f"
+      },
+      "scale": 2,
+      "monitor": "2880x1800",
+      "approval": {
+        "status": "approved",
+        "approvedAt": "2026-11-05T01:00:00Z",
+        "shots": "7220b5b8e1d8",
+        "note": "batch-2 (apex-gnome#284, 2ef7e44), owner approved all"
+      }
+    },
+    "19-screenshot": {
+      "board": 19,
+      "title": "Screenshot UI",
+      "slug": "screenshot",
+      "source": "tests/shots/direct.sh signoff",
+      "fixture": "the screenshot UI over the desktop",
+      "scene": {
+        "light": "default-screenshot",
+        "dark": "dark-style-screenshot"
+      },
+      "shots": "4777f60d0566",
+      "files": {
+        "light": "boards/board-19-screenshot-light.png",
+        "dark": "boards/board-19-screenshot-dark.png"
+      },
+      "pins": {
+        "apexGnome": "da4b9a1544b8d43d0380995404c1ba6a1af61fcc",
+        "apexDesktop": "44d889fe455a4dd3e62bfa33796fb89d9bc2ff4f"
+      },
+      "scale": 2,
+      "monitor": "2880x1800",
+      "approval": {
+        "status": "approved",
+        "approvedAt": "2026-11-05T01:00:00Z",
+        "shots": "4777f60d0566",
+        "note": "batch-2 (apex-gnome#284, 2ef7e44), owner approved all"
+      }
+    },
+    "22-tiling": {
       "board": 22,
       "title": "Edge tiling",
       "slug": "tiling",
@@ -397,22 +234,694 @@
         "light": "default-tile-preview",
         "dark": "dark-style-tile-preview"
       },
-      "shots": "df5fe11bcddb",
+      "shots": "00bde7a7044b",
       "files": {
-        "light": "boards/board-22-light.png",
-        "dark": "boards/board-22-dark.png"
+        "light": "boards/board-22-tiling-light.png",
+        "dark": "boards/board-22-tiling-dark.png"
       },
       "pins": {
-        "apexGnome": "64a6d0388fe81f06dbeb72afdcd7cf7b8faf805f",
+        "apexGnome": "da4b9a1544b8d43d0380995404c1ba6a1af61fcc",
         "apexDesktop": "44d889fe455a4dd3e62bfa33796fb89d9bc2ff4f"
       },
       "scale": 2,
       "monitor": "2880x1800",
       "approval": {
         "status": "approved",
-        "approvedAt": "2026-11-03T12:20:00Z",
-        "shots": "df5fe11bcddb",
-        "note": "batch-1 (apex-gnome#267, 565c171), owner approved all 12 boards"
+        "approvedAt": "2026-11-05T01:00:00Z",
+        "shots": "00bde7a7044b",
+        "note": "batch-2 (apex-gnome#284, 2ef7e44), owner approved all"
+      }
+    },
+    "34-date-menu": {
+      "board": 34,
+      "title": "Calendar and notifications",
+      "slug": "date-menu",
+      "source": "tests/shots/direct.sh signoff",
+      "fixture": "Monday 28 September 2026, two low-urgency notifications",
+      "scene": {
+        "light": "default-datemenu",
+        "dark": "dark-style-datemenu"
+      },
+      "shots": "aa7d662b7d67",
+      "files": {
+        "light": "boards/board-34-date-menu-light.png",
+        "dark": "boards/board-34-date-menu-dark.png"
+      },
+      "pins": {
+        "apexGnome": "da4b9a1544b8d43d0380995404c1ba6a1af61fcc",
+        "apexDesktop": "44d889fe455a4dd3e62bfa33796fb89d9bc2ff4f"
+      },
+      "scale": 2,
+      "monitor": "2880x1800",
+      "approval": {
+        "status": "approved",
+        "approvedAt": "2026-11-05T01:00:00Z",
+        "shots": "aa7d662b7d67",
+        "note": "batch-2 (apex-gnome#284, 2ef7e44), owner approved all"
+      }
+    },
+    "35-overview": {
+      "board": 35,
+      "title": "Overview",
+      "slug": "overview",
+      "source": "tests/shots/direct.sh signoff",
+      "fixture": "the overview with Text Editor, Calendar and Terminal open, two workspaces",
+      "scene": {
+        "light": "default-signoff-overview",
+        "dark": "dark-style-signoff-overview"
+      },
+      "shots": "31fe8b973729",
+      "files": {
+        "light": "boards/board-35-overview-light.png",
+        "dark": "boards/board-35-overview-dark.png"
+      },
+      "pins": {
+        "apexGnome": "da4b9a1544b8d43d0380995404c1ba6a1af61fcc",
+        "apexDesktop": "44d889fe455a4dd3e62bfa33796fb89d9bc2ff4f"
+      },
+      "scale": 2,
+      "monitor": "2880x1800",
+      "approval": {
+        "status": "approved",
+        "approvedAt": "2026-11-05T01:00:00Z",
+        "shots": "31fe8b973729",
+        "note": "batch-2 (apex-gnome#284, 2ef7e44), owner approved all"
+      }
+    },
+    "36-launcher": {
+      "board": 36,
+      "title": "Launcher",
+      "slug": "launcher",
+      "source": "tests/shots/direct.sh signoff",
+      "fixture": "the app grid's first page, no folder open: the image's apps outside the dock",
+      "scene": {
+        "light": "default-launcher",
+        "dark": "dark-style-launcher"
+      },
+      "shots": "b56520da93df",
+      "files": {
+        "light": "boards/board-36-launcher-light.png",
+        "dark": "boards/board-36-launcher-dark.png"
+      },
+      "pins": {
+        "apexGnome": "da4b9a1544b8d43d0380995404c1ba6a1af61fcc",
+        "apexDesktop": "44d889fe455a4dd3e62bfa33796fb89d9bc2ff4f"
+      },
+      "scale": 2,
+      "monitor": "2880x1800",
+      "approval": {
+        "status": "approved",
+        "approvedAt": "2026-11-05T01:00:00Z",
+        "shots": "b56520da93df",
+        "note": "batch-2 (apex-gnome#284, 2ef7e44), owner approved all"
+      }
+    },
+    "37-desktop": {
+      "board": 37,
+      "title": "Desktop: dock and top bar",
+      "slug": "desktop",
+      "source": "tests/shots/direct.sh signoff",
+      "fixture": "the desktop with the dock and the bar, no window open",
+      "scene": {
+        "light": "default-desktop",
+        "dark": "dark-style-desktop"
+      },
+      "shots": "9e259ecda72d",
+      "files": {
+        "light": "boards/board-37-desktop-light.png",
+        "dark": "boards/board-37-desktop-dark.png"
+      },
+      "pins": {
+        "apexGnome": "da4b9a1544b8d43d0380995404c1ba6a1af61fcc",
+        "apexDesktop": "44d889fe455a4dd3e62bfa33796fb89d9bc2ff4f"
+      },
+      "scale": 2,
+      "monitor": "2880x1800",
+      "approval": {
+        "status": "approved",
+        "approvedAt": "2026-11-05T01:00:00Z",
+        "shots": "9e259ecda72d",
+        "note": "batch-2 (apex-gnome#284, 2ef7e44), owner approved all"
+      }
+    },
+    "38-spotlight": {
+      "board": 38,
+      "title": "Spotlight",
+      "slug": "spotlight",
+      "source": "tests/shots/direct.sh signoff",
+      "fixture": "Spotlight with \"disk\" typed",
+      "scene": {
+        "light": "default-spotlight-search",
+        "dark": "dark-style-spotlight-search"
+      },
+      "shots": "019e747457f3",
+      "files": {
+        "light": "boards/board-38-spotlight-light.png",
+        "dark": "boards/board-38-spotlight-dark.png"
+      },
+      "pins": {
+        "apexGnome": "da4b9a1544b8d43d0380995404c1ba6a1af61fcc",
+        "apexDesktop": "44d889fe455a4dd3e62bfa33796fb89d9bc2ff4f"
+      },
+      "scale": 2,
+      "monitor": "2880x1800",
+      "approval": {
+        "status": "approved",
+        "approvedAt": "2026-11-05T01:00:00Z",
+        "shots": "019e747457f3",
+        "note": "batch-2 (apex-gnome#284, 2ef7e44), owner approved all"
+      }
+    },
+    "39-indicators": {
+      "board": 39,
+      "title": "Top bar: indicators",
+      "slug": "indicators",
+      "source": "tests/shots/direct.sh signoff",
+      "fixture": "everything: two input sources and the StatusNotifierItems sni-items.js starts",
+      "scene": {
+        "light": "indicators-indicators-everything",
+        "dark": "indicators-dark-indicators-everything"
+      },
+      "shots": "8461c0599591",
+      "files": {
+        "light": "boards/board-39-indicators-light.png",
+        "dark": "boards/board-39-indicators-dark.png"
+      },
+      "pins": {
+        "apexGnome": "da4b9a1544b8d43d0380995404c1ba6a1af61fcc",
+        "apexDesktop": "44d889fe455a4dd3e62bfa33796fb89d9bc2ff4f"
+      },
+      "scale": 2,
+      "monitor": "2880x1800",
+      "approval": {
+        "status": "approved",
+        "approvedAt": "2026-11-05T01:00:00Z",
+        "shots": "8461c0599591",
+        "note": "batch-2 (apex-gnome#284, 2ef7e44), owner approved all"
+      }
+    },
+    "11-settings-apex-top": {
+      "board": 11,
+      "title": "Settings: Apex Desktop",
+      "slug": "settings-apex-top",
+      "source": "tests/control-center/run.sh",
+      "fixture": "the Apex Desktop panel at the top, with apex-desktop's schema",
+      "scene": {
+        "light": "light",
+        "dark": "dark"
+      },
+      "shots": "1e3734287ca6",
+      "files": {
+        "light": "boards/board-11-settings-apex-top-light.png",
+        "dark": "boards/board-11-settings-apex-top-dark.png"
+      },
+      "pins": {
+        "apexGnome": "da4b9a1544b8d43d0380995404c1ba6a1af61fcc",
+        "apexDesktop": "44d889fe455a4dd3e62bfa33796fb89d9bc2ff4f"
+      },
+      "scale": 2,
+      "monitor": "2880x1800",
+      "approval": {
+        "status": "approved",
+        "approvedAt": "2026-11-05T01:00:00Z",
+        "shots": "1e3734287ca6",
+        "note": "batch-2 (apex-gnome#284, 2ef7e44), owner approved all"
+      }
+    },
+    "11-settings-apex-scrolled": {
+      "board": 11,
+      "title": "Settings: Apex Desktop, scrolled",
+      "slug": "settings-apex-scrolled",
+      "source": "tests/control-center/run.sh",
+      "fixture": "the Apex Desktop panel scrolled to its end, with apex-desktop's schema",
+      "scene": {
+        "light": "light-scrolled",
+        "dark": "dark-scrolled"
+      },
+      "shots": "52afb68adf0d",
+      "files": {
+        "light": "boards/board-11-settings-apex-scrolled-light.png",
+        "dark": "boards/board-11-settings-apex-scrolled-dark.png"
+      },
+      "pins": {
+        "apexGnome": "da4b9a1544b8d43d0380995404c1ba6a1af61fcc",
+        "apexDesktop": "44d889fe455a4dd3e62bfa33796fb89d9bc2ff4f"
+      },
+      "scale": 2,
+      "monitor": "2880x1800",
+      "approval": {
+        "status": "approved",
+        "approvedAt": "2026-11-05T01:00:00Z",
+        "shots": "52afb68adf0d",
+        "note": "batch-2 (apex-gnome#284, 2ef7e44), owner approved all"
+      }
+    },
+    "18-settings-updates-updates": {
+      "board": 18,
+      "title": "Settings: Software Updates",
+      "slug": "settings-updates-updates",
+      "source": "tests/control-center/run.sh",
+      "fixture": "System > Software Updates with an update staged and ready (update1.py ready)",
+      "scene": {
+        "light": "updates-light",
+        "dark": "updates-dark"
+      },
+      "shots": "b54d35d29daa",
+      "files": {
+        "light": "boards/board-18-settings-updates-updates-light.png",
+        "dark": "boards/board-18-settings-updates-updates-dark.png"
+      },
+      "pins": {
+        "apexGnome": "da4b9a1544b8d43d0380995404c1ba6a1af61fcc",
+        "apexDesktop": "44d889fe455a4dd3e62bfa33796fb89d9bc2ff4f"
+      },
+      "scale": 2,
+      "monitor": "2880x1800",
+      "approval": {
+        "status": "approved",
+        "approvedAt": "2026-11-05T01:00:00Z",
+        "shots": "b54d35d29daa",
+        "note": "batch-2 (apex-gnome#284, 2ef7e44), owner approved all"
+      }
+    },
+    "23-settings-appearance-appearance": {
+      "board": 23,
+      "title": "Settings: Appearance",
+      "slug": "settings-appearance-appearance",
+      "source": "tests/control-center/run.sh",
+      "fixture": "Appearance on gnome-backgrounds' Amber wallpaper",
+      "scene": {
+        "light": "appearance-light",
+        "dark": "appearance-dark"
+      },
+      "shots": "44131229d101",
+      "files": {
+        "light": "boards/board-23-settings-appearance-appearance-light.png",
+        "dark": "boards/board-23-settings-appearance-appearance-dark.png"
+      },
+      "pins": {
+        "apexGnome": "da4b9a1544b8d43d0380995404c1ba6a1af61fcc",
+        "apexDesktop": "44d889fe455a4dd3e62bfa33796fb89d9bc2ff4f"
+      },
+      "scale": 2,
+      "monitor": "2880x1800",
+      "approval": {
+        "status": "approved",
+        "approvedAt": "2026-11-05T01:00:00Z",
+        "shots": "44131229d101",
+        "note": "batch-2 (apex-gnome#284, 2ef7e44), owner approved all"
+      }
+    },
+    "24-settings-power-power": {
+      "board": 24,
+      "title": "Settings: Power",
+      "slug": "settings-power-power",
+      "source": "tests/control-center/run.sh",
+      "fixture": "Power with an NVIDIA card under umockdev: the Graphics and Display group",
+      "scene": {
+        "light": "power-light",
+        "dark": "power-dark"
+      },
+      "shots": "d5f614b2a359",
+      "files": {
+        "light": "boards/board-24-settings-power-power-light.png",
+        "dark": "boards/board-24-settings-power-power-dark.png"
+      },
+      "pins": {
+        "apexGnome": "da4b9a1544b8d43d0380995404c1ba6a1af61fcc",
+        "apexDesktop": "44d889fe455a4dd3e62bfa33796fb89d9bc2ff4f"
+      },
+      "scale": 2,
+      "monitor": "2880x1800",
+      "approval": {
+        "status": "approved",
+        "approvedAt": "2026-11-05T01:00:00Z",
+        "shots": "d5f614b2a359",
+        "note": "batch-2 (apex-gnome#284, 2ef7e44), owner approved all"
+      }
+    },
+    "26-update-health-health-failure": {
+      "board": 26,
+      "title": "Update health failure",
+      "slug": "update-health-health-failure",
+      "source": "tests/control-center/run.sh",
+      "fixture": "Software Updates after an update whose health check failed (update1.py health-failure)",
+      "scene": {
+        "light": "updates-health-failure",
+        "dark": "updates-health-failure-dark"
+      },
+      "shots": "68dcf42cd072",
+      "files": {
+        "light": "boards/board-26-update-health-health-failure-light.png",
+        "dark": "boards/board-26-update-health-health-failure-dark.png"
+      },
+      "pins": {
+        "apexGnome": "da4b9a1544b8d43d0380995404c1ba6a1af61fcc",
+        "apexDesktop": "44d889fe455a4dd3e62bfa33796fb89d9bc2ff4f"
+      },
+      "scale": 2,
+      "monitor": "2880x1800",
+      "approval": {
+        "status": "approved",
+        "approvedAt": "2026-11-05T01:00:00Z",
+        "shots": "68dcf42cd072",
+        "note": "batch-2 (apex-gnome#284, 2ef7e44), owner approved all"
+      }
+    },
+    "26-update-health-fallback": {
+      "board": 26,
+      "title": "Update health failure",
+      "slug": "update-health-fallback",
+      "source": "tests/control-center/run.sh",
+      "fixture": "Software Updates booted back into the previous version (update1.py fallback)",
+      "scene": {
+        "light": "updates-fallback",
+        "dark": "updates-fallback-dark"
+      },
+      "shots": "79b90b27ac4c",
+      "files": {
+        "light": "boards/board-26-update-health-fallback-light.png",
+        "dark": "boards/board-26-update-health-fallback-dark.png"
+      },
+      "pins": {
+        "apexGnome": "da4b9a1544b8d43d0380995404c1ba6a1af61fcc",
+        "apexDesktop": "44d889fe455a4dd3e62bfa33796fb89d9bc2ff4f"
+      },
+      "scale": 2,
+      "monitor": "2880x1800",
+      "approval": {
+        "status": "approved",
+        "approvedAt": "2026-11-05T01:00:00Z",
+        "shots": "79b90b27ac4c",
+        "note": "batch-2 (apex-gnome#284, 2ef7e44), owner approved all"
+      }
+    },
+    "26-update-health-fallback-changes": {
+      "board": 26,
+      "title": "Update health failure",
+      "slug": "update-health-fallback-changes",
+      "source": "tests/control-center/run.sh",
+      "fixture": "the set-aside version's changes from Show Changes, in board 18's grid (update1.py fallback)",
+      "scene": {
+        "light": "updates-fallback-changes",
+        "dark": null
+      },
+      "shots": "6017a7600102",
+      "files": {
+        "light": "boards/board-26-update-health-fallback-changes-light.png",
+        "dark": null
+      },
+      "pins": {
+        "apexGnome": "da4b9a1544b8d43d0380995404c1ba6a1af61fcc",
+        "apexDesktop": "44d889fe455a4dd3e62bfa33796fb89d9bc2ff4f"
+      },
+      "scale": 2,
+      "monitor": "2880x1800",
+      "approval": {
+        "status": "approved",
+        "approvedAt": "2026-11-05T01:00:00Z",
+        "shots": "6017a7600102",
+        "note": "batch-2 (apex-gnome#284, 2ef7e44), owner approved all"
+      }
+    },
+    "27-files-home-home": {
+      "board": 27,
+      "title": "Files: Home",
+      "slug": "files-home-home",
+      "source": "tests/nautilus/shoot.sh",
+      "fixture": "the home folder of home.py in the icon view",
+      "scene": {
+        "light": "home-light",
+        "dark": "home-dark"
+      },
+      "shots": "2998adc7feda",
+      "files": {
+        "light": "boards/board-27-files-home-home-light.png",
+        "dark": "boards/board-27-files-home-home-dark.png"
+      },
+      "pins": {
+        "apexGnome": "da4b9a1544b8d43d0380995404c1ba6a1af61fcc",
+        "apexDesktop": "44d889fe455a4dd3e62bfa33796fb89d9bc2ff4f"
+      },
+      "scale": 2,
+      "monitor": "2880x1800",
+      "approval": {
+        "status": "approved",
+        "approvedAt": "2026-11-05T01:00:00Z",
+        "shots": "2998adc7feda",
+        "note": "batch-2 (apex-gnome#284, 2ef7e44), owner approved all"
+      }
+    },
+    "28-files-list-documents": {
+      "board": 28,
+      "title": "Files: list and details",
+      "slug": "files-list-documents",
+      "source": "tests/nautilus/shoot.sh",
+      "fixture": "Documents in the list view, the spec selected, details on",
+      "scene": {
+        "light": "documents-light",
+        "dark": "documents-dark"
+      },
+      "shots": "237c6a2cf83e",
+      "files": {
+        "light": "boards/board-28-files-list-documents-light.png",
+        "dark": "boards/board-28-files-list-documents-dark.png"
+      },
+      "pins": {
+        "apexGnome": "da4b9a1544b8d43d0380995404c1ba6a1af61fcc",
+        "apexDesktop": "44d889fe455a4dd3e62bfa33796fb89d9bc2ff4f"
+      },
+      "scale": 2,
+      "monitor": "2880x1800",
+      "approval": {
+        "status": "approved",
+        "approvedAt": "2026-11-05T01:00:00Z",
+        "shots": "237c6a2cf83e",
+        "note": "batch-2 (apex-gnome#284, 2ef7e44), owner approved all"
+      }
+    },
+    "29-files-search-search": {
+      "board": 29,
+      "title": "Files: search",
+      "slug": "files-search-search",
+      "source": "tests/nautilus/shoot.sh",
+      "fixture": "a search for \"apex\" from the home folder, in the list view",
+      "scene": {
+        "light": "search-light",
+        "dark": "search-dark"
+      },
+      "shots": "67b9a6c474de",
+      "files": {
+        "light": "boards/board-29-files-search-search-light.png",
+        "dark": "boards/board-29-files-search-search-dark.png"
+      },
+      "pins": {
+        "apexGnome": "da4b9a1544b8d43d0380995404c1ba6a1af61fcc",
+        "apexDesktop": "44d889fe455a4dd3e62bfa33796fb89d9bc2ff4f"
+      },
+      "scale": 2,
+      "monitor": "2880x1800",
+      "approval": {
+        "status": "approved",
+        "approvedAt": "2026-11-05T01:00:00Z",
+        "shots": "67b9a6c474de",
+        "note": "batch-2 (apex-gnome#284, 2ef7e44), owner approved all"
+      }
+    },
+    "32-terminal-sessions-sessions": {
+      "board": 32,
+      "title": "Terminal: sessions",
+      "slug": "terminal-sessions-sessions",
+      "source": "tests/ptyxis/shoot.sh",
+      "fixture": "the sessions of board 32, typed in by a virtual keyboard, statuses from vte.sh",
+      "scene": {
+        "light": "light",
+        "dark": "dark"
+      },
+      "shots": "a078f914d7f1",
+      "files": {
+        "light": "boards/board-32-terminal-sessions-sessions-light.png",
+        "dark": "boards/board-32-terminal-sessions-sessions-dark.png"
+      },
+      "pins": {
+        "apexGnome": "da4b9a1544b8d43d0380995404c1ba6a1af61fcc",
+        "apexDesktop": "44d889fe455a4dd3e62bfa33796fb89d9bc2ff4f"
+      },
+      "scale": 2,
+      "monitor": "2880x1800",
+      "approval": {
+        "status": "approved",
+        "approvedAt": "2026-11-05T01:00:00Z",
+        "shots": "a078f914d7f1",
+        "note": "batch-2 (apex-gnome#284, 2ef7e44), owner approved all"
+      }
+    },
+    "33-terminal-split-split": {
+      "board": 33,
+      "title": "Terminal: split panes, needs you",
+      "slug": "terminal-split-split",
+      "source": "tests/ptyxis/shoot.sh",
+      "fixture": "board 32's sessions with apex-gnome in a right split",
+      "scene": {
+        "light": "split-light",
+        "dark": "split-dark"
+      },
+      "shots": "b2d1fe1b8384",
+      "files": {
+        "light": "boards/board-33-terminal-split-split-light.png",
+        "dark": "boards/board-33-terminal-split-split-dark.png"
+      },
+      "pins": {
+        "apexGnome": "da4b9a1544b8d43d0380995404c1ba6a1af61fcc",
+        "apexDesktop": "44d889fe455a4dd3e62bfa33796fb89d9bc2ff4f"
+      },
+      "scale": 2,
+      "monitor": "2880x1800",
+      "approval": {
+        "status": "approved",
+        "approvedAt": "2026-11-05T01:00:00Z",
+        "shots": "b2d1fe1b8384",
+        "note": "batch-2 (apex-gnome#284, 2ef7e44), owner approved all"
+      }
+    },
+    "31-symbolic-core": {
+      "board": 31,
+      "title": "Apex Symbolic: contact sheet",
+      "slug": "symbolic-core",
+      "source": "apex-desktop tools/icons/contact-sheet.sh",
+      "fixture": "boards.txt's core glyphs as GTK 4 draws them, recoloured, at scale 2",
+      "scene": {
+        "light": "board-31-symbolic-core-light",
+        "dark": "board-31-symbolic-core-dark"
+      },
+      "shots": "817e6f642b90",
+      "files": {
+        "light": "boards/board-31-symbolic-core-light.png",
+        "dark": "boards/board-31-symbolic-core-dark.png"
+      },
+      "pins": {
+        "apexGnome": "da4b9a1544b8d43d0380995404c1ba6a1af61fcc",
+        "apexDesktop": "44d889fe455a4dd3e62bfa33796fb89d9bc2ff4f"
+      },
+      "scale": 2,
+      "monitor": "2880x1800",
+      "approval": {
+        "status": "approved",
+        "approvedAt": "2026-11-05T01:00:00Z",
+        "shots": "817e6f642b90",
+        "note": "batch-2 (apex-gnome#284, 2ef7e44), owner approved all"
+      }
+    },
+    "31-symbolic-status": {
+      "board": 31,
+      "title": "Apex Symbolic: contact sheet",
+      "slug": "symbolic-status",
+      "source": "apex-desktop tools/icons/contact-sheet.sh",
+      "fixture": "boards.txt's status glyphs as GTK 4 draws them, recoloured, at scale 2",
+      "scene": {
+        "light": "board-31-symbolic-status-light",
+        "dark": "board-31-symbolic-status-dark"
+      },
+      "shots": "01597bbdf1a8",
+      "files": {
+        "light": "boards/board-31-symbolic-status-light.png",
+        "dark": "boards/board-31-symbolic-status-dark.png"
+      },
+      "pins": {
+        "apexGnome": "da4b9a1544b8d43d0380995404c1ba6a1af61fcc",
+        "apexDesktop": "44d889fe455a4dd3e62bfa33796fb89d9bc2ff4f"
+      },
+      "scale": 2,
+      "monitor": "2880x1800",
+      "approval": {
+        "status": "approved",
+        "approvedAt": "2026-11-05T01:00:00Z",
+        "shots": "01597bbdf1a8",
+        "note": "batch-2 (apex-gnome#284, 2ef7e44), owner approved all"
+      }
+    },
+    "31-symbolic-actions": {
+      "board": 31,
+      "title": "Apex Symbolic: contact sheet",
+      "slug": "symbolic-actions",
+      "source": "apex-desktop tools/icons/contact-sheet.sh",
+      "fixture": "boards.txt's actions glyphs as GTK 4 draws them, recoloured, at scale 2",
+      "scene": {
+        "light": "board-31-symbolic-actions-light",
+        "dark": "board-31-symbolic-actions-dark"
+      },
+      "shots": "2f11291b800e",
+      "files": {
+        "light": "boards/board-31-symbolic-actions-light.png",
+        "dark": "boards/board-31-symbolic-actions-dark.png"
+      },
+      "pins": {
+        "apexGnome": "da4b9a1544b8d43d0380995404c1ba6a1af61fcc",
+        "apexDesktop": "44d889fe455a4dd3e62bfa33796fb89d9bc2ff4f"
+      },
+      "scale": 2,
+      "monitor": "2880x1800",
+      "approval": {
+        "status": "approved",
+        "approvedAt": "2026-11-05T01:00:00Z",
+        "shots": "2f11291b800e",
+        "note": "batch-2 (apex-gnome#284, 2ef7e44), owner approved all"
+      }
+    },
+    "31-symbolic-everywhere": {
+      "board": 31,
+      "title": "Apex Symbolic: contact sheet",
+      "slug": "symbolic-everywhere",
+      "source": "apex-desktop tools/icons/contact-sheet.sh",
+      "fixture": "boards.txt's everywhere glyphs as GTK 4 draws them, recoloured, at scale 2",
+      "scene": {
+        "light": "board-31-symbolic-everywhere-light",
+        "dark": "board-31-symbolic-everywhere-dark"
+      },
+      "shots": "fbee21879fa1",
+      "files": {
+        "light": "boards/board-31-symbolic-everywhere-light.png",
+        "dark": "boards/board-31-symbolic-everywhere-dark.png"
+      },
+      "pins": {
+        "apexGnome": "da4b9a1544b8d43d0380995404c1ba6a1af61fcc",
+        "apexDesktop": "44d889fe455a4dd3e62bfa33796fb89d9bc2ff4f"
+      },
+      "scale": 2,
+      "monitor": "2880x1800",
+      "approval": {
+        "status": "approved",
+        "approvedAt": "2026-11-05T01:00:00Z",
+        "shots": "fbee21879fa1",
+        "note": "batch-2 (apex-gnome#284, 2ef7e44), owner approved all"
+      }
+    },
+    "31-symbolic-aliases": {
+      "board": 31,
+      "title": "Apex Symbolic: contact sheet",
+      "slug": "symbolic-aliases",
+      "source": "apex-desktop tools/icons/contact-sheet.sh",
+      "fixture": "boards.txt's aliases as GTK 4 draws them, recoloured, at scale 2",
+      "scene": {
+        "light": "board-31-symbolic-aliases-light",
+        "dark": "board-31-symbolic-aliases-dark"
+      },
+      "shots": "e92c05757511",
+      "files": {
+        "light": "boards/board-31-symbolic-aliases-light.png",
+        "dark": "boards/board-31-symbolic-aliases-dark.png"
+      },
+      "pins": {
+        "apexGnome": "da4b9a1544b8d43d0380995404c1ba6a1af61fcc",
+        "apexDesktop": "44d889fe455a4dd3e62bfa33796fb89d9bc2ff4f"
+      },
+      "scale": 2,
+      "monitor": "2880x1800",
+      "approval": {
+        "status": "approved",
+        "approvedAt": "2026-11-05T01:00:00Z",
+        "shots": "e92c05757511",
+        "note": "batch-2 (apex-gnome#284, 2ef7e44), owner approved all"
       }
     }
   }
