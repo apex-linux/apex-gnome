@@ -33,7 +33,6 @@ readonly RPMS=${1:-$APEX_ROOT/_build/gnome-builder/out}
 readonly OUT=$APEX_ROOT/_build/gnome-builder/run
 readonly TOOLBOX=fedora-toolbox-45
 readonly IMAGE=registry.fedoraproject.org/fedora-toolbox:45
-# The setup gbp-apex-workbench-addin.c's Create Toolbox runs, as root has no sudo prompt.
 readonly SETUP='sudo dnf -y -q install rust-analyzer cargo rust python3-lsp-server python3-pyflakes nodejs-npm && sudo npm install -g --no-fund --no-audit typescript-language-server typescript'
 readonly FIRST_FRAME_MS=${BUILDER_FIRST_FRAME_MS:-1900}
 readonly RSS_MIB=${BUILDER_RSS_MIB:-360}
@@ -45,7 +44,6 @@ rpms=("$RPMS"/gnome-builder-[0-9]*.x86_64.rpm)
 shopt -u nullglob
 ((${#rpms[@]} == 1)) || die "run.sh: expected one gnome-builder x86_64 RPM in $RPMS"
 rm -f /etc/rpm/macros.image-language-conf
-# reinstall too: an earlier run may have left a build with the same NEVRA.
 for verb in install reinstall; do
     dnf5 -y -q --setopt=install_weak_deps=False --repo=fedora --repo=updates "$verb" "${rpms[0]}" ||
         die "run.sh: cannot $verb ${rpms[0]##*/}"
@@ -66,8 +64,7 @@ mkdir -p /etc/containers
     printf '[containers]\npids_limit=0\n[engine]\ncgroup_manager="cgroupfs"\n' >/etc/containers/containers.conf
 [[ -f /etc/containers/storage.conf ]] ||
     printf '[storage]\ndriver="overlay"\n[storage.options.overlay]\nmount_program="/usr/bin/fuse-overlayfs"\n' >/etc/containers/storage.conf
-# Fedora's toolbox binary loads through /run/host, as inside a toolbox; tmpfiles.d/toolbox.conf links it on a
-# booted host, and nothing does in a container without systemd.
+# Fedora's toolbox loads through /run/host, which only tmpfiles.d/toolbox.conf links on a booted host.
 [[ -e /run/host ]] || ln -s ../ /run/host
 toolbox_failed() {
     tail -n 20 "$OUT/toolbox.log" >&2
@@ -87,7 +84,6 @@ git -c safe.directory='*' -C "$APEX_ROOT" archive --format=tar --prefix=apex-gno
 rm -f "$project/.buildconfig"
 printf 'import os\n\n\ndef f(a):\n    return undefined_name + a\n' >"$project/tests/e1_lsp.py"
 
-# The probe asks for each cold start's dropped page cache through this file.
 drop=$OUT/drop-caches
 (while sleep 0.1; do [[ -f $drop ]] && { sync; echo 3 >/proc/sys/vm/drop_caches; rm -f "$drop"; }; done) &
 dropper=$!
