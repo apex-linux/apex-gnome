@@ -39,6 +39,36 @@ msgstr ""
 msgid "Apex Code — Preferences"
 msgstr ""
 
+#: src/plugins/apex/gbp-apex-a11y-addins.c:40
+msgid "Build Details"
+msgstr ""
+
+#: src/plugins/apex/gbp-apex-a11y-addins.c:42
+msgid "New Page"
+msgstr ""
+
+#: src/plugins/apex/gbp-apex-a11y-addins.c:44
+msgid "Sidebar Menu"
+msgstr ""
+
+#: src/plugins/apex/gbp-apex-a11y-addins.c:46
+msgid "Open Pages"
+msgstr ""
+
+#: src/plugins/apex/gbp-apex-a11y-addins.c:54
+msgid "Run Options"
+msgstr ""
+
+#: src/plugins/apex/gbp-apex-a11y-addins.c:66
+msgid "Run Project"
+msgstr ""
+
+#. TRANSLATORS: the editor's accessible name; %s is the file
+#: src/plugins/apex/gbp-apex-a11y-addins.c:162
+#, c-format
+msgid "Editor for %s"
+msgstr ""
+
 #: src/plugins/apex/gbp-apex-workbench-addin.c:63
 msgid "Create Toolbox"
 msgstr ""

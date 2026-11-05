@@ -99,6 +99,11 @@ builder_image := "registry.fedoraproject.org/fedora:45@sha256:1e13e11f63e147a40a
 builder-test:
     tests/builder/selftest.sh
 
+# The Apex Code that builder-lane built, in a headless gnome-shell with fedora-toolbox-45: E1's start and memory budgets, its AT-SPI names, pylsp answering (podman or docker, privileged); in _build/gnome-builder/run.
+builder-run:
+    engine=$(command -v podman || command -v docker) && "$engine" run --rm --privileged -v "{{justfile_directory()}}:/apex-gnome:z" -w /apex-gnome {{builder_image}} \
+        bash -c 'dnf5 -y -q --setopt=install_weak_deps=False install gnome-shell mesa-dri-drivers dbus-daemon python3-gobject at-spi2-core procps-ng podman toolbox fuse-overlayfs jq git-core tar && tests/builder/run.sh _build/gnome-builder/out'
+
 # GNOME Builder rebuilt as Apex Code as the lane builds it (apex-lane's container half), in fedora:45 with podman or docker; RPMs in _build/gnome-builder/out.
 builder-lane:
     engine=$(command -v podman || command -v docker) && "$engine" run --rm -v "{{justfile_directory()}}:/apex-gnome:z" -w /apex-gnome {{builder_image}} tests/lib/lane.sh gnome-builder

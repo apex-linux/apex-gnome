@@ -22,7 +22,7 @@ Ptyxis, each rebuilt in the lane from its recipe in `packaging/pkgs/`.
 | `desktop/nautilus/`, `packaging/pkgs/nautilus/` | nautilus rebuilt in the lane for Files, boards 27 to 29: its sources (`src/apex/`) and its recipe ([README](packaging/pkgs/nautilus/README.md)) |
 | `tests/nautilus/` | the checks of `desktop/nautilus/`, the texts' unit test, and the captures with board 27's home (`shoot.sh`) |
 | `desktop/gnome-builder/`, `packaging/pkgs/gnome-builder/` | GNOME Builder rebuilt in the lane as Apex Code, track E (ADR 0017 in apex-linux/apex): its built-in plugin (`src/plugins/apex/`) and its recipe ([README](packaging/pkgs/gnome-builder/README.md)) |
-| `tests/builder/` | the checks of `desktop/gnome-builder/` |
+| `tests/builder/` | the checks of `desktop/gnome-builder/`, and Apex Code in a headless shell with fedora-toolbox-45: E1's start and memory budgets, its AT-SPI names, pylsp answering in the toolbox (`run.sh`) |
 | `tests/shell/` | the lock screen and the greeter of the lane's gnome-shell, boards 20 and 12, against a GDM mock that fails every answer (`gdm-mock.py`): captures and their assertions (`shoot.sh`) |
 
 [apex-image](https://github.com/apex-linux/apex-image) pins this repository by commit in
@@ -59,6 +59,7 @@ just s2c-radius     # podman or docker, after the three lanes: Settings' Corner 
 just nautilus-lane # podman or docker: nautilus rebuilt as the lane builds it, RPMs in _build/nautilus/out
 just nautilus-shots # podman or docker: that nautilus captured in a headless gnome-shell, light and dark
 just builder-lane  # podman or docker: GNOME Builder rebuilt as Apex Code as the lane builds it, RPMs in _build/gnome-builder/out
+just builder-run   # podman or docker, privileged: that Apex Code against E1's budgets, its AT-SPI names, pylsp in the toolbox
 just gnome-shell-lane # podman or docker: gnome-shell rebuilt as the lane builds it, RPMs in _build/gnome-shell/out
 just s7-accent       # podman or docker, after gnome-shell-lane: the accent from blue to green and pink under Files, the chooser and Spotlight
 just lock-shots  # podman or docker: its lock screen and greeter, light and dark, against a GDM mock
