@@ -58,10 +58,10 @@ group "fedora-toolbox-45"
 # The toolbox shares the account's home from passwd; CI's HOME (/github/home) is not it.
 HOME=$(getent passwd "$(id -un)" | cut -d: -f6)
 export HOME SHELL=/bin/bash
-# podman in a container: no cgroup controllers to delegate, overlay through fuse.
+# podman without systemd: no cgroup controllers to delegate, no journald, overlay through fuse.
 mkdir -p /etc/containers
 [[ -f /etc/containers/containers.conf ]] ||
-    printf '[containers]\npids_limit=0\n[engine]\ncgroup_manager="cgroupfs"\n' >/etc/containers/containers.conf
+    printf '[containers]\npids_limit=0\nlog_driver="k8s-file"\n[engine]\ncgroup_manager="cgroupfs"\nevents_logger="file"\n' >/etc/containers/containers.conf
 [[ -f /etc/containers/storage.conf ]] ||
     printf '[storage]\ndriver="overlay"\n[storage.options.overlay]\nmount_program="/usr/bin/fuse-overlayfs"\n' >/etc/containers/storage.conf
 # Fedora's toolbox loads through /run/host, which only tmpfiles.d/toolbox.conf links on a booted host.
