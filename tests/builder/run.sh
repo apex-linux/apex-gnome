@@ -62,6 +62,9 @@ mkdir -p /etc/containers
     printf '[containers]\npids_limit=0\n[engine]\ncgroup_manager="cgroupfs"\n' >/etc/containers/containers.conf
 [[ -f /etc/containers/storage.conf ]] ||
     printf '[storage]\ndriver="overlay"\n[storage.options.overlay]\nmount_program="/usr/bin/fuse-overlayfs"\n' >/etc/containers/storage.conf
+# Fedora's toolbox binary loads through /run/host, as inside a toolbox; tmpfiles.d/toolbox.conf links it on a
+# booted host, and nothing does in a container without systemd.
+[[ -e /run/host ]] || ln -s ../ /run/host
 toolbox_failed() {
     tail -n 20 "$OUT/toolbox.log" >&2
     die "run.sh: $1; see ${OUT#"$APEX_ROOT/"}/toolbox.log"
