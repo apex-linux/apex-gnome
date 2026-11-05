@@ -3,6 +3,7 @@
 
 plugins_sources += files([
   'apex-plugin.c',
+  'gbp-apex-a11y-addins.c',
   'gbp-apex-workbench-addin.c',
 ])
 

@@ -42,6 +42,7 @@ checks both.
 |---|---|
 | `meson.build`, `apex.gresource.xml`, `apex.plugin`, `apex-plugin.c` | the built-in plugin `apex` (Builder links its plugins into the executable): it registers one workbench addin, and depends on `podman` |
 | `gbp-apex-workbench-addin.c` | toolbox by default (below), and the notifications for a missing toolbox or a project outside it |
+| `gbp-apex-a11y-addins.c` | E0's AT-SPI gaps: the editor named for its file, and the icon-only menu buttons named (below) |
 | `apex-brand.h` | the name: `apex_code_name()`, `apex_code_title()`, `apex_code_preferences_title()` |
 | `apex-toolbox.h` | `apex_podman_container_shares_path()`: whether a container's mounts (from `podman ps --format=json`) hold a path |
 | `apex-i18n.h`, `po/` | Apex's own gettext domain, `apex-builder`, with `vi.po`; `lint/i18n.sh` holds the template and `vi.po` to the sources |
@@ -72,6 +73,25 @@ a project loads, the addin lists the toolbox containers (`podman ps --all --no-t
   A toolbox the image or the first login creates is used as is.
 - A project outside the folders the toolbox mounts (outside `$HOME`, `/mnt`, `/media`,
   `/run/media`) gets a notification saying so; patch 0004 keeps its servers from starting.
+
+### AT-SPI names
+
+E0 found the editor's text and eight buttons and toggle buttons without a name (four menu
+buttons, each a button holding a toggle button), and the Run button's dropdown and main
+button both named "More Options". Two addins name them, with no hunk in upstream files:
+
+| Widget | Name | How |
+|---|---|---|
+| the editor (`IdeSourceView`) | "Editor for e0_typing.py" | an editor page addin sets the accessible label from the page's title, and follows it |
+| the header's new-page menu (`list-add-symbolic`) | "New Page" | a workspace addin gives each icon-only menu button without a tooltip one, by its icon |
+| the omnibar's dropdown (libpanel's, no icon) | "Build Details" | the same, by its `PanelOmniBar` ancestor |
+| the sidebar's menu (`open-menu-symbolic`) | "Sidebar Menu" | the same |
+| each tab bar's page menu (`pan-down-symbolic`) | "Open Pages" | the same, again on each page change, for the frames a split adds |
+| the Run button's dropdown | "Run Options" | `adw_split_button_set_dropdown_tooltip()` |
+| the Run button's main button | "Run Project (Shift+Ctrl+Space)", or "Stop Running Project" | libadwaita labels it by its dropdown; the addin replaces that relation with `IdeRunButton`'s own tooltip, and follows it |
+
+E0's gaps 3 to 6 that remain (the diagnostics button's "0 0", the progress bar, the tab
+lists and the filter entry, the empty status label) are E2's, with the status strip.
 
 ### Translations
 
@@ -144,6 +164,7 @@ and `just pkg-export gnome-builder`.
 ```bash
 just builder-test   # desktop/gnome-builder's licence and paths, the series, the patches' From: lines
 just builder-lane   # podman or docker: apex-lane's container half in fedora:45
+just builder-run    # podman or docker, privileged: the built RPM against E1's budgets, names and toolbox
 ```
 
 `tests/lib/lane.sh gnome-builder` builds `apex-lane` from a pinned apex-image commit and
@@ -153,3 +174,28 @@ does: the SRPM's signature, `spec-edit`, the series at fuzz 0, the exact-tree ch
 checks and `check.sh`. It leaves out what the VM adds, the signing and the store. The RPMs
 and logs land in `_build/gnome-builder/out/`. CI runs it on every push and keeps the RPM as
 the `gnome-builder-rpms` artifact.
+
+## The lane case
+
+`tests/builder/run.sh` installs that RPM in a privileged fedora:45 container, creates
+`fedora-toolbox-45` with the setup Apex Code's Create Toolbox runs, copies this repository
+to `~/Projects/apex-gnome` (inside the toolbox's shares), and runs gnome-shell headless at
+1920×1080 as root, E0's setting. Its automation script, `probe.js`:
+
+- starts Apex Code three times on the project, after a discarded start, each after
+  `run.sh` drops the page cache; it times the spawn to the first painted frame as E0 did
+  (the window's `first-frame`, then the stage's next `after-paint`);
+- opens `tests/e1_lsp.py`, maximises the window, waits 30 s, and samples Apex Code's own
+  process tree ten times (`mem.py`: RSS and PSS from `smaps_rollup`, the language servers
+  and the `podman exec` clients apart, as E0 counted);
+- reads every button, toggle button and text over AT-SPI (`atspi.py`);
+- starts Apex Code again with its verbose log, types `os.pa` into `tests/e1_lsp.py`, and
+  waits for pylsp, in the toolbox, to answer the completion request.
+
+It fails above E1's column of E0's budgets: a first frame over 1.9 s (median of 3), idle
+RSS over 360 MiB or PSS over 270 MiB (median of 10); a missing name of the table above,
+any unnamed button or toggle button, or no completion from pylsp. In the session the desktop
+portal is masked: in a headless container it waits 25 s on RealtimeKit and Builder waits
+on it. Here (4 vCPUs, software rendering): first frames 1731, 1932 and 1605 ms, idle RSS
+338 MiB and PSS 239 MiB with pylsp running, 463 completion items. CI runs it after the lane
+and keeps `run.json` and the logs as the `gnome-builder-run` artifact.
