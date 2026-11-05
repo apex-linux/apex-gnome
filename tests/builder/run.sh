@@ -46,9 +46,10 @@ shopt -u nullglob
 ((${#rpms[@]} == 1)) || die "run.sh: expected one gnome-builder x86_64 RPM in $RPMS"
 rm -f /etc/rpm/macros.image-language-conf
 # reinstall too: an earlier run may have left a build with the same NEVRA.
-dnf5 -y -q --setopt=install_weak_deps=False --repo=fedora --repo=updates install "${rpms[0]}" &&
-    dnf5 -y -q --setopt=install_weak_deps=False --repo=fedora --repo=updates reinstall "${rpms[0]}" ||
-    die "run.sh: cannot install ${rpms[0]##*/}"
+for verb in install reinstall; do
+    dnf5 -y -q --setopt=install_weak_deps=False --repo=fedora --repo=updates "$verb" "${rpms[0]}" ||
+        die "run.sh: cannot $verb ${rpms[0]##*/}"
+done
 rm -rf "$OUT" && mkdir -p "$OUT"
 
 group "fedora-toolbox-45"
