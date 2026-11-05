@@ -12,7 +12,7 @@ from collections import Counter
 
 import gi
 
-from ccatspi import Atspi, failures, find_app, finish, spin, walk
+from ccatspi import Atspi, a11y_ready, failures, find_app, finish, spin, walk
 from contrast import FOCUS_CHANGED, FOCUS_MARGIN, perimeter, ratio
 
 gi.require_version("GdkPixbuf", "2.0")
@@ -460,6 +460,7 @@ def updates(app, surface):
 def main():
     surface = sys.argv[1]
     app = find_app()
+    a11y_ready(app)
     park()
     if surface == "apex":
         apex(app)

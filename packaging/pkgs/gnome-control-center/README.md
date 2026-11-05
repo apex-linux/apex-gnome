@@ -366,6 +366,11 @@ list's border line), and mixes suggested buttons' accent with black so white tex
 4.5:1 whatever the accent. At Large Text `fonts.py` also checks that each label
 `apex.css` sizes in pt is drawn at its rule's size times 1.25, where a px size would stay
 put. These cases come after every other, as a setting stays from one case to the next.
+Before it walks, `a11y.py` checks that at-spi2-registryd lists gnome-shell and Settings and that
+both answer a ping on the accessibility bus (`APEXCC-A11Y-READY`). While it walks, it ends at once,
+naming the app, if the registry drops either one: the registry disables an app that leaves its
+ping unanswered for 10 s, and every later call to that app would otherwise hang to the case's
+timeout.
 
 In these captures the sidebar has no separator under Apex Desktop: the fixtures offer no
 Wi-Fi device, so the Wi-Fi row, the one after the separator in `panel_order[]`, is not
