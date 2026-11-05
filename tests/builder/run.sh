@@ -62,9 +62,13 @@ mkdir -p /etc/containers
     printf '[containers]\npids_limit=0\n[engine]\ncgroup_manager="cgroupfs"\n' >/etc/containers/containers.conf
 [[ -f /etc/containers/storage.conf ]] ||
     printf '[storage]\ndriver="overlay"\n[storage.options.overlay]\nmount_program="/usr/bin/fuse-overlayfs"\n' >/etc/containers/storage.conf
+toolbox_failed() {
+    tail -n 20 "$OUT/toolbox.log" >&2
+    die "run.sh: $1; see ${OUT#"$APEX_ROOT/"}/toolbox.log"
+}
 if ! podman container exists "$TOOLBOX"; then
-    toolbox create --assumeyes --image "$IMAGE" "$TOOLBOX" >"$OUT/toolbox.log" 2>&1 || die "run.sh: toolbox create failed; see $OUT/toolbox.log"
-    toolbox run --container "$TOOLBOX" sh -c "$SETUP" >>"$OUT/toolbox.log" 2>&1 || die "run.sh: the toolbox setup failed; see $OUT/toolbox.log"
+    toolbox create --assumeyes --image "$IMAGE" "$TOOLBOX" >"$OUT/toolbox.log" 2>&1 || toolbox_failed "toolbox create failed"
+    toolbox run --container "$TOOLBOX" sh -c "$SETUP" >>"$OUT/toolbox.log" 2>&1 || toolbox_failed "the toolbox setup failed"
 fi
 (cd "$HOME" && toolbox run --container "$TOOLBOX" sh -c 'command -v pylsp rust-analyzer typescript-language-server' >"$OUT/servers.txt") ||
     die "run.sh: $TOOLBOX lacks a language server"
