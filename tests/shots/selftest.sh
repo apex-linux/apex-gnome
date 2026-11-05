@@ -876,7 +876,7 @@ CHANGES
 test_pill_gaps() {
     local want_failures want_gaps sharing what passes failures open_gaps edges
     while IFS='|' read -r want_failures want_gaps sharing what; do
-        edges=".barPills.pills.recording.edge.ratio = 2.02 | .barPills.pills.sharing.edge.ratio = $sharing | .barPills.pills.privacy.edge.ratio = 1.62"
+        edges=".barPills.pills.recording.edge.ratio = 3.07 | .barPills.pills.sharing.edge.ratio = $sharing | .barPills.pills.privacy.edge.ratio = 3.06"
         read -r passes failures open_gaps <<<"$(a11y_run a11y_contrast "$edges" default-solid 2.22)"
         if ((failures == want_failures && open_gaps == want_gaps)); then
             ok "pill gaps: $what fails $want_failures, $want_gaps gap(s)"
@@ -884,9 +884,8 @@ test_pill_gaps() {
             not_ok "pill gaps: $what fails $want_failures, $want_gaps gap(s) (passed/failed/gaps $passes/$failures/$open_gaps): $(grep -m3 '^FAIL' "$T/a11y.out" | paste -sd'|' -)"
         fi
     done <<'CHANGES'
-0|7|1.62|default-solid's three pill fills at today's ratios, beside its two inactive-dot gaps
-1|7|1.61|the sharing pill's fill below today's 1.62:1
-1|6|3|the sharing pill's fill at 3:1: its gap must go
+0|4|3.06|default-solid's three pill fills at 3:1 or more, no pill gap left beside its four other gaps
+1|4|2.99|the sharing pill's fill below 3:1, with no pin to fall back on
 CHANGES
 }
 
@@ -1671,9 +1670,9 @@ test_indicators() {
 .everything.order = ["indicators", "divider", "apex-search", "screenRecording", "screenSharing", "keyboard", "quickSettings"]|the sharing pill before the input chip
 .everything.sharing.name = "Stop Screen Sharing"|the sharing pill under stock's name
 .everything.sharing.stop.radius = 4|a sharing stop dot instead of a square
-.everything.privacy.colour = "#c01c28ff"|a privacy group in the recording's red
+.everything.privacy.colour = "#8d151dff"|a privacy group in the recording's red
 .everything.pill.paddingLeft = 10|the pill's stock start beside the group
-.everything.privacy.glyphs[0].colour = "#c64600ff"|a privacy glyph in the group's orange
+.everything.privacy.glyphs[0].colour = "#7e2d00ff"|a privacy glyph in the group's orange
 .everything.privacy.next.x += 4|the next status glyph further from the group
 .everything.after.privacy = true|a privacy group left once nothing is in use
 .everything.recording.radius = 4|a recording pill with a square's corners
@@ -3742,7 +3741,7 @@ CHANGES
 # A privacy case on main's RPMs: both indicators on real streams, then gone.
 readonly PRIVACY_REPORT='{unit: {length: 1, fontSize: 1024}, before: {camera: false, microphone: false}, viewerStarts: 1, shown: true,
     inUse: {pill: {x: 1261, y: 4, width: 171, height: 24, paddingLeft: 4},
-        privacy: {x: 1265, y: 6, width: 48, height: 20, radius: 10, colour: "#c64600ff", next: {x: 1323, y: 4, width: 16, height: 24},
+        privacy: {x: 1265, y: 6, width: 48, height: 20, radius: 10, colour: "#7e2d00ff", next: {x: 1323, y: 4, width: 16, height: 24},
             glyphs: [{x: 1272, y: 6, width: 14, height: 20, iconName: "camera-web-symbolic", colour: "#ffffffff"},
                 {x: 1292, y: 6, width: 14, height: 20, iconName: "microphone-sensitivity-high-symbolic", colour: "#ffffffff"}]},
         microphone: "microphone-sensitivity-high-symbolic", stream: {name: "g2-mic", volume: 65536, muted: false, normal: 65536}},
@@ -3771,6 +3770,53 @@ test_privacy_case() {
 1|.after.privacy = .inUse.privacy|a group left after the streams stop
 1|.after.pill.paddingLeft = 4|a pill still padded for the group
 6|{error: "privacyReport: no PipeWire"}|a probe error
+CHANGES
+}
+
+readonly INPUT_SOURCES_MODE='{start: {source: "us", engine: "xkb:us::eng", chip: "EN"},
+    superSpace: {spotlight: true, source: "us", engine: "xkb:us::eng", chip: "EN"},
+    superAltSpace: {switcher: [["us", "m17n:vi:telex"]], source: "m17n:vi:telex", engine: "m17n:vi:telex", chip: "VI"},
+    superSpaceInTelex: {spotlight: true, source: "m17n:vi:telex", engine: "m17n:vi:telex", chip: "VI"},
+    shiftSuperAltSpace: {switcher: [["m17n:vi:telex", "us"]], source: "us", engine: "xkb:us::eng", chip: "EN"},
+    heldSuperAlt: {held: {shown: true, items: ["us", "m17n:vi:telex"], selected: "m17n:vi:telex", source: "us",
+        engine: "xkb:us::eng", chip: "EN"}, released: {shown: true, source: "m17n:vi:telex", engine: "m17n:vi:telex", chip: "VI"}},
+    back: {switcher: [["m17n:vi:telex", "us"]], source: "us", engine: "xkb:us::eng", chip: "EN"}}'
+readonly INPUT_SOURCES_REPORT="{ready: true, sources: [{type: \"xkb\", id: \"us\"}, {type: \"ibus\", id: \"m17n:vi:telex\"}],
+    telexEngine: \"m17n:vi:telex\", session: $INPUT_SOURCES_MODE, typed: {engine: \"m17n:vi:telex\", text: \"Việt \"},
+    overview: ({visible: true} + $INPUT_SOURCES_MODE), modals: 0}"
+
+test_input_sources_case() {
+    local run=$T/input-sources passes failures change what
+    mkdir -p "$run"
+    echo 'input-sources exit=0 secs=19 marker-after-exit=no' >"$run/results-main.txt"
+    while IFS='|' read -r failures change what; do
+        printf 'APEXG2-INPUT-SOURCES %s\n' "$(jq -nc "$INPUT_SOURCES_REPORT | $change")" >"$run/input-sources.log"
+        read -r passes _ <<<"$(assertion_counts input_sources_case "$run")"
+        expect_eq "input-sources: $what fails $failures of 16" "$failures" $((16 - passes))
+    done <<'CHANGES'
+0|.|the image's sources under both keys
+1|.ready = false|IBus never ready
+1|.sources[1].id = "m17n:vi:telex-ext"|another IBus engine than the image's Telex
+1|.session.superSpace.engine = "m17n:vi:telex"|Super+Space that also switches the IBus engine
+1|.session.superSpaceInTelex.source = "us"|Super+Space in Telex that switches the source back
+1|.session.superAltSpace.engine = "xkb:us::eng"|Super+Alt+Space that leaves the IBus engine on us
+1|.session.shiftSuperAltSpace.source = "m17n:vi:telex"|a Shift variant that does not go back
+1|.session.superAltSpace.switcher = []|a switch with no switcher shown
+1|.overview.visible = false|an overview that never opened
+1|.overview.superSpace.spotlight = false|Super+Space in the overview that opens nothing
+1|.overview.superAltSpace.source = "us"|Super+Alt+Space in the overview that switches nothing
+1|.overview.shiftSuperAltSpace.switcher = [["us"]]|a backward switcher in the overview without Telex
+1|.typed.text = "Vieetj "|Telex that composes nothing
+1|.session.heldSuperAlt.held.shown = false|a held chord with no switcher shown
+1|.session.heldSuperAlt.held.source = "m17n:vi:telex"|a held chord that switches before the release
+1|.overview.heldSuperAlt.held.selected = "us"|a held switcher highlighting the current source
+1|.overview.heldSuperAlt.released.engine = "xkb:us::eng"|a release that switches nothing
+1|.session.superAltSpace.chip = "EN"|a chip that stays EN on Telex
+1|.overview.superSpaceInTelex.chip = "Ắ"|a Telex chip showing its engine's symbol, not its language
+1|.overview.back.chip = "VI"|a chip that does not come back to EN
+1|.session.heldSuperAlt.released.chip = null|no chip on Telex
+1|.modals = 1|a grab left behind
+13|{error: "inputSourcesReport: no IBus"}|a probe error
 CHANGES
 }
 
@@ -4576,6 +4622,7 @@ test_no_disposed_at_shutdown
 test_exit_cut
 test_keys_case
 test_privacy_case
+test_input_sources_case
 test_shutdown_banner_case
 test_startup_handler_ran
 test_network_rows_centred

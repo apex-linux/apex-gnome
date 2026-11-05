@@ -585,8 +585,10 @@ $apex_indicator_switch_width: 30px;
 $apex_indicator_switch_height: 18px;
 $apex_indicator_switch_padding: 2px;
 $apex_indicator_switch_knob: 14px;
-$apex_privacy: #c64600;
-$apex_privacy_fg: #ffffff;
+// At 3:1 against the bar over Facets and a solid backdrop alike; the dark bar over #052b76 leaves no
+// fill that also holds white at 4.5:1, so the dark pills take dark content.
+$apex_privacy: if($variant == 'light', #7e2d00, #d95613);
+$apex_privacy_fg: if($variant == 'light', #ffffff, #16161a);
 $apex_privacy_height: 20px;
 $apex_privacy_padding: 7px;
 $apex_privacy_gap: 6px;
@@ -594,8 +596,8 @@ $apex_privacy_margin: 2px;
 $apex_privacy_icon_size: 14px;
 $apex_radius_privacy: 10px;
 $apex_bar_pill_padding_privacy: 4px;
-$apex_recording: #c01c28;
-$apex_recording_fg: #ffffff;
+$apex_recording: if($variant == 'light', #8d151d, #e54543);
+$apex_recording_fg: if($variant == 'light', #ffffff, #16161a);
 $apex_recording_padding_start: 8px;
 $apex_recording_padding_end: 10px;
 $apex_recording_gap: 7px;
