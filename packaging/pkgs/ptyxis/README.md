@@ -12,7 +12,7 @@ escalation rule. The lane, `apex-lane`, and the formats of the files here are in
 | `pkg.env` | the SRPM, the hold family `ptyxis`, the one binary package the image takes, and Source1 (`desktop/ptyxis/`, unpacked as `src/apex/`) |
 | `spec-edit` | anchored edits to Fedora's spec: `.apexN`, `Source100`, and the `%prep` line that unpacks it |
 | `series`, `patches/` | the hook hunks, one patch per concern |
-| `check.sh` | the lane checks of this package: upstream's resource still in `/usr/bin/ptyxis`, every resource file of Source1 in `/org/gnome/Ptyxis/apex`, the Apex marker and the sidebar's sheet, and Fedora's gschema override |
+| `check.sh` | the lane checks of this package: upstream's resource still in `/usr/bin/ptyxis`, every resource file of Source1 in `/org/gnome/Ptyxis/apex`, the Apex marker and the sidebar's sheet, the vi `apex-ptyxis.mo`, and Fedora's gschema override |
 
 ## What the build does to Fedora's package
 
@@ -21,6 +21,7 @@ escalation rule. The lane, `apex-lane`, and the formats of the files here are in
   process; it has no split panes and no sidebar.
 - `Release: %{autorelease}.apexN` gives `50.1-6.fc45.apexN`, above Fedora's build and
   below its next one.
+- `%find_lang apex-ptyxis` adds Apex's catalogue to the main package's list.
 - Fedora's own `Source1` is its gschema override, so the Apex archive is `Source100`:
   `apex-ptyxis-<tree>.tar`, the `git archive` of `desktop/ptyxis/`. `%prep` unpacks it
   at the top of the tree with `tar -xkf`, which gives `src/apex/` and never replaces an
@@ -47,6 +48,7 @@ path `source1_paths` allows; `tests/ptyxis/selftest.sh` checks both.
 | `src/apex/apex-session-state.c` | the status logic, without GTK: idle, running, done, failed, needs you; the subtitle; the relative time; the ssh host |
 | `src/apex/apex-panes.c` | board 33's splits: `ApexPanes` wraps the tab view in a `GtkPaned`; Split Right and Split Down (header toggles, Ctrl+Alt+R and Ctrl+Alt+D, `apex.split-right`/`-down`) give the selected session a second `PtyxisTab` beside it, in its working directory and container; each pane gets a 34 px header (its running command or "Shell", path, tag, the needs-you glyph, Close Pane on the second); the unfocused pane is dimmed (.7 header, .62 body); a session remembers its focused pane, and focusing a pane clears its "needs you". A session's row shows the stronger status of its two panes |
 | `src/apex/apex-palette.c` | `apex_profile_follow_palette_files()`: a profile notifies `palette` when the palette list reloads a file with its palette id, so open terminals and the window dressing take a rewritten user palette (apex-session-agent's `apex.palette`) |
+| `src/apex/apex-i18n.h`, `src/apex/po/` | Apex's own gettext domain, `apex-ptyxis`, with `vi.po` (see below); `lint/i18n.sh` holds the template and `vi.po` to the sources |
 | `src/apex/apex-session-row.c`, `apex-glyph.c` | a row (title, subtitle, time, glyph, the 2 px progress bar) and the Apex Symbolic glyphs drawn from their 16 px paths |
 
 In a split, Ctrl+Alt+O moves the focus to the other pane and Ctrl+Alt+W closes the
@@ -76,6 +78,17 @@ Two limits of Fedora 45, raised with apex-desktop:
   `__vte_precmd` reads `$?` after a `local`, so bash always reports exit 0, and zsh
   sends no preexec. Until the prompt snippet reports the status first, no session
   reads "failed". `tests/ptyxis/shoot.sh`'s `.bashrc` does what that snippet needs to.
+
+### Translations
+
+Apex's strings (the sidebar, the headers, the session and pane menus) come from the
+`apex-ptyxis` domain, which ships Vietnamese. Ptyxis 50.1 itself has no vi catalogue,
+so under a Vietnamese locale its own preferences, dialogs and menus stay English beside
+Apex's Vietnamese: the owner's decision of 2026-11-04, until upstream gains vi.
+GLib's `g_dgettext` leaves any domain untranslated while the application's own has no
+catalogue for the locale, so `apex-i18n.h` calls libc's `dgettext` and `dngettext`.
+`tests/ptyxis/shoot.sh`'s `vi` case reads the sidebar's title and its needs-you count
+in Vietnamese over AT-SPI (`i18n-atspi.py`).
 
 ## The series
 

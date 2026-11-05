@@ -15,3 +15,9 @@ after ^%autosetup[[:space:]]
 	# Apex: src/apex/ (Source100, desktop/ptyxis/ in apex-gnome); -k never clobbers upstream.
 	tar -xkf %{SOURCE100}
 end
+
+# Apex's own gettext domain (desktop/ptyxis/src/apex/po), in the main package's list.
+after ^%find_lang[[:space:]]+%\{name\}[[:space:]]+--with-gnome$
+	%find_lang apex-ptyxis
+	cat apex-ptyxis.lang >> %{name}.lang
+end

@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+src/apex/apex-panes.c
+src/apex/apex-session-state.c
+src/apex/apex-session.c
+src/apex/apex-sidebar.c
+src/apex/apex-window.c

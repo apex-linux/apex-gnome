@@ -2,7 +2,7 @@
 
 #include "config.h"
 
-#include <glib/gi18n.h>
+#include "apex-i18n.h"
 #include <pwd.h>
 #include <unistd.h>
 
@@ -152,7 +152,7 @@ apex_session_update_group (ApexSession *self)
     }
   else
     {
-      label = "This computer";
+      label = _("This computer");
       key = g_strdup (HOST_GROUP_KEY);
     }
 

@@ -15,3 +15,5 @@ ptyxis_sources += gnome.compile_resources('apex-resources',
   'apex.gresource.xml',
   c_name: 'apex',
 )
+
+subdir('po')

@@ -1,0 +1,147 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) YEAR THE PACKAGE'S COPYRIGHT HOLDER
+# This file is distributed under the same license as the apex-ptyxis package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: apex-ptyxis\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-11-04 23:33+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"Language: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=INTEGER; plural=EXPRESSION;\n"
+
+#: src/apex/apex-panes.c:135
+msgid "Close Pane"
+msgstr ""
+
+#: src/apex/apex-session-state.c:157
+msgid "running"
+msgstr ""
+
+#: src/apex/apex-session-state.c:160
+msgid "done"
+msgstr ""
+
+#: src/apex/apex-session-state.c:163
+#, c-format
+msgid "exit %d"
+msgstr ""
+
+#: src/apex/apex-session-state.c:167
+msgid "needs you"
+msgstr ""
+
+#: src/apex/apex-session-state.c:221
+msgid "now"
+msgstr ""
+
+#: src/apex/apex-session-state.c:223
+#, c-format
+msgid "%dm"
+msgstr ""
+
+#: src/apex/apex-session-state.c:225
+#, c-format
+msgid "%dh"
+msgstr ""
+
+#: src/apex/apex-session-state.c:226
+#, c-format
+msgid "%dd"
+msgstr ""
+
+#: src/apex/apex-session.c:155
+msgid "This computer"
+msgstr ""
+
+#: src/apex/apex-session.c:497
+msgid "Shell"
+msgstr ""
+
+#: src/apex/apex-sidebar.c:54
+#, c-format
+msgid "%u session needs you"
+msgid_plural "%u sessions need you"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/apex/apex-sidebar.c:56
+#, c-format
+msgid "%u running"
+msgstr ""
+
+#: src/apex/apex-sidebar.c:58
+#, c-format
+msgid "%u failed"
+msgstr ""
+
+#: src/apex/apex-sidebar.c:62
+#, c-format
+msgid "%u done"
+msgstr ""
+
+#: src/apex/apex-sidebar.c:146
+#, c-format
+msgid "%u needs you"
+msgstr ""
+
+#: src/apex/apex-sidebar.c:313
+msgid "Terminal"
+msgstr ""
+
+#: src/apex/apex-sidebar.c:314
+msgid "New Session"
+msgstr ""
+
+#: src/apex/apex-sidebar.c:325
+msgid "Main Menu"
+msgstr ""
+
+#: src/apex/apex-sidebar.c:430
+msgid "Sessions"
+msgstr ""
+
+#: src/apex/apex-window.c:71
+msgid "2 panes"
+msgstr ""
+
+#: src/apex/apex-window.c:162
+msgid "_Rename…"
+msgstr ""
+
+#: src/apex/apex-window.c:163
+msgid "Change _Profile…"
+msgstr ""
+
+#: src/apex/apex-window.c:168
+msgid "Move to New _Window"
+msgstr ""
+
+#: src/apex/apex-window.c:169
+msgid "_Close Session"
+msgstr ""
+
+#: src/apex/apex-window.c:192
+msgid "Session Menu"
+msgstr ""
+
+#: src/apex/apex-window.c:195
+msgid "Find"
+msgstr ""
+
+#: src/apex/apex-window.c:199
+msgid "Split Right"
+msgstr ""
+
+#: src/apex/apex-window.c:200
+msgid "Split Down"
+msgstr ""

@@ -37,6 +37,7 @@ members=$(tar -tf "$SOURCE1") || cannot "cannot list $SOURCE1"
 n=0
 while IFS= read -r m; do
     [[ $m == "$SOURCE1_DIR"* && $m != */ ]] || continue
+    [[ $m == "${SOURCE1_DIR}po/"* ]] && continue
     case ${m##*/} in meson.build | *.gresource.xml | *.[ch]) continue ;; esac
     grep -Fxq -- "$APEX_PREFIX/${m#"$SOURCE1_DIR"}" <<<"$resources" ||
         fail "$m is in desktop/ptyxis but not in the resource (apex.gresource.xml)"
@@ -49,6 +50,9 @@ css=$(gresource extract "$bin" "$APEX_PREFIX/apex.css") || fail "ptyxis has no $
 grep -Fq '/*! apex-ptyxis */' <<<"$css" || fail "$APEX_PREFIX/apex.css has no Apex marker"
 grep -Fq '.apex-sessions' <<<"$css" || fail "$APEX_PREFIX/apex.css has no sessions sidebar"
 ok "$APEX_PREFIX/apex.css carries the Apex marker and the sidebar's sheet"
+
+[[ -f $root/usr/share/locale/vi/LC_MESSAGES/apex-ptyxis.mo ]] || fail "the ptyxis RPM has no vi apex-ptyxis.mo"
+ok "the ptyxis RPM carries Apex's vi catalogue"
 
 override=$root/usr/share/glib-2.0/schemas/org.gnome.Ptyxis.fedora.gschema.override
 [[ -f $override ]] || fail "Fedora's gschema override (its Source1) is missing"

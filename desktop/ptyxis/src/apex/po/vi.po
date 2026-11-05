@@ -1,0 +1,146 @@
+# Vietnamese translation of Apex's additions to Terminal (apex-ptyxis).
+# Bản dịch tiếng Việt cho phần Apex thêm vào Dòng lệnh.
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# Glossary, following GNOME's existing Vietnamese; Ptyxis itself ships no vi catalogue:
+#   Terminal = Dòng lệnh (as in Apex's Settings); session = phiên; shell = hệ vỏ;
+#   menu = trình đơn; profile = hồ sơ; pane = khung; Find = Tìm; window = cửa sổ.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: apex-ptyxis\n"
+"Report-Msgid-Bugs-To: https://github.com/apex-linux/apex-gnome/issues\n"
+"PO-Revision-Date: 2026-11-04 00:00+0000\n"
+"Last-Translator: Apex <noreply@apex-linux.github.io>\n"
+"Language-Team: Vietnamese <gnome-vi-list@gnome.org>\n"
+"Language: vi\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+
+#: src/apex/apex-panes.c:135
+msgid "Close Pane"
+msgstr "Đóng khung"
+
+#: src/apex/apex-session-state.c:157
+msgid "running"
+msgstr "đang chạy"
+
+#: src/apex/apex-session-state.c:160
+msgid "done"
+msgstr "xong"
+
+#: src/apex/apex-session-state.c:163
+#, c-format
+msgid "exit %d"
+msgstr "thoát %d"
+
+#: src/apex/apex-session-state.c:167
+msgid "needs you"
+msgstr "cần bạn"
+
+#: src/apex/apex-session-state.c:221
+msgid "now"
+msgstr "vừa xong"
+
+#: src/apex/apex-session-state.c:223
+#, c-format
+msgid "%dm"
+msgstr "%d phút"
+
+#: src/apex/apex-session-state.c:225
+#, c-format
+msgid "%dh"
+msgstr "%d giờ"
+
+#: src/apex/apex-session-state.c:226
+#, c-format
+msgid "%dd"
+msgstr "%d ngày"
+
+#: src/apex/apex-session.c:155
+msgid "This computer"
+msgstr "Máy này"
+
+#: src/apex/apex-session.c:497
+msgid "Shell"
+msgstr "Hệ vỏ"
+
+#: src/apex/apex-sidebar.c:54
+#, c-format
+msgid "%u session needs you"
+msgid_plural "%u sessions need you"
+msgstr[0] "%u phiên cần bạn"
+
+#: src/apex/apex-sidebar.c:56
+#, c-format
+msgid "%u running"
+msgstr "%u đang chạy"
+
+#: src/apex/apex-sidebar.c:58
+#, c-format
+msgid "%u failed"
+msgstr "%u bị lỗi"
+
+#: src/apex/apex-sidebar.c:62
+#, c-format
+msgid "%u done"
+msgstr "%u đã xong"
+
+#: src/apex/apex-sidebar.c:146
+#, c-format
+msgid "%u needs you"
+msgstr "%u cần bạn"
+
+#: src/apex/apex-sidebar.c:313
+msgid "Terminal"
+msgstr "Dòng lệnh"
+
+#: src/apex/apex-sidebar.c:314
+msgid "New Session"
+msgstr "Phiên mới"
+
+#: src/apex/apex-sidebar.c:325
+msgid "Main Menu"
+msgstr "Trình đơn chính"
+
+#: src/apex/apex-sidebar.c:430
+msgid "Sessions"
+msgstr "Các phiên"
+
+#: src/apex/apex-window.c:71
+msgid "2 panes"
+msgstr "2 khung"
+
+#: src/apex/apex-window.c:162
+msgid "_Rename…"
+msgstr "Đổi _tên…"
+
+#: src/apex/apex-window.c:163
+msgid "Change _Profile…"
+msgstr "Đổi _hồ sơ…"
+
+#: src/apex/apex-window.c:168
+msgid "Move to New _Window"
+msgstr "Chuyển sang _cửa sổ mới"
+
+#: src/apex/apex-window.c:169
+msgid "_Close Session"
+msgstr "Đó_ng phiên"
+
+#: src/apex/apex-window.c:192
+msgid "Session Menu"
+msgstr "Trình đơn phiên"
+
+#: src/apex/apex-window.c:195
+msgid "Find"
+msgstr "Tìm"
+
+#: src/apex/apex-window.c:199
+msgid "Split Right"
+msgstr "Chia sang phải"
+
+#: src/apex/apex-window.c:200
+msgid "Split Down"
+msgstr "Chia xuống dưới"

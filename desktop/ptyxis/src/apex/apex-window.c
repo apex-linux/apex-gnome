@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 
-#include <glib/gi18n.h>
+#include "apex-i18n.h"
 
 #include "apex-panes.h"
 #include "apex-sidebar.h"
