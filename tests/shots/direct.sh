@@ -172,8 +172,17 @@ run_case() {
             printf "%s\n" "context.objects = [ { factory = adapter args = { factory.name = support.null-audio-sink" \
                 "node.name = g2-mic media.class = Audio/Source/Virtual audio.position = [ MONO ] } } ]" \
                 >"$HOME/.config/pipewire/pipewire.conf.d/g2-mic.conf"
-            pipewire & pipewire-pulse & wireplumber &
-            for _ in $(seq 50); do [ -S "$XDG_RUNTIME_DIR/pipewire-0" ] && [ -S "$XDG_RUNTIME_DIR/pulse/native" ] && break; sleep 0.1; done
+            # WirePlumber and pulse give up on a daemon not yet listening, and nothing links the streams.
+            pipewire &
+            for _ in $(seq 50); do [ -S "$XDG_RUNTIME_DIR/pipewire-0" ] && break; sleep 0.1; done
+            [ -S "$XDG_RUNTIME_DIR/pipewire-0" ] || { echo "G2-PIPEWIRE-NOT-READY: no pipewire-0 within 5 s"; kill $(jobs -p) 2>/dev/null; exit 4; }
+            pipewire-pulse & wireplumber &
+            for _ in $(seq 50); do
+                [ -S "$XDG_RUNTIME_DIR/pulse/native" ] && timeout 1 wpctl status 2>/dev/null | grep -q "^ *[0-9]*\. WirePlumber " && break
+                sleep 0.1
+            done
+            [ -S "$XDG_RUNTIME_DIR/pulse/native" ] && timeout 1 wpctl status 2>/dev/null | grep -q "^ *[0-9]*\. WirePlumber " ||
+                { echo "G2-PIPEWIRE-NOT-READY: no pulse socket or WirePlumber client within 5 s"; kill $(jobs -p) 2>/dev/null; exit 4; }
             "$@"
             rc=$?
             kill $(jobs -p) 2>/dev/null
@@ -182,6 +191,7 @@ run_case() {
     rc=$?
     secs=$((SECONDS - start))
     case_backtrace "/out/$name.log" "$rc" "$home" "/out/$name.bt" "$expected"
+    grep -h '^G2-PIPEWIRE-NOT-READY: ' "/out/$name.log" | sed "s/^G2-PIPEWIRE-NOT-READY/== $name: PipeWire was not ready, the shell did not start/"
     [[ -e $run/apex-shell-starting ]] && left=yes
     RESULT="$name exit=$rc secs=$secs marker-after-exit=$left"
     LIMIT=$limit
