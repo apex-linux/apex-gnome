@@ -1,0 +1,27 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Thuong Vo <66083331+SekiroKenjii@users.noreply.github.com>
+Date: Thu, 5 Nov 2026 03:37:26 +0000
+Subject: [PATCH] podman: read /etc/containers/storage.conf, not
+ etc/containers/storage.conf
+
+get_storage_directory() built the system configuration's path without its
+leading slash, relative to the working directory, so it never read it. For
+that file Builder takes only rootless_storage_path, which Fedora leaves
+commented out, so a rootless user keeps ~/.local/share/containers/storage.
+---
+ src/plugins/podman/gbp-podman-runtime.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/plugins/podman/gbp-podman-runtime.c b/src/plugins/podman/gbp-podman-runtime.c
+index fdf6e8a..c516da4 100644
+--- a/src/plugins/podman/gbp-podman-runtime.c
++++ b/src/plugins/podman/gbp-podman-runtime.c
+@@ -302,7 +302,7 @@ get_storage_directory (void)
+     }
+ 
+   /* second search for a global storage configuration */
+-  global_storage_conf = g_build_filename ("etc", "containers", "storage.conf", NULL);
++  global_storage_conf = g_build_filename ("/etc", "containers", "storage.conf", NULL);
+ 
+   if (g_file_test (global_storage_conf, G_FILE_TEST_EXISTS))
+     {

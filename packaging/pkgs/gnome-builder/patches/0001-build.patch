@@ -1,0 +1,27 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Thuong Vo <66083331+SekiroKenjii@users.noreply.github.com>
+Date: Thu, 5 Nov 2026 03:37:26 +0000
+Subject: [PATCH] build: compile the Apex Code plugin into gnome-builder
+
+Apex Code is GNOME Builder with an Apex series (ADR 0017 in apex-linux/apex).
+Its sources come from Source1, a git archive of desktop/gnome-builder/ in
+apex-gnome, which %prep unpacks at the top of this tree as src/plugins/apex/.
+src/plugins/meson.build reads it after podman, which it depends on: the
+plugin adds its sources to plugins_sources and its apex-builder gettext
+domain.
+---
+ src/plugins/meson.build | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/src/plugins/meson.build b/src/plugins/meson.build
+index 2d9fc82..b9563de 100644
+--- a/src/plugins/meson.build
++++ b/src/plugins/meson.build
+@@ -116,6 +116,7 @@ subdir('open-with-external')
+ subdir('platformui')
+ subdir('phpize')
+ subdir('podman')
++subdir('apex')
+ subdir('project-tree')
+ subdir('projectui')
+ subdir('pygi')

@@ -1,0 +1,44 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Thuong Vo <66083331+SekiroKenjii@users.noreply.github.com>
+Date: Thu, 5 Nov 2026 03:37:26 +0000
+Subject: [PATCH] podman: refuse a working directory the container does not
+ mount
+
+podman exec --workdir on a path the container does not mount fails with
+exit 127. A language server for a project outside the toolbox's shared
+folders (outside $HOME, say) then respawned every 5 s for good, with no
+error shown. The run handler now fails with G_IO_ERROR_NOT_FOUND when no
+mount of the container (from podman ps) holds the directory, so the server
+is not started; the Apex Code plugin tells the user why.
+---
+ src/plugins/podman/gbp-podman-runtime.c | 10 ++++++++++
+ 1 file changed, 10 insertions(+)
+
+diff --git a/src/plugins/podman/gbp-podman-runtime.c b/src/plugins/podman/gbp-podman-runtime.c
+index c516da4..e8f81e1 100644
+--- a/src/plugins/podman/gbp-podman-runtime.c
++++ b/src/plugins/podman/gbp-podman-runtime.c
+@@ -29,6 +29,8 @@
+ #include "gbp-podman-runtime.h"
+ #include "gbp-podman-runtime-private.h"
+ 
++#include "../apex/apex-toolbox.h"
++
+ struct _GbpPodmanRuntime
+ {
+   IdeRuntime    parent_instance;
+@@ -134,6 +136,14 @@ gbp_podman_runtime_run_handler_cb (IdeRunContext       *run_context,
+   if (cwd != NULL)
+     {
+       g_autofree char *cwd_absolute = g_canonicalize_filename (cwd, NULL);
++
++      if (!apex_podman_container_shares_path (self->object, cwd_absolute))
++        {
++          g_set_error (error, G_IO_ERROR, G_IO_ERROR_NOT_FOUND,
++                       "%s is not a folder container %s mounts", cwd_absolute, self->id);
++          IDE_RETURN (FALSE);
++        }
++
+       ide_run_context_append_formatted (run_context, "--workdir=%s", cwd_absolute);
+     }
+   else

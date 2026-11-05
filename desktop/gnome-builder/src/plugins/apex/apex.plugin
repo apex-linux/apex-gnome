@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+[Plugin]
+Authors=Apex
+Builtin=true
+Copyright=Copyright © 2026 Apex
+Depends=podman;
+Description=Apex Code: builds and language servers in the fedora-toolbox-45 toolbox
+Embedded=_gbp_apex_register_types
+Module=apex
+Name=Apex Code
+X-Category=sdks
