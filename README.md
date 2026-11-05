@@ -21,6 +21,8 @@ Ptyxis, each rebuilt in the lane from its recipe in `packaging/pkgs/`.
 | `tests/s7/` | S7's accent exit end to end: Files on `~`, GTK's file chooser and Spotlight on a folder while the accent turns green, then pink, each drawing the new folder colour within 1 s, with a control run without apex-session-agent that must stay blue (`accent-test.sh`, asserted by `check.sh`, whose `selftest.sh` runs in CI); the folder themes are built from the apex-desktop commit pinned in `tests/lib/pins.sh` |
 | `desktop/nautilus/`, `packaging/pkgs/nautilus/` | nautilus rebuilt in the lane for Files, boards 27 to 29: its sources (`src/apex/`) and its recipe ([README](packaging/pkgs/nautilus/README.md)) |
 | `tests/nautilus/` | the checks of `desktop/nautilus/`, the texts' unit test, and the captures with board 27's home (`shoot.sh`) |
+| `desktop/gnome-builder/`, `packaging/pkgs/gnome-builder/` | GNOME Builder rebuilt in the lane as Apex Code, track E (ADR 0017 in apex-linux/apex): its built-in plugin (`src/plugins/apex/`) and its recipe ([README](packaging/pkgs/gnome-builder/README.md)) |
+| `tests/builder/` | the checks of `desktop/gnome-builder/` |
 | `tests/shell/` | the lock screen and the greeter of the lane's gnome-shell, boards 20 and 12, against a GDM mock that fails every answer (`gdm-mock.py`): captures and their assertions (`shoot.sh`) |
 
 [apex-image](https://github.com/apex-linux/apex-image) pins this repository by commit in
@@ -56,6 +58,7 @@ just control-center-run  # podman or docker: that Settings in a headless gnome-s
 just s2c-radius     # podman or docker, after the three lanes: Settings' Corner Radius from 14 to 0 under open windows
 just nautilus-lane # podman or docker: nautilus rebuilt as the lane builds it, RPMs in _build/nautilus/out
 just nautilus-shots # podman or docker: that nautilus captured in a headless gnome-shell, light and dark
+just builder-lane  # podman or docker: GNOME Builder rebuilt as Apex Code as the lane builds it, RPMs in _build/gnome-builder/out
 just gnome-shell-lane # podman or docker: gnome-shell rebuilt as the lane builds it, RPMs in _build/gnome-shell/out
 just s7-accent       # podman or docker, after gnome-shell-lane: the accent from blue to green and pink under Files, the chooser and Spotlight
 just lock-shots  # podman or docker: its lock screen and greeter, light and dark, against a GDM mock
@@ -80,5 +83,5 @@ explains itself, and comments say only why
 (`LICENSE.GPL-2.0`); so are `desktop/control-center/` and the gnome-control-center
 patches, gnome-control-center's licence. The libadwaita patch is LGPL-2.1-or-later, as
 libadwaita is (`LICENSE.LGPL-2.1`). `lint/eslint.config.js` keeps gnome-shell's MIT OR
-LGPL-2.1-or-later. Everything else, `desktop/ptyxis/`, `desktop/nautilus/` and their patches
-included (Ptyxis and nautilus are GPL-3.0-or-later), is GPL-3.0-or-later (`LICENSE`).
+LGPL-2.1-or-later. Everything else, `desktop/ptyxis/`, `desktop/nautilus/`, `desktop/gnome-builder/` and their patches
+included (Ptyxis, nautilus and GNOME Builder are GPL-3.0-or-later), is GPL-3.0-or-later (`LICENSE`).

@@ -1,0 +1,159 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Thuong Vo <66083331+SekiroKenjii@users.noreply.github.com>
+Date: Thu, 5 Nov 2026 03:37:26 +0000
+Subject: [PATCH] name: Apex Code in the desktop file, the about dialog and
+ window titles
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The app id stays org.gnome.Builder. The application name, the about
+dialog's name and every "Builder — %s" title come from apex-brand.h, in
+the apex-builder domain, so libide links nothing new. The desktop file's
+Name is Apex Code; upstream's catalogues hold no translation of it, so no
+Name[xx] keeps "Builder".
+---
+ data/org.gnome.Builder.desktop.in.in       |  2 +-
+ src/libide/greeter/ide-greeter-workspace.c |  4 +++-
+ src/libide/gui/ide-application-actions.c   |  4 +++-
+ src/libide/gui/ide-workbench.c             |  6 ++++--
+ src/libide/tweaks/ide-tweaks-window.c      | 10 ++++------
+ src/main.c                                 |  4 +++-
+ 6 files changed, 18 insertions(+), 12 deletions(-)
+
+diff --git a/data/org.gnome.Builder.desktop.in.in b/data/org.gnome.Builder.desktop.in.in
+index c291d59..d5f78dc 100644
+--- a/data/org.gnome.Builder.desktop.in.in
++++ b/data/org.gnome.Builder.desktop.in.in
+@@ -1,5 +1,5 @@
+ [Desktop Entry]
+-Name=Builder
++Name=Apex Code
+ Comment=Build software for GNOME
+ Exec=gnome-builder %U
+ # Translators: Do NOT translate or transliterate this text (this is an icon file name)!
+diff --git a/src/libide/greeter/ide-greeter-workspace.c b/src/libide/greeter/ide-greeter-workspace.c
+index 1c25601..55e9bf9 100644
+--- a/src/libide/greeter/ide-greeter-workspace.c
++++ b/src/libide/greeter/ide-greeter-workspace.c
+@@ -33,6 +33,8 @@
+ #include "ide-greeter-row.h"
+ #include "ide-greeter-workspace.h"
+ 
++#include "../../plugins/apex/apex-brand.h"
++
+ /**
+  * SECTION:ide-greeter-workspace
+  * @title: IdeGreeterWorkspace
+@@ -220,7 +222,7 @@ navigation_view_notify_visible_page_cb (IdeGreeterWorkspace *self)
+   if (page != NULL)
+     {
+       if ((title = g_strdup (adw_navigation_page_get_title (page))))
+-        full_title = g_strdup_printf (_("Builder — %s"), title);
++        full_title = apex_code_title (title);
+     }
+ 
+   gtk_window_set_title (GTK_WINDOW (self), full_title);
+diff --git a/src/libide/gui/ide-application-actions.c b/src/libide/gui/ide-application-actions.c
+index ac5c169..2e33411 100644
+--- a/src/libide/gui/ide-application-actions.c
++++ b/src/libide/gui/ide-application-actions.c
+@@ -39,6 +39,8 @@
+ 
+ #include "ide-plugin-section-private.h"
+ 
++#include "../../plugins/apex/apex-brand.h"
++
+ static void
+ ide_application_actions_tweaks (GSimpleAction *action,
+                                 GVariant      *parameter,
+@@ -160,7 +162,7 @@ ide_application_actions_about (GSimpleAction *action,
+ 
+   dialog = g_object_new (ADW_TYPE_ABOUT_DIALOG,
+                          "application-icon", ide_get_application_id (),
+-                         "application-name", _("Builder"),
++                         "application-name", apex_code_name (),
+                          "copyright", "© 2014–2024 Christian Hergert",
+                          "debug-info", support_info,
+                          "debug-info-filename", support_filename,
+diff --git a/src/libide/gui/ide-workbench.c b/src/libide/gui/ide-workbench.c
+index 32d88b3..f0e123d 100644
+--- a/src/libide/gui/ide-workbench.c
++++ b/src/libide/gui/ide-workbench.c
+@@ -47,6 +47,8 @@
+ #include "ide-workbench-private.h"
+ #include "ide-workspace-private.h"
+ 
++#include "../../plugins/apex/apex-brand.h"
++
+ G_DEFINE_AUTOPTR_CLEANUP_FUNC (GActionGroup, g_object_unref)
+ 
+ /**
+@@ -360,7 +362,7 @@ ide_workbench_notify_context_title (IdeWorkbench *self,
+   g_assert (IDE_IS_CONTEXT (context));
+ 
+   title = ide_context_dup_title (context);
+-  formatted = g_strdup_printf (_("Builder — %s"), title);
++  formatted = apex_code_title (title);
+   ide_workbench_foreach_workspace (self,
+                                    (IdeWorkspaceCallback)gtk_window_set_title,
+                                    formatted);
+@@ -884,7 +886,7 @@ ide_workbench_add_workspace (IdeWorkbench *self,
+       g_autofree gchar *formatted = NULL;
+ 
+       title = ide_context_dup_title (self->context);
+-      formatted = g_strdup_printf (_("Builder — %s"), title);
++      formatted = apex_code_title (title);
+       gtk_window_set_title (GTK_WINDOW (workspace), formatted);
+     }
+ }
+diff --git a/src/libide/tweaks/ide-tweaks-window.c b/src/libide/tweaks/ide-tweaks-window.c
+index dcb55bb..bf04c8d 100644
+--- a/src/libide/tweaks/ide-tweaks-window.c
++++ b/src/libide/tweaks/ide-tweaks-window.c
+@@ -32,6 +32,8 @@
+ #include "ide-tweaks-panel-list-private.h"
+ #include "ide-tweaks-window.h"
+ 
++#include "../../plugins/apex/apex-brand.h"
++
+ struct _IdeTweaksWindow
+ {
+   AdwWindow               parent_instance;
+@@ -82,12 +84,8 @@ ide_tweaks_window_update_title (IdeTweaksWindow *self)
+   if ((context = ide_tweaks_get_context (self->tweaks)))
+     project_title = ide_context_dup_title (context);
+ 
+-  if (project_title != NULL)
+-    window_title = g_strdup_printf (_("Builder — %s — Preferences"), project_title);
+-
+-  gtk_window_set_title (GTK_WINDOW (self),
+-                        window_title ? window_title
+-                                     : _("Builder — Preferences"));
++  window_title = apex_code_preferences_title (project_title);
++  gtk_window_set_title (GTK_WINDOW (self), window_title);
+ }
+ 
+ static void
+diff --git a/src/main.c b/src/main.c
+index 7b65a11..f1312a0 100644
+--- a/src/main.c
++++ b/src/main.c
+@@ -39,6 +39,8 @@
+ #include <libdex.h>
+ 
+ #include <libide-core.h>
++
++#include "plugins/apex/apex-brand.h"
+ #include <libide-code.h>
+ #include <libide-gui.h>
+ #include <libide-threading.h>
+@@ -219,7 +221,7 @@ main (gint   argc,
+ 
+   /* Setup various application name/id defaults. */
+   g_set_prgname (ide_get_program_name ());
+-  g_set_application_name (_("Builder"));
++  g_set_application_name (apex_code_name ());
+ 
+ #ifdef DEVELOPMENT_BUILD
+   ide_set_application_id ("org.gnome.Builder.Devel");

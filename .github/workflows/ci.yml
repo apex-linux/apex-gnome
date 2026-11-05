@@ -488,6 +488,56 @@ jobs:
           path: _build/nautilus/out/
           if-no-files-found: ignore
 
+  builder-lane:
+    # The gnome-builder recipe (Apex Code, track E) through apex-lane's own container
+    # half, built from a pinned apex-image; the builder VM adds only the signing and the store.
+    name: tests/lib/lane.sh gnome-builder (Fedora 45, Apex Code)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    permissions:
+      contents: read
+    container:
+      image: registry.fedoraproject.org/fedora:45@sha256:1e13e11f63e147a40a935c9046c79d53a30b861a3cf05ebb023bb53c562382cb
+    steps:
+      - name: git for the checkout and the Source1 archive
+        run: >-
+          dnf5 -y --setopt=install_weak_deps=False --repo=fedora --repo=updates install
+          git-core bash coreutils findutils sed grep tar zstd
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: tests/builder/selftest.sh
+        run: tests/builder/selftest.sh
+
+      - uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+        if: github.event.schedule != '17 4 * * 1'
+        with:
+          path: _build/lane-cache
+          key: lane-gnome-builder-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: lane-gnome-builder-
+
+      - name: tests/lib/lane.sh gnome-builder
+        id: lane
+        env:
+          APEX_LANE_CACHE: ${{ github.event.schedule != '17 4 * * 1' && '_build/lane-cache' || '' }}
+        run: tests/lib/lane.sh gnome-builder
+
+      # Only a build changes the cache; a reused key leaves it as it was.
+      - uses: actions/cache/save@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+        if: steps.lane.outputs.built == 'true'
+        with:
+          path: _build/lane-cache
+          key: lane-gnome-builder-${{ github.run_id }}-${{ github.run_attempt }}
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: gnome-builder-rpms
+          path: _build/gnome-builder/out/gnome-builder-[0-9]*.x86_64.rpm
+          if-no-files-found: error
+          retention-days: 3
+
   shell-lane:
     # The gnome-shell recipe through apex-lane's container half, then the lock screen and
     # the greeter of that build against a GDM mock that never lets a verification succeed.

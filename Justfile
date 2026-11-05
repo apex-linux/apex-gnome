@@ -10,7 +10,7 @@ default:
     @just --list
 
 # The tests, eslint, the theme compile, the script self-test and the comment guard, as ci.yml runs them (tests that need a missing tool skip).
-check: layer-test shots-test eslint theme selftest ptyxis-test control-center-test nautilus-test
+check: layer-test shots-test eslint theme selftest ptyxis-test control-center-test nautilus-test builder-test
     apex-lint comments
 
 # The Apex layer's safety net in gjs: kill switches, fault injection, crash guard, live layer cycles.
@@ -92,6 +92,16 @@ nautilus-test:
 # nautilus rebuilt as the lane builds it (apex-lane's container half), in fedora:45 with podman or docker; RPMs in _build/nautilus/out.
 nautilus-lane:
     engine=$(command -v podman || command -v docker) && "$engine" run --rm -v "{{justfile_directory()}}:/apex-gnome:z" -w /apex-gnome {{nautilus_image}} tests/lib/lane.sh nautilus
+
+builder_image := "registry.fedoraproject.org/fedora:45@sha256:1e13e11f63e147a40a935c9046c79d53a30b861a3cf05ebb023bb53c562382cb"
+
+# desktop/gnome-builder (Apex Code): its licence lines, the recipe's source1_paths, its series and the patches' From: lines.
+builder-test:
+    tests/builder/selftest.sh
+
+# GNOME Builder rebuilt as Apex Code as the lane builds it (apex-lane's container half), in fedora:45 with podman or docker; RPMs in _build/gnome-builder/out.
+builder-lane:
+    engine=$(command -v podman || command -v docker) && "$engine" run --rm -v "{{justfile_directory()}}:/apex-gnome:z" -w /apex-gnome {{builder_image}} tests/lib/lane.sh gnome-builder
 
 # The nautilus that nautilus-lane built, captured in a headless gnome-shell with board 27's home, light and dark, and its assertions (podman or docker); in _build/nautilus/shots.
 nautilus-shots:

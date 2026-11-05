@@ -1,0 +1,89 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) YEAR THE PACKAGE'S COPYRIGHT HOLDER
+# This file is distributed under the same license as the apex-builder package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: apex-builder\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-11-05 03:19+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"Language: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+#. TRANSLATORS: the product name; keep it as is unless your language writes it in another script
+#: src/plugins/apex/apex-brand.h:11
+msgid "Apex Code"
+msgstr ""
+
+#. TRANSLATORS: a window title; %s is the project or page
+#: src/plugins/apex/apex-brand.h:18
+#, c-format
+msgid "Apex Code — %s"
+msgstr ""
+
+#. TRANSLATORS: the Preferences window's title; %s is the project
+#: src/plugins/apex/apex-brand.h:26
+#, c-format
+msgid "Apex Code — %s — Preferences"
+msgstr ""
+
+#: src/plugins/apex/apex-brand.h:28
+msgid "Apex Code — Preferences"
+msgstr ""
+
+#: src/plugins/apex/gbp-apex-workbench-addin.c:61
+msgid "Create Toolbox"
+msgstr ""
+
+#. TRANSLATORS: %s is the project's folder
+#: src/plugins/apex/gbp-apex-workbench-addin.c:99
+#, c-format
+msgid ""
+"%s is outside the folders the toolbox shares, so its language servers cannot "
+"start. Move the project into your home folder."
+msgstr ""
+
+#: src/plugins/apex/gbp-apex-workbench-addin.c:101
+msgid "Project Outside the Toolbox"
+msgstr ""
+
+#: src/plugins/apex/gbp-apex-workbench-addin.c:167
+msgid "No Toolbox for Builds"
+msgstr ""
+
+#: src/plugins/apex/gbp-apex-workbench-addin.c:168
+msgid ""
+"Apex Code builds and runs language servers in the fedora-toolbox-45 toolbox. "
+"Until it exists, they run on the host."
+msgstr ""
+
+#: src/plugins/apex/gbp-apex-workbench-addin.c:210
+#: src/plugins/apex/gbp-apex-workbench-addin.c:240
+msgid "Could Not Create the Toolbox"
+msgstr ""
+
+#: src/plugins/apex/gbp-apex-workbench-addin.c:213
+msgid "Toolbox Ready"
+msgstr ""
+
+#: src/plugins/apex/gbp-apex-workbench-addin.c:214
+msgid ""
+"fedora-toolbox-45 has its language servers. Reopen the project to build and "
+"run them in the toolbox."
+msgstr ""
+
+#: src/plugins/apex/gbp-apex-workbench-addin.c:246
+msgid "Creating the Toolbox"
+msgstr ""
+
+#: src/plugins/apex/gbp-apex-workbench-addin.c:247
+msgid "Downloading fedora-toolbox-45 and installing its language servers."
+msgstr ""
