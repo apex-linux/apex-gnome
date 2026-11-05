@@ -52,6 +52,10 @@ for verb in install reinstall; do
 done
 rm -rf "$OUT" && mkdir -p "$OUT"
 
+# The system bus: toolbox create mounts its socket, and the shell's session uses it.
+mkdir -p /run/dbus && rm -rf /run/systemd/seats
+[[ -S /run/dbus/system_bus_socket ]] || dbus-daemon --system --fork
+
 group "fedora-toolbox-45"
 # The toolbox shares the account's home from passwd; CI's HOME (/github/home) is not it.
 HOME=$(getent passwd "$(id -un)" | cut -d: -f6)
@@ -89,8 +93,6 @@ drop=$OUT/drop-caches
 dropper=$!
 trap 'kill "$dropper" 2>/dev/null || true' EXIT
 
-mkdir -p /run/dbus && rm -rf /run/systemd/seats
-[[ -S /run/dbus/system_bus_socket ]] || dbus-daemon --system --fork
 run=$(mktemp -d) && chmod 700 "$run"
 # No desktop portal: it waits 25 s on RealtimeKit and the GNOME backend's interfaces, and Builder on it.
 mkdir -p "$HOME/.local/share/dbus-1/services"
