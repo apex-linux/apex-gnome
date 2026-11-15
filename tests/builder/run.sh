@@ -160,6 +160,12 @@ else
     fails=$((fails + 1))
 fi
 
-jq -r '"first frame (ms): \([.starts[].painted] | map(tostring) | join(", ")); idle RSS/PSS (MiB): \([.idle.samples[].rss] | sort | .[5] / 1024 | floor)/\([.idle.samples[].pss] | sort | .[5] / 1024 | floor); glue RSS (MiB): \([.idle.samples[].glue.rss] | sort | .[5] / 1024 * 10 | floor / 10); longest key (ms): \(.typing.keys | max); completion items: \(.typing.completionItems)"' "$OUT/run.json" >&2
+jq -r '[
+    "first frame (ms): \([.starts[].painted] | map(tostring) | join(", "))",
+    "idle RSS/PSS (MiB): \([.idle.samples[].rss] | sort | .[5] / 1024 | floor)/\([.idle.samples[].pss] | sort | .[5] / 1024 | floor)",
+    "glue RSS (MiB): \([.idle.samples[].glue.rss] | sort | .[5] / 1024 * 10 | floor / 10)",
+    "longest key (ms): \(.typing.keys | max)",
+    "completion items: \(.typing.completionItems)"
+] | join("; ")' "$OUT/run.json" >&2
 ((fails == 0)) || die "run.sh: $fails check(s) failed; see ${OUT#"$APEX_ROOT/"}/run.json"
 log "run.sh: every check passed"
