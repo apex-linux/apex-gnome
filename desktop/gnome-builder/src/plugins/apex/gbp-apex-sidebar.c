@@ -291,7 +291,7 @@ struct _GbpApexSidebar
 
 G_DEFINE_FINAL_TYPE (GbpApexSidebar, gbp_apex_sidebar, G_TYPE_OBJECT)
 
-/* A page the boards do not show (Build Targets, Manuals, To-Do, Unit Tests) moves to the bottom
+/* A page the boards do not show (Build Pipeline, Manuals, TODO/FIXMEs, Unit Tests) moves to the bottom
  * panel as a tab: still there, and reached as upstream reaches it. */
 static gboolean
 relocate (gpointer user_data)
