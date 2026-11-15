@@ -107,7 +107,7 @@ button both named "More Options". Two addins name them, with no hunk in upstream
 | the sidebar's view switcher (E2 UI) | the tab list "Sidebar views", its tabs "Project", "Outline", "Search" and "Version control" | the boards' switcher over the start frame (`gbp-apex-sidebar.c`): an `AdwToggleGroup` built with the tab-list role, so each segment is a tab named for its view, the shown one selected |
 | the Search view (E2 UI) | the entry "Search in Project"; each hit a button "Line 5: return undefined_name + a"; "Show 1 result in Find in Files" | the entry by its placeholder; a hit by its line and text, without its indent. The lane searches e1_lsp.py's undefined_name, then hands it to Find in Files |
 | the Version control view (E2 UI) | the tab "Version control", badge or not; each change a button "dock.js in desktop/shell/js/ui/apex/dock, 12 added, 2 removed" | the tab is labelled for its view, or GTK would name it for its badge. The captures check the fixture's three changes by these names |
-| the palette (E2 UI) | the popover and its entry "Search files, symbols and commands"; the list "Results", a list item per group header and result, a result named "e1_lsp.py, tests", the selected one selected | the board's names. The "nothing unnamed" check leaves list items out: the project tree's rows are unnamed list items in Builder |
+| the palette (E2 UI) | the popover and its entry "Search files, symbols and commands"; the list "Results", a list item per group header and result, a result named "e1_lsp.py, tests", the selected one selected | the board's names. The "nothing unnamed" check leaves out only the project tree's rows, unnamed list items in Builder; every row of the palette's Results is checked named |
 | the Outline view (E2 UI) | the tree "Outline of e1_lsp.py", each item named for its symbol and described "Line 4" | the board's names; the current symbol's item is selected. The lane opens it with the cursor at the file's end, and finds pylsp's f there, current |
 | the diagnostics popover's switcher (E2) | "Diagnostics" | the `GtkStackSwitcher` between errors and warnings, in the diagnostics button's popover |
 | a page's progress bar (E2) | "Progress" | `GtkProgressBar` under an `IdePage`; it shows both loading and saving |
@@ -351,8 +351,8 @@ to `~/Projects/apex-gnome` (inside the toolbox's shares), and runs gnome-shell h
 It fails above E1's column of E0's budgets: a first frame over 1.9 s (median of 3), idle
 RSS over 360 MiB or PSS over 270 MiB (median of 10); a missing name of the table above,
 a button, toggle button, tab list, progress bar, entry, list or label left unnamed with the
-file open (the editor's text is named by the table, not by this check; list items are left
-out, the project tree's being unnamed in Builder), or no completion from pylsp. It also fails on E2's
+file open (the editor's text is named by the table, not by this check; the project tree's
+rows are left out, being unnamed list items in Builder, and other lists' items are checked), or no completion from pylsp. It also fails on E2's
 stall budget: any key over 200 ms, or one that drew nothing within 2 s. In the session the desktop
 portal is masked: in a headless container it waits 25 s on RealtimeKit and Builder waits
 on it. Here (4 vCPUs, software rendering): first frames 1731, 1932 and 1605 ms, idle RSS
