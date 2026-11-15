@@ -25,6 +25,8 @@ const SAMPLES = 10;
 const LSP_WAIT_MS = 45000;
 const PRESS_WAIT_MS = 30000;
 const CREATE_WAIT_MS = 900000;
+const SETUP_WAIT_MS = 600000;
+const TOOLBOX = env('APEX_BUILDER_TOOLBOX');
 // E0's typing: a key every 150 ms, timed from the press to the frame presented after the window's first damage.
 const TYPING_MS = 60000;
 const KEY_GAP_MS = 150;
@@ -236,17 +238,45 @@ async function create() {
         await Scripting.sleep(1000);
         ({pressed} = await helper('APEX_BUILDER_PRESS', 'Create Toolbox'));
     }
+    // pylsp itself launched in the toolbox, not a `which pylsp` lookup, and spawned.
     let lspInToolboxAfterS = null;
+    let text = '';
     const t1 = now();
     while (pressed && lspInToolboxAfterS === null && (now() - t1) / 1000 < CREATE_WAIT_MS) {
         await Scripting.sleep(2000);
         const [, bytes] = GLib.file_get_contents(log);
-        if (/Launching podman exec [^\n]*pylsp/.test(new TextDecoder().decode(bytes)))
+        text = new TextDecoder().decode(bytes);
+        if (/Launching podman exec [^\n]* pylsp \[env /.test(text) && /Language server .pylsp. spawned as process/.test(text))
             lspInToolboxAfterS = Math.round((now() - t1) / 1e6);
     }
+    const createEnv = (text.match(/Launching sh -c \{ podman container exists [^\n]*/) ?? [''])[0];
     const {names} = await helper('APEX_BUILDER_PRESS', '--names');
     await quit();
-    return {pressed, lspInToolboxAfterS, toolboxNames: names.filter(n => /oolbox/.test(n))};
+    return {pressed, lspInToolboxAfterS, createHasRuntimeDir: /\[env [^\]]*XDG_RUNTIME_DIR=/.test(createEnv),
+            toolboxNames: names.filter(n => /oolbox/.test(n))};
+}
+
+// A toolbox whose setup stopped halfway: Apex Code says so, and Finish Setup completes it.
+async function finishSetup() {
+    const has = () => spawnWait(['podman', 'exec', TOOLBOX, 'sh', '-c', 'command -v typescript-language-server']);
+    await spawnWait(['podman', 'exec', TOOLBOX, 'npm', 'uninstall', '-g', '--no-fund', '--no-audit', 'typescript-language-server']);
+    const removed = await has() !== 0;
+    await launch(['gnome-builder', '-p', PROJECT]);
+    const t0 = now();
+    let pressed = false;
+    while (!pressed && (now() - t0) / 1000 < PRESS_WAIT_MS) {
+        await Scripting.sleep(1000);
+        ({pressed} = await helper('APEX_BUILDER_PRESS', 'Finish Setup'));
+    }
+    let restoredAfterS = null;
+    const t1 = now();
+    while (pressed && restoredAfterS === null && (now() - t1) / 1000 < SETUP_WAIT_MS) {
+        await Scripting.sleep(2000);
+        if (await has() === 0)
+            restoredAfterS = Math.round((now() - t1) / 1e6);
+    }
+    await quit();
+    return {removed, pressed, restoredAfterS};
 }
 
 async function drive() {
@@ -254,7 +284,8 @@ async function drive() {
         .create_virtual_device(Clutter.InputDeviceType.KEYBOARD_DEVICE);
     Main.overview.hide();
     const created = env('APEX_BUILDER_CREATE') === 'true' ? await create() : null;
-    return {create: created, starts: await starts(), idle: await idle(), typing: await typing()};
+    const setup = created !== null ? await finishSetup() : null;
+    return {create: created, setup, starts: await starts(), idle: await idle(), typing: await typing()};
 }
 
 // main.js connects to startup-complete only after importing this module, so a startup that

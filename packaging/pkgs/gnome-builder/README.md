@@ -73,9 +73,13 @@ a project loads, the addin lists the toolbox containers (`podman ps --all --no-t
   toolbox again and adds its runtime to that provider (E2); the move above then runs, and
   the servers restart in the toolbox with no reopen. The button has an icon and is also the
   notification's default action, since the omnibar shows only icon buttons, and only on a
-  notification with a default action. `SHELL` is set for `toolbox create`, which fails
-  without it, and Builder's host launcher clears the environment. A toolbox the image or
-  the first login creates is used as is.
+  notification with a default action. Builder's host launcher clears the environment, so
+  the plugin sets `SHELL` (toolbox fails without it), `XDG_RUNTIME_DIR` (rootless podman
+  needs it) and the session bus. The command is resumable: `podman container exists` skips
+  `toolbox create` for a toolbox whose setup stopped halfway. When the project loads with
+  the toolbox, the plugin checks its three servers (`command -v` in the toolbox), and a
+  missing one brings "Toolbox Setup Incomplete" with a Finish Setup button. A toolbox the
+  image or the first login creates is used as is.
 - A project outside the folders the toolbox mounts (outside `$HOME`, `/mnt`, `/media`,
   `/run/media`) gets a notification saying so; patch 0004 keeps its servers from starting.
 

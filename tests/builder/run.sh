@@ -13,7 +13,8 @@ usage: tests/builder/run.sh [RPM_DIR]
 Installs the lane's gnome-builder from RPM_DIR (_build/gnome-builder/out by default) and
 runs a headless gnome-shell, as root, whose automation script (probe.js):
 - without fedora-toolbox-45, opens the project, presses the notification's Create Toolbox
-  (press.py) and waits for pylsp to start in the new toolbox, with no reopen;
+  (press.py) and waits for pylsp to start in the new toolbox, with no reopen; then removes
+  typescript-language-server from it, and presses Finish Setup, which must bring it back;
 - starts Apex Code on a copy of this repository three times, after a discarded start,
   each after the page cache is dropped: E1's first frame, at most ${BUILDER_FIRST_FRAME_MS:-1900} ms (median);
 - opens tests/e1_lsp.py, waits 30 s, and samples Apex Code's own process tree ten
@@ -93,7 +94,7 @@ printf '[D-BUS Service]\nName=org.freedesktop.portal.Desktop\nExec=/bin/false\n'
 rc=0
 env XDG_RUNTIME_DIR="$run" XDG_SESSION_TYPE=wayland XDG_CURRENT_DESKTOP=GNOME LANG=C.UTF-8 GDK_DEBUG=no-portals ADW_DISABLE_PORTAL=1 \
     APEX_BUILDER_PROJECT="$project" APEX_BUILDER_LSP_FILE="$project/tests/e1_lsp.py" APEX_BUILDER_TYPING_FILE="$project/tests/e2_typing.py" \
-    APEX_BUILDER_MEM="$HERE/mem.py" APEX_BUILDER_ATSPI="$HERE/atspi.py" APEX_BUILDER_DROP="$drop" APEX_BUILDER_CREATE="$create" APEX_BUILDER_PRESS="$HERE/press.py" \
+    APEX_BUILDER_MEM="$HERE/mem.py" APEX_BUILDER_ATSPI="$HERE/atspi.py" APEX_BUILDER_DROP="$drop" APEX_BUILDER_CREATE="$create" APEX_BUILDER_PRESS="$HERE/press.py" APEX_BUILDER_TOOLBOX="$TOOLBOX" \
     APEX_BUILDER_LOG="$OUT/builder-verbose.log" APEX_BUILDER_CREATE_LOG="$OUT/builder-create.log" PROBE="$HERE/probe.js" \
     timeout "$SHELL_TIMEOUT" dbus-run-session -- bash -c '
         for setting in "enable-animations false" "cursor-blink false" "toolkit-accessibility true"; do
@@ -142,7 +143,9 @@ check "every typed key drew a frame" '.typing.keys | length > 300 and all(. != n
 check "typing for 60 s from a fresh start: no key over ${STALL_MS} ms" '.typing.keys | max <= $stall'
 check "pylsp in the toolbox answers a completion" '.typing.completionItems > 0'
 if $create; then
-    check "Create Toolbox makes $TOOLBOX, and pylsp starts in it without reopening the project" '.create.lspInToolboxAfterS != null'
+    check "Create Toolbox makes $TOOLBOX, and pylsp itself starts in it without reopening the project" '.create.lspInToolboxAfterS != null'
+    check "toolbox create runs with XDG_RUNTIME_DIR, which rootless podman needs and Builder's launcher clears" '.create.createHasRuntimeDir'
+    check "with a server missing, Apex Code offers Finish Setup, and it installs the server again" '.setup.removed and .setup.pressed and .setup.restoredAfterS != null'
 fi
 if [[ $(wc -l <"$OUT/servers.txt" 2>/dev/null) == 3 ]]; then
     log "ok: $TOOLBOX has pylsp, rust-analyzer and typescript-language-server"
