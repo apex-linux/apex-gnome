@@ -3,5 +3,6 @@
 <gresources>
   <gresource prefix="/plugins/apex">
     <file>apex.plugin</file>
+    <file>style.css</file>
   </gresource>
 </gresources>

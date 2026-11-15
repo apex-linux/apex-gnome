@@ -1,0 +1,45 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+/* Boards 40 to 42's tokens (apex's docs/design/apex-code-boards-40-42.md, section 3.2), light then dark. */
+
+apexsidebarviews {
+  margin: 10px 12px 8px;
+}
+
+apexsidebarviews toggle-group {
+  padding: 3px;
+  border: none;
+  border-radius: 10px;
+  box-shadow: none;
+  background-color: rgba(0, 0, 10, .065);
+}
+
+apexsidebarviews toggle-group separator {
+  min-width: 3px;
+  background: none;
+}
+
+apexsidebarviews toggle-group toggle {
+  min-height: 30px;
+  padding: 0;
+  border-radius: 8px;
+  color: rgba(29, 29, 33, .62);
+}
+
+apexsidebarviews toggle-group toggle:checked {
+  background-color: #ffffff;
+  color: #1d1d21;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, .12);
+}
+
+apexsidebarviews.dark toggle-group {
+  background-color: rgba(255, 255, 255, .09);
+}
+
+apexsidebarviews.dark toggle-group toggle {
+  color: rgba(244, 244, 246, .64);
+}
+
+apexsidebarviews.dark toggle-group toggle:checked {
+  background-color: #1e1e21;
+  color: #f4f4f6;
+}

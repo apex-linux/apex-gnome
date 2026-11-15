@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 # SPDX-License-Identifier: GPL-3.0-or-later
-# Apex Code's names over AT-SPI: the editor's text, every button and toggle button, as E0 listed them, and E0's other gaps' roles.
+# Apex Code's names over AT-SPI: the editor's text, every button and toggle button, as E0 listed them, and E0's other gaps' roles; a page tab also says whether it takes keyboard focus and is selected.
 import json
 
 import gi
@@ -8,7 +8,8 @@ gi.require_version('Atspi', '2.0')
 from gi.repository import Atspi  # noqa: E402
 
 ROLES = {Atspi.Role.BUTTON, Atspi.Role.TOGGLE_BUTTON, Atspi.Role.TEXT, Atspi.Role.PAGE_TAB_LIST,
-         Atspi.Role.PROGRESS_BAR, Atspi.Role.ENTRY, Atspi.Role.LIST, Atspi.Role.LABEL}
+         Atspi.Role.PROGRESS_BAR, Atspi.Role.ENTRY, Atspi.Role.LIST, Atspi.Role.LABEL, Atspi.Role.PAGE_TAB,
+         Atspi.Role.RADIO_BUTTON}
 
 
 def walk(node, out, depth=0):
@@ -20,7 +21,12 @@ def walk(node, out, depth=0):
     if depth > 1 and not showing:
         return
     if role in ROLES:
-        out.append({'role': Atspi.role_get_name(role), 'name': name})
+        node_out = {'role': Atspi.role_get_name(role), 'name': name}
+        if role == Atspi.Role.PAGE_TAB:
+            states = node.get_state_set()
+            node_out['focusable'] = states.contains(Atspi.StateType.FOCUSABLE)
+            node_out['selected'] = states.contains(Atspi.StateType.SELECTED)
+        out.append(node_out)
     for i in range(node.get_child_count()):
         child = node.get_child_at_index(i)
         if child is not None and depth < 60:

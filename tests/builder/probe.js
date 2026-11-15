@@ -192,7 +192,8 @@ async function starts() {
     return out;
 }
 
-// The names before any page has focus, then with a file open, then with the diagnostics popover open.
+// The names before any page has focus, then with a file open, then with the diagnostics popover
+// open, then with the bottom panel open (Ctrl+F9), closed again before the quit saves the session.
 async function idle() {
     const st = await launch(['gnome-builder', '-p', PROJECT]);
     await Scripting.sleep(QUIET_MS);
@@ -211,8 +212,14 @@ async function idle() {
     await Scripting.sleep(1000);
     const popover = await helper('APEX_BUILDER_ATSPI');
     tap(Clutter.KEY_Escape);
+    await Scripting.sleep(1000);
+    tap(Clutter.KEY_F9, [Clutter.KEY_Control_L]);
+    await Scripting.sleep(2000);
+    const bottom = await helper('APEX_BUILDER_ATSPI');
+    tap(Clutter.KEY_F9, [Clutter.KEY_Control_L]);
+    await Scripting.sleep(1000);
     await quit();
-    return {samples, names, noPage, popover: {pressed, names: popover}, title: st.window.get_title()};
+    return {samples, names, noPage, popover: {pressed, names: popover}, bottom, title: st.window.get_title()};
 }
 
 // The toolbox stopped, as after a reboot, with its start held 3 s: lookups meet it not yet running.
@@ -221,12 +228,67 @@ const SLOW_PODMAN = '/usr/local/bin/podman';
 // Keys timed from the moment the first file opens, in a meson project (its pipeline looks up
 // ninja), then pylsp's answer. Cairo: lavapipe's first popup pipeline costs 290-430 ms.
 
+async function runOut(argv) {
+    const proc = Gio.Subprocess.new(argv, Gio.SubprocessFlags.STDOUT_PIPE);
+    const [stdout] = await proc.communicate_utf8_async(null, null);
+    return stdout.trim();
+}
+
+// A clean close, as a user closes the window: Builder unloads the workbench and saves its session.
+async function closeCleanly(st) {
+    st.window.delete(global.get_current_time());
+    for (let i = 0; i < 100 && await spawnWait(['pgrep', '-x', 'gnome-builder']) === 0; i++)
+        await Scripting.sleep(200);
+    const clean = await spawnWait(['pgrep', '-x', 'gnome-builder']) !== 0;
+    await quit();
+    return clean;
+}
+
+// A session from before the switcher, TODO/FIXMEs in a second start frame: on the next start the frame
+// goes, and TODO/FIXMEs goes to the bottom panel unpresented.
+async function splitSession() {
+    const project = env('APEX_BUILDER_SESSION_PROJECT');
+    const log = env('APEX_BUILDER_SESSION_LOG');
+    let st = await launch(['gnome-builder', '-p', project]);
+    await Scripting.sleep(QUIET_MS);
+    const saved = await closeCleanly(st);
+    // Builder 50 keeps it beside the projects, in <projects>/.gnome-builder/projects/<project>/.
+    const name = GLib.path_get_basename(project);
+    const file = (await runOut(['sh', '-c', `find "$HOME" -path '*/.gnome-builder/projects/${name}/session.gvariant' -o -path '*/gnome-builder/projects/${name}/session.gvariant'`])).split('\n')[0];
+    const split = await spawnWait(['python3', env('APEX_BUILDER_SESSION'), 'split', file]) === 0;
+    st = await launch(['sh', '-c', `exec gnome-builder -vvv -p '${project}' > '${log}' 2>&1`]);
+    await Scripting.sleep(QUIET_MS);
+    const names = await helper('APEX_BUILDER_ATSPI');
+    const resaved = await closeCleanly(st);
+    let startRows = null, todoArea = null;
+    try {
+        ({startRows, todoArea} = JSON.parse(await runOut(['python3', env('APEX_BUILDER_SESSION'), 'frames', file])));
+    } catch (e) {
+        // No session file, or one session.py cannot read: the checks on it fail, and say so.
+    }
+    const text = readText(log);
+    return {saved, split, resaved, names, file, startRows, todoArea,
+        todoMoved: text.includes('GbpTodoPanel moves to the bottom panel'),
+        frameDropped: text.includes('an emptied start frame leaves the sidebar'),
+        unbalanced: text.includes('is not blocked'),
+        todoMined: /Located \d+ TODO items/.test(text)};
+}
+
+// The editor-only workspace (gnome-builder -e): the same switcher over its sidebar.
+async function editorOnly() {
+    await launch(['gnome-builder', '-e', env('APEX_BUILDER_EDITOR_FILE')]);
+    await Scripting.sleep(QUIET_MS);
+    const names = await helper('APEX_BUILDER_ATSPI');
+    await quit();
+    return {names};
+}
+
 async function typing() {
     const log = env('APEX_BUILDER_LOG');
     await spawnWait(['podman', 'stop', '--time', '0', TOOLBOX]);
     GLib.file_set_contents(SLOW_PODMAN, '#!/bin/sh\n[ "$1" = start ] && sleep 3\nexec /usr/bin/podman "$@"\n');
     await spawnWait(['chmod', '755', SLOW_PODMAN]);
-    const st = await launch(['sh', '-c', `GSK_RENDERER=cairo exec gnome-builder -vvv -p '${TYPING_PROJECT}' > '${log}' 2>&1`]);
+    const st = await launch(['sh', '-c', `APEX_BUILDER_SELFTEST=1 GSK_RENDERER=cairo exec gnome-builder -vvv -p '${TYPING_PROJECT}' > '${log}' 2>&1`]);
     await spawnWait(['gnome-builder', TYPING_FILE]);
     const keys = await typeTimed(st.window, TYPING_MS);
     tap(Clutter.KEY_Escape);
@@ -249,7 +311,12 @@ async function typing() {
     const mainThreadLookups = lookups.filter(m => Number(m[1]) === pid).map(m => m[2]);
     await quit();
     GLib.unlink(SLOW_PODMAN);
-    return {keys, completionItems: found, offThread: [...new Set(offThread)], lookups: lookups.length, mainThreadLookups};
+    const toBottom = [...text.matchAll(/(\S+) moves to the bottom panel/g)].map(m => m[1]);
+    // The todo plugin mines the project on its panel's first "presented": a move must not present it.
+    const todoMined = /Located \d+ TODO items/.test(text);
+    const canDrop = [...text.matchAll(/selftest: can_drop (\S+) (yes|no)/g)].map(m => [m[1], m[2]]);
+    return {keys, completionItems: found, offThread: [...new Set(offThread)], lookups: lookups.length, mainThreadLookups, toBottom,
+        todoMined, canDrop};
 }
 
 // Apex Code's own Create Toolbox, pressed in the notification the project shows without a
@@ -400,7 +467,7 @@ async function drive() {
     Main.overview.hide();
     const created = env('APEX_BUILDER_CREATE') === 'true' ? await create() : null;
     return {create: created, ...await underAnotherName(), starts: await starts(), idle: await idle(), typing: await typing(),
-            plain: await plain(), jhbuild: await jhbuild()};
+            plain: await plain(), jhbuild: await jhbuild(), session: await splitSession(), editorOnly: await editorOnly()};
 }
 
 // main.js connects to startup-complete only after importing this module, so a startup that

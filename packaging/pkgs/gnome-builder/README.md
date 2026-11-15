@@ -43,6 +43,7 @@ checks both.
 | `meson.build`, `apex.gresource.xml`, `apex.plugin`, `apex-plugin.c` | the built-in plugin `apex` (Builder links its plugins into the executable): it registers one workbench addin, and depends on `podman` |
 | `gbp-apex-workbench-addin.c` | toolbox by default (below), and the notifications for a missing toolbox or a project outside it |
 | `gbp-apex-a11y-addins.c` | E0's AT-SPI gaps: the editor named for its file, the icon-only menu buttons, and (E2) the diagnostics button, the tab lists, the progress bar, the project tree and its filter (below) |
+| `gbp-apex-sidebar.c`, `style.css` | E2's UI: boards 40 to 42's sidebar view switcher over the start frame, the boards' colours (below) |
 | `apex-brand.h` | the name: `apex_code_name()`, `apex_code_title()`, `apex_code_preferences_title()` |
 | `apex-toolbox.h` | `apex_podman_container_shares_path()`: whether a container's mounts (from `podman ps --format=json`) hold a path; `apex_podman_bridge_argv()` (E2), the `apex-toolbox-exec` command line patch 0006 runs for a toolbox |
 | `apex-toolbox-exec.c`, `apex-toolbox-bridge.c`, `apex-toolbox-bridge.h` | E2: the toolbox bridge's host client and the one bridge per toolbox, installed in `/usr/libexec` (below) |
@@ -102,12 +103,45 @@ button both named "More Options". Two addins name them, with no hunk in upstream
 | the Run button's main button | "Run Project (Shift+Ctrl+Space)", or "Stop Running Project" | libadwaita labels it by its dropdown; the addin replaces that relation with `IdeRunButton`'s own tooltip, and follows it |
 | the status bar's diagnostics button (E2) | "Build Diagnostics: 0 errors, 0 warnings" | GTK named it "0 0" from its two count labels; found by its own tooltip in Builder's catalogue, and named from `IdeBuildManager`'s counts as they change (plurals from `APEX_NG_`) |
 | an editor tab bar's two tab lists (E2) | "Pinned Pages", "Pages" | by the accessible role, under `AdwTabBar`, the first being the pinned one |
-| a dock's panel switcher (E2) | "Panels" | libpanel's `PanelFrameSwitcher` only |
+| a dock's panel switcher (E2) | "Panels" | libpanel's `PanelFrameSwitcher` only: the bottom and end frames', the sidebar's being "Sidebar views" since E2's UI. The lane opens the bottom panel (Ctrl+F9) for a snapshot of its own: its tabs, Build Pipeline, Manuals, TODO/FIXMEs and Unit Tests among them, are named and take keyboard focus, as upstream's do |
+| the sidebar's view switcher (E2 UI) | the tab list "Sidebar views", its tabs "Project" | the boards' switcher over the start frame (`gbp-apex-sidebar.c`): an `AdwToggleGroup` built with the tab-list role, so each segment is a tab named for its view, the shown one selected |
 | the diagnostics popover's switcher (E2) | "Diagnostics" | the `GtkStackSwitcher` between errors and warnings, in the diagnostics button's popover |
 | a page's progress bar (E2) | "Progress" | `GtkProgressBar` under an `IdePage`; it shows both loading and saving |
 | the project tree's filter (E2) | "Filter…" | a `GtkSearchEntry` is named by its placeholder |
 | the project tree (E2) | "Project Tree" | a `GtkListView` in a panel is named by the panel's title |
 | empty status bar labels (E2) | — | vim's command bar sits empty in the status bar, and the hidden state does not take it out of the tree, so the label is hidden while it has no text, even when its owner shows it |
+
+### The sidebar (E2 UI)
+
+Boards 40 to 42 (`docs/design/apex-code-boards-40-42.md` in apex, section 6) put one
+segmented switcher at the top of the sidebar, four views wide: Project, Outline, Search and
+Version control. `gbp-apex-sidebar.c` installs it, in the project workspace and the
+editor-only one alike, as the first start frame's header in place of libpanel's
+`PanelFrameSwitcher`: an `AdwToggleGroup`, a segment per page of Builder's own
+frame, in the boards' order, with the boards' icon and name for each view. `style.css`
+draws it in the boards' tokens: a `--btn` track with 3px of padding and a 10px radius,
+30px segments with an 8px radius, the selected one `--view` with its shadow. The stylesheet
+keys dark on `AdwStyleManager`, which Builder's style variant sets, through a `dark` class.
+It takes only the boards' views as drops: a document dragged
+there would leave the editor grid, and with it the close prompt for its unsaved edits.
+Every start frame is swept, a split one a session restored included: the other panes go
+to the bottom panel, the views join the switcher's frame, and a frame left empty leaves
+the sidebar, or it would sit there as an empty "Panels" switcher and be saved again. The
+moved panes' `presented` signal stays blocked until the main loop is idle, after libpanel
+has presented whatever the move selected, or TODO/FIXMEs would mine the project at every
+start. It is blocked again while the window is unmapped: closing, Builder closes the bottom
+panel's panes one by one, each close presents the next, and every close path hides the
+window first. Builder saves its session only on a clean close, so the lane closes the window,
+splits the saved session (`tests/builder/session.py`), and opens it again. Under
+`APEX_BUILDER_SELFTEST` the sidebar logs whether its header takes each page changed to,
+which the lane reads for the editor page: libpanel's drop target asks the same function.
+Only Project exists so far; Outline, Search and Version control come as their panes do.
+
+#### Not on the board
+
+| Builder's | Where it goes | Why |
+|---|---|---|
+| Build Pipeline, Manuals, TODO/FIXMEs and Unit Tests in the sidebar | the bottom panel, each a tab beside Builder's own, named and reached as upstream has them | the boards' switcher has exactly four views; the boards' bottom panel is tabbed |
 
 ### Translations
 

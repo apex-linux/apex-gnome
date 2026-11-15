@@ -148,6 +148,12 @@ msgstr "Các trang"
 msgid "Pinned Pages"
 msgstr "Các trang đã ghim"
 
+msgid "Project"
+msgstr "Dự án"
+
+msgid "Sidebar views"
+msgstr "Các chế độ xem thanh bên"
+
 msgid "Progress"
 msgstr "Tiến trình"
 
