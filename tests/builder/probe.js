@@ -295,7 +295,8 @@ async function renamed() {
     await Scripting.sleep(2 * QUIET_MS);
     const {names} = await helper('APEX_BUILDER_PRESS', '--names');
     await quit();
-    return {checkedByName: check.test(readText(log)), offersFinishSetup: names.includes('Finish Setup')};
+    return {checkedByName: check.test(readText(log)), offersFinishSetup: names.includes('Finish Setup'),
+            notices: names.filter(n => /Toolbox|Setup/.test(n))};
 }
 
 // dev whose setup stopped halfway (pylsp's package gone), with a Python file open: Apex Code says
