@@ -121,6 +121,14 @@ for name in plain jhbuild; do
     printf '[default]\nname=Default\nruntime=%s\ntoolchain=default\ndefault=true\n' "$runtime" >"$dir/.buildconfig"
 done
 
+# A repository with no commit yet: one file added to the index, one untracked; git diff has no HEAD.
+nohead=$HOME/Projects/apex-nohead
+rm -rf "$nohead" && mkdir -p "$nohead"
+git -C "$nohead" init -q
+printf 'print("added")\n' >"$nohead/added.py"
+printf 'untracked\n' >"$nohead/untracked.txt"
+git -C "$nohead" add added.py
+
 drop=$OUT/drop-caches
 (while sleep 0.1; do [[ -f $drop ]] && { sync; echo 3 >/proc/sys/vm/drop_caches; rm -f "$drop"; }; done) &
 dropper=$!
@@ -137,6 +145,7 @@ env XDG_RUNTIME_DIR="$run" XDG_SESSION_TYPE=wayland XDG_CURRENT_DESKTOP=GNOME LA
     APEX_BUILDER_TYPING_PROJECT="$typing_project" APEX_BUILDER_TOOLBOX="$TOOLBOX" \
     APEX_BUILDER_PLAIN_PROJECT="$HOME/Projects/apex-plain" APEX_BUILDER_PLAIN_ID="$plain_id" APEX_BUILDER_PLAIN_LOG="$OUT/builder-plain.log" \
     APEX_BUILDER_JHBUILD_PROJECT="$HOME/Projects/apex-jhbuild" APEX_BUILDER_JHBUILD_LOG="$OUT/builder-jhbuild.log" \
+    APEX_BUILDER_NOHEAD_PROJECT="$nohead" APEX_BUILDER_NOHEAD_LOG="$OUT/builder-nohead.log" \
     APEX_BUILDER_MEM="$HERE/mem.py" APEX_BUILDER_ATSPI="$HERE/atspi.py" APEX_BUILDER_DROP="$drop" APEX_BUILDER_CREATE="$create" APEX_BUILDER_PRESS="$HERE/press.py" \
     APEX_BUILDER_LOG="$OUT/builder-verbose.log" APEX_BUILDER_CREATE_LOG="$OUT/builder-create.log" \
     APEX_BUILDER_RENAMED_LOG="$OUT/builder-renamed.log" APEX_BUILDER_SETUP_LOG="$OUT/builder-setup.log" PROBE="$HERE/probe.js" \
@@ -213,6 +222,11 @@ check "\"Outline\" is the switcher's second segment, after \"Project\"" \
 check "the Outline view names its tree for the file, and lists pylsp's symbol f at line 4, current with the cursor below it" \
     '.idle.outline.pressed and (.idle.outline.names.nodes | any(.role == "tree" and .name == "Outline of e1_lsp.py"))
      and (.idle.outline.names.nodes | any(.role == "tree item" and .name == "f" and .description == "Line 4" and .selected))'
+check "a repository with no commit yet: Version control lists added.py and untracked.txt, named, without counts" \
+    '.nohead.pressed and ([.nohead.names.nodes[] | select(.role == "button" and (.name == "added.py" or .name == "untracked.txt")) | .name] | sort) == ["added.py", "untracked.txt"]'
+check "and nothing warns of it: no warning from the apex or git plugins, the badge reads 2" \
+    '(.nohead.warnings | length == 0) and .nohead.badge'
+check "typing for 10 s there while the list loads: no key over ${STALL_MS} ms" '.nohead.keys | length > 30 and all(. != null) and max <= $stall'
 check "the switcher's segments are the boards' four views, in order" \
     '[.idle.names.nodes[] | select(.role == "page tab" and (.name == "Project" or .name == "Outline" or .name == "Search" or .name == "Version control")) | .name][:4] == ["Project", "Outline", "Search", "Version control"]'
 check "the Search view finds undefined_name in e1_lsp.py: its entry, its hit at line 5, and the hand-off button named" \

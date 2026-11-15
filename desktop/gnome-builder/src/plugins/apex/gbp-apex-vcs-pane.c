@@ -131,7 +131,10 @@ change_row (GbpApexVcsPane *self,
     }
 
   gtk_button_set_child (GTK_BUTTON (button), box);
-  if (added != NULL)
+  /* A file at the project's root is named alone; without a HEAD, git diff gives no counts. */
+  if (g_strcmp0 (dir, ".") == 0)
+    label = added != NULL ? g_strdup_printf (APEX_("%s, %s added, %s removed"), name, added, removed) : g_strdup (name);
+  else if (added != NULL)
     label = g_strdup_printf (APEX_("%s in %s, %s added, %s removed"), name, dir, added, removed);
   else
     label = g_strdup_printf (APEX_("%s in %s"), name, dir);

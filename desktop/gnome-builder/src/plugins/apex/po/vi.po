@@ -212,3 +212,7 @@ msgstr "%s trong %s, thêm %s, xóa %s"
 #, c-format
 msgid "%s in %s"
 msgstr "%s trong %s"
+
+#, c-format
+msgid "%s, %s added, %s removed"
+msgstr "%s, thêm %s, xóa %s"

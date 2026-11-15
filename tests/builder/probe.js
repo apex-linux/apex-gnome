@@ -30,6 +30,7 @@ const SAMPLES = 10;
 const LSP_WAIT_MS = 45000;
 const PRESS_WAIT_MS = 30000;
 const OUTLINE_WAIT_MS = 30000;
+const NOHEAD_TYPING_MS = 10000;
 const SEARCH_WAIT_MS = 30000;
 const CREATE_WAIT_MS = 900000;
 const SETUP_WAIT_MS = 600000;
@@ -425,6 +426,30 @@ async function plain() {
     return {keys, lookups: Object.values(counts)};
 }
 
+// A repository with no commit: Version control chosen at once, then 10 s typed while its list loads.
+async function noHead() {
+    const log = env('APEX_BUILDER_NOHEAD_LOG');
+    const project = env('APEX_BUILDER_NOHEAD_PROJECT');
+    const st = await launch(['sh', '-c', `exec gnome-builder -vvv -p '${project}' > '${log}' 2>&1`]);
+    await spawnWait(['gnome-builder', `${project}/added.py`]);
+    const {pressed} = await helper('APEX_BUILDER_PRESS', 'Version control');
+    // The file again, for the focus: the keys go to its editor, the view stays chosen.
+    await spawnWait(['gnome-builder', `${project}/added.py`]);
+    const keys = await typeTimed(st.window, NOHEAD_TYPING_MS);
+    let names;
+    for (let i = 0; i < 10; i++) {
+        names = await helper('APEX_BUILDER_ATSPI');
+        if (names.nodes.some(n => n.role === 'button' && n.name === 'untracked.txt'))
+            break;
+        await Scripting.sleep(1000);
+    }
+    const warnings = readText(log).split('\n').filter(l => /(gbp-apex|gbp-git|GbpGit)\S*\[\s*\d+\]:\s+(WARNING|CRITICAL)/.test(l));
+    await helper('APEX_BUILDER_PRESS', 'Project');
+    await Scripting.sleep(1000);
+    await quit();
+    return {pressed, names, keys, warnings, badge: names.nodes.filter(n => n.role === 'label' && n.name === '2').length >= 2};
+}
+
 // A runtime neither podman nor host, from a stand-in jhbuild: its lookups stay on the main thread.
 const JHBUILD = `${GLib.get_home_dir()}/.local/bin/jhbuild`;
 
@@ -454,7 +479,7 @@ async function drive() {
     Main.overview.hide();
     const created = env('APEX_BUILDER_CREATE') === 'true' ? await create() : null;
     return {create: created, ...await underAnotherName(), starts: await starts(), idle: await idle(), typing: await typing(),
-            plain: await plain(), jhbuild: await jhbuild()};
+            plain: await plain(), jhbuild: await jhbuild(), nohead: await noHead()};
 }
 
 // main.js connects to startup-complete only after importing this module, so a startup that
