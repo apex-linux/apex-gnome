@@ -190,7 +190,7 @@ jobs:
             shoot: tests/control-center/run.sh
             packages: >-
               gnome-shell mesa-dri-drivers dbus-daemon python3-dbusmock python3-gobject at-spi2-core gcc util-linux
-              adwaita-sans-fonts python3-dbus systemd gnome-backgrounds umockdev glibc-langpack-vi
+              adwaita-sans-fonts jetbrains-mono-fonts-all python3-dbus systemd gnome-backgrounds umockdev glibc-langpack-vi
           - app: nautilus
             key: files
             pkg: nautilus
@@ -238,6 +238,7 @@ jobs:
           KEY: ${{ matrix.key }}
         run: |
           rpm -q pango harfbuzz freetype fontconfig cairo adwaita-sans-fonts gtk4 libadwaita glib2
+          fc-match monospace
           mkdir -p _build/next-point/rpms
           rpm -qa | sort >"_build/next-point/rpms/$KEY.txt"
 
