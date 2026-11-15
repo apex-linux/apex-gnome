@@ -46,7 +46,7 @@ static void
 gbp_apex_workbench_addin_notify (GbpApexWorkbenchAddin *self,
                                  const char            *title,
                                  const char            *body,
-                                 gboolean               offer_create)
+                                 const char            *button)
 {
   IdeContext *context;
 
@@ -65,17 +65,34 @@ gbp_apex_workbench_addin_notify (GbpApexWorkbenchAddin *self,
   ide_notification_set_title (self->notif, title);
   ide_notification_set_body (self->notif, body);
   /* The omnibar shows only icon buttons, and only on a notification with a default action. */
-  if (offer_create)
+  if (button != NULL)
     {
       g_autoptr(GIcon) icon = g_themed_icon_new ("list-add-symbolic");
 
       ide_notification_set_default_action (self->notif, "context.workbench.apex.create-toolbox");
-      ide_notification_add_button (self->notif, APEX_("Create Toolbox"), icon, "context.workbench.apex.create-toolbox");
+      ide_notification_add_button (self->notif, button, icon, "context.workbench.apex.create-toolbox");
     }
   ide_notification_attach (self->notif, IDE_OBJECT (context));
 }
 
 static void gbp_apex_workbench_addin_apply (GbpApexWorkbenchAddin *self);
+
+/* A host launcher for toolbox: Builder's clears the environment, and toolbox needs SHELL,
+ * and rootless podman XDG_RUNTIME_DIR (and the session bus, when there is one). */
+static IdeSubprocessLauncher *
+toolbox_launcher_new (GSubprocessFlags flags)
+{
+  IdeSubprocessLauncher *launcher = ide_subprocess_launcher_new (flags);
+  const char *bus = g_getenv ("DBUS_SESSION_BUS_ADDRESS");
+
+  ide_subprocess_launcher_set_run_on_host (launcher, TRUE);
+  ide_subprocess_launcher_setenv (launcher, "SHELL", ide_get_user_shell (), TRUE);
+  ide_subprocess_launcher_setenv (launcher, "XDG_RUNTIME_DIR", g_get_user_runtime_dir (), TRUE);
+  if (bus != NULL)
+    ide_subprocess_launcher_setenv (launcher, "DBUS_SESSION_BUS_ADDRESS", bus, TRUE);
+
+  return launcher;
+}
 
 static void
 gbp_apex_workbench_addin_runtimes_changed_cb (GbpApexWorkbenchAddin *self)
@@ -136,7 +153,7 @@ gbp_apex_workbench_addin_apply (GbpApexWorkbenchAddin *self)
       /* TRANSLATORS: %s is the project's folder */
       body = g_strdup_printf (APEX_("%s is outside the folders the toolbox shares, so its language servers cannot start. Move the project into your home folder."),
                               workdir_path);
-      gbp_apex_workbench_addin_notify (self, APEX_("Project Outside the Toolbox"), body, FALSE);
+      gbp_apex_workbench_addin_notify (self, APEX_("Project Outside the Toolbox"), body, NULL);
     }
 }
 
@@ -191,6 +208,40 @@ gbp_apex_workbench_addin_add_runtime (GbpApexWorkbenchAddin *self,
 }
 
 static void
+gbp_apex_workbench_addin_servers_cb (GObject      *object,
+                                     GAsyncResult *result,
+                                     gpointer      user_data)
+{
+  g_autoptr(GbpApexWorkbenchAddin) self = user_data;
+
+  if (self->workbench == NULL || self->creating ||
+      ide_subprocess_wait_check_finish (IDE_SUBPROCESS (object), result, NULL))
+    return;
+
+  gbp_apex_workbench_addin_notify (self,
+                                   APEX_("Toolbox Setup Incomplete"),
+                                   APEX_("fedora-toolbox-45 lacks some of its language servers, so their languages have no completion or diagnostics. Finish its setup to install them."),
+                                   APEX_("Finish Setup"));
+}
+
+/* A toolbox whose setup stopped halfway would be used without its servers. */
+static void
+gbp_apex_workbench_addin_check_servers (GbpApexWorkbenchAddin *self)
+{
+  g_autoptr(IdeSubprocessLauncher) launcher = NULL;
+  g_autoptr(IdeSubprocess) subprocess = NULL;
+
+  launcher = toolbox_launcher_new (G_SUBPROCESS_FLAGS_STDOUT_SILENCE | G_SUBPROCESS_FLAGS_STDERR_SILENCE);
+  ide_subprocess_launcher_set_cwd (launcher, g_get_home_dir ());
+  ide_subprocess_launcher_push_args (launcher,
+                                     IDE_STRV_INIT ("toolbox", "run", "--container", APEX_TOOLBOX_NAME, "sh", "-c",
+                                                    "command -v pylsp && command -v rust-analyzer && command -v typescript-language-server"));
+
+  if ((subprocess = ide_subprocess_launcher_spawn (launcher, NULL, NULL)))
+    ide_subprocess_wait_check_async (subprocess, NULL, gbp_apex_workbench_addin_servers_cb, g_object_ref (self));
+}
+
+static void
 gbp_apex_workbench_addin_ps_cb (GObject      *object,
                                 GAsyncResult *result,
                                 gpointer      user_data)
@@ -225,12 +276,13 @@ gbp_apex_workbench_addin_ps_cb (GObject      *object,
       if (self->created)
         gbp_apex_workbench_addin_add_runtime (self, toolbox);
       gbp_apex_workbench_addin_apply (self);
+      gbp_apex_workbench_addin_check_servers (self);
     }
   else if (!self->creating)
     gbp_apex_workbench_addin_notify (self,
                                      APEX_("No Toolbox for Builds"),
                                      APEX_("Apex Code builds and runs language servers in the fedora-toolbox-45 toolbox. Until it exists, they run on the host."),
-                                     TRUE);
+                                     APEX_("Create Toolbox"));
 }
 
 static void
@@ -271,14 +323,14 @@ gbp_apex_workbench_addin_create_cb (GObject      *object,
     return;
 
   if (!ide_subprocess_wait_check_finish (subprocess, result, &error))
-    gbp_apex_workbench_addin_notify (self, APEX_("Could Not Create the Toolbox"), error->message, TRUE);
+    gbp_apex_workbench_addin_notify (self, APEX_("Could Not Create the Toolbox"), error->message, APEX_("Create Toolbox"));
   else
     {
       self->created = TRUE;
       gbp_apex_workbench_addin_notify (self,
                                        APEX_("Toolbox Ready"),
                                        APEX_("fedora-toolbox-45 has its language servers, and builds and language servers now run in it."),
-                                       FALSE);
+                                       NULL);
       gbp_apex_workbench_addin_find (self);
     }
 }
@@ -296,18 +348,17 @@ create_toolbox_action (GSimpleAction *action,
   if (self->creating || self->workbench == NULL)
     return;
 
-  launcher = ide_subprocess_launcher_new (G_SUBPROCESS_FLAGS_STDOUT_SILENCE | G_SUBPROCESS_FLAGS_STDERR_SILENCE);
-  ide_subprocess_launcher_set_run_on_host (launcher, TRUE);
-  /* The launcher clears the environment, and toolbox fails without SHELL. */
-  ide_subprocess_launcher_setenv (launcher, "SHELL", ide_get_user_shell (), TRUE);
+  /* Resumable: a toolbox whose setup failed is set up again, not created again. */
+  launcher = toolbox_launcher_new (G_SUBPROCESS_FLAGS_STDOUT_SILENCE | G_SUBPROCESS_FLAGS_STDERR_SILENCE);
   ide_subprocess_launcher_push_args (launcher,
                                      IDE_STRV_INIT ("sh", "-c",
-                                                    "toolbox create --assumeyes --image " APEX_TOOLBOX_IMAGE " " APEX_TOOLBOX_NAME
+                                                    "{ podman container exists " APEX_TOOLBOX_NAME
+                                                    " || toolbox create --assumeyes --image " APEX_TOOLBOX_IMAGE " " APEX_TOOLBOX_NAME "; }"
                                                     " && toolbox run --container " APEX_TOOLBOX_NAME " sh -c '" APEX_TOOLBOX_SETUP "'"));
 
   if (!(subprocess = ide_subprocess_launcher_spawn (launcher, NULL, &error)))
     {
-      gbp_apex_workbench_addin_notify (self, APEX_("Could Not Create the Toolbox"), error->message, TRUE);
+      gbp_apex_workbench_addin_notify (self, APEX_("Could Not Create the Toolbox"), error->message, APEX_("Create Toolbox"));
       return;
     }
 
@@ -315,7 +366,7 @@ create_toolbox_action (GSimpleAction *action,
   gbp_apex_workbench_addin_notify (self,
                                    APEX_("Creating the Toolbox"),
                                    APEX_("Downloading fedora-toolbox-45 and installing its language servers."),
-                                   FALSE);
+                                   NULL);
   ide_notification_set_has_progress (self->notif, TRUE);
   ide_notification_set_progress_is_imprecise (self->notif, TRUE);
   ide_subprocess_wait_check_async (subprocess, NULL, gbp_apex_workbench_addin_create_cb, g_object_ref (self));

@@ -74,9 +74,13 @@ a project loads, the addin lists the toolbox containers (`podman ps --all --no-t
   toolbox again and adds its runtime to that provider (E2); the move above then runs, and
   the servers restart in the toolbox with no reopen. The button has an icon and is also the
   notification's default action, since the omnibar shows only icon buttons, and only on a
-  notification with a default action. `SHELL` is set for `toolbox create`, which fails
-  without it, and Builder's host launcher clears the environment. A toolbox the image or
-  the first login creates is used as is.
+  notification with a default action. Builder's host launcher clears the environment, so
+  the plugin sets `SHELL` (toolbox fails without it), `XDG_RUNTIME_DIR` (rootless podman
+  needs it) and the session bus. The command is resumable: `podman container exists` skips
+  `toolbox create` for a toolbox whose setup stopped halfway. When the project loads with
+  the toolbox, the plugin checks its three servers (`command -v` in the toolbox), and a
+  missing one brings "Toolbox Setup Incomplete" with a Finish Setup button. A toolbox the
+  image or the first login creates is used as is.
 - A project outside the folders the toolbox mounts (outside `$HOME`, `/mnt`, `/media`,
   `/run/media`) gets a notification saying so; patch 0004 keeps its servers from starting.
 
@@ -97,8 +101,8 @@ button both named "More Options". Two addins name them, with no hunk in upstream
 | the Run button's main button | "Run Project (Shift+Ctrl+Space)", or "Stop Running Project" | libadwaita labels it by its dropdown; the addin replaces that relation with `IdeRunButton`'s own tooltip, and follows it |
 | the status bar's diagnostics button (E2) | "Build Diagnostics: 0 errors, 0 warnings" | GTK named it "0 0" from its two count labels; found by its own tooltip in Builder's catalogue, and named from `IdeBuildManager`'s counts as they change (plurals from `APEX_NG_`) |
 | an editor tab bar's two tab lists (E2) | "Pinned Pages", "Pages" | by the accessible role, under `AdwTabBar`, the first being the pinned one |
-| a dock's panel switcher (E2) | "Panels" | by the accessible role, elsewhere |
-| a page's progress bar (E2) | "Loading Progress" | `GtkProgressBar` under an `IdePage` |
+| a dock's panel switcher (E2) | "Panels" | libpanel's `PanelFrameSwitcher` only; a popover's or a notebook's tab list keeps its own |
+| a page's progress bar (E2) | "Progress" | `GtkProgressBar` under an `IdePage`; it shows both loading and saving |
 | the project tree's filter (E2) | "Filter…" | a `GtkSearchEntry` is named by its placeholder |
 | the project tree (E2) | "Project Tree" | a `GtkListView` in a panel is named by the panel's title |
 | empty status bar labels (E2) | — | vim's command bar sits empty in the status bar, and the hidden state does not take it out of the tree, so the label is hidden while it has no text, even when its owner shows it |
@@ -122,12 +126,12 @@ the application name before any plugin loads. Strings are marked `APEX_()` rathe
 | `0002-name` | `src/main.c`, `src/libide/gui/ide-application-actions.c`, `ide-workbench.c`, `src/libide/greeter/ide-greeter-workspace.c`, `src/libide/tweaks/ide-tweaks-window.c`, `data/org.gnome.Builder.desktop.in.in` | +18 −12 | the includes; the application name, the about dialog's name and the "Builder — %s" titles from `apex-brand.h`; `Name=Apex Code` |
 | `0003-podman-storage-path` | `src/plugins/podman/gbp-podman-runtime.c` | +1 −1 | `/etc/containers/storage.conf`, which lost its leading `/` |
 | `0004-podman-workdir` | `src/plugins/podman/gbp-podman-runtime.c` | +10 | the run handler refuses a working directory no mount of the container holds |
-| `0005-program-lookups` | `src/libide/foundry/ide-pipeline.c`, `ide-pipeline-private.h`, `ide-diagnostic-tool.c`, `src/libide/lsp/ide-lsp-service.c` | +288 −31 | `_ide_pipeline_find_programs_async()` makes the program lookups on a worker thread; a diagnostic tool runs it before each pass, a language server before it starts (E2; see below) |
+| `0005-program-lookups` | `src/libide/foundry/ide-pipeline.c`, `ide-pipeline-private.h`, `ide-diagnostic-tool.c`, `src/libide/lsp/ide-lsp-service.c`, `src/plugins/podman/gbp-podman-runtime.c` | +404 −54 | `_ide_pipeline_find_programs_async()` makes the program lookups on a worker thread, for the podman and host runtimes; a diagnostic tool runs it before each pass, a language server before it starts, the pipeline before it loads; the podman runtime caches only `which`'s own answer and lets a worker wait for `podman start` (E2; see below) |
 | `0006-podman-bridge` | `src/plugins/podman/gbp-podman-runtime.c` | +10 | the run handler hands a toolbox's processes without a TTY to `apex-toolbox-exec` (E2; see below) |
 
 No ADR 0014 budget applies to this series (ADR 0017, decision 2); each patch still says
-what it changes and why, and the lane's checks apply. In use: +328 −44 lines in 12 files, of
-which 0005's +288 −31 is a fix to propose upstream rather than a hook. The
+what it changes and why, and the lane's checks apply. In use: +444 −67 lines in 12 files, of
+which 0005's +404 −54 is a fix to propose upstream rather than a hook. The
 patches are `git format-patch` output against Fedora's `%prep` tree, with `a/` and `b/`
 prefixes, applied with `-p1`; write them with apex-image's `just pkg-prep gnome-builder`
 and `just pkg-export gnome-builder`.
@@ -156,11 +160,18 @@ and `just pkg-export gnome-builder`.
   `ide_lsp_service_create_launcher()` looks up `ruff` and `pylsp` (145 and 160 ms here), so
   the stall also comes when the toolbox's pipeline loads as the file opens. Patch 0005 adds
   `_ide_pipeline_find_programs_async()`, which makes those lookups on a worker thread; the
-  diagnostic tool runs it before each pass, and the language server once per pipeline
-  before it creates its launcher, and both then find their answers cached. The runtimes
-  allow it: their path caches lock, and the podman runtime starts its container under a
-  mutex. Typing from the moment the file opens, the longest key here went from 313 ms
-  (diagnostics) and 320 ms (language servers) to 30.5 ms (median 14.2 ms).
+  diagnostic tool runs it before each pass, the language server once per pipeline before
+  it creates its launcher, and the pipeline before it loads its addins, whose build systems
+  look up ninja, ninja-build and cargo. All of them then find their answers cached. Only
+  the podman and host runtimes are looked up there, as their path caches lock; a Flatpak
+  runtime reaches the context for its SDK, which is main-thread only, so the others stay
+  on the main thread. The podman runtime caches only `which`'s own answer (0 or 1), not
+  podman's 125 while the container is still starting, and a worker waits for its
+  `podman start` while the main thread never does; it frees what a worker reads in
+  finalize. Typing from the moment the file opens, the longest key here went from 313 ms
+  (diagnostics) and 320 ms (language servers) to 30.5 ms (median 14.2 ms). With the
+  toolbox stopped and its start held 3 s, the code before these last changes cached
+  pylsp as missing (no completion) and looked up ninja on the main thread; now neither.
 - **One shared `podman exec` per toolbox: done in E2** (patch 0006). Every process
   Builder ran in the toolbox was its own `podman exec`, whose Go client stays alive as the
   process's stdio (about 48 MiB RSS, 26 MiB PSS each) beside a `conmon` (about 2.3 MiB).
@@ -179,7 +190,8 @@ and `just pkg-export gnome-builder`.
   - the first client that finds no bridge starts it with `podman exec … --daemonize`, from
     the host's `/usr/libexec` under `/run/host`; the bridge goes to the background only once
     it listens, so that exit status says whether it started, and a lock beside the socket
-    keeps it to one. A failed start leaves a `.failed` stamp that sends every client
+    keeps it to one. A start that fails because the bridge cannot run (podman exec's 126 or 127, not its
+    125 for a toolbox not running yet) leaves a `.failed` stamp that sends every client
     straight to `podman exec` for ten minutes; a client that cannot reach a bridge execs
     `podman exec` as before, so a dead bridge costs one respawn and no more;
   - the socket's peer gets the process's pipes and environment, so the socket lives only in

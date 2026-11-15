@@ -16,6 +16,8 @@ const env = name => GLib.getenv(name);
 const PROJECT = env('APEX_BUILDER_PROJECT');
 const LSP_FILE = env('APEX_BUILDER_LSP_FILE');
 const TYPING_FILE = env('APEX_BUILDER_TYPING_FILE');
+const TYPING_PROJECT = env('APEX_BUILDER_TYPING_PROJECT');
+const TOOLBOX = env('APEX_BUILDER_TOOLBOX');
 // E0's harness: three cold starts after a discarded one; 30 s settled, then 10 samples a second apart.
 const STARTS = 3;
 const WINDOW_WAIT_MS = 60000;
@@ -25,6 +27,7 @@ const SAMPLES = 10;
 const LSP_WAIT_MS = 45000;
 const PRESS_WAIT_MS = 30000;
 const CREATE_WAIT_MS = 900000;
+const SETUP_WAIT_MS = 900000;
 // E0's typing: a key every 150 ms, timed from the press to the frame presented after the window's first damage.
 const TYPING_MS = 60000;
 const KEY_GAP_MS = 150;
@@ -186,8 +189,11 @@ async function starts() {
     return out;
 }
 
+// The names before any page has focus, then with a file open, then with the diagnostics popover open.
 async function idle() {
     const st = await launch(['gnome-builder', '-p', PROJECT]);
+    await Scripting.sleep(QUIET_MS);
+    const noPage = await helper('APEX_BUILDER_ATSPI');
     await spawnWait(['gnome-builder', LSP_FILE]);
     st.window.maximize(Meta.MaximizeFlags.BOTH);
     await Scripting.sleep(SETTLE_MS);
@@ -198,15 +204,26 @@ async function idle() {
         await Scripting.sleep(1000);
     }
     const names = await helper('APEX_BUILDER_ATSPI');
+    const {pressed} = await helper('APEX_BUILDER_PRESS', 'Build Diagnostics:*');
+    await Scripting.sleep(1000);
+    const popover = await helper('APEX_BUILDER_ATSPI');
+    tap(Clutter.KEY_Escape);
     await quit();
-    return {samples, names, title: st.window.get_title()};
+    return {samples, names, noPage, popover: {pressed, names: popover}, title: st.window.get_title()};
 }
 
-// Keys timed from the moment the first file opens and starts its diagnostics, then pylsp's answer.
-// Cairo compiles no shaders: lavapipe's first popup pipeline costs 290-430 ms, the driver's cost.
+// The toolbox stopped, as after a reboot, with its start held 3 s: lookups meet it not yet running.
+const SLOW_PODMAN = '/usr/local/bin/podman';
+
+// Keys timed from the moment the first file opens, in a meson project (its pipeline looks up
+// ninja), then pylsp's answer. Cairo: lavapipe's first popup pipeline costs 290-430 ms.
+
 async function typing() {
     const log = env('APEX_BUILDER_LOG');
-    const st = await launch(['sh', '-c', `GSK_RENDERER=cairo exec gnome-builder -vvv -p '${PROJECT}' > '${log}' 2>&1`]);
+    await spawnWait(['podman', 'stop', '--time', '0', TOOLBOX]);
+    GLib.file_set_contents(SLOW_PODMAN, '#!/bin/sh\n[ "$1" = start ] && sleep 3\nexec /usr/bin/podman "$@"\n');
+    await spawnWait(['chmod', '755', SLOW_PODMAN]);
+    const st = await launch(['sh', '-c', `GSK_RENDERER=cairo exec gnome-builder -vvv -p '${TYPING_PROJECT}' > '${log}' 2>&1`]);
     await spawnWait(['gnome-builder', TYPING_FILE]);
     const keys = await typeTimed(st.window, TYPING_MS);
     tap(Clutter.KEY_Escape);
@@ -220,8 +237,16 @@ async function typing() {
         if (m)
             found = Number(m[1]);
     }
+    const [, bytes] = GLib.file_get_contents(log);
+    const text = new TextDecoder().decode(bytes);
+    const offThread = [...text.matchAll(/Looking up \S+ in (\S+) off the main thread/g)].map(m => m[1]);
+    // The launcher logs from the thread that spawns; the main thread's id is the process's.
+    const pid = st.window.get_pid();
+    const lookups = [...text.matchAll(/ide-subprocess-launcher\[\s*(\d+)\]:\s+DEBUG: Launching (?:podman exec|\S*apex-toolbox-exec) [^\n]*'which' '([^']+)'/g)];
+    const mainThreadLookups = lookups.filter(m => Number(m[1]) === pid).map(m => m[2]);
     await quit();
-    return {keys, completionItems: found};
+    GLib.unlink(SLOW_PODMAN);
+    return {keys, completionItems: found, offThread: [...new Set(offThread)], lookups: lookups.length, mainThreadLookups};
 }
 
 // Apex Code's own Create Toolbox, pressed in the notification the project shows without a
@@ -236,17 +261,45 @@ async function create() {
         await Scripting.sleep(1000);
         ({pressed} = await helper('APEX_BUILDER_PRESS', 'Create Toolbox'));
     }
+    // pylsp itself launched in the toolbox, not a `which pylsp` lookup, and spawned.
     let lspInToolboxAfterS = null;
+    let text = '';
     const t1 = now();
     while (pressed && lspInToolboxAfterS === null && (now() - t1) / 1000 < CREATE_WAIT_MS) {
         await Scripting.sleep(2000);
         const [, bytes] = GLib.file_get_contents(log);
-        if (/Launching (podman exec|\S*apex-toolbox-exec) [^\n]*pylsp/.test(new TextDecoder().decode(bytes)))
+        text = new TextDecoder().decode(bytes);
+        if (/Launching (?:podman exec|\S*apex-toolbox-exec) [^\n]* pylsp \[env /.test(text) && /Language server .pylsp. spawned as process/.test(text))
             lspInToolboxAfterS = Math.round((now() - t1) / 1e6);
     }
+    const createEnv = (text.match(/Launching sh -c \{ podman container exists [^\n]*/) ?? [''])[0];
     const {names} = await helper('APEX_BUILDER_PRESS', '--names');
     await quit();
-    return {pressed, lspInToolboxAfterS, toolboxNames: names.filter(n => /oolbox/.test(n))};
+    return {pressed, lspInToolboxAfterS, createHasRuntimeDir: /\[env [^\]]*XDG_RUNTIME_DIR=/.test(createEnv),
+            toolboxNames: names.filter(n => /oolbox/.test(n))};
+}
+
+// A toolbox whose setup stopped halfway: Apex Code says so, and Finish Setup completes it.
+async function finishSetup() {
+    const has = () => spawnWait(['podman', 'exec', TOOLBOX, 'sh', '-c', 'command -v typescript-language-server']);
+    await spawnWait(['podman', 'exec', TOOLBOX, 'npm', 'uninstall', '-g', '--no-fund', '--no-audit', 'typescript-language-server']);
+    const removed = await has() !== 0;
+    await launch(['gnome-builder', '-p', PROJECT]);
+    const t0 = now();
+    let pressed = false;
+    while (!pressed && (now() - t0) / 1000 < PRESS_WAIT_MS) {
+        await Scripting.sleep(1000);
+        ({pressed} = await helper('APEX_BUILDER_PRESS', 'Finish Setup'));
+    }
+    let restoredAfterS = null;
+    const t1 = now();
+    while (pressed && restoredAfterS === null && (now() - t1) / 1000 < SETUP_WAIT_MS) {
+        await Scripting.sleep(2000);
+        if (await has() === 0)
+            restoredAfterS = Math.round((now() - t1) / 1e6);
+    }
+    await quit();
+    return {removed, pressed, restoredAfterS};
 }
 
 async function drive() {
@@ -254,7 +307,8 @@ async function drive() {
         .create_virtual_device(Clutter.InputDeviceType.KEYBOARD_DEVICE);
     Main.overview.hide();
     const created = env('APEX_BUILDER_CREATE') === 'true' ? await create() : null;
-    return {create: created, starts: await starts(), idle: await idle(), typing: await typing()};
+    const setup = created !== null ? await finishSetup() : null;
+    return {create: created, setup, starts: await starts(), idle: await idle(), typing: await typing()};
 }
 
 // main.js connects to startup-complete only after importing this module, so a startup that

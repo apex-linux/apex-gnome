@@ -150,7 +150,8 @@ label_widget (GtkWidget  *widget,
   gtk_accessible_update_property (GTK_ACCESSIBLE (widget), GTK_ACCESSIBLE_PROPERTY_LABEL, label, -1);
 }
 
-/* AdwTabBar's two tab lists, pinned tabs first, and libpanel's switcher of a dock's panels. */
+/* AdwTabBar's two tab lists, pinned tabs first, and libpanel's switcher of a dock's panels;
+ * other tab lists (a popover's or a notebook's) keep their own. */
 static void
 name_tab_list (GtkWidget *widget)
 {
@@ -158,7 +159,8 @@ name_tab_list (GtkWidget *widget)
 
   if (bar == NULL)
     {
-      label_widget (widget, APEX_("Panels"));
+      if (PANEL_IS_FRAME_SWITCHER (widget) || gtk_widget_get_ancestor (widget, PANEL_TYPE_FRAME_SWITCHER) != NULL)
+        label_widget (widget, APEX_("Panels"));
       return;
     }
 
@@ -183,7 +185,7 @@ name_widgets (GtkWidget *widget)
   else if (role == GTK_ACCESSIBLE_ROLE_TAB_LIST)
     name_tab_list (widget);
   else if (GTK_IS_PROGRESS_BAR (widget) && gtk_widget_get_ancestor (widget, IDE_TYPE_PAGE) != NULL)
-    label_widget (widget, APEX_("Loading Progress"));
+    label_widget (widget, APEX_("Progress"));
   else if (GTK_IS_SEARCH_ENTRY (widget) && gtk_search_entry_get_placeholder_text (GTK_SEARCH_ENTRY (widget)) != NULL)
     label_widget (widget, gtk_search_entry_get_placeholder_text (GTK_SEARCH_ENTRY (widget)));
   else if (GTK_IS_LIST_VIEW (widget) && (panel = gtk_widget_get_ancestor (widget, PANEL_TYPE_WIDGET)) != NULL &&
@@ -218,12 +220,25 @@ name_widgets (GtkWidget *widget)
     name_widgets (child);
 }
 
+/* Other addins add their widgets (the status bar's diagnostics button) after this one loads. */
+static gboolean
+gbp_apex_workspace_addin_rescan (gpointer user_data)
+{
+  GbpApexWorkspaceAddin *self = user_data;
+
+  if (self->workspace != NULL)
+    name_widgets (GTK_WIDGET (self->workspace));
+
+  return G_SOURCE_REMOVE;
+}
+
 static void
 gbp_apex_workspace_addin_load (IdeWorkspaceAddin *addin,
                                IdeWorkspace      *workspace)
 {
   GBP_APEX_WORKSPACE_ADDIN (addin)->workspace = workspace;
   name_widgets (GTK_WIDGET (workspace));
+  g_idle_add_full (G_PRIORITY_DEFAULT_IDLE, gbp_apex_workspace_addin_rescan, g_object_ref (addin), g_object_unref);
 }
 
 static void
