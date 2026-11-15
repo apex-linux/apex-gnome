@@ -14,7 +14,7 @@ Installs the lane's gnome-builder from RPM_DIR (_build/gnome-builder/out by defa
 runs a headless gnome-shell, as root, whose automation script (probe.js):
 - without fedora-toolbox-45, opens the project, presses the notification's Create Toolbox
   (press.py) and waits for pylsp to start in the new toolbox, with no reopen; then removes
-  typescript-language-server from it, and presses Finish Setup, which must bring it back;
+  python3-lsp-server from it, and presses Finish Setup, which must bring it back;
 - starts Apex Code on a copy of this repository three times, after a discarded start,
   each after the page cache is dropped: E1's first frame, at most ${BUILDER_FIRST_FRAME_MS:-1900} ms (median);
 - opens tests/e1_lsp.py, waits 30 s, and samples Apex Code's own process tree ten
