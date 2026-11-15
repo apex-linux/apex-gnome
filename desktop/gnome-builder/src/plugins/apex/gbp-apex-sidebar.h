@@ -18,4 +18,11 @@ GbpApexSidebar *gbp_apex_sidebar_new (IdeWorkspace *workspace);
 /* The board's view of a sidebar page, or NULL for a page the boards do not show. */
 const char *gbp_apex_sidebar_view_name (PanelWidget *page);
 
+/* The outline follows the focused page (the workspace addin's page_changed). */
+void        gbp_apex_sidebar_page_changed (GbpApexSidebar *self,
+                                           IdePage        *page);
+
+/* A "dark" class while AdwStyleManager is dark: Builder's style variant sets it, not prefers-color-scheme. */
+void        gbp_apex_track_dark           (GtkWidget      *widget);
+
 G_END_DECLS

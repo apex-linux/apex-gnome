@@ -29,6 +29,7 @@ const SETTLE_MS = 30000;
 const SAMPLES = 10;
 const LSP_WAIT_MS = 45000;
 const PRESS_WAIT_MS = 30000;
+const OUTLINE_WAIT_MS = 30000;
 const CREATE_WAIT_MS = 900000;
 const SETUP_WAIT_MS = 600000;
 // E0's typing: a key every 150 ms, timed from the press to the frame presented after the window's first damage.
@@ -218,8 +219,25 @@ async function idle() {
     const bottom = await helper('APEX_BUILDER_ATSPI');
     tap(Clutter.KEY_F9, [Clutter.KEY_Control_L]);
     await Scripting.sleep(1000);
+    const outline = await outlineOf();
     await quit();
-    return {samples, names, noPage, popover: {pressed, names: popover}, bottom, title: st.window.get_title()};
+    return {samples, names, noPage, popover: {pressed, names: popover}, bottom, outline, title: st.window.get_title()};
+}
+
+// The Outline view with the cursor at the file's end, then Project again before the quit saves the session.
+async function outlineOf() {
+    tap(Clutter.KEY_End, [Clutter.KEY_Control_L]);
+    const {pressed} = await helper('APEX_BUILDER_PRESS', 'Outline');
+    let names;
+    for (let i = 0; i < OUTLINE_WAIT_MS / 1000; i++) {
+        await Scripting.sleep(1000);
+        names = await helper('APEX_BUILDER_ATSPI');
+        if (names.nodes.some(n => n.role === 'tree item'))
+            break;
+    }
+    await helper('APEX_BUILDER_PRESS', 'Project');
+    await Scripting.sleep(1000);
+    return {pressed, names};
 }
 
 // The toolbox stopped, as after a reboot, with its start held 3 s: lookups meet it not yet running.

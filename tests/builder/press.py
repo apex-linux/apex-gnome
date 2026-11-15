@@ -9,7 +9,7 @@ import gi
 gi.require_version('Atspi', '2.0')
 from gi.repository import Atspi  # noqa: E402
 
-PRESSABLE = {Atspi.Role.BUTTON, Atspi.Role.TOGGLE_BUTTON}
+PRESSABLE = {Atspi.Role.BUTTON, Atspi.Role.TOGGLE_BUTTON, Atspi.Role.RADIO_BUTTON}
 
 
 def nodes(node, depth=0):

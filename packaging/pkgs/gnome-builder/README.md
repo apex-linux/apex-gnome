@@ -104,7 +104,8 @@ button both named "More Options". Two addins name them, with no hunk in upstream
 | the status bar's diagnostics button (E2) | "Build Diagnostics: 0 errors, 0 warnings" | GTK named it "0 0" from its two count labels; found by its own tooltip in Builder's catalogue, and named from `IdeBuildManager`'s counts as they change (plurals from `APEX_NG_`) |
 | an editor tab bar's two tab lists (E2) | "Pinned Pages", "Pages" | by the accessible role, under `AdwTabBar`, the first being the pinned one |
 | a dock's panel switcher (E2) | "Panels" | libpanel's `PanelFrameSwitcher` only: the bottom and end frames', the sidebar's being "Sidebar views" since E2's UI. The lane opens the bottom panel (Ctrl+F9) for a snapshot of its own: its tabs, Build Pipeline, Manuals, TODO/FIXMEs and Unit Tests among them, are named and take keyboard focus, as upstream's do |
-| the sidebar's view switcher (E2 UI) | "Sidebar views", its segments "Project" | the boards' tab list over the start frame (`gbp-apex-sidebar.c`), each segment a radio button named for its view |
+| the sidebar's view switcher (E2 UI) | "Sidebar views", its segments "Project" and "Outline" | the boards' tab list over the start frame (`gbp-apex-sidebar.c`), each segment a radio button named for its view |
+| the Outline view (E2 UI) | the tree "Outline of e1_lsp.py", each item named for its symbol and described "Line 4" | the board's names; the current symbol's item is selected. The lane opens it with the cursor at the file's end, and finds pylsp's f there, current |
 | the diagnostics popover's switcher (E2) | "Diagnostics" | the `GtkStackSwitcher` between errors and warnings, in the diagnostics button's popover |
 | a page's progress bar (E2) | "Progress" | `GtkProgressBar` under an `IdePage`; it shows both loading and saving |
 | the project tree's filter (E2) | "Filter…" | a `GtkSearchEntry` is named by its placeholder |
@@ -121,7 +122,16 @@ frame, in the boards' order, with the boards' icon and name for each view. `styl
 draws it in the boards' tokens: a `--btn` track with 3px of padding and a 10px radius,
 30px segments with an 8px radius, the selected one `--view` with its shadow. The stylesheet
 keys dark on `AdwStyleManager`, which Builder's style variant sets, through a `dark` class.
-Only Project exists so far; Outline, Search and Version control come as their panes do.
+Project and Outline exist so far; Search and Version control come as their panes do.
+
+The Outline view (`gbp-apex-outline-pane.c`) is an `IdePane` on the start frame. It follows
+the focused editor's buffer and asks Builder's symbol resolvers for its tree, the last
+resolver first, as Builder's own symbol menu does. Under a 26px file caption, each symbol is
+a 28px row: the board's kind glyph (C for a class, ƒ for a function or method, fn and impl in
+Rust, # otherwise), the name, and the line. The current symbol, the last one at or above
+the cursor's line, is drawn `--sel` and bold. Activating a row moves the cursor to the symbol.
+An empty tree is retried, 1 to 32 s apart, and again after each save: ctags writes its
+first index only after a save, and a language server can answer before it is ready.
 
 #### Not on the board
 
@@ -129,6 +139,9 @@ Only Project exists so far; Outline, Search and Version control come as their pa
 |---|---|---|
 | Build Pipeline, Manuals, TODO/FIXMEs and Unit Tests in the sidebar | the bottom panel, each a tab beside Builder's own, named and reached as upstream has them | the boards' switcher has exactly four views; the boards' bottom panel is tabbed |
 | a sidebar segment's role | a radio button in the "Sidebar views" tab list, not a tab | `AdwToggleGroup`'s own; the name is the board's |
+| the Outline's indent | Builder's nesting: 8px, then 14px more for each level | the board indents every row after the first unless it is a class, impl or h1, so feature.js's two top-level functions sit at 8px and 22px |
+| an Outline row | activating it moves the cursor to the symbol | the board's rows have no click handler |
+| an empty Outline | "No outline for this file", and, unlike Builder's symbol menu, the next resolver tried after an empty tree | the board has no empty state; ctags answers with an empty tree before its first index |
 
 ### Translations
 

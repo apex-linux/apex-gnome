@@ -205,6 +205,11 @@ check "the bottom panel's tabs: Build Pipeline, Manuals, TODO/FIXMEs, Unit Tests
 for name in "Pinned Pages" "Pages"; do
     check "\"$name\" names a tab list" ".idle.names.nodes | any(.role == \"page tab list\" and .name == \"$name\")"
 done
+check "\"Outline\" is the switcher's second segment, after \"Project\"" \
+    '[.idle.names.nodes[] | select(.role == "radio button") | .name][:2] == ["Project", "Outline"]'
+check "the Outline view names its tree for the file, and lists pylsp's symbol f at line 4, current with the cursor below it" \
+    '.idle.outline.pressed and (.idle.outline.names.nodes | any(.role == "tree" and .name == "Outline of e1_lsp.py"))
+     and (.idle.outline.names.nodes | any(.role == "tree item" and .name == "f" and .description == "Line 4" and .selected))'
 check "the project tree and its filter are named" '[.idle.names.nodes[] | select(.role == "list" or .role == "entry") | .name] | (index("Project Tree") != null and index("Filter…") != null)'
 check "every typed key drew a frame" '.typing.keys | length > 300 and all(. != null)'
 check "typing for 60 s from a fresh start: no key over ${STALL_MS} ms" '.typing.keys | max <= $stall'

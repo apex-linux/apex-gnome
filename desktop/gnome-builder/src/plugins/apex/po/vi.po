@@ -166,3 +166,17 @@ msgstr "%s còn thiếu một số máy chủ ngôn ngữ, nên các ngôn ngữ
 
 msgid "Finish Setup"
 msgstr "Hoàn tất thiết lập"
+
+#, c-format
+msgid "Line %d"
+msgstr "Dòng %d"
+
+#, c-format
+msgid "Outline of %s"
+msgstr "Dàn ý của %s"
+
+msgid "Outline"
+msgstr "Dàn ý"
+
+msgid "No outline for this file"
+msgstr "Tệp này không có dàn ý"
