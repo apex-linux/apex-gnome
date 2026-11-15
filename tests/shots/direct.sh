@@ -29,6 +29,9 @@ gi-compile-repository.
   kernel   the apex.safe=1 case (run.sh binds a fixture over /proc/cmdline)
   fedora   the captures of Fedora's own gnome-shell build (run.sh's baseline image)
   signoff  main's capture and indicator cases with every scene saved (signoff.sh)
+
+G2_SUBSET=rest|split, for the main part only: rest runs every main case but parts.sh's
+SPLIT_CASES, split only those, so a gate can run each on a runner of its own. Unset, every case.
 EOF
 }
 
@@ -36,6 +39,12 @@ case ${1:-} in
     main | pr | kernel | fedora | signoff) part=$1 ;;
     -h | --help) usage; exit 0 ;;
     *) usage >&2; exit 2 ;;
+esac
+subset=${G2_SUBSET:-}
+case $subset in
+    '') ;;
+    rest | split) [[ $part == main ]] || { echo "direct.sh: G2_SUBSET is for the main part, not $part" >&2; exit 2; } ;;
+    *) echo "direct.sh: G2_SUBSET is rest or split, not $subset" >&2; exit 2 ;;
 esac
 # It stops logind's seats and changes /run as root: never outside a throwaway container.
 [[ -e /run/.containerenv || -e /.dockerenv ]] || { echo "direct.sh: only inside run.sh's or smoke.sh's container" >&2; exit 2; }
@@ -202,6 +211,8 @@ run_case() {
 run_and_record_case() {
     local name=$1
     [[ $part == pr && " ${PR_CASES[*]} " != *" $name "* ]] && return
+    [[ $subset == rest && " ${SPLIT_CASES[*]} " == *" $name "* ]] && return
+    [[ $subset == split && " ${SPLIT_CASES[*]} " != *" $name "* ]] && return
     [[ $part == fedora && ${G2_PR:-} == 1 && " ${PR_FEDORA_CASES[*]} " != *" $name "* ]] && return
     run_case "$@"
     if grep -q 'APEXG2-LATE' "/out/$name.log"; then

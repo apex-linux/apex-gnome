@@ -7,8 +7,9 @@ usage() {
 usage: tests/shots/stable.sh RUN_DIR OTHER_RUN_DIR
 
 G2 runs twice per build: two runs of one image must report the same and capture the
-same pixels; the direct cases' clock stands still. One PASS or FAIL line each, then a
-count, and exit 1 when one fails.
+same pixels; the direct cases' clock stands still. Both runs must have run one G2_SUBSET
+(subset.txt); two split runs compare only their image, as glass-stress reports measurements.
+One PASS or FAIL line each, then a count, and exit 1 when one fails.
 EOF
 }
 
@@ -60,6 +61,19 @@ main() {
         pass "both runs tested one image ($(sed -n 's/^id //p' "$first_run/image.txt" | cut -c1-12))"
     else
         fail "the runs tested different images"
+    fi
+    local subset other_subset
+    subset=$(cat "$first_run/subset.txt" 2>/dev/null)
+    other_subset=$(cat "$other_run/subset.txt" 2>/dev/null)
+    if [[ $subset != "$other_subset" ]]; then
+        fail "the runs ran different G2_SUBSETs: ${subset:-every case} and ${other_subset:-every case}"
+        summary
+        return
+    fi
+    # SPLIT_CASES report measurements only, which assert.sh holds to their bounds in each run.
+    if [[ $subset == split ]]; then
+        summary
+        return
     fi
     for case_name in "${REPORTED[@]}"; do
         same_report "$case_name" "$first_run/$case_name.log" "$other_run/$case_name.log" APEXG2

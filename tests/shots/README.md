@@ -21,6 +21,14 @@ assertion prints one `PASS`, `FAIL` or `GAP` line (see "Known gaps"); the summar
 number of runs, the sha256 of the lane lock the image carries, and the status. apex-image's
 `tools/builder-vm/builder-vm.sh fetch` copies one to the host.
 
+`G2_SUBSET` splits a run between runners. `rest` runs everything but `parts.sh`'s
+`SPLIT_CASES` (today `glass-stress`, whose two 300 s phases are a fixed 10 minutes); `split`
+runs only those, in the main part, without G1, the kernel and fedora parts or the crash
+guard. Each run writes `subset.txt`; `assert.sh` then asserts that subset's cases and fails
+any of them missing, and `stable.sh` fails two runs of different subsets and compares two
+split runs only by their image, as `glass-stress` reports measurements. Unset, a run is every
+case, as before. The selftest holds that `rest` and `split` together are every direct case once.
+
 CI runs what needs no image: shellcheck of these scripts, and `selftest.sh`
 (`just shots-test`), which tests the capture comparison, the reading of the token file,
 the top-bar, clock and layer-cycle assertions, `clock.c`, and `fixtures.py` on a private bus, read
