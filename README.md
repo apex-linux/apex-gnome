@@ -22,7 +22,7 @@ Ptyxis, each rebuilt in the lane from its recipe in `packaging/pkgs/`.
 | `desktop/nautilus/`, `packaging/pkgs/nautilus/` | nautilus rebuilt in the lane for Files, boards 27 to 29: its sources (`src/apex/`) and its recipe ([README](packaging/pkgs/nautilus/README.md)) |
 | `tests/nautilus/` | the checks of `desktop/nautilus/`, the texts' unit test, and the captures with board 27's home (`shoot.sh`) |
 | `desktop/gnome-builder/`, `packaging/pkgs/gnome-builder/` | GNOME Builder rebuilt in the lane as Apex Code, track E (ADR 0017 in apex-linux/apex): its built-in plugin (`src/plugins/apex/`) and its recipe ([README](packaging/pkgs/gnome-builder/README.md)) |
-| `tests/builder/` | the checks of `desktop/gnome-builder/`, and Apex Code in a headless shell with fedora-toolbox-45: E1's start and memory budgets, its AT-SPI names, pylsp answering in the toolbox (`run.sh`) |
+| `tests/builder/` | the checks of `desktop/gnome-builder/`, and Apex Code in a headless shell with fedora-toolbox-45: E1's start and memory budgets, its AT-SPI names, pylsp answering in the toolbox (`run.sh`), and the sign-off captures of its boards (`shoot.sh`) |
 | `tests/shell/` | the lock screen and the greeter of the lane's gnome-shell, boards 20 and 12, against a GDM mock that fails every answer (`gdm-mock.py`): captures and their assertions (`shoot.sh`) |
 
 [apex-image](https://github.com/apex-linux/apex-image) pins this repository by commit in

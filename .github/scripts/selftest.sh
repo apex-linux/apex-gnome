@@ -92,12 +92,13 @@ for f in desktop/shell/data/theme/apex/_input.scss packaging/pkgs/gnome-shell/pa
     .github/workflows/signoff.yml desktop/control-center/panels/apex/settings-tiles.json desktop/nautilus/src/apex/apex-count-bar.c \
     desktop/ptyxis/src/apex/apex-glyph.c packaging/pkgs/gnome-control-center/check.sh packaging/pkgs/nautilus/patches/0001-build.patch \
     packaging/pkgs/ptyxis/check.sh packaging/pkgs/libadwaita/check.sh tests/control-center/bindings.py tests/nautilus/check.py \
-    tests/ptyxis/fixture.c; do
+    tests/ptyxis/fixture.c desktop/gnome-builder/src/plugins/apex/gbp-apex-a11y-addins.c packaging/pkgs/gnome-builder/series \
+    tests/builder/shoot.sh tests/builder/shoot-probe.js tests/builder/fixture.sh tests/builder/atspi.py; do
     check "signoff runs on a pull request changing $f" touches=true "$(signoff_paths README.md "$f")"
 done
 for f in tests/shots/README.md tests/shots/selftest.sh tests/shots/assert.sh tests/shots/stable.sh \
     tests/s2c/radius-test.sh tests/s7/accent-test.sh tests/libadwaita/radius-test.sh tests/laptop/selftest.sh \
-    .github/workflows/ci.yml docs/x.md; do
+    .github/workflows/ci.yml docs/x.md tests/builder/run.sh tests/builder/probe.js; do
     check "signoff skips a pull request changing only $f" touches=false "$(signoff_paths "$f")"
 done
 check "signoff skips a pull request with no changed path" touches=false "$(signoff_paths)"

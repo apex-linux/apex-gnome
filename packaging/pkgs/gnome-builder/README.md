@@ -211,6 +211,26 @@ and `just pkg-export gnome-builder`.
   process from its first moment, as both the bridge and the process set its group. The
   program lookups (`which`, through the bridge) went from 134–177 ms to about 50 ms.
 
+## The sign-off captures
+
+`tests/builder/shoot.sh` renders the boards' states for the owner to compare with boards 40
+to 42 (`docs/design/apex-code-boards-40-42.md` in apex). signoff.yml runs it on the lane's
+RPM, beside the other apps' shooters, and `signoff.sh` collects its rows:
+
+- `fixture.sh` writes the boards' apex-gnome project: the tree of the spec's section 7.1,
+  committed on main, then the branch dock-focus-label with dock.js, feature.js and
+  tests/layer/run.sh changed. Its outlines put the boards' symbols on the boards' lines.
+- A user `apex` opens it in a headless gnome-shell at scale 2 (2880×1800), with the image's
+  fonts, animations and the cursor blink off, and the clock held; dock.js opens with the caret
+  at its start, and the window sits at the board's 1240×762 at (100, 48).
+- Each capture, light and dark (`style-variant`), must name the editor and the project tree
+  over AT-SPI. Two runs here gave byte-identical captures.
+- The container has no podman, so Apex Code offers no toolbox; the boards show none.
+
+Until the owner approves goldens, `goldens.sh check` reports the rows as awaiting sign-off,
+and the job fails only on a crash, a capture that did not happen or a missing name.
+Board 40 is the first row; boards 41 and 42 follow with the UI items that draw them.
+
 ## Building it here
 
 ```bash
@@ -242,7 +262,9 @@ to `~/Projects/apex-gnome` (inside the toolbox's shares), and runs gnome-shell h
 - opens `tests/e1_lsp.py`, maximises the window, waits 30 s, and samples Apex Code's own
   process tree ten times (`mem.py`: RSS and PSS from `smaps_rollup`, the language servers
   and the `podman exec` clients apart, as E0 counted);
-- reads every button, toggle button and text over AT-SPI (`atspi.py`);
+- reads buttons, toggle buttons, text, tab lists, progress bars, entries, lists and labels
+  over AT-SPI (`atspi.py`) at three points: before any page has focus, with the file open,
+  and with the diagnostics popover open;
 - starts Apex Code again with its verbose log and opens an empty `tests/e2_typing.py`,
   whose first diagnostics pass starts as it opens. From then it types a line of Python, a
   key every 150 ms for 60 s, and times each key from the press to the frame presented after
@@ -253,7 +275,8 @@ to `~/Projects/apex-gnome` (inside the toolbox's shares), and runs gnome-shell h
 
 It fails above E1's column of E0's budgets: a first frame over 1.9 s (median of 3), idle
 RSS over 360 MiB or PSS over 270 MiB (median of 10); a missing name of the table above,
-any unnamed button or toggle button, or no completion from pylsp. It also fails on E2's
+a button, toggle button, tab list, progress bar, entry, list or label left unnamed with the
+file open (the editor's text is named by the table, not by this check), or no completion from pylsp. It also fails on E2's
 stall budget: any key over 200 ms, or one that drew nothing within 2 s. In the session the desktop
 portal is masked: in a headless container it waits 25 s on RealtimeKit and Builder waits
 on it. Here (4 vCPUs, software rendering): first frames 1731, 1932 and 1605 ms, idle RSS

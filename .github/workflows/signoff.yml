@@ -12,17 +12,23 @@ on:
       - desktop/control-center/**
       - desktop/nautilus/**
       - desktop/ptyxis/**
+      - desktop/gnome-builder/**
       - packaging/pkgs/gnome-shell/**
       - packaging/pkgs/gnome-control-center/**
       - packaging/pkgs/nautilus/**
       - packaging/pkgs/ptyxis/**
       - packaging/pkgs/libadwaita/**
+      - packaging/pkgs/gnome-builder/**
       - tests/shots/**
       - tests/shell/**
       - tests/lib/**
       - tests/control-center/**
       - tests/nautilus/**
       - tests/ptyxis/**
+      - tests/builder/shoot.sh
+      - tests/builder/shoot-probe.js
+      - tests/builder/fixture.sh
+      - tests/builder/atspi.py
       - tests/layer/fixtures/**
       - .github/workflows/signoff.yml
   pull_request:
@@ -174,6 +180,14 @@ jobs:
             packages: >-
               gnome-shell mesa-dri-drivers dbus-daemon python3-dbusmock gcc util-linux jq jetbrains-mono-fonts-all
               adwaita-sans-fonts
+          # No podman: without it, Apex Code offers no toolbox, which the boards do not show.
+          - app: gnome-builder
+            pkg: gnome-builder
+            shoot: tests/builder/shoot.sh
+            shots: _build/gnome-builder/shots
+            packages: >-
+              gnome-shell mesa-dri-drivers dbus-daemon python3-dbusmock python3-gobject at-spi2-core gcc util-linux
+              git-core jetbrains-mono-fonts-all adwaita-sans-fonts
     steps:
       - name: git for the checkout and the Source1 archive
         run: >-
@@ -289,7 +303,8 @@ jobs:
           tests/shots/signoff.sh --collect "$SOURCES/signoff-shell-$SHA/signoff-work/g2/run"
           "$SOURCES/signoff-shell-$SHA/gnome-shell/shots" _build/signoff
           "control-center=$SOURCES/signoff-control-center-$SHA" "nautilus=$SOURCES/signoff-nautilus-$SHA"
-          "ptyxis=$SOURCES/signoff-ptyxis-$SHA" "symbolic=$SOURCES/signoff-shell-$SHA/signoff-work/symbolic"
+          "ptyxis=$SOURCES/signoff-ptyxis-$SHA" "gnome-builder=$SOURCES/signoff-gnome-builder-$SHA"
+          "symbolic=$SOURCES/signoff-shell-$SHA/signoff-work/symbolic"
 
       - name: tests/shots/goldens.sh check
         run: tests/shots/goldens.sh check _build/signoff

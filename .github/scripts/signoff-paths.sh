@@ -5,7 +5,7 @@
 
 set -euo pipefail
 
-readonly RENDERED='^(desktop/(shell|control-center|nautilus|ptyxis)/|packaging/pkgs/(gnome-shell|gnome-control-center|nautilus|ptyxis|libadwaita)/|tests/(shots|shell|lib|control-center|nautilus|ptyxis)/|tests/layer/fixtures/|\.github/workflows/signoff\.yml$)'
+readonly RENDERED='^(desktop/(shell|control-center|nautilus|ptyxis|gnome-builder)/|packaging/pkgs/(gnome-shell|gnome-control-center|nautilus|ptyxis|libadwaita|gnome-builder)/|tests/(shots|shell|lib|control-center|nautilus|ptyxis)/|tests/builder/(shoot\.sh|shoot-probe\.js|fixture\.sh|atspi\.py)$|tests/layer/fixtures/|\.github/workflows/signoff\.yml$)'
 readonly NOT_RENDERED='^tests/shots/(README\.md|selftest\.sh|assert\.sh|stable\.sh)$'
 
 rendered=$(grep -E "$RENDERED" | grep -Ev "$NOT_RENDERED" || true)
