@@ -9,6 +9,7 @@
 
 #include "apex-i18n.h"
 #include "gbp-apex-a11y-addins.h"
+#include "gbp-apex-palette.h"
 #include "gbp-apex-sidebar.h"
 
 /* E0's AT-SPI gaps: the editor's text, the icon-only menu buttons, the diagnostics button,
@@ -250,6 +251,7 @@ gbp_apex_workspace_addin_load (IdeWorkspaceAddin *addin,
 {
   GBP_APEX_WORKSPACE_ADDIN (addin)->workspace = workspace;
   GBP_APEX_WORKSPACE_ADDIN (addin)->sidebar = gbp_apex_sidebar_new (workspace);
+  gbp_apex_palette_install (workspace);
   name_widgets (GTK_WIDGET (workspace));
   g_idle_add_full (G_PRIORITY_DEFAULT_IDLE, gbp_apex_workspace_addin_rescan, g_object_ref (addin), g_object_unref);
 }

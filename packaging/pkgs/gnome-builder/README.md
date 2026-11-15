@@ -107,6 +107,7 @@ button both named "More Options". Two addins name them, with no hunk in upstream
 | the sidebar's view switcher (E2 UI) | the tab list "Sidebar views", its tabs "Project", "Outline", "Search" and "Version control" | the boards' switcher over the start frame (`gbp-apex-sidebar.c`): an `AdwToggleGroup` built with the tab-list role, so each segment is a tab named for its view, the shown one selected |
 | the Search view (E2 UI) | the entry "Search in Project"; each hit a button "Line 5: return undefined_name + a"; "Show 1 result in Find in Files" | the entry by its placeholder; a hit by its line and text, without its indent. The lane searches e1_lsp.py's undefined_name, then hands it to Find in Files |
 | the Version control view (E2 UI) | the tab "Version control", badge or not; each change a button "dock.js in desktop/shell/js/ui/apex/dock, 12 added, 2 removed" | the tab is labelled for its view, or GTK would name it for its badge. The captures check the fixture's three changes by these names |
+| the palette (E2 UI) | the popover and its entry "Search files, symbols and commands"; the list "Results", a list item per group header and result, a result named "e1_lsp.py, tests", the selected one selected | the board's names. The "nothing unnamed" check leaves list items out: the project tree's rows are unnamed list items in Builder |
 | the Outline view (E2 UI) | the tree "Outline of e1_lsp.py", each item named for its symbol and described "Line 4" | the board's names; the current symbol's item is selected. The lane opens it with the cursor at the file's end, and finds pylsp's f there, current |
 | the diagnostics popover's switcher (E2) | "Diagnostics" | the `GtkStackSwitcher` between errors and warnings, in the diagnostics button's popover |
 | a page's progress bar (E2) | "Progress" | `GtkProgressBar` under an `IdePage`; it shows both loading and saving |
@@ -149,6 +150,14 @@ rest `--dim`. A hit opens its file at its line. The button above the results han
 model to Find in Files in the bottom panel, which keeps Builder's list and its Replace.
 Choosing the Search segment puts the focus in the entry.
 
+Ctrl+K opens board 41's palette (`gbp-apex-palette.c`): a 600px popover under the header bar
+that asks Builder's own search engine, the providers of its global search, for files,
+symbols and commands, at most four of each, and shows them in the board's groups and order.
+A file is named by its base name over its folder; the query's letters are drawn in the accent
+at 800, each at its first place after the last. Up and Down move over the results, the
+headers skipped; Enter activates the result as Builder's search does. `>` limits it to
+commands, `@` to symbols, and `:N` goes to line N of the page in front.
+
 The Version control view (`gbp-apex-vcs-pane.c`) lists the project's changed files from
 Builder's own VCS (`ide_vcs_list_status_async`), refreshed on its `changed` signal: under a
 "Changes" header and count pill, a 30px row per file, its name over its folder `--dim`, then
@@ -170,6 +179,9 @@ puts at a row's trailing edge, is drawn as the board's 7px `--mod` dot.
 | the tree's dots on dock, dock.js, feature.js, tests and tests/layer only | Builder's own marks, on every ancestor of a changed file | the spec notes the board's skips as a quirk; Builder marks the whole path |
 | the commit box and its button | Not on the board yet: commit box (needs staging; the agent text belongs to the agent feature) | a button over the list would commit more than it shows; it comes as its own change, with a choice per file |
 | Version control's +N −N | `git diff --numstat HEAD`, run on the host, asynchronously, refreshed with Builder's VCS | Builder's VCS has none; a repository without a HEAD yet lists its changes without counts |
+| the palette's results, `dlab` and its five rows | whatever Builder's search providers answer: files from its file index; symbols only where a provider indexes them (C, through the code index); commands | the board draws one query; Builder has no JavaScript symbol index |
+| an empty query | an empty list under the input | the board draws none; Builder keeps no recent list for it |
+| the palette's Ctrl K chip on the omnibox | Ctrl+K on the workspace | the omnibox comes with the status strip |
 | an empty Outline | "No outline for this file", and, unlike Builder's symbol menu, the next resolver tried after an empty tree | the board has no empty state; ctags answers with an empty tree before its first index |
 
 ### Translations
@@ -339,7 +351,8 @@ to `~/Projects/apex-gnome` (inside the toolbox's shares), and runs gnome-shell h
 It fails above E1's column of E0's budgets: a first frame over 1.9 s (median of 3), idle
 RSS over 360 MiB or PSS over 270 MiB (median of 10); a missing name of the table above,
 a button, toggle button, tab list, progress bar, entry, list or label left unnamed with the
-file open (the editor's text is named by the table, not by this check), or no completion from pylsp. It also fails on E2's
+file open (the editor's text is named by the table, not by this check; list items are left
+out, the project tree's being unnamed in Builder), or no completion from pylsp. It also fails on E2's
 stall budget: any key over 200 ms, or one that drew nothing within 2 s. In the session the desktop
 portal is masked: in a headless container it waits 25 s on RealtimeKit and Builder waits
 on it. Here (4 vCPUs, software rendering): first frames 1731, 1932 and 1605 ms, idle RSS
