@@ -26,7 +26,11 @@ runs a headless gnome-shell, as root, whose automation script (probe.js):
 - stops the toolbox, as after a reboot, and holds its podman start 3 s; then types into an
   empty e2_typing.py in a meson project for 60 s from a fresh start, a key every 150 ms: E2's longest
   key, press to presented frame, at most ${BUILDER_STALL_MS:-200} ms;
-- then waits for pylsp, in the toolbox, to answer a completion.
+- then waits for pylsp, in the toolbox, to answer a completion;
+- types for 60 s into a project whose runtime is a plain fedora:45 container, no toolbox and
+  without which(1): each program is looked up there at most twice, and no key over the same budget;
+- opens a project whose runtime is a stand-in jhbuild, neither podman nor host: its lookups
+  stay on the main thread, and only podman and host are looked up off it.
 Needs a throwaway container with podman's privileges (--privileged), root, and the
 packages the Justfile's builder-run installs. The log and result land in _build/gnome-builder/run/.
 USAGE
@@ -40,6 +44,8 @@ readonly HERE=$APEX_ROOT/tests/builder
 readonly RPMS=${1:-$APEX_ROOT/_build/gnome-builder/out}
 readonly OUT=$APEX_ROOT/_build/gnome-builder/run
 readonly TOOLBOX=fedora-toolbox-45
+readonly PLAIN=apex-plain
+readonly PLAIN_IMAGE=registry.fedoraproject.org/fedora:45
 readonly FIRST_FRAME_MS=${BUILDER_FIRST_FRAME_MS:-1900}
 readonly RSS_MIB=${BUILDER_RSS_MIB:-360}
 readonly PSS_MIB=${BUILDER_PSS_MIB:-270}
@@ -78,6 +84,13 @@ printf '[containers]\npids_limit=0\nlog_driver="k8s-file"\n[engine]\ncgroup_mana
 # Without the toolbox, the probe's first session creates it with Apex Code's own Create Toolbox.
 create=true
 podman container exists "$TOOLBOX" && create=false
+# A podman container that is no toolbox, without which(1): the runtime of a plain project.
+podman container exists "$PLAIN" ||
+    podman create --quiet --name "$PLAIN" "$PLAIN_IMAGE" sleep infinity >"$OUT/podman.log" 2>&1 ||
+    die "run.sh: cannot create $PLAIN; see ${OUT#"$APEX_ROOT/"}/podman.log"
+plain_id=$(podman inspect --format '{{.Id}}' "$PLAIN") || die "run.sh: cannot inspect $PLAIN"
+podman start "$PLAIN" >/dev/null || die "run.sh: $PLAIN does not start"
+if podman exec "$PLAIN" sh -c 'command -v which' >/dev/null; then die "run.sh: $PLAIN has which"; fi
 endgroup
 
 project=$HOME/Projects/apex-gnome
@@ -92,6 +105,13 @@ rm -rf "$typing_project" && mkdir -p "$typing_project"
 printf "project('apex-meson', 'c')\nexecutable('apex-meson', 'main.c')\n" >"$typing_project/meson.build"
 printf 'int main (void) { return 0; }\n' >"$typing_project/main.c"
 : >"$typing_project/e2_typing.py"
+# Two plain projects, each with its runtime in .buildconfig: the plain container, and jhbuild.
+for name in plain jhbuild; do
+    dir=$HOME/Projects/apex-$name
+    rm -rf "$dir" && mkdir -p "$dir" && : >"$dir/e2_$name.py"
+    runtime=jhbuild && [[ $name == plain ]] && runtime=podman:$plain_id
+    printf '[default]\nname=Default\nruntime=%s\ntoolchain=default\ndefault=true\n' "$runtime" >"$dir/.buildconfig"
+done
 
 drop=$OUT/drop-caches
 (while sleep 0.1; do [[ -f $drop ]] && { sync; echo 3 >/proc/sys/vm/drop_caches; rm -f "$drop"; }; done) &
@@ -107,6 +127,8 @@ rc=0
 env XDG_RUNTIME_DIR="$run" XDG_SESSION_TYPE=wayland XDG_CURRENT_DESKTOP=GNOME LANG=C.UTF-8 GDK_DEBUG=no-portals ADW_DISABLE_PORTAL=1 \
     APEX_BUILDER_PROJECT="$project" APEX_BUILDER_LSP_FILE="$project/tests/e1_lsp.py" APEX_BUILDER_TYPING_FILE="$typing_project/e2_typing.py" \
     APEX_BUILDER_TYPING_PROJECT="$typing_project" APEX_BUILDER_TOOLBOX="$TOOLBOX" \
+    APEX_BUILDER_PLAIN_PROJECT="$HOME/Projects/apex-plain" APEX_BUILDER_PLAIN_ID="$plain_id" APEX_BUILDER_PLAIN_LOG="$OUT/builder-plain.log" \
+    APEX_BUILDER_JHBUILD_PROJECT="$HOME/Projects/apex-jhbuild" APEX_BUILDER_JHBUILD_LOG="$OUT/builder-jhbuild.log" \
     APEX_BUILDER_MEM="$HERE/mem.py" APEX_BUILDER_ATSPI="$HERE/atspi.py" APEX_BUILDER_DROP="$drop" APEX_BUILDER_CREATE="$create" APEX_BUILDER_PRESS="$HERE/press.py" \
     APEX_BUILDER_LOG="$OUT/builder-verbose.log" APEX_BUILDER_CREATE_LOG="$OUT/builder-create.log" \
     APEX_BUILDER_RENAMED_LOG="$OUT/builder-renamed.log" APEX_BUILDER_SETUP_LOG="$OUT/builder-setup.log" PROBE="$HERE/probe.js" \
@@ -156,8 +178,13 @@ check "no button or toggle button is unnamed" '.idle.names.nodes | all(.role == 
 check "every typed key drew a frame" '.typing.keys | length > 300 and all(. != null)'
 check "typing for 60 s from a fresh start: no key over ${STALL_MS} ms" '.typing.keys | max <= $stall'
 check "pylsp in the toolbox answers a completion, the toolbox stopped before the session" '.typing.completionItems > 0'
-check "only the podman and host runtimes are looked up off the main thread" '.typing.offThread | length > 0 and all(startswith("podman:") or . == "host")'
+check "only the podman and host runtimes are looked up off the main thread; jhbuild's lookups stay on it" \
+    '(.typing.offThread + .jhbuild.offThread) as $off | ($off | length > 0 and all(startswith("podman:") or . == "host"))
+     and (.jhbuild.left | index("jhbuild") != null) and ($off | index("jhbuild") == null)'
 check "no program is looked up in the toolbox on the main thread, from the start to the completion" '.typing.lookups > 0 and (.typing.mainThreadLookups | length == 0)'
+check "a podman container without which: each program looked up there at most twice, once on the main thread" \
+    '.plain.lookups | length > 0 and all(.count <= 2 and .mainThread <= 1)'
+check "typing for 60 s in that container's project: no key over ${STALL_MS} ms" '.plain.keys | length > 300 and all(. != null) and max <= $stall'
 if $create; then
     check "Create Toolbox makes $TOOLBOX, and pylsp itself starts in it without reopening the project" '.create.lspInToolboxAfterS != null'
     check "toolbox create runs with XDG_RUNTIME_DIR, which rootless podman needs and Builder's launcher clears" '.create.createHasRuntimeDir'

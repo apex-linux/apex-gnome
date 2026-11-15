@@ -122,11 +122,11 @@ the application name before any plugin loads. Strings are marked `APEX_()` rathe
 | `0002-name` | `src/main.c`, `src/libide/gui/ide-application-actions.c`, `ide-workbench.c`, `src/libide/greeter/ide-greeter-workspace.c`, `src/libide/tweaks/ide-tweaks-window.c`, `data/org.gnome.Builder.desktop.in.in` | +18 −12 | the includes; the application name, the about dialog's name and the "Builder — %s" titles from `apex-brand.h`; `Name=Apex Code` |
 | `0003-podman-storage-path` | `src/plugins/podman/gbp-podman-runtime.c` | +1 −1 | `/etc/containers/storage.conf`, which lost its leading `/` |
 | `0004-podman-workdir` | `src/plugins/podman/gbp-podman-runtime.c` | +10 | the run handler refuses a working directory no mount of the container holds |
-| `0005-program-lookups` | `ide-pipeline.c`, `ide-pipeline-private.h`, `ide-diagnostic-tool.c` (foundry), `ide-lsp-service.c`, `gbp-podman-runtime.c` | +404 −54 | program lookups on a worker thread, for the podman and host runtimes, before a diagnostics pass, a server's start and a pipeline's load; podman caches only `which`'s answer (E2; see below) |
+| `0005-program-lookups` | `ide-pipeline.c`, `ide-pipeline-private.h`, `ide-diagnostic-tool.c`, `ide-path-cache.[ch]` (foundry), `ide-lsp-service.c`, `gbp-podman-runtime.[ch]` | +442 −55 | lookups on a worker thread, for podman and host, before a diagnostics pass, a server's start and a pipeline's load; podman's cache, and a way to clear it (E2; see below) |
 
 No ADR 0014 budget applies to this series (ADR 0017, decision 2); each patch still says
-what it changes and why, and the lane's checks apply. In use: +434 −67 lines in 12 files, of
-which 0005's +404 −54 is a fix to propose upstream rather than a hook. The
+what it changes and why, and the lane's checks apply. In use: +472 −68 lines in 15 files, of
+which 0005's +442 −55 is a fix to propose upstream rather than a hook. The
 patches are `git format-patch` output against Fedora's `%prep` tree, with `a/` and `b/`
 prefixes, applied with `-p1`; write them with apex-image's `just pkg-prep gnome-builder`
 and `just pkg-export gnome-builder`.
@@ -160,10 +160,11 @@ and `just pkg-export gnome-builder`.
   look up ninja, ninja-build and cargo. All of them then find their answers cached. Only
   the podman and host runtimes are looked up there, as their path caches lock; a Flatpak
   runtime reaches the context for its SDK, which is main-thread only, so the others stay
-  on the main thread. The podman runtime caches only `which`'s own answer (0 or 1), not
-  podman's 125 while the container is still starting, and a worker waits for its
-  `podman start` while the main thread never does; it frees what a worker reads in
-  finalize. Typing from the moment the file opens, the longest key here went from 313 ms
+  on the main thread, and each lookup left there is logged. The podman runtime caches every
+  answer but podman's 125 while its `podman start` has not exited, so a container without
+  `which`, or one that will not start, costs one lookup per program; a worker waits for that
+  start while the main thread never does; it frees what a worker reads in finalize, and
+  forgets its programs on request (`gbp_podman_runtime_forget_programs()`). Typing from the moment the file opens, the longest key here went from 313 ms
   (diagnostics) and 320 ms (language servers) to 30.5 ms (median 14.2 ms). With the
   toolbox stopped and its start held 3 s, the code before these last changes cached
   pylsp as missing (no completion) and looked up ninja on the main thread; now neither.
