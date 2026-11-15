@@ -130,3 +130,84 @@ apexsidebarviews.dark toggle-group toggle:checked {
 .apexoutline.dark label.line {
   color: rgba(244, 244, 246, .4);
 }
+
+/* The Search view (section 7.3): the accent-ringed entry, the --btn action, groups of mono hit rows. */
+.apexsearch > box {
+  padding: 0 12px 8px;
+  font-size: 13px;
+}
+
+.apexsearch entry {
+  min-height: 34px;
+  padding: 0 10px;
+  border-radius: 9px;
+  background-color: #ffffff;
+  box-shadow: inset 0 0 0 2px var(--accent-bg-color);
+  outline: none;
+}
+
+.apexsearch entry text {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 12.5px;
+}
+
+.apexsearch button.show-all {
+  min-height: 30px;
+  border-radius: 8px;
+  background-color: rgba(0, 0, 10, .065);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.apexsearch .header {
+  min-height: 26px;
+  padding: 0 4px;
+}
+
+.apexsearch .header .file {
+  font-weight: 600;
+}
+
+.apexsearch .header .directory {
+  font-size: 12px;
+  color: rgba(29, 29, 33, .62);
+}
+
+.apexsearch .header .count {
+  padding: 0 6px;
+  border-radius: 8px;
+  background-color: rgba(0, 0, 10, .065);
+  color: rgba(29, 29, 33, .62);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.apexsearch button.hit {
+  min-height: 24px;
+  padding: 0 8px 0 12px;
+  border-radius: 6px;
+  background: none;
+  box-shadow: none;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.apexsearch button.hit:hover {
+  background-color: rgba(0, 0, 10, .065);
+}
+
+.apexsearch.dark entry {
+  background-color: #1e1e21;
+}
+
+.apexsearch.dark button.show-all,
+.apexsearch.dark .header .count,
+.apexsearch.dark button.hit:hover {
+  background-color: rgba(255, 255, 255, .09);
+}
+
+.apexsearch.dark .header .directory,
+.apexsearch.dark .header .count {
+  color: rgba(244, 244, 246, .64);
+}

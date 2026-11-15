@@ -4,3 +4,4 @@ src/plugins/apex/gbp-apex-a11y-addins.c
 src/plugins/apex/gbp-apex-workbench-addin.c
 src/plugins/apex/gbp-apex-sidebar.c
 src/plugins/apex/gbp-apex-outline-pane.c
+src/plugins/apex/gbp-apex-search-pane.c

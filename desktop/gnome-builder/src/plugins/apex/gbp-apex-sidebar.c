@@ -13,6 +13,7 @@
 
 #include "apex-i18n.h"
 #include "gbp-apex-outline-pane.h"
+#include "gbp-apex-search-pane.h"
 #include "gbp-apex-sidebar.h"
 
 typedef struct
@@ -26,6 +27,7 @@ typedef struct
 static const View views[] = {
   { "GbpProjectTreePane", APEX_N_("Project"), "text-x-generic-symbolic" },
   { "GbpApexOutlinePane", APEX_N_("Outline"), "view-list-symbolic" },
+  { "GbpApexSearchPane", APEX_N_("Search"), "system-search-symbolic" },
 };
 
 static const View *
@@ -174,7 +176,12 @@ active_name_changed (GbpApexSidebarHeader *self)
     return;
 
   if ((page = page_at (self->pages, (guint) g_ascii_strtoull (name, NULL, 10))))
-    panel_frame_set_visible_child (self->frame, page);
+    {
+      panel_frame_set_visible_child (self->frame, page);
+      /* Choosing Search is choosing to type a query. */
+      if (GBP_IS_APEX_SEARCH_PANE (page))
+        gtk_widget_grab_focus (GTK_WIDGET (page));
+    }
 }
 
 static void
@@ -478,6 +485,7 @@ gbp_apex_sidebar_new (IdeWorkspace *workspace)
   self->outline = GTK_WIDGET (gbp_apex_outline_pane_new ());
   g_object_add_weak_pointer (G_OBJECT (self->outline), (gpointer *) &self->outline);
   ide_workspace_add_pane (workspace, IDE_PANE (self->outline), position);
+  ide_workspace_add_pane (workspace, IDE_PANE (gbp_apex_search_pane_new ()), position);
   relocate (self);
 
   return self;
