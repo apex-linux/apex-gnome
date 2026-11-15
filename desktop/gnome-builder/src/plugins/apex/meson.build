@@ -14,9 +14,12 @@ plugins_sources += gnome.compile_resources(
 )
 
 # E2: one process per toolbox runs what Builder runs there (apex-toolbox-bridge.h).
+# The bridge runs inside the toolbox, whatever its glibc: it is linked statically (no NSS).
 foreach tool : ['apex-toolbox-exec', 'apex-toolbox-bridge']
   executable(tool, tool + '.c',
-    c_args: ['-DPACKAGE_LIBEXECDIR="@0@"'.format(get_option('prefix') / get_option('libexecdir'))],
+    c_args: ['-DPACKAGE_LIBEXECDIR="@0@"'.format(get_option('prefix') / get_option('libexecdir'))]
+      + (tool == 'apex-toolbox-bridge' ? ['-fPIE'] : []),
+    link_args: tool == 'apex-toolbox-bridge' ? ['-static-pie'] : [],
     install: true,
     install_dir: get_option('libexecdir'),
   )

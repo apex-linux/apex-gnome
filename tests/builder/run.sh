@@ -23,6 +23,7 @@ runs a headless gnome-shell, as root, whose automation script (probe.js):
 - types into an empty tests/e2_typing.py for 60 s from a fresh start, a key every 150 ms: E2's longest
   key, press to presented frame, at most ${BUILDER_STALL_MS:-200} ms;
 - then waits for pylsp, in the toolbox, to answer a completion.
+Before them, bridge.sh checks the toolbox bridge's socket, start and process groups.
 Needs a throwaway container with podman's privileges (--privileged), root, and the
 packages the Justfile's builder-run installs. The log and result land in _build/gnome-builder/run/.
 USAGE
@@ -57,6 +58,11 @@ rm -rf "$OUT" && mkdir -p "$OUT"
 # The system bus: toolbox create mounts its socket, and the shell's session uses it.
 mkdir -p /run/dbus && rm -rf /run/systemd/seats
 [[ -S /run/dbus/system_bus_socket ]] || dbus-daemon --system --fork
+
+group "the toolbox bridge"
+"$HERE/bridge.sh" >"$OUT/bridge.log" 2>&1 || { cat "$OUT/bridge.log" >&2; die "run.sh: the toolbox bridge's checks failed"; }
+cat "$OUT/bridge.log"
+endgroup
 
 group "fedora-toolbox-45"
 # The toolbox shares the account's home from passwd; CI's HOME (/github/home) is not it.

@@ -14,6 +14,9 @@
  * Reply, bridge to client: one ApexBridgeStatus when the process ends, then EOF. */
 
 #include <stdint.h>
+#include <sys/socket.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
 #define APEX_BRIDGE_MAGIC   0x41504258u /* "APBX" */
 #define APEX_BRIDGE_MAX_FDS 64
@@ -34,3 +37,27 @@ typedef struct
 
 /* The socket, at the same path from the host and, under /run/host, from the toolbox. */
 #define APEX_BRIDGE_SOCKET_FORMAT "%s/apex-toolbox-%.12s.sock"
+
+/* Whether @dir is an absolute directory, not a link, of this user's alone: the socket's
+ * peer gets a process's pipes and environment, so it never lives where another user
+ * could bind first (no /tmp fallback, no shared directory). */
+static inline int
+apex_bridge_dir_is_private (const char *dir)
+{
+  struct stat st;
+
+  return dir != NULL && dir[0] == '/' &&
+         lstat (dir, &st) == 0 && S_ISDIR (st.st_mode) &&
+         st.st_uid == getuid () && (st.st_mode & 077) == 0;
+}
+
+/* Whether the other end of a connected Unix socket runs as this user. */
+static inline int
+apex_bridge_peer_is_us (int fd)
+{
+  struct ucred cred;
+  socklen_t len = sizeof cred;
+
+  return getsockopt (fd, SOL_SOCKET, SO_PEERCRED, &cred, &len) == 0 &&
+         len == sizeof cred && cred.uid == getuid ();
+}

@@ -26,3 +26,8 @@ after ^%\{_libexecdir\}/gnome-builder-git$
 	%{_libexecdir}/apex-toolbox-bridge
 	%{_libexecdir}/apex-toolbox-exec
 end
+
+# The toolbox bridge is linked statically, so that a toolbox of any glibc runs it.
+after ^BuildRequires:[[:space:]]+clang-devel$
+	BuildRequires:  glibc-static
+end

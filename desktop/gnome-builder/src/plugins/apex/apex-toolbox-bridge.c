@@ -1,9 +1,13 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 
-/* apex-toolbox-bridge SOCKET: the one process per toolbox that runs what Builder runs there.
+/* apex-toolbox-bridge [--daemonize] SOCKET: the one process per toolbox that runs what
+ * Builder runs there.
  *
- * apex-toolbox-exec starts it with `podman exec --detach`, from the host's libexec under
- * /run/host. A lock beside the socket keeps it to one per toolbox. For each request it
+ * apex-toolbox-exec starts it with `podman exec`, from the host's libexec under /run/host;
+ * with --daemonize it goes to the background once it listens, so podman exec's status says
+ * whether it started. It is linked statically, so a toolbox of any glibc runs it. It binds
+ * only in a directory of its user's alone, and serves only clients of its user. A lock
+ * beside the socket keeps it to one per toolbox. For each request it
  * forks a handler, which spawns the process on the client's descriptors in its own
  * process group, passes on the client's signals, kills the group when the client goes,
  * and replies with how the process ended. No client copies stdio, so the host keeps one
@@ -158,6 +162,9 @@ handle (int client)
       close (client);
       spawn_child (cwd, argv, env, fds, n_fds);
     }
+  /* As the child does: a signal for the group must find it from the first moment. */
+  if (pid > 0)
+    setpgid (pid, pid);
   for (int i = 0; i < n_fds; i++)
     close (fds[i]);
   if (pid < 0)
@@ -207,27 +214,58 @@ main (int argc, char **argv)
   struct sockaddr_un addr = { .sun_family = AF_UNIX };
   struct sigaction reap = { .sa_handler = SIG_IGN, .sa_flags = SA_NOCLDWAIT };
   char lock_path[sizeof addr.sun_path + 8];
-  int lock, listener;
+  char dir[sizeof addr.sun_path];
+  const char *path;
+  int daemonize, lock, listener;
 
-  if (argc != 2 || strlen (argv[1]) >= sizeof addr.sun_path)
+  daemonize = argc == 3 && strcmp (argv[1], "--daemonize") == 0;
+  path = argv[argc - 1];
+  if (argc != 2 + daemonize || strlen (path) >= sizeof addr.sun_path)
     {
-      fprintf (stderr, "usage: apex-toolbox-bridge SOCKET\n");
+      fprintf (stderr, "usage: apex-toolbox-bridge [--daemonize] SOCKET\n");
       return 2;
     }
-  strcpy (addr.sun_path, argv[1]);
+  strcpy (addr.sun_path, path);
 
-  snprintf (lock_path, sizeof lock_path, "%s.lock", argv[1]);
-  if ((lock = open (lock_path, O_RDWR | O_CREAT | O_CLOEXEC, 0600)) < 0)
+  strcpy (dir, path);
+  if (strrchr (dir, '/') == NULL || strrchr (dir, '/') == dir)
+    return 2;
+  *strrchr (dir, '/') = '\0';
+  if (!apex_bridge_dir_is_private (dir))
+    {
+      fprintf (stderr, "apex-toolbox-bridge: %s is not a directory of this user's alone\n", dir);
+      return 1;
+    }
+
+  snprintf (lock_path, sizeof lock_path, "%s.lock", path);
+  if ((lock = open (lock_path, O_RDWR | O_CREAT | O_NOFOLLOW | O_CLOEXEC, 0600)) < 0)
     return 1;
   if (flock (lock, LOCK_EX | LOCK_NB) < 0)
     return 0; /* another bridge serves this toolbox */
 
-  unlink (argv[1]);
+  unlink (path);
   if ((listener = socket (AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0)) < 0 ||
       bind (listener, (struct sockaddr *)&addr, sizeof addr) < 0 ||
-      chmod (argv[1], 0600) < 0 ||
+      chmod (path, 0600) < 0 ||
       listen (listener, 64) < 0)
     return 1;
+
+  if (daemonize)
+    {
+      pid_t pid = fork ();
+      int null;
+
+      if (pid < 0)
+        return 1;
+      if (pid > 0)
+        _exit (0);
+      setsid ();
+      null = open ("/dev/null", O_RDWR | O_CLOEXEC);
+      dup2 (null, STDIN_FILENO);
+      dup2 (null, STDOUT_FILENO);
+      dup2 (null, STDERR_FILENO);
+      close (null);
+    }
 
   /* Handlers are reaped by the kernel; each waits for its own process. */
   sigaction (SIGCHLD, &reap, NULL);
@@ -243,6 +281,11 @@ main (int argc, char **argv)
           if (errno == EINTR || errno == ECONNABORTED)
             continue;
           return 1;
+        }
+      if (!apex_bridge_peer_is_us (client))
+        {
+          close (client);
+          continue;
         }
 
       if ((pid = fork ()) == 0)

@@ -5,8 +5,8 @@
 import json, os, re, sys
 
 LSP = re.compile(r'rust-analyzer|typescript-language-server|tsserver|typingsInstaller|pylsp|jedi|ruff|clangd')
-GLUE = re.compile(r'^(podman|conmon|\S*apex-toolbox-exec) ')
-SESSION = re.compile(r'^(conmon .*--exec\b|\S*apex-toolbox-bridge )')
+GLUE = re.compile(r'^(\S*podman|\S*conmon|\S*apex-toolbox-exec) ')
+SESSION = re.compile(r'^(\S*conmon .*--exec\b|\S*apex-toolbox-bridge )')
 
 
 def cmdline(pid):

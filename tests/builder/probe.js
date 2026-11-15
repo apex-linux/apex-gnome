@@ -225,7 +225,7 @@ async function typing() {
 }
 
 // Apex Code's own Create Toolbox, pressed in the notification the project shows without a
-// toolbox; pylsp starting through podman exec shows the new runtime used without a reopen.
+// toolbox; pylsp starting in it, through podman exec or the bridge, shows it used without a reopen.
 async function create() {
     const log = env('APEX_BUILDER_CREATE_LOG');
     await launch(['sh', '-c', `exec gnome-builder -vvv -p '${PROJECT}' > '${log}' 2>&1`]);
@@ -241,7 +241,7 @@ async function create() {
     while (pressed && lspInToolboxAfterS === null && (now() - t1) / 1000 < CREATE_WAIT_MS) {
         await Scripting.sleep(2000);
         const [, bytes] = GLib.file_get_contents(log);
-        if (/Launching podman exec [^\n]*pylsp/.test(new TextDecoder().decode(bytes)))
+        if (/Launching (podman exec|\S*apex-toolbox-exec) [^\n]*pylsp/.test(new TextDecoder().decode(bytes)))
             lspInToolboxAfterS = Math.round((now() - t1) / 1e6);
     }
     const {names} = await helper('APEX_BUILDER_PRESS', '--names');

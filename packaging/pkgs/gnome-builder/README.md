@@ -176,13 +176,24 @@ and `just pkg-export gnome-builder`.
     gives it, then replies with the exit status or the signal;
   - the client passes on SIGTERM, SIGINT, SIGHUP and SIGQUIT, and when the client dies
     (Builder's SIGKILL) the handler kills the group;
-  - the first client that finds no bridge starts it with `podman exec --detach`, from the
-    host's `/usr/libexec` under `/run/host`, and a lock beside the socket keeps it to one;
-    a client that cannot reach a bridge execs `podman exec` as before, so a dead bridge
-    costs one respawn and no more.
+  - the first client that finds no bridge starts it with `podman exec … --daemonize`, from
+    the host's `/usr/libexec` under `/run/host`; the bridge goes to the background only once
+    it listens, so that exit status says whether it started, and a lock beside the socket
+    keeps it to one. A failed start leaves a `.failed` stamp that sends every client
+    straight to `podman exec` for ten minutes; a client that cannot reach a bridge execs
+    `podman exec` as before, so a dead bridge costs one respawn and no more;
+  - the socket's peer gets the process's pipes and environment, so the socket lives only in
+    a `$XDG_RUNTIME_DIR` that is an absolute directory of the user's alone (not a link,
+    mode `077` clear; without one, `podman exec`, never `/tmp`), both ends check
+    `SO_PEERCRED` for the same uid, and the bridge binds only in such a directory;
+  - the bridge is linked statically (`-static-pie`, `glibc-static`): it runs inside the
+    toolbox, whose glibc may be older than the host's, and it calls no NSS.
 
   A TTY (the terminal, a build with a PTY), any other container, a folder the container
-  does not mount (0004's error), or `APEX_TOOLBOX_BRIDGE=0` keeps `podman exec`. The
+  does not mount (0004's error), or `APEX_TOOLBOX_BRIDGE=0` keeps `podman exec`.
+  `tests/builder/bridge.sh`, which `run.sh` runs first, checks the socket rules, a failed
+  start, and the process groups: a forwarded signal or the client's death reaches the
+  process from its first moment, as both the bridge and the process set its group. The
   program lookups (`which`, through the bridge) went from 134–177 ms to about 50 ms.
 
 ## Building it here

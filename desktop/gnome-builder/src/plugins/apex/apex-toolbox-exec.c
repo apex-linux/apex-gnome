@@ -5,9 +5,15 @@
  *   apex-toolbox-exec --container ID --user NAME --cwd DIR --fds N [--env K=V]... -- ARGV...
  *
  * Builder's podman runtime runs this on the host instead of `podman exec` (patch 0006).
- * It passes its descriptors 0 to N - 1 to the toolbox's bridge, starting the bridge with
- * `podman exec --detach` when none answers, passes on SIGTERM, SIGINT, SIGHUP and SIGQUIT,
- * and exits as the process did. Without a bridge it execs `podman exec`, as before. */
+ * It passes its descriptors 0 to N - 1 to the toolbox's bridge, starting the bridge when
+ * none answers, passes on SIGTERM, SIGINT, SIGHUP and SIGQUIT, and exits as the process
+ * did. The socket lives only in a $XDG_RUNTIME_DIR that is the user's alone, and its peer
+ * must be the user: the client hands it the process's pipes and environment. Without
+ * such a directory, or a bridge, it execs `podman exec`, as before. */
+
+#ifndef _GNU_SOURCE
+# define _GNU_SOURCE
+#endif
 
 #include <errno.h>
 #include <fcntl.h>
@@ -79,15 +85,17 @@ parse (int argc, char **argv)
     usage ();
 }
 
-static void
+/* 0 when $XDG_RUNTIME_DIR is a directory of this user's alone, and the socket fits in it. */
+static int
 socket_path (char *path, size_t size)
 {
   const char *runtime_dir = getenv ("XDG_RUNTIME_DIR");
 
-  if (runtime_dir == NULL || runtime_dir[0] != '/')
-    runtime_dir = "/tmp";
+  if (!apex_bridge_dir_is_private (runtime_dir))
+    return -1;
   if (snprintf (path, size, APEX_BRIDGE_SOCKET_FORMAT, runtime_dir, container) >= (int)size)
-    path[0] = '\0'; /* no bridge: connect_bridge() fails and podman exec runs */
+    return -1;
+  return 0;
 }
 
 static int
@@ -102,7 +110,7 @@ connect_bridge (const char *path)
 
   if ((fd = socket (AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0)) < 0)
     return -1;
-  if (connect (fd, (struct sockaddr *)&addr, sizeof addr) == 0)
+  if (connect (fd, (struct sockaddr *)&addr, sizeof addr) == 0 && apex_bridge_peer_is_us (fd))
     {
       /* Above the process's descriptors, which a free low number would join. */
       int high = fcntl (fd, F_DUPFD_CLOEXEC, APEX_BRIDGE_MAX_FDS);
@@ -134,30 +142,38 @@ run_quiet (char **argv)
 }
 
 /* The bridge serves every client of its toolbox; the first client to miss it starts it,
- * and the bridge's lock makes a second start a no-op. */
+ * and the bridge's lock makes a second start a no-op. The bridge goes to the background
+ * only once it listens, so podman exec's status says whether it started; a failed start
+ * leaves a stamp that sends every client straight to podman exec for STAMP_SECONDS. */
+#define STAMP_SECONDS (10 * 60)
+
 static int
 start_bridge (const char *path)
 {
-  char bridge[4096], socket_arg[sizeof "/run/host" + 4096], user_arg[512];
-  char *argv[] = { "podman", "exec", "--detach", "--privileged", user_arg, (char *)container,
-                   bridge, socket_arg, NULL };
-  struct timespec pause = { 0, 50 * 1000 * 1000 };
+  char bridge[4096], socket_arg[sizeof "/run/host" + 4096], user_arg[512], stamp[4096 + 8];
+  char *argv[] = { "podman", "exec", "--privileged", user_arg, (char *)container,
+                   bridge, "--daemonize", socket_arg, NULL };
+  struct stat st;
+  int fd;
+
+  if (snprintf (stamp, sizeof stamp, "%s.failed", path) >= (int)sizeof stamp ||
+      (lstat (stamp, &st) == 0 && time (NULL) - st.st_mtime < STAMP_SECONDS))
+    return -1;
 
   if (snprintf (bridge, sizeof bridge, "/run/host%s/apex-toolbox-bridge", PACKAGE_LIBEXECDIR) >= (int)sizeof bridge ||
       snprintf (socket_arg, sizeof socket_arg, "/run/host%s", path) >= (int)sizeof socket_arg ||
       snprintf (user_arg, sizeof user_arg, "--user=%s", user) >= (int)sizeof user_arg ||
-      run_quiet (argv) != 0)
-    return -1;
-
-  for (int i = 0; i < 100; i++)
+      run_quiet (argv) != 0 ||
+      (fd = connect_bridge (path)) < 0)
     {
-      int fd = connect_bridge (path);
-      if (fd >= 0)
-        return fd;
-      nanosleep (&pause, NULL);
+      int stamp_fd = open (stamp, O_WRONLY | O_CREAT | O_TRUNC | O_NOFOLLOW | O_CLOEXEC, 0600);
+      if (stamp_fd >= 0)
+        close (stamp_fd);
+      return -1;
     }
 
-  return -1;
+  unlink (stamp);
+  return fd;
 }
 
 /* Without a bridge, the process runs as Builder would have run it. */
@@ -279,11 +295,19 @@ main (int argc, char **argv)
   struct sigaction sa = { .sa_handler = forward_signal };
   const int forwarded[] = { SIGTERM, SIGINT, SIGHUP, SIGQUIT };
 
-  parse (argc, argv);
-  socket_path (path, sizeof path);
+  sigset_t block, saved;
 
-  if ((sock = connect_bridge (path)) < 0 && (sock = start_bridge (path)) < 0)
+  parse (argc, argv);
+
+  if (socket_path (path, sizeof path) < 0 ||
+      ((sock = connect_bridge (path)) < 0 && (sock = start_bridge (path)) < 0))
     exec_podman ();
+
+  /* A signal before the request is sent would come first on the socket: hold them until then. */
+  sigemptyset (&block);
+  for (size_t i = 0; i < sizeof forwarded / sizeof forwarded[0]; i++)
+    sigaddset (&block, forwarded[i]);
+  sigprocmask (SIG_BLOCK, &block, &saved);
 
   for (size_t i = 0; i < sizeof forwarded / sizeof forwarded[0]; i++)
     sigaction (forwarded[i], &sa, NULL);
@@ -294,6 +318,7 @@ main (int argc, char **argv)
       fprintf (stderr, "apex-toolbox-exec: the bridge took no request\n");
       return 125;
     }
+  sigprocmask (SIG_SETMASK, &saved, NULL);
 
   while (got < sizeof status)
     {
