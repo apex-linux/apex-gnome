@@ -86,7 +86,8 @@ socket_path (char *path, size_t size)
 
   if (runtime_dir == NULL || runtime_dir[0] != '/')
     runtime_dir = "/tmp";
-  snprintf (path, size, APEX_BRIDGE_SOCKET_FORMAT, runtime_dir, container);
+  if (snprintf (path, size, APEX_BRIDGE_SOCKET_FORMAT, runtime_dir, container) >= (int)size)
+    path[0] = '\0'; /* no bridge: connect_bridge() fails and podman exec runs */
 }
 
 static int
@@ -137,16 +138,15 @@ run_quiet (char **argv)
 static int
 start_bridge (const char *path)
 {
-  char bridge[4096], socket_arg[4096], user_arg[512];
+  char bridge[4096], socket_arg[sizeof "/run/host" + 4096], user_arg[512];
   char *argv[] = { "podman", "exec", "--detach", "--privileged", user_arg, (char *)container,
                    bridge, socket_arg, NULL };
   struct timespec pause = { 0, 50 * 1000 * 1000 };
 
-  snprintf (bridge, sizeof bridge, "/run/host%s/apex-toolbox-bridge", PACKAGE_LIBEXECDIR);
-  snprintf (socket_arg, sizeof socket_arg, "/run/host%s", path);
-  snprintf (user_arg, sizeof user_arg, "--user=%s", user);
-
-  if (run_quiet (argv) != 0)
+  if (snprintf (bridge, sizeof bridge, "/run/host%s/apex-toolbox-bridge", PACKAGE_LIBEXECDIR) >= (int)sizeof bridge ||
+      snprintf (socket_arg, sizeof socket_arg, "/run/host%s", path) >= (int)sizeof socket_arg ||
+      snprintf (user_arg, sizeof user_arg, "--user=%s", user) >= (int)sizeof user_arg ||
+      run_quiet (argv) != 0)
     return -1;
 
   for (int i = 0; i < 100; i++)
@@ -168,8 +168,12 @@ exec_podman (void)
   char user_arg[512], cwd_arg[4096], fds_arg[64];
   int n = 0;
 
-  snprintf (user_arg, sizeof user_arg, "--user=%s", user);
-  snprintf (cwd_arg, sizeof cwd_arg, "--workdir=%s", cwd);
+  if (snprintf (user_arg, sizeof user_arg, "--user=%s", user) >= (int)sizeof user_arg ||
+      snprintf (cwd_arg, sizeof cwd_arg, "--workdir=%s", cwd) >= (int)sizeof cwd_arg)
+    {
+      fprintf (stderr, "apex-toolbox-exec: the user or the working directory is too long\n");
+      exit (125);
+    }
   snprintf (fds_arg, sizeof fds_arg, "--preserve-fds=%d", n_fds - 3);
 
   argv[n++] = "podman";

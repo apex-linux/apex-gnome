@@ -9,7 +9,9 @@
  * and replies with how the process ended. No client copies stdio, so the host keeps one
  * conmon per toolbox instead of a podman client and a conmon per process. */
 
-#define _GNU_SOURCE
+#ifndef _GNU_SOURCE
+# define _GNU_SOURCE
+#endif
 
 #include <errno.h>
 #include <fcntl.h>
