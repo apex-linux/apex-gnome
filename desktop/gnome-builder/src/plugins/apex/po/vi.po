@@ -103,13 +103,31 @@ msgid "Toolbox Ready"
 msgstr "Toolbox đã sẵn sàng"
 
 #: src/plugins/apex/gbp-apex-workbench-addin.c:245
-msgid "fedora-toolbox-45 has its language servers. Reopen the project to build and run them in the toolbox."
-msgstr "fedora-toolbox-45 đã có các máy chủ ngôn ngữ. Hãy mở lại dự án để biên dịch và chạy chúng trong toolbox."
+#, c-format
+msgid "%s has its language servers, and builds and language servers now run in it."
+msgstr "%s đã có các máy chủ ngôn ngữ, và việc biên dịch cùng các máy chủ ngôn ngữ giờ chạy trong đó."
 
 #: src/plugins/apex/gbp-apex-workbench-addin.c:277
 msgid "Creating the Toolbox"
 msgstr "Đang tạo toolbox"
 
+#, c-format
+msgid "Installing the language servers %s lacks."
+msgstr "Đang cài các máy chủ ngôn ngữ mà %s còn thiếu."
+
+msgid "Finishing the Toolbox Setup"
+msgstr "Đang hoàn tất thiết lập toolbox"
+
 #: src/plugins/apex/gbp-apex-workbench-addin.c:278
 msgid "Downloading fedora-toolbox-45 and installing its language servers."
 msgstr "Đang tải fedora-toolbox-45 và cài đặt các máy chủ ngôn ngữ."
+
+msgid "Toolbox Setup Incomplete"
+msgstr "Thiết lập toolbox chưa xong"
+
+#, c-format
+msgid "%s lacks some of its language servers, so their languages have no completion or diagnostics. Finish its setup to install them."
+msgstr "%s còn thiếu một số máy chủ ngôn ngữ, nên các ngôn ngữ đó không có gợi ý hoàn thành hay chẩn đoán. Hãy hoàn tất thiết lập để cài chúng."
+
+msgid "Finish Setup"
+msgstr "Hoàn tất thiết lập"

@@ -9,7 +9,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: apex-builder\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-05 03:49+0000\n"
+"POT-Creation-Date: 2026-11-15 17:05+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -69,51 +69,80 @@ msgstr ""
 msgid "Editor for %s"
 msgstr ""
 
-#: src/plugins/apex/gbp-apex-workbench-addin.c:63
-msgid "Create Toolbox"
-msgstr ""
-
 #. TRANSLATORS: %s is the project's folder
-#: src/plugins/apex/gbp-apex-workbench-addin.c:126
+#: src/plugins/apex/gbp-apex-workbench-addin.c:158
 #, c-format
 msgid ""
 "%s is outside the folders the toolbox shares, so its language servers cannot "
 "start. Move the project into your home folder."
 msgstr ""
 
-#: src/plugins/apex/gbp-apex-workbench-addin.c:128
+#: src/plugins/apex/gbp-apex-workbench-addin.c:160
 msgid "Project Outside the Toolbox"
 msgstr ""
 
-#: src/plugins/apex/gbp-apex-workbench-addin.c:198
+#. TRANSLATORS: %s is the toolbox's name, such as fedora-toolbox-45
+#: src/plugins/apex/gbp-apex-workbench-addin.c:257
+#, c-format
+msgid ""
+"%s lacks some of its language servers, so their languages have no completion "
+"or diagnostics. Finish its setup to install them."
+msgstr ""
+
+#: src/plugins/apex/gbp-apex-workbench-addin.c:259
+msgid "Finish Setup"
+msgstr ""
+
+#: src/plugins/apex/gbp-apex-workbench-addin.c:259
+msgid "Toolbox Setup Incomplete"
+msgstr ""
+
+#: src/plugins/apex/gbp-apex-workbench-addin.c:320
 msgid "No Toolbox for Builds"
 msgstr ""
 
-#: src/plugins/apex/gbp-apex-workbench-addin.c:199
+#: src/plugins/apex/gbp-apex-workbench-addin.c:321
 msgid ""
 "Apex Code builds and runs language servers in the fedora-toolbox-45 toolbox. "
 "Until it exists, they run on the host."
 msgstr ""
 
-#: src/plugins/apex/gbp-apex-workbench-addin.c:241
-#: src/plugins/apex/gbp-apex-workbench-addin.c:271
+#: src/plugins/apex/gbp-apex-workbench-addin.c:322
+#: src/plugins/apex/gbp-apex-workbench-addin.c:363
+#: src/plugins/apex/gbp-apex-workbench-addin.c:404
+msgid "Create Toolbox"
+msgstr ""
+
+#: src/plugins/apex/gbp-apex-workbench-addin.c:363
+#: src/plugins/apex/gbp-apex-workbench-addin.c:404
 msgid "Could Not Create the Toolbox"
 msgstr ""
 
-#: src/plugins/apex/gbp-apex-workbench-addin.c:244
+#. TRANSLATORS: %s is the toolbox's name, such as fedora-toolbox-45
+#: src/plugins/apex/gbp-apex-workbench-addin.c:370
+#, c-format
+msgid ""
+"%s has its language servers, and builds and language servers now run in it."
+msgstr ""
+
+#: src/plugins/apex/gbp-apex-workbench-addin.c:372
 msgid "Toolbox Ready"
 msgstr ""
 
-#: src/plugins/apex/gbp-apex-workbench-addin.c:245
-msgid ""
-"fedora-toolbox-45 has its language servers. Reopen the project to build and "
-"run them in the toolbox."
+#. TRANSLATORS: %s is the toolbox's name, such as fedora-toolbox-45
+#: src/plugins/apex/gbp-apex-workbench-addin.c:414
+#, c-format
+msgid "Installing the language servers %s lacks."
 msgstr ""
 
-#: src/plugins/apex/gbp-apex-workbench-addin.c:277
+#: src/plugins/apex/gbp-apex-workbench-addin.c:415
+msgid "Finishing the Toolbox Setup"
+msgstr ""
+
+#: src/plugins/apex/gbp-apex-workbench-addin.c:419
 msgid "Creating the Toolbox"
 msgstr ""
 
-#: src/plugins/apex/gbp-apex-workbench-addin.c:278
+#: src/plugins/apex/gbp-apex-workbench-addin.c:420
 msgid "Downloading fedora-toolbox-45 and installing its language servers."
 msgstr ""

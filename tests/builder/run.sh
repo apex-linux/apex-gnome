@@ -10,9 +10,14 @@ usage() {
     cat <<USAGE
 usage: tests/builder/run.sh [RPM_DIR]
 
-Installs the lane's gnome-builder from RPM_DIR (_build/gnome-builder/out by default),
-creates the fedora-toolbox-45 toolbox with the language servers Apex Code offers, and
+Installs the lane's gnome-builder from RPM_DIR (_build/gnome-builder/out by default) and
 runs a headless gnome-shell, as root, whose automation script (probe.js):
+- without fedora-toolbox-45, opens the project, presses the notification's Create Toolbox
+  (press.py) and waits for pylsp to start in the new toolbox, with no reopen;
+- renames the toolbox dev, as another toolbox of its image: Apex Code checks dev's servers
+  under that name and offers no Finish Setup; then removes python3-lsp-server from dev, with
+  a Python file open, and presses Finish Setup, which must bring it back in dev, make no second
+  toolbox, and spawn pylsp with no reopen;
 - starts Apex Code on a copy of this repository three times, after a discarded start,
   each after the page cache is dropped: E1's first frame, at most ${BUILDER_FIRST_FRAME_MS:-1900} ms (median);
 - opens tests/e1_lsp.py, waits 30 s, and samples Apex Code's own process tree ten
@@ -39,15 +44,15 @@ readonly HERE=$APEX_ROOT/tests/builder
 readonly RPMS=${1:-$APEX_ROOT/_build/gnome-builder/out}
 readonly OUT=$APEX_ROOT/_build/gnome-builder/run
 readonly TOOLBOX=fedora-toolbox-45
-readonly IMAGE=registry.fedoraproject.org/fedora-toolbox:45
 readonly PLAIN=apex-plain
 readonly PLAIN_IMAGE=registry.fedoraproject.org/fedora:45
-readonly SETUP='sudo dnf -y -q install rust-analyzer cargo rust python3-lsp-server python3-pyflakes nodejs-npm && sudo npm install -g --no-fund --no-audit typescript-language-server typescript'
 readonly FIRST_FRAME_MS=${BUILDER_FIRST_FRAME_MS:-1900}
 readonly RSS_MIB=${BUILDER_RSS_MIB:-360}
 readonly PSS_MIB=${BUILDER_PSS_MIB:-270}
 readonly STALL_MS=${BUILDER_STALL_MS:-200}
-readonly SHELL_TIMEOUT=900
+# probe.js's caps for Create Toolbox, Finish Setup and three waits for a button (900 + 600 + 3 x 30 s),
+# then 10 minutes for its other phases, which take about 4 here.
+readonly SHELL_TIMEOUT=2190
 
 shopt -s nullglob
 rpms=("$RPMS"/gnome-builder-[0-9]*.x86_64.rpm)
@@ -76,25 +81,13 @@ printf '[containers]\npids_limit=0\nlog_driver="k8s-file"\n[engine]\ncgroup_mana
     printf '[storage]\ndriver="overlay"\n[storage.options.overlay]\nmount_program="/usr/bin/fuse-overlayfs"\n' >/etc/containers/storage.conf
 # Fedora's toolbox loads through /run/host, which only tmpfiles.d/toolbox.conf links on a booted host.
 [[ -e /run/host ]] || ln -s ../ /run/host
-toolbox_failed() {
-    tail -n 20 "$OUT/toolbox.log" >&2
-    die "run.sh: $1; see ${OUT#"$APEX_ROOT/"}/toolbox.log"
-}
-created=false
-if ! podman container exists "$TOOLBOX"; then
-    toolbox create --assumeyes --image "$IMAGE" "$TOOLBOX" >"$OUT/toolbox.log" 2>&1 || toolbox_failed "toolbox create failed"
-    created=true
-fi
-driver=$(podman inspect --format '{{.HostConfig.LogConfig.Type}}' "$TOOLBOX") || die "run.sh: cannot inspect $TOOLBOX"
-[[ $driver == k8s-file ]] ||
-    die "run.sh: $TOOLBOX logs to $driver, not k8s-file; toolbox run's --follow needs k8s-file without systemd"
-if $created; then
-    toolbox run --container "$TOOLBOX" sh -c "$SETUP" >>"$OUT/toolbox.log" 2>&1 || toolbox_failed "the toolbox setup failed"
-fi
-(cd "$HOME" && toolbox run --container "$TOOLBOX" sh -c 'command -v pylsp rust-analyzer typescript-language-server' >"$OUT/servers.txt") ||
-    die "run.sh: $TOOLBOX lacks a language server"
+# Without the toolbox, the probe's first session creates it with Apex Code's own Create Toolbox.
+create=true
+podman container exists "$TOOLBOX" && create=false
+# A podman container that is no toolbox, without which(1): the runtime of a plain project.
 podman container exists "$PLAIN" ||
-    podman create --quiet --name "$PLAIN" "$PLAIN_IMAGE" sleep infinity >>"$OUT/toolbox.log" 2>&1 || toolbox_failed "cannot create $PLAIN"
+    podman create --quiet --name "$PLAIN" "$PLAIN_IMAGE" sleep infinity >"$OUT/podman.log" 2>&1 ||
+    die "run.sh: cannot create $PLAIN; see ${OUT#"$APEX_ROOT/"}/podman.log"
 plain_id=$(podman inspect --format '{{.Id}}' "$PLAIN") || die "run.sh: cannot inspect $PLAIN"
 podman start "$PLAIN" >/dev/null || die "run.sh: $PLAIN does not start"
 if podman exec "$PLAIN" sh -c 'command -v which' >/dev/null; then die "run.sh: $PLAIN has which"; fi
@@ -136,8 +129,9 @@ env XDG_RUNTIME_DIR="$run" XDG_SESSION_TYPE=wayland XDG_CURRENT_DESKTOP=GNOME LA
     APEX_BUILDER_TYPING_PROJECT="$typing_project" APEX_BUILDER_TOOLBOX="$TOOLBOX" \
     APEX_BUILDER_PLAIN_PROJECT="$HOME/Projects/apex-plain" APEX_BUILDER_PLAIN_ID="$plain_id" APEX_BUILDER_PLAIN_LOG="$OUT/builder-plain.log" \
     APEX_BUILDER_JHBUILD_PROJECT="$HOME/Projects/apex-jhbuild" APEX_BUILDER_JHBUILD_LOG="$OUT/builder-jhbuild.log" \
-    APEX_BUILDER_MEM="$HERE/mem.py" APEX_BUILDER_ATSPI="$HERE/atspi.py" APEX_BUILDER_DROP="$drop" \
-    APEX_BUILDER_LOG="$OUT/builder-verbose.log" PROBE="$HERE/probe.js" \
+    APEX_BUILDER_MEM="$HERE/mem.py" APEX_BUILDER_ATSPI="$HERE/atspi.py" APEX_BUILDER_DROP="$drop" APEX_BUILDER_CREATE="$create" APEX_BUILDER_PRESS="$HERE/press.py" \
+    APEX_BUILDER_LOG="$OUT/builder-verbose.log" APEX_BUILDER_CREATE_LOG="$OUT/builder-create.log" \
+    APEX_BUILDER_RENAMED_LOG="$OUT/builder-renamed.log" APEX_BUILDER_SETUP_LOG="$OUT/builder-setup.log" PROBE="$HERE/probe.js" \
     timeout "$SHELL_TIMEOUT" dbus-run-session -- bash -c '
         for setting in "enable-animations false" "cursor-blink false" "toolkit-accessibility true"; do
             gsettings set org.gnome.desktop.interface $setting
@@ -147,6 +141,12 @@ env XDG_RUNTIME_DIR="$run" XDG_SESSION_TYPE=wayland XDG_CURRENT_DESKTOP=GNOME LA
         exec gnome-shell --headless --virtual-monitor 1920x1080 --wayland-display=apex-builder --automation-script "$PROBE"
     ' >"$OUT/run.log" 2>&1 || rc=$?
 
+if podman container exists "$TOOLBOX"; then
+    driver=$(podman inspect --format '{{.HostConfig.LogConfig.Type}}' "$TOOLBOX") || die "run.sh: cannot inspect $TOOLBOX"
+    [[ $driver == k8s-file ]] ||
+        die "run.sh: $TOOLBOX logs to $driver, not k8s-file; toolbox run's --follow needs k8s-file without systemd"
+    (cd "$HOME" && toolbox run --container "$TOOLBOX" sh -c 'command -v pylsp rust-analyzer typescript-language-server' >"$OUT/servers.txt") || true
+fi
 result=$(sed -n 's/.*APEXBUILDER //p' "$OUT/run.log" | tail -n 1)
 [[ -n $result ]] || die "run.sh: no result (exit $rc); see ${OUT#"$APEX_ROOT/"}/run.log"
 printf '%s\n' "$result" | jq . >"$OUT/run.json"
@@ -185,6 +185,21 @@ check "no program is looked up in the toolbox on the main thread, from the start
 check "a podman container without which: each program looked up there at most twice, once on the main thread" \
     '.plain.lookups | length > 0 and all(.count <= 2 and .mainThread <= 1)'
 check "typing for 60 s in that container's project: no key over ${STALL_MS} ms" '.plain.keys | length > 300 and all(. != null) and max <= $stall'
+if $create; then
+    check "Create Toolbox makes $TOOLBOX, and pylsp itself starts in it without reopening the project" '.create.lspInToolboxAfterS != null'
+    check "toolbox create runs with XDG_RUNTIME_DIR, which rootless podman needs and Builder's launcher clears" '.create.createHasRuntimeDir'
+fi
+check "a toolbox of its image named dev: its servers checked under that name, and no false Finish Setup" \
+    '.renamed.checkedByName and (.renamed.offersFinishSetup | not)'
+check "with a server missing, Apex Code offers Finish Setup, and it installs the server again in dev" '.setup.removed and .setup.pressed and .setup.restoredAfterS != null'
+check "Finish Setup on dev makes no second toolbox" '.setup.restoredAfterS != null and (.setup.secondToolbox | not)'
+check "the restored pylsp spawns without reopening the project" '.setup.spawnedBefore == 0 and .setup.spawnedAfterS != null'
+if [[ $(wc -l <"$OUT/servers.txt" 2>/dev/null) == 3 ]]; then
+    log "ok: $TOOLBOX has pylsp, rust-analyzer and typescript-language-server"
+else
+    log "not ok: $TOOLBOX has pylsp, rust-analyzer and typescript-language-server"
+    fails=$((fails + 1))
+fi
 
 jq -r '"first frame (ms): \([.starts[].painted] | map(tostring) | join(", ")); idle RSS/PSS (MiB): \([.idle.samples[].rss] | sort | .[5] / 1024 | floor)/\([.idle.samples[].pss] | sort | .[5] / 1024 | floor); longest key (ms): \(.typing.keys | max); completion items: \(.typing.completionItems)"' "$OUT/run.json" >&2
 ((fails == 0)) || die "run.sh: $fails check(s) failed; see ${OUT#"$APEX_ROOT/"}/run.json"

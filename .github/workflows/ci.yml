@@ -541,7 +541,7 @@ jobs:
           retention-days: 3
 
       - name: tests/builder/run.sh on the built RPM
-        timeout-minutes: 30
+        timeout-minutes: 45
         run: |
           dnf5 -y -q --setopt=install_weak_deps=False --repo=fedora --repo=updates install \
             gnome-shell mesa-dri-drivers dbus-daemon python3-gobject at-spi2-core procps-ng \

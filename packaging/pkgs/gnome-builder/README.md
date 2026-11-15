@@ -69,8 +69,18 @@ a project loads, the addin lists the toolbox containers (`podman ps --all --no-t
   `fedora-toolbox:45`, then `rust-analyzer cargo rust python3-lsp-server python3-pyflakes
   nodejs-npm` from Fedora and `typescript-language-server typescript` from npm (Fedora 45
   packages no typescript-language-server). About 1.5 min here. The podman provider lists
-  containers only when a project loads, so the notification asks to reopen the project.
-  A toolbox the image or the first login creates is used as is.
+  containers only when a project loads, so once the setup is done the plugin lists the
+  toolbox again and adds its runtime to that provider (E2); the move above then runs, and
+  the servers restart in the toolbox with no reopen. The button has an icon and is also the
+  notification's default action, since the omnibar shows only icon buttons, and only on a
+  notification with a default action. Builder's host launcher clears the environment, so
+  the plugin sets `SHELL` (toolbox fails without it), `XDG_RUNTIME_DIR` (rootless podman
+  needs it) and the session bus. The command is resumable: `podman container exists` skips
+  `toolbox create` for a toolbox whose setup stopped halfway. When the project loads with
+  the toolbox, the plugin checks its three servers (`command -v` in the toolbox), and a
+  missing one brings "Toolbox Setup Incomplete" with a Finish Setup button; each part of
+  the setup installs only what is missing (`rpm -q`, `command -v`), so that is quick. A toolbox the
+  image or the first login creates is used as is.
 - A project outside the folders the toolbox mounts (outside `$HOME`, `/mnt`, `/media`,
   `/run/media`) gets a notification saying so; patch 0004 keeps its servers from starting.
 
@@ -189,11 +199,13 @@ the `gnome-builder-rpms` artifact.
 
 ## The lane case
 
-`tests/builder/run.sh` installs that RPM in a privileged fedora:45 container, creates
-`fedora-toolbox-45` with the setup Apex Code's Create Toolbox runs, copies this repository
+`tests/builder/run.sh` installs that RPM in a privileged fedora:45 container, copies this repository
 to `~/Projects/apex-gnome` (inside the toolbox's shares), and runs gnome-shell headless at
 1920×1080 as root, E0's setting. Its automation script, `probe.js`:
 
+- without `fedora-toolbox-45` (always in CI), opens the project and presses the
+  notification's Create Toolbox over AT-SPI (`press.py`), then waits for pylsp to start
+  through `podman exec` in the new toolbox, without reopening the project;
 - starts Apex Code three times on the project, after a discarded start, each after
   `run.sh` drops the page cache; it times the spawn to the first painted frame as E0 did
   (the window's `first-frame`, then the stage's next `after-paint`);
