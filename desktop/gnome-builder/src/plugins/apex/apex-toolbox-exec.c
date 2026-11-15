@@ -21,6 +21,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/prctl.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/un.h>
@@ -341,6 +342,8 @@ main (int argc, char **argv)
 
   if (status.signaled)
     {
+      /* The process's core, if any, is its own: the client re-raises without one. */
+      prctl (PR_SET_DUMPABLE, 0);
       signal (status.value, SIG_DFL);
       raise (status.value);
       return 128 + status.value;

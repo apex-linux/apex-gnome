@@ -13,6 +13,7 @@ default) as root, with a fake podman first on PATH: its bridge start runs the re
 without /run/host, and its plain podman exec, the client's fallback, prints "fallback".
 - a request runs, with its environment, working directory and exit status, and a second
   client reuses the one bridge;
+- a process killed by SIGSEGV ends the client by SIGSEGV, without a core of the client's;
 - a socket in a directory others can enter, or owned by another user, is never used;
 - a bridge that cannot start costs one start, then none for ten minutes;
 - 160 clients killed and 280 sent SIGTERM within 2 ms of their spawn leave nothing running.
@@ -89,6 +90,20 @@ else
     not_ok "a second client: exit $rc, '$out', $(starts) starts"
 fi
 
+# A process killed by a signal: the client ends by the same signal, without a core of its own.
+mkdir -p "$work/cores"
+got=$(cd "$work/cores" && python3 -I -c '
+import os, resource, subprocess, sys
+resource.setrlimit(resource.RLIMIT_CORE, (resource.RLIM_INFINITY, resource.RLIM_INFINITY))
+p = subprocess.Popen(sys.argv[1:]); _, st = os.waitpid(p.pid, 0)
+print(os.WTERMSIG(st) if os.WIFSIGNALED(st) else "exit", "core" if os.WCOREDUMP(st) else "nocore")
+' "$EXEC" --container "$ID" --user root --cwd / --fds 3 -- sh -c 'kill -SEGV $$')
+if [[ $got == "11 nocore" ]]; then
+    ok "a process killed by SIGSEGV ends the client by SIGSEGV, and the client dumps no core"
+else
+    not_ok "a process killed by SIGSEGV: the client gave '$got'"
+fi
+
 # Never a socket where another user could have bound it.
 listen() {
     python3 -I -c '
@@ -158,7 +173,8 @@ client -- true
 stress() {
     local signal=$1 n=$2 pid hung=0
     for ((i = 0; i < n; i++)); do
-        client -- sleep 4242 &
+        # The client itself, not a function: bash 5.2 forks a subshell for `func &`, so $! would miss it.
+        "$EXEC" --container "$ID" --user root --cwd / --fds 3 -- sleep 4242 &
         pid=$!
         sleep "0.00$((RANDOM % 3))"
         kill "-$signal" "$pid" 2>/dev/null || true
