@@ -51,6 +51,7 @@ printf '%s\n' "\$*" >>"\${FAKE_LOG:?}"
 for ((i = 1; i <= \$#; i++)); do
     if [[ \${!i} == --daemonize ]]; then
         [[ \${FAKE_START:-} == fail ]] && exit 127
+        [[ \${FAKE_START:-} == stopped ]] && exit 125
         next=\$((i + 1))
         exec "$LIBEXEC/apex-toolbox-bridge" --daemonize "\${!next#/run/host}"
     fi
@@ -137,6 +138,16 @@ if [[ $out == fallback && $out2 == fallback && $(starts) == 1 && $ms -lt 300 ]];
     ok "a bridge that cannot start is tried once; the next client falls back in $ms ms"
 else
     not_ok "a failing bridge: '$out' '$out2', $(starts) starts, the second client took $ms ms"
+fi
+
+# A toolbox not running yet (podman's 125) says nothing about the bridge: no stamp.
+XDG_RUNTIME_DIR=$(fresh_dir stopped) FAKE_LOG=$work/stopped.log
+out=$(FAKE_START=stopped client -- true)
+out2=$(FAKE_START=stopped client -- true)
+if [[ $out == fallback && $out2 == fallback && $(starts) == 2 && ! -e $XDG_RUNTIME_DIR/apex-toolbox-${ID:0:12}.sock.failed ]]; then
+    ok "a toolbox that is not running yet leaves no stamp; the next client tries the bridge again"
+else
+    not_ok "a stopped toolbox: '$out' '$out2', $(starts) starts, stamp: $(ls "$XDG_RUNTIME_DIR")"
 fi
 
 # Killed or signalled right after the spawn, a client leaves nothing running.

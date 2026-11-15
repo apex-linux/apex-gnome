@@ -154,7 +154,7 @@ start_bridge (const char *path)
   char *argv[] = { "podman", "exec", "--privileged", user_arg, (char *)container,
                    bridge, "--daemonize", socket_arg, NULL };
   struct stat st;
-  int fd;
+  int fd, status;
 
   if (snprintf (stamp, sizeof stamp, "%s.failed", path) >= (int)sizeof stamp ||
       (lstat (stamp, &st) == 0 && time (NULL) - st.st_mtime < STAMP_SECONDS))
@@ -162,9 +162,15 @@ start_bridge (const char *path)
 
   if (snprintf (bridge, sizeof bridge, "/run/host%s/apex-toolbox-bridge", PACKAGE_LIBEXECDIR) >= (int)sizeof bridge ||
       snprintf (socket_arg, sizeof socket_arg, "/run/host%s", path) >= (int)sizeof socket_arg ||
-      snprintf (user_arg, sizeof user_arg, "--user=%s", user) >= (int)sizeof user_arg ||
-      run_quiet (argv) != 0 ||
-      (fd = connect_bridge (path)) < 0)
+      snprintf (user_arg, sizeof user_arg, "--user=%s", user) >= (int)sizeof user_arg)
+    return -1;
+
+  /* podman's own failures (125: the container is not running yet, as after a reboot) say
+   * nothing about the bridge: fall back this once, and try again next time. */
+  if ((status = run_quiet (argv)) == 125 || status < 0)
+    return -1;
+
+  if (status != 0 || (fd = connect_bridge (path)) < 0)
     {
       int stamp_fd = open (stamp, O_WRONLY | O_CREAT | O_TRUNC | O_NOFOLLOW | O_CLOEXEC, 0600);
       if (stamp_fd >= 0)
