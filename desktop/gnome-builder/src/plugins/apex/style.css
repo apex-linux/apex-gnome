@@ -310,3 +310,117 @@ apexsidebarviews .badge {
 .apexsidebar.dark treeexpander > image:last-child {
   background-image: radial-gradient(circle closest-side, #ffa348 3px, transparent 3.5px);
 }
+
+/* Board 41's palette: a 600px card, radius 14, --pop with the board's shadow and a 1px --border ring. */
+popover.apexpalette > contents {
+  padding: 0;
+  border-radius: 14px;
+  background-color: #ffffff;
+  box-shadow: 0 18px 50px rgba(20, 30, 60, .22), 0 2px 8px rgba(20, 30, 60, .10), 0 0 0 1px rgba(0, 0, 10, .09);
+}
+
+.apexpalette .input {
+  min-height: 47px;
+  padding: 0 14px;
+  border-bottom: 1px solid rgba(0, 0, 10, .09);
+}
+
+.apexpalette .input image,
+.apexpalette .scope,
+.apexpalette .subtitle,
+.apexpalette .kind,
+.apexpalette .group,
+.apexpalette .footer,
+.apexpalette .empty {
+  color: rgba(29, 29, 33, .62);
+}
+
+.apexpalette .input text {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 14px;
+}
+
+.apexpalette .scope,
+.apexpalette .subtitle,
+.apexpalette .footer {
+  font-size: 12px;
+}
+
+.apexpalette list {
+  padding: 6px;
+  background: none;
+}
+
+.apexpalette list > row {
+  min-height: 36px;
+  padding: 0 12px;
+  border-radius: 9px;
+  font-size: 13.5px;
+}
+
+.apexpalette list > row:hover {
+  background-color: rgba(0, 0, 10, .065);
+}
+
+.apexpalette list > row:selected {
+  background-color: rgba(0, 0, 10, .08);
+  color: inherit;
+}
+
+.apexpalette list > row.group {
+  min-height: 26px;
+  font-size: 11.5px;
+  font-weight: 700;
+}
+
+.apexpalette .name {
+  font-weight: 500;
+}
+
+.apexpalette .chip {
+  padding: 1px 6px;
+  border-radius: 5px;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 10, .09);
+  font-family: "JetBrains Mono", monospace;
+  font-size: 11px;
+  color: rgba(29, 29, 33, .62);
+}
+
+.apexpalette .footer {
+  min-height: 33px;
+  padding: 0 16px;
+  border-top: 1px solid rgba(0, 0, 10, .09);
+}
+
+popover.apexpalette.dark > contents {
+  background-color: #2e2e33;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, .5), 0 2px 8px rgba(0, 0, 0, .3), 0 0 0 1px rgba(255, 255, 255, .08);
+}
+
+.apexpalette.dark .input,
+.apexpalette.dark .footer {
+  border-color: rgba(255, 255, 255, .08);
+}
+
+.apexpalette.dark .input image,
+.apexpalette.dark .scope,
+.apexpalette.dark .subtitle,
+.apexpalette.dark .kind,
+.apexpalette.dark .group,
+.apexpalette.dark .footer,
+.apexpalette.dark .empty,
+.apexpalette.dark .chip {
+  color: rgba(244, 244, 246, .64);
+}
+
+.apexpalette.dark list > row:hover {
+  background-color: rgba(255, 255, 255, .09);
+}
+
+.apexpalette.dark list > row:selected {
+  background-color: rgba(255, 255, 255, .1);
+}
+
+.apexpalette.dark .chip {
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .08);
+}

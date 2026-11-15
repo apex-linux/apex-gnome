@@ -9,7 +9,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: apex-builder\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-15 21:35+0000\n"
+"POT-Creation-Date: 2026-11-15 22:41+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -40,38 +40,38 @@ msgstr ""
 msgid "Apex Code — Preferences"
 msgstr ""
 
-#: src/plugins/apex/gbp-apex-a11y-addins.c:44
+#: src/plugins/apex/gbp-apex-a11y-addins.c:45
 msgid "Build Details"
 msgstr ""
 
-#: src/plugins/apex/gbp-apex-a11y-addins.c:46
+#: src/plugins/apex/gbp-apex-a11y-addins.c:47
 msgid "New Page"
 msgstr ""
 
-#: src/plugins/apex/gbp-apex-a11y-addins.c:48
+#: src/plugins/apex/gbp-apex-a11y-addins.c:49
 msgid "Sidebar Menu"
 msgstr ""
 
-#: src/plugins/apex/gbp-apex-a11y-addins.c:50
+#: src/plugins/apex/gbp-apex-a11y-addins.c:51
 msgid "Open Pages"
 msgstr ""
 
-#: src/plugins/apex/gbp-apex-a11y-addins.c:58
+#: src/plugins/apex/gbp-apex-a11y-addins.c:59
 msgid "Run Options"
 msgstr ""
 
-#: src/plugins/apex/gbp-apex-a11y-addins.c:70
+#: src/plugins/apex/gbp-apex-a11y-addins.c:71
 msgid "Run Project"
 msgstr ""
 
-#: src/plugins/apex/gbp-apex-a11y-addins.c:97
+#: src/plugins/apex/gbp-apex-a11y-addins.c:98
 #, c-format
 msgid "%u error"
 msgid_plural "%u errors"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/plugins/apex/gbp-apex-a11y-addins.c:98
+#: src/plugins/apex/gbp-apex-a11y-addins.c:99
 #, c-format
 msgid "%u warning"
 msgid_plural "%u warnings"
@@ -79,33 +79,33 @@ msgstr[0] ""
 msgstr[1] ""
 
 #. TRANSLATORS: the status bar's diagnostics button; the counts are "%u errors" and "%u warnings"
-#: src/plugins/apex/gbp-apex-a11y-addins.c:100
+#: src/plugins/apex/gbp-apex-a11y-addins.c:101
 #, c-format
 msgid "Build Diagnostics: %s, %s"
 msgstr ""
 
-#: src/plugins/apex/gbp-apex-a11y-addins.c:174
+#: src/plugins/apex/gbp-apex-a11y-addins.c:175
 msgid "Panels"
 msgstr ""
 
-#: src/plugins/apex/gbp-apex-a11y-addins.c:176
+#: src/plugins/apex/gbp-apex-a11y-addins.c:177
 msgid "Diagnostics"
 msgstr ""
 
-#: src/plugins/apex/gbp-apex-a11y-addins.c:182
+#: src/plugins/apex/gbp-apex-a11y-addins.c:183
 msgid "Pages"
 msgstr ""
 
-#: src/plugins/apex/gbp-apex-a11y-addins.c:182
+#: src/plugins/apex/gbp-apex-a11y-addins.c:183
 msgid "Pinned Pages"
 msgstr ""
 
-#: src/plugins/apex/gbp-apex-a11y-addins.c:200
+#: src/plugins/apex/gbp-apex-a11y-addins.c:201
 msgid "Progress"
 msgstr ""
 
 #. TRANSLATORS: the editor's accessible name; %s is the file
-#: src/plugins/apex/gbp-apex-a11y-addins.c:318
+#: src/plugins/apex/gbp-apex-a11y-addins.c:320
 #, c-format
 msgid "Editor for %s"
 msgstr ""
@@ -128,6 +128,60 @@ msgstr ""
 
 #: src/plugins/apex/gbp-apex-outline-pane.c:503
 msgid "No outline for this file"
+msgstr ""
+
+#: src/plugins/apex/gbp-apex-palette.c:55
+msgid "Files"
+msgstr ""
+
+#: src/plugins/apex/gbp-apex-palette.c:56
+#: src/plugins/apex/gbp-apex-palette.c:352
+msgid "Symbols"
+msgstr ""
+
+#: src/plugins/apex/gbp-apex-palette.c:57
+#: src/plugins/apex/gbp-apex-palette.c:352
+msgid "Commands"
+msgstr ""
+
+#: src/plugins/apex/gbp-apex-palette.c:228
+#, c-format
+msgid "No results for “%s”"
+msgstr ""
+
+#: src/plugins/apex/gbp-apex-palette.c:314
+#, c-format
+msgid "Go to line %u"
+msgstr ""
+
+#: src/plugins/apex/gbp-apex-palette.c:352
+#: src/plugins/apex/gbp-apex-palette.c:548
+msgid "Files, symbols and commands"
+msgstr ""
+
+#: src/plugins/apex/gbp-apex-palette.c:523
+msgid "> commands only · @ symbols · : line"
+msgstr ""
+
+#: src/plugins/apex/gbp-apex-palette.c:533
+#: src/plugins/apex/gbp-apex-palette.c:542
+msgid "Search files, symbols and commands"
+msgstr ""
+
+#: src/plugins/apex/gbp-apex-palette.c:554
+msgid "Results"
+msgstr ""
+
+#: src/plugins/apex/gbp-apex-palette.c:558
+msgid "↑↓ to move"
+msgstr ""
+
+#: src/plugins/apex/gbp-apex-palette.c:559
+msgid "Enter to open"
+msgstr ""
+
+#: src/plugins/apex/gbp-apex-palette.c:560
+msgid "Esc to close"
 msgstr ""
 
 #: src/plugins/apex/gbp-apex-search-pane.c:129

@@ -30,6 +30,7 @@ const SAMPLES = 10;
 const LSP_WAIT_MS = 45000;
 const PRESS_WAIT_MS = 30000;
 const OUTLINE_WAIT_MS = 30000;
+const PALETTE_WAIT_MS = 20000;
 const NOHEAD_TYPING_MS = 10000;
 const SEARCH_WAIT_MS = 30000;
 const CREATE_WAIT_MS = 900000;
@@ -221,10 +222,30 @@ async function idle() {
     const bottom = await helper('APEX_BUILDER_ATSPI');
     tap(Clutter.KEY_F9, [Clutter.KEY_Control_L]);
     await Scripting.sleep(1000);
+    const palette = await paletteFor('e1_l');
     const outline = await outlineOf();
     const search = await searchFor('undefined_name');
     await quit();
-    return {samples, names, noPage, popover: {pressed, names: popover}, bottom, outline, search, title: st.window.get_title()};
+    return {samples, names, noPage, popover: {pressed, names: popover}, bottom, palette, outline, search, title: st.window.get_title()};
+}
+
+// The palette: Ctrl+K, a query, its results; then Enter on the first, which opens it and closes the palette.
+async function paletteFor(query) {
+    tap(Clutter.KEY_k, [Clutter.KEY_Control_L]);
+    await Scripting.sleep(1000);
+    await type(query);
+    let names;
+    for (let i = 0; i < PALETTE_WAIT_MS / 1000; i++) {
+        await Scripting.sleep(1000);
+        names = await helper('APEX_BUILDER_ATSPI');
+        if (names.nodes.some(n => n.role === 'list item' && n.selected))
+            break;
+    }
+    tap(Clutter.KEY_Return);
+    await Scripting.sleep(1500);
+    const after = await helper('APEX_BUILDER_ATSPI');
+    const opened = after.nodes.some(n => n.role === 'text' && n.name === 'Editor for e1_lsp.py');
+    return {names, after, opened};
 }
 
 // The Outline view with the cursor at the file's end, then Project again before the quit saves the session.

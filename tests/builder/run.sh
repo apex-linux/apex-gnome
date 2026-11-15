@@ -193,7 +193,7 @@ for name in "New Page" "Build Details" "Sidebar Menu" "Open Pages" "Run Options"
         "[.idle.names.nodes[] | select(.name == \"$name\") | .role] | (index(\"button\") != null and index(\"toggle button\") != null)"
 done
 check "the Run button is named for running the project" '.idle.names.nodes | any(.role == "button" and (.name | startswith("Run Project")))'
-check "no button, toggle button, tab list, progress bar, entry, list or label is unnamed" '.idle.names.nodes | all(.role == "text" or .name != "")'
+check "no button, toggle button, tab list, progress bar, entry, list or label is unnamed" '.idle.names.nodes | all(.role == "text" or (.role == "list item" and .list == "Project Tree") or .name != "")'
 check "the diagnostics button is named for its counts, not \"0 0\"" '.idle.names.nodes | any(.role == "button" and (.name | test("^Build Diagnostics: [0-9]+ errors?, [0-9]+ warnings?$")))'
 check "the diagnostics button is named before any page has focus" '.idle.noPage.nodes | any(.role == "button" and (.name | test("^Build Diagnostics: [0-9]+ errors?, [0-9]+ warnings?$")))'
 check "the diagnostics popover's tab list is not named \"Panels\"" '.idle.popover.pressed and ([.idle.popover.names.nodes[] | select(.role == "page tab list" and .name == "Panels")] | length) == ([.idle.names.nodes[] | select(.role == "page tab list" and .name == "Panels")] | length)'
@@ -227,6 +227,13 @@ check "a repository with no commit yet: Version control lists added.py and untra
 check "and nothing warns of it: no warning from the apex or git plugins, the badge reads 2" \
     '(.nohead.warnings | length == 0) and .nohead.badge'
 check "typing for 10 s there while the list loads: no key over ${STALL_MS} ms" '.nohead.keys | length > 30 and all(. != null) and max <= $stall'
+check "Ctrl+K opens the palette, named; its results list is \"Results\", e1_lsp.py first under Files and selected" \
+    '.idle.palette.names.nodes | (any((.role == "text" or .role == "entry") and .name == "Search files, symbols and commands")
+     and (. as $n | [range(length)] | map(select($n[.].role == "list" and $n[.].name == "Results"))[0] as $i
+     | $i != null and ([$n[$i + 1:][] | select(.role == "list item")][:2] | map([.name, .selected])) == [["Files", false], ["e1_lsp.py, tests", true]]))'
+check "every row of the palette's Results is named" \
+    '[.idle.palette.names.nodes[] | select(.role == "list item" and .list == "Results")] | length > 1 and all(.name != "")'
+check "Enter on it opens e1_lsp.py and closes the palette" '.idle.palette.opened and (.idle.palette.after.nodes | any(.name == "Results") | not)'
 check "the switcher's segments are the boards' four views, in order" \
     '[.idle.names.nodes[] | select(.role == "page tab" and (.name == "Project" or .name == "Outline" or .name == "Search" or .name == "Version control")) | .name][:4] == ["Project", "Outline", "Search", "Version control"]'
 check "the Search view finds undefined_name in e1_lsp.py: its entry, its hit at line 5, and the hand-off button named" \

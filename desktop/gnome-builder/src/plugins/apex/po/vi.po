@@ -216,3 +216,41 @@ msgstr "%s trong %s"
 #, c-format
 msgid "%s, %s added, %s removed"
 msgstr "%s, thêm %s, xóa %s"
+
+msgid "Files"
+msgstr "Tệp"
+
+msgid "Symbols"
+msgstr "Ký hiệu"
+
+msgid "Commands"
+msgstr "Lệnh"
+
+msgid "Files, symbols and commands"
+msgstr "Tệp, ký hiệu và lệnh"
+
+msgid "Search files, symbols and commands"
+msgstr "Tìm tệp, ký hiệu và lệnh"
+
+#, c-format
+msgid "No results for “%s”"
+msgstr "Không có kết quả cho “%s”"
+
+#, c-format
+msgid "Go to line %u"
+msgstr "Đến dòng %u"
+
+msgid "Results"
+msgstr "Kết quả"
+
+msgid "↑↓ to move"
+msgstr "↑↓ để di chuyển"
+
+msgid "Enter to open"
+msgstr "Enter để mở"
+
+msgid "Esc to close"
+msgstr "Esc để đóng"
+
+msgid "> commands only · @ symbols · : line"
+msgstr "> chỉ lệnh · @ ký hiệu · : dòng"
