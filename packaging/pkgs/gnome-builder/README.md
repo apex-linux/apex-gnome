@@ -112,11 +112,11 @@ the application name before any plugin loads. Strings are marked `APEX_()` rathe
 | `0002-name` | `src/main.c`, `src/libide/gui/ide-application-actions.c`, `ide-workbench.c`, `src/libide/greeter/ide-greeter-workspace.c`, `src/libide/tweaks/ide-tweaks-window.c`, `data/org.gnome.Builder.desktop.in.in` | +18 −12 | the includes; the application name, the about dialog's name and the "Builder — %s" titles from `apex-brand.h`; `Name=Apex Code` |
 | `0003-podman-storage-path` | `src/plugins/podman/gbp-podman-runtime.c` | +1 −1 | `/etc/containers/storage.conf`, which lost its leading `/` |
 | `0004-podman-workdir` | `src/plugins/podman/gbp-podman-runtime.c` | +10 | the run handler refuses a working directory no mount of the container holds |
-| `0005-diagnostic-tool-lookups` | `src/libide/foundry/ide-diagnostic-tool.c` | +203 −31 | a diagnostic tool's program lookups run on a worker thread before its pass (E2; see below) |
+| `0005-program-lookups` | `src/libide/foundry/ide-pipeline.c`, `ide-pipeline-private.h`, `ide-diagnostic-tool.c`, `src/libide/lsp/ide-lsp-service.c` | +288 −31 | `_ide_pipeline_find_programs_async()` makes the program lookups on a worker thread; a diagnostic tool runs it before each pass, a language server before it starts (E2; see below) |
 
 No ADR 0014 budget applies to this series (ADR 0017, decision 2); each patch still says
-what it changes and why, and the lane's checks apply. In use: +233 −44 lines in 9 files, of
-which 0005's +203 −31 is a fix to propose upstream rather than a hook. The
+what it changes and why, and the lane's checks apply. In use: +318 −44 lines in 12 files, of
+which 0005's +288 −31 is a fix to propose upstream rather than a hook. The
 patches are `git format-patch` output against Fedora's `%prep` tree, with `a/` and `b/`
 prefixes, applied with `-p1`; write them with apex-image's `just pkg-prep gnome-builder`
 and `just pkg-export gnome-builder`.
@@ -141,10 +141,15 @@ and `just pkg-export gnome-builder`.
   `ide_subprocess_wait_check()` on the main thread; the runtimes cache the answers, so it
   happens once per program and runtime. Builder's log shows `Failed to locate program
   "flake8"` at the end of the stall; installing flake8 would not help, since a found program
-  costs the same lookups. Patch 0005 runs the same lookups on a worker thread first, and
-  `prepare_run_context()` then finds them cached. The runtimes allow it: their path caches
-  lock, and the podman runtime starts its container under a mutex. Typing from the moment
-  the file opens, the longest key here went from 313 ms to 30.5 ms (median 14.2 ms both).
+  costs the same lookups. `IdeLspService` does the same when a pipeline finishes loading:
+  `ide_lsp_service_create_launcher()` looks up `ruff` and `pylsp` (145 and 160 ms here), so
+  the stall also comes when the toolbox's pipeline loads as the file opens. Patch 0005 adds
+  `_ide_pipeline_find_programs_async()`, which makes those lookups on a worker thread; the
+  diagnostic tool runs it before each pass, and the language server once per pipeline
+  before it creates its launcher, and both then find their answers cached. The runtimes
+  allow it: their path caches lock, and the podman runtime starts its container under a
+  mutex. Typing from the moment the file opens, the longest key here went from 313 ms
+  (diagnostics) and 320 ms (language servers) to 30.5 ms (median 14.2 ms).
 - **One shared `podman exec` per toolbox: feasible.** Today every process Builder runs in
   the toolbox is its own `podman exec`, whose Go client stays alive as the server's stdio
   (about 48 MiB RSS, 26 MiB PSS each) beside a `conmon` (about 2.3 MiB). The shared form:
