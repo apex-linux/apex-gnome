@@ -272,19 +272,45 @@ async function create() {
             toolboxNames: names.filter(n => /oolbox/.test(n))};
 }
 
-// A toolbox whose setup stopped halfway (pylsp's package gone): Apex Code says so, and Finish
-// Setup installs that package again, and only that.
+function readText(path) {
+    const [, bytes] = GLib.file_get_contents(path);
+    return new TextDecoder().decode(bytes);
+}
+
+// The toolbox under another name, as `toolbox create --image …fedora-toolbox:45 dev` makes it.
+const RENAMED = 'dev';
+const PYLSP_SPAWNED = /Language server .pylsp. spawned as process/g;
+
+// With every server there, Apex Code checks dev under its own name and offers no Finish Setup.
+async function renamed() {
+    const log = env('APEX_BUILDER_RENAMED_LOG');
+    const check = new RegExp(`Launching toolbox run --container ${RENAMED} sh -c command -v pylsp`);
+    await launch(['sh', '-c', `exec gnome-builder -vvv -p '${PROJECT}' > '${log}' 2>&1`]);
+    const t0 = now();
+    while (!check.test(readText(log)) && (now() - t0) / 1000 < PRESS_WAIT_MS)
+        await Scripting.sleep(1000);
+    await Scripting.sleep(2 * QUIET_MS);
+    const {names} = await helper('APEX_BUILDER_PRESS', '--names');
+    await quit();
+    return {checkedByName: check.test(readText(log)), offersFinishSetup: names.includes('Finish Setup')};
+}
+
+// dev whose setup stopped halfway (pylsp's package gone), with a Python file open: Apex Code says
+// so, Finish Setup installs that package again in dev, and pylsp, looked up as missing, then spawns.
 async function finishSetup() {
-    const has = () => spawnWait(['podman', 'exec', TOOLBOX, 'sh', '-c', 'command -v pylsp']);
-    await spawnWait(['podman', 'exec', TOOLBOX, 'rpm', '-e', '--nodeps', 'python3-lsp-server']);
+    const has = () => spawnWait(['podman', 'exec', RENAMED, 'sh', '-c', 'command -v pylsp']);
+    const log = env('APEX_BUILDER_SETUP_LOG');
+    await spawnWait(['podman', 'exec', RENAMED, 'rpm', '-e', '--nodeps', 'python3-lsp-server']);
     const removed = await has() !== 0;
-    await launch(['gnome-builder', '-p', PROJECT]);
+    await launch(['sh', '-c', `exec gnome-builder -vvv -p '${PROJECT}' > '${log}' 2>&1`]);
+    await spawnWait(['gnome-builder', LSP_FILE]);
     const t0 = now();
     let pressed = false;
     while (!pressed && (now() - t0) / 1000 < PRESS_WAIT_MS) {
         await Scripting.sleep(1000);
         ({pressed} = await helper('APEX_BUILDER_PRESS', 'Finish Setup'));
     }
+    const spawnedBefore = [...readText(log).matchAll(PYLSP_SPAWNED)].length;
     let restoredAfterS = null;
     const t1 = now();
     while (pressed && restoredAfterS === null && (now() - t1) / 1000 < SETUP_WAIT_MS) {
@@ -292,8 +318,24 @@ async function finishSetup() {
         if (await has() === 0)
             restoredAfterS = Math.round((now() - t1) / 1e6);
     }
+    let spawnedAfterS = null;
+    while (restoredAfterS !== null && spawnedAfterS === null && (now() - t1) / 1e6 < restoredAfterS + LSP_WAIT_MS / 1000) {
+        await Scripting.sleep(1000);
+        if ([...readText(log).matchAll(PYLSP_SPAWNED)].length > spawnedBefore)
+            spawnedAfterS = Math.round((now() - t1) / 1e6);
+    }
+    const secondToolbox = await spawnWait(['podman', 'container', 'exists', TOOLBOX]) === 0;
     await quit();
-    return {removed, pressed, restoredAfterS};
+    return {removed, pressed, restoredAfterS, spawnedBefore, spawnedAfterS, secondToolbox};
+}
+
+async function underAnotherName() {
+    await spawnWait(['podman', 'rename', TOOLBOX, RENAMED]);
+    try {
+        return {renamed: await renamed(), setup: await finishSetup()};
+    } finally {
+        await spawnWait(['podman', 'rename', RENAMED, TOOLBOX]);
+    }
 }
 
 async function drive() {
@@ -301,8 +343,7 @@ async function drive() {
         .create_virtual_device(Clutter.InputDeviceType.KEYBOARD_DEVICE);
     Main.overview.hide();
     const created = env('APEX_BUILDER_CREATE') === 'true' ? await create() : null;
-    const setup = created !== null ? await finishSetup() : null;
-    return {create: created, setup, starts: await starts(), idle: await idle(), typing: await typing()};
+    return {create: created, ...await underAnotherName(), starts: await starts(), idle: await idle(), typing: await typing()};
 }
 
 // main.js connects to startup-complete only after importing this module, so a startup that
