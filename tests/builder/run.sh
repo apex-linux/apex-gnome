@@ -121,6 +121,15 @@ for name in plain jhbuild; do
     printf '[default]\nname=Default\nruntime=%s\ntoolchain=default\ndefault=true\n' "$runtime" >"$dir/.buildconfig"
 done
 
+# A project whose session the probe saves, splits and reopens; a file to open with no project.
+session_project=$HOME/Projects/apex-session
+# Builder 50 saves sessions in <projects>/.gnome-builder/projects/<project>: none from a run before.
+rm -rf "$session_project" "$HOME/Projects/.gnome-builder/projects/apex-session" "$HOME/.cache/gnome-builder/projects/apex-session"
+mkdir -p "$session_project"
+printf 'print("session")\n' >"$session_project/session_check.py"
+editor_file=$HOME/notes.txt
+printf 'notes\n' >"$editor_file"
+
 drop=$OUT/drop-caches
 (while sleep 0.1; do [[ -f $drop ]] && { sync; echo 3 >/proc/sys/vm/drop_caches; rm -f "$drop"; }; done) &
 dropper=$!
@@ -137,6 +146,8 @@ env XDG_RUNTIME_DIR="$run" XDG_SESSION_TYPE=wayland XDG_CURRENT_DESKTOP=GNOME LA
     APEX_BUILDER_TYPING_PROJECT="$typing_project" APEX_BUILDER_TOOLBOX="$TOOLBOX" \
     APEX_BUILDER_PLAIN_PROJECT="$HOME/Projects/apex-plain" APEX_BUILDER_PLAIN_ID="$plain_id" APEX_BUILDER_PLAIN_LOG="$OUT/builder-plain.log" \
     APEX_BUILDER_JHBUILD_PROJECT="$HOME/Projects/apex-jhbuild" APEX_BUILDER_JHBUILD_LOG="$OUT/builder-jhbuild.log" \
+    APEX_BUILDER_SESSION_PROJECT="$session_project" APEX_BUILDER_SESSION_LOG="$OUT/builder-session.log" \
+    APEX_BUILDER_SESSION="$HERE/session.py" APEX_BUILDER_EDITOR_FILE="$editor_file" \
     APEX_BUILDER_MEM="$HERE/mem.py" APEX_BUILDER_ATSPI="$HERE/atspi.py" APEX_BUILDER_DROP="$drop" APEX_BUILDER_CREATE="$create" APEX_BUILDER_PRESS="$HERE/press.py" \
     APEX_BUILDER_LOG="$OUT/builder-verbose.log" APEX_BUILDER_CREATE_LOG="$OUT/builder-create.log" \
     APEX_BUILDER_RENAMED_LOG="$OUT/builder-renamed.log" APEX_BUILDER_SETUP_LOG="$OUT/builder-setup.log" PROBE="$HERE/probe.js" \
@@ -198,6 +209,17 @@ check "\"Sidebar views\" names the sidebar's tab list, whose tabs are the boards
 check "the sidebar's pages the boards do not show move to the bottom panel: Build Pipeline, Manuals, TODO/FIXMEs, Unit Tests" \
     '.typing.toBottom | unique | length == 4'
 check "moving them presents none: TODO/FIXMEs does not mine the project at startup" '.typing.todoMined == false'
+check "a document page cannot be dropped in the sidebar: can_drop says no for the editor page" \
+    '.typing.canDrop | length > 0 and any(.[0] == "IdeEditorPage") and all(.[1] == "no")'
+check "a session with TODO/FIXMEs in a second start frame: saved and split, the frame goes and TODO/FIXMEs moves" \
+    '.session.saved and .session.split and .session.frameDropped and .session.todoMoved'
+check "and on that start and its clean close TODO/FIXMEs mines nothing, the sidebar has no empty Panels switcher, and is saved whole" \
+    '(.session.todoMined | not) and (.session.unbalanced | not) and .session.resaved and .session.todoArea == "bottom"
+     and (.session.startRows | type == "array" and all(. == 0))
+     and (.session.names.nodes | any(.role == "page tab list" and .name == "Sidebar views"))
+     and (.session.names.nodes | any(.role == "page tab list" and .name == "Panels") | not)'
+check "the editor-only workspace (gnome-builder -e) has the switcher, its first tab Project" \
+    '.editorOnly.names.nodes | any(.role == "page tab list" and .name == "Sidebar views") and any(.role == "page tab" and .name == "Project")'
 check "\"Panels\" names the bottom panel's switcher, open, and not the closed one" \
     '(.idle.bottom.nodes | any(.role == "page tab list" and .name == "Panels")) and (.idle.names.nodes | any(.name == "Panels") | not)'
 check "the bottom panel's tabs: Build Pipeline, Manuals, TODO/FIXMEs, Unit Tests, each named and taking keyboard focus" \

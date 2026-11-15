@@ -21,4 +21,8 @@ const char *gbp_apex_sidebar_view_name (PanelWidget *page);
 /* After the workspace's session is restored: a split it restored may hold panes to move. */
 void            gbp_apex_sidebar_session_restored (GbpApexSidebar *self);
 
+/* The lane's check of can_drop() on a document page, only with APEX_BUILDER_SELFTEST set. */
+void            gbp_apex_sidebar_selftest_drop    (GbpApexSidebar *self,
+                                                   IdePage        *page);
+
 G_END_DECLS

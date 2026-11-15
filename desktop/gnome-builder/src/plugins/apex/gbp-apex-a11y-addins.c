@@ -271,6 +271,8 @@ gbp_apex_workspace_addin_page_changed (IdeWorkspaceAddin *addin,
 
   if (self->workspace != NULL)
     name_widgets (GTK_WIDGET (self->workspace));
+  if (self->sidebar != NULL)
+    gbp_apex_sidebar_selftest_drop (self->sidebar, page);
 }
 
 static void

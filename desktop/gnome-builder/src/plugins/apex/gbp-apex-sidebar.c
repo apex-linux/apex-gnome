@@ -306,7 +306,9 @@ struct _GbpApexSidebar
   PanelFrame   *frame;
   PanelPaned   *paned;
   GPtrArray    *watched;
+  GPtrArray    *moved;
   guint         relocate_source;
+  guint         hidden : 1;
 };
 
 G_DEFINE_FINAL_TYPE (GbpApexSidebar, gbp_apex_sidebar, G_TYPE_OBJECT)
@@ -360,6 +362,38 @@ block_presented (GPtrArray *pages,
     }
 }
 
+static gboolean
+unblock_presented (gpointer user_data)
+{
+  block_presented (user_data, FALSE);
+  return G_SOURCE_REMOVE;
+}
+
+/* A split the sweep emptied would keep its share of the sidebar, and the session would keep it:
+ * remove it, as libpanel does after a drag. */
+static void
+drop_empty_frames (GbpApexSidebar *self)
+{
+  for (guint i = panel_paned_get_n_children (self->paned); i > 0; i--)
+    {
+      GtkWidget *child = panel_paned_get_nth_child (self->paned, i - 1);
+      g_autoptr(GListModel) pages = NULL;
+      guint index;
+
+      if (!PANEL_IS_FRAME (child) || child == GTK_WIDGET (self->frame) || !panel_frame_get_empty (PANEL_FRAME (child)))
+        continue;
+
+      pages = G_LIST_MODEL (panel_frame_get_pages (PANEL_FRAME (child)));
+      if (g_ptr_array_find (self->watched, pages, &index))
+        {
+          g_signal_handlers_disconnect_by_data (pages, self);
+          g_ptr_array_remove_index (self->watched, index);
+        }
+      g_debug ("an emptied start frame leaves the sidebar");
+      panel_paned_remove (self->paned, child);
+    }
+}
+
 /* A page the boards do not show (Build Pipeline, Manuals, TODO/FIXMEs, Unit Tests) moves to the bottom
  * panel as a tab: still there, and reached as upstream reaches it. A board view in another start frame
  * joins the switcher's. Neither move "presents" a page: TODO/FIXMEs would mine the project for it. */
@@ -395,7 +429,25 @@ relocate (gpointer user_data)
       panel_position_set_area (position, PANEL_AREA_BOTTOM);
       ide_workspace_add_pane (self->workspace, IDE_PANE (page), position);
     }
-  block_presented (others, FALSE);
+  /* Builder's own session restore can move them again in this same dispatch: unblock after it. */
+  if (others->len > 0)
+    g_idle_add_full (G_PRIORITY_DEFAULT_IDLE, unblock_presented, g_ptr_array_ref (others), (GDestroyNotify) g_ptr_array_unref);
+  for (guint i = 0; i < others->len; i++)
+    {
+      PanelWidget *page = g_ptr_array_index (others, i);
+      g_autoptr(GPtrArray) one = NULL;
+
+      if (g_ptr_array_find (self->moved, page, NULL))
+        continue;
+      g_ptr_array_add (self->moved, g_object_ref (page));
+      /* Moved before the window maps: blocked until it does, as the panes moved before are. */
+      if (self->hidden)
+        {
+          one = g_ptr_array_new ();
+          g_ptr_array_add (one, page);
+          block_presented (one, TRUE);
+        }
+    }
 
   for (guint i = 0; i < strays->len; i++)
     {
@@ -406,7 +458,23 @@ relocate (gpointer user_data)
       panel_frame_add (self->frame, page);
     }
 
+  drop_empty_frames (self);
+
   return G_SOURCE_REMOVE;
+}
+
+/* Closing, Builder closes the bottom panel's panes one by one, and each close presents the next:
+ * TODO/FIXMEs would mine the project as the window goes. Every close path hides the window first. */
+static void
+workspace_mapped (GbpApexSidebar *self,
+                  GtkWidget      *workspace)
+{
+  gboolean hidden = !gtk_widget_get_mapped (workspace);
+
+  if (hidden == self->hidden)
+    return;
+  self->hidden = hidden;
+  block_presented (self->moved, hidden);
 }
 
 static void
@@ -414,6 +482,24 @@ queue_relocate (GbpApexSidebar *self)
 {
   if (self->relocate_source == 0)
     self->relocate_source = g_idle_add (relocate, self);
+}
+
+/* The lane's check of can_drop() on a real document page (APEX_BUILDER_SELFTEST): a drag is
+ * beyond its reach. */
+void
+gbp_apex_sidebar_selftest_drop (GbpApexSidebar *self,
+                                IdePage        *page)
+{
+  PanelFrameHeader *header;
+
+  g_return_if_fail (GBP_IS_APEX_SIDEBAR (self));
+
+  if (page == NULL || self->frame == NULL || g_getenv ("APEX_BUILDER_SELFTEST") == NULL ||
+      !(header = panel_frame_get_header (self->frame)))
+    return;
+
+  g_debug ("selftest: can_drop %s %s", G_OBJECT_TYPE_NAME (page),
+           panel_frame_header_can_drop (header, PANEL_WIDGET (page)) ? "yes" : "no");
 }
 
 void
@@ -436,6 +522,9 @@ gbp_apex_sidebar_new (IdeWorkspace *workspace)
 
   self = g_object_new (GBP_TYPE_APEX_SIDEBAR, NULL);
   self->workspace = workspace;
+  self->hidden = !gtk_widget_get_mapped (GTK_WIDGET (workspace));
+  g_signal_connect_object (workspace, "map", G_CALLBACK (workspace_mapped), self, G_CONNECT_SWAPPED);
+  g_signal_connect_object (workspace, "unmap", G_CALLBACK (workspace_mapped), self, G_CONNECT_SWAPPED);
   position = panel_position_new ();
   panel_position_set_area (position, PANEL_AREA_START);
   if (!(self->frame = ide_workspace_get_frame_at_position (workspace, position)))
@@ -459,6 +548,7 @@ gbp_apex_sidebar_dispose (GObject *object)
   for (guint i = 0; self->watched != NULL && i < self->watched->len; i++)
     g_signal_handlers_disconnect_by_data (g_ptr_array_index (self->watched, i), self);
   g_clear_pointer (&self->watched, g_ptr_array_unref);
+  g_clear_pointer (&self->moved, g_ptr_array_unref);
   self->frame = NULL;
   self->paned = NULL;
   self->workspace = NULL;
@@ -476,4 +566,5 @@ static void
 gbp_apex_sidebar_init (GbpApexSidebar *self)
 {
   self->watched = g_ptr_array_new_with_free_func (g_object_unref);
+  self->moved = g_ptr_array_new_with_free_func (g_object_unref);
 }
