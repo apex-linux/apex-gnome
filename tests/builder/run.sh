@@ -18,7 +18,8 @@ runs a headless gnome-shell, as root, whose automation script (probe.js):
 - opens tests/e1_lsp.py, waits 30 s, and samples Apex Code's own process tree ten
   times: E1's RSS and PSS, at most ${BUILDER_RSS_MIB:-360} and ${BUILDER_PSS_MIB:-270} MiB (median);
 - reads the editor's name and E0's eight unnamed buttons over AT-SPI;
-- types into an empty tests/e2_typing.py for 60 s from a fresh start, a key every 150 ms: E2's longest
+- stops the toolbox, as after a reboot, and holds its podman start 3 s; then types into an
+  empty e2_typing.py in a meson project for 60 s from a fresh start, a key every 150 ms: E2's longest
   key, press to presented frame, at most ${BUILDER_STALL_MS:-200} ms;
 - then waits for pylsp, in the toolbox, to answer a completion.
 Needs a throwaway container with podman's privileges (--privileged), root, and the
@@ -94,6 +95,12 @@ git -c safe.directory='*' -C "$APEX_ROOT" archive --format=tar --prefix=apex-gno
 rm -f "$project/.buildconfig"
 printf 'import os\n\n\ndef f(a):\n    return undefined_name + a\n' >"$project/tests/e1_lsp.py"
 : >"$project/tests/e2_typing.py"
+# The typing case's project builds with meson, whose pipeline looks up ninja as it loads.
+typing_project=$HOME/Projects/apex-meson
+rm -rf "$typing_project" && mkdir -p "$typing_project"
+printf "project('apex-meson', 'c')\nexecutable('apex-meson', 'main.c')\n" >"$typing_project/meson.build"
+printf 'int main (void) { return 0; }\n' >"$typing_project/main.c"
+: >"$typing_project/e2_typing.py"
 
 drop=$OUT/drop-caches
 (while sleep 0.1; do [[ -f $drop ]] && { sync; echo 3 >/proc/sys/vm/drop_caches; rm -f "$drop"; }; done) &
@@ -107,7 +114,8 @@ printf '[D-BUS Service]\nName=org.freedesktop.portal.Desktop\nExec=/bin/false\n'
     >"$HOME/.local/share/dbus-1/services/org.freedesktop.portal.Desktop.service"
 rc=0
 env XDG_RUNTIME_DIR="$run" XDG_SESSION_TYPE=wayland XDG_CURRENT_DESKTOP=GNOME LANG=C.UTF-8 GDK_DEBUG=no-portals ADW_DISABLE_PORTAL=1 \
-    APEX_BUILDER_PROJECT="$project" APEX_BUILDER_LSP_FILE="$project/tests/e1_lsp.py" APEX_BUILDER_TYPING_FILE="$project/tests/e2_typing.py" \
+    APEX_BUILDER_PROJECT="$project" APEX_BUILDER_LSP_FILE="$project/tests/e1_lsp.py" APEX_BUILDER_TYPING_FILE="$typing_project/e2_typing.py" \
+    APEX_BUILDER_TYPING_PROJECT="$typing_project" APEX_BUILDER_TOOLBOX="$TOOLBOX" \
     APEX_BUILDER_MEM="$HERE/mem.py" APEX_BUILDER_ATSPI="$HERE/atspi.py" APEX_BUILDER_DROP="$drop" \
     APEX_BUILDER_LOG="$OUT/builder-verbose.log" PROBE="$HERE/probe.js" \
     timeout "$SHELL_TIMEOUT" dbus-run-session -- bash -c '
@@ -149,7 +157,9 @@ check "the Run button is named for running the project" '.idle.names.nodes | any
 check "no button or toggle button is unnamed" '.idle.names.nodes | all(.role == "text" or .name != "")'
 check "every typed key drew a frame" '.typing.keys | length > 300 and all(. != null)'
 check "typing for 60 s from a fresh start: no key over ${STALL_MS} ms" '.typing.keys | max <= $stall'
-check "pylsp in the toolbox answers a completion" '.typing.completionItems > 0'
+check "pylsp in the toolbox answers a completion, the toolbox stopped before the session" '.typing.completionItems > 0'
+check "only the podman and host runtimes are looked up off the main thread" '.typing.offThread | length > 0 and all(startswith("podman:") or . == "host")'
+check "no program is looked up in the toolbox on the main thread, from the start to the completion" '.typing.lookups > 0 and (.typing.mainThreadLookups | length == 0)'
 
 jq -r '"first frame (ms): \([.starts[].painted] | map(tostring) | join(", ")); idle RSS/PSS (MiB): \([.idle.samples[].rss] | sort | .[5] / 1024 | floor)/\([.idle.samples[].pss] | sort | .[5] / 1024 | floor); longest key (ms): \(.typing.keys | max); completion items: \(.typing.completionItems)"' "$OUT/run.json" >&2
 ((fails == 0)) || die "run.sh: $fails check(s) failed; see ${OUT#"$APEX_ROOT/"}/run.json"

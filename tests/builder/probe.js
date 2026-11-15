@@ -16,6 +16,8 @@ const env = name => GLib.getenv(name);
 const PROJECT = env('APEX_BUILDER_PROJECT');
 const LSP_FILE = env('APEX_BUILDER_LSP_FILE');
 const TYPING_FILE = env('APEX_BUILDER_TYPING_FILE');
+const TYPING_PROJECT = env('APEX_BUILDER_TYPING_PROJECT');
+const TOOLBOX = env('APEX_BUILDER_TOOLBOX');
 // E0's harness: three cold starts after a discarded one; 30 s settled, then 10 samples a second apart.
 const STARTS = 3;
 const WINDOW_WAIT_MS = 60000;
@@ -200,11 +202,18 @@ async function idle() {
     return {samples, names, title: st.window.get_title()};
 }
 
-// Keys timed from the moment the first file opens and starts its diagnostics, then pylsp's answer.
-// Cairo compiles no shaders: lavapipe's first popup pipeline costs 290-430 ms, the driver's cost.
+// The toolbox stopped, as after a reboot, with its start held 3 s: lookups meet it not yet running.
+const SLOW_PODMAN = '/usr/local/bin/podman';
+
+// Keys timed from the moment the first file opens, in a meson project (its pipeline looks up
+// ninja), then pylsp's answer. Cairo: lavapipe's first popup pipeline costs 290-430 ms.
+
 async function typing() {
     const log = env('APEX_BUILDER_LOG');
-    const st = await launch(['sh', '-c', `GSK_RENDERER=cairo exec gnome-builder -vvv -p '${PROJECT}' > '${log}' 2>&1`]);
+    await spawnWait(['podman', 'stop', '--time', '0', TOOLBOX]);
+    GLib.file_set_contents(SLOW_PODMAN, '#!/bin/sh\n[ "$1" = start ] && sleep 3\nexec /usr/bin/podman "$@"\n');
+    await spawnWait(['chmod', '755', SLOW_PODMAN]);
+    const st = await launch(['sh', '-c', `GSK_RENDERER=cairo exec gnome-builder -vvv -p '${TYPING_PROJECT}' > '${log}' 2>&1`]);
     await spawnWait(['gnome-builder', TYPING_FILE]);
     const keys = await typeTimed(st.window, TYPING_MS);
     tap(Clutter.KEY_Escape);
@@ -218,8 +227,16 @@ async function typing() {
         if (m)
             found = Number(m[1]);
     }
+    const [, bytes] = GLib.file_get_contents(log);
+    const text = new TextDecoder().decode(bytes);
+    const offThread = [...text.matchAll(/Looking up \S+ in (\S+) off the main thread/g)].map(m => m[1]);
+    // The launcher logs from the thread that spawns; the main thread's id is the process's.
+    const pid = st.window.get_pid();
+    const lookups = [...text.matchAll(/ide-subprocess-launcher\[\s*(\d+)\]:\s+DEBUG: Launching (?:podman exec|\S*apex-toolbox-exec) [^\n]*'which' '([^']+)'/g)];
+    const mainThreadLookups = lookups.filter(m => Number(m[1]) === pid).map(m => m[2]);
     await quit();
-    return {keys, completionItems: found};
+    GLib.unlink(SLOW_PODMAN);
+    return {keys, completionItems: found, offThread: [...new Set(offThread)], lookups: lookups.length, mainThreadLookups};
 }
 
 async function drive() {
