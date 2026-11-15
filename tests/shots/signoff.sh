@@ -27,7 +27,8 @@ logs stay in _build/signoff-work. A board whose scene has no capture, or a probe
 windows never all reached the overview, fails the run, named. --collect does only that last
 step, from a G2 run directory and shoot.sh's captures; each APP=SHOTS adds the rows of an app
 board from that app's shooter's captures (control-center: tests/control-center/run.sh,
-nautilus: tests/nautilus/shoot.sh, ptyxis: tests/ptyxis/shoot.sh, symbolic: apex-desktop's
+nautilus: tests/nautilus/shoot.sh, ptyxis: tests/ptyxis/shoot.sh, gnome-builder:
+tests/builder/shoot.sh, symbolic: apex-desktop's
 tools/icons/contact-sheet.sh). A board has one row per
 scene, keyed NN-SLUG in signoff.json, and a row the shooter captures light only has no dark
 file. --goldens then compares the rows with the approved goldens (goldens.sh check OUT).
@@ -63,8 +64,10 @@ readonly G2='tests/shots/direct.sh signoff'
 readonly CONTROL_CENTER=tests/control-center/run.sh
 readonly NAUTILUS=tests/nautilus/shoot.sh
 readonly PTYXIS=tests/ptyxis/shoot.sh
+readonly BUILDER=tests/builder/shoot.sh
 readonly SYMBOLIC='apex-desktop tools/icons/contact-sheet.sh'
-declare -rA APP_SOURCES=([control-center]=$CONTROL_CENTER [nautilus]=$NAUTILUS [ptyxis]=$PTYXIS [symbolic]=$SYMBOLIC)
+declare -rA APP_SOURCES=([control-center]=$CONTROL_CENTER [nautilus]=$NAUTILUS [ptyxis]=$PTYXIS [gnome-builder]=$BUILDER
+    [symbolic]=$SYMBOLIC)
 # What contact-sheet.sh needs beyond the fonts and the Apex theme apex-desktop brings.
 readonly SYMBOLIC_PACKAGES=(python3-gobject gtk4 gobject-introspection xorg-x11-server-Xvfb fontconfig)
 
@@ -97,6 +100,7 @@ readonly BOARDS="12|greeter|GDM greeter|$SHOOT|greeter-light-list|greeter-dark-l
 29|files-search-search|Files: search|$NAUTILUS|search-light|search-dark|a search for \"apex\" from the home folder, in the list view
 32|terminal-sessions-sessions|Terminal: sessions|$PTYXIS|light|dark|the sessions of board 32, typed in by a virtual keyboard, statuses from vte.sh
 33|terminal-split-split|Terminal: split panes, needs you|$PTYXIS|split-light|split-dark|board 32's sessions with apex-gnome in a right split
+40|code-editor-editor|Apex Code (Builder): editor|$BUILDER|light|dark|tests/builder/fixture.sh's apex-gnome on dock-focus-label with its three changes, dock.js open, at the board's window geometry
 31|symbolic-core|Apex Symbolic: contact sheet|$SYMBOLIC|board-31-symbolic-core-light|board-31-symbolic-core-dark|boards.txt's core glyphs as GTK 4 draws them, recoloured, at scale 2
 31|symbolic-status|Apex Symbolic: contact sheet|$SYMBOLIC|board-31-symbolic-status-light|board-31-symbolic-status-dark|boards.txt's status glyphs as GTK 4 draws them, recoloured, at scale 2
 31|symbolic-actions|Apex Symbolic: contact sheet|$SYMBOLIC|board-31-symbolic-actions-light|board-31-symbolic-actions-dark|boards.txt's actions glyphs as GTK 4 draws them, recoloured, at scale 2

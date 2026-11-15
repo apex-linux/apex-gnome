@@ -172,6 +172,9 @@ client -- true
 # second after their signal (a lost SIGTERM leaves the client waiting for good).
 stress() {
     local signal=$1 n=$2 pid hung=0
+    # Each phase counts its own leftovers, not the last one's.
+    pkill -x -f 'sleep 4242' || true
+    sleep 0.2
     for ((i = 0; i < n; i++)); do
         # The client itself, not a function: bash 5.2 forks a subshell for `func &`, so $! would miss it.
         "$EXEC" --container "$ID" --user root --cwd / --fds 3 -- sleep 4242 &

@@ -20,13 +20,19 @@ readonly FIXTURE_NAMES=(org.freedesktop.UPower org.freedesktop.NetworkManager or
 # apex-desktop's values (schemas/90_apex.gschema.override, dconf/distro.d/50-apex-ptyxis).
 readonly PROFILE_UUID=d14b2180d28c41f3a9ee7785f4daa697
 readonly PROFILE_SCHEMA=org.gnome.Ptyxis.Profile:/org/gnome/Ptyxis/Profiles/$PROFILE_UUID/
-readonly APEX_SETTINGS="org.gnome.desktop.interface font-name 'Adwaita Sans 10.125'
+readonly APEX_FONT_SETTINGS="org.gnome.desktop.interface font-name 'Adwaita Sans 10.125'
 org.gnome.desktop.interface monospace-font-name 'JetBrains Mono 9.75'
-org.gnome.desktop.interface font-hinting 'none'
+org.gnome.desktop.interface font-hinting 'none'"
+# HEADLESS_NO_PTYXIS=1: a caller without Ptyxis, whose schemas would fail the settings.
+if [[ ${HEADLESS_NO_PTYXIS:-} == 1 ]]; then
+    readonly APEX_SETTINGS=$APEX_FONT_SETTINGS
+else
+    readonly APEX_SETTINGS="$APEX_FONT_SETTINGS
 org.gnome.Ptyxis profile-uuids ['$PROFILE_UUID']
 org.gnome.Ptyxis default-profile-uuid '$PROFILE_UUID'
 $PROFILE_SCHEMA label 'Apex'
 $PROFILE_SCHEMA cell-height-scale 1.21"
+fi
 readonly CAPTURE_SETTINGS="org.gnome.desktop.interface enable-animations false
 org.gnome.desktop.interface cursor-blink false
 org.gnome.desktop.notifications show-banners false

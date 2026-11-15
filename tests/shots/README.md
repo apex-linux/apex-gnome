@@ -949,13 +949,13 @@ dialog and the power-off dialog with an update staged.
 The app boards come from their lanes' own shooters, on the lanes' RPMs with the lane's
 libadwaita installed over Fedora's: `tests/control-center/run.sh` (boards 11, 18, 23, 24 and
 26), `tests/nautilus/shoot.sh` (27 to 29, with `APEX_DESKTOP_SRC` at the pinned apex-desktop)
-and `tests/ptyxis/shoot.sh` (32 and 33). A board has one row per scene in `signoff.sh`'s
+`tests/ptyxis/shoot.sh` (32 and 33) and `tests/builder/shoot.sh` (40, Apex Code). A board has one row per scene in `signoff.sh`'s
 `BOARDS`, with the board's number and the slug `BOARD-SLUG-SCENE`: board 11 has the rows
 `11-settings-apex-top` and `11-settings-apex-scrolled`, board 26 `26-update-health-health-failure`
 and `26-update-health-fallback`, and each other app board one, its scene the capture's stem
 (`18-settings-updates-updates`). The fifteen shell boards keep one row each, its slug the
 board's. `signoff.sh --collect G2_RUN SHELL_SHOTS OUT` collects the shell's rows, and each
-`APP=SHOTS` (`control-center`, `nautilus`, `ptyxis`, `symbolic`) adds that source's rows from
+`APP=SHOTS` (`control-center`, `nautilus`, `ptyxis`, `gnome-builder`, `symbolic`) adds that source's rows from
 its captures.
 
 Board 31, Apex Symbolic's contact sheet, comes from the pinned apex-desktop's own
