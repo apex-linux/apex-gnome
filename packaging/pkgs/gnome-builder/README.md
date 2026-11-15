@@ -44,7 +44,8 @@ checks both.
 | `gbp-apex-workbench-addin.c` | toolbox by default (below), and the notifications for a missing toolbox or a project outside it |
 | `gbp-apex-a11y-addins.c` | E0's AT-SPI gaps: the editor named for its file, the icon-only menu buttons, and (E2) the diagnostics button, the tab lists, the progress bar, the project tree and its filter (below) |
 | `apex-brand.h` | the name: `apex_code_name()`, `apex_code_title()`, `apex_code_preferences_title()` |
-| `apex-toolbox.h` | `apex_podman_container_shares_path()`: whether a container's mounts (from `podman ps --format=json`) hold a path |
+| `apex-toolbox.h` | `apex_podman_container_shares_path()`: whether a container's mounts (from `podman ps --format=json`) hold a path; `apex_podman_bridge_argv()` (E2), the `apex-toolbox-exec` command line patch 0006 runs for a toolbox |
+| `apex-toolbox-exec.c`, `apex-toolbox-bridge.c`, `apex-toolbox-bridge.h` | E2: the toolbox bridge's host client and the one bridge per toolbox, installed in `/usr/libexec` (below) |
 | `apex-i18n.h`, `po/` | Apex's own gettext domain, `apex-builder`, with `vi.po`; `lint/i18n.sh` holds the template and `vi.po` to the sources |
 
 The three headers are header-only on purpose: libide's hook hunks include them, and
@@ -122,9 +123,10 @@ the application name before any plugin loads. Strings are marked `APEX_()` rathe
 | `0003-podman-storage-path` | `src/plugins/podman/gbp-podman-runtime.c` | +1 −1 | `/etc/containers/storage.conf`, which lost its leading `/` |
 | `0004-podman-workdir` | `src/plugins/podman/gbp-podman-runtime.c` | +10 | the run handler refuses a working directory no mount of the container holds |
 | `0005-program-lookups` | `src/libide/foundry/ide-pipeline.c`, `ide-pipeline-private.h`, `ide-diagnostic-tool.c`, `src/libide/lsp/ide-lsp-service.c` | +288 −31 | `_ide_pipeline_find_programs_async()` makes the program lookups on a worker thread; a diagnostic tool runs it before each pass, a language server before it starts (E2; see below) |
+| `0006-podman-bridge` | `src/plugins/podman/gbp-podman-runtime.c` | +10 | the run handler hands a toolbox's processes without a TTY to `apex-toolbox-exec` (E2; see below) |
 
 No ADR 0014 budget applies to this series (ADR 0017, decision 2); each patch still says
-what it changes and why, and the lane's checks apply. In use: +318 −44 lines in 12 files, of
+what it changes and why, and the lane's checks apply. In use: +328 −44 lines in 12 files, of
 which 0005's +288 −31 is a fix to propose upstream rather than a hook. The
 patches are `git format-patch` output against Fedora's `%prep` tree, with `a/` and `b/`
 prefixes, applied with `-p1`; write them with apex-image's `just pkg-prep gnome-builder`
@@ -159,18 +161,29 @@ and `just pkg-export gnome-builder`.
   allow it: their path caches lock, and the podman runtime starts its container under a
   mutex. Typing from the moment the file opens, the longest key here went from 313 ms
   (diagnostics) and 320 ms (language servers) to 30.5 ms (median 14.2 ms).
-- **One shared `podman exec` per toolbox: feasible.** Today every process Builder runs in
-  the toolbox is its own `podman exec`, whose Go client stays alive as the server's stdio
-  (about 48 MiB RSS, 26 MiB PSS each) beside a `conmon` (about 2.3 MiB). The shared form:
-  one `podman exec --detach` per toolbox runs a small bridge inside it, which listens on a
-  socket in `$XDG_RUNTIME_DIR` (toolbox shares it with the host) and spawns each server
-  with the argv, environment and working directory Builder sends, and the stdio fds Builder
-  passes with `SCM_RIGHTS`. Nothing then copies a server's stdio, and the host keeps one
-  `conmon` per toolbox: about 2 MiB in all, under E2's ≤ 20 MiB. The bridge can ship on
-  the host and run inside the toolbox from `/run/host/usr/libexec/` (toolbox mounts the
-  host's root at `/run/host`); it needs the same Fedora or a static link. In Builder it is
-  a second run handler in the podman runtime for toolbox containers, about 400 lines in
-  all; exit status and signals travel over the socket.
+- **One shared `podman exec` per toolbox: done in E2** (patch 0006). Every process
+  Builder ran in the toolbox was its own `podman exec`, whose Go client stays alive as the
+  process's stdio (about 48 MiB RSS, 26 MiB PSS each) beside a `conmon` (about 2.3 MiB).
+  Now the podman run handler hands a toolbox's processes without a TTY to
+  `apex-toolbox-exec`, a small C client (`desktop/gnome-builder/src/plugins/apex/`, no
+  GLib), which talks to one `apex-toolbox-bridge` per toolbox over a socket in
+  `$XDG_RUNTIME_DIR` (the protocol is in `apex-toolbox-bridge.h`):
+  - the client sends the argv, the environment and the working directory, and passes its
+    descriptors 0 to N − 1 with `SCM_RIGHTS`, so the process writes to Builder's pipes
+    directly and nothing copies its stdio;
+  - the bridge forks a handler, which spawns the process in its own process group on those
+    descriptors, with the client's environment over the toolbox's, as `podman exec --env`
+    gives it, then replies with the exit status or the signal;
+  - the client passes on SIGTERM, SIGINT, SIGHUP and SIGQUIT, and when the client dies
+    (Builder's SIGKILL) the handler kills the group;
+  - the first client that finds no bridge starts it with `podman exec --detach`, from the
+    host's `/usr/libexec` under `/run/host`, and a lock beside the socket keeps it to one;
+    a client that cannot reach a bridge execs `podman exec` as before, so a dead bridge
+    costs one respawn and no more.
+
+  A TTY (the terminal, a build with a PTY), any other container, a folder the container
+  does not mount (0004's error), or `APEX_TOOLBOX_BRIDGE=0` keeps `podman exec`. The
+  program lookups (`which`, through the bridge) went from 134–177 ms to about 50 ms.
 
 ## Building it here
 

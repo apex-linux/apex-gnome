@@ -43,3 +43,9 @@ ok "org.gnome.Builder.desktop is named Apex Code, untranslated"
 
 [[ -f $root/usr/share/locale/vi/LC_MESSAGES/apex-builder.mo ]] || fail "the gnome-builder RPM has no vi apex-builder.mo"
 ok "the gnome-builder RPM carries Apex's vi catalogue"
+
+for tool in apex-toolbox-exec apex-toolbox-bridge; do
+    [[ -x $root/usr/libexec/$tool ]] || fail "the gnome-builder RPM has no executable /usr/libexec/$tool"
+done
+grep -aq 'apex-toolbox-exec' "$bin" || fail "gnome-builder does not run apex-toolbox-exec: patch 0006 is not in"
+ok "the gnome-builder RPM carries the toolbox bridge, and gnome-builder runs it"

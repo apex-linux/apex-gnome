@@ -1,0 +1,38 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Thuong Vo <66083331+SekiroKenjii@users.noreply.github.com>
+Date: Sun, 15 Nov 2026 13:00:20 +0000
+Subject: [PATCH] podman: run a toolbox's processes through its bridge
+
+Every process Builder ran in a toolbox was its own `podman exec`, whose Go
+client stays alive as the process's stdio beside a conmon: about 48 MiB
+RSS on the host per language server. The run handler now hands a
+toolbox's processes without a TTY to the Apex Code plugin's
+apex-toolbox-exec, a small client that passes its descriptors to one
+bridge per toolbox (apex-toolbox.h, apex-toolbox-bridge.c). A TTY, any
+other container, a folder the container does not mount (patch 0004's
+error) or APEX_TOOLBOX_BRIDGE=0 keeps `podman exec`.
+---
+ src/plugins/podman/gbp-podman-runtime.c | 10 ++++++++++
+ 1 file changed, 10 insertions(+)
+
+diff --git a/src/plugins/podman/gbp-podman-runtime.c b/src/plugins/podman/gbp-podman-runtime.c
+index e8f81e1..ac1d7f1 100644
+--- a/src/plugins/podman/gbp-podman-runtime.c
++++ b/src/plugins/podman/gbp-podman-runtime.c
+@@ -112,6 +112,16 @@ gbp_podman_runtime_run_handler_cb (IdeRunContext       *run_context,
+   if (!ide_run_context_merge_unix_fd_map (run_context, unix_fd_map, error))
+     IDE_RETURN (FALSE);
+ 
++  /* Apex: a toolbox's processes go through its one bridge, see apex-toolbox.h */
++  {
++    g_autofree char *workdir = g_canonicalize_filename (cwd != NULL ? cwd : g_get_home_dir (), NULL);
++
++    if (apex_podman_container_shares_path (self->object, workdir) &&
++        apex_podman_bridge_argv (run_context, self->object, self->id, argv, env, workdir,
++                                 ide_unix_fd_map_get_max_dest_fd (unix_fd_map), has_tty))
++      IDE_RETURN (TRUE);
++  }
++
+   /* Setup basic podman-exec command */
+   ide_run_context_append_args (run_context, IDE_STRV_INIT ("podman", "exec"));
+   ide_run_context_append_argv (run_context, "--privileged");

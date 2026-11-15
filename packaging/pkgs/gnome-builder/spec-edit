@@ -20,3 +20,9 @@ after ^%find_lang[[:space:]]+%\{name\}$
 	%find_lang apex-builder
 	cat apex-builder.lang >> %{name}.lang
 end
+
+# E2: the toolbox bridge's client and bridge (desktop/gnome-builder/src/plugins/apex/meson.build).
+after ^%\{_libexecdir\}/gnome-builder-git$
+	%{_libexecdir}/apex-toolbox-bridge
+	%{_libexecdir}/apex-toolbox-exec
+end
