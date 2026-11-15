@@ -30,6 +30,7 @@ const SAMPLES = 10;
 const LSP_WAIT_MS = 45000;
 const PRESS_WAIT_MS = 30000;
 const OUTLINE_WAIT_MS = 30000;
+const SEARCH_WAIT_MS = 30000;
 const CREATE_WAIT_MS = 900000;
 const SETUP_WAIT_MS = 600000;
 // E0's typing: a key every 150 ms, timed from the press to the frame presented after the window's first damage.
@@ -220,8 +221,9 @@ async function idle() {
     tap(Clutter.KEY_F9, [Clutter.KEY_Control_L]);
     await Scripting.sleep(1000);
     const outline = await outlineOf();
+    const search = await searchFor('undefined_name');
     await quit();
-    return {samples, names, noPage, popover: {pressed, names: popover}, bottom, outline, title: st.window.get_title()};
+    return {samples, names, noPage, popover: {pressed, names: popover}, bottom, outline, search, title: st.window.get_title()};
 }
 
 // The Outline view with the cursor at the file's end, then Project again before the quit saves the session.
@@ -238,6 +240,29 @@ async function outlineOf() {
     await helper('APEX_BUILDER_PRESS', 'Project');
     await Scripting.sleep(1000);
     return {pressed, names};
+}
+
+// The Search view: a query typed into its entry, its results, then the hand-off to Find in Files
+// in the bottom panel, closed again, and Project again before the quit saves the session.
+async function searchFor(query) {
+    const {pressed} = await helper('APEX_BUILDER_PRESS', 'Search');
+    await Scripting.sleep(1500);
+    await type(query);
+    let names;
+    for (let i = 0; i < SEARCH_WAIT_MS / 1000; i++) {
+        await Scripting.sleep(1000);
+        names = await helper('APEX_BUILDER_ATSPI');
+        if (names.nodes.some(n => n.role === 'button' && n.name.startsWith('Show ')))
+            break;
+    }
+    const {pressed: handedOff} = await helper('APEX_BUILDER_PRESS', 'Show *');
+    await Scripting.sleep(2000);
+    const findInFiles = await helper('APEX_BUILDER_ATSPI');
+    tap(Clutter.KEY_F9, [Clutter.KEY_Control_L]);
+    await Scripting.sleep(1000);
+    await helper('APEX_BUILDER_PRESS', 'Project');
+    await Scripting.sleep(1000);
+    return {pressed, names, handedOff, findInFiles};
 }
 
 // The toolbox stopped, as after a reboot, with its start held 3 s: lookups meet it not yet running.

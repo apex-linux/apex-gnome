@@ -1,10 +1,14 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Apex Code's built-in plugin (desktop/gnome-builder in apex-gnome, Source1); the series hooks it in.
 
+# The Search view hands its results to the grep plugin's Find in Files panel.
+assert(get_option('plugin_grep'), 'the apex plugin needs the grep plugin')
+
 plugins_sources += files([
   'apex-plugin.c',
   'gbp-apex-a11y-addins.c',
   'gbp-apex-outline-pane.c',
+  'gbp-apex-search-pane.c',
   'gbp-apex-sidebar.c',
   'gbp-apex-workbench-addin.c',
 ])

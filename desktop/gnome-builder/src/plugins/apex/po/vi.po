@@ -180,3 +180,18 @@ msgstr "Dàn ý"
 
 msgid "No outline for this file"
 msgstr "Tệp này không có dàn ý"
+
+msgid "Search"
+msgstr "Tìm kiếm"
+
+msgid "Search in Project"
+msgstr "Tìm trong dự án"
+
+#, c-format
+msgid "Line %u: %s"
+msgstr "Dòng %u: %s"
+
+#, c-format
+msgid "Show %u result in Find in Files"
+msgid_plural "Show %u results in Find in Files"
+msgstr[0] "Hiện %u kết quả trong Tìm trong tệp"
