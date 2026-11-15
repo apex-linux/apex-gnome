@@ -18,8 +18,7 @@ DOMAINS=(
     "apex-builder|desktop/gnome-builder|src/plugins/apex/po|src/plugins/apex|\bAPEX_N?G?_\(|--keyword=APEX_ --keyword=APEX_N_ --keyword=APEX_NG_:1,2"
 )
 
-# The keywords meson's glib preset passes.
-GLIB_PRESET=(--keyword=_ --keyword=N_ --keyword=C_:1c,2 --keyword=NC_:1c,2)
+MESON_GLIB_PRESET_KEYWORDS=(--keyword=_ --keyword=N_ '--keyword=C_:1c,2' '--keyword=NC_:1c,2')
 
 for tool in xgettext msgmerge msgfmt msgattrib; do
     command -v "$tool" >/dev/null 2>&1 && continue
@@ -55,7 +54,7 @@ for entry in "${DOMAINS[@]}"; do
     for kw in $args; do
         [[ $kw == --keyword=* ]] || continue
         grep -Fq -- "'$kw'" "$podir/meson.build" && continue
-        grep -q "preset: 'glib'" "$podir/meson.build" && [[ " ${GLIB_PRESET[*]} " == *" $kw "* ]] && continue
+        grep -q "preset: 'glib'" "$podir/meson.build" && [[ " ${MESON_GLIB_PRESET_KEYWORDS[*]} " == *" $kw "* ]] && continue
         fail "$domain: $po/meson.build's gettext lacks $kw, so update-po would drop those strings"
     done
     [[ ${1:-} == --update ]] && cp "$pot" "$podir/$domain.pot"
