@@ -18,6 +18,9 @@ const LSP_FILE = env('APEX_BUILDER_LSP_FILE');
 const TYPING_FILE = env('APEX_BUILDER_TYPING_FILE');
 const TYPING_PROJECT = env('APEX_BUILDER_TYPING_PROJECT');
 const TOOLBOX = env('APEX_BUILDER_TOOLBOX');
+const PLAIN_PROJECT = env('APEX_BUILDER_PLAIN_PROJECT');
+const PLAIN_ID = env('APEX_BUILDER_PLAIN_ID');
+const JHBUILD_PROJECT = env('APEX_BUILDER_JHBUILD_PROJECT');
 // E0's harness: three cold starts after a discarded one; 30 s settled, then 10 samples a second apart.
 const STARTS = 3;
 const WINDOW_WAIT_MS = 60000;
@@ -239,11 +242,61 @@ async function typing() {
     return {keys, completionItems: found, offThread: [...new Set(offThread)], lookups: lookups.length, mainThreadLookups};
 }
 
+function readText(path) {
+    const [, bytes] = GLib.file_get_contents(path);
+    return new TextDecoder().decode(bytes);
+}
+
+// Builder lists every podman container: one that is no toolbox, without `which`, is the
+// runtime of a plain project. Each lookup there, and on which thread, counted per program.
+async function plain() {
+    const log = env('APEX_BUILDER_PLAIN_LOG');
+    const st = await launch(['sh', '-c', `GSK_RENDERER=cairo exec gnome-builder -vvv -p '${PLAIN_PROJECT}' > '${log}' 2>&1`]);
+    await spawnWait(['gnome-builder', `${PLAIN_PROJECT}/e2_plain.py`]);
+    const keys = await typeTimed(st.window, TYPING_MS);
+    const pid = st.window.get_pid();
+    const counts = {};
+    for (const line of readText(log).split('\n')) {
+        const m = line.match(/ide-subprocess-launcher\[\s*(\d+)\]:\s+DEBUG: Launching podman exec .*'which' '([^']+)'/);
+        if (!m || !line.includes(PLAIN_ID))
+            continue;
+        counts[m[2]] ??= {program: m[2], count: 0, mainThread: 0};
+        counts[m[2]].count++;
+        if (Number(m[1]) === pid)
+            counts[m[2]].mainThread++;
+    }
+    await quit();
+    return {keys, lookups: Object.values(counts)};
+}
+
+// A runtime neither podman nor host, from a stand-in jhbuild: its lookups stay on the main thread.
+const JHBUILD = `${GLib.get_home_dir()}/.local/bin/jhbuild`;
+
+async function jhbuild() {
+    const log = env('APEX_BUILDER_JHBUILD_LOG');
+    GLib.mkdir_with_parents(GLib.path_get_dirname(JHBUILD), 0o755);
+    GLib.file_set_contents(JHBUILD, '#!/bin/sh\n[ "$1" = run ] && shift\nJHBUILD_PREFIX=/usr exec "$@"\n');
+    await spawnWait(['chmod', '755', JHBUILD]);
+    await launch(['sh', '-c', `exec gnome-builder -vvv -p '${JHBUILD_PROJECT}' > '${log}' 2>&1`]);
+    await spawnWait(['gnome-builder', `${JHBUILD_PROJECT}/e2_jhbuild.py`]);
+    await type('import os\n');
+    for (let i = 0; i < 60 && !/Leaving \S+ in jhbuild to the main thread/.test(readText(log)); i++)
+        await Scripting.sleep(500);
+    await Scripting.sleep(QUIET_MS);
+    const text = readText(log);
+    await quit();
+    GLib.unlink(JHBUILD);
+    return {
+        left: [...new Set([...text.matchAll(/Leaving \S+ in (\S+) to the main thread/g)].map(m => m[1]))],
+        offThread: [...new Set([...text.matchAll(/Looking up \S+ in (\S+) off the main thread/g)].map(m => m[1]))],
+    };
+}
+
 async function drive() {
     keyboard = global.stage.context.get_backend().get_default_seat()
         .create_virtual_device(Clutter.InputDeviceType.KEYBOARD_DEVICE);
     Main.overview.hide();
-    return {starts: await starts(), idle: await idle(), typing: await typing()};
+    return {starts: await starts(), idle: await idle(), typing: await typing(), plain: await plain(), jhbuild: await jhbuild()};
 }
 
 // main.js connects to startup-complete only after importing this module, so a startup that
