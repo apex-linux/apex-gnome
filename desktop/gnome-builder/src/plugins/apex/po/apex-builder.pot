@@ -9,7 +9,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: apex-builder\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-15 19:36+0000\n"
+"POT-Creation-Date: 2026-11-15 19:50+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -110,23 +110,23 @@ msgstr ""
 msgid "Editor for %s"
 msgstr ""
 
-#: src/plugins/apex/gbp-apex-outline-pane.c:157
+#: src/plugins/apex/gbp-apex-outline-pane.c:152
 #, c-format
 msgid "Line %d"
 msgstr ""
 
-#: src/plugins/apex/gbp-apex-outline-pane.c:395
-#: src/plugins/apex/gbp-apex-outline-pane.c:476
+#: src/plugins/apex/gbp-apex-outline-pane.c:390
+#: src/plugins/apex/gbp-apex-outline-pane.c:471
 #: src/plugins/apex/gbp-apex-sidebar.c:27
 msgid "Outline"
 msgstr ""
 
-#: src/plugins/apex/gbp-apex-outline-pane.c:395
+#: src/plugins/apex/gbp-apex-outline-pane.c:390
 #, c-format
 msgid "Outline of %s"
 msgstr ""
 
-#: src/plugins/apex/gbp-apex-outline-pane.c:508
+#: src/plugins/apex/gbp-apex-outline-pane.c:503
 msgid "No outline for this file"
 msgstr ""
 
