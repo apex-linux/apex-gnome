@@ -113,3 +113,29 @@ msgstr "Đang tạo toolbox"
 #: src/plugins/apex/gbp-apex-workbench-addin.c:278
 msgid "Downloading fedora-toolbox-45 and installing its language servers."
 msgstr "Đang tải fedora-toolbox-45 và cài đặt các máy chủ ngôn ngữ."
+
+#, c-format
+msgid "%u error"
+msgid_plural "%u errors"
+msgstr[0] "%u lỗi"
+
+#, c-format
+msgid "%u warning"
+msgid_plural "%u warnings"
+msgstr[0] "%u cảnh báo"
+
+#, c-format
+msgid "Build Diagnostics: %s, %s"
+msgstr "Chẩn đoán biên dịch: %s, %s"
+
+msgid "Panels"
+msgstr "Các bảng"
+
+msgid "Pages"
+msgstr "Các trang"
+
+msgid "Pinned Pages"
+msgstr "Các trang đã ghim"
+
+msgid "Loading Progress"
+msgstr "Tiến trình tải"

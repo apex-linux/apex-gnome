@@ -9,8 +9,8 @@
 
 /* Header-only, so libide's hook hunks need no link dependency on the plugin.
  * libc's dgettext: g_dgettext leaves every domain untranslated while Builder's own has no catalogue for the locale, as for vi. */
-G_GNUC_FORMAT (1) static inline const char *
-apex_gettext (const char *msgid)
+static inline void
+apex_bind_textdomain (void)
 {
   static gsize bound = 0;
 
@@ -20,9 +20,24 @@ apex_gettext (const char *msgid)
       bind_textdomain_codeset (APEX_GETTEXT_DOMAIN, "UTF-8");
       g_once_init_leave (&bound, 1);
     }
+}
 
+G_GNUC_FORMAT (1) static inline const char *
+apex_gettext (const char *msgid)
+{
+  apex_bind_textdomain ();
   return dgettext (APEX_GETTEXT_DOMAIN, msgid);
+}
+
+G_GNUC_FORMAT (1) static inline const char *
+apex_ngettext (const char  *msgid,
+               const char  *msgid_plural,
+               gulong       n)
+{
+  apex_bind_textdomain ();
+  return dngettext (APEX_GETTEXT_DOMAIN, msgid, msgid_plural, n);
 }
 
 #define APEX_(String) apex_gettext (String)
 #define APEX_N_(String) (String)
+#define APEX_NG_(String, Plural, N) apex_ngettext (String, Plural, N)

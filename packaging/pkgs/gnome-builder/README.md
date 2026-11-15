@@ -42,7 +42,7 @@ checks both.
 |---|---|
 | `meson.build`, `apex.gresource.xml`, `apex.plugin`, `apex-plugin.c` | the built-in plugin `apex` (Builder links its plugins into the executable): it registers one workbench addin, and depends on `podman` |
 | `gbp-apex-workbench-addin.c` | toolbox by default (below), and the notifications for a missing toolbox or a project outside it |
-| `gbp-apex-a11y-addins.c` | E0's AT-SPI gaps: the editor named for its file, and the icon-only menu buttons named (below) |
+| `gbp-apex-a11y-addins.c` | E0's AT-SPI gaps: the editor named for its file, the icon-only menu buttons, and (E2) the diagnostics button, the tab lists, the progress bar, the project tree and its filter (below) |
 | `apex-brand.h` | the name: `apex_code_name()`, `apex_code_title()`, `apex_code_preferences_title()` |
 | `apex-toolbox.h` | `apex_podman_container_shares_path()`: whether a container's mounts (from `podman ps --format=json`) hold a path |
 | `apex-i18n.h`, `po/` | Apex's own gettext domain, `apex-builder`, with `vi.po`; `lint/i18n.sh` holds the template and `vi.po` to the sources |
@@ -94,9 +94,13 @@ button both named "More Options". Two addins name them, with no hunk in upstream
 | each tab bar's page menu (`pan-down-symbolic`) | "Open Pages" | the same, again on each page change, for the frames a split adds |
 | the Run button's dropdown | "Run Options" | `adw_split_button_set_dropdown_tooltip()` |
 | the Run button's main button | "Run Project (Shift+Ctrl+Space)", or "Stop Running Project" | libadwaita labels it by its dropdown; the addin replaces that relation with `IdeRunButton`'s own tooltip, and follows it |
-
-E0's gaps 3 to 6 that remain (the diagnostics button's "0 0", the progress bar, the tab
-lists and the filter entry, the empty status label) are E2's, with the status strip.
+| the status bar's diagnostics button (E2) | "Build Diagnostics: 0 errors, 0 warnings" | GTK named it "0 0" from its two count labels; found by its own tooltip in Builder's catalogue, and named from `IdeBuildManager`'s counts as they change (plurals from `APEX_NG_`) |
+| an editor tab bar's two tab lists (E2) | "Pinned Pages", "Pages" | by the accessible role, under `AdwTabBar`, the first being the pinned one |
+| a dock's panel switcher (E2) | "Panels" | by the accessible role, elsewhere |
+| a page's progress bar (E2) | "Loading Progress" | `GtkProgressBar` under an `IdePage` |
+| the project tree's filter (E2) | "Filter…" | a `GtkSearchEntry` is named by its placeholder |
+| the project tree (E2) | "Project Tree" | a `GtkListView` in a panel is named by the panel's title |
+| empty status bar labels (E2) | — | vim's command bar sits empty in the status bar, and the hidden state does not take it out of the tree, so the label is hidden while it has no text, even when its owner shows it |
 
 ### Translations
 

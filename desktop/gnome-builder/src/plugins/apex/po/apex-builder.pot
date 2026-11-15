@@ -9,7 +9,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: apex-builder\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-05 04:33+0000\n"
+"POT-Creation-Date: 2026-11-15 12:27+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -17,6 +17,7 @@ msgstr ""
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=INTEGER; plural=EXPRESSION;\n"
 
 #. TRANSLATORS: the product name; keep it as is unless your language writes it in another script
 #: src/plugins/apex/apex-brand.h:11
@@ -39,32 +40,68 @@ msgstr ""
 msgid "Apex Code — Preferences"
 msgstr ""
 
-#: src/plugins/apex/gbp-apex-a11y-addins.c:40
+#: src/plugins/apex/gbp-apex-a11y-addins.c:42
 msgid "Build Details"
 msgstr ""
 
-#: src/plugins/apex/gbp-apex-a11y-addins.c:42
+#: src/plugins/apex/gbp-apex-a11y-addins.c:44
 msgid "New Page"
 msgstr ""
 
-#: src/plugins/apex/gbp-apex-a11y-addins.c:44
+#: src/plugins/apex/gbp-apex-a11y-addins.c:46
 msgid "Sidebar Menu"
 msgstr ""
 
-#: src/plugins/apex/gbp-apex-a11y-addins.c:46
+#: src/plugins/apex/gbp-apex-a11y-addins.c:48
 msgid "Open Pages"
 msgstr ""
 
-#: src/plugins/apex/gbp-apex-a11y-addins.c:54
+#: src/plugins/apex/gbp-apex-a11y-addins.c:56
 msgid "Run Options"
 msgstr ""
 
-#: src/plugins/apex/gbp-apex-a11y-addins.c:66
+#: src/plugins/apex/gbp-apex-a11y-addins.c:68
 msgid "Run Project"
 msgstr ""
 
+#: src/plugins/apex/gbp-apex-a11y-addins.c:95
+#, c-format
+msgid "%u error"
+msgid_plural "%u errors"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/plugins/apex/gbp-apex-a11y-addins.c:96
+#, c-format
+msgid "%u warning"
+msgid_plural "%u warnings"
+msgstr[0] ""
+msgstr[1] ""
+
+#. TRANSLATORS: the status bar's diagnostics button; the counts are "%u errors" and "%u warnings"
+#: src/plugins/apex/gbp-apex-a11y-addins.c:98
+#, c-format
+msgid "Build Diagnostics: %s, %s"
+msgstr ""
+
+#: src/plugins/apex/gbp-apex-a11y-addins.c:161
+msgid "Panels"
+msgstr ""
+
+#: src/plugins/apex/gbp-apex-a11y-addins.c:167
+msgid "Pages"
+msgstr ""
+
+#: src/plugins/apex/gbp-apex-a11y-addins.c:167
+msgid "Pinned Pages"
+msgstr ""
+
+#: src/plugins/apex/gbp-apex-a11y-addins.c:186
+msgid "Loading Progress"
+msgstr ""
+
 #. TRANSLATORS: the editor's accessible name; %s is the file
-#: src/plugins/apex/gbp-apex-a11y-addins.c:162
+#: src/plugins/apex/gbp-apex-a11y-addins.c:276
 #, c-format
 msgid "Editor for %s"
 msgstr ""
