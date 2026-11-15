@@ -309,7 +309,8 @@ to `~/Projects/apex-gnome` (inside the toolbox's shares), and runs gnome-shell h
 
 It fails above E1's column of E0's budgets: a first frame over 1.9 s (median of 3), idle
 RSS over 360 MiB or PSS over 270 MiB (median of 10); a missing name of the table above,
-any of those roles left unnamed with the file open, or no completion from pylsp. It also fails on E2's
+a button, toggle button, tab list, progress bar, entry, list or label left unnamed with the
+file open (the editor's text is named by the table, not by this check), or no completion from pylsp. It also fails on E2's
 stall budget: any key over 200 ms, or one that drew nothing within 2 s. In the session the desktop
 portal is masked: in a headless container it waits 25 s on RealtimeKit and Builder waits
 on it. Here (4 vCPUs, software rendering): first frames 1731, 1932 and 1605 ms, idle RSS

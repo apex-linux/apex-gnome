@@ -1058,9 +1058,10 @@ that has a golden with its capture, light and dark (light alone for a light-only
 
 It runs in `signoff.yml`'s collect job, after the captures:
 
-- on a push to main that changes the shell or an app (Settings, Files, Terminal), their
-  recipes or libadwaita's, `tests/shots`, `tests/shell`, the apps' tests, `tests/lib` (the
-  pins) or the schema fixture;
+- on a push to main that changes the shell or an app (Settings, Files, Terminal, Apex
+  Code), their recipes or libadwaita's, `tests/shots`, `tests/shell`, the apps' tests (for
+  Apex Code, `tests/builder`'s `shoot.sh`, `shoot-probe.js`, `fixture.sh` and `atspi.py`),
+  `tests/lib` (the pins) or the schema fixture;
 - daily;
 - on dispatch;
 - on a pull request that changes what the captures render: the shell and the apps, their
