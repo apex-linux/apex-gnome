@@ -27,7 +27,7 @@ const SAMPLES = 10;
 const LSP_WAIT_MS = 45000;
 const PRESS_WAIT_MS = 30000;
 const CREATE_WAIT_MS = 900000;
-const SETUP_WAIT_MS = 900000;
+const SETUP_WAIT_MS = 600000;
 // E0's typing: a key every 150 ms, timed from the press to the frame presented after the window's first damage.
 const TYPING_MS = 60000;
 const KEY_GAP_MS = 150;
@@ -272,10 +272,11 @@ async function create() {
             toolboxNames: names.filter(n => /oolbox/.test(n))};
 }
 
-// A toolbox whose setup stopped halfway: Apex Code says so, and Finish Setup completes it.
+// A toolbox whose setup stopped halfway (pylsp's package gone): Apex Code says so, and Finish
+// Setup installs that package again, and only that.
 async function finishSetup() {
-    const has = () => spawnWait(['podman', 'exec', TOOLBOX, 'sh', '-c', 'command -v typescript-language-server']);
-    await spawnWait(['podman', 'exec', TOOLBOX, 'npm', 'uninstall', '-g', '--no-fund', '--no-audit', 'typescript-language-server']);
+    const has = () => spawnWait(['podman', 'exec', TOOLBOX, 'sh', '-c', 'command -v pylsp']);
+    await spawnWait(['podman', 'exec', TOOLBOX, 'rpm', '-e', '--nodeps', 'python3-lsp-server']);
     const removed = await has() !== 0;
     await launch(['gnome-builder', '-p', PROJECT]);
     const t0 = now();
