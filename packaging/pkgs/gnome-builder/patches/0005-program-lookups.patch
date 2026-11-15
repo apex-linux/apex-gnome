@@ -1,30 +1,44 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Thuong Vo <66083331+SekiroKenjii@users.noreply.github.com>
 Date: Sun, 15 Nov 2026 11:17:17 +0000
-Subject: [PATCH] foundry, lsp: look up programs off the main thread
+Subject: [PATCH] foundry, lsp, podman: look up programs off the main thread
 
-A file's first diagnostics pass, and each language server's start when a
-pipeline finishes loading, looked up the program on the main thread: in
-the pipeline's runtime with ide_pipeline_contains_program_in_path(), then
-on the host. Each lookup spawns `which` and waits for it, and in a podman
-runtime that is a `podman exec`, 134-177 ms each. With a toolbox as the
-runtime, opening a Python file froze the editor for 0.3-0.8 s: flake8 for
-the diagnostics, then ruff and pylsp when the pipeline loaded.
+A file's first diagnostics pass, each language server's start when a
+pipeline finishes loading, and the build systems' pipeline addins as it
+loads (meson and cmake ninja, cargo cargo), looked up their programs on
+the main thread: in the pipeline's runtime with
+ide_pipeline_contains_program_in_path(), then on the host. Each lookup
+spawns `which` and waits for it, and in a podman runtime that is a
+`podman exec`, 134-177 ms each. With a toolbox as the runtime, opening
+a Python file froze the editor for 0.3-0.8 s.
 
 _ide_pipeline_find_programs_async() makes the same lookups on a worker
-thread, filling the runtimes' path caches. Both are IdePathCache, which
-locks, and the podman runtime starts its container under a mutex.
-IdeDiagnosticTool runs it before each pass, and IdeLspService once per
-pipeline before it creates the launcher. Both then make their lookups on
-the main thread as before, and find every answer cached. The SDK
-extensions of a Flatpak configuration are left to the main thread, as
-before.
+thread, filling the runtimes' path caches. IdeDiagnosticTool runs it
+before each pass, IdeLspService once per pipeline before it creates the
+launcher, and the pipeline before it loads its addins, for ninja,
+ninja-build and cargo. All of them then make their lookups on the main
+thread as before, and find every answer cached.
+
+Only the podman and host runtimes are looked up there: both answer from
+an IdePathCache, which locks. Others stay on the main thread, as a
+Flatpak runtime reaches the context's runtime manager for its SDK, which
+is main-thread only.
+
+The podman runtime, looked up from threads now:
+- caches only which's own answer, exit 0 or 1, and not a cancelled wait
+  or podman's own failure (125 while `podman start` is still running),
+  which was cached as a miss for good;
+- lets a worker thread wait until `podman start` has exited, whoever
+  started it, under a condition, while the main thread never waits;
+- frees its id, JSON object and path cache in finalize, not destroy,
+  since a lookup on a worker may still use them.
 ---
- src/libide/foundry/ide-diagnostic-tool.c  | 139 +++++++++++++++++-----
- src/libide/foundry/ide-pipeline-private.h |   8 ++
- src/libide/foundry/ide-pipeline.c         | 126 ++++++++++++++++++++
- src/libide/lsp/ide-lsp-service.c          |  46 +++++++
- 4 files changed, 288 insertions(+), 31 deletions(-)
+ src/libide/foundry/ide-diagnostic-tool.c  | 139 +++++++++++++----
+ src/libide/foundry/ide-pipeline-private.h |   8 +
+ src/libide/foundry/ide-pipeline.c         | 176 +++++++++++++++++++++-
+ src/libide/lsp/ide-lsp-service.c          |  46 ++++++
+ src/plugins/podman/gbp-podman-runtime.c   |  89 ++++++++---
+ 5 files changed, 404 insertions(+), 54 deletions(-)
 
 diff --git a/src/libide/foundry/ide-diagnostic-tool.c b/src/libide/foundry/ide-diagnostic-tool.c
 index f373324..26b41e6 100644
@@ -244,7 +258,7 @@ index 8d0ebda..ec31945 100644
  
  G_END_DECLS
 diff --git a/src/libide/foundry/ide-pipeline.c b/src/libide/foundry/ide-pipeline.c
-index 8178a1c..131d844 100644
+index 8178a1c..a208937 100644
 --- a/src/libide/foundry/ide-pipeline.c
 +++ b/src/libide/foundry/ide-pipeline.c
 @@ -61,6 +61,7 @@
@@ -255,7 +269,56 @@ index 8178a1c..131d844 100644
  #include "ide-toolchain-manager.h"
  #include "ide-toolchain.h"
  #include "ide-triplet.h"
-@@ -4399,6 +4400,131 @@ contains_in_runtime_with_alt_path (IdeRuntime *runtime,
+@@ -1357,6 +1358,31 @@ ide_pipeline_load (IdePipeline *self)
+   IDE_EXIT;
+ }
+ 
++static void
++ide_pipeline_load_find_programs_cb (GObject      *object,
++                                    GAsyncResult *result,
++                                    gpointer      user_data)
++{
++  IdePipeline *self = (IdePipeline *)object;
++  g_autoptr(IdeDeviceInfo) info = user_data;
++
++  IDE_ENTRY;
++
++  g_assert (IDE_IS_PIPELINE (self));
++  g_assert (IDE_IS_DEVICE_INFO (info));
++
++  _ide_pipeline_find_programs_finish (self, result, NULL);
++
++  if (g_cancellable_is_cancelled (self->cancellable))
++    IDE_EXIT;
++
++  _ide_pipeline_check_toolchain (self, info);
++
++  ide_pipeline_load (self);
++
++  IDE_EXIT;
++}
++
+ static void
+ ide_pipeline_load_get_info_cb (GObject      *object,
+                                GAsyncResult *result,
+@@ -1384,9 +1410,13 @@ ide_pipeline_load_get_info_cb (GObject      *object,
+   if (g_cancellable_is_cancelled (self->cancellable))
+     IDE_EXIT;
+ 
+-  _ide_pipeline_check_toolchain (self, info);
+-
+-  ide_pipeline_load (self);
++  /* The build systems' pipeline addins look their tools up as the pipeline loads (meson
++   * and cmake ninja, cargo cargo), on the main thread: fill the caches first. */
++  _ide_pipeline_find_programs_async (self,
++                                     (const char * const []) { "ninja", "ninja-build", "cargo", NULL },
++                                     NULL,
++                                     ide_pipeline_load_find_programs_cb,
++                                     g_steal_pointer (&info));
+ }
+ 
+ static void
+@@ -4399,6 +4429,146 @@ contains_in_runtime_with_alt_path (IdeRuntime *runtime,
    return FALSE;
  }
  
@@ -273,6 +336,16 @@ index 8178a1c..131d844 100644
 +  g_free (find);
 +}
 +
++/* The podman and host runtimes answer from their own locked IdePathCache. Others (a
++ * Flatpak runtime reaches the context's runtime manager for its SDK) are main-thread only. */
++static gboolean
++find_programs_runtime_is_threadsafe (IdeRuntime *runtime)
++{
++  const char *id = ide_runtime_get_id (runtime);
++
++  return id != NULL && (g_str_has_prefix (id, "podman:") || g_str_equal (id, "host"));
++}
++
 +static void
 +find_programs_add (FindPrograms *find,
 +                   IdeRuntime   *runtime,
@@ -281,8 +354,12 @@ index 8178a1c..131d844 100644
 +{
 +  g_auto(GStrv) dirs = NULL;
 +
++  if (!find_programs_runtime_is_threadsafe (runtime))
++    return;
++
 +  if (path == NULL)
 +    {
++      g_debug ("Looking up %s in %s off the main thread", program, ide_runtime_get_id (runtime));
 +      g_ptr_array_add (find->runtimes, g_object_ref (runtime));
 +      g_ptr_array_add (find->programs, g_strdup (program));
 +      return;
@@ -320,7 +397,8 @@ index 8178a1c..131d844 100644
 + * Looks up @programs on a worker thread, as ide_pipeline_contains_program_in_path()
 + * and the "host" runtime's lookup do, so that those calls then answer from the
 + * runtimes' path caches instead of spawning `which` (a `podman exec` in a container)
-+ * on the main thread. The SDK extensions of a Flatpak configuration are left out.
++ * on the main thread. Only the podman and host runtimes are looked up there; the others,
++ * and the SDK extensions of a Flatpak configuration, are left to the main thread.
 + */
 +void
 +_ide_pipeline_find_programs_async (IdePipeline         *self,
@@ -473,3 +551,166 @@ index 4388cd5..9099c62 100644
    flags = G_SUBPROCESS_FLAGS_STDIN_PIPE | G_SUBPROCESS_FLAGS_STDOUT_PIPE;
    if (!priv->inherit_stderr && !g_settings_get_boolean (settings, "lsp-inherit-stderr"))
      flags |= G_SUBPROCESS_FLAGS_STDERR_SILENCE;
+diff --git a/src/plugins/podman/gbp-podman-runtime.c b/src/plugins/podman/gbp-podman-runtime.c
+index e8f81e1..dbd7cec 100644
+--- a/src/plugins/podman/gbp-podman-runtime.c
++++ b/src/plugins/podman/gbp-podman-runtime.c
+@@ -36,48 +36,86 @@ struct _GbpPodmanRuntime
+   IdeRuntime    parent_instance;
+ 
+   GMutex        mutex;
++  GCond         started_cond;
+ 
+   IdePathCache *path_cache;
+   JsonObject   *object;
+   char         *id;
+   GList        *layers;
+ 
+-  gboolean      has_started;
++  /* START_NONE, START_RUNNING (podman start has not exited), START_DONE; under mutex. */
++  int           start;
+ };
+ 
++enum { START_NONE, START_RUNNING, START_DONE };
++
+ G_DEFINE_FINAL_TYPE (GbpPodmanRuntime, gbp_podman_runtime, IDE_TYPE_RUNTIME)
+ 
++static void
++start_done (GbpPodmanRuntime *self)
++{
++  g_mutex_lock (&self->mutex);
++  self->start = START_DONE;
++  g_cond_broadcast (&self->started_cond);
++  g_mutex_unlock (&self->mutex);
++}
++
++static void
++maybe_start_cb (GObject      *object,
++                GAsyncResult *result,
++                gpointer      user_data)
++{
++  g_autoptr(GbpPodmanRuntime) self = user_data;
++
++  ide_subprocess_wait_finish (IDE_SUBPROCESS (object), result, NULL);
++  start_done (self);
++}
++
++/* `podman start`, once. A worker thread (patch 0005's lookups) waits until it has exited,
++ * whoever started it, so that its lookups find the container running; the main thread
++ * never waits. */
+ static void
+ maybe_start (GbpPodmanRuntime *self)
+ {
+   g_autoptr(IdeSubprocessLauncher) launcher = NULL;
+   g_autoptr(IdeSubprocess) subprocess = NULL;
++  gboolean main_thread = IDE_IS_MAIN_THREAD ();
+ 
+   g_assert (GBP_IS_PODMAN_RUNTIME (self));
+   g_assert (self->id != NULL);
+ 
+-  if (self->has_started)
++  if (g_atomic_int_get (&self->start) == START_DONE)
+     return;
+ 
+   g_mutex_lock (&self->mutex);
+ 
+-  if (g_atomic_int_get (&self->has_started))
+-    goto unlock;
+-
+-  launcher = ide_subprocess_launcher_new (G_SUBPROCESS_FLAGS_STDERR_SILENCE |
+-                                          G_SUBPROCESS_FLAGS_STDOUT_SILENCE);
+-  ide_subprocess_launcher_set_run_on_host (launcher, TRUE);
+-  ide_subprocess_launcher_push_argv (launcher, "podman");
+-  ide_subprocess_launcher_push_argv (launcher, "start");
+-  ide_subprocess_launcher_push_argv (launcher, self->id);
+-
+-  if ((subprocess = ide_subprocess_launcher_spawn (launcher, NULL, NULL)))
++  if (self->start == START_NONE)
+     {
+-      ide_subprocess_wait_async (subprocess, NULL, NULL, NULL);
+-      self->has_started = TRUE;
++      self->start = START_RUNNING;
++
++      launcher = ide_subprocess_launcher_new (G_SUBPROCESS_FLAGS_STDERR_SILENCE |
++                                              G_SUBPROCESS_FLAGS_STDOUT_SILENCE);
++      ide_subprocess_launcher_set_run_on_host (launcher, TRUE);
++      ide_subprocess_launcher_push_argv (launcher, "podman");
++      ide_subprocess_launcher_push_argv (launcher, "start");
++      ide_subprocess_launcher_push_argv (launcher, self->id);
++
++      if (!(subprocess = ide_subprocess_launcher_spawn (launcher, NULL, NULL)))
++        self->start = START_DONE;
++      else if (main_thread)
++        ide_subprocess_wait_async (subprocess, NULL, maybe_start_cb, g_object_ref (self));
++      else
++        {
++          g_mutex_unlock (&self->mutex);
++          ide_subprocess_wait (subprocess, NULL, NULL);
++          start_done (self);
++          return;
++        }
+     }
+ 
+-unlock:
++  while (!main_thread && self->start == START_RUNNING)
++    g_cond_wait (&self->started_cond, &self->mutex);
++
+   g_mutex_unlock (&self->mutex);
+ }
+ 
+@@ -212,6 +250,7 @@ gbp_podman_runtime_contains_program_in_path (IdeRuntime   *runtime,
+   GbpPodmanRuntime *self = (GbpPodmanRuntime *) runtime;
+   gboolean found;
+   gboolean ret;
++  int status;
+ 
+   IDE_ENTRY;
+ 
+@@ -235,7 +274,14 @@ gbp_podman_runtime_contains_program_in_path (IdeRuntime   *runtime,
+   if (!(subprocess = ide_run_context_spawn (run_context, NULL)))
+     IDE_RETURN (FALSE);
+ 
+-  ret = ide_subprocess_wait_check (subprocess, cancellable, NULL);
++  /* Cache which's own answer only: 0 or 1. A cancelled wait, or podman's own failure
++   * (125 while the container's `podman start` is still running), is no answer. */
++  if (!ide_subprocess_wait (subprocess, cancellable, NULL) ||
++      !ide_subprocess_get_if_exited (subprocess) ||
++      ((status = ide_subprocess_get_exit_status (subprocess)) != 0 && status != 1))
++    IDE_RETURN (FALSE);
++
++  ret = status == 0;
+ 
+   /* Cache both positive and negative lookups */
+   ide_path_cache_insert (self->path_cache, program, ret ? program : NULL);
+@@ -590,10 +636,7 @@ gbp_podman_runtime_destroy (IdeObject *object)
+ {
+   GbpPodmanRuntime *self = (GbpPodmanRuntime *)object;
+ 
+-  g_clear_pointer (&self->object, json_object_unref);
+-  g_clear_pointer (&self->id, g_free);
+   g_clear_list (&self->layers, g_free);
+-  g_clear_object (&self->path_cache);
+ 
+   IDE_OBJECT_CLASS (gbp_podman_runtime_parent_class)->destroy (object);
+ }
+@@ -603,7 +646,12 @@ gbp_podman_runtime_finalize (GObject *object)
+ {
+   GbpPodmanRuntime *self = (GbpPodmanRuntime *)object;
+ 
++  /* Not in destroy: a lookup on a worker thread may still use them (patch 0005). */
++  g_clear_pointer (&self->object, json_object_unref);
++  g_clear_pointer (&self->id, g_free);
++  g_clear_object (&self->path_cache);
+   g_mutex_clear (&self->mutex);
++  g_cond_clear (&self->started_cond);
+ 
+   G_OBJECT_CLASS (gbp_podman_runtime_parent_class)->finalize (object);
+ }
+@@ -629,6 +677,7 @@ static void
+ gbp_podman_runtime_init (GbpPodmanRuntime *self)
+ {
+   g_mutex_init (&self->mutex);
++  g_cond_init (&self->started_cond);
+   self->path_cache = ide_path_cache_new ();
+ }
+ 

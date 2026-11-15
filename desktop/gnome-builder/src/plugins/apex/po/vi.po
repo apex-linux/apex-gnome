@@ -139,3 +139,12 @@ msgstr "Các trang đã ghim"
 
 msgid "Progress"
 msgstr "Tiến trình"
+
+msgid "Toolbox Setup Incomplete"
+msgstr "Thiết lập toolbox chưa xong"
+
+msgid "fedora-toolbox-45 lacks some of its language servers, so their languages have no completion or diagnostics. Finish its setup to install them."
+msgstr "fedora-toolbox-45 còn thiếu một số máy chủ ngôn ngữ, nên các ngôn ngữ đó không có gợi ý hoàn thành hay chẩn đoán. Hãy hoàn tất thiết lập để cài chúng."
+
+msgid "Finish Setup"
+msgstr "Hoàn tất thiết lập"
