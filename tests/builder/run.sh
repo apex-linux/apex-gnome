@@ -58,10 +58,10 @@ group "fedora-toolbox-45"
 # The toolbox shares the account's home from passwd; CI's HOME (/github/home) is not it.
 HOME=$(getent passwd "$(id -un)" | cut -d: -f6)
 export HOME SHELL=/bin/bash
-# podman without systemd: no cgroup controllers to delegate, no journald, overlay through fuse.
-mkdir -p /etc/containers
-[[ -f /etc/containers/containers.conf ]] ||
-    printf '[containers]\npids_limit=0\nlog_driver="k8s-file"\n[engine]\ncgroup_manager="cgroupfs"\nevents_logger="file"\n' >/etc/containers/containers.conf
+# podman without systemd: cgroupfs, file logs (a 99- drop-in outranks containers-common's journald 00-vendor.conf).
+mkdir -p /etc/containers/containers.conf.d
+printf '[containers]\npids_limit=0\nlog_driver="k8s-file"\n[engine]\ncgroup_manager="cgroupfs"\nevents_logger="file"\n' \
+    >/etc/containers/containers.conf.d/99-apex-builder-test.conf
 [[ -f /etc/containers/storage.conf ]] ||
     printf '[storage]\ndriver="overlay"\n[storage.options.overlay]\nmount_program="/usr/bin/fuse-overlayfs"\n' >/etc/containers/storage.conf
 # Fedora's toolbox loads through /run/host, which only tmpfiles.d/toolbox.conf links on a booted host.
@@ -70,8 +70,15 @@ toolbox_failed() {
     tail -n 20 "$OUT/toolbox.log" >&2
     die "run.sh: $1; see ${OUT#"$APEX_ROOT/"}/toolbox.log"
 }
+created=false
 if ! podman container exists "$TOOLBOX"; then
     toolbox create --assumeyes --image "$IMAGE" "$TOOLBOX" >"$OUT/toolbox.log" 2>&1 || toolbox_failed "toolbox create failed"
+    created=true
+fi
+driver=$(podman inspect --format '{{.HostConfig.LogConfig.Type}}' "$TOOLBOX") || die "run.sh: cannot inspect $TOOLBOX"
+[[ $driver == k8s-file ]] ||
+    die "run.sh: $TOOLBOX logs to $driver, not k8s-file; toolbox run's --follow needs k8s-file without systemd"
+if $created; then
     toolbox run --container "$TOOLBOX" sh -c "$SETUP" >>"$OUT/toolbox.log" 2>&1 || toolbox_failed "the toolbox setup failed"
 fi
 (cd "$HOME" && toolbox run --container "$TOOLBOX" sh -c 'command -v pylsp rust-analyzer typescript-language-server' >"$OUT/servers.txt") ||
