@@ -9,7 +9,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: apex-builder\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-15 19:02+0000\n"
+"POT-Creation-Date: 2026-11-15 20:27+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -105,16 +105,16 @@ msgid "Progress"
 msgstr ""
 
 #. TRANSLATORS: the editor's accessible name; %s is the file
-#: src/plugins/apex/gbp-apex-a11y-addins.c:305
+#: src/plugins/apex/gbp-apex-a11y-addins.c:316
 #, c-format
 msgid "Editor for %s"
 msgstr ""
 
-#: src/plugins/apex/gbp-apex-sidebar.c:25
+#: src/plugins/apex/gbp-apex-sidebar.c:26
 msgid "Project"
 msgstr ""
 
-#: src/plugins/apex/gbp-apex-sidebar.c:277
+#: src/plugins/apex/gbp-apex-sidebar.c:296
 msgid "Sidebar views"
 msgstr ""
 

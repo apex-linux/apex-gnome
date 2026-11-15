@@ -8,6 +8,7 @@
 #include "config.h"
 
 #include <adwaita.h>
+#include <libide-editor.h>
 #include <libide-gui.h>
 
 #include "apex-i18n.h"
@@ -75,6 +76,20 @@ static void frame_header_iface_init (PanelFrameHeaderInterface *iface);
 G_DEFINE_FINAL_TYPE_WITH_CODE (GbpApexSidebarHeader, gbp_apex_sidebar_header, GTK_TYPE_WIDGET,
                                G_IMPLEMENT_INTERFACE (PANEL_TYPE_FRAME_HEADER, frame_header_iface_init))
 
+/* AdwToggleGroup marks its tabs checked; a tab list's reader wants the selected one. */
+static void
+sync_selected (GbpApexSidebarHeader *self)
+{
+  for (GtkWidget *child = gtk_widget_get_first_child (GTK_WIDGET (self->group));
+       child != NULL;
+       child = gtk_widget_get_next_sibling (child))
+    {
+      if (GTK_IS_TOGGLE_BUTTON (child))
+        gtk_accessible_update_state (GTK_ACCESSIBLE (child), GTK_ACCESSIBLE_STATE_SELECTED,
+                                     gtk_toggle_button_get_active (GTK_TOGGLE_BUTTON (child)), -1);
+    }
+}
+
 static void
 select_page (GbpApexSidebarHeader *self,
              PanelWidget          *page)
@@ -95,6 +110,7 @@ select_page (GbpApexSidebarHeader *self,
   self->syncing = TRUE;
   adw_toggle_group_set_active_name (self->group, name);
   self->syncing = FALSE;
+  sync_selected (self);
 }
 
 static void
@@ -129,6 +145,7 @@ active_name_changed (GbpApexSidebarHeader *self)
   const char *name = adw_toggle_group_get_active_name (self->group);
   g_autoptr(PanelWidget) page = NULL;
 
+  sync_selected (self);
   if (self->syncing || self->frame == NULL || name == NULL)
     return;
 
@@ -166,11 +183,13 @@ page_changed (PanelFrameHeader *header,
   select_page (GBP_APEX_SIDEBAR_HEADER (header), page);
 }
 
+/* Only the boards' views: a document dropped here would leave the grid, and its unsaved edits the
+ * close prompt; any other pane would only move back to the bottom panel. */
 static gboolean
 can_drop (PanelFrameHeader *header,
           PanelWidget      *page)
 {
-  return TRUE;
+  return view_of (page) != NULL;
 }
 
 static void
@@ -246,7 +265,6 @@ gbp_apex_sidebar_header_class_init (GbpApexSidebarHeaderClass *klass)
 
   gtk_widget_class_set_layout_manager_type (widget_class, GTK_TYPE_BIN_LAYOUT);
   gtk_widget_class_set_css_name (widget_class, "apexsidebarviews");
-  gtk_widget_class_set_accessible_role (widget_class, GTK_ACCESSIBLE_ROLE_TAB_LIST);
 }
 
 /* Builder's style variant reaches AdwStyleManager, not the plugin stylesheet's prefers-color-scheme. */
@@ -265,7 +283,8 @@ gbp_apex_sidebar_header_init (GbpApexSidebarHeader *self)
   self->box = gtk_box_new (GTK_ORIENTATION_HORIZONTAL, 0);
   self->prefix = gtk_box_new (GTK_ORIENTATION_HORIZONTAL, 0);
   self->suffix = gtk_box_new (GTK_ORIENTATION_HORIZONTAL, 0);
-  self->group = ADW_TOGGLE_GROUP (adw_toggle_group_new ());
+  /* As AdwInlineViewSwitcher does: a tab list's toggles are tabs. */
+  self->group = g_object_new (ADW_TYPE_TOGGLE_GROUP, "accessible-role", GTK_ACCESSIBLE_ROLE_TAB_LIST, NULL);
   gtk_widget_set_hexpand (GTK_WIDGET (self->group), TRUE);
   adw_toggle_group_set_homogeneous (self->group, TRUE);
   gtk_box_append (GTK_BOX (self->box), self->prefix);
@@ -274,55 +293,117 @@ gbp_apex_sidebar_header_init (GbpApexSidebarHeader *self)
   gtk_widget_set_parent (self->box, GTK_WIDGET (self));
   g_signal_connect_object (self->group, "notify::active-name", G_CALLBACK (active_name_changed), self, G_CONNECT_SWAPPED);
 
-  gtk_accessible_update_property (GTK_ACCESSIBLE (self), GTK_ACCESSIBLE_PROPERTY_LABEL, APEX_("Sidebar views"), -1);
+  gtk_accessible_update_property (GTK_ACCESSIBLE (self->group), GTK_ACCESSIBLE_PROPERTY_LABEL, APEX_("Sidebar views"), -1);
   g_signal_connect_object (adw_style_manager_get_default (), "notify::dark", G_CALLBACK (follow_dark), self, G_CONNECT_SWAPPED);
   follow_dark (GTK_WIDGET (self));
 }
 
-/* The switcher on the primary workspace's start frame, and the pages it keeps; the workspace addin holds it. */
+/* The switcher on the workspace's first start frame, and the start frames' pages; the workspace addin holds it. */
 struct _GbpApexSidebar
 {
   GObject       parent_instance;
   IdeWorkspace *workspace;
   PanelFrame   *frame;
-  GListModel   *pages;
+  PanelPaned   *paned;
+  GPtrArray    *watched;
   guint         relocate_source;
 };
 
 G_DEFINE_FINAL_TYPE (GbpApexSidebar, gbp_apex_sidebar, G_TYPE_OBJECT)
 
-/* A page the boards do not show (Build Pipeline, Manuals, TODO/FIXMEs, Unit Tests) moves to the bottom
- * panel as a tab: still there, and reached as upstream reaches it. */
-static gboolean
-relocate (gpointer user_data)
+static void queue_relocate (GbpApexSidebar *self);
+
+typedef struct
 {
-  GbpApexSidebar *self = user_data;
-  GListModel *pages;
-  g_autoptr(GPtrArray) others = g_ptr_array_new_with_free_func (g_object_unref);
+  GbpApexSidebar *self;
+  GPtrArray      *others;
+  GPtrArray      *strays;
+} Sweep;
 
-  self->relocate_source = 0;
-  if (self->frame == NULL || self->workspace == NULL)
-    return G_SOURCE_REMOVE;
+/* Every frame of the start area's paned: the first one's, and any a restored session split off. */
+static void
+sweep_frame (PanelFrame *frame,
+             Sweep      *sweep)
+{
+  g_autoptr(GListModel) pages = NULL;
 
-  pages = G_LIST_MODEL (panel_frame_get_pages (self->frame));
+  pages = G_LIST_MODEL (panel_frame_get_pages (frame));
+  if (!g_ptr_array_find (sweep->self->watched, pages, NULL))
+    {
+      g_signal_connect_object (pages, "items-changed", G_CALLBACK (queue_relocate), sweep->self, G_CONNECT_SWAPPED);
+      g_ptr_array_add (sweep->self->watched, g_object_ref (pages));
+    }
+
   for (guint i = 0; i < g_list_model_get_n_items (pages); i++)
     {
       g_autoptr(PanelWidget) page = page_at (pages, i);
 
       if (view_of (page) == NULL && IDE_IS_PANE (page))
-        g_ptr_array_add (others, g_steal_pointer (&page));
+        g_ptr_array_add (sweep->others, g_steal_pointer (&page));
+      else if (view_of (page) != NULL && frame != sweep->self->frame)
+        g_ptr_array_add (sweep->strays, g_steal_pointer (&page));
     }
-  g_object_unref (pages);
+}
 
+static void
+block_presented (GPtrArray *pages,
+                 gboolean   block)
+{
+  guint presented = g_signal_lookup ("presented", PANEL_TYPE_WIDGET);
+
+  for (guint i = 0; i < pages->len; i++)
+    {
+      if (block)
+        g_signal_handlers_block_matched (g_ptr_array_index (pages, i), G_SIGNAL_MATCH_ID, presented, 0, NULL, NULL, NULL);
+      else
+        g_signal_handlers_unblock_matched (g_ptr_array_index (pages, i), G_SIGNAL_MATCH_ID, presented, 0, NULL, NULL, NULL);
+    }
+}
+
+/* A page the boards do not show (Build Pipeline, Manuals, TODO/FIXMEs, Unit Tests) moves to the bottom
+ * panel as a tab: still there, and reached as upstream reaches it. A board view in another start frame
+ * joins the switcher's. Neither move "presents" a page: TODO/FIXMEs would mine the project for it. */
+static gboolean
+relocate (gpointer user_data)
+{
+  GbpApexSidebar *self = user_data;
+  g_autoptr(GPtrArray) others = g_ptr_array_new_with_free_func (g_object_unref);
+  g_autoptr(GPtrArray) strays = g_ptr_array_new_with_free_func (g_object_unref);
+  Sweep sweep = { self, others, strays };
+
+  self->relocate_source = 0;
+  if (self->frame == NULL || self->paned == NULL || self->workspace == NULL)
+    return G_SOURCE_REMOVE;
+
+  for (guint i = 0; i < panel_paned_get_n_children (self->paned); i++)
+    {
+      GtkWidget *child = panel_paned_get_nth_child (self->paned, i);
+
+      if (PANEL_IS_FRAME (child))
+        sweep_frame (PANEL_FRAME (child), &sweep);
+    }
+
+  block_presented (others, TRUE);
   for (guint i = 0; i < others->len; i++)
     {
       PanelWidget *page = g_ptr_array_index (others, i);
+      PanelFrame *frame = PANEL_FRAME (gtk_widget_get_ancestor (GTK_WIDGET (page), PANEL_TYPE_FRAME));
       g_autoptr(PanelPosition) position = panel_position_new ();
 
       g_debug ("%s moves to the bottom panel", G_OBJECT_TYPE_NAME (page));
-      panel_frame_remove (self->frame, page);
+      panel_frame_remove (frame, page);
       panel_position_set_area (position, PANEL_AREA_BOTTOM);
       ide_workspace_add_pane (self->workspace, IDE_PANE (page), position);
+    }
+  block_presented (others, FALSE);
+
+  for (guint i = 0; i < strays->len; i++)
+    {
+      PanelWidget *page = g_ptr_array_index (strays, i);
+
+      g_debug ("%s joins the sidebar's switcher", G_OBJECT_TYPE_NAME (page));
+      panel_frame_remove (PANEL_FRAME (gtk_widget_get_ancestor (GTK_WIDGET (page), PANEL_TYPE_FRAME)), page);
+      panel_frame_add (self->frame, page);
     }
 
   return G_SOURCE_REMOVE;
@@ -335,6 +416,14 @@ queue_relocate (GbpApexSidebar *self)
     self->relocate_source = g_idle_add (relocate, self);
 }
 
+void
+gbp_apex_sidebar_session_restored (GbpApexSidebar *self)
+{
+  g_return_if_fail (GBP_IS_APEX_SIDEBAR (self));
+
+  queue_relocate (self);
+}
+
 GbpApexSidebar *
 gbp_apex_sidebar_new (IdeWorkspace *workspace)
 {
@@ -342,7 +431,7 @@ gbp_apex_sidebar_new (IdeWorkspace *workspace)
   g_autoptr(PanelPosition) position = NULL;
   PanelFrameHeader *header;
 
-  if (!IDE_IS_PRIMARY_WORKSPACE (workspace))
+  if (!IDE_IS_PRIMARY_WORKSPACE (workspace) && !IDE_IS_EDITOR_WORKSPACE (workspace))
     return NULL;
 
   self = g_object_new (GBP_TYPE_APEX_SIDEBAR, NULL);
@@ -351,13 +440,12 @@ gbp_apex_sidebar_new (IdeWorkspace *workspace)
   panel_position_set_area (position, PANEL_AREA_START);
   if (!(self->frame = ide_workspace_get_frame_at_position (workspace, position)))
     return self;
+  self->paned = PANEL_PANED (gtk_widget_get_ancestor (GTK_WIDGET (self->frame), PANEL_TYPE_PANED));
 
   header = PANEL_FRAME_HEADER (g_object_new (GBP_TYPE_APEX_SIDEBAR_HEADER, NULL));
   panel_frame_set_header (self->frame, header);
   panel_frame_header_set_frame (header, self->frame);
-  self->pages = G_LIST_MODEL (panel_frame_get_pages (self->frame));
-  g_signal_connect_object (self->pages, "items-changed", G_CALLBACK (queue_relocate), self, G_CONNECT_SWAPPED);
-  queue_relocate (self);
+  relocate (self);
 
   return self;
 }
@@ -368,10 +456,11 @@ gbp_apex_sidebar_dispose (GObject *object)
   GbpApexSidebar *self = GBP_APEX_SIDEBAR (object);
 
   g_clear_handle_id (&self->relocate_source, g_source_remove);
-  if (self->pages != NULL)
-    g_signal_handlers_disconnect_by_data (self->pages, self);
-  g_clear_object (&self->pages);
+  for (guint i = 0; self->watched != NULL && i < self->watched->len; i++)
+    g_signal_handlers_disconnect_by_data (g_ptr_array_index (self->watched, i), self);
+  g_clear_pointer (&self->watched, g_ptr_array_unref);
   self->frame = NULL;
+  self->paned = NULL;
   self->workspace = NULL;
 
   G_OBJECT_CLASS (gbp_apex_sidebar_parent_class)->dispose (object);
@@ -386,4 +475,5 @@ gbp_apex_sidebar_class_init (GbpApexSidebarClass *klass)
 static void
 gbp_apex_sidebar_init (GbpApexSidebar *self)
 {
+  self->watched = g_ptr_array_new_with_free_func (g_object_unref);
 }

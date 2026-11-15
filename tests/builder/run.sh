@@ -190,11 +190,14 @@ check "the diagnostics button is named before any page has focus" '.idle.noPage.
 check "the diagnostics popover's tab list is not named \"Panels\"" '.idle.popover.pressed and ([.idle.popover.names.nodes[] | select(.role == "page tab list" and .name == "Panels")] | length) == ([.idle.names.nodes[] | select(.role == "page tab list" and .name == "Panels")] | length)'
 check "the diagnostics popover's tab list is named \"Diagnostics\"" '.idle.popover.pressed and (.idle.popover.names.nodes | any(.role == "page tab list" and .name == "Diagnostics"))'
 check "the page's progress bar is named \"Progress\", for loading and saving alike" '.idle.names.nodes | any(.role == "progress bar" and .name == "Progress")'
-check "\"Sidebar views\" names the sidebar's switcher, whose segments are the boards' views, \"Project\" selected" \
+check "\"Sidebar views\" names the sidebar's tab list, whose tabs are the boards' views, \"Project\" selected, each focusable" \
     '[.idle.names.nodes | to_entries[] | select(.value.role == "page tab list" and .value.name == "Sidebar views") | .key] as [$i]
-     | $i != null and [.idle.names.nodes[$i + 1:][] | select(.role == "radio button") | .name][:1] == ["Project"]'
+     | $i != null and (.idle.names.nodes[$i + 1:] | (map(.role == "page tab list") | index(true)) as $end | .[:$end // length]
+     | map(select(.role == "page tab"))) as $tabs
+     | ($tabs[:1] | map([.name, .selected])) == [["Project", true]] and ($tabs | length > 0 and all(.focusable))'
 check "the sidebar's pages the boards do not show move to the bottom panel: Build Pipeline, Manuals, TODO/FIXMEs, Unit Tests" \
     '.typing.toBottom | unique | length == 4'
+check "moving them presents none: TODO/FIXMEs does not mine the project at startup" '.typing.todoMined == false'
 check "\"Panels\" names the bottom panel's switcher, open, and not the closed one" \
     '(.idle.bottom.nodes | any(.role == "page tab list" and .name == "Panels")) and (.idle.names.nodes | any(.name == "Panels") | not)'
 check "the bottom panel's tabs: Build Pipeline, Manuals, TODO/FIXMEs, Unit Tests, each named and taking keyboard focus" \
