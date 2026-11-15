@@ -23,6 +23,8 @@ const QUIET_MS = 3000;
 const SETTLE_MS = 30000;
 const SAMPLES = 10;
 const LSP_WAIT_MS = 45000;
+const PRESS_WAIT_MS = 30000;
+const CREATE_WAIT_MS = 900000;
 // E0's typing: a key every 150 ms, timed from the press to the frame presented after the window's first damage.
 const TYPING_MS = 60000;
 const KEY_GAP_MS = 150;
@@ -222,11 +224,37 @@ async function typing() {
     return {keys, completionItems: found};
 }
 
+// Apex Code's own Create Toolbox, pressed in the notification the project shows without a
+// toolbox; pylsp starting through podman exec shows the new runtime used without a reopen.
+async function create() {
+    const log = env('APEX_BUILDER_CREATE_LOG');
+    await launch(['sh', '-c', `exec gnome-builder -vvv -p '${PROJECT}' > '${log}' 2>&1`]);
+    await spawnWait(['gnome-builder', LSP_FILE]);
+    const t0 = now();
+    let pressed = false;
+    while (!pressed && (now() - t0) / 1000 < PRESS_WAIT_MS) {
+        await Scripting.sleep(1000);
+        ({pressed} = await helper('APEX_BUILDER_PRESS', 'Create Toolbox'));
+    }
+    let lspInToolboxAfterS = null;
+    const t1 = now();
+    while (pressed && lspInToolboxAfterS === null && (now() - t1) / 1000 < CREATE_WAIT_MS) {
+        await Scripting.sleep(2000);
+        const [, bytes] = GLib.file_get_contents(log);
+        if (/Launching podman exec [^\n]*pylsp/.test(new TextDecoder().decode(bytes)))
+            lspInToolboxAfterS = Math.round((now() - t1) / 1e6);
+    }
+    const {names} = await helper('APEX_BUILDER_PRESS', '--names');
+    await quit();
+    return {pressed, lspInToolboxAfterS, toolboxNames: names.filter(n => /oolbox/.test(n))};
+}
+
 async function drive() {
     keyboard = global.stage.context.get_backend().get_default_seat()
         .create_virtual_device(Clutter.InputDeviceType.KEYBOARD_DEVICE);
     Main.overview.hide();
-    return {starts: await starts(), idle: await idle(), typing: await typing()};
+    const created = env('APEX_BUILDER_CREATE') === 'true' ? await create() : null;
+    return {create: created, starts: await starts(), idle: await idle(), typing: await typing()};
 }
 
 // main.js connects to startup-complete only after importing this module, so a startup that

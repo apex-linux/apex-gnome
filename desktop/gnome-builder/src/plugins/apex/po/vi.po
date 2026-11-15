@@ -103,8 +103,8 @@ msgid "Toolbox Ready"
 msgstr "Toolbox đã sẵn sàng"
 
 #: src/plugins/apex/gbp-apex-workbench-addin.c:245
-msgid "fedora-toolbox-45 has its language servers. Reopen the project to build and run them in the toolbox."
-msgstr "fedora-toolbox-45 đã có các máy chủ ngôn ngữ. Hãy mở lại dự án để biên dịch và chạy chúng trong toolbox."
+msgid "fedora-toolbox-45 has its language servers, and builds and language servers now run in it."
+msgstr "fedora-toolbox-45 đã có các máy chủ ngôn ngữ, và việc biên dịch cùng các máy chủ ngôn ngữ giờ chạy trong đó."
 
 #: src/plugins/apex/gbp-apex-workbench-addin.c:277
 msgid "Creating the Toolbox"

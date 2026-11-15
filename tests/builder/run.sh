@@ -10,9 +10,10 @@ usage() {
     cat <<USAGE
 usage: tests/builder/run.sh [RPM_DIR]
 
-Installs the lane's gnome-builder from RPM_DIR (_build/gnome-builder/out by default),
-creates the fedora-toolbox-45 toolbox with the language servers Apex Code offers, and
+Installs the lane's gnome-builder from RPM_DIR (_build/gnome-builder/out by default) and
 runs a headless gnome-shell, as root, whose automation script (probe.js):
+- without fedora-toolbox-45, opens the project, presses the notification's Create Toolbox
+  (press.py) and waits for pylsp to start in the new toolbox, with no reopen;
 - starts Apex Code on a copy of this repository three times, after a discarded start,
   each after the page cache is dropped: E1's first frame, at most ${BUILDER_FIRST_FRAME_MS:-1900} ms (median);
 - opens tests/e1_lsp.py, waits 30 s, and samples Apex Code's own process tree ten
@@ -34,13 +35,11 @@ readonly HERE=$APEX_ROOT/tests/builder
 readonly RPMS=${1:-$APEX_ROOT/_build/gnome-builder/out}
 readonly OUT=$APEX_ROOT/_build/gnome-builder/run
 readonly TOOLBOX=fedora-toolbox-45
-readonly IMAGE=registry.fedoraproject.org/fedora-toolbox:45
-readonly SETUP='sudo dnf -y -q install rust-analyzer cargo rust python3-lsp-server python3-pyflakes nodejs-npm && sudo npm install -g --no-fund --no-audit typescript-language-server typescript'
 readonly FIRST_FRAME_MS=${BUILDER_FIRST_FRAME_MS:-1900}
 readonly RSS_MIB=${BUILDER_RSS_MIB:-360}
 readonly PSS_MIB=${BUILDER_PSS_MIB:-270}
 readonly STALL_MS=${BUILDER_STALL_MS:-200}
-readonly SHELL_TIMEOUT=900
+readonly SHELL_TIMEOUT=1800
 
 shopt -s nullglob
 rpms=("$RPMS"/gnome-builder-[0-9]*.x86_64.rpm)
@@ -69,23 +68,9 @@ printf '[containers]\npids_limit=0\nlog_driver="k8s-file"\n[engine]\ncgroup_mana
     printf '[storage]\ndriver="overlay"\n[storage.options.overlay]\nmount_program="/usr/bin/fuse-overlayfs"\n' >/etc/containers/storage.conf
 # Fedora's toolbox loads through /run/host, which only tmpfiles.d/toolbox.conf links on a booted host.
 [[ -e /run/host ]] || ln -s ../ /run/host
-toolbox_failed() {
-    tail -n 20 "$OUT/toolbox.log" >&2
-    die "run.sh: $1; see ${OUT#"$APEX_ROOT/"}/toolbox.log"
-}
-created=false
-if ! podman container exists "$TOOLBOX"; then
-    toolbox create --assumeyes --image "$IMAGE" "$TOOLBOX" >"$OUT/toolbox.log" 2>&1 || toolbox_failed "toolbox create failed"
-    created=true
-fi
-driver=$(podman inspect --format '{{.HostConfig.LogConfig.Type}}' "$TOOLBOX") || die "run.sh: cannot inspect $TOOLBOX"
-[[ $driver == k8s-file ]] ||
-    die "run.sh: $TOOLBOX logs to $driver, not k8s-file; toolbox run's --follow needs k8s-file without systemd"
-if $created; then
-    toolbox run --container "$TOOLBOX" sh -c "$SETUP" >>"$OUT/toolbox.log" 2>&1 || toolbox_failed "the toolbox setup failed"
-fi
-(cd "$HOME" && toolbox run --container "$TOOLBOX" sh -c 'command -v pylsp rust-analyzer typescript-language-server' >"$OUT/servers.txt") ||
-    die "run.sh: $TOOLBOX lacks a language server"
+# Without the toolbox, the probe's first session creates it with Apex Code's own Create Toolbox.
+create=true
+podman container exists "$TOOLBOX" && create=false
 endgroup
 
 project=$HOME/Projects/apex-gnome
@@ -108,8 +93,8 @@ printf '[D-BUS Service]\nName=org.freedesktop.portal.Desktop\nExec=/bin/false\n'
 rc=0
 env XDG_RUNTIME_DIR="$run" XDG_SESSION_TYPE=wayland XDG_CURRENT_DESKTOP=GNOME LANG=C.UTF-8 GDK_DEBUG=no-portals ADW_DISABLE_PORTAL=1 \
     APEX_BUILDER_PROJECT="$project" APEX_BUILDER_LSP_FILE="$project/tests/e1_lsp.py" APEX_BUILDER_TYPING_FILE="$project/tests/e2_typing.py" \
-    APEX_BUILDER_MEM="$HERE/mem.py" APEX_BUILDER_ATSPI="$HERE/atspi.py" APEX_BUILDER_DROP="$drop" \
-    APEX_BUILDER_LOG="$OUT/builder-verbose.log" PROBE="$HERE/probe.js" \
+    APEX_BUILDER_MEM="$HERE/mem.py" APEX_BUILDER_ATSPI="$HERE/atspi.py" APEX_BUILDER_DROP="$drop" APEX_BUILDER_CREATE="$create" APEX_BUILDER_PRESS="$HERE/press.py" \
+    APEX_BUILDER_LOG="$OUT/builder-verbose.log" APEX_BUILDER_CREATE_LOG="$OUT/builder-create.log" PROBE="$HERE/probe.js" \
     timeout "$SHELL_TIMEOUT" dbus-run-session -- bash -c '
         for setting in "enable-animations false" "cursor-blink false" "toolkit-accessibility true"; do
             gsettings set org.gnome.desktop.interface $setting
@@ -119,6 +104,12 @@ env XDG_RUNTIME_DIR="$run" XDG_SESSION_TYPE=wayland XDG_CURRENT_DESKTOP=GNOME LA
         exec gnome-shell --headless --virtual-monitor 1920x1080 --wayland-display=apex-builder --automation-script "$PROBE"
     ' >"$OUT/run.log" 2>&1 || rc=$?
 
+if podman container exists "$TOOLBOX"; then
+    driver=$(podman inspect --format '{{.HostConfig.LogConfig.Type}}' "$TOOLBOX") || die "run.sh: cannot inspect $TOOLBOX"
+    [[ $driver == k8s-file ]] ||
+        die "run.sh: $TOOLBOX logs to $driver, not k8s-file; toolbox run's --follow needs k8s-file without systemd"
+    (cd "$HOME" && toolbox run --container "$TOOLBOX" sh -c 'command -v pylsp rust-analyzer typescript-language-server' >"$OUT/servers.txt") || true
+fi
 result=$(sed -n 's/.*APEXBUILDER //p' "$OUT/run.log" | tail -n 1)
 [[ -n $result ]] || die "run.sh: no result (exit $rc); see ${OUT#"$APEX_ROOT/"}/run.log"
 printf '%s\n' "$result" | jq . >"$OUT/run.json"
@@ -150,6 +141,15 @@ check "no button or toggle button is unnamed" '.idle.names.nodes | all(.role == 
 check "every typed key drew a frame" '.typing.keys | length > 300 and all(. != null)'
 check "typing for 60 s from a fresh start: no key over ${STALL_MS} ms" '.typing.keys | max <= $stall'
 check "pylsp in the toolbox answers a completion" '.typing.completionItems > 0'
+if $create; then
+    check "Create Toolbox makes $TOOLBOX, and pylsp starts in it without reopening the project" '.create.lspInToolboxAfterS != null'
+fi
+if [[ $(wc -l <"$OUT/servers.txt" 2>/dev/null) == 3 ]]; then
+    log "ok: $TOOLBOX has pylsp, rust-analyzer and typescript-language-server"
+else
+    log "not ok: $TOOLBOX has pylsp, rust-analyzer and typescript-language-server"
+    fails=$((fails + 1))
+fi
 
 jq -r '"first frame (ms): \([.starts[].painted] | map(tostring) | join(", ")); idle RSS/PSS (MiB): \([.idle.samples[].rss] | sort | .[5] / 1024 | floor)/\([.idle.samples[].pss] | sort | .[5] / 1024 | floor); longest key (ms): \(.typing.keys | max); completion items: \(.typing.completionItems)"' "$OUT/run.json" >&2
 ((fails == 0)) || die "run.sh: $fails check(s) failed; see ${OUT#"$APEX_ROOT/"}/run.json"
