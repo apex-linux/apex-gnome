@@ -104,8 +104,9 @@ button both named "More Options". Two addins name them, with no hunk in upstream
 | the status bar's diagnostics button (E2) | "Build Diagnostics: 0 errors, 0 warnings" | GTK named it "0 0" from its two count labels; found by its own tooltip in Builder's catalogue, and named from `IdeBuildManager`'s counts as they change (plurals from `APEX_NG_`) |
 | an editor tab bar's two tab lists (E2) | "Pinned Pages", "Pages" | by the accessible role, under `AdwTabBar`, the first being the pinned one |
 | a dock's panel switcher (E2) | "Panels" | libpanel's `PanelFrameSwitcher` only: the bottom and end frames', the sidebar's being "Sidebar views" since E2's UI. The lane opens the bottom panel (Ctrl+F9) for a snapshot of its own: its tabs, Build Pipeline, Manuals, TODO/FIXMEs and Unit Tests among them, are named and take keyboard focus, as upstream's do |
-| the sidebar's view switcher (E2 UI) | the tab list "Sidebar views", its tabs "Project", "Outline" and "Search" | the boards' switcher over the start frame (`gbp-apex-sidebar.c`): an `AdwToggleGroup` built with the tab-list role, so each segment is a tab named for its view, the shown one selected |
+| the sidebar's view switcher (E2 UI) | the tab list "Sidebar views", its tabs "Project", "Outline", "Search" and "Version control" | the boards' switcher over the start frame (`gbp-apex-sidebar.c`): an `AdwToggleGroup` built with the tab-list role, so each segment is a tab named for its view, the shown one selected |
 | the Search view (E2 UI) | the entry "Search in Project"; each hit a button "Line 5: return undefined_name + a"; "Show 1 result in Find in Files" | the entry by its placeholder; a hit by its line and text, without its indent. The lane searches e1_lsp.py's undefined_name, then hands it to Find in Files |
+| the Version control view (E2 UI) | the tab "Version control", badge or not; each change a button "dock.js in desktop/shell/js/ui/apex/dock, 12 added, 2 removed" | the tab is labelled for its view, or GTK would name it for its badge. The captures check the fixture's three changes by these names |
 | the Outline view (E2 UI) | the tree "Outline of e1_lsp.py", each item named for its symbol and described "Line 4" | the board's names; the current symbol's item is selected. The lane opens it with the cursor at the file's end, and finds pylsp's f there, current |
 | the diagnostics popover's switcher (E2) | "Diagnostics" | the `GtkStackSwitcher` between errors and warnings, in the diagnostics button's popover |
 | a page's progress bar (E2) | "Progress" | `GtkProgressBar` under an `IdePage`; it shows both loading and saving |
@@ -129,7 +130,7 @@ there would leave the editor grid, and with it the close prompt for its unsaved 
 Every start frame is swept, a split one a session restored included: the other panes go
 to the bottom panel, the views join the switcher's frame. The moved panes' `presented`
 signal is blocked while they move, or TODO/FIXMEs would mine the project at every start.
-Project, Outline and Search exist so far; Version control comes with its pane.
+All four views exist: Project, Outline, Search and Version control.
 
 The Outline view (`gbp-apex-outline-pane.c`) is an `IdePane` on the start frame. It follows
 the focused editor's buffer and asks Builder's symbol resolvers for its tree, the last
@@ -148,6 +149,14 @@ rest `--dim`. A hit opens its file at its line. The button above the results han
 model to Find in Files in the bottom panel, which keeps Builder's list and its Replace.
 Choosing the Search segment puts the focus in the entry.
 
+The Version control view (`gbp-apex-vcs-pane.c`) lists the project's changed files from
+Builder's own VCS (`ide_vcs_list_status_async`), refreshed on its `changed` signal: under a
+"Changes" header and count pill, a 30px row per file, its name over its folder `--dim`, then
+the added lines in `--add` and the removed in `--mod`. Builder's VCS has no line counts, so
+they come from `git diff --numstat HEAD` in the project. A row opens its file. The segment
+carries the count as its badge. The project tree's changed-file icon, which Builder already
+puts at a row's trailing edge, is drawn as the board's 7px `--mod` dot.
+
 #### Not on the board
 
 | Builder's | Where it goes | Why |
@@ -157,6 +166,9 @@ Choosing the Search segment puts the focus in the entry.
 | an Outline row | activating it moves the cursor to the symbol | the board's rows have no click handler |
 | Search's "Open 6 results as one buffer", with no handler | "Show 6 results in Find in Files": the same model in Builder's panel | Builder has no buffer of results; its panel lists them and replaces in them |
 | Search's static entry and results | a live search of the project | the board draws one query |
+| Version control's counts, badges and list, hard-coded | live: the project's changes, the badge and pill their number | the board draws one branch |
+| the tree's dots on dock, dock.js, feature.js, tests and tests/layer only | Builder's own marks, on every ancestor of a changed file | the spec notes the board's skips as a quirk; Builder marks the whole path |
+| the commit box and its button | not yet: awaiting the lead's ruling | Builder has no commit UI; its git daemon can stage and commit |
 | an empty Outline | "No outline for this file", and, unlike Builder's symbol menu, the next resolver tried after an empty tree | the board has no empty state; ctags answers with an empty tree before its first index |
 
 ### Translations

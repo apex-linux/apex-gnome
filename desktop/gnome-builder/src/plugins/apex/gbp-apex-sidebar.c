@@ -14,6 +14,7 @@
 #include "apex-i18n.h"
 #include "gbp-apex-outline-pane.h"
 #include "gbp-apex-search-pane.h"
+#include "gbp-apex-vcs-pane.h"
 #include "gbp-apex-sidebar.h"
 
 typedef struct
@@ -28,6 +29,7 @@ static const View views[] = {
   { "GbpProjectTreePane", APEX_N_("Project"), "text-x-generic-symbolic" },
   { "GbpApexOutlinePane", APEX_N_("Outline"), "view-list-symbolic" },
   { "GbpApexSearchPane", APEX_N_("Search"), "system-search-symbolic" },
+  { "GbpApexVcsPane", APEX_N_("Version control"), "builder-vcs-branch-symbolic" },
 };
 
 static const View *
@@ -125,6 +127,37 @@ select_page (GbpApexSidebarHeader *self,
   sync_selected (self);
 }
 
+static gboolean
+badge_text (GBinding     *binding,
+            const GValue *from,
+            GValue       *to,
+            gpointer      user_data)
+{
+  guint n = g_value_get_uint (from);
+
+  g_value_take_string (to, n > 0 ? g_strdup_printf ("%u", n) : NULL);
+  return TRUE;
+}
+
+/* Version control's segment: its icon, then the count of changed files, as the board's badge. */
+static GtkWidget *
+badged (const View  *view,
+        PanelWidget *page)
+{
+  GtkWidget *box = gtk_box_new (GTK_ORIENTATION_HORIZONTAL, 6);
+  GtkWidget *badge = gtk_label_new (NULL);
+
+
+  gtk_widget_set_halign (box, GTK_ALIGN_CENTER);
+  gtk_widget_add_css_class (badge, "badge");
+  gtk_box_append (GTK_BOX (box), gtk_image_new_from_icon_name (view->icon_name));
+  gtk_box_append (GTK_BOX (box), badge);
+  g_object_bind_property_full (page, "n-changes", badge, "label", G_BINDING_SYNC_CREATE, badge_text, NULL, NULL, NULL);
+  g_object_bind_property (page, "n-changes", badge, "visible", G_BINDING_SYNC_CREATE);
+
+  return box;
+}
+
 static void
 add_toggle (GbpApexSidebarHeader *self,
             PanelWidget          *page,
@@ -134,11 +167,19 @@ add_toggle (GbpApexSidebarHeader *self,
   const View *view = view_of (page);
   AdwToggle *toggle = adw_toggle_new ();
   const char *label = view != NULL ? APEX_(view->name) : panel_widget_get_title (page);
+  GtkWidget *button;
 
   adw_toggle_set_name (toggle, name);
   adw_toggle_set_icon_name (toggle, view != NULL ? view->icon_name : panel_widget_get_icon_name (page));
   adw_toggle_set_tooltip (toggle, label);
+  if (GBP_IS_APEX_VCS_PANE (page))
+    adw_toggle_set_child (toggle, badged (view, page));
   adw_toggle_group_add (self->group, toggle);
+
+  /* A tab with a child is named for its content, the count: name it for its view. */
+  if (adw_toggle_get_child (toggle) != NULL &&
+      (button = gtk_widget_get_ancestor (adw_toggle_get_child (toggle), GTK_TYPE_TOGGLE_BUTTON)))
+    gtk_accessible_update_property (GTK_ACCESSIBLE (button), GTK_ACCESSIBLE_PROPERTY_LABEL, label, -1);
 }
 
 static void
@@ -486,6 +527,10 @@ gbp_apex_sidebar_new (IdeWorkspace *workspace)
   g_object_add_weak_pointer (G_OBJECT (self->outline), (gpointer *) &self->outline);
   ide_workspace_add_pane (workspace, IDE_PANE (self->outline), position);
   ide_workspace_add_pane (workspace, IDE_PANE (gbp_apex_search_pane_new ()), position);
+  ide_workspace_add_pane (workspace, IDE_PANE (gbp_apex_vcs_pane_new ()), position);
+  /* The project tree's changed-file marker becomes the board's dot (style.css). */
+  gtk_widget_add_css_class (GTK_WIDGET (self->frame), "apexsidebar");
+  gbp_apex_track_dark (GTK_WIDGET (self->frame));
   relocate (self);
 
   return self;

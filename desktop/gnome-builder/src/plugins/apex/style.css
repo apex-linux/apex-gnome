@@ -211,3 +211,102 @@ apexsidebarviews.dark toggle-group toggle:checked {
 .apexsearch.dark .header .count {
   color: rgba(244, 244, 246, .64);
 }
+
+/* The Version control view (section 7.4): a Changes header and pill over 30px rows, +N in --add, −N in --mod. */
+.apexvcs > box {
+  padding: 0 12px 8px;
+  font-size: 13px;
+}
+
+.apexvcs .header {
+  min-height: 26px;
+  margin-top: 4px;
+  padding: 0 4px;
+  font-weight: 600;
+}
+
+.apexvcs .header .count,
+apexsidebarviews .badge {
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.apexvcs .header .count {
+  padding: 0 6px;
+  border-radius: 8px;
+  background-color: rgba(0, 0, 10, .065);
+  color: rgba(29, 29, 33, .62);
+}
+
+.apexvcs button.change {
+  min-height: 30px;
+  padding: 0 8px;
+  border-radius: 7px;
+  background: none;
+  box-shadow: none;
+  font-weight: 400;
+}
+
+.apexvcs button.change:hover {
+  background-color: rgba(0, 0, 10, .065);
+}
+
+.apexvcs button.change label {
+  line-height: 1.15;
+}
+
+.apexvcs button.change .directory {
+  font-size: 11.5px;
+  color: rgba(29, 29, 33, .62);
+}
+
+.apexvcs button.change .added,
+.apexvcs button.change .removed {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 11.5px;
+}
+
+.apexvcs button.change .added {
+  color: #1b7a43;
+}
+
+.apexvcs button.change .removed {
+  color: #b04000;
+}
+
+.apexvcs .placeholder {
+  padding: 4px;
+  color: rgba(29, 29, 33, .62);
+}
+
+.apexvcs.dark .header .count,
+.apexvcs.dark button.change:hover {
+  background-color: rgba(255, 255, 255, .09);
+}
+
+.apexvcs.dark .header .count,
+.apexvcs.dark button.change .directory,
+.apexvcs.dark .placeholder {
+  color: rgba(244, 244, 246, .64);
+}
+
+.apexvcs.dark button.change .added {
+  color: #8ff0a4;
+}
+
+.apexvcs.dark button.change .removed {
+  color: #ffa348;
+}
+
+/* The project tree's changed-file marker (section 2.10): a 7px --mod dot at the row's trailing edge. */
+.apexsidebar treeexpander > image:last-child {
+  -gtk-icon-size: 7px;
+  min-width: 7px;
+  margin: 0 2px;
+  color: transparent;
+  background-image: radial-gradient(circle closest-side, #b04000 3px, transparent 3.5px);
+}
+
+.apexsidebar.dark treeexpander > image:last-child {
+  background-image: radial-gradient(circle closest-side, #ffa348 3px, transparent 3.5px);
+}

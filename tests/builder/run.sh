@@ -213,8 +213,8 @@ check "\"Outline\" is the switcher's second segment, after \"Project\"" \
 check "the Outline view names its tree for the file, and lists pylsp's symbol f at line 4, current with the cursor below it" \
     '.idle.outline.pressed and (.idle.outline.names.nodes | any(.role == "tree" and .name == "Outline of e1_lsp.py"))
      and (.idle.outline.names.nodes | any(.role == "tree item" and .name == "f" and .description == "Line 4" and .selected))'
-check "\"Search\" is the switcher's third segment" \
-    '[.idle.names.nodes[] | select(.role == "page tab" and (.name == "Project" or .name == "Outline" or .name == "Search" or .name == "Version control")) | .name][:3] == ["Project", "Outline", "Search"]'
+check "the switcher's segments are the boards' four views, in order" \
+    '[.idle.names.nodes[] | select(.role == "page tab" and (.name == "Project" or .name == "Outline" or .name == "Search" or .name == "Version control")) | .name][:4] == ["Project", "Outline", "Search", "Version control"]'
 check "the Search view finds undefined_name in e1_lsp.py: its entry, its hit at line 5, and the hand-off button named" \
     '.idle.search.pressed and (.idle.search.names.nodes | any(.role == "entry" and .name == "Search in Project"))
      and (.idle.search.names.nodes | any(.role == "button" and .name == "Line 5: return undefined_name + a"))

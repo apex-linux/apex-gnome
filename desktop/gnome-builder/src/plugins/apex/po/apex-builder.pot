@@ -9,7 +9,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: apex-builder\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-15 20:29+0000\n"
+"POT-Creation-Date: 2026-11-15 21:32+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -117,7 +117,7 @@ msgstr ""
 
 #: src/plugins/apex/gbp-apex-outline-pane.c:390
 #: src/plugins/apex/gbp-apex-outline-pane.c:471
-#: src/plugins/apex/gbp-apex-sidebar.c:29
+#: src/plugins/apex/gbp-apex-sidebar.c:30
 msgid "Outline"
 msgstr ""
 
@@ -143,7 +143,7 @@ msgstr[0] ""
 msgstr[1] ""
 
 #: src/plugins/apex/gbp-apex-search-pane.c:312
-#: src/plugins/apex/gbp-apex-sidebar.c:30
+#: src/plugins/apex/gbp-apex-sidebar.c:31
 msgid "Search"
 msgstr ""
 
@@ -152,12 +152,35 @@ msgstr ""
 msgid "Search in Project"
 msgstr ""
 
-#: src/plugins/apex/gbp-apex-sidebar.c:28
+#: src/plugins/apex/gbp-apex-sidebar.c:29
 msgid "Project"
 msgstr ""
 
-#: src/plugins/apex/gbp-apex-sidebar.c:333
+#: src/plugins/apex/gbp-apex-sidebar.c:32
+#: src/plugins/apex/gbp-apex-vcs-pane.c:325
+msgid "Version control"
+msgstr ""
+
+#: src/plugins/apex/gbp-apex-sidebar.c:374
 msgid "Sidebar views"
+msgstr ""
+
+#: src/plugins/apex/gbp-apex-vcs-pane.c:135
+#, c-format
+msgid "%s in %s, %s added, %s removed"
+msgstr ""
+
+#: src/plugins/apex/gbp-apex-vcs-pane.c:137
+#, c-format
+msgid "%s in %s"
+msgstr ""
+
+#: src/plugins/apex/gbp-apex-vcs-pane.c:374
+msgid "Changes"
+msgstr ""
+
+#: src/plugins/apex/gbp-apex-vcs-pane.c:388
+msgid "No changes"
 msgstr ""
 
 #. TRANSLATORS: %s is the project's folder
