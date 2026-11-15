@@ -37,7 +37,8 @@ usage: .github/scripts/next-point.sh COMMAND
               PASSED/FAILED from LOG, or ? when LOG has none: g2 and goldens read the last
               '# N passed, M failed' line (patched.sh's, goldens.sh's), tap counts the TAP
               lines (tests/shell/shoot.sh's, the only ones in signoff.sh's output, or
-              tests/control-center/run.sh's and tests/nautilus/shoot.sh's); shoot is tap
+              tests/control-center/run.sh's and tests/nautilus/shoot.sh's), with a 'FAIL '
+              line (tests/control-center's checkers') as a failure; shoot is tap
 
 It never touches lane.sh's cache: next-point.yml runs lane.sh without APEX_LANE_CACHE.
 EOF
@@ -134,7 +135,7 @@ counts() {
         g2 | goldens)
             sed -nE 's/^# ([0-9]+) passed, ([0-9]+) failed.*/\1\/\2/p' "$log" 2>/dev/null | tail -n 1 | grep . || echo '?' ;;
         shoot | tap)
-            awk '/^ok / { ok++ } /^not ok / { bad++ } END { print (ok + bad ? ok + 0 "/" bad + 0 : "?") }' "$log" 2>/dev/null || echo '?' ;;
+            awk '/^ok / { ok++ } /^(not ok|FAIL) / { bad++ } END { print (ok + bad ? ok + 0 "/" bad + 0 : "?") }' "$log" 2>/dev/null || echo '?' ;;
         *) usage >&2; exit 2 ;;
     esac
 }
