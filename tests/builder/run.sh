@@ -21,7 +21,8 @@ runs a headless gnome-shell, as root, whose automation script (probe.js):
 - starts Apex Code on a copy of this repository three times, after a discarded start,
   each after the page cache is dropped: E1's first frame, at most ${BUILDER_FIRST_FRAME_MS:-1900} ms (median);
 - opens tests/e1_lsp.py, waits 30 s, and samples Apex Code's own process tree ten
-  times: E1's RSS and PSS, at most ${BUILDER_RSS_MIB:-360} and ${BUILDER_PSS_MIB:-270} MiB (median);
+  times: E1's RSS and PSS, at most ${BUILDER_RSS_MIB:-360} and ${BUILDER_PSS_MIB:-270} MiB (median), and
+  the toolbox runtime's host side, its servers' clients through the bridge: E2's ${BUILDER_GLUE_MIB:-20} MiB;
 - reads the editor's name, E0's eight unnamed buttons and its other gaps over AT-SPI;
 - stops the toolbox, as after a reboot, and holds its podman start 3 s; then types into an
   empty e2_typing.py in a meson project for 60 s from a fresh start, a key every 150 ms: E2's longest
@@ -31,6 +32,7 @@ runs a headless gnome-shell, as root, whose automation script (probe.js):
   without which(1): each program is looked up there at most twice, and no key over the same budget;
 - opens a project whose runtime is a stand-in jhbuild, neither podman nor host: its lookups
   stay on the main thread, and only podman and host are looked up off it.
+Before them, bridge.sh checks the toolbox bridge's socket, start and process groups.
 Needs a throwaway container with podman's privileges (--privileged), root, and the
 packages the Justfile's builder-run installs. The log and result land in _build/gnome-builder/run/.
 USAGE
@@ -50,6 +52,7 @@ readonly FIRST_FRAME_MS=${BUILDER_FIRST_FRAME_MS:-1900}
 readonly RSS_MIB=${BUILDER_RSS_MIB:-360}
 readonly PSS_MIB=${BUILDER_PSS_MIB:-270}
 readonly STALL_MS=${BUILDER_STALL_MS:-200}
+readonly GLUE_MIB=${BUILDER_GLUE_MIB:-20}
 # probe.js's caps for Create Toolbox, Finish Setup and three waits for a button (900 + 600 + 3 x 30 s),
 # then 10 minutes for its other phases, which take about 4 here.
 readonly SHELL_TIMEOUT=2190
@@ -68,6 +71,11 @@ rm -rf "$OUT" && mkdir -p "$OUT"
 # The system bus: toolbox create mounts its socket, and the shell's session uses it.
 mkdir -p /run/dbus && rm -rf /run/systemd/seats
 [[ -S /run/dbus/system_bus_socket ]] || dbus-daemon --system --fork
+
+group "the toolbox bridge"
+"$HERE/bridge.sh" >"$OUT/bridge.log" 2>&1 || { cat "$OUT/bridge.log" >&2; die "run.sh: the toolbox bridge's checks failed"; }
+cat "$OUT/bridge.log"
+endgroup
 
 group "fedora-toolbox-45"
 # The toolbox shares the account's home from passwd; CI's HOME (/github/home) is not it.
@@ -155,7 +163,7 @@ jq -e '.error == null' <<<"$result" >/dev/null || die "run.sh: the probe failed:
 fails=0
 # check WHAT JQ: one fact about the run, against run.json.
 check() {
-    if jq -e --argjson ff "$FIRST_FRAME_MS" --argjson rss "$RSS_MIB" --argjson pss "$PSS_MIB" --argjson stall "$STALL_MS" \
+    if jq -e --argjson ff "$FIRST_FRAME_MS" --argjson rss "$RSS_MIB" --argjson pss "$PSS_MIB" --argjson stall "$STALL_MS" --argjson glue "$GLUE_MIB" \
         'def median: sort | .[length / 2 | floor]; '"$2" "$OUT/run.json" >/dev/null; then
         log "ok: $1"
     else
@@ -168,6 +176,8 @@ check "the window is titled Apex Code" '.starts | all(.title | startswith("Apex 
 check "cold start to the first painted frame, median of 3: at most ${FIRST_FRAME_MS} ms" '[.starts[].painted] | median <= $ff'
 check "idle RSS of Apex Code's own processes, median of 10: at most ${RSS_MIB} MiB" '[.idle.samples[].rss] | median / 1024 <= $rss'
 check "idle PSS, median of 10: at most ${PSS_MIB} MiB" '[.idle.samples[].pss] | median / 1024 <= $pss'
+check "the language servers run through the toolbox's bridge, not a podman exec each" '.idle.samples[-1].apart | (any(test("apex-toolbox-exec ")) and all(startswith("podman exec") | not))'
+check "the toolbox runtime's host side (clients, bridge, conmon), median of 10: at most ${GLUE_MIB} MiB RSS" '[.idle.samples[].glue.rss] | median / 1024 <= $glue'
 check "the editor is named for its file" '.idle.names.nodes | any(.role == "text" and .name == "Editor for e1_lsp.py")'
 for name in "New Page" "Build Details" "Sidebar Menu" "Open Pages" "Run Options"; do
     check "\"$name\" names a button and its toggle" \
@@ -210,6 +220,14 @@ else
     fails=$((fails + 1))
 fi
 
-jq -r '"first frame (ms): \([.starts[].painted] | map(tostring) | join(", ")); idle RSS/PSS (MiB): \([.idle.samples[].rss] | sort | .[5] / 1024 | floor)/\([.idle.samples[].pss] | sort | .[5] / 1024 | floor); longest key (ms): \(.typing.keys | max); completion items: \(.typing.completionItems)"' "$OUT/run.json" >&2
+jq -r '[
+    "first frame (ms): \([.starts[].painted] | map(tostring) | join(", "))",
+    "idle RSS/PSS (MiB): \([.idle.samples[].rss] | sort | .[5] / 1024 | floor)/\([.idle.samples[].pss] | sort | .[5] / 1024 | floor)",
+    "glue RSS (MiB): \([.idle.samples[].glue.rss] | sort | .[5] / 1024 * 10 | floor / 10)",
+    "longest key (ms): \(.typing.keys | max)",
+    "completion items: \(.typing.completionItems)"
+] | join("; ")' "$OUT/run.json" >&2
+# Start times move with the runner's CPU from one CI run to the next: name it beside them.
+log "machine: $(nproc) CPUs, $(sed -n 's/^model name[[:space:]]*: //p' /proc/cpuinfo | sort -u | head -n 1)"
 ((fails == 0)) || die "run.sh: $fails check(s) failed; see ${OUT#"$APEX_ROOT/"}/run.json"
 log "run.sh: every check passed"

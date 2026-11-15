@@ -4,3 +4,4 @@
 0003-podman-storage-path.patch
 0004-podman-workdir.patch
 0005-program-lookups.patch
+0006-podman-bridge.patch
