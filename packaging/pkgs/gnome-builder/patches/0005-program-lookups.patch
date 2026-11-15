@@ -1,0 +1,475 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Thuong Vo <66083331+SekiroKenjii@users.noreply.github.com>
+Date: Sun, 15 Nov 2026 11:17:17 +0000
+Subject: [PATCH] foundry, lsp: look up programs off the main thread
+
+A file's first diagnostics pass, and each language server's start when a
+pipeline finishes loading, looked up the program on the main thread: in
+the pipeline's runtime with ide_pipeline_contains_program_in_path(), then
+on the host. Each lookup spawns `which` and waits for it, and in a podman
+runtime that is a `podman exec`, 134-177 ms each. With a toolbox as the
+runtime, opening a Python file froze the editor for 0.3-0.8 s: flake8 for
+the diagnostics, then ruff and pylsp when the pipeline loaded.
+
+_ide_pipeline_find_programs_async() makes the same lookups on a worker
+thread, filling the runtimes' path caches. Both are IdePathCache, which
+locks, and the podman runtime starts its container under a mutex.
+IdeDiagnosticTool runs it before each pass, and IdeLspService once per
+pipeline before it creates the launcher. Both then make their lookups on
+the main thread as before, and find every answer cached. The SDK
+extensions of a Flatpak configuration are left to the main thread, as
+before.
+---
+ src/libide/foundry/ide-diagnostic-tool.c  | 139 +++++++++++++++++-----
+ src/libide/foundry/ide-pipeline-private.h |   8 ++
+ src/libide/foundry/ide-pipeline.c         | 126 ++++++++++++++++++++
+ src/libide/lsp/ide-lsp-service.c          |  46 +++++++
+ 4 files changed, 288 insertions(+), 31 deletions(-)
+
+diff --git a/src/libide/foundry/ide-diagnostic-tool.c b/src/libide/foundry/ide-diagnostic-tool.c
+index f373324..26b41e6 100644
+--- a/src/libide/foundry/ide-diagnostic-tool.c
++++ b/src/libide/foundry/ide-diagnostic-tool.c
+@@ -27,6 +27,7 @@
+ #include "ide-build-manager.h"
+ #include "ide-diagnostic-tool.h"
+ #include "ide-pipeline.h"
++#include "ide-pipeline-private.h"
+ #include "ide-run-context.h"
+ #include "ide-runtime.h"
+ #include "ide-runtime-manager.h"
+@@ -45,6 +46,8 @@ typedef struct
+ {
+   GBytes *stdin_bytes;
+   GFile  *file;
++  GBytes *contents;
++  char   *lang_id;
+ } DiagnoseState;
+ 
+ static void diagnostic_provider_iface_init (IdeDiagnosticProviderInterface *iface);
+@@ -74,6 +77,8 @@ diagnose_state_free (DiagnoseState *state)
+ 
+   g_clear_pointer (&state->stdin_bytes, g_bytes_unref);
+   g_clear_object (&state->file);
++  g_clear_pointer (&state->contents, g_bytes_unref);
++  g_clear_pointer (&state->lang_id, g_free);
+   g_slice_free (DiagnoseState, state);
+ 
+   IDE_EXIT;
+@@ -433,6 +438,97 @@ ide_diagnostic_tool_communicate_cb (GObject      *object,
+   IDE_EXIT;
+ }
+ 
++static void
++ide_diagnostic_tool_spawn (IdeDiagnosticTool *self,
++                           IdeTask           *task)
++{
++  IdeDiagnosticToolPrivate *priv = ide_diagnostic_tool_get_instance_private (self);
++  DiagnoseState *state = ide_task_get_task_data (task);
++  GCancellable *cancellable = ide_task_get_cancellable (task);
++  g_autoptr(IdeSubprocessLauncher) launcher = NULL;
++  g_autoptr(IdeRunContext) run_context = NULL;
++  g_autoptr(IdeSubprocess) subprocess = NULL;
++  g_autoptr(GError) error = NULL;
++  const char *stdin_data;
++
++  IDE_ENTRY;
++
++  if (ide_task_return_error_if_cancelled (task))
++    IDE_EXIT;
++
++  run_context = ide_run_context_new ();
++
++  if (!IDE_DIAGNOSTIC_TOOL_GET_CLASS (self)->prepare_run_context (self, run_context, state->file, state->contents, state->lang_id, &error) ||
++      !(launcher = ide_run_context_end (run_context, &error)))
++    {
++      g_assert (error != NULL);
++
++      ide_task_return_error (task, g_steal_pointer (&error));
++      IDE_EXIT;
++    }
++
++  ide_subprocess_launcher_set_flags (launcher, priv->flags);
++
++  if (!(subprocess = ide_subprocess_launcher_spawn (launcher, cancellable, &error)))
++    {
++      g_assert (error != NULL);
++
++      ide_task_return_error (task, g_steal_pointer (&error));
++      IDE_EXIT;
++    }
++
++  if (state->stdin_bytes != NULL)
++    stdin_data = (char *)g_bytes_get_data (state->stdin_bytes, NULL);
++  else
++    stdin_data = NULL;
++
++  ide_subprocess_communicate_utf8_async (subprocess,
++                                         stdin_data,
++                                         cancellable,
++                                         ide_diagnostic_tool_communicate_cb,
++                                         g_object_ref (task));
++
++  IDE_EXIT;
++}
++
++static void
++ide_diagnostic_tool_find_programs_cb (GObject      *object,
++                                      GAsyncResult *result,
++                                      gpointer      user_data)
++{
++  g_autoptr(IdeTask) task = user_data;
++
++  g_assert (IDE_IS_PIPELINE (object));
++  g_assert (IDE_IS_TASK (task));
++
++  _ide_pipeline_find_programs_finish (IDE_PIPELINE (object), result, NULL);
++  ide_diagnostic_tool_spawn (ide_task_get_source_object (task), task);
++}
++
++/* The project's pipeline, if there is one, and the local program prepare_run_context() would use. */
++static IdePipeline *
++ide_diagnostic_tool_get_pipeline (IdeDiagnosticTool  *self,
++                                  char              **local_program)
++{
++  IdeDiagnosticToolPrivate *priv = ide_diagnostic_tool_get_instance_private (self);
++  g_autoptr(IdeContext) context = NULL;
++  IdePipeline *pipeline;
++
++  if (!(context = ide_object_ref_context (IDE_OBJECT (self))) ||
++      !ide_context_has_project (context) ||
++      !(pipeline = ide_build_manager_get_pipeline (ide_build_manager_from_context (context))))
++    return NULL;
++
++  if (priv->local_program_path != NULL)
++    {
++      g_autofree char *local = g_build_filename (ide_pipeline_get_srcdir (pipeline), priv->local_program_path, NULL);
++      if (g_file_test (local, G_FILE_TEST_IS_EXECUTABLE))
++        *local_program = g_steal_pointer (&local);
++    }
++
++  return pipeline;
++}
++
+ static void
+ ide_diagnostic_tool_diagnose_async (IdeDiagnosticProvider *provider,
+                                     GFile                 *file,
+@@ -444,13 +540,10 @@ ide_diagnostic_tool_diagnose_async (IdeDiagnosticProvider *provider,
+ {
+   IdeDiagnosticTool *self = (IdeDiagnosticTool *)provider;
+   IdeDiagnosticToolPrivate *priv = ide_diagnostic_tool_get_instance_private (self);
+-  g_autoptr(IdeSubprocessLauncher) launcher = NULL;
+-  g_autoptr(IdeRunContext) run_context = NULL;
+-  g_autoptr(IdeSubprocess) subprocess = NULL;
+   g_autoptr(IdeTask) task = NULL;
+-  g_autoptr(GError) error = NULL;
++  g_autofree char *local_program = NULL;
+   DiagnoseState *state;
+-  const char *stdin_data;
++  IdePipeline *pipeline;
+ 
+   IDE_ENTRY;
+ 
+@@ -475,6 +568,8 @@ ide_diagnostic_tool_diagnose_async (IdeDiagnosticProvider *provider,
+ 
+   state = g_slice_new0 (DiagnoseState);
+   state->file = file ? g_object_ref (file) : NULL;
++  state->contents = contents ? g_bytes_ref (contents) : NULL;
++  state->lang_id = g_strdup (lang_id);
+   state->stdin_bytes = IDE_DIAGNOSTIC_TOOL_GET_CLASS (self)->get_stdin_bytes (self, file, contents, lang_id);
+   ide_task_set_task_data (task, state, diagnose_state_free);
+ 
+@@ -487,37 +582,19 @@ ide_diagnostic_tool_diagnose_async (IdeDiagnosticProvider *provider,
+       IDE_EXIT;
+     }
+ 
+-  run_context = ide_run_context_new ();
+-
+-  if (!IDE_DIAGNOSTIC_TOOL_GET_CLASS (self)->prepare_run_context (self, run_context, file, contents, lang_id, &error) ||
+-      !(launcher = ide_run_context_end (run_context, &error)))
++  /* prepare_run_context() looks the program up on the main thread: fill the
++   * runtimes' path caches first, on a worker thread. */
++  if ((pipeline = ide_diagnostic_tool_get_pipeline (self, &local_program)))
+     {
+-      g_assert (error != NULL);
+-
+-      ide_task_return_error (task, g_steal_pointer (&error));
+-      IDE_EXIT;
+-    }
+-
+-  ide_subprocess_launcher_set_flags (launcher, priv->flags);
+-
+-  if (!(subprocess = ide_subprocess_launcher_spawn (launcher, cancellable, &error)))
+-    {
+-      g_assert (error != NULL);
++      const char *programs[] = { priv->program_name, local_program, NULL };
+ 
+-      ide_task_return_error (task, g_steal_pointer (&error));
++      _ide_pipeline_find_programs_async (pipeline, programs, NULL,
++                                         ide_diagnostic_tool_find_programs_cb,
++                                         g_steal_pointer (&task));
+       IDE_EXIT;
+     }
+ 
+-  if (state->stdin_bytes != NULL)
+-    stdin_data = (char *)g_bytes_get_data (state->stdin_bytes, NULL);
+-  else
+-    stdin_data = NULL;
+-
+-  ide_subprocess_communicate_utf8_async (subprocess,
+-                                         stdin_data,
+-                                         cancellable,
+-                                         ide_diagnostic_tool_communicate_cb,
+-                                         g_steal_pointer (&task));
++  ide_diagnostic_tool_spawn (self, task);
+ 
+   IDE_EXIT;
+ }
+diff --git a/src/libide/foundry/ide-pipeline-private.h b/src/libide/foundry/ide-pipeline-private.h
+index 8d0ebda..ec31945 100644
+--- a/src/libide/foundry/ide-pipeline-private.h
++++ b/src/libide/foundry/ide-pipeline-private.h
+@@ -29,5 +29,13 @@ void         _ide_pipeline_attach_pty_to_run_context (IdePipeline      *self,
+                                                       IdeRunContext    *run_context);
+ const guint *_ide_pipeline_addin_get_stages          (IdePipelineAddin *self,
+                                                       guint            *n_stages);
++void         _ide_pipeline_find_programs_async       (IdePipeline         *self,
++                                                      const char * const  *programs,
++                                                      GCancellable        *cancellable,
++                                                      GAsyncReadyCallback  callback,
++                                                      gpointer             user_data);
++gboolean     _ide_pipeline_find_programs_finish      (IdePipeline         *self,
++                                                      GAsyncResult        *result,
++                                                      GError             **error);
+ 
+ G_END_DECLS
+diff --git a/src/libide/foundry/ide-pipeline.c b/src/libide/foundry/ide-pipeline.c
+index 8178a1c..131d844 100644
+--- a/src/libide/foundry/ide-pipeline.c
++++ b/src/libide/foundry/ide-pipeline.c
+@@ -61,6 +61,7 @@
+ #include "ide-run-context.h"
+ #include "ide-run-manager-private.h"
+ #include "ide-runtime.h"
++#include "ide-runtime-manager.h"
+ #include "ide-toolchain-manager.h"
+ #include "ide-toolchain.h"
+ #include "ide-triplet.h"
+@@ -4399,6 +4400,131 @@ contains_in_runtime_with_alt_path (IdeRuntime *runtime,
+   return FALSE;
+ }
+ 
++typedef struct
++{
++  GPtrArray *runtimes;
++  GPtrArray *programs;
++} FindPrograms;
++
++static void
++find_programs_free (FindPrograms *find)
++{
++  g_clear_pointer (&find->runtimes, g_ptr_array_unref);
++  g_clear_pointer (&find->programs, g_ptr_array_unref);
++  g_free (find);
++}
++
++static void
++find_programs_add (FindPrograms *find,
++                   IdeRuntime   *runtime,
++                   const char   *program,
++                   const char   *path)
++{
++  g_auto(GStrv) dirs = NULL;
++
++  if (path == NULL)
++    {
++      g_ptr_array_add (find->runtimes, g_object_ref (runtime));
++      g_ptr_array_add (find->programs, g_strdup (program));
++      return;
++    }
++
++  dirs = g_strsplit (path, ":", 0);
++
++  for (guint i = 0; dirs[i]; i++)
++    {
++      g_autofree char *filename = g_build_filename (dirs[i], program, NULL);
++      find_programs_add (find, runtime, filename, NULL);
++    }
++}
++
++static void
++find_programs_worker (IdeTask      *task,
++                      gpointer      source_object,
++                      gpointer      task_data,
++                      GCancellable *cancellable)
++{
++  FindPrograms *find = task_data;
++
++  /* No cancellable: a cancelled lookup would be cached as a miss. */
++  for (guint i = 0; i < find->runtimes->len; i++)
++    ide_runtime_contains_program_in_path (g_ptr_array_index (find->runtimes, i),
++                                          g_ptr_array_index (find->programs, i),
++                                          NULL);
++
++  ide_task_return_boolean (task, TRUE);
++}
++
++/*
++ * _ide_pipeline_find_programs_async:
++ *
++ * Looks up @programs on a worker thread, as ide_pipeline_contains_program_in_path()
++ * and the "host" runtime's lookup do, so that those calls then answer from the
++ * runtimes' path caches instead of spawning `which` (a `podman exec` in a container)
++ * on the main thread. The SDK extensions of a Flatpak configuration are left out.
++ */
++void
++_ide_pipeline_find_programs_async (IdePipeline         *self,
++                                   const char * const  *programs,
++                                   GCancellable        *cancellable,
++                                   GAsyncReadyCallback  callback,
++                                   gpointer             user_data)
++{
++  g_autoptr(IdeContext) context = NULL;
++  g_autoptr(IdeTask) task = NULL;
++  const char *prepend_path = NULL;
++  const char *append_path = NULL;
++  IdeRuntime *host = NULL;
++  FindPrograms *find;
++
++  g_return_if_fail (IDE_IS_MAIN_THREAD ());
++  g_return_if_fail (IDE_IS_PIPELINE (self));
++  g_return_if_fail (programs != NULL);
++
++  task = ide_task_new (self, cancellable, callback, user_data);
++  ide_task_set_source_tag (task, _ide_pipeline_find_programs_async);
++
++  if ((context = ide_object_ref_context (IDE_OBJECT (self))))
++    host = ide_runtime_manager_get_runtime (ide_runtime_manager_from_context (context), "host");
++
++  if (self->config != NULL)
++    {
++      prepend_path = ide_config_get_prepend_path (self->config);
++      append_path = ide_config_get_append_path (self->config);
++    }
++
++  find = g_new0 (FindPrograms, 1);
++  find->runtimes = g_ptr_array_new_with_free_func (g_object_unref);
++  find->programs = g_ptr_array_new_with_free_func (g_free);
++
++  for (guint i = 0; programs[i]; i++)
++    {
++      if (self->runtime != NULL)
++        {
++          find_programs_add (find, self->runtime, programs[i], NULL);
++          find_programs_add (find, self->runtime, programs[i], prepend_path);
++          find_programs_add (find, self->runtime, programs[i], append_path);
++        }
++
++      if (host != NULL)
++        find_programs_add (find, host, programs[i], NULL);
++    }
++
++  ide_task_set_task_data (task, find, find_programs_free);
++  ide_task_run_in_thread (task, find_programs_worker);
++}
++
++gboolean
++_ide_pipeline_find_programs_finish (IdePipeline   *self,
++                                    GAsyncResult  *result,
++                                    GError       **error)
++{
++  g_return_val_if_fail (IDE_IS_PIPELINE (self), FALSE);
++  g_return_val_if_fail (IDE_IS_TASK (result), FALSE);
++
++  return ide_task_propagate_boolean (IDE_TASK (result), error);
++}
++
+ /**
+  * ide_pipeline_contains_program_in_path:
+  * @self: a #IdePipeline
+diff --git a/src/libide/lsp/ide-lsp-service.c b/src/libide/lsp/ide-lsp-service.c
+index 4388cd5..9099c62 100644
+--- a/src/libide/lsp/ide-lsp-service.c
++++ b/src/libide/lsp/ide-lsp-service.c
+@@ -26,6 +26,8 @@
+ 
+ #include "ide-lsp-service.h"
+ 
++#include "ide-pipeline-private.h"
++
+ /**
+  * SECTION:ide-lsp-service
+  * @title: IdeLspService
+@@ -38,7 +40,9 @@ typedef struct
+   IdeLspClient *client;
+   char *program;
+   char **search_path;
++  IdePipeline *found_in;
+   guint has_started : 1;
++  guint finding : 1;
+   guint inherit_stderr : 1;
+   guint has_seen_autostart : 1;
+ } IdeLspServicePrivate;
+@@ -176,6 +180,7 @@ ide_lsp_service_destroy (IdeObject *object)
+   g_clear_object (&priv->client);
+   g_clear_pointer (&priv->program, g_free);
+   g_clear_pointer (&priv->search_path, g_strfreev);
++  g_clear_weak_pointer (&priv->found_in);
+ 
+   IDE_OBJECT_CLASS (ide_lsp_service_parent_class)->destroy (object);
+ 
+@@ -569,6 +574,31 @@ on_supervisor_spawned_cb (IdeLspService           *self,
+   IDE_EXIT;
+ }
+ 
++static void ensure_started (IdeLspService *self,
++                            IdeContext    *context);
++
++static void
++ide_lsp_service_find_programs_cb (GObject      *object,
++                                  GAsyncResult *result,
++                                  gpointer      user_data)
++{
++  IdePipeline *pipeline = (IdePipeline *)object;
++  g_autoptr(IdeLspService) self = user_data;
++  IdeLspServicePrivate *priv = ide_lsp_service_get_instance_private (self);
++  IdeContext *context;
++
++  g_assert (IDE_IS_PIPELINE (pipeline));
++  g_assert (IDE_IS_LSP_SERVICE (self));
++
++  _ide_pipeline_find_programs_finish (pipeline, result, NULL);
++  priv->finding = FALSE;
++  g_set_weak_pointer (&priv->found_in, pipeline);
++
++  if (!ide_object_in_destruction (IDE_OBJECT (self)) &&
++      (context = ide_object_get_context (IDE_OBJECT (self))))
++    ensure_started (self, context);
++}
++
+ static void
+ ensure_started (IdeLspService *self,
+                 IdeContext    *context)
+@@ -603,6 +633,22 @@ ensure_started (IdeLspService *self,
+   if (!ide_pipeline_is_ready (pipeline))
+     IDE_EXIT;
+ 
++  /* ide_lsp_service_create_launcher() looks the program up on the main thread:
++   * fill the runtimes' path caches first, on a worker thread, once per pipeline. */
++  if (priv->program != NULL && priv->found_in != pipeline)
++    {
++      if (!priv->finding)
++        {
++          const char *programs[] = { priv->program, NULL };
++
++          priv->finding = TRUE;
++          _ide_pipeline_find_programs_async (pipeline, programs, NULL,
++                                             ide_lsp_service_find_programs_cb,
++                                             g_object_ref (self));
++        }
++      IDE_EXIT;
++    }
++
+   flags = G_SUBPROCESS_FLAGS_STDIN_PIPE | G_SUBPROCESS_FLAGS_STDOUT_PIPE;
+   if (!priv->inherit_stderr && !g_settings_get_boolean (settings, "lsp-inherit-stderr"))
+     flags |= G_SUBPROCESS_FLAGS_STDERR_SILENCE;

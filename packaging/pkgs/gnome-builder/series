@@ -3,4 +3,4 @@
 0002-name.patch
 0003-podman-storage-path.patch
 0004-podman-workdir.patch
-0005-diagnostic-tool-lookups.patch
+0005-program-lookups.patch
