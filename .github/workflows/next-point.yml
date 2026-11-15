@@ -233,6 +233,20 @@ jobs:
           dnf5 -y -q --setopt=install_weak_deps=False --repo=fedora --repo=updates install _build/libadwaita/out/libadwaita-[0-9]*.x86_64.rpm
           rpm -q libadwaita | grep -q '\.apex'
 
+      - name: the text stack's NEVRs, and every installed package as an artifact
+        env:
+          KEY: ${{ matrix.key }}
+        run: |
+          rpm -q pango harfbuzz freetype fontconfig cairo adwaita-sans-fonts gtk4 libadwaita glib2
+          mkdir -p _build/next-point/rpms
+          rpm -qa | sort >"_build/next-point/rpms/$KEY.txt"
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: next-point-rpms-${{ matrix.key }}
+          path: _build/next-point/rpms/
+          retention-days: 30
+
       - name: apex-desktop at tests/lib/pins.sh's APEX_DESKTOP_REV
         if: matrix.app == 'nautilus'
         run: |
@@ -361,7 +375,7 @@ jobs:
         run: |
           dnf5 -y -q --setopt=install_weak_deps=False --repo=fedora --repo=updates install \
             glib2-devel pkgconf-pkg-config gnome-shell mesa-dri-drivers dbus-daemon python3-dbusmock gcc util-linux jq \
-            jetbrains-mono-fonts-all adwaita-sans-fonts python3-gobject at-spi2-core procps-ng
+            jetbrains-mono-fonts-all adwaita-sans-fonts python3-gobject at-spi2-core procps-ng glibc-langpack-vi
           mkdir -p _build/next-point/counts
           ok=0 bad=0
           run() { if "$@"; then ok=$((ok + 1)); else bad=$((bad + 1)); fi; }

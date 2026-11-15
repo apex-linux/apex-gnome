@@ -125,6 +125,8 @@ np_counts() { "$APEX_ROOT/.github/scripts/next-point.sh" counts "$@"; }
 check "next-point: counts g2 reads patched.sh's last summary" 1865/0 "$(np_counts g2 "$TMP/np-g2.log")"
 check "next-point: counts goldens reads goldens.sh's, the last" 28/2 "$(np_counts goldens "$TMP/np-signoff.log")"
 check "next-point: counts shoot counts shoot.sh's TAP lines" 2/1 "$(np_counts shoot "$TMP/np-signoff.log")"
+printf '%s\n' 'ok light a11y: a' 'FAIL bounds: b' 'GAP bounds: c' 'APEXCC-CHECK FAIL 1' 'ok dark a11y: d' >"$TMP/np-cc.log"
+check "next-point: counts tap counts control-center's FAIL lines as failures" 2/1 "$(np_counts tap "$TMP/np-cc.log")"
 check "next-point: a log without a summary counts ?" "? ?" \
     "$(np_counts goldens "$TMP/dnf5") $(np_counts shoot "$TMP/np-g2.log")"
 check "next-point: a missing log counts ?" "? ?" "$(np_counts g2 "$TMP/none") $(np_counts shoot "$TMP/none")"
