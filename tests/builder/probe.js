@@ -192,7 +192,8 @@ async function starts() {
     return out;
 }
 
-// The names before any page has focus, then with a file open, then with the diagnostics popover open.
+// The names before any page has focus, then with a file open, then with the diagnostics popover
+// open, then with the bottom panel open (Ctrl+F9), closed again before the quit saves the session.
 async function idle() {
     const st = await launch(['gnome-builder', '-p', PROJECT]);
     await Scripting.sleep(QUIET_MS);
@@ -211,8 +212,14 @@ async function idle() {
     await Scripting.sleep(1000);
     const popover = await helper('APEX_BUILDER_ATSPI');
     tap(Clutter.KEY_Escape);
+    await Scripting.sleep(1000);
+    tap(Clutter.KEY_F9, [Clutter.KEY_Control_L]);
+    await Scripting.sleep(2000);
+    const bottom = await helper('APEX_BUILDER_ATSPI');
+    tap(Clutter.KEY_F9, [Clutter.KEY_Control_L]);
+    await Scripting.sleep(1000);
     await quit();
-    return {samples, names, noPage, popover: {pressed, names: popover}, title: st.window.get_title()};
+    return {samples, names, noPage, popover: {pressed, names: popover}, bottom, title: st.window.get_title()};
 }
 
 // The toolbox stopped, as after a reboot, with its start held 3 s: lookups meet it not yet running.

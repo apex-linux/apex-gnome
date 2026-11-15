@@ -195,6 +195,13 @@ check "\"Sidebar views\" names the sidebar's switcher, whose segments are the bo
      | $i != null and [.idle.names.nodes[$i + 1:][] | select(.role == "radio button") | .name][:1] == ["Project"]'
 check "the sidebar's pages the boards do not show move to the bottom panel: Build Targets, Manuals, To-Do, Unit Tests" \
     '.typing.toBottom | unique | length == 4'
+check "\"Panels\" names the bottom panel's switcher, open, and not the closed one" \
+    '(.idle.bottom.nodes | any(.role == "page tab list" and .name == "Panels")) and (.idle.names.nodes | any(.name == "Panels") | not)'
+check "the bottom panel's tabs: Build Targets, Manuals, To-Do, Unit Tests, each named and taking keyboard focus" \
+    '[.idle.bottom.nodes | to_entries[] | select(.value.role == "page tab list" and .value.name == "Panels") | .key] as [$i]
+     | $i != null and ([.idle.bottom.nodes[$i + 1:][] | select(.role == "page tab")] as $tabs
+     | ["Build Targets", "Manuals", "To-Do", "Unit Tests"] | all(. as $n | $tabs | any(.name == $n and .focusable)))
+     and (.idle.bottom.nodes | all(.role != "page tab" or .name != ""))'
 for name in "Pinned Pages" "Pages"; do
     check "\"$name\" names a tab list" ".idle.names.nodes | any(.role == \"page tab list\" and .name == \"$name\")"
 done
