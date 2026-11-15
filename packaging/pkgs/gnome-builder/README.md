@@ -168,7 +168,8 @@ puts at a row's trailing edge, is drawn as the board's 7px `--mod` dot.
 | Search's static entry and results | a live search of the project | the board draws one query |
 | Version control's counts, badges and list, hard-coded | live: the project's changes, the badge and pill their number | the board draws one branch |
 | the tree's dots on dock, dock.js, feature.js, tests and tests/layer only | Builder's own marks, on every ancestor of a changed file | the spec notes the board's skips as a quirk; Builder marks the whole path |
-| the commit box and its button | not yet: awaiting the lead's ruling | Builder has no commit UI; its git daemon can stage and commit |
+| the commit box and its button | Not on the board yet: commit box (needs staging; the agent text belongs to the agent feature) | a button over the list would commit more than it shows; it comes as its own change, with a choice per file |
+| Version control's +N −N | `git diff --numstat HEAD`, run on the host, asynchronously, refreshed with Builder's VCS | Builder's VCS has none; a repository without a HEAD yet lists its changes without counts |
 | an empty Outline | "No outline for this file", and, unlike Builder's symbol menu, the next resolver tried after an empty tree | the board has no empty state; ctags answers with an empty tree before its first index |
 
 ### Translations

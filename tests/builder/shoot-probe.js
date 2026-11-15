@@ -100,6 +100,9 @@ async function shoot() {
         JSON.stringify(vcs, null, 1));
     const missing = [...NAMED.filter(n => !nodes.some(m => m.role === n.role && m.name === n.name)),
         ...NAMED_VCS.filter(n => !vcs.some(m => m.role === n.role && m.name === n.name))];
+    // The badge on the segment and the pill over the list: "3" both.
+    if (vcs.filter(m => m.role === 'label' && m.name === '3').length < 2)
+        missing.push({role: 'label', name: '3 (the badge and the pill)'});
     if (missing.length)
         throw new Error(`no ${missing.map(n => `${n.role} named "${n.name}"`).join(', ')}`);
     console.log(`APEXBUILDERSHOT ${JSON.stringify({shot, frame: [r.x, r.y, r.width, r.height]})}`);
