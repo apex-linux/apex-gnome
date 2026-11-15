@@ -139,6 +139,8 @@ done
 check "the Run button is named for running the project" '.idle.names.nodes | any(.role == "button" and (.name | startswith("Run Project")))'
 check "no button, toggle button, tab list, progress bar, entry, list or label is unnamed" '.idle.names.nodes | all(.role == "text" or .name != "")'
 check "the diagnostics button is named for its counts, not \"0 0\"" '.idle.names.nodes | any(.role == "button" and (.name | test("^Build Diagnostics: [0-9]+ errors?, [0-9]+ warnings?$")))'
+check "the diagnostics button is named before any page has focus" '.idle.noPage.nodes | any(.role == "button" and (.name | test("^Build Diagnostics: [0-9]+ errors?, [0-9]+ warnings?$")))'
+check "the diagnostics popover's tab list is not named \"Panels\"" '.idle.popover.pressed and ([.idle.popover.names.nodes[] | select(.role == "page tab list" and .name == "Panels")] | length) == ([.idle.names.nodes[] | select(.role == "page tab list" and .name == "Panels")] | length)'
 for name in "Pinned Pages" "Pages" "Panels"; do
     check "\"$name\" names a tab list" ".idle.names.nodes | any(.role == \"page tab list\" and .name == \"$name\")"
 done

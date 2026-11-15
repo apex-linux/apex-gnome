@@ -186,8 +186,11 @@ async function starts() {
     return out;
 }
 
+// The names before any page has focus, then with a file open, then with the diagnostics popover open.
 async function idle() {
     const st = await launch(['gnome-builder', '-p', PROJECT]);
+    await Scripting.sleep(QUIET_MS);
+    const noPage = await helper('APEX_BUILDER_ATSPI');
     await spawnWait(['gnome-builder', LSP_FILE]);
     st.window.maximize(Meta.MaximizeFlags.BOTH);
     await Scripting.sleep(SETTLE_MS);
@@ -198,8 +201,12 @@ async function idle() {
         await Scripting.sleep(1000);
     }
     const names = await helper('APEX_BUILDER_ATSPI');
+    const {pressed} = await helper('APEX_BUILDER_PRESS', 'Build Diagnostics:*');
+    await Scripting.sleep(1000);
+    const popover = await helper('APEX_BUILDER_ATSPI');
+    tap(Clutter.KEY_Escape);
     await quit();
-    return {samples, names, title: st.window.get_title()};
+    return {samples, names, noPage, popover: {pressed, names: popover}, title: st.window.get_title()};
 }
 
 // Keys timed from the moment the first file opens and starts its diagnostics, then pylsp's answer.

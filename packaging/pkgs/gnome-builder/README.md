@@ -96,8 +96,8 @@ button both named "More Options". Two addins name them, with no hunk in upstream
 | the Run button's main button | "Run Project (Shift+Ctrl+Space)", or "Stop Running Project" | libadwaita labels it by its dropdown; the addin replaces that relation with `IdeRunButton`'s own tooltip, and follows it |
 | the status bar's diagnostics button (E2) | "Build Diagnostics: 0 errors, 0 warnings" | GTK named it "0 0" from its two count labels; found by its own tooltip in Builder's catalogue, and named from `IdeBuildManager`'s counts as they change (plurals from `APEX_NG_`) |
 | an editor tab bar's two tab lists (E2) | "Pinned Pages", "Pages" | by the accessible role, under `AdwTabBar`, the first being the pinned one |
-| a dock's panel switcher (E2) | "Panels" | by the accessible role, elsewhere |
-| a page's progress bar (E2) | "Loading Progress" | `GtkProgressBar` under an `IdePage` |
+| a dock's panel switcher (E2) | "Panels" | libpanel's `PanelFrameSwitcher` only; a popover's or a notebook's tab list keeps its own |
+| a page's progress bar (E2) | "Progress" | `GtkProgressBar` under an `IdePage`; it shows both loading and saving |
 | the project tree's filter (E2) | "Filter…" | a `GtkSearchEntry` is named by its placeholder |
 | the project tree (E2) | "Project Tree" | a `GtkListView` in a panel is named by the panel's title |
 | empty status bar labels (E2) | — | vim's command bar sits empty in the status bar, and the hidden state does not take it out of the tree, so the label is hidden while it has no text, even when its owner shows it |

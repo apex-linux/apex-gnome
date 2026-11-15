@@ -9,7 +9,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: apex-builder\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-15 12:27+0000\n"
+"POT-Creation-Date: 2026-11-15 12:52+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -84,24 +84,24 @@ msgstr[1] ""
 msgid "Build Diagnostics: %s, %s"
 msgstr ""
 
-#: src/plugins/apex/gbp-apex-a11y-addins.c:161
+#: src/plugins/apex/gbp-apex-a11y-addins.c:163
 msgid "Panels"
 msgstr ""
 
-#: src/plugins/apex/gbp-apex-a11y-addins.c:167
+#: src/plugins/apex/gbp-apex-a11y-addins.c:169
 msgid "Pages"
 msgstr ""
 
-#: src/plugins/apex/gbp-apex-a11y-addins.c:167
+#: src/plugins/apex/gbp-apex-a11y-addins.c:169
 msgid "Pinned Pages"
 msgstr ""
 
-#: src/plugins/apex/gbp-apex-a11y-addins.c:186
-msgid "Loading Progress"
+#: src/plugins/apex/gbp-apex-a11y-addins.c:188
+msgid "Progress"
 msgstr ""
 
 #. TRANSLATORS: the editor's accessible name; %s is the file
-#: src/plugins/apex/gbp-apex-a11y-addins.c:276
+#: src/plugins/apex/gbp-apex-a11y-addins.c:291
 #, c-format
 msgid "Editor for %s"
 msgstr ""

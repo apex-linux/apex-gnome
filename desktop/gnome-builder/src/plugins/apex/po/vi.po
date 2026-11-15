@@ -137,5 +137,5 @@ msgstr "Các trang"
 msgid "Pinned Pages"
 msgstr "Các trang đã ghim"
 
-msgid "Loading Progress"
-msgstr "Tiến trình tải"
+msgid "Progress"
+msgstr "Tiến trình"
