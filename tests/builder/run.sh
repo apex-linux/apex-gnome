@@ -167,5 +167,7 @@ jq -r '[
     "longest key (ms): \(.typing.keys | max)",
     "completion items: \(.typing.completionItems)"
 ] | join("; ")' "$OUT/run.json" >&2
+# Start times move with the runner's CPU from one CI run to the next: name it beside them.
+log "machine: $(nproc) CPUs, $(sed -n 's/^model name[[:space:]]*: //p' /proc/cpuinfo | sort -u | head -n 1)"
 ((fails == 0)) || die "run.sh: $fails check(s) failed; see ${OUT#"$APEX_ROOT/"}/run.json"
 log "run.sh: every check passed"
