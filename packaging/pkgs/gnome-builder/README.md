@@ -126,8 +126,16 @@ keys dark on `AdwStyleManager`, which Builder's style variant sets, through a `d
 It takes only the boards' views as drops: a document dragged
 there would leave the editor grid, and with it the close prompt for its unsaved edits.
 Every start frame is swept, a split one a session restored included: the other panes go
-to the bottom panel, the views join the switcher's frame. The moved panes' `presented`
-signal is blocked while they move, or TODO/FIXMEs would mine the project at every start.
+to the bottom panel, the views join the switcher's frame, and a frame left empty leaves
+the sidebar, or it would sit there as an empty "Panels" switcher and be saved again. The
+moved panes' `presented` signal stays blocked until the main loop is idle, after libpanel
+has presented whatever the move selected, or TODO/FIXMEs would mine the project at every
+start. It is blocked again while the window is unmapped: closing, Builder closes the bottom
+panel's panes one by one, each close presents the next, and every close path hides the
+window first. Builder saves its session only on a clean close, so the lane closes the window,
+splits the saved session (`tests/builder/session.py`), and opens it again. Under
+`APEX_BUILDER_SELFTEST` the sidebar logs whether its header takes each page changed to,
+which the lane reads for the editor page: libpanel's drop target asks the same function.
 Project and Outline exist so far; Search and Version control come as their panes do.
 
 The Outline view (`gbp-apex-outline-pane.c`) is an `IdePane` on the start frame. It follows
