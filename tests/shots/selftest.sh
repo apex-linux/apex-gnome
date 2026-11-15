@@ -3200,6 +3200,18 @@ test_g2_subset() {
     subset_counts split split_cases "$run" >/dev/null
     expect_eq "subset: a split run without glass-stress fails it, and asks for no rest case" "1/0" \
         "$(grep -c '^FAIL glass-stress: no log$' "$T/assertions.out")/$(grep -c '^FAIL default: no log$' "$T/assertions.out")"
+    echo 'BOOT_IMAGE=/vmlinuz root=UUID=0 rw quiet' >"$run/cmdline-main.txt"
+    subset_counts split split_cases "$run" >/dev/null
+    expect_eq "subset: a split run's /proc/cmdline without apex.safe=1 passes" 1 \
+        "$(grep -c "^PASS the split cases: the VM's /proc/cmdline has no apex.safe=1$" "$T/assertions.out")"
+    echo 'BOOT_IMAGE=/vmlinuz root=UUID=0 rw apex.safe=1 quiet' >"$run/cmdline-main.txt"
+    subset_counts split split_cases "$run" >/dev/null
+    expect_eq "subset: and one with apex.safe=1 fails" 1 \
+        "$(grep -c "^FAIL the split cases: the VM's /proc/cmdline has no apex.safe=1$" "$T/assertions.out")"
+    rm "$run/cmdline-main.txt"
+    subset_counts split split_cases "$run" >/dev/null
+    expect_eq "subset: and one without cmdline-main.txt fails" 1 \
+        "$(grep -c "^FAIL the split cases: the VM's /proc/cmdline has no apex.safe=1$" "$T/assertions.out")"
     subset_counts rest direct_cases "$run" >/dev/null
     expect_eq "subset: a rest run without its cases fails each, and asks for no split case" "1/0" \
         "$(grep -c '^FAIL default: no log$' "$T/assertions.out")/$(grep -c '^FAIL glass-stress: no log$' "$T/assertions.out")"
