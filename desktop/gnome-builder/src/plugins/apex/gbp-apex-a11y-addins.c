@@ -276,8 +276,19 @@ gbp_apex_workspace_addin_page_changed (IdeWorkspaceAddin *addin,
 }
 
 static void
+gbp_apex_workspace_addin_restore_session (IdeWorkspaceAddin *addin,
+                                          IdeSession        *session)
+{
+  GbpApexWorkspaceAddin *self = GBP_APEX_WORKSPACE_ADDIN (addin);
+
+  if (self->sidebar != NULL)
+    gbp_apex_sidebar_session_restored (self->sidebar);
+}
+
+static void
 workspace_addin_iface_init (IdeWorkspaceAddinInterface *iface)
 {
+  iface->restore_session = gbp_apex_workspace_addin_restore_session;
   iface->load = gbp_apex_workspace_addin_load;
   iface->unload = gbp_apex_workspace_addin_unload;
   iface->page_changed = gbp_apex_workspace_addin_page_changed;

@@ -9,7 +9,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: apex-builder\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-15 19:50+0000\n"
+"POT-Creation-Date: 2026-11-15 20:28+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -105,7 +105,7 @@ msgid "Progress"
 msgstr ""
 
 #. TRANSLATORS: the editor's accessible name; %s is the file
-#: src/plugins/apex/gbp-apex-a11y-addins.c:307
+#: src/plugins/apex/gbp-apex-a11y-addins.c:318
 #, c-format
 msgid "Editor for %s"
 msgstr ""
@@ -117,7 +117,7 @@ msgstr ""
 
 #: src/plugins/apex/gbp-apex-outline-pane.c:390
 #: src/plugins/apex/gbp-apex-outline-pane.c:471
-#: src/plugins/apex/gbp-apex-sidebar.c:27
+#: src/plugins/apex/gbp-apex-sidebar.c:28
 msgid "Outline"
 msgstr ""
 
@@ -130,11 +130,11 @@ msgstr ""
 msgid "No outline for this file"
 msgstr ""
 
-#: src/plugins/apex/gbp-apex-sidebar.c:26
+#: src/plugins/apex/gbp-apex-sidebar.c:27
 msgid "Project"
 msgstr ""
 
-#: src/plugins/apex/gbp-apex-sidebar.c:307
+#: src/plugins/apex/gbp-apex-sidebar.c:326
 msgid "Sidebar views"
 msgstr ""
 
