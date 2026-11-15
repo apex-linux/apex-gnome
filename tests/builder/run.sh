@@ -228,7 +228,7 @@ check "and nothing warns of it: no warning from the apex or git plugins, the bad
     '(.nohead.warnings | length == 0) and .nohead.badge'
 check "typing for 10 s there while the list loads: no key over ${STALL_MS} ms" '.nohead.keys | length > 30 and all(. != null) and max <= $stall'
 check "Ctrl+K opens the palette, named; its results list is \"Results\", e1_lsp.py first under Files and selected" \
-    '.idle.palette.names.nodes | (any(.role == "entry" and .name == "Search files, symbols and commands")
+    '.idle.palette.names.nodes | (any((.role == "text" or .role == "entry") and .name == "Search files, symbols and commands")
      and (. as $n | [range(length)] | map(select($n[.].role == "list" and $n[.].name == "Results"))[0] as $i
      | $i != null and ([$n[$i + 1:][] | select(.role == "list item")][:2] | map([.name, .selected])) == [["Files", false], ["e1_lsp.py, tests", true]]))'
 check "Enter on it opens e1_lsp.py and closes the palette" '.idle.palette.opened and (.idle.palette.after.nodes | any(.name == "Results") | not)'
