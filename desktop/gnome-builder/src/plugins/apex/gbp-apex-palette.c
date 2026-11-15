@@ -535,7 +535,8 @@ gbp_apex_palette_init (GbpApexPalette *self)
 
   gtk_widget_add_css_class (input, "input");
   gtk_box_append (GTK_BOX (input), gtk_image_new_from_icon_name ("system-search-symbolic"));
-  self->text = GTK_TEXT (gtk_text_new ());
+  /* A bare GtkText has no role of its own: the entry's, so a reader finds the field. */
+  self->text = g_object_new (GTK_TYPE_TEXT, "accessible-role", GTK_ACCESSIBLE_ROLE_TEXT_BOX, NULL);
   gtk_widget_set_hexpand (GTK_WIDGET (self->text), TRUE);
   gtk_accessible_update_property (GTK_ACCESSIBLE (self->text), GTK_ACCESSIBLE_PROPERTY_LABEL,
                                   APEX_("Search files, symbols and commands"), -1);

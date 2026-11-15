@@ -9,7 +9,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: apex-builder\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-15 22:35+0000\n"
+"POT-Creation-Date: 2026-11-15 22:41+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -155,7 +155,7 @@ msgid "Go to line %u"
 msgstr ""
 
 #: src/plugins/apex/gbp-apex-palette.c:352
-#: src/plugins/apex/gbp-apex-palette.c:547
+#: src/plugins/apex/gbp-apex-palette.c:548
 msgid "Files, symbols and commands"
 msgstr ""
 
@@ -164,23 +164,23 @@ msgid "> commands only · @ symbols · : line"
 msgstr ""
 
 #: src/plugins/apex/gbp-apex-palette.c:533
-#: src/plugins/apex/gbp-apex-palette.c:541
+#: src/plugins/apex/gbp-apex-palette.c:542
 msgid "Search files, symbols and commands"
 msgstr ""
 
-#: src/plugins/apex/gbp-apex-palette.c:553
+#: src/plugins/apex/gbp-apex-palette.c:554
 msgid "Results"
 msgstr ""
 
-#: src/plugins/apex/gbp-apex-palette.c:557
+#: src/plugins/apex/gbp-apex-palette.c:558
 msgid "↑↓ to move"
 msgstr ""
 
-#: src/plugins/apex/gbp-apex-palette.c:558
+#: src/plugins/apex/gbp-apex-palette.c:559
 msgid "Enter to open"
 msgstr ""
 
-#: src/plugins/apex/gbp-apex-palette.c:559
+#: src/plugins/apex/gbp-apex-palette.c:560
 msgid "Esc to close"
 msgstr ""
 
