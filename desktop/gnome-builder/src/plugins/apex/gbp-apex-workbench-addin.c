@@ -35,6 +35,7 @@ struct _GbpApexWorkbenchAddin
   IdeNotification *notif;
   GSimpleActionGroup *actions;
   JsonObject      *toolbox;
+  char            *toolbox_name;
   gulong           runtimes_changed_id;
   guint            creating : 1;
   guint            created : 1;
@@ -160,6 +161,27 @@ gbp_apex_workbench_addin_apply (GbpApexWorkbenchAddin *self)
     }
 }
 
+/* The matched container's own name: fedora-toolbox-45, or another toolbox of its image. */
+static char *
+toolbox_name_of (JsonObject *toolbox)
+{
+  JsonArray *names;
+  const char *first = NULL;
+
+  if (json_object_has_member (toolbox, "Names") && (names = json_object_get_array_member (toolbox, "Names")))
+    for (guint j = 0; j < json_array_get_length (names); j++)
+      {
+        const char *name = json_array_get_string_element (names, j);
+
+        if (g_strcmp0 (name, APEX_TOOLBOX_NAME) == 0)
+          return g_strdup (name);
+        if (first == NULL)
+          first = name;
+      }
+
+  return g_strdup (first != NULL ? first : APEX_TOOLBOX_NAME);
+}
+
 static JsonObject *
 find_toolbox (JsonArray *containers)
 {
@@ -200,9 +222,18 @@ gbp_apex_workbench_addin_add_runtime (GbpApexWorkbenchAddin *self,
   g_autoptr(IdeObject) adapter = NULL;
   g_autoptr(IdeObject) provider = NULL;
   g_autoptr(GbpPodmanRuntime) runtime = NULL;
+  IdeRuntime *existing;
 
-  if (ide_runtime_manager_get_runtime (runtime_manager, runtime_id) != NULL ||
-      !(adapter = ide_object_get_child_typed (IDE_OBJECT (runtime_manager), IDE_TYPE_EXTENSION_SET_ADAPTER)) ||
+  /* Finish Setup: the runtime stays, the pipeline holding it, but what it found missing is asked again. */
+  if ((existing = ide_runtime_manager_get_runtime (runtime_manager, runtime_id)) != NULL)
+    {
+      if (GBP_IS_PODMAN_RUNTIME (existing))
+        gbp_podman_runtime_forget_programs (GBP_PODMAN_RUNTIME (existing));
+      ide_build_manager_invalidate (ide_build_manager_from_context (ide_workbench_get_context (self->workbench)));
+      return;
+    }
+
+  if (!(adapter = ide_object_get_child_typed (IDE_OBJECT (runtime_manager), IDE_TYPE_EXTENSION_SET_ADAPTER)) ||
       !(provider = ide_object_get_child_typed (adapter, GBP_TYPE_PODMAN_RUNTIME_PROVIDER)) ||
       !(runtime = gbp_podman_runtime_new (toolbox)))
     return;
@@ -216,15 +247,16 @@ gbp_apex_workbench_addin_servers_cb (GObject      *object,
                                      gpointer      user_data)
 {
   g_autoptr(GbpApexWorkbenchAddin) self = user_data;
+  g_autofree char *body = NULL;
 
   if (self->workbench == NULL || self->creating ||
       ide_subprocess_wait_check_finish (IDE_SUBPROCESS (object), result, NULL))
     return;
 
-  gbp_apex_workbench_addin_notify (self,
-                                   APEX_("Toolbox Setup Incomplete"),
-                                   APEX_("fedora-toolbox-45 lacks some of its language servers, so their languages have no completion or diagnostics. Finish its setup to install them."),
-                                   APEX_("Finish Setup"));
+  /* TRANSLATORS: %s is the toolbox's name, such as fedora-toolbox-45 */
+  body = g_strdup_printf (APEX_("%s lacks some of its language servers, so their languages have no completion or diagnostics. Finish its setup to install them."),
+                          self->toolbox_name);
+  gbp_apex_workbench_addin_notify (self, APEX_("Toolbox Setup Incomplete"), body, APEX_("Finish Setup"));
 }
 
 /* A toolbox whose setup stopped halfway would be used without its servers. */
@@ -237,7 +269,7 @@ gbp_apex_workbench_addin_check_servers (GbpApexWorkbenchAddin *self)
   launcher = toolbox_launcher_new (G_SUBPROCESS_FLAGS_STDOUT_SILENCE | G_SUBPROCESS_FLAGS_STDERR_SILENCE);
   ide_subprocess_launcher_set_cwd (launcher, g_get_home_dir ());
   ide_subprocess_launcher_push_args (launcher,
-                                     IDE_STRV_INIT ("toolbox", "run", "--container", APEX_TOOLBOX_NAME, "sh", "-c",
+                                     IDE_STRV_INIT ("toolbox", "run", "--container", self->toolbox_name, "sh", "-c",
                                                     "command -v pylsp && command -v rust-analyzer && command -v typescript-language-server"));
 
   if ((subprocess = ide_subprocess_launcher_spawn (launcher, NULL, NULL)))
@@ -276,6 +308,8 @@ gbp_apex_workbench_addin_ps_cb (GObject      *object,
     {
       g_clear_pointer (&self->toolbox, json_object_unref);
       self->toolbox = json_object_ref (toolbox);
+      g_free (self->toolbox_name);
+      self->toolbox_name = toolbox_name_of (toolbox);
       if (self->created)
         gbp_apex_workbench_addin_add_runtime (self, toolbox);
       gbp_apex_workbench_addin_apply (self);
@@ -329,11 +363,13 @@ gbp_apex_workbench_addin_create_cb (GObject      *object,
     gbp_apex_workbench_addin_notify (self, APEX_("Could Not Create the Toolbox"), error->message, APEX_("Create Toolbox"));
   else
     {
+      g_autofree char *body = NULL;
+
       self->created = TRUE;
-      gbp_apex_workbench_addin_notify (self,
-                                       APEX_("Toolbox Ready"),
-                                       APEX_("fedora-toolbox-45 has its language servers, and builds and language servers now run in it."),
-                                       NULL);
+      /* TRANSLATORS: %s is the toolbox's name, such as fedora-toolbox-45 */
+      body = g_strdup_printf (APEX_("%s has its language servers, and builds and language servers now run in it."),
+                              self->toolbox_name != NULL ? self->toolbox_name : APEX_TOOLBOX_NAME);
+      gbp_apex_workbench_addin_notify (self, APEX_("Toolbox Ready"), body, NULL);
       gbp_apex_workbench_addin_find (self);
     }
 }
@@ -351,13 +387,17 @@ create_toolbox_action (GSimpleAction *action,
   if (self->creating || self->workbench == NULL)
     return;
 
-  /* Resumable: a toolbox whose setup failed is set up again, not created again. */
+  /* Resumable: the toolbox found, whatever its name, is set up again, and only a missing one created. */
   launcher = toolbox_launcher_new (G_SUBPROCESS_FLAGS_STDOUT_SILENCE | G_SUBPROCESS_FLAGS_STDERR_SILENCE);
-  ide_subprocess_launcher_push_args (launcher,
-                                     IDE_STRV_INIT ("sh", "-c",
-                                                    "{ podman container exists " APEX_TOOLBOX_NAME
-                                                    " || toolbox create --assumeyes --image " APEX_TOOLBOX_IMAGE " " APEX_TOOLBOX_NAME "; }"
-                                                    " && toolbox run --container " APEX_TOOLBOX_NAME " sh -c '" APEX_TOOLBOX_SETUP "'"));
+  if (self->toolbox_name != NULL)
+    ide_subprocess_launcher_push_args (launcher,
+                                       IDE_STRV_INIT ("toolbox", "run", "--container", self->toolbox_name, "sh", "-c", APEX_TOOLBOX_SETUP));
+  else
+    ide_subprocess_launcher_push_args (launcher,
+                                       IDE_STRV_INIT ("sh", "-c",
+                                                      "{ podman container exists " APEX_TOOLBOX_NAME
+                                                      " || toolbox create --assumeyes --image " APEX_TOOLBOX_IMAGE " " APEX_TOOLBOX_NAME "; }"
+                                                      " && toolbox run --container " APEX_TOOLBOX_NAME " sh -c '" APEX_TOOLBOX_SETUP "'"));
 
   if (!(subprocess = ide_subprocess_launcher_spawn (launcher, NULL, &error)))
     {
@@ -366,10 +406,19 @@ create_toolbox_action (GSimpleAction *action,
     }
 
   self->creating = TRUE;
-  gbp_apex_workbench_addin_notify (self,
-                                   APEX_("Creating the Toolbox"),
-                                   APEX_("Downloading fedora-toolbox-45 and installing its language servers."),
-                                   NULL);
+  if (self->toolbox_name != NULL)
+    {
+      g_autofree char *body = NULL;
+
+      /* TRANSLATORS: %s is the toolbox's name, such as fedora-toolbox-45 */
+      body = g_strdup_printf (APEX_("Installing the language servers %s lacks."), self->toolbox_name);
+      gbp_apex_workbench_addin_notify (self, APEX_("Finishing the Toolbox Setup"), body, NULL);
+    }
+  else
+    gbp_apex_workbench_addin_notify (self,
+                                     APEX_("Creating the Toolbox"),
+                                     APEX_("Downloading fedora-toolbox-45 and installing its language servers."),
+                                     NULL);
   ide_notification_set_has_progress (self->notif, TRUE);
   ide_notification_set_progress_is_imprecise (self->notif, TRUE);
   ide_subprocess_wait_check_async (subprocess, NULL, gbp_apex_workbench_addin_create_cb, g_object_ref (self));
@@ -424,6 +473,7 @@ gbp_apex_workbench_addin_dispose (GObject *object)
   g_clear_object (&self->notif);
   g_clear_object (&self->actions);
   g_clear_pointer (&self->toolbox, json_object_unref);
+  g_clear_pointer (&self->toolbox_name, g_free);
 
   G_OBJECT_CLASS (gbp_apex_workbench_addin_parent_class)->dispose (object);
 }

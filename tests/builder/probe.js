@@ -18,6 +18,9 @@ const LSP_FILE = env('APEX_BUILDER_LSP_FILE');
 const TYPING_FILE = env('APEX_BUILDER_TYPING_FILE');
 const TYPING_PROJECT = env('APEX_BUILDER_TYPING_PROJECT');
 const TOOLBOX = env('APEX_BUILDER_TOOLBOX');
+const PLAIN_PROJECT = env('APEX_BUILDER_PLAIN_PROJECT');
+const PLAIN_ID = env('APEX_BUILDER_PLAIN_ID');
+const JHBUILD_PROJECT = env('APEX_BUILDER_JHBUILD_PROJECT');
 // E0's harness: three cold starts after a discarded one; 30 s settled, then 10 samples a second apart.
 const STARTS = 3;
 const WINDOW_WAIT_MS = 60000;
@@ -279,19 +282,46 @@ async function create() {
             toolboxNames: names.filter(n => /oolbox/.test(n))};
 }
 
-// A toolbox whose setup stopped halfway (pylsp's package gone): Apex Code says so, and Finish
-// Setup installs that package again, and only that.
+function readText(path) {
+    const [, bytes] = GLib.file_get_contents(path);
+    return new TextDecoder().decode(bytes);
+}
+
+// The toolbox under another name, as `toolbox create --image …fedora-toolbox:45 dev` makes it.
+const RENAMED = 'dev';
+const PYLSP_SPAWNED = /Language server .pylsp. spawned as process/g;
+
+// With every server there, Apex Code checks dev under its own name and offers no Finish Setup.
+async function renamed() {
+    const log = env('APEX_BUILDER_RENAMED_LOG');
+    const check = new RegExp(`Launching toolbox run --container ${RENAMED} sh -c command -v pylsp`);
+    await launch(['sh', '-c', `exec gnome-builder -vvv -p '${PROJECT}' > '${log}' 2>&1`]);
+    const t0 = now();
+    while (!check.test(readText(log)) && (now() - t0) / 1000 < PRESS_WAIT_MS)
+        await Scripting.sleep(1000);
+    await Scripting.sleep(2 * QUIET_MS);
+    const {names} = await helper('APEX_BUILDER_PRESS', '--names');
+    await quit();
+    return {checkedByName: check.test(readText(log)), offersFinishSetup: names.includes('Finish Setup'),
+            notices: names.filter(n => /Toolbox|Setup/.test(n))};
+}
+
+// dev whose setup stopped halfway (pylsp's package gone), with a Python file open: Apex Code says
+// so, Finish Setup installs that package again in dev, and pylsp, looked up as missing, then spawns.
 async function finishSetup() {
-    const has = () => spawnWait(['podman', 'exec', TOOLBOX, 'sh', '-c', 'command -v pylsp']);
-    await spawnWait(['podman', 'exec', TOOLBOX, 'rpm', '-e', '--nodeps', 'python3-lsp-server']);
+    const has = () => spawnWait(['podman', 'exec', RENAMED, 'sh', '-c', 'command -v pylsp']);
+    const log = env('APEX_BUILDER_SETUP_LOG');
+    await spawnWait(['podman', 'exec', RENAMED, 'rpm', '-e', '--nodeps', 'python3-lsp-server']);
     const removed = await has() !== 0;
-    await launch(['gnome-builder', '-p', PROJECT]);
+    await launch(['sh', '-c', `exec gnome-builder -vvv -p '${PROJECT}' > '${log}' 2>&1`]);
+    await spawnWait(['gnome-builder', LSP_FILE]);
     const t0 = now();
     let pressed = false;
     while (!pressed && (now() - t0) / 1000 < PRESS_WAIT_MS) {
         await Scripting.sleep(1000);
         ({pressed} = await helper('APEX_BUILDER_PRESS', 'Finish Setup'));
     }
+    const spawnedBefore = [...readText(log).matchAll(PYLSP_SPAWNED)].length;
     let restoredAfterS = null;
     const t1 = now();
     while (pressed && restoredAfterS === null && (now() - t1) / 1000 < SETUP_WAIT_MS) {
@@ -299,8 +329,69 @@ async function finishSetup() {
         if (await has() === 0)
             restoredAfterS = Math.round((now() - t1) / 1e6);
     }
+    let spawnedAfterS = null;
+    while (restoredAfterS !== null && spawnedAfterS === null && (now() - t1) / 1e6 < restoredAfterS + LSP_WAIT_MS / 1000) {
+        await Scripting.sleep(1000);
+        if ([...readText(log).matchAll(PYLSP_SPAWNED)].length > spawnedBefore)
+            spawnedAfterS = Math.round((now() - t1) / 1e6);
+    }
+    const secondToolbox = await spawnWait(['podman', 'container', 'exists', TOOLBOX]) === 0;
     await quit();
-    return {removed, pressed, restoredAfterS};
+    return {removed, pressed, restoredAfterS, spawnedBefore, spawnedAfterS, secondToolbox};
+}
+
+async function underAnotherName() {
+    await spawnWait(['podman', 'rename', TOOLBOX, RENAMED]);
+    try {
+        return {renamed: await renamed(), setup: await finishSetup()};
+    } finally {
+        await spawnWait(['podman', 'rename', RENAMED, TOOLBOX]);
+    }
+}
+
+// Builder lists every podman container: one that is no toolbox, without `which`, is the
+// runtime of a plain project. Each lookup there, and on which thread, counted per program.
+async function plain() {
+    const log = env('APEX_BUILDER_PLAIN_LOG');
+    const st = await launch(['sh', '-c', `GSK_RENDERER=cairo exec gnome-builder -vvv -p '${PLAIN_PROJECT}' > '${log}' 2>&1`]);
+    await spawnWait(['gnome-builder', `${PLAIN_PROJECT}/e2_plain.py`]);
+    const keys = await typeTimed(st.window, TYPING_MS);
+    const pid = st.window.get_pid();
+    const counts = {};
+    for (const line of readText(log).split('\n')) {
+        const m = line.match(/ide-subprocess-launcher\[\s*(\d+)\]:\s+DEBUG: Launching podman exec .*'which' '([^']+)'/);
+        if (!m || !line.includes(PLAIN_ID))
+            continue;
+        counts[m[2]] ??= {program: m[2], count: 0, mainThread: 0};
+        counts[m[2]].count++;
+        if (Number(m[1]) === pid)
+            counts[m[2]].mainThread++;
+    }
+    await quit();
+    return {keys, lookups: Object.values(counts)};
+}
+
+// A runtime neither podman nor host, from a stand-in jhbuild: its lookups stay on the main thread.
+const JHBUILD = `${GLib.get_home_dir()}/.local/bin/jhbuild`;
+
+async function jhbuild() {
+    const log = env('APEX_BUILDER_JHBUILD_LOG');
+    GLib.mkdir_with_parents(GLib.path_get_dirname(JHBUILD), 0o755);
+    GLib.file_set_contents(JHBUILD, '#!/bin/sh\n[ "$1" = run ] && shift\nJHBUILD_PREFIX=/usr exec "$@"\n');
+    await spawnWait(['chmod', '755', JHBUILD]);
+    await launch(['sh', '-c', `exec gnome-builder -vvv -p '${JHBUILD_PROJECT}' > '${log}' 2>&1`]);
+    await spawnWait(['gnome-builder', `${JHBUILD_PROJECT}/e2_jhbuild.py`]);
+    await type('import os\n');
+    for (let i = 0; i < 60 && !/Leaving \S+ in jhbuild to the main thread/.test(readText(log)); i++)
+        await Scripting.sleep(500);
+    await Scripting.sleep(QUIET_MS);
+    const text = readText(log);
+    await quit();
+    GLib.unlink(JHBUILD);
+    return {
+        left: [...new Set([...text.matchAll(/Leaving \S+ in (\S+) to the main thread/g)].map(m => m[1]))],
+        offThread: [...new Set([...text.matchAll(/Looking up \S+ in (\S+) off the main thread/g)].map(m => m[1]))],
+    };
 }
 
 async function drive() {
@@ -308,8 +399,8 @@ async function drive() {
         .create_virtual_device(Clutter.InputDeviceType.KEYBOARD_DEVICE);
     Main.overview.hide();
     const created = env('APEX_BUILDER_CREATE') === 'true' ? await create() : null;
-    const setup = created !== null ? await finishSetup() : null;
-    return {create: created, setup, starts: await starts(), idle: await idle(), typing: await typing()};
+    return {create: created, ...await underAnotherName(), starts: await starts(), idle: await idle(), typing: await typing(),
+            plain: await plain(), jhbuild: await jhbuild()};
 }
 
 // main.js connects to startup-complete only after importing this module, so a startup that

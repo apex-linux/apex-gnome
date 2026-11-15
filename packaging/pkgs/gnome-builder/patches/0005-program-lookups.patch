@@ -1,6 +1,6 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Thuong Vo <66083331+SekiroKenjii@users.noreply.github.com>
-Date: Sun, 15 Nov 2026 11:17:17 +0000
+Date: Sun, 15 Nov 2026 16:35:47 +0000
 Subject: [PATCH] foundry, lsp, podman: look up programs off the main thread
 
 A file's first diagnostics pass, each language server's start when a
@@ -22,23 +22,32 @@ thread as before, and find every answer cached.
 Only the podman and host runtimes are looked up there: both answer from
 an IdePathCache, which locks. Others stay on the main thread, as a
 Flatpak runtime reaches the context's runtime manager for its SDK, which
-is main-thread only.
+is main-thread only; each lookup left to it is logged ("Leaving PROGRAM
+in RUNTIME to the main thread").
 
 The podman runtime, looked up from threads now:
-- caches only which's own answer, exit 0 or 1, and not a cancelled wait
-  or podman's own failure (125 while `podman start` is still running),
-  which was cached as a miss for good;
+- caches every answer but a cancelled wait and podman's 125 while
+  `podman start` had not yet exited, which was cached as a miss for
+  good; any other status (127 from a container without `which`, 125 from
+  one that will not start) is a miss, cached, as before, so it costs one
+  lookup per program rather than one per diagnostics pass;
 - lets a worker thread wait until `podman start` has exited, whoever
   started it, under a condition, while the main thread never waits;
 - frees its id, JSON object and path cache in finalize, not destroy,
   since a lookup on a worker may still use them.
+- forgets its programs with gbp_podman_runtime_forget_programs(), on
+  ide_path_cache_clear(), for a caller that changed what the container
+  has installed.
 ---
  src/libide/foundry/ide-diagnostic-tool.c  | 139 +++++++++++++----
+ src/libide/foundry/ide-path-cache.c       |  16 ++
+ src/libide/foundry/ide-path-cache.h       |   2 +
  src/libide/foundry/ide-pipeline-private.h |   8 +
- src/libide/foundry/ide-pipeline.c         | 176 +++++++++++++++++++++-
+ src/libide/foundry/ide-pipeline.c         | 179 +++++++++++++++++++++-
  src/libide/lsp/ide-lsp-service.c          |  46 ++++++
- src/plugins/podman/gbp-podman-runtime.c   |  89 ++++++++---
- 5 files changed, 404 insertions(+), 54 deletions(-)
+ src/plugins/podman/gbp-podman-runtime.c   | 104 ++++++++++---
+ src/plugins/podman/gbp-podman-runtime.h   |   3 +-
+ 8 files changed, 442 insertions(+), 55 deletions(-)
 
 diff --git a/src/libide/foundry/ide-diagnostic-tool.c b/src/libide/foundry/ide-diagnostic-tool.c
 index f373324..26b41e6 100644
@@ -239,6 +248,42 @@ index f373324..26b41e6 100644
  
    IDE_EXIT;
  }
+diff --git a/src/libide/foundry/ide-path-cache.c b/src/libide/foundry/ide-path-cache.c
+index e430b6e..161c31c 100644
+--- a/src/libide/foundry/ide-path-cache.c
++++ b/src/libide/foundry/ide-path-cache.c
+@@ -183,3 +183,19 @@ ide_path_cache_insert (IdePathCache *self,
+   g_hash_table_insert (self->cache, key, value);
+   g_mutex_unlock (&self->mutex);
+ }
++
++/**
++ * ide_path_cache_clear:
++ * @self: a #IdePathCache
++ *
++ * Removes every entry, positive and negative, so that the next lookups ask again.
++ */
++void
++ide_path_cache_clear (IdePathCache *self)
++{
++  g_return_if_fail (IDE_IS_PATH_CACHE (self));
++
++  g_mutex_lock (&self->mutex);
++  g_hash_table_remove_all (self->cache);
++  g_mutex_unlock (&self->mutex);
++}
+diff --git a/src/libide/foundry/ide-path-cache.h b/src/libide/foundry/ide-path-cache.h
+index 7f2c27e..3ddde52 100644
+--- a/src/libide/foundry/ide-path-cache.h
++++ b/src/libide/foundry/ide-path-cache.h
+@@ -47,5 +47,7 @@ IDE_AVAILABLE_IN_44
+ void          ide_path_cache_insert   (IdePathCache  *self,
+                                        const char    *program_name,
+                                        const char    *program_path);
++IDE_AVAILABLE_IN_ALL
++void          ide_path_cache_clear    (IdePathCache  *self);
+ 
+ G_END_DECLS
 diff --git a/src/libide/foundry/ide-pipeline-private.h b/src/libide/foundry/ide-pipeline-private.h
 index 8d0ebda..ec31945 100644
 --- a/src/libide/foundry/ide-pipeline-private.h
@@ -258,7 +303,7 @@ index 8d0ebda..ec31945 100644
  
  G_END_DECLS
 diff --git a/src/libide/foundry/ide-pipeline.c b/src/libide/foundry/ide-pipeline.c
-index 8178a1c..a208937 100644
+index 8178a1c..aae5f45 100644
 --- a/src/libide/foundry/ide-pipeline.c
 +++ b/src/libide/foundry/ide-pipeline.c
 @@ -61,6 +61,7 @@
@@ -318,7 +363,7 @@ index 8178a1c..a208937 100644
  }
  
  static void
-@@ -4399,6 +4429,146 @@ contains_in_runtime_with_alt_path (IdeRuntime *runtime,
+@@ -4399,6 +4429,149 @@ contains_in_runtime_with_alt_path (IdeRuntime *runtime,
    return FALSE;
  }
  
@@ -355,7 +400,10 @@ index 8178a1c..a208937 100644
 +  g_auto(GStrv) dirs = NULL;
 +
 +  if (!find_programs_runtime_is_threadsafe (runtime))
-+    return;
++    {
++      g_debug ("Leaving %s in %s to the main thread", program, ide_runtime_get_id (runtime));
++      return;
++    }
 +
 +  if (path == NULL)
 +    {
@@ -552,7 +600,7 @@ index 4388cd5..9099c62 100644
    if (!priv->inherit_stderr && !g_settings_get_boolean (settings, "lsp-inherit-stderr"))
      flags |= G_SUBPROCESS_FLAGS_STDERR_SILENCE;
 diff --git a/src/plugins/podman/gbp-podman-runtime.c b/src/plugins/podman/gbp-podman-runtime.c
-index e8f81e1..dbd7cec 100644
+index e8f81e1..c255f3f 100644
 --- a/src/plugins/podman/gbp-podman-runtime.c
 +++ b/src/plugins/podman/gbp-podman-runtime.c
 @@ -36,48 +36,86 @@ struct _GbpPodmanRuntime
@@ -658,31 +706,60 @@ index e8f81e1..dbd7cec 100644
    g_mutex_unlock (&self->mutex);
  }
  
-@@ -212,6 +250,7 @@ gbp_podman_runtime_contains_program_in_path (IdeRuntime   *runtime,
+@@ -212,6 +250,8 @@ gbp_podman_runtime_contains_program_in_path (IdeRuntime   *runtime,
    GbpPodmanRuntime *self = (GbpPodmanRuntime *) runtime;
    gboolean found;
    gboolean ret;
 +  int status;
++  int start;
  
    IDE_ENTRY;
  
-@@ -235,7 +274,14 @@ gbp_podman_runtime_contains_program_in_path (IdeRuntime   *runtime,
+@@ -224,6 +264,7 @@ gbp_podman_runtime_contains_program_in_path (IdeRuntime   *runtime,
+   run_context = ide_run_context_new ();
+ 
+   gbp_podman_runtime_prepare_run_context (runtime, NULL, run_context);
++  start = g_atomic_int_get (&self->start);
+   ide_run_context_push_shell (run_context, TRUE);
+   ide_run_context_append_argv (run_context, "which");
+   ide_run_context_append_argv (run_context, program);
+@@ -235,7 +276,17 @@ gbp_podman_runtime_contains_program_in_path (IdeRuntime   *runtime,
    if (!(subprocess = ide_run_context_spawn (run_context, NULL)))
      IDE_RETURN (FALSE);
  
 -  ret = ide_subprocess_wait_check (subprocess, cancellable, NULL);
-+  /* Cache which's own answer only: 0 or 1. A cancelled wait, or podman's own failure
-+   * (125 while the container's `podman start` is still running), is no answer. */
 +  if (!ide_subprocess_wait (subprocess, cancellable, NULL) ||
-+      !ide_subprocess_get_if_exited (subprocess) ||
-+      ((status = ide_subprocess_get_exit_status (subprocess)) != 0 && status != 1))
++      !ide_subprocess_get_if_exited (subprocess))
++    IDE_RETURN (FALSE);
++
++  /* Only podman's 125 before `podman start` exited is no answer; any other status is cached, so a
++   * container without `which`, or one that will not start, costs one lookup per program. */
++  status = ide_subprocess_get_exit_status (subprocess);
++  if (status == 125 && start != START_DONE)
 +    IDE_RETURN (FALSE);
 +
 +  ret = status == 0;
  
    /* Cache both positive and negative lookups */
    ide_path_cache_insert (self->path_cache, program, ret ? program : NULL);
-@@ -590,10 +636,7 @@ gbp_podman_runtime_destroy (IdeObject *object)
+@@ -243,6 +294,16 @@ gbp_podman_runtime_contains_program_in_path (IdeRuntime   *runtime,
+   IDE_RETURN (ret);
+ }
+ 
++/* After the container's programs changed (a toolbox's setup installed its servers), each
++ * program is looked up again, the misses with it. */
++void
++gbp_podman_runtime_forget_programs (GbpPodmanRuntime *self)
++{
++  g_return_if_fail (GBP_IS_PODMAN_RUNTIME (self));
++
++  ide_path_cache_clear (self->path_cache);
++}
++
+ char *
+ _gbp_podman_runtime_parse_toml_line (const char *line)
+ {
+@@ -590,10 +651,7 @@ gbp_podman_runtime_destroy (IdeObject *object)
  {
    GbpPodmanRuntime *self = (GbpPodmanRuntime *)object;
  
@@ -693,7 +770,7 @@ index e8f81e1..dbd7cec 100644
  
    IDE_OBJECT_CLASS (gbp_podman_runtime_parent_class)->destroy (object);
  }
-@@ -603,7 +646,12 @@ gbp_podman_runtime_finalize (GObject *object)
+@@ -603,7 +661,12 @@ gbp_podman_runtime_finalize (GObject *object)
  {
    GbpPodmanRuntime *self = (GbpPodmanRuntime *)object;
  
@@ -706,7 +783,7 @@ index e8f81e1..dbd7cec 100644
  
    G_OBJECT_CLASS (gbp_podman_runtime_parent_class)->finalize (object);
  }
-@@ -629,6 +677,7 @@ static void
+@@ -629,6 +692,7 @@ static void
  gbp_podman_runtime_init (GbpPodmanRuntime *self)
  {
    g_mutex_init (&self->mutex);
@@ -714,3 +791,16 @@ index e8f81e1..dbd7cec 100644
    self->path_cache = ide_path_cache_new ();
  }
  
+diff --git a/src/plugins/podman/gbp-podman-runtime.h b/src/plugins/podman/gbp-podman-runtime.h
+index a5ab1e5..8cffc9d 100644
+--- a/src/plugins/podman/gbp-podman-runtime.h
++++ b/src/plugins/podman/gbp-podman-runtime.h
+@@ -29,6 +29,7 @@ G_BEGIN_DECLS
+ 
+ G_DECLARE_FINAL_TYPE (GbpPodmanRuntime, gbp_podman_runtime, GBP, PODMAN_RUNTIME, IdeRuntime)
+ 
+-GbpPodmanRuntime *gbp_podman_runtime_new (JsonObject *object);
++GbpPodmanRuntime *gbp_podman_runtime_new             (JsonObject       *object);
++void              gbp_podman_runtime_forget_programs (GbpPodmanRuntime *self);
+ 
+ G_END_DECLS
