@@ -1,6 +1,6 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Thuong Vo <66083331+SekiroKenjii@users.noreply.github.com>
-Date: Sun, 15 Nov 2026 16:35:47 +0000
+Date: Sun, 15 Nov 2026 17:36:25 +0000
 Subject: [PATCH] foundry, lsp, podman: look up programs off the main thread
 
 A file's first diagnostics pass, each language server's start when a
@@ -37,7 +37,8 @@ The podman runtime, looked up from threads now:
   since a lookup on a worker may still use them.
 - forgets its programs with gbp_podman_runtime_forget_programs(), on
   ide_path_cache_clear(), for a caller that changed what the container
-  has installed.
+  has installed; a lookup begun before that caches nothing, so an
+  answer from before the change cannot come back.
 ---
  src/libide/foundry/ide-diagnostic-tool.c  | 139 +++++++++++++----
  src/libide/foundry/ide-path-cache.c       |  16 ++
@@ -45,9 +46,9 @@ The podman runtime, looked up from threads now:
  src/libide/foundry/ide-pipeline-private.h |   8 +
  src/libide/foundry/ide-pipeline.c         | 179 +++++++++++++++++++++-
  src/libide/lsp/ide-lsp-service.c          |  46 ++++++
- src/plugins/podman/gbp-podman-runtime.c   | 104 ++++++++++---
+ src/plugins/podman/gbp-podman-runtime.c   | 112 +++++++++++---
  src/plugins/podman/gbp-podman-runtime.h   |   3 +-
- 8 files changed, 442 insertions(+), 55 deletions(-)
+ 8 files changed, 450 insertions(+), 55 deletions(-)
 
 diff --git a/src/libide/foundry/ide-diagnostic-tool.c b/src/libide/foundry/ide-diagnostic-tool.c
 index f373324..26b41e6 100644
@@ -600,10 +601,10 @@ index 4388cd5..9099c62 100644
    if (!priv->inherit_stderr && !g_settings_get_boolean (settings, "lsp-inherit-stderr"))
      flags |= G_SUBPROCESS_FLAGS_STDERR_SILENCE;
 diff --git a/src/plugins/podman/gbp-podman-runtime.c b/src/plugins/podman/gbp-podman-runtime.c
-index e8f81e1..c255f3f 100644
+index e8f81e1..b1ae738 100644
 --- a/src/plugins/podman/gbp-podman-runtime.c
 +++ b/src/plugins/podman/gbp-podman-runtime.c
-@@ -36,48 +36,86 @@ struct _GbpPodmanRuntime
+@@ -36,48 +36,88 @@ struct _GbpPodmanRuntime
    IdeRuntime    parent_instance;
  
    GMutex        mutex;
@@ -617,6 +618,8 @@ index e8f81e1..c255f3f 100644
 -  gboolean      has_started;
 +  /* START_NONE, START_RUNNING (podman start has not exited), START_DONE; under mutex. */
 +  int           start;
++  /* Raised by forget_programs: a lookup begun before it caches nothing. Atomic. */
++  int           programs_generation;
  };
  
 +enum { START_NONE, START_RUNNING, START_DONE };
@@ -706,16 +709,23 @@ index e8f81e1..c255f3f 100644
    g_mutex_unlock (&self->mutex);
  }
  
-@@ -212,6 +250,8 @@ gbp_podman_runtime_contains_program_in_path (IdeRuntime   *runtime,
+@@ -212,18 +252,23 @@ gbp_podman_runtime_contains_program_in_path (IdeRuntime   *runtime,
    GbpPodmanRuntime *self = (GbpPodmanRuntime *) runtime;
    gboolean found;
    gboolean ret;
 +  int status;
 +  int start;
++  int generation;
  
    IDE_ENTRY;
  
-@@ -224,6 +264,7 @@ gbp_podman_runtime_contains_program_in_path (IdeRuntime   *runtime,
+   g_assert (GBP_IS_PODMAN_RUNTIME (runtime));
+   g_assert (program != NULL);
+ 
++  generation = g_atomic_int_get (&self->programs_generation);
+   if (ide_path_cache_contains (self->path_cache, program, &found))
+     return found;
+ 
    run_context = ide_run_context_new ();
  
    gbp_podman_runtime_prepare_run_context (runtime, NULL, run_context);
@@ -723,7 +733,7 @@ index e8f81e1..c255f3f 100644
    ide_run_context_push_shell (run_context, TRUE);
    ide_run_context_append_argv (run_context, "which");
    ide_run_context_append_argv (run_context, program);
-@@ -235,7 +276,17 @@ gbp_podman_runtime_contains_program_in_path (IdeRuntime   *runtime,
+@@ -235,7 +280,20 @@ gbp_podman_runtime_contains_program_in_path (IdeRuntime   *runtime,
    if (!(subprocess = ide_run_context_spawn (run_context, NULL)))
      IDE_RETURN (FALSE);
  
@@ -739,10 +749,13 @@ index e8f81e1..c255f3f 100644
 +    IDE_RETURN (FALSE);
 +
 +  ret = status == 0;
++
++  if (g_atomic_int_get (&self->programs_generation) != generation)
++    IDE_RETURN (ret);
  
    /* Cache both positive and negative lookups */
    ide_path_cache_insert (self->path_cache, program, ret ? program : NULL);
-@@ -243,6 +294,16 @@ gbp_podman_runtime_contains_program_in_path (IdeRuntime   *runtime,
+@@ -243,6 +301,17 @@ gbp_podman_runtime_contains_program_in_path (IdeRuntime   *runtime,
    IDE_RETURN (ret);
  }
  
@@ -753,13 +766,14 @@ index e8f81e1..c255f3f 100644
 +{
 +  g_return_if_fail (GBP_IS_PODMAN_RUNTIME (self));
 +
++  g_atomic_int_inc (&self->programs_generation);
 +  ide_path_cache_clear (self->path_cache);
 +}
 +
  char *
  _gbp_podman_runtime_parse_toml_line (const char *line)
  {
-@@ -590,10 +651,7 @@ gbp_podman_runtime_destroy (IdeObject *object)
+@@ -590,10 +659,7 @@ gbp_podman_runtime_destroy (IdeObject *object)
  {
    GbpPodmanRuntime *self = (GbpPodmanRuntime *)object;
  
@@ -770,7 +784,7 @@ index e8f81e1..c255f3f 100644
  
    IDE_OBJECT_CLASS (gbp_podman_runtime_parent_class)->destroy (object);
  }
-@@ -603,7 +661,12 @@ gbp_podman_runtime_finalize (GObject *object)
+@@ -603,7 +669,12 @@ gbp_podman_runtime_finalize (GObject *object)
  {
    GbpPodmanRuntime *self = (GbpPodmanRuntime *)object;
  
@@ -783,7 +797,7 @@ index e8f81e1..c255f3f 100644
  
    G_OBJECT_CLASS (gbp_podman_runtime_parent_class)->finalize (object);
  }
-@@ -629,6 +692,7 @@ static void
+@@ -629,6 +700,7 @@ static void
  gbp_podman_runtime_init (GbpPodmanRuntime *self)
  {
    g_mutex_init (&self->mutex);
