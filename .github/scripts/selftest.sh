@@ -93,7 +93,7 @@ for f in desktop/shell/data/theme/apex/_input.scss packaging/pkgs/gnome-shell/pa
     desktop/ptyxis/src/apex/apex-glyph.c packaging/pkgs/gnome-control-center/check.sh packaging/pkgs/nautilus/patches/0001-build.patch \
     packaging/pkgs/ptyxis/check.sh packaging/pkgs/libadwaita/check.sh tests/control-center/bindings.py tests/nautilus/check.py \
     tests/ptyxis/fixture.c desktop/gnome-builder/src/plugins/apex/gbp-apex-a11y-addins.c packaging/pkgs/gnome-builder/series \
-    tests/builder/shoot.sh tests/builder/shoot-probe.js tests/builder/fixture.sh; do
+    tests/builder/shoot.sh tests/builder/shoot-probe.js tests/builder/fixture.sh tests/builder/atspi.py; do
     check "signoff runs on a pull request changing $f" touches=true "$(signoff_paths README.md "$f")"
 done
 for f in tests/shots/README.md tests/shots/selftest.sh tests/shots/assert.sh tests/shots/stable.sh \
