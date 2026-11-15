@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// gnome-shell's automation script for run.sh: Apex Code started, measured, named and answered by pylsp in the toolbox.
+// gnome-shell's automation script for run.sh: Apex Code started, measured, named, typed into and answered by pylsp in the toolbox.
 
 import Clutter from 'gi://Clutter';
 import Gio from 'gi://Gio';
@@ -15,6 +15,12 @@ Gio._promisify(Gio.Subprocess.prototype, 'wait_async');
 const env = name => GLib.getenv(name);
 const PROJECT = env('APEX_BUILDER_PROJECT');
 const LSP_FILE = env('APEX_BUILDER_LSP_FILE');
+const TYPING_FILE = env('APEX_BUILDER_TYPING_FILE');
+const TYPING_PROJECT = env('APEX_BUILDER_TYPING_PROJECT');
+const TOOLBOX = env('APEX_BUILDER_TOOLBOX');
+const PLAIN_PROJECT = env('APEX_BUILDER_PLAIN_PROJECT');
+const PLAIN_ID = env('APEX_BUILDER_PLAIN_ID');
+const JHBUILD_PROJECT = env('APEX_BUILDER_JHBUILD_PROJECT');
 // E0's harness: three cold starts after a discarded one; 30 s settled, then 10 samples a second apart.
 const STARTS = 3;
 const WINDOW_WAIT_MS = 60000;
@@ -22,6 +28,11 @@ const QUIET_MS = 3000;
 const SETTLE_MS = 30000;
 const SAMPLES = 10;
 const LSP_WAIT_MS = 45000;
+// E0's typing: a key every 150 ms, timed from the press to the frame presented after the window's first damage.
+const TYPING_MS = 60000;
+const KEY_GAP_MS = 150;
+const KEY_WAIT_MS = 2000;
+const TYPED_LINE = 'total_count = base_value + offset * 2\n';
 
 const now = () => GLib.get_monotonic_time();
 let keyboard;
@@ -35,11 +46,56 @@ function tap(keyval, modifiers = []) {
         keyboard.notify_keyval(now(), m, Clutter.KeyState.RELEASED);
 }
 
+function keyval(ch) {
+    return ch === '\n' ? Clutter.KEY_Return : Clutter.unicode_to_keysym(ch.codePointAt(0));
+}
+
 async function type(text) {
     for (const ch of text) {
-        tap(ch === '\n' ? Clutter.KEY_Return : Clutter.unicode_to_keysym(ch.codePointAt(0)));
-        await Scripting.sleep(150);
+        tap(keyval(ch));
+        await Scripting.sleep(KEY_GAP_MS);
     }
+}
+
+// Each key's latency in ms, or null when the window drew nothing for KEY_WAIT_MS; the next key waits for it.
+function timedTap(window, kv) {
+    const actor = window.get_compositor_private();
+    const t0 = now();
+    return new Promise(resolve => {
+        let pid = 0;
+        const did = actor.connect('damaged', () => {
+            actor.disconnect(did);
+            pid = global.stage.connect('after-paint', () => {
+                global.stage.disconnect(pid);
+                resolve(Math.round((now() - t0) / 100) / 10);
+            });
+        });
+        tap(kv);
+        GLib.timeout_add(GLib.PRIORITY_DEFAULT, KEY_WAIT_MS, () => {
+            if (pid === 0) {
+                actor.disconnect(did);
+                resolve(null);
+            }
+            return GLib.SOURCE_REMOVE;
+        });
+    });
+}
+
+// Escape before Return, so that a completion popup never takes the newline.
+async function typeTimed(window, ms) {
+    const keys = [];
+    const end = now() + ms * 1000;
+    for (let i = 0; now() < end; i++) {
+        const ch = TYPED_LINE[i % TYPED_LINE.length];
+        if (ch === '\n')
+            tap(Clutter.KEY_Escape);
+        const t = now();
+        keys.push(await timedTap(window, keyval(ch)));
+        const left = KEY_GAP_MS - (now() - t) / 1000;
+        if (left > 0)
+            await Scripting.sleep(left);
+    }
+    return keys;
 }
 
 async function helper(script, ...args) {
@@ -149,14 +205,22 @@ async function idle() {
     return {samples, names, title: st.window.get_title()};
 }
 
-// A completion request answered by pylsp in the toolbox, from Builder's own log.
-async function answers() {
+// The toolbox stopped, as after a reboot, with its start held 3 s: lookups meet it not yet running.
+const SLOW_PODMAN = '/usr/local/bin/podman';
+
+// Keys timed from the moment the first file opens, in a meson project (its pipeline looks up
+// ninja), then pylsp's answer. Cairo: lavapipe's first popup pipeline costs 290-430 ms.
+
+async function typing() {
     const log = env('APEX_BUILDER_LOG');
-    await launch(['sh', '-c', `exec gnome-builder -vvv -p '${PROJECT}' > '${log}' 2>&1`]);
-    await spawnWait(['gnome-builder', LSP_FILE]);
-    await Scripting.sleep(15000);
-    tap(Clutter.KEY_End, [Clutter.KEY_Control_L]);
-    await type('\nos.pa');
+    await spawnWait(['podman', 'stop', '--time', '0', TOOLBOX]);
+    GLib.file_set_contents(SLOW_PODMAN, '#!/bin/sh\n[ "$1" = start ] && sleep 3\nexec /usr/bin/podman "$@"\n');
+    await spawnWait(['chmod', '755', SLOW_PODMAN]);
+    const st = await launch(['sh', '-c', `GSK_RENDERER=cairo exec gnome-builder -vvv -p '${TYPING_PROJECT}' > '${log}' 2>&1`]);
+    await spawnWait(['gnome-builder', TYPING_FILE]);
+    const keys = await typeTimed(st.window, TYPING_MS);
+    tap(Clutter.KEY_Escape);
+    await type('\nimport os\nos.pa');
     const start = now();
     let found = null;
     while (found === null && (now() - start) / 1000 < LSP_WAIT_MS) {
@@ -166,15 +230,73 @@ async function answers() {
         if (m)
             found = Number(m[1]);
     }
+    const [, bytes] = GLib.file_get_contents(log);
+    const text = new TextDecoder().decode(bytes);
+    const offThread = [...text.matchAll(/Looking up \S+ in (\S+) off the main thread/g)].map(m => m[1]);
+    // The launcher logs from the thread that spawns; the main thread's id is the process's.
+    const pid = st.window.get_pid();
+    const lookups = [...text.matchAll(/ide-subprocess-launcher\[\s*(\d+)\]:\s+DEBUG: Launching (?:podman exec|\S*apex-toolbox-exec) [^\n]*'which' '([^']+)'/g)];
+    const mainThreadLookups = lookups.filter(m => Number(m[1]) === pid).map(m => m[2]);
     await quit();
-    return {completionItems: found};
+    GLib.unlink(SLOW_PODMAN);
+    return {keys, completionItems: found, offThread: [...new Set(offThread)], lookups: lookups.length, mainThreadLookups};
+}
+
+function readText(path) {
+    const [, bytes] = GLib.file_get_contents(path);
+    return new TextDecoder().decode(bytes);
+}
+
+// Builder lists every podman container: one that is no toolbox, without `which`, is the
+// runtime of a plain project. Each lookup there, and on which thread, counted per program.
+async function plain() {
+    const log = env('APEX_BUILDER_PLAIN_LOG');
+    const st = await launch(['sh', '-c', `GSK_RENDERER=cairo exec gnome-builder -vvv -p '${PLAIN_PROJECT}' > '${log}' 2>&1`]);
+    await spawnWait(['gnome-builder', `${PLAIN_PROJECT}/e2_plain.py`]);
+    const keys = await typeTimed(st.window, TYPING_MS);
+    const pid = st.window.get_pid();
+    const counts = {};
+    for (const line of readText(log).split('\n')) {
+        const m = line.match(/ide-subprocess-launcher\[\s*(\d+)\]:\s+DEBUG: Launching podman exec .*'which' '([^']+)'/);
+        if (!m || !line.includes(PLAIN_ID))
+            continue;
+        counts[m[2]] ??= {program: m[2], count: 0, mainThread: 0};
+        counts[m[2]].count++;
+        if (Number(m[1]) === pid)
+            counts[m[2]].mainThread++;
+    }
+    await quit();
+    return {keys, lookups: Object.values(counts)};
+}
+
+// A runtime neither podman nor host, from a stand-in jhbuild: its lookups stay on the main thread.
+const JHBUILD = `${GLib.get_home_dir()}/.local/bin/jhbuild`;
+
+async function jhbuild() {
+    const log = env('APEX_BUILDER_JHBUILD_LOG');
+    GLib.mkdir_with_parents(GLib.path_get_dirname(JHBUILD), 0o755);
+    GLib.file_set_contents(JHBUILD, '#!/bin/sh\n[ "$1" = run ] && shift\nJHBUILD_PREFIX=/usr exec "$@"\n');
+    await spawnWait(['chmod', '755', JHBUILD]);
+    await launch(['sh', '-c', `exec gnome-builder -vvv -p '${JHBUILD_PROJECT}' > '${log}' 2>&1`]);
+    await spawnWait(['gnome-builder', `${JHBUILD_PROJECT}/e2_jhbuild.py`]);
+    await type('import os\n');
+    for (let i = 0; i < 60 && !/Leaving \S+ in jhbuild to the main thread/.test(readText(log)); i++)
+        await Scripting.sleep(500);
+    await Scripting.sleep(QUIET_MS);
+    const text = readText(log);
+    await quit();
+    GLib.unlink(JHBUILD);
+    return {
+        left: [...new Set([...text.matchAll(/Leaving \S+ in (\S+) to the main thread/g)].map(m => m[1]))],
+        offThread: [...new Set([...text.matchAll(/Looking up \S+ in (\S+) off the main thread/g)].map(m => m[1]))],
+    };
 }
 
 async function drive() {
     keyboard = global.stage.context.get_backend().get_default_seat()
         .create_virtual_device(Clutter.InputDeviceType.KEYBOARD_DEVICE);
     Main.overview.hide();
-    return {starts: await starts(), idle: await idle(), server: await answers()};
+    return {starts: await starts(), idle: await idle(), typing: await typing(), plain: await plain(), jhbuild: await jhbuild()};
 }
 
 // main.js connects to startup-complete only after importing this module, so a startup that

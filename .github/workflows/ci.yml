@@ -545,7 +545,7 @@ jobs:
         run: |
           dnf5 -y -q --setopt=install_weak_deps=False --repo=fedora --repo=updates install \
             gnome-shell mesa-dri-drivers dbus-daemon python3-gobject at-spi2-core procps-ng \
-            podman toolbox fuse-overlayfs jq
+            podman toolbox fuse-overlayfs jq which
           tests/builder/run.sh _build/gnome-builder/out
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
