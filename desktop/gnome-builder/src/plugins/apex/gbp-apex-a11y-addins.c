@@ -9,14 +9,16 @@
 
 #include "apex-i18n.h"
 #include "gbp-apex-a11y-addins.h"
+#include "gbp-apex-sidebar.h"
 
 /* E0's AT-SPI gaps: the editor's text, the icon-only menu buttons, the diagnostics button,
  * the tab lists, the page's progress bar, the project tree and its filter, empty labels. */
 
 struct _GbpApexWorkspaceAddin
 {
-  GObject       parent_instance;
-  IdeWorkspace *workspace;
+  GObject         parent_instance;
+  IdeWorkspace   *workspace;
+  GbpApexSidebar *sidebar;
 };
 
 struct _GbpApexEditorPageAddin
@@ -247,6 +249,7 @@ gbp_apex_workspace_addin_load (IdeWorkspaceAddin *addin,
                                IdeWorkspace      *workspace)
 {
   GBP_APEX_WORKSPACE_ADDIN (addin)->workspace = workspace;
+  GBP_APEX_WORKSPACE_ADDIN (addin)->sidebar = gbp_apex_sidebar_new (workspace);
   name_widgets (GTK_WIDGET (workspace));
   g_idle_add_full (G_PRIORITY_DEFAULT_IDLE, gbp_apex_workspace_addin_rescan, g_object_ref (addin), g_object_unref);
 }
@@ -256,6 +259,7 @@ gbp_apex_workspace_addin_unload (IdeWorkspaceAddin *addin,
                                  IdeWorkspace      *workspace)
 {
   GBP_APEX_WORKSPACE_ADDIN (addin)->workspace = NULL;
+  g_clear_object (&GBP_APEX_WORKSPACE_ADDIN (addin)->sidebar);
 }
 
 /* A new page can bring a new frame, and with it a tab bar. */

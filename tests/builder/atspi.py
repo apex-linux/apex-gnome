@@ -8,7 +8,8 @@ gi.require_version('Atspi', '2.0')
 from gi.repository import Atspi  # noqa: E402
 
 ROLES = {Atspi.Role.BUTTON, Atspi.Role.TOGGLE_BUTTON, Atspi.Role.TEXT, Atspi.Role.PAGE_TAB_LIST,
-         Atspi.Role.PROGRESS_BAR, Atspi.Role.ENTRY, Atspi.Role.LIST, Atspi.Role.LABEL}
+         Atspi.Role.PROGRESS_BAR, Atspi.Role.ENTRY, Atspi.Role.LIST, Atspi.Role.LABEL, Atspi.Role.PAGE_TAB,
+         Atspi.Role.RADIO_BUTTON}
 
 
 def walk(node, out, depth=0):

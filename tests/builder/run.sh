@@ -190,7 +190,12 @@ check "the diagnostics button is named before any page has focus" '.idle.noPage.
 check "the diagnostics popover's tab list is not named \"Panels\"" '.idle.popover.pressed and ([.idle.popover.names.nodes[] | select(.role == "page tab list" and .name == "Panels")] | length) == ([.idle.names.nodes[] | select(.role == "page tab list" and .name == "Panels")] | length)'
 check "the diagnostics popover's tab list is named \"Diagnostics\"" '.idle.popover.pressed and (.idle.popover.names.nodes | any(.role == "page tab list" and .name == "Diagnostics"))'
 check "the page's progress bar is named \"Progress\", for loading and saving alike" '.idle.names.nodes | any(.role == "progress bar" and .name == "Progress")'
-for name in "Pinned Pages" "Pages" "Panels"; do
+check "\"Sidebar views\" names the sidebar's switcher, whose segments are the boards' views, \"Project\" selected" \
+    '[.idle.names.nodes | to_entries[] | select(.value.role == "page tab list" and .value.name == "Sidebar views") | .key] as [$i]
+     | $i != null and [.idle.names.nodes[$i + 1:][] | select(.role == "radio button") | .name][:1] == ["Project"]'
+check "the sidebar's pages the boards do not show move to the bottom panel: Build Targets, Manuals, To-Do, Unit Tests" \
+    '.typing.toBottom | unique | length == 4'
+for name in "Pinned Pages" "Pages"; do
     check "\"$name\" names a tab list" ".idle.names.nodes | any(.role == \"page tab list\" and .name == \"$name\")"
 done
 check "the project tree and its filter are named" '[.idle.names.nodes[] | select(.role == "list" or .role == "entry") | .name] | (index("Project Tree") != null and index("Filter…") != null)'

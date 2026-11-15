@@ -249,7 +249,8 @@ async function typing() {
     const mainThreadLookups = lookups.filter(m => Number(m[1]) === pid).map(m => m[2]);
     await quit();
     GLib.unlink(SLOW_PODMAN);
-    return {keys, completionItems: found, offThread: [...new Set(offThread)], lookups: lookups.length, mainThreadLookups};
+    const toBottom = [...text.matchAll(/(\S+) moves to the bottom panel/g)].map(m => m[1]);
+    return {keys, completionItems: found, offThread: [...new Set(offThread)], lookups: lookups.length, mainThreadLookups, toBottom};
 }
 
 // Apex Code's own Create Toolbox, pressed in the notification the project shows without a
