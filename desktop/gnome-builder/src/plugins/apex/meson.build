@@ -9,6 +9,7 @@ plugins_sources += files([
   'gbp-apex-a11y-addins.c',
   'gbp-apex-outline-pane.c',
   'gbp-apex-search-pane.c',
+  'gbp-apex-vcs-pane.c',
   'gbp-apex-sidebar.c',
   'gbp-apex-workbench-addin.c',
 ])

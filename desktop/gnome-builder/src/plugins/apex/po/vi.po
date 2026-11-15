@@ -195,3 +195,24 @@ msgstr "Dòng %u: %s"
 msgid "Show %u result in Find in Files"
 msgid_plural "Show %u results in Find in Files"
 msgstr[0] "Hiện %u kết quả trong Tìm trong tệp"
+
+msgid "Version control"
+msgstr "Quản lý phiên bản"
+
+msgid "Changes"
+msgstr "Thay đổi"
+
+msgid "No changes"
+msgstr "Không có thay đổi"
+
+#, c-format
+msgid "%s in %s, %s added, %s removed"
+msgstr "%s trong %s, thêm %s, xóa %s"
+
+#, c-format
+msgid "%s in %s"
+msgstr "%s trong %s"
+
+#, c-format
+msgid "%s, %s added, %s removed"
+msgstr "%s, thêm %s, xóa %s"

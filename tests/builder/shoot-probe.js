@@ -20,6 +20,12 @@ const env = name => GLib.getenv(name);
 const NAMED = [{role: 'text', name: 'Editor for dock.js'}, {role: 'list', name: 'Project Tree'},
     {role: 'page tab list', name: 'Sidebar views'}, {role: 'page tab', name: 'Project'}];
 
+// Then, with Version control chosen: the fixture's three changes as the board counts them.
+const NAMED_VCS = [{role: 'page tab', name: 'Version control'},
+    {role: 'button', name: 'dock.js in desktop/shell/js/ui/apex/dock, 12 added, 2 removed'},
+    {role: 'button', name: 'feature.js in desktop/shell/js/ui/apex/dock, 3 added, 1 removed'},
+    {role: 'button', name: 'run.sh in tests/layer, 38 added, 0 removed'}];
+
 function builderWindows() {
     return global.get_window_actors().map(a => a.meta_window)
         .filter(w => w.get_window_type() === 0 && `${w.get_wm_class()}`.includes('Builder'));
@@ -85,7 +91,18 @@ async function shoot() {
     const nodes = await names();
     GLib.file_set_contents(GLib.build_filenamev([env('APEX_SHOTS'), `${env('APEX_SHOT')}.names.json`]),
         JSON.stringify(nodes, null, 1));
-    const missing = NAMED.filter(n => !nodes.some(m => m.role === n.role && m.name === n.name));
+    const press = Gio.Subprocess.new(['python3', env('APEX_BUILDER_ATSPI').replace('atspi.py', 'press.py'), 'Version control'],
+        Gio.SubprocessFlags.STDOUT_PIPE);
+    await press.communicate_utf8_async(null, null);
+    await Scripting.sleep(SETTLE_MS);
+    const vcs = await names();
+    GLib.file_set_contents(GLib.build_filenamev([env('APEX_SHOTS'), `${env('APEX_SHOT')}.vcs.names.json`]),
+        JSON.stringify(vcs, null, 1));
+    const missing = [...NAMED.filter(n => !nodes.some(m => m.role === n.role && m.name === n.name)),
+        ...NAMED_VCS.filter(n => !vcs.some(m => m.role === n.role && m.name === n.name))];
+    // The badge on the segment and the pill over the list: "3" both.
+    if (vcs.filter(m => m.role === 'label' && m.name === '3').length < 2)
+        missing.push({role: 'label', name: '3 (the badge and the pill)'});
     if (missing.length)
         throw new Error(`no ${missing.map(n => `${n.role} named "${n.name}"`).join(', ')}`);
     console.log(`APEXBUILDERSHOT ${JSON.stringify({shot, frame: [r.x, r.y, r.width, r.height]})}`);
