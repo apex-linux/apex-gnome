@@ -150,6 +150,8 @@ check "no button, toggle button, tab list, progress bar, entry, list or label is
 check "the diagnostics button is named for its counts, not \"0 0\"" '.idle.names.nodes | any(.role == "button" and (.name | test("^Build Diagnostics: [0-9]+ errors?, [0-9]+ warnings?$")))'
 check "the diagnostics button is named before any page has focus" '.idle.noPage.nodes | any(.role == "button" and (.name | test("^Build Diagnostics: [0-9]+ errors?, [0-9]+ warnings?$")))'
 check "the diagnostics popover's tab list is not named \"Panels\"" '.idle.popover.pressed and ([.idle.popover.names.nodes[] | select(.role == "page tab list" and .name == "Panels")] | length) == ([.idle.names.nodes[] | select(.role == "page tab list" and .name == "Panels")] | length)'
+check "the diagnostics popover's tab list is named \"Diagnostics\"" '.idle.popover.pressed and (.idle.popover.names.nodes | any(.role == "page tab list" and .name == "Diagnostics"))'
+check "the page's progress bar is named \"Progress\", for loading and saving alike" '.idle.names.nodes | any(.role == "progress bar" and .name == "Progress")'
 for name in "Pinned Pages" "Pages" "Panels"; do
     check "\"$name\" names a tab list" ".idle.names.nodes | any(.role == \"page tab list\" and .name == \"$name\")"
 done

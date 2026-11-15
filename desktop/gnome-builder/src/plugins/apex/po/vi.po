@@ -131,6 +131,9 @@ msgstr "Chẩn đoán biên dịch: %s, %s"
 msgid "Panels"
 msgstr "Các bảng"
 
+msgid "Diagnostics"
+msgstr "Chẩn đoán"
+
 msgid "Pages"
 msgstr "Các trang"
 

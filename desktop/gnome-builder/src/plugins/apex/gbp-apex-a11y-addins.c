@@ -150,17 +150,28 @@ label_widget (GtkWidget  *widget,
   gtk_accessible_update_property (GTK_ACCESSIBLE (widget), GTK_ACCESSIBLE_PROPERTY_LABEL, label, -1);
 }
 
-/* AdwTabBar's two tab lists, pinned tabs first, and libpanel's switcher of a dock's panels;
- * other tab lists (a popover's or a notebook's) keep their own. */
+static gboolean
+is_diagnostics_button (GtkWidget *widget)
+{
+  return GTK_IS_MENU_BUTTON (widget) &&
+         g_strcmp0 (gtk_widget_get_tooltip_text (widget), g_dgettext (GETTEXT_PACKAGE, "Display Build Diagnostics (Ctrl+Alt+?)")) == 0;
+}
+
+/* AdwTabBar's two tab lists, pinned tabs first, libpanel's switcher of a dock's panels, and
+ * the diagnostics popover's switcher between errors and warnings. */
 static void
 name_tab_list (GtkWidget *widget)
 {
   GtkWidget *bar = gtk_widget_get_ancestor (widget, ADW_TYPE_TAB_BAR);
+  GtkWidget *popover;
 
   if (bar == NULL)
     {
+      popover = gtk_widget_get_ancestor (widget, GTK_TYPE_POPOVER);
       if (PANEL_IS_FRAME_SWITCHER (widget) || gtk_widget_get_ancestor (widget, PANEL_TYPE_FRAME_SWITCHER) != NULL)
         label_widget (widget, APEX_("Panels"));
+      else if (popover != NULL && is_diagnostics_button (gtk_widget_get_parent (popover)))
+        label_widget (widget, APEX_("Diagnostics"));
       return;
     }
 
@@ -175,8 +186,7 @@ name_widgets (GtkWidget *widget)
   GtkAccessibleRole role = gtk_accessible_get_accessible_role (GTK_ACCESSIBLE (widget));
   GtkWidget *panel;
 
-  if (GTK_IS_MENU_BUTTON (widget) &&
-      g_strcmp0 (gtk_widget_get_tooltip_text (widget), g_dgettext (GETTEXT_PACKAGE, "Display Build Diagnostics (Ctrl+Alt+?)")) == 0)
+  if (is_diagnostics_button (widget))
     watch_diagnostics (widget);
   else if (GTK_IS_LABEL (widget) && gtk_widget_get_ancestor (widget, PANEL_TYPE_STATUSBAR) != NULL &&
            gtk_widget_get_ancestor (widget, GTK_TYPE_POPOVER) == NULL &&
