@@ -21,9 +21,12 @@
 /* ADR 0017: builds and language servers run in a toolbox on bootc, never on the host. */
 #define APEX_TOOLBOX_NAME  "fedora-toolbox-45"
 #define APEX_TOOLBOX_IMAGE "registry.fedoraproject.org/fedora-toolbox:45"
+/* Each part installs only what is missing, so that Finish Setup after a partial setup is quick. */
+#define APEX_TOOLBOX_PACKAGES "rust-analyzer cargo rust python3-lsp-server python3-pyflakes nodejs-npm"
 #define APEX_TOOLBOX_SETUP \
-  "sudo dnf -y install rust-analyzer cargo rust python3-lsp-server python3-pyflakes nodejs-npm && " \
-  "sudo npm install -g --no-fund --no-audit typescript-language-server typescript"
+  "{ rpm -q --quiet " APEX_TOOLBOX_PACKAGES " || sudo dnf -y install " APEX_TOOLBOX_PACKAGES "; } && " \
+  "{ command -v typescript-language-server >/dev/null || " \
+  "sudo npm install -g --no-fund --no-audit typescript-language-server typescript; }"
 
 struct _GbpApexWorkbenchAddin
 {

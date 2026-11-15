@@ -79,7 +79,8 @@ a project loads, the addin lists the toolbox containers (`podman ps --all --no-t
   needs it) and the session bus. The command is resumable: `podman container exists` skips
   `toolbox create` for a toolbox whose setup stopped halfway. When the project loads with
   the toolbox, the plugin checks its three servers (`command -v` in the toolbox), and a
-  missing one brings "Toolbox Setup Incomplete" with a Finish Setup button. A toolbox the
+  missing one brings "Toolbox Setup Incomplete" with a Finish Setup button; each part of
+  the setup installs only what is missing (`rpm -q`, `command -v`), so that is quick. A toolbox the
   image or the first login creates is used as is.
 - A project outside the folders the toolbox mounts (outside `$HOME`, `/mnt`, `/media`,
   `/run/media`) gets a notification saying so; patch 0004 keeps its servers from starting.
