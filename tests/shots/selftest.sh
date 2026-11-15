@@ -3165,6 +3165,66 @@ test_part_ran() {
         "$(grep -c '^FAIL direct.sh pr: indicators had no report within 150 s; G2 stops at a hung case' "$T/assertions.out")"
 }
 
+subset_counts() {
+    # shellcheck disable=SC2016 # expanded by the inner bash
+    bash -c '. "$1/assert.sh"; subset=$3; "${@:4}" >"$2" 2>&1; echo "$npass $nfail"' _ "$HERE" "$T/assertions.out" "$@"
+}
+
+# G2_SUBSET: rest and split run every direct case once between them, and each fails a case of its own it lacks.
+test_g2_subset() {
+    local run=$T/subset-run c rc passes failures
+    local -a split all rest=()
+    # shellcheck disable=SC2016 # expanded by the inner bash
+    read -ra split <<<"$(bash -c '. "$1/parts.sh"; echo "${SPLIT_CASES[*]}"' _ "$HERE")"
+    # shellcheck disable=SC2016 # expanded by the inner bash
+    read -ra all <<<"$(bash -c '. "$1/assert.sh"; echo "${DIRECT_CASES[*]}"' _ "$HERE")"
+    for c in "${all[@]}"; do
+        [[ " ${split[*]} " == *" $c "* ]] || rest+=("$c")
+    done
+    expect_eq "subset: SPLIT_CASES are direct cases, each once" "${#split[@]}" \
+        "$(printf '%s\n' "${split[@]}" | sort -u | grep -cxFf <(printf '%s\n' "${all[@]}"))"
+    expect_eq "subset: rest and split together are every direct case, none in both" "${#all[@]}/${#all[@]}" \
+        "$(printf '%s\n' "${rest[@]}" "${split[@]}" | sort -u | wc -l)/$((${#rest[@]} + ${#split[@]}))"
+    for c in "${split[@]}"; do
+        expect_eq "subset: $c runs in direct.sh's main part" 1 "$(grep -c "^run_and_record_case $c " "$HERE/direct.sh")"
+    done
+    rc=0
+    G2_SUBSET=bogus bash "$HERE/direct.sh" main >"$T/subset.out" 2>&1 || rc=$?
+    expect_eq "subset: direct.sh refuses a G2_SUBSET that is neither rest nor split" "2/1" \
+        "$rc/$(grep -c '^direct.sh: G2_SUBSET is rest or split, not bogus$' "$T/subset.out")"
+    rc=0
+    G2_SUBSET="split" bash "$HERE/direct.sh" pr >"$T/subset.out" 2>&1 || rc=$?
+    expect_eq "subset: and one for a part other than main" "2/1" \
+        "$rc/$(grep -c '^direct.sh: G2_SUBSET is for the main part, not pr$' "$T/subset.out")"
+    mkdir -p "$run"
+    subset_counts split split_cases "$run" >/dev/null
+    expect_eq "subset: a split run without glass-stress fails it, and asks for no rest case" "1/0" \
+        "$(grep -c '^FAIL glass-stress: no log$' "$T/assertions.out")/$(grep -c '^FAIL default: no log$' "$T/assertions.out")"
+    subset_counts rest direct_cases "$run" >/dev/null
+    expect_eq "subset: a rest run without its cases fails each, and asks for no split case" "1/0" \
+        "$(grep -c '^FAIL default: no log$' "$T/assertions.out")/$(grep -c '^FAIL glass-stress: no log$' "$T/assertions.out")"
+    subset_counts '' direct_cases "$run" >/dev/null
+    expect_eq "subset: unset, a run asks for every case, glass-stress among them" "1/1" \
+        "$(grep -c '^FAIL default: no log$' "$T/assertions.out")/$(grep -c '^FAIL glass-stress: no log$' "$T/assertions.out")"
+    echo bogus >"$run/subset.txt"
+    "$HERE/assert.sh" "$run" >"$T/subset.out" 2>&1 || true
+    expect_eq "subset: assert.sh fails a subset.txt that is neither rest nor split" 1 \
+        "$(grep -c '^FAIL subset.txt names rest or split, not bogus$' "$T/subset.out")"
+    mkdir -p "$T/subset-a" "$T/subset-b"
+    echo 'id 0123456789abcdef' | tee "$T/subset-a/image.txt" >"$T/subset-b/image.txt"
+    echo split >"$T/subset-a/subset.txt"
+    echo rest >"$T/subset-b/subset.txt"
+    rc=0
+    G2_GJS=false "$HERE/stable.sh" "$T/subset-a" "$T/subset-b" >"$T/subset.out" 2>&1 || rc=$?
+    expect_eq "subset: stable.sh fails two runs of different subsets" "1/1" \
+        "$rc/$(grep -c '^FAIL the runs ran different G2_SUBSETs: split and rest$' "$T/subset.out")"
+    echo split >"$T/subset-b/subset.txt"
+    rc=0
+    G2_GJS=false "$HERE/stable.sh" "$T/subset-a" "$T/subset-b" >"$T/subset.out" 2>&1 || rc=$?
+    expect_eq "subset: and passes two split runs of one image, comparing nothing else" "0/1/0" \
+        "$rc/$(grep -c '^PASS' "$T/subset.out")/$(grep -c '^FAIL' "$T/subset.out")"
+}
+
 test_parental_controls_ready() {
     local run=$T/parental-run failed passes failures
     failed='(gnome-shell:2405): GNOME Shell-CRITICAL **: 09:41:00.000: Failed to get parental controls settings: Gio.DBusError: GDBus.Error:org.freedesktop.DBus.Error.Spawn.ExecFailed: Cannot launch daemon'
@@ -4606,6 +4666,7 @@ test_glass_stress
 test_spotlight_key
 test_one_gpu
 test_part_ran
+test_g2_subset
 test_no_nan_allocation
 test_no_st_css_warning
 test_parental_controls_ready

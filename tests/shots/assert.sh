@@ -28,6 +28,8 @@ readonly DIRECT_CASES=(default default-scale1 dark-style high-contrast large-tex
     fedora-light fedora-dark glass glass-scale1 glass-views fedora-glass
     indicators indicators-scale1 indicators-dark privacy)
 readonly DIRECT_PARTS=(main kernel fedora)
+# The run's G2_SUBSET (run.sh's subset.txt): empty for every case.
+subset=
 readonly CAPTURE_CASES=(default default-scale1 dark-style stock-light stock-dark fedora-light fedora-dark)
 readonly SCENES=(desktop overview)
 readonly STOCK_MAX_THUMBNAIL_SCALE=0.05
@@ -2423,12 +2425,14 @@ dock_pin() {
         "with the dock in disabled-features, the overview's own dash holds the favourites ($(jq -r '.stock.dashApps | join(", ")' <<<"$r" 2>/dev/null))"
 }
 
-direct_cases() {
+# The checks every direct case gets, for the cases named.
+each_direct_case() {
     local run=$1 c f
+    shift
     echo "# the direct cases: $(grep -m1 -E '^gnome-shell-[0-9]' "$run/rpm.txt" 2>/dev/null)"
     check "the bus image's gnome-shell, mutter and apex-desktop verify unmodified (rpm -V), before and after dbus-daemon joined them" \
         test "$(grep -cx 'rpm -V rc=0' "$run/rpm.txt")" = 2
-    for c in "${DIRECT_CASES[@]}"; do
+    for c in "$@"; do
         f=$run/$c.log
         if [[ ! -s $f ]]; then
             fail "$c: no log"
@@ -2453,6 +2457,24 @@ direct_cases() {
         fixed_clock "$c" "$f"
         backdrop_painted "$c" "$f"
     done
+}
+
+# A G2_SUBSET=split run: SPLIT_CASES alone, in the main part.
+split_cases() {
+    local run=$1
+    each_direct_case "$run" "${SPLIT_CASES[@]}"
+    fixtures_on_the_bus "$run" main
+    glass_stress "$run"
+}
+
+# Every direct case, or with G2_SUBSET=rest every one but SPLIT_CASES.
+direct_cases() {
+    local run=$1 c f
+    local -a cases=()
+    for c in "${DIRECT_CASES[@]}"; do
+        [[ $subset == rest && " ${SPLIT_CASES[*]} " == *" $c "* ]] || cases+=("$c")
+    done
+    each_direct_case "$run" "${cases[@]}"
     fixtures_on_the_bus "$run"
 
     f=$run/default.log
@@ -2594,7 +2616,7 @@ direct_cases() {
     motion_curve "$run"
     idle_desktop "$run"
     glass_load "$run"
-    glass_stress "$run"
+    [[ $subset == rest ]] || glass_stress "$run"
     dock_pin "$run"
 
     f=$run/kernel-safe.log
@@ -3398,9 +3420,19 @@ main() {
     esac
     local run=$1
     echo "# G2 run $run: $(head -n 3 "$run/image.txt" 2>/dev/null | paste -sd' ' -)"
-    g1_on_the_image "$run"
-    direct_cases "$run"
-    crash_guard "$run"
+    subset=$(cat "$run/subset.txt" 2>/dev/null)
+    case $subset in
+        '') ;;
+        rest | split) echo "# G2_SUBSET=$subset" ;;
+        *) fail "subset.txt names rest or split, not $subset"; summary; return ;;
+    esac
+    if [[ $subset == split ]]; then
+        split_cases "$run"
+    else
+        g1_on_the_image "$run"
+        direct_cases "$run"
+        crash_guard "$run"
+    fi
     summary
 }
 

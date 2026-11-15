@@ -17,7 +17,9 @@ The newest 5 <UTC time> directories are kept.
 
 Environment: G2_IMAGE_DIR, the image/ directory of an apex-image checkout, and
 G2_REPOS_BASE, the REPOS_BASE of its Containerfile (both required); G2_RUNS; G2_OUT_DIR
-(default _build/g2).
+(default _build/g2); G2_SUBSET=rest|split (direct.sh's): rest is every run's work but
+parts.sh's SPLIT_CASES, split only the main part's SPLIT_CASES, without G1, the kernel and
+fedora parts or the crash guard. Each run writes it to subset.txt; unset, every case.
 EOF
 }
 
@@ -34,6 +36,7 @@ readonly REPOS_BASE=${G2_REPOS_BASE:-}
 readonly OUT_DIR=${G2_OUT_DIR:-$REPO/_build/g2}
 readonly IMAGE=${1:-localhost/apex:build}
 readonly RUNS=${G2_RUNS:-2}
+readonly SUBSET=${G2_SUBSET:-}
 # ROADMAP S2b's 5 minutes of glass stress; patched.sh's runs take direct.sh's 60 s.
 readonly VM_GLASS_STRESS_SECONDS=300
 # The image has no dbus-daemon, which dbus-run-session and the direct cases' system bus
@@ -55,6 +58,7 @@ log() { printf '== %s\n' "$*"; }
 die() { printf 'run.sh: %s\n' "$*" >&2; exit 1; }
 
 [[ $RUNS =~ ^[1-9][0-9]*$ ]] || die "G2_RUNS must be a positive number, got '$RUNS'"
+[[ -z $SUBSET || $SUBSET == rest || $SUBSET == split ]] || die "G2_SUBSET must be rest, split or unset, got '$SUBSET'"
 [[ -f $IMAGE_DIR/Containerfile ]] || die "G2_IMAGE_DIR must be the image/ directory of an apex-image checkout, got '$IMAGE_DIR'"
 [[ -n $REPOS_BASE ]] || die "G2_REPOS_BASE must be set (the REPOS_BASE of $IMAGE_DIR/Containerfile)"
 sudo podman image exists "$IMAGE" || die "no image $IMAGE in root's container storage (just vm-image builds it)"
@@ -163,7 +167,8 @@ one_run() {
     name=g2-$stamp-${out##*/}
     mkdir -p "$out/captures"
     cp "$root/bus-image.txt" "$out/rpm.txt"
-    cp "$root/fedora-image.txt" "$out/fedora-image.txt"
+    [[ $SUBSET == split ]] || cp "$root/fedora-image.txt" "$out/fedora-image.txt"
+    [[ -z $SUBSET ]] || printf '%s\n' "$SUBSET" >"$out/subset.txt"
     printf '%s\n' "$KERNEL_FIXTURE" >"$out/cmdline-safe"
     {
         echo "image: $IMAGE"
@@ -175,6 +180,17 @@ one_run() {
         echo "started: $(date -u +%FT%TZ)"
     } >"$out/image.txt"
 
+    if [[ $SUBSET == split ]]; then
+        log "${out##*/}: the direct cases, parts.sh's SPLIT_CASES"
+        sudo podman run --rm --name "$name-direct" "$NO_SELINUX_LABELS" -v "$HERE:/w:ro,z" -v "$out:/out:z" \
+            --env G2_GLASS_STRESS_SECONDS="${G2_GLASS_STRESS_SECONDS:-$VM_GLASS_STRESS_SECONDS}" --env G2_SUBSET=split \
+            --entrypoint /bin/bash "$BUS_IMAGE" /w/direct.sh main 2>&1 | tee "$out/direct-main.txt" ||
+            direct_failed main "$out" $?
+        sudo chown -R "$(id -u):$(id -g)" "$out"
+        echo "finished: $(date -u +%FT%TZ)" >>"$out/image.txt"
+        return
+    fi
+
     log "${out##*/}: G1's desktop checks on the tested image"
     rc=0
     # shellcheck disable=SC2024 # builder owns the results
@@ -185,7 +201,7 @@ one_run() {
 
     log "${out##*/}: the direct cases"
     sudo podman run --rm --name "$name-direct" "$NO_SELINUX_LABELS" -v "$HERE:/w:ro,z" -v "$out:/out:z" \
-        --env G2_GLASS_STRESS_SECONDS="${G2_GLASS_STRESS_SECONDS:-$VM_GLASS_STRESS_SECONDS}" \
+        --env G2_GLASS_STRESS_SECONDS="${G2_GLASS_STRESS_SECONDS:-$VM_GLASS_STRESS_SECONDS}" ${SUBSET:+--env G2_SUBSET="$SUBSET"} \
         --entrypoint /bin/bash "$BUS_IMAGE" /w/direct.sh main 2>&1 | tee "$out/direct-main.txt" ||
         direct_failed main "$out" $?
 
@@ -220,7 +236,7 @@ t0=$SECONDS
 trap remove_leftovers EXIT
 prune_old_runs
 prepare_bus_image
-prepare_fedora_image
+[[ $SUBSET == split ]] || prepare_fedora_image
 for i in $(seq 1 "$RUNS"); do
     one_run "$root/run-$i"
 done
