@@ -2463,6 +2463,7 @@ each_direct_case() {
 split_cases() {
     local run=$1
     each_direct_case "$run" "${SPLIT_CASES[@]}"
+    check "the split cases: the VM's /proc/cmdline has no apex.safe=1" bash -c "test -s '$run/cmdline-main.txt' && ! grep -qw apex.safe=1 '$run/cmdline-main.txt'"
     fixtures_on_the_bus "$run" main
     glass_stress "$run"
 }
