@@ -54,7 +54,7 @@ readonly PSS_MIB=${BUILDER_PSS_MIB:-270}
 readonly STALL_MS=${BUILDER_STALL_MS:-200}
 readonly GLUE_MIB=${BUILDER_GLUE_MIB:-20}
 # probe.js's caps for Create Toolbox, Finish Setup and three waits for a button (900 + 600 + 3 x 30 s),
-# then 10 minutes for its other phases, which take about 7.
+# then 10 minutes for its other phases, which take about 4 here.
 readonly SHELL_TIMEOUT=2190
 
 shopt -s nullglob
