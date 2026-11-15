@@ -18,7 +18,7 @@ const SETTLE_MS = 6000;
 const env = name => GLib.getenv(name);
 // The nodes each capture must name, as run.sh's lane checks have them.
 const NAMED = [{role: 'text', name: 'Editor for dock.js'}, {role: 'list', name: 'Project Tree'},
-    {role: 'page tab list', name: 'Sidebar views'}, {role: 'radio button', name: 'Project'}];
+    {role: 'page tab list', name: 'Sidebar views'}, {role: 'page tab', name: 'Project'}];
 
 function builderWindows() {
     return global.get_window_actors().map(a => a.meta_window)

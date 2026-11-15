@@ -9,7 +9,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: apex-builder\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-15 19:49+0000\n"
+"POT-Creation-Date: 2026-11-15 20:29+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -105,7 +105,7 @@ msgid "Progress"
 msgstr ""
 
 #. TRANSLATORS: the editor's accessible name; %s is the file
-#: src/plugins/apex/gbp-apex-a11y-addins.c:307
+#: src/plugins/apex/gbp-apex-a11y-addins.c:318
 #, c-format
 msgid "Editor for %s"
 msgstr ""
@@ -117,7 +117,7 @@ msgstr ""
 
 #: src/plugins/apex/gbp-apex-outline-pane.c:390
 #: src/plugins/apex/gbp-apex-outline-pane.c:471
-#: src/plugins/apex/gbp-apex-sidebar.c:28
+#: src/plugins/apex/gbp-apex-sidebar.c:29
 msgid "Outline"
 msgstr ""
 
@@ -143,7 +143,7 @@ msgstr[0] ""
 msgstr[1] ""
 
 #: src/plugins/apex/gbp-apex-search-pane.c:312
-#: src/plugins/apex/gbp-apex-sidebar.c:29
+#: src/plugins/apex/gbp-apex-sidebar.c:30
 msgid "Search"
 msgstr ""
 
@@ -152,11 +152,11 @@ msgstr ""
 msgid "Search in Project"
 msgstr ""
 
-#: src/plugins/apex/gbp-apex-sidebar.c:27
+#: src/plugins/apex/gbp-apex-sidebar.c:28
 msgid "Project"
 msgstr ""
 
-#: src/plugins/apex/gbp-apex-sidebar.c:314
+#: src/plugins/apex/gbp-apex-sidebar.c:333
 msgid "Sidebar views"
 msgstr ""
 

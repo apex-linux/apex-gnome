@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 # SPDX-License-Identifier: GPL-3.0-or-later
-# Press Apex Code's showing button or toggle button named argv[1] (a trailing * matches a prefix) over AT-SPI;
+# Press Apex Code's showing button, toggle button or tab named argv[1] (a trailing * matches a prefix) over AT-SPI;
 # with --names, list every showing name.
 import json
 import sys
@@ -9,7 +9,7 @@ import gi
 gi.require_version('Atspi', '2.0')
 from gi.repository import Atspi  # noqa: E402
 
-PRESSABLE = {Atspi.Role.BUTTON, Atspi.Role.TOGGLE_BUTTON, Atspi.Role.RADIO_BUTTON}
+PRESSABLE = {Atspi.Role.BUTTON, Atspi.Role.TOGGLE_BUTTON, Atspi.Role.PAGE_TAB}
 
 
 def nodes(node, depth=0):

@@ -300,7 +300,10 @@ async function typing() {
     await quit();
     GLib.unlink(SLOW_PODMAN);
     const toBottom = [...text.matchAll(/(\S+) moves to the bottom panel/g)].map(m => m[1]);
-    return {keys, completionItems: found, offThread: [...new Set(offThread)], lookups: lookups.length, mainThreadLookups, toBottom};
+    // The todo plugin mines the project on its panel's first "presented": a move must not present it.
+    const todoMined = /Located \d+ TODO items/.test(text);
+    return {keys, completionItems: found, offThread: [...new Set(offThread)], lookups: lookups.length, mainThreadLookups, toBottom,
+        todoMined};
 }
 
 // Apex Code's own Create Toolbox, pressed in the notification the project shows without a

@@ -104,7 +104,7 @@ button both named "More Options". Two addins name them, with no hunk in upstream
 | the status bar's diagnostics button (E2) | "Build Diagnostics: 0 errors, 0 warnings" | GTK named it "0 0" from its two count labels; found by its own tooltip in Builder's catalogue, and named from `IdeBuildManager`'s counts as they change (plurals from `APEX_NG_`) |
 | an editor tab bar's two tab lists (E2) | "Pinned Pages", "Pages" | by the accessible role, under `AdwTabBar`, the first being the pinned one |
 | a dock's panel switcher (E2) | "Panels" | libpanel's `PanelFrameSwitcher` only: the bottom and end frames', the sidebar's being "Sidebar views" since E2's UI. The lane opens the bottom panel (Ctrl+F9) for a snapshot of its own: its tabs, Build Pipeline, Manuals, TODO/FIXMEs and Unit Tests among them, are named and take keyboard focus, as upstream's do |
-| the sidebar's view switcher (E2 UI) | "Sidebar views", its segments "Project", "Outline" and "Search" | the boards' tab list over the start frame (`gbp-apex-sidebar.c`), each segment a radio button named for its view |
+| the sidebar's view switcher (E2 UI) | the tab list "Sidebar views", its tabs "Project", "Outline" and "Search" | the boards' switcher over the start frame (`gbp-apex-sidebar.c`): an `AdwToggleGroup` built with the tab-list role, so each segment is a tab named for its view, the shown one selected |
 | the Search view (E2 UI) | the entry "Search in Project"; each hit a button "Line 5: return undefined_name + a"; "Show 1 result in Find in Files" | the entry by its placeholder; a hit by its line and text, without its indent. The lane searches e1_lsp.py's undefined_name, then hands it to Find in Files |
 | the Outline view (E2 UI) | the tree "Outline of e1_lsp.py", each item named for its symbol and described "Line 4" | the board's names; the current symbol's item is selected. The lane opens it with the cursor at the file's end, and finds pylsp's f there, current |
 | the diagnostics popover's switcher (E2) | "Diagnostics" | the `GtkStackSwitcher` between errors and warnings, in the diagnostics button's popover |
@@ -117,12 +117,18 @@ button both named "More Options". Two addins name them, with no hunk in upstream
 
 Boards 40 to 42 (`docs/design/apex-code-boards-40-42.md` in apex, section 6) put one
 segmented switcher at the top of the sidebar, four views wide: Project, Outline, Search and
-Version control. `gbp-apex-sidebar.c` installs it as the start frame's header in place of
-libpanel's `PanelFrameSwitcher`: an `AdwToggleGroup`, a segment per page of Builder's own
+Version control. `gbp-apex-sidebar.c` installs it, in the project workspace and the
+editor-only one alike, as the first start frame's header in place of libpanel's
+`PanelFrameSwitcher`: an `AdwToggleGroup`, a segment per page of Builder's own
 frame, in the boards' order, with the boards' icon and name for each view. `style.css`
 draws it in the boards' tokens: a `--btn` track with 3px of padding and a 10px radius,
 30px segments with an 8px radius, the selected one `--view` with its shadow. The stylesheet
 keys dark on `AdwStyleManager`, which Builder's style variant sets, through a `dark` class.
+It takes only the boards' views as drops: a document dragged
+there would leave the editor grid, and with it the close prompt for its unsaved edits.
+Every start frame is swept, a split one a session restored included: the other panes go
+to the bottom panel, the views join the switcher's frame. The moved panes' `presented`
+signal is blocked while they move, or TODO/FIXMEs would mine the project at every start.
 Project, Outline and Search exist so far; Version control comes with its pane.
 
 The Outline view (`gbp-apex-outline-pane.c`) is an `IdePane` on the start frame. It follows
@@ -147,7 +153,6 @@ Choosing the Search segment puts the focus in the entry.
 | Builder's | Where it goes | Why |
 |---|---|---|
 | Build Pipeline, Manuals, TODO/FIXMEs and Unit Tests in the sidebar | the bottom panel, each a tab beside Builder's own, named and reached as upstream has them | the boards' switcher has exactly four views; the boards' bottom panel is tabbed |
-| a sidebar segment's role | a radio button in the "Sidebar views" tab list, not a tab | `AdwToggleGroup`'s own; the name is the board's |
 | the Outline's indent | Builder's nesting: 8px, then 14px more for each level | the board indents every row after the first unless it is a class, impl or h1, so feature.js's two top-level functions sit at 8px and 22px |
 | an Outline row | activating it moves the cursor to the symbol | the board's rows have no click handler |
 | Search's "Open 6 results as one buffer", with no handler | "Show 6 results in Find in Files": the same model in Builder's panel | Builder has no buffer of results; its panel lists them and replaces in them |
