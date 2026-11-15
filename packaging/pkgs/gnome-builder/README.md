@@ -3,16 +3,16 @@
 Fedora's gnome-builder SRPM, rebuilt as Apex Code: track E of the
 [ROADMAP](https://github.com/apex-linux/apex/blob/main/docs/ROADMAP.md), after
 [ADR 0017](https://github.com/apex-linux/apex/blob/main/docs/adr/0017-apex-code-on-builder.md).
-This is E1: the name, toolbox as the default runtime, and the fixes the
+E1 gave it the name, toolbox as the default runtime, and the fixes the
 [E0 spike](https://github.com/apex-linux/apex/blob/main/docs/reviews/2026-11-03-e0-apex-code.md)
-found. The lane, `apex-lane`, and the formats of the files here are in
+found; E2 adds the typing-stall fix (patch 0005). The lane, `apex-lane`, and the formats of the files here are in
 [packaging/README.md](https://github.com/apex-linux/apex-image/blob/main/packaging/README.md#the-rebuild-lane).
 
 | File | Role |
 |---|---|
 | `pkg.env` | the SRPM, the hold family `gnome-builder`, the one binary package the image takes, and Source1 (`desktop/gnome-builder/`, unpacked as `src/plugins/apex/`) |
 | `spec-edit` | anchored edits to Fedora's spec: `.apexN`, `Source1`, the `%prep` line that unpacks it, and the `apex-builder` catalogue in the main package's list |
-| `series`, `patches/` | the hook hunks, one patch per concern |
+| `series`, `patches/` | the hook hunks, one patch per concern, and 0005, a fix to propose upstream |
 | `check.sh` | the lane checks of this package: upstream's podman plugin still in `/usr/bin/gnome-builder`, the Apex Code plugin's resource (`/plugins/apex/apex.plugin`, the marker), the desktop file named Apex Code with no translated Name, and the vi `apex-builder.mo` |
 
 ## What the build does to Fedora's package
@@ -112,9 +112,11 @@ the application name before any plugin loads. Strings are marked `APEX_()` rathe
 | `0002-name` | `src/main.c`, `src/libide/gui/ide-application-actions.c`, `ide-workbench.c`, `src/libide/greeter/ide-greeter-workspace.c`, `src/libide/tweaks/ide-tweaks-window.c`, `data/org.gnome.Builder.desktop.in.in` | +18 −12 | the includes; the application name, the about dialog's name and the "Builder — %s" titles from `apex-brand.h`; `Name=Apex Code` |
 | `0003-podman-storage-path` | `src/plugins/podman/gbp-podman-runtime.c` | +1 −1 | `/etc/containers/storage.conf`, which lost its leading `/` |
 | `0004-podman-workdir` | `src/plugins/podman/gbp-podman-runtime.c` | +10 | the run handler refuses a working directory no mount of the container holds |
+| `0005-diagnostic-tool-lookups` | `src/libide/foundry/ide-diagnostic-tool.c` | +203 −31 | a diagnostic tool's program lookups run on a worker thread before its pass (E2; see below) |
 
 No ADR 0014 budget applies to this series (ADR 0017, decision 2); each patch still says
-what it changes and why, and the lane's checks apply. In use: +30 −13 lines in 8 files. The
+what it changes and why, and the lane's checks apply. In use: +233 −44 lines in 9 files, of
+which 0005's +203 −31 is a fix to propose upstream rather than a hook. The
 patches are `git format-patch` output against Fedora's `%prep` tree, with `a/` and `b/`
 prefixes, applied with `-p1`; write them with apex-image's `just pkg-prep gnome-builder`
 and `just pkg-export gnome-builder`.
@@ -131,21 +133,18 @@ and `just pkg-export gnome-builder`.
   reads only `rootless_storage_path`, which Fedora's `/usr/share/containers/storage.conf`
   leaves commented out and `/etc/containers/storage.conf` overrides when present, so a
   rootless user still gets `~/.local/share/containers/storage`.
-- **The 0.76 s typing stall: cause found, not fixed in E1.** E0 saw one main-loop stall
-  about 2.4 s into typing; with the toolbox runtime it is 0.63 s, 2.7 s in. Its cause is
-  the first diagnostics run after the first edit: `IdeDiagnosticTool`'s
-  `prepare_run_context()` looks up its program (flake8 for Python) with
-  `ide_pipeline_contains_program_in_path()` for the program path and the program name,
-  then `ide_runtime_contains_program_in_path()` on the host. Each lookup spawns `which`,
-  through `podman exec` for the toolbox (134–177 ms here) or a login shell for the host
-  (61–151 ms), and blocks on `ide_subprocess_wait_check()` on the main thread. The
-  runtimes cache both answers, so it happens once per program and runtime; Builder's log
-  shows `Failed to locate program "flake8"` at the end of the stall. A fix moves the
-  lookup off the main thread: prime the runtimes' path caches from a libdex fiber when the
-  pipeline is ready, or make `prepare_run_context()` asynchronous. It touches
-  `ide-diagnostic-tool.c` and both runtimes, so it is E2's, against E2's ≤ 200 ms stall
-  budget. Installing flake8 in the toolbox would not help: a found program costs the same
-  lookup.
+- **The 0.76 s typing stall: fixed in E2** (patch 0005). E0 saw one main-loop stall
+  about 2.4 s into typing. Its cause is a file's first diagnostics pass:
+  `IdeDiagnosticTool`'s `prepare_run_context()` looks up its program (flake8 for Python)
+  with `ide_pipeline_contains_program_in_path()`, then on the host. Each lookup spawns
+  `which`, through `podman exec` for the toolbox (134–177 ms here), and blocks on
+  `ide_subprocess_wait_check()` on the main thread; the runtimes cache the answers, so it
+  happens once per program and runtime. Builder's log shows `Failed to locate program
+  "flake8"` at the end of the stall; installing flake8 would not help, since a found program
+  costs the same lookups. Patch 0005 runs the same lookups on a worker thread first, and
+  `prepare_run_context()` then finds them cached. The runtimes allow it: their path caches
+  lock, and the podman runtime starts its container under a mutex. Typing from the moment
+  the file opens, the longest key here went from 313 ms to 30.5 ms (median 14.2 ms both).
 - **One shared `podman exec` per toolbox: feasible.** Today every process Builder runs in
   the toolbox is its own `podman exec`, whose Go client stays alive as the server's stdio
   (about 48 MiB RSS, 26 MiB PSS each) beside a `conmon` (about 2.3 MiB). The shared form:
@@ -164,7 +163,7 @@ and `just pkg-export gnome-builder`.
 ```bash
 just builder-test   # desktop/gnome-builder's licence and paths, the series, the patches' From: lines
 just builder-lane   # podman or docker: apex-lane's container half in fedora:45
-just builder-run    # podman or docker, privileged: the built RPM against E1's budgets, names and toolbox
+just builder-run    # podman or docker, privileged: the built RPM against E0's budgets, names, typing and toolbox
 ```
 
 `tests/lib/lane.sh gnome-builder` builds `apex-lane` from a pinned apex-image commit and
@@ -189,12 +188,18 @@ to `~/Projects/apex-gnome` (inside the toolbox's shares), and runs gnome-shell h
   process tree ten times (`mem.py`: RSS and PSS from `smaps_rollup`, the language servers
   and the `podman exec` clients apart, as E0 counted);
 - reads every button, toggle button and text over AT-SPI (`atspi.py`);
-- starts Apex Code again with its verbose log, types `os.pa` into `tests/e1_lsp.py`, and
-  waits for pylsp, in the toolbox, to answer the completion request.
+- starts Apex Code again with its verbose log and opens an empty `tests/e2_typing.py`,
+  whose first diagnostics pass starts as it opens. From then it types a line of Python, a
+  key every 150 ms for 60 s, and times each key from the press to the frame presented after
+  the window's first damage, as E0 did. Then it types `os.pa` and waits for pylsp, in the
+  toolbox, to answer the completion request. This session draws with GSK's cairo renderer:
+  under lavapipe, the completion popup's first Vulkan pipeline compiles in 290–430 ms on the
+  main thread, a cost of the software driver that a GPU does not have.
 
 It fails above E1's column of E0's budgets: a first frame over 1.9 s (median of 3), idle
 RSS over 360 MiB or PSS over 270 MiB (median of 10); a missing name of the table above,
-any unnamed button or toggle button, or no completion from pylsp. In the session the desktop
+any unnamed button or toggle button, or no completion from pylsp. It also fails on E2's
+stall budget: any key over 200 ms, or one that drew nothing within 2 s. In the session the desktop
 portal is masked: in a headless container it waits 25 s on RealtimeKit and Builder waits
 on it. Here (4 vCPUs, software rendering): first frames 1731, 1932 and 1605 ms, idle RSS
 338 MiB and PSS 239 MiB with pylsp running, 463 completion items. CI runs it after the lane

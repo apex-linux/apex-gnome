@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// gnome-shell's automation script for run.sh: Apex Code started, measured, named and answered by pylsp in the toolbox.
+// gnome-shell's automation script for run.sh: Apex Code started, measured, named, typed into and answered by pylsp in the toolbox.
 
 import Clutter from 'gi://Clutter';
 import Gio from 'gi://Gio';
@@ -15,6 +15,7 @@ Gio._promisify(Gio.Subprocess.prototype, 'wait_async');
 const env = name => GLib.getenv(name);
 const PROJECT = env('APEX_BUILDER_PROJECT');
 const LSP_FILE = env('APEX_BUILDER_LSP_FILE');
+const TYPING_FILE = env('APEX_BUILDER_TYPING_FILE');
 // E0's harness: three cold starts after a discarded one; 30 s settled, then 10 samples a second apart.
 const STARTS = 3;
 const WINDOW_WAIT_MS = 60000;
@@ -22,6 +23,11 @@ const QUIET_MS = 3000;
 const SETTLE_MS = 30000;
 const SAMPLES = 10;
 const LSP_WAIT_MS = 45000;
+// E0's typing: a key every 150 ms, timed from the press to the frame presented after the window's first damage.
+const TYPING_MS = 60000;
+const KEY_GAP_MS = 150;
+const KEY_WAIT_MS = 2000;
+const TYPED_LINE = 'total_count = base_value + offset * 2\n';
 
 const now = () => GLib.get_monotonic_time();
 let keyboard;
@@ -35,11 +41,56 @@ function tap(keyval, modifiers = []) {
         keyboard.notify_keyval(now(), m, Clutter.KeyState.RELEASED);
 }
 
+function keyval(ch) {
+    return ch === '\n' ? Clutter.KEY_Return : Clutter.unicode_to_keysym(ch.codePointAt(0));
+}
+
 async function type(text) {
     for (const ch of text) {
-        tap(ch === '\n' ? Clutter.KEY_Return : Clutter.unicode_to_keysym(ch.codePointAt(0)));
-        await Scripting.sleep(150);
+        tap(keyval(ch));
+        await Scripting.sleep(KEY_GAP_MS);
     }
+}
+
+// Each key's latency in ms, or null when the window drew nothing for KEY_WAIT_MS; the next key waits for it.
+function timedTap(window, kv) {
+    const actor = window.get_compositor_private();
+    const t0 = now();
+    return new Promise(resolve => {
+        let pid = 0;
+        const did = actor.connect('damaged', () => {
+            actor.disconnect(did);
+            pid = global.stage.connect('after-paint', () => {
+                global.stage.disconnect(pid);
+                resolve(Math.round((now() - t0) / 100) / 10);
+            });
+        });
+        tap(kv);
+        GLib.timeout_add(GLib.PRIORITY_DEFAULT, KEY_WAIT_MS, () => {
+            if (pid === 0) {
+                actor.disconnect(did);
+                resolve(null);
+            }
+            return GLib.SOURCE_REMOVE;
+        });
+    });
+}
+
+// Escape before Return, so that a completion popup never takes the newline.
+async function typeTimed(window, ms) {
+    const keys = [];
+    const end = now() + ms * 1000;
+    for (let i = 0; now() < end; i++) {
+        const ch = TYPED_LINE[i % TYPED_LINE.length];
+        if (ch === '\n')
+            tap(Clutter.KEY_Escape);
+        const t = now();
+        keys.push(await timedTap(window, keyval(ch)));
+        const left = KEY_GAP_MS - (now() - t) / 1000;
+        if (left > 0)
+            await Scripting.sleep(left);
+    }
+    return keys;
 }
 
 async function helper(script, ...args) {
@@ -149,14 +200,15 @@ async function idle() {
     return {samples, names, title: st.window.get_title()};
 }
 
-// A completion request answered by pylsp in the toolbox, from Builder's own log.
-async function answers() {
+// Keys timed from the moment the first file opens and starts its diagnostics, then pylsp's answer.
+// Cairo compiles no shaders: lavapipe's first popup pipeline costs 290-430 ms, the driver's cost.
+async function typing() {
     const log = env('APEX_BUILDER_LOG');
-    await launch(['sh', '-c', `exec gnome-builder -vvv -p '${PROJECT}' > '${log}' 2>&1`]);
-    await spawnWait(['gnome-builder', LSP_FILE]);
-    await Scripting.sleep(15000);
-    tap(Clutter.KEY_End, [Clutter.KEY_Control_L]);
-    await type('\nos.pa');
+    const st = await launch(['sh', '-c', `GSK_RENDERER=cairo exec gnome-builder -vvv -p '${PROJECT}' > '${log}' 2>&1`]);
+    await spawnWait(['gnome-builder', TYPING_FILE]);
+    const keys = await typeTimed(st.window, TYPING_MS);
+    tap(Clutter.KEY_Escape);
+    await type('\nimport os\nos.pa');
     const start = now();
     let found = null;
     while (found === null && (now() - start) / 1000 < LSP_WAIT_MS) {
@@ -167,14 +219,14 @@ async function answers() {
             found = Number(m[1]);
     }
     await quit();
-    return {completionItems: found};
+    return {keys, completionItems: found};
 }
 
 async function drive() {
     keyboard = global.stage.context.get_backend().get_default_seat()
         .create_virtual_device(Clutter.InputDeviceType.KEYBOARD_DEVICE);
     Main.overview.hide();
-    return {starts: await starts(), idle: await idle(), server: await answers()};
+    return {starts: await starts(), idle: await idle(), typing: await typing()};
 }
 
 // main.js connects to startup-complete only after importing this module, so a startup that

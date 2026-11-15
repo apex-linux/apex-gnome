@@ -1,5 +1,6 @@
-# Hook hunks only: all logic lives in desktop/gnome-builder/. Format: packaging/README.md.
+# Hook hunks, and 0005, a fix to propose upstream: all Apex logic lives in desktop/gnome-builder/. Format: packaging/README.md.
 0001-build.patch
 0002-name.patch
 0003-podman-storage-path.patch
 0004-podman-workdir.patch
+0005-diagnostic-tool-lookups.patch
