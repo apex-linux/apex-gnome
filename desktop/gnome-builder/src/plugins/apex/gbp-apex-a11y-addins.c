@@ -5,11 +5,13 @@
 #include "config.h"
 
 #include <adwaita.h>
+#include <glib/gi18n.h>
 
 #include "apex-i18n.h"
 #include "gbp-apex-a11y-addins.h"
 
-/* E0's AT-SPI gaps: the editor's text and the icon-only menu buttons had no name. */
+/* E0's AT-SPI gaps: the editor's text, the icon-only menu buttons, the diagnostics button,
+ * the tab lists, the page's progress bar, the project tree and its filter, empty labels. */
 
 struct _GbpApexWorkspaceAddin
 {
@@ -74,8 +76,132 @@ name_split_main (GtkWidget *split)
 }
 
 static void
+name_diagnostics (GtkWidget *button)
+{
+  IdeContext *context = ide_widget_get_context (button);
+  IdeBuildManager *build_manager;
+  g_autofree char *errors = NULL;
+  g_autofree char *warnings = NULL;
+  g_autofree char *label = NULL;
+  guint n_errors;
+  guint n_warnings;
+
+  if (context == NULL)
+    return;
+
+  build_manager = ide_build_manager_from_context (context);
+  n_errors = ide_build_manager_get_error_count (build_manager);
+  n_warnings = ide_build_manager_get_warning_count (build_manager);
+  errors = g_strdup_printf (APEX_NG_("%u error", "%u errors", n_errors), n_errors);
+  warnings = g_strdup_printf (APEX_NG_("%u warning", "%u warnings", n_warnings), n_warnings);
+  /* TRANSLATORS: the status bar's diagnostics button; the counts are "%u errors" and "%u warnings" */
+  label = g_strdup_printf (APEX_("Build Diagnostics: %s, %s"), errors, warnings);
+  gtk_accessible_update_property (GTK_ACCESSIBLE (button), GTK_ACCESSIBLE_PROPERTY_LABEL, label, -1);
+}
+
+static void
+watch_diagnostics (GtkWidget *button)
+{
+  IdeContext *context = ide_widget_get_context (button);
+  IdeBuildManager *build_manager;
+
+  if (context == NULL || g_object_get_data (G_OBJECT (button), "apex-named") != NULL)
+    return;
+
+  g_object_set_data (G_OBJECT (button), "apex-named", GINT_TO_POINTER (1));
+  build_manager = ide_build_manager_from_context (context);
+  g_signal_connect_object (build_manager, "notify::error-count", G_CALLBACK (name_diagnostics), button, G_CONNECT_SWAPPED);
+  g_signal_connect_object (build_manager, "notify::warning-count", G_CALLBACK (name_diagnostics), button, G_CONNECT_SWAPPED);
+  name_diagnostics (button);
+}
+
+/* An empty status bar label (vim's command bar) is an empty node over AT-SPI, and the
+ * hidden state does not remove it, so it is hidden while it has no text, even when its
+ * owner shows it. */
+static void
+hide_if_empty (GtkLabel *label)
+{
+  const char *text = gtk_label_get_label (label);
+
+  if (text == NULL || text[0] == 0)
+    gtk_widget_set_visible (GTK_WIDGET (label), FALSE);
+  else if (g_object_get_data (G_OBJECT (label), "apex-hid") != NULL)
+    gtk_widget_set_visible (GTK_WIDGET (label), TRUE);
+
+  g_object_set_data (G_OBJECT (label), "apex-hid", GINT_TO_POINTER (text == NULL || text[0] == 0));
+}
+
+static void
+watch_label (GtkWidget *label)
+{
+  if (g_object_get_data (G_OBJECT (label), "apex-named") != NULL)
+    return;
+
+  g_object_set_data (G_OBJECT (label), "apex-named", GINT_TO_POINTER (1));
+  g_signal_connect (label, "notify::label", G_CALLBACK (hide_if_empty), NULL);
+  g_signal_connect (label, "notify::visible", G_CALLBACK (hide_if_empty), NULL);
+  hide_if_empty (GTK_LABEL (label));
+}
+
+static void
+label_widget (GtkWidget  *widget,
+              const char *label)
+{
+  gtk_accessible_update_property (GTK_ACCESSIBLE (widget), GTK_ACCESSIBLE_PROPERTY_LABEL, label, -1);
+}
+
+static gboolean
+is_diagnostics_button (GtkWidget *widget)
+{
+  return GTK_IS_MENU_BUTTON (widget) &&
+         g_strcmp0 (gtk_widget_get_tooltip_text (widget), g_dgettext (GETTEXT_PACKAGE, "Display Build Diagnostics (Ctrl+Alt+?)")) == 0;
+}
+
+/* AdwTabBar's two tab lists, pinned tabs first, libpanel's switcher of a dock's panels, and
+ * the diagnostics popover's switcher between errors and warnings. */
+static void
+name_tab_list (GtkWidget *widget)
+{
+  GtkWidget *bar = gtk_widget_get_ancestor (widget, ADW_TYPE_TAB_BAR);
+  GtkWidget *popover;
+
+  if (bar == NULL)
+    {
+      popover = gtk_widget_get_ancestor (widget, GTK_TYPE_POPOVER);
+      if (PANEL_IS_FRAME_SWITCHER (widget) || gtk_widget_get_ancestor (widget, PANEL_TYPE_FRAME_SWITCHER) != NULL)
+        label_widget (widget, APEX_("Panels"));
+      else if (popover != NULL && is_diagnostics_button (gtk_widget_get_parent (popover)))
+        label_widget (widget, APEX_("Diagnostics"));
+      return;
+    }
+
+  if (g_object_get_data (G_OBJECT (bar), "apex-pinned") == NULL)
+    g_object_set_data (G_OBJECT (bar), "apex-pinned", widget);
+  label_widget (widget, g_object_get_data (G_OBJECT (bar), "apex-pinned") == widget ? APEX_("Pinned Pages") : APEX_("Pages"));
+}
+
+static void
 name_widgets (GtkWidget *widget)
 {
+  GtkAccessibleRole role = gtk_accessible_get_accessible_role (GTK_ACCESSIBLE (widget));
+  GtkWidget *panel;
+
+  if (is_diagnostics_button (widget))
+    watch_diagnostics (widget);
+  else if (GTK_IS_LABEL (widget) && gtk_widget_get_ancestor (widget, PANEL_TYPE_STATUSBAR) != NULL &&
+           gtk_widget_get_ancestor (widget, GTK_TYPE_POPOVER) == NULL &&
+           gtk_widget_get_ancestor (widget, GTK_TYPE_BUTTON) == NULL)
+    watch_label (widget);
+  else if (role == GTK_ACCESSIBLE_ROLE_TAB_LIST)
+    name_tab_list (widget);
+  else if (GTK_IS_PROGRESS_BAR (widget) && gtk_widget_get_ancestor (widget, IDE_TYPE_PAGE) != NULL)
+    label_widget (widget, APEX_("Progress"));
+  else if (GTK_IS_SEARCH_ENTRY (widget) && gtk_search_entry_get_placeholder_text (GTK_SEARCH_ENTRY (widget)) != NULL)
+    label_widget (widget, gtk_search_entry_get_placeholder_text (GTK_SEARCH_ENTRY (widget)));
+  else if (GTK_IS_LIST_VIEW (widget) && (panel = gtk_widget_get_ancestor (widget, PANEL_TYPE_WIDGET)) != NULL &&
+           !IDE_IS_PAGE (panel) && panel_widget_get_title (PANEL_WIDGET (panel)) != NULL)
+    label_widget (widget, panel_widget_get_title (PANEL_WIDGET (panel)));
+
   if (GTK_IS_MENU_BUTTON (widget) && gtk_widget_get_tooltip_text (widget) == NULL)
     {
       const char *name = menu_button_name (widget, gtk_menu_button_get_icon_name (GTK_MENU_BUTTON (widget)));
@@ -104,12 +230,25 @@ name_widgets (GtkWidget *widget)
     name_widgets (child);
 }
 
+/* Other addins add their widgets (the status bar's diagnostics button) after this one loads. */
+static gboolean
+gbp_apex_workspace_addin_rescan (gpointer user_data)
+{
+  GbpApexWorkspaceAddin *self = user_data;
+
+  if (self->workspace != NULL)
+    name_widgets (GTK_WIDGET (self->workspace));
+
+  return G_SOURCE_REMOVE;
+}
+
 static void
 gbp_apex_workspace_addin_load (IdeWorkspaceAddin *addin,
                                IdeWorkspace      *workspace)
 {
   GBP_APEX_WORKSPACE_ADDIN (addin)->workspace = workspace;
   name_widgets (GTK_WIDGET (workspace));
+  g_idle_add_full (G_PRIORITY_DEFAULT_IDLE, gbp_apex_workspace_addin_rescan, g_object_ref (addin), g_object_unref);
 }
 
 static void

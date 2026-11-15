@@ -15,8 +15,10 @@ DOMAINS=(
     "apex-shell|desktop/shell|data/theme/apex/po|js/ui/apex|from '\.\./i18n\.js'|--language=JavaScript --keyword=_"
     "apex-nautilus|desktop/nautilus|src/apex/po|src/apex|\bN?_\(|--keyword=_ --keyword=N_"
     "apex-ptyxis|desktop/ptyxis|src/apex/po|src/apex|\bN?_\(|--keyword=_ --keyword=N_"
-    "apex-builder|desktop/gnome-builder|src/plugins/apex/po|src/plugins/apex|\bAPEX_N?_\(|--keyword=APEX_ --keyword=APEX_N_"
+    "apex-builder|desktop/gnome-builder|src/plugins/apex/po|src/plugins/apex|\bAPEX_N?G?_\(|--keyword=APEX_ --keyword=APEX_N_ --keyword=APEX_NG_:1,2"
 )
+
+MESON_GLIB_PRESET_KEYWORDS=(--keyword=_ --keyword=N_ '--keyword=C_:1c,2' '--keyword=NC_:1c,2')
 
 for tool in xgettext msgmerge msgfmt msgattrib; do
     command -v "$tool" >/dev/null 2>&1 && continue
@@ -48,6 +50,13 @@ for entry in "${DOMAINS[@]}"; do
     (cd "$src" && xgettext --from-code=UTF-8 --add-comments --sort-by-file --package-name="$domain" \
         -f "$podir/POTFILES.in" -o - $args 2>"$T/$domain.xgettext") | { printf '%s\n' "$spdx"; cat; } >"$pot"
     grep -v "extension 'blp' is unknown; will try C" "$T/$domain.xgettext" >&2 || true
+    # update-po runs meson's xgettext, not this one: a keyword it lacks would make its entries obsolete.
+    for kw in $args; do
+        [[ $kw == --keyword=* ]] || continue
+        grep -Fq -- "'$kw'" "$podir/meson.build" && continue
+        grep -q "preset: 'glib'" "$podir/meson.build" && [[ " ${MESON_GLIB_PRESET_KEYWORDS[*]} " == *" $kw "* ]] && continue
+        fail "$domain: $po/meson.build's gettext lacks $kw, so update-po would drop those strings"
+    done
     [[ ${1:-} == --update ]] && cp "$pot" "$podir/$domain.pot"
     [[ $(body "$pot") == "$(body "$podir/$domain.pot")" ]] ||
         fail "$domain: $po/$domain.pot is stale; regenerate it (lint/i18n.sh --update)"
@@ -55,6 +64,8 @@ for entry in "${DOMAINS[@]}"; do
     while IFS= read -r lingua; do
         merged=$T/$domain.$lingua.po
         msgmerge --quiet --no-fuzzy-matching -o "$merged" "$podir/$lingua.po" "$pot"
+        obsolete=$(msgattrib --only-obsolete "$podir/$lingua.po" | grep -c '^#~ msgid ' || true)
+        ((obsolete > 0)) && fail "$domain: $lingua.po keeps $obsolete obsolete string(s), which msgfmt leaves out"
         missing=$(msgattrib --untranslated --no-obsolete "$merged" | grep -c '^msgid ' || true)
         fuzzy=$(msgattrib --only-fuzzy --no-obsolete "$merged" | grep -c '^msgid ' || true)
         # msgattrib prints the header's empty msgid when anything else is listed.

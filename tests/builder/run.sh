@@ -22,7 +22,7 @@ runs a headless gnome-shell, as root, whose automation script (probe.js):
   each after the page cache is dropped: E1's first frame, at most ${BUILDER_FIRST_FRAME_MS:-1900} ms (median);
 - opens tests/e1_lsp.py, waits 30 s, and samples Apex Code's own process tree ten
   times: E1's RSS and PSS, at most ${BUILDER_RSS_MIB:-360} and ${BUILDER_PSS_MIB:-270} MiB (median);
-- reads the editor's name and E0's eight unnamed buttons over AT-SPI;
+- reads the editor's name, E0's eight unnamed buttons and its other gaps over AT-SPI;
 - stops the toolbox, as after a reboot, and holds its podman start 3 s; then types into an
   empty e2_typing.py in a meson project for 60 s from a fresh start, a key every 150 ms: E2's longest
   key, press to presented frame, at most ${BUILDER_STALL_MS:-200} ms;
@@ -174,7 +174,16 @@ for name in "New Page" "Build Details" "Sidebar Menu" "Open Pages" "Run Options"
         "[.idle.names.nodes[] | select(.name == \"$name\") | .role] | (index(\"button\") != null and index(\"toggle button\") != null)"
 done
 check "the Run button is named for running the project" '.idle.names.nodes | any(.role == "button" and (.name | startswith("Run Project")))'
-check "no button or toggle button is unnamed" '.idle.names.nodes | all(.role == "text" or .name != "")'
+check "no button, toggle button, tab list, progress bar, entry, list or label is unnamed" '.idle.names.nodes | all(.role == "text" or .name != "")'
+check "the diagnostics button is named for its counts, not \"0 0\"" '.idle.names.nodes | any(.role == "button" and (.name | test("^Build Diagnostics: [0-9]+ errors?, [0-9]+ warnings?$")))'
+check "the diagnostics button is named before any page has focus" '.idle.noPage.nodes | any(.role == "button" and (.name | test("^Build Diagnostics: [0-9]+ errors?, [0-9]+ warnings?$")))'
+check "the diagnostics popover's tab list is not named \"Panels\"" '.idle.popover.pressed and ([.idle.popover.names.nodes[] | select(.role == "page tab list" and .name == "Panels")] | length) == ([.idle.names.nodes[] | select(.role == "page tab list" and .name == "Panels")] | length)'
+check "the diagnostics popover's tab list is named \"Diagnostics\"" '.idle.popover.pressed and (.idle.popover.names.nodes | any(.role == "page tab list" and .name == "Diagnostics"))'
+check "the page's progress bar is named \"Progress\", for loading and saving alike" '.idle.names.nodes | any(.role == "progress bar" and .name == "Progress")'
+for name in "Pinned Pages" "Pages" "Panels"; do
+    check "\"$name\" names a tab list" ".idle.names.nodes | any(.role == \"page tab list\" and .name == \"$name\")"
+done
+check "the project tree and its filter are named" '[.idle.names.nodes[] | select(.role == "list" or .role == "entry") | .name] | (index("Project Tree") != null and index("Filter…") != null)'
 check "every typed key drew a frame" '.typing.keys | length > 300 and all(. != null)'
 check "typing for 60 s from a fresh start: no key over ${STALL_MS} ms" '.typing.keys | max <= $stall'
 check "pylsp in the toolbox answers a completion, the toolbox stopped before the session" '.typing.completionItems > 0'

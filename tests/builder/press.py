@@ -1,6 +1,7 @@
 #!/usr/bin/python3
 # SPDX-License-Identifier: GPL-3.0-or-later
-# Press Apex Code's showing button or toggle button named argv[1] over AT-SPI; with --names, list every showing name.
+# Press Apex Code's showing button or toggle button named argv[1] (a trailing * matches a prefix) over AT-SPI;
+# with --names, list every showing name.
 import json
 import sys
 
@@ -28,7 +29,9 @@ def nodes(node, depth=0):
 def pressable(node, name):
     try:
         action = node.get_action_iface()
-        return (node.get_role() in PRESSABLE and node.get_name() == name
+        given = node.get_name() or ''
+        matches = given.startswith(name[:-1]) if name.endswith('*') else given == name
+        return (node.get_role() in PRESSABLE and matches
                 and action is not None and action.get_n_actions() > 0)
     except gi.repository.GLib.Error:
         return False
