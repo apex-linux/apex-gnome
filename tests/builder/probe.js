@@ -240,6 +240,52 @@ async function outlineOf() {
     return {pressed, names};
 }
 
+// A refresh that asked a resolver: one with no buffer yet asks none.
+const OUTLINE_LINE = /gbp-apex-outline\[.*outline: \d+ top-level symbols(?! from none)/g;
+const countOutlines = text => (text.match(OUTLINE_LINE) ?? []).length;
+
+// ctags answers in name order; the Outline lists line order. Hidden, an edit refreshes nothing;
+// a save with symbols listed rebuilds nothing.
+async function outlineOrder() {
+    const file = env('APEX_BUILDER_OUTLINE_FILE');
+    const log = env('APEX_BUILDER_OUTLINE_LOG');
+    await launch(['sh', '-c', `exec gnome-builder -vvv -p '${env('APEX_BUILDER_OUTLINE_PROJECT')}' > '${log}' 2>&1`]);
+    await spawnWait(['gnome-builder', file]);
+    await Scripting.sleep(QUIET_MS);
+    tap(Clutter.KEY_End, [Clutter.KEY_Control_L]);
+    await type('\n');
+    await Scripting.sleep(2000);
+    const hiddenRefreshes = countOutlines(readText(log));
+    const {pressed} = await helper('APEX_BUILDER_PRESS', 'Outline');
+    for (let i = 0; i < OUTLINE_WAIT_MS / 1000; i++) {
+        await Scripting.sleep(1000);
+        if ((await helper('APEX_BUILDER_ATSPI')).nodes.some(n => n.role === 'tree item' && n.name === 'a'))
+            break;
+    }
+    tap(Clutter.KEY_s, [Clutter.KEY_Control_L]);
+    await Scripting.sleep(500);
+    const beforeSave = countOutlines(readText(log));
+    await Scripting.sleep(3000);
+    const savedRebuilds = countOutlines(readText(log)) - beforeSave;
+    // ctags indexes the project after the session's first save: its tags file, then an edit asks again.
+    const tags = `find "$HOME/.cache/gnome-builder" "$HOME/Projects/.gnome-builder" -path '*ctags*' -type f -newer '${file}' 2>/dev/null`;
+    let indexed = false;
+    for (let i = 0; i < OUTLINE_WAIT_MS / 1000 && !indexed; i++) {
+        await Scripting.sleep(1000);
+        indexed = (await runOut(['sh', '-c', tags])) !== '';
+    }
+    await type('\n');
+    await Scripting.sleep(4000);
+    const names = await helper('APEX_BUILDER_ATSPI');
+    const text = readText(log);
+    await helper('APEX_BUILDER_PRESS', 'Project');
+    await Scripting.sleep(1000);
+    await quit();
+    return {pressed, hiddenRefreshes, savedRebuilds, indexed, names,
+        items: names.nodes.filter(n => n.role === 'tree item'),
+        byCtags: text.includes('top-level symbols from IdeCtagsSymbolResolver')};
+}
+
 // The toolbox stopped, as after a reboot, with its start held 3 s: lookups meet it not yet running.
 const SLOW_PODMAN = '/usr/local/bin/podman';
 
@@ -484,7 +530,7 @@ async function drive() {
         .create_virtual_device(Clutter.InputDeviceType.KEYBOARD_DEVICE);
     Main.overview.hide();
     const created = env('APEX_BUILDER_CREATE') === 'true' ? await create() : null;
-    return {create: created, ...await underAnotherName(), starts: await starts(), idle: await idle(), typing: await typing(),
+    return {create: created, ...await underAnotherName(), starts: await starts(), idle: await idle(), outline: await outlineOrder(), typing: await typing(),
             plain: await plain(), jhbuild: await jhbuild(), session: await splitSession(), editorOnly: await editorOnly()};
 }
 

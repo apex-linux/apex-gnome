@@ -33,6 +33,7 @@ struct _GbpApexOutlinePane
   guint         refresh_source;
   guint         retries;
   guint         watching_saves : 1;
+  guint         stale : 1;
 };
 
 G_DEFINE_FINAL_TYPE (GbpApexOutlinePane, gbp_apex_outline_pane, IDE_TYPE_PANE)
@@ -101,6 +102,7 @@ update_current (GbpApexOutlinePane *self)
   GtkWidget *current = NULL;
   GtkTextIter iter;
   int cursor;
+  int best = 0;
 
   if (buffer == NULL)
     {
@@ -118,71 +120,138 @@ update_current (GbpApexOutlinePane *self)
     {
       int line = GPOINTER_TO_INT (g_object_get_data (G_OBJECT (row), "apex-line"));
 
-      if (GTK_IS_LIST_BOX_ROW (row) && line > 0 && line <= cursor)
-        current = row;
+      /* The nearest line wins, whatever order the rows are in. */
+      if (GTK_IS_LIST_BOX_ROW (row) && line > 0 && line <= cursor && line >= best)
+        {
+          best = line;
+          current = row;
+        }
     }
 
   set_current (self, current);
 }
 
+/* A symbol and its children, with the line its location resolved to. */
 typedef struct
 {
-  GbpApexOutlinePane *self;
-  GtkWidget          *row;
-  GtkLabel           *line_label;
-} LocationRequest;
+  IdeSymbolNode *node;
+  IdeLocation   *location;
+  GPtrArray     *children;
+  guint          depth;
+  int            line;
+} Item;
 
 static void
-location_cb (GObject      *object,
-             GAsyncResult *result,
-             gpointer      user_data)
+item_free (Item *item)
 {
-  LocationRequest *request = user_data;
-  g_autoptr(IdeLocation) location = NULL;
-  g_autofree char *line_text = NULL;
-  g_autofree char *description = NULL;
-  int line;
+  g_clear_object (&item->node);
+  g_clear_object (&item->location);
+  g_clear_pointer (&item->children, g_ptr_array_unref);
+  g_free (item);
+}
 
-  location = ide_symbol_node_get_location_finish (IDE_SYMBOL_NODE (object), result, NULL);
+/* Builder's own nesting, not the board's quirk, which indents by position. */
+static void
+collect (IdeSymbolTree *tree,
+         IdeSymbolNode *parent,
+         guint          depth,
+         GPtrArray     *into,
+         GPtrArray     *flat)
+{
+  guint n = ide_symbol_tree_get_n_children (tree, parent);
 
-  if (location != NULL && gtk_widget_get_parent (request->row) != NULL)
+  for (guint i = 0; i < n; i++)
     {
-      line = ide_location_get_line (location) + 1;
-      line_text = g_strdup_printf ("%d", line);
-      description = g_strdup_printf (APEX_("Line %d"), line);
-      gtk_label_set_text (request->line_label, line_text);
-      gtk_accessible_update_property (GTK_ACCESSIBLE (request->row), GTK_ACCESSIBLE_PROPERTY_DESCRIPTION, description, -1);
-      g_object_set_data (G_OBJECT (request->row), "apex-line", GINT_TO_POINTER (line));
-      g_object_set_data_full (G_OBJECT (request->row), "apex-location", g_steal_pointer (&location), g_object_unref);
-      update_current (request->self);
-    }
+      IdeSymbolNode *node = ide_symbol_tree_get_nth_child (tree, parent, i);
+      Item *item;
 
-  g_object_unref (request->self);
-  g_object_unref (request->row);
-  g_free (request);
+      if (node == NULL)
+        continue;
+
+      item = g_new0 (Item, 1);
+      item->node = node;
+      item->depth = depth;
+      item->children = g_ptr_array_new_with_free_func ((GDestroyNotify) item_free);
+      g_ptr_array_add (into, item);
+      g_ptr_array_add (flat, item);
+      collect (tree, node, depth + 1, item->children, flat);
+    }
+}
+
+/* ctags answers in name order: siblings go in line order, unresolved ones last as they came. */
+static int
+compare_items (gconstpointer a,
+               gconstpointer b,
+               gpointer      user_data)
+{
+  const Item *x = a;
+  const Item *y = b;
+  guint lx = x->line > 0 ? (guint) x->line : G_MAXUINT;
+  guint ly = y->line > 0 ? (guint) y->line : G_MAXUINT;
+
+  return lx < ly ? -1 : lx > ly;
+}
+
+static void
+sort_items (GPtrArray *items)
+{
+  g_ptr_array_sort_values_with_data (items, compare_items, NULL);
+  for (guint i = 0; i < items->len; i++)
+    sort_items (((Item *) g_ptr_array_index (items, i))->children);
+}
+
+static const char *
+kind_name (IdeSymbolKind kind,
+           gboolean      impl)
+{
+  static const struct { IdeSymbolKind kind; const char *name; } names[] = {
+    { IDE_SYMBOL_KIND_CLASS, APEX_N_("Class") },
+    { IDE_SYMBOL_KIND_STRUCT, APEX_N_("Struct") },
+    { IDE_SYMBOL_KIND_ENUM, APEX_N_("Enum") },
+    { IDE_SYMBOL_KIND_INTERFACE, APEX_N_("Interface") },
+    { IDE_SYMBOL_KIND_FUNCTION, APEX_N_("Function") },
+    { IDE_SYMBOL_KIND_METHOD, APEX_N_("Method") },
+    { IDE_SYMBOL_KIND_CONSTRUCTOR, APEX_N_("Constructor") },
+    { IDE_SYMBOL_KIND_HEADER, APEX_N_("Heading") },
+    /* ctags's kind for a member, a Python or JavaScript method among them. */
+    { IDE_SYMBOL_KIND_FIELD, APEX_N_("Field") },
+    { IDE_SYMBOL_KIND_VARIABLE, APEX_N_("Variable") },
+    { IDE_SYMBOL_KIND_CONSTANT, APEX_N_("Constant") },
+  };
+
+  if (impl)
+    return APEX_("Implementation");
+  for (guint i = 0; i < G_N_ELEMENTS (names); i++)
+    if (names[i].kind == kind)
+      return APEX_(names[i].name);
+
+  return APEX_("Symbol");
 }
 
 static void
 add_row (GbpApexOutlinePane *self,
-         IdeSymbolNode      *node,
-         guint               depth,
+         Item               *item,
          const char         *language_id)
 {
-  const char *name = ide_symbol_node_get_name (node);
-  Glyph glyph = glyph_of (ide_symbol_node_get_kind (node), name, language_id);
+  const char *full = ide_symbol_node_get_name (item->node);
+  const char *name = full;
+  IdeSymbolKind kind_id = ide_symbol_node_get_kind (item->node);
+  Glyph glyph = glyph_of (kind_id, name, language_id);
+  gboolean impl = g_strcmp0 (glyph.text, "impl") == 0;
+  g_autofree char *line_text = NULL;
+  g_autofree char *description = NULL;
   GtkWidget *row;
   GtkWidget *box;
   GtkWidget *kind;
   GtkWidget *label;
   GtkWidget *line;
-  LocationRequest *request;
 
-  if (g_strcmp0 (glyph.text, "impl") == 0)
+  if (impl)
     name += strlen ("impl ");
 
   row = g_object_new (GTK_TYPE_LIST_BOX_ROW, "accessible-role", GTK_ACCESSIBLE_ROLE_TREE_ITEM, NULL);
   box = gtk_box_new (GTK_ORIENTATION_HORIZONTAL, 8);
-  gtk_widget_set_margin_start (box, INDENT_PX * depth);
+  gtk_widget_set_margin_start (box, INDENT_PX * item->depth);
 
   kind = gtk_label_new (glyph.text);
   gtk_widget_add_css_class (kind, "glyph");
@@ -196,68 +265,161 @@ add_row (GbpApexOutlinePane *self,
   gtk_label_set_ellipsize (GTK_LABEL (label), PANGO_ELLIPSIZE_END);
   gtk_widget_set_hexpand (label, TRUE);
 
-  line = gtk_label_new (NULL);
+  line_text = item->line > 0 ? g_strdup_printf ("%d", item->line) : NULL;
+  line = gtk_label_new (line_text);
   gtk_widget_add_css_class (line, "line");
   gtk_accessible_update_state (GTK_ACCESSIBLE (line), GTK_ACCESSIBLE_STATE_HIDDEN, TRUE, -1);
+
+  /* TRANSLATORS: an Outline item's description: the symbol's kind (Class, Function...) and its line. */
+  description = item->line > 0 ? g_strdup_printf (APEX_("%s, line %d"), kind_name (kind_id, impl), item->line)
+                               : g_strdup (kind_name (kind_id, impl));
 
   gtk_box_append (GTK_BOX (box), kind);
   gtk_box_append (GTK_BOX (box), label);
   gtk_box_append (GTK_BOX (box), line);
   gtk_list_box_row_set_child (GTK_LIST_BOX_ROW (row), box);
-  gtk_accessible_update_property (GTK_ACCESSIBLE (row), GTK_ACCESSIBLE_PROPERTY_LABEL, name, -1);
+  /* The glyph is hidden from AT: the full name ("impl Engine") and the kind say it. */
+  gtk_accessible_update_property (GTK_ACCESSIBLE (row),
+                                  GTK_ACCESSIBLE_PROPERTY_LABEL, full,
+                                  GTK_ACCESSIBLE_PROPERTY_DESCRIPTION, description,
+                                  GTK_ACCESSIBLE_PROPERTY_LEVEL, (int) item->depth + 1,
+                                  -1);
   gtk_accessible_update_state (GTK_ACCESSIBLE (row), GTK_ACCESSIBLE_STATE_SELECTED, FALSE, -1);
+  g_object_set_data (G_OBJECT (row), "apex-line", GINT_TO_POINTER (item->line));
+  if (item->location != NULL)
+    g_object_set_data_full (G_OBJECT (row), "apex-location", g_object_ref (item->location), g_object_unref);
   gtk_list_box_append (self->list, row);
-
-  request = g_new0 (LocationRequest, 1);
-  request->self = g_object_ref (self);
-  request->row = g_object_ref (row);
-  request->line_label = GTK_LABEL (line);
-  ide_symbol_node_get_location_async (node, self->cancellable, location_cb, request);
 }
 
-/* Builder's own nesting, not the board's quirk, which indents by position. */
 static void
 add_rows (GbpApexOutlinePane *self,
-          IdeSymbolTree      *tree,
-          IdeSymbolNode      *parent,
-          guint               depth,
+          GPtrArray          *items,
           const char         *language_id)
 {
-  guint n = ide_symbol_tree_get_n_children (tree, parent);
-
-  for (guint i = 0; i < n; i++)
+  for (guint i = 0; i < items->len; i++)
     {
-      g_autoptr(IdeSymbolNode) node = ide_symbol_tree_get_nth_child (tree, parent, i);
+      Item *item = g_ptr_array_index (items, i);
 
-      if (node == NULL)
-        continue;
-
-      add_row (self, node, depth, language_id);
-      add_rows (self, tree, node, depth + 1, language_id);
+      add_row (self, item, language_id);
+      add_rows (self, item->children, language_id);
     }
 }
 
 static void queue_retry (GbpApexOutlinePane *self);
 
+/* The rows go all at once, once every line is known; keyboard focus stays on the same row. */
 static void
-show_tree (GbpApexOutlinePane *self,
-           IdeSymbolTree      *tree)
+show_items (GbpApexOutlinePane *self,
+            GPtrArray          *items,
+            const char         *language_id)
 {
+  GtkWidget *focus = gtk_widget_get_focus_child (GTK_WIDGET (self->list));
+  int focused = GTK_IS_LIST_BOX_ROW (focus) ? gtk_list_box_row_get_index (GTK_LIST_BOX_ROW (focus)) : -1;
   IdeBuffer *buffer = buffer_of (self);
-  guint n = tree != NULL ? ide_symbol_tree_get_n_children (tree, NULL) : 0;
+  GtkListBoxRow *row = NULL;
 
   set_current (self, NULL);
   gtk_list_box_remove_all (self->list);
+  if (items != NULL)
+    add_rows (self, items, language_id);
+  gtk_widget_set_visible (self->empty, (items == NULL || items->len == 0) && buffer != NULL);
 
-  if (n > 0 && buffer != NULL)
-    add_rows (self, tree, NULL, 0, ide_buffer_get_language_id (buffer));
-  gtk_widget_set_visible (self->empty, n == 0 && buffer != NULL);
+  for (int i = focused; i >= 0 && !(row = gtk_list_box_get_row_at_index (self->list, i)); i--)
+    ;
+  if (focused >= 0 && row != NULL)
+    gtk_widget_grab_focus (GTK_WIDGET (row));
 
-  g_debug ("outline: %u top-level symbols", n);
+  update_current (self);
+}
 
-  /* A resolver can answer before its index or its server is ready (ctags, a language server). */
-  if (n == 0 && buffer != NULL && ide_buffer_has_symbol_resolvers (buffer))
-    queue_retry (self);
+/* One location at a time: ctags slices the whole buffer on the main thread for each. */
+typedef struct
+{
+  GbpApexOutlinePane *self;
+  GCancellable       *cancellable;
+  GPtrArray          *items;
+  GPtrArray          *flat;
+  char               *language_id;
+  guint               next;
+} Resolve;
+
+static void
+resolve_free (Resolve *resolve)
+{
+  g_object_unref (resolve->self);
+  g_object_unref (resolve->cancellable);
+  g_ptr_array_unref (resolve->items);
+  g_ptr_array_unref (resolve->flat);
+  g_free (resolve->language_id);
+  g_free (resolve);
+}
+
+static void resolve_next (Resolve *resolve);
+
+static void
+location_cb (GObject      *object,
+             GAsyncResult *result,
+             gpointer      user_data)
+{
+  Resolve *resolve = user_data;
+  Item *item = g_ptr_array_index (resolve->flat, resolve->next);
+
+  item->location = ide_symbol_node_get_location_finish (IDE_SYMBOL_NODE (object), result, NULL);
+  if (g_cancellable_is_cancelled (resolve->cancellable))
+    {
+      resolve_free (resolve);
+      return;
+    }
+
+  item->line = item->location != NULL ? (int) ide_location_get_line (item->location) + 1 : 0;
+  resolve->next++;
+  resolve_next (resolve);
+}
+
+static void
+resolve_next (Resolve *resolve)
+{
+  if (resolve->next < resolve->flat->len)
+    {
+      Item *item = g_ptr_array_index (resolve->flat, resolve->next);
+
+      ide_symbol_node_get_location_async (item->node, resolve->cancellable, location_cb, resolve);
+      return;
+    }
+
+  sort_items (resolve->items);
+  show_items (resolve->self, resolve->items, resolve->language_id);
+  resolve_free (resolve);
+}
+
+static void
+show_tree (GbpApexOutlinePane *self,
+           IdeSymbolTree      *tree,
+           GObject            *resolver)
+{
+  IdeBuffer *buffer = buffer_of (self);
+  guint n = tree != NULL ? ide_symbol_tree_get_n_children (tree, NULL) : 0;
+  Resolve *resolve;
+
+  g_debug ("outline: %u top-level symbols from %s", n, resolver != NULL ? G_OBJECT_TYPE_NAME (resolver) : "none");
+
+  if (n == 0 || buffer == NULL)
+    {
+      show_items (self, NULL, NULL);
+      /* A resolver can answer before its index or its server is ready (ctags, a language server). */
+      if (buffer != NULL && ide_buffer_has_symbol_resolvers (buffer))
+        queue_retry (self);
+      return;
+    }
+
+  resolve = g_new0 (Resolve, 1);
+  resolve->self = g_object_ref (self);
+  resolve->cancellable = g_object_ref (self->cancellable);
+  resolve->items = g_ptr_array_new_with_free_func ((GDestroyNotify) item_free);
+  resolve->flat = g_ptr_array_new ();
+  resolve->language_id = g_strdup (ide_buffer_get_language_id (buffer));
+  collect (tree, NULL, 0, resolve->items, resolve->flat);
+  resolve_next (resolve);
 }
 
 /* As Builder's symbol tree plugin asks: the last resolver first, then each before it. */
@@ -307,7 +469,7 @@ fetch_cb (GObject      *object,
       return;
     }
 
-  show_tree (fetch->self, tree);
+  show_tree (fetch->self, tree, object);
   fetch_free (fetch);
 }
 
@@ -331,10 +493,15 @@ refresh (GbpApexOutlinePane *self)
   g_clear_object (&self->cancellable);
   self->cancellable = g_cancellable_new ();
 
+  /* Hidden, as it is behind Project by default: refreshed when it is next shown. */
+  self->stale = !gtk_widget_get_mapped (GTK_WIDGET (self));
+  if (self->stale)
+    return;
+
   if (buffer == NULL || ide_buffer_get_file (buffer) == NULL ||
       !(resolvers = ide_buffer_get_symbol_resolvers (buffer)) || resolvers->len == 0)
     {
-      show_tree (self, NULL);
+      show_tree (self, NULL, NULL);
       return;
     }
 
@@ -415,6 +582,13 @@ file_changed (GbpApexOutlinePane *self)
 }
 
 static void
+mapped (GbpApexOutlinePane *self)
+{
+  if (self->stale)
+    refresh (self);
+}
+
+static void
 row_activated (GbpApexOutlinePane *self,
                GtkListBoxRow      *row)
 {
@@ -430,7 +604,8 @@ static void
 buffer_saved (GbpApexOutlinePane *self,
               IdeBuffer          *buffer)
 {
-  if (buffer != buffer_of (self))
+  /* Only an empty outline: a rebuild would take keyboard focus off its row, at every autosave too. */
+  if (buffer != buffer_of (self) || gtk_widget_get_first_child (GTK_WIDGET (self->list)) != NULL)
     return;
 
   self->retries = 0;
@@ -518,6 +693,7 @@ gbp_apex_outline_pane_init (GbpApexOutlinePane *self)
   gtk_label_set_wrap (GTK_LABEL (placeholder), TRUE);
   gtk_widget_set_visible (placeholder, FALSE);
   g_signal_connect_object (self->list, "row-activated", G_CALLBACK (row_activated), self, G_CONNECT_SWAPPED);
+  g_signal_connect (self, "map", G_CALLBACK (mapped), NULL);
 
   gtk_scrolled_window_set_policy (GTK_SCROLLED_WINDOW (scroller), GTK_POLICY_NEVER, GTK_POLICY_AUTOMATIC);
   gtk_scrolled_window_set_child (GTK_SCROLLED_WINDOW (scroller), GTK_WIDGET (self->list));
@@ -528,6 +704,7 @@ gbp_apex_outline_pane_init (GbpApexOutlinePane *self)
   gtk_box_append (GTK_BOX (box), scroller);
   panel_widget_set_child (PANEL_WIDGET (self), box);
 
+  self->stale = TRUE;
   self->buffer_signals = g_signal_group_new (IDE_TYPE_BUFFER);
   g_signal_connect_object (self->buffer_signals, "bind", G_CALLBACK (buffer_bind), self, G_CONNECT_SWAPPED);
   g_signal_connect_object (self->buffer_signals, "unbind", G_CALLBACK (buffer_unbind), self, G_CONNECT_SWAPPED);

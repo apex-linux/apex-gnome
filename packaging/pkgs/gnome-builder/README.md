@@ -105,7 +105,8 @@ button both named "More Options". Two addins name them, with no hunk in upstream
 | an editor tab bar's two tab lists (E2) | "Pinned Pages", "Pages" | by the accessible role, under `AdwTabBar`, the first being the pinned one |
 | a dock's panel switcher (E2) | "Panels" | libpanel's `PanelFrameSwitcher` only: the bottom and end frames', the sidebar's being "Sidebar views" since E2's UI. The lane opens the bottom panel (Ctrl+F9) for a snapshot of its own: its tabs, Build Pipeline, Manuals, TODO/FIXMEs and Unit Tests among them, are named and take keyboard focus, as upstream's do |
 | the sidebar's view switcher (E2 UI) | the tab list "Sidebar views", its tabs "Project" and "Outline" | the boards' switcher over the start frame (`gbp-apex-sidebar.c`): an `AdwToggleGroup` built with the tab-list role, so each segment is a tab named for its view, the shown one selected |
-| the Outline view (E2 UI) | the tree "Outline of e1_lsp.py", each item named for its symbol and described "Line 4" | the board's names; the current symbol's item is selected. The lane opens it with the cursor at the file's end, and finds pylsp's f there, current |
+| the Outline view (E2 UI) | the tree "Outline of e1_lsp.py", each item named for its whole symbol ("impl Engine", where the row shows "Engine" after its glyph), described "Function, line 4", at its nesting level | the board's names; the glyph is hidden from AT, so the kind is in the description. The current symbol's item is selected. The lane opens it with the cursor at the file's end, and finds pylsp's f there, current, at level 1 |
+| an Outline item's kind (E2 UI) | "Class", "Struct", "Enum", "Interface", "Function", "Method", "Constructor", "Heading", "Field", "Variable", "Constant", "Implementation", or "Symbol" for every other kind, in "%s, line %d" | Builder's `IdeSymbolKind`, as the resolver reports it: ctags reports a Python or JavaScript method as a member, which Builder's kind calls a field. The lane reads "Class, line 1" and "Field, line 2" from ctags |
 | the diagnostics popover's switcher (E2) | "Diagnostics" | the `GtkStackSwitcher` between errors and warnings, in the diagnostics button's popover |
 | a page's progress bar (E2) | "Progress" | `GtkProgressBar` under an `IdePage`; it shows both loading and saving |
 | the project tree's filter (E2) | "Filter…" | a `GtkSearchEntry` is named by its placeholder |
@@ -142,10 +143,16 @@ The Outline view (`gbp-apex-outline-pane.c`) is an `IdePane` on the start frame.
 the focused editor's buffer and asks Builder's symbol resolvers for its tree, the last
 resolver first, as Builder's own symbol menu does. Under a 26px file caption, each symbol is
 a 28px row: the board's kind glyph (C for a class, ƒ for a function or method, fn and impl in
-Rust, # otherwise), the name, and the line. The current symbol, the last one at or above
-the cursor's line, is drawn `--sel` and bold. Activating a row moves the cursor to the symbol.
-An empty tree is retried, 1 to 32 s apart, and again after each save: ctags writes its
-first index only after a save, and a language server can answer before it is ready.
+Rust, # otherwise), the name, and the line. Siblings go in line order: ctags, which Builder
+asks first for Python, JavaScript and the rest once it has an index, answers in name order.
+The current symbol, the nearest one at or above the cursor's line, is drawn `--sel` and
+bold. Activating a row moves the cursor to the symbol. Locations are asked one at a time,
+since ctags slices the whole buffer on the main thread for each, and the rows are built once
+every line is known, keyboard focus kept on the same row. While Outline is hidden (behind
+Project, its default) the view does not refresh, and refreshes when it is next shown. An
+empty tree is retried, 1 to 32 s apart, and again after each save: ctags writes its first
+index only after a save, and a language server can answer before it is ready. A save with
+symbols listed rebuilds nothing, autosave's included.
 
 #### Not on the board
 
