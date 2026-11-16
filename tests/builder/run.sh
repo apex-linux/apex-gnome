@@ -107,6 +107,12 @@ git -c safe.directory='*' -C "$APEX_ROOT" archive --format=tar --prefix=apex-gno
 rm -f "$project/.buildconfig"
 printf 'import os\n\n\ndef f(a):\n    return undefined_name + a\n' >"$project/tests/e1_lsp.py"
 : >"$project/tests/e2_typing.py"
+# The Outline's order case: its own small project, which ctags indexes in a moment after the first save.
+outline_project=$HOME/Projects/apex-outline
+rm -rf "$outline_project" "$HOME/.cache/gnome-builder/projects/apex-outline" "$HOME/Projects/.gnome-builder/projects/apex-outline"
+mkdir -p "$outline_project"
+printf 'class Engine:\n    def start(self):\n        return 1\n\n\ndef b():\n    return 2\n\n\ndef a():\n    return 3\n' \
+    >"$outline_project/e3_outline.py"
 # The typing case's project builds with meson, whose pipeline looks up ninja as it loads.
 typing_project=$HOME/Projects/apex-meson
 rm -rf "$typing_project" && mkdir -p "$typing_project"
@@ -120,6 +126,15 @@ for name in plain jhbuild; do
     runtime=jhbuild && [[ $name == plain ]] && runtime=podman:$plain_id
     printf '[default]\nname=Default\nruntime=%s\ntoolchain=default\ndefault=true\n' "$runtime" >"$dir/.buildconfig"
 done
+
+# A project whose session the probe saves, splits and reopens; a file to open with no project.
+session_project=$HOME/Projects/apex-session
+# Builder 50 saves sessions in <projects>/.gnome-builder/projects/<project>: none from a run before.
+rm -rf "$session_project" "$HOME/Projects/.gnome-builder/projects/apex-session" "$HOME/.cache/gnome-builder/projects/apex-session"
+mkdir -p "$session_project"
+printf 'print("session")\n' >"$session_project/session_check.py"
+editor_file=$HOME/notes.txt
+printf 'notes\n' >"$editor_file"
 
 drop=$OUT/drop-caches
 (while sleep 0.1; do [[ -f $drop ]] && { sync; echo 3 >/proc/sys/vm/drop_caches; rm -f "$drop"; }; done) &
@@ -137,6 +152,10 @@ env XDG_RUNTIME_DIR="$run" XDG_SESSION_TYPE=wayland XDG_CURRENT_DESKTOP=GNOME LA
     APEX_BUILDER_TYPING_PROJECT="$typing_project" APEX_BUILDER_TOOLBOX="$TOOLBOX" \
     APEX_BUILDER_PLAIN_PROJECT="$HOME/Projects/apex-plain" APEX_BUILDER_PLAIN_ID="$plain_id" APEX_BUILDER_PLAIN_LOG="$OUT/builder-plain.log" \
     APEX_BUILDER_JHBUILD_PROJECT="$HOME/Projects/apex-jhbuild" APEX_BUILDER_JHBUILD_LOG="$OUT/builder-jhbuild.log" \
+    APEX_BUILDER_SESSION_PROJECT="$session_project" APEX_BUILDER_SESSION_LOG="$OUT/builder-session.log" \
+    APEX_BUILDER_SESSION="$HERE/session.py" APEX_BUILDER_EDITOR_FILE="$editor_file" \
+    APEX_BUILDER_OUTLINE_PROJECT="$outline_project" APEX_BUILDER_OUTLINE_FILE="$outline_project/e3_outline.py" \
+    APEX_BUILDER_OUTLINE_LOG="$OUT/builder-outline.log" \
     APEX_BUILDER_MEM="$HERE/mem.py" APEX_BUILDER_ATSPI="$HERE/atspi.py" APEX_BUILDER_DROP="$drop" APEX_BUILDER_CREATE="$create" APEX_BUILDER_PRESS="$HERE/press.py" \
     APEX_BUILDER_LOG="$OUT/builder-verbose.log" APEX_BUILDER_CREATE_LOG="$OUT/builder-create.log" \
     APEX_BUILDER_RENAMED_LOG="$OUT/builder-renamed.log" APEX_BUILDER_SETUP_LOG="$OUT/builder-setup.log" PROBE="$HERE/probe.js" \
@@ -198,6 +217,17 @@ check "\"Sidebar views\" names the sidebar's tab list, whose tabs are the boards
 check "the sidebar's pages the boards do not show move to the bottom panel: Build Pipeline, Manuals, TODO/FIXMEs, Unit Tests" \
     '.typing.toBottom | unique | length == 4'
 check "moving them presents none: TODO/FIXMEs does not mine the project at startup" '.typing.todoMined == false'
+check "a document page cannot be dropped in the sidebar: can_drop says no for the editor page" \
+    '.typing.canDrop | length > 0 and any(.[0] == "IdeEditorPage") and all(.[1] == "no")'
+check "a session with TODO/FIXMEs in a second start frame: saved and split, the frame goes and TODO/FIXMEs moves" \
+    '.session.saved and .session.split and .session.frameDropped and .session.todoMoved'
+check "and on that start and its clean close TODO/FIXMEs mines nothing, the sidebar has no empty Panels switcher, and is saved whole" \
+    '(.session.todoMined | not) and (.session.unbalanced | not) and .session.resaved and .session.todoArea == "bottom"
+     and (.session.startRows | type == "array" and all(. == 0))
+     and (.session.names.nodes | any(.role == "page tab list" and .name == "Sidebar views"))
+     and (.session.names.nodes | any(.role == "page tab list" and .name == "Panels") | not)'
+check "the editor-only workspace (gnome-builder -e) has the switcher, its first tab Project" \
+    '.editorOnly.names.nodes | any(.role == "page tab list" and .name == "Sidebar views") and any(.role == "page tab" and .name == "Project")'
 check "\"Panels\" names the bottom panel's switcher, open, and not the closed one" \
     '(.idle.bottom.nodes | any(.role == "page tab list" and .name == "Panels")) and (.idle.names.nodes | any(.name == "Panels") | not)'
 check "the bottom panel's tabs: Build Pipeline, Manuals, TODO/FIXMEs, Unit Tests, each named and taking keyboard focus" \
@@ -212,7 +242,7 @@ check "\"Outline\" is the switcher's second segment, after \"Project\"" \
     '[.idle.names.nodes[] | select(.role == "page tab" and (.name == "Project" or .name == "Outline" or .name == "Search" or .name == "Version control")) | .name][:2] == ["Project", "Outline"]'
 check "the Outline view names its tree for the file, and lists pylsp's symbol f at line 4, current with the cursor below it" \
     '.idle.outline.pressed and (.idle.outline.names.nodes | any(.role == "tree" and .name == "Outline of e1_lsp.py"))
-     and (.idle.outline.names.nodes | any(.role == "tree item" and .name == "f" and .description == "Line 4" and .selected))'
+     and (.idle.outline.names.nodes | any(.role == "tree item" and .name == "f" and .description == "Function, line 4" and .selected and .level == "1"))'
 check "\"Search\" is the switcher's third segment" \
     '[.idle.names.nodes[] | select(.role == "page tab" and (.name == "Project" or .name == "Outline" or .name == "Search" or .name == "Version control")) | .name][:3] == ["Project", "Outline", "Search"]'
 check "the Search view finds undefined_name in e1_lsp.py: its entry, its hit at line 5, and the hand-off button named" \
@@ -221,6 +251,16 @@ check "the Search view finds undefined_name in e1_lsp.py: its entry, its hit at 
      and (.idle.search.names.nodes | any(.role == "button" and (.name | test("^Show [0-9]+ results? in Find in Files$"))))'
 check "the hand-off opens Builder's Find in Files in the bottom panel" \
     '.idle.search.handedOff and (.idle.search.findInFiles.nodes | any(.role == "page tab list" and .name == "Panels"))'
+check "with Outline hidden behind Project, an edit refreshes it not at all" \
+    '.outline.pressed and .outline.hiddenRefreshes == 0'
+check "a save with symbols listed rebuilds the Outline not at all, so a row keeps keyboard focus" \
+    '.outline.pressed and .outline.savedRebuilds == 0'
+check "ctags's tree, in name order, is listed in line order: Engine, start, b, a; a current with the cursor below it" \
+    '.outline.indexed and .outline.byCtags and ([.outline.items[].name] == ["Engine", "start", "b", "a"])
+     and ([.outline.items[] | select(.selected) | .name] == ["a"])'
+check "each Outline item says its kind and its nesting: Engine a class at level 1, start (ctags's member, Builder's field) at level 2" \
+    '([.outline.items[] | [.name, .description, .level]][:2] == [["Engine", "Class, line 1", "1"], ["start", "Field, line 2", "2"]])
+     and ([.outline.items[2:][] | .level] == ["1", "1"])'
 check "the project tree and its filter are named" '[.idle.names.nodes[] | select(.role == "list" or .role == "entry") | .name] | (index("Project Tree") != null and index("Filter…") != null)'
 check "every typed key drew a frame" '.typing.keys | length > 300 and all(. != null)'
 check "typing for 60 s from a fresh start: no key over ${STALL_MS} ms" '.typing.keys | max <= $stall'
