@@ -106,7 +106,8 @@ button both named "More Options". Two addins name them, with no hunk in upstream
 | a dock's panel switcher (E2) | "Panels" | libpanel's `PanelFrameSwitcher` only: the bottom and end frames', the sidebar's being "Sidebar views" since E2's UI. The lane opens the bottom panel (Ctrl+F9) for a snapshot of its own: its tabs, Build Pipeline, Manuals, TODO/FIXMEs and Unit Tests among them, are named and take keyboard focus, as upstream's do |
 | the sidebar's view switcher (E2 UI) | the tab list "Sidebar views", its tabs "Project", "Outline" and "Search" | the boards' switcher over the start frame (`gbp-apex-sidebar.c`): an `AdwToggleGroup` built with the tab-list role, so each segment is a tab named for its view, the shown one selected |
 | the Search view (E2 UI) | the entry "Search in Project"; each hit a button "Line 5: return undefined_name + a"; "Show 1 result in Find in Files" | the entry by its placeholder; a hit by its line and text, without its indent. The lane searches e1_lsp.py's undefined_name, then hands it to Find in Files |
-| the Outline view (E2 UI) | the tree "Outline of e1_lsp.py", each item named for its symbol and described "Line 4" | the board's names; the current symbol's item is selected. The lane opens it with the cursor at the file's end, and finds pylsp's f there, current |
+| the Outline view (E2 UI) | the tree "Outline of e1_lsp.py", each item named for its whole symbol ("impl Engine", where the row shows "Engine" after its glyph), described "Function, line 4", at its nesting level | the board's names; the glyph is hidden from AT, so the kind is in the description. The current symbol's item is selected. The lane opens it with the cursor at the file's end, and finds pylsp's f there, current, at level 1 |
+| an Outline item's kind (E2 UI) | "Class", "Struct", "Enum", "Interface", "Function", "Method", "Constructor", "Heading", "Field", "Variable", "Constant", "Implementation", or "Symbol" for every other kind, in "%s, line %d" | Builder's `IdeSymbolKind`, as the resolver reports it: ctags reports a Python or JavaScript method as a member, which Builder's kind calls a field. The lane reads "Class, line 1" and "Field, line 2" from ctags |
 | the diagnostics popover's switcher (E2) | "Diagnostics" | the `GtkStackSwitcher` between errors and warnings, in the diagnostics button's popover |
 | a page's progress bar (E2) | "Progress" | `GtkProgressBar` under an `IdePage`; it shows both loading and saving |
 | the project tree's filter (E2) | "Filter…" | a `GtkSearchEntry` is named by its placeholder |
@@ -127,18 +128,32 @@ keys dark on `AdwStyleManager`, which Builder's style variant sets, through a `d
 It takes only the boards' views as drops: a document dragged
 there would leave the editor grid, and with it the close prompt for its unsaved edits.
 Every start frame is swept, a split one a session restored included: the other panes go
-to the bottom panel, the views join the switcher's frame. The moved panes' `presented`
-signal is blocked while they move, or TODO/FIXMEs would mine the project at every start.
+to the bottom panel, the views join the switcher's frame, and a frame left empty leaves
+the sidebar, or it would sit there as an empty "Panels" switcher and be saved again. The
+moved panes' `presented` signal stays blocked until the main loop is idle, after libpanel
+has presented whatever the move selected, or TODO/FIXMEs would mine the project at every
+start. It is blocked again while the window is unmapped: closing, Builder closes the bottom
+panel's panes one by one, each close presents the next, and every close path hides the
+window first. Builder saves its session only on a clean close, so the lane closes the window,
+splits the saved session (`tests/builder/session.py`), and opens it again. Under
+`APEX_BUILDER_SELFTEST` the sidebar logs whether its header takes each page changed to,
+which the lane reads for the editor page: libpanel's drop target asks the same function.
 Project, Outline and Search exist so far; Version control comes with its pane.
 
 The Outline view (`gbp-apex-outline-pane.c`) is an `IdePane` on the start frame. It follows
 the focused editor's buffer and asks Builder's symbol resolvers for its tree, the last
 resolver first, as Builder's own symbol menu does. Under a 26px file caption, each symbol is
 a 28px row: the board's kind glyph (C for a class, ƒ for a function or method, fn and impl in
-Rust, # otherwise), the name, and the line. The current symbol, the last one at or above
-the cursor's line, is drawn `--sel` and bold. Activating a row moves the cursor to the symbol.
-An empty tree is retried, 1 to 32 s apart, and again after each save: ctags writes its
-first index only after a save, and a language server can answer before it is ready.
+Rust, # otherwise), the name, and the line. Siblings go in line order: ctags, which Builder
+asks first for Python, JavaScript and the rest once it has an index, answers in name order.
+The current symbol, the nearest one at or above the cursor's line, is drawn `--sel` and
+bold. Activating a row moves the cursor to the symbol. Locations are asked one at a time,
+since ctags slices the whole buffer on the main thread for each, and the rows are built once
+every line is known, keyboard focus kept on the same row. While Outline is hidden (behind
+Project, its default) the view does not refresh, and refreshes when it is next shown. An
+empty tree is retried, 1 to 32 s apart, and again after each save: ctags writes its first
+index only after a save, and a language server can answer before it is ready. A save with
+symbols listed rebuilds nothing, autosave's included.
 
 The Search view (`gbp-apex-search-pane.c`) is Builder's Find in Files in the sidebar: its
 entry runs the grep plugin's `GbpGrepModel` over the project, 300 ms after the last key.

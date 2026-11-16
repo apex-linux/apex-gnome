@@ -9,7 +9,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: apex-builder\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-15 20:29+0000\n"
+"POT-Creation-Date: 2026-11-16 12:29+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -105,28 +105,82 @@ msgid "Progress"
 msgstr ""
 
 #. TRANSLATORS: the editor's accessible name; %s is the file
-#: src/plugins/apex/gbp-apex-a11y-addins.c:318
+#: src/plugins/apex/gbp-apex-a11y-addins.c:321
 #, c-format
 msgid "Editor for %s"
 msgstr ""
 
-#: src/plugins/apex/gbp-apex-outline-pane.c:152
-#, c-format
-msgid "Line %d"
+#: src/plugins/apex/gbp-apex-outline-pane.c:208
+msgid "Class"
 msgstr ""
 
-#: src/plugins/apex/gbp-apex-outline-pane.c:390
-#: src/plugins/apex/gbp-apex-outline-pane.c:471
+#: src/plugins/apex/gbp-apex-outline-pane.c:209
+msgid "Struct"
+msgstr ""
+
+#: src/plugins/apex/gbp-apex-outline-pane.c:210
+msgid "Enum"
+msgstr ""
+
+#: src/plugins/apex/gbp-apex-outline-pane.c:211
+msgid "Interface"
+msgstr ""
+
+#: src/plugins/apex/gbp-apex-outline-pane.c:212
+msgid "Function"
+msgstr ""
+
+#: src/plugins/apex/gbp-apex-outline-pane.c:213
+msgid "Method"
+msgstr ""
+
+#: src/plugins/apex/gbp-apex-outline-pane.c:214
+msgid "Constructor"
+msgstr ""
+
+#: src/plugins/apex/gbp-apex-outline-pane.c:215
+msgid "Heading"
+msgstr ""
+
+#. ctags's kind for a member, a Python or JavaScript method among them.
+#: src/plugins/apex/gbp-apex-outline-pane.c:217
+msgid "Field"
+msgstr ""
+
+#: src/plugins/apex/gbp-apex-outline-pane.c:218
+msgid "Variable"
+msgstr ""
+
+#: src/plugins/apex/gbp-apex-outline-pane.c:219
+msgid "Constant"
+msgstr ""
+
+#: src/plugins/apex/gbp-apex-outline-pane.c:223
+msgid "Implementation"
+msgstr ""
+
+#: src/plugins/apex/gbp-apex-outline-pane.c:228
+msgid "Symbol"
+msgstr ""
+
+#. TRANSLATORS: an Outline item's description: the symbol's kind (Class, Function...) and its line.
+#: src/plugins/apex/gbp-apex-outline-pane.c:274
+#, c-format
+msgid "%s, line %d"
+msgstr ""
+
+#: src/plugins/apex/gbp-apex-outline-pane.c:557
+#: src/plugins/apex/gbp-apex-outline-pane.c:646
 #: src/plugins/apex/gbp-apex-sidebar.c:29
 msgid "Outline"
 msgstr ""
 
-#: src/plugins/apex/gbp-apex-outline-pane.c:390
+#: src/plugins/apex/gbp-apex-outline-pane.c:557
 #, c-format
 msgid "Outline of %s"
 msgstr ""
 
-#: src/plugins/apex/gbp-apex-outline-pane.c:503
+#: src/plugins/apex/gbp-apex-outline-pane.c:678
 msgid "No outline for this file"
 msgstr ""
 

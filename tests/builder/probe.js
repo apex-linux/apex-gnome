@@ -265,18 +265,119 @@ async function searchFor(query) {
     return {pressed, names, handedOff, findInFiles};
 }
 
+// A refresh that asked a resolver: one with no buffer yet asks none.
+const OUTLINE_LINE = /gbp-apex-outline\[.*outline: \d+ top-level symbols(?! from none)/g;
+const countOutlines = text => (text.match(OUTLINE_LINE) ?? []).length;
+
+// ctags answers in name order; the Outline lists line order. Hidden, an edit refreshes nothing;
+// a save with symbols listed rebuilds nothing.
+async function outlineOrder() {
+    const file = env('APEX_BUILDER_OUTLINE_FILE');
+    const log = env('APEX_BUILDER_OUTLINE_LOG');
+    await launch(['sh', '-c', `exec gnome-builder -vvv -p '${env('APEX_BUILDER_OUTLINE_PROJECT')}' > '${log}' 2>&1`]);
+    await spawnWait(['gnome-builder', file]);
+    await Scripting.sleep(QUIET_MS);
+    tap(Clutter.KEY_End, [Clutter.KEY_Control_L]);
+    await type('\n');
+    await Scripting.sleep(2000);
+    const hiddenRefreshes = countOutlines(readText(log));
+    const {pressed} = await helper('APEX_BUILDER_PRESS', 'Outline');
+    for (let i = 0; i < OUTLINE_WAIT_MS / 1000; i++) {
+        await Scripting.sleep(1000);
+        if ((await helper('APEX_BUILDER_ATSPI')).nodes.some(n => n.role === 'tree item' && n.name === 'a'))
+            break;
+    }
+    tap(Clutter.KEY_s, [Clutter.KEY_Control_L]);
+    await Scripting.sleep(500);
+    const beforeSave = countOutlines(readText(log));
+    await Scripting.sleep(3000);
+    const savedRebuilds = countOutlines(readText(log)) - beforeSave;
+    // ctags indexes the project after the session's first save: its tags file, then an edit asks again.
+    const tags = `find "$HOME/.cache/gnome-builder" "$HOME/Projects/.gnome-builder" -path '*ctags*' -type f -newer '${file}' 2>/dev/null`;
+    let indexed = false;
+    for (let i = 0; i < OUTLINE_WAIT_MS / 1000 && !indexed; i++) {
+        await Scripting.sleep(1000);
+        indexed = (await runOut(['sh', '-c', tags])) !== '';
+    }
+    await type('\n');
+    await Scripting.sleep(4000);
+    const names = await helper('APEX_BUILDER_ATSPI');
+    const text = readText(log);
+    await helper('APEX_BUILDER_PRESS', 'Project');
+    await Scripting.sleep(1000);
+    await quit();
+    return {pressed, hiddenRefreshes, savedRebuilds, indexed, names,
+        items: names.nodes.filter(n => n.role === 'tree item'),
+        byCtags: text.includes('top-level symbols from IdeCtagsSymbolResolver')};
+}
+
 // The toolbox stopped, as after a reboot, with its start held 3 s: lookups meet it not yet running.
 const SLOW_PODMAN = '/usr/local/bin/podman';
 
 // Keys timed from the moment the first file opens, in a meson project (its pipeline looks up
 // ninja), then pylsp's answer. Cairo: lavapipe's first popup pipeline costs 290-430 ms.
 
+async function runOut(argv) {
+    const proc = Gio.Subprocess.new(argv, Gio.SubprocessFlags.STDOUT_PIPE);
+    const [stdout] = await proc.communicate_utf8_async(null, null);
+    return stdout.trim();
+}
+
+// A clean close, as a user closes the window: Builder unloads the workbench and saves its session.
+async function closeCleanly(st) {
+    st.window.delete(global.get_current_time());
+    for (let i = 0; i < 100 && await spawnWait(['pgrep', '-x', 'gnome-builder']) === 0; i++)
+        await Scripting.sleep(200);
+    const clean = await spawnWait(['pgrep', '-x', 'gnome-builder']) !== 0;
+    await quit();
+    return clean;
+}
+
+// A session from before the switcher, TODO/FIXMEs in a second start frame: on the next start the frame
+// goes, and TODO/FIXMEs goes to the bottom panel unpresented.
+async function splitSession() {
+    const project = env('APEX_BUILDER_SESSION_PROJECT');
+    const log = env('APEX_BUILDER_SESSION_LOG');
+    let st = await launch(['gnome-builder', '-p', project]);
+    await Scripting.sleep(QUIET_MS);
+    const saved = await closeCleanly(st);
+    // Builder 50 keeps it beside the projects, in <projects>/.gnome-builder/projects/<project>/.
+    const name = GLib.path_get_basename(project);
+    const file = (await runOut(['sh', '-c', `find "$HOME" -path '*/.gnome-builder/projects/${name}/session.gvariant' -o -path '*/gnome-builder/projects/${name}/session.gvariant'`])).split('\n')[0];
+    const split = await spawnWait(['python3', env('APEX_BUILDER_SESSION'), 'split', file]) === 0;
+    st = await launch(['sh', '-c', `exec gnome-builder -vvv -p '${project}' > '${log}' 2>&1`]);
+    await Scripting.sleep(QUIET_MS);
+    const names = await helper('APEX_BUILDER_ATSPI');
+    const resaved = await closeCleanly(st);
+    let startRows = null, todoArea = null;
+    try {
+        ({startRows, todoArea} = JSON.parse(await runOut(['python3', env('APEX_BUILDER_SESSION'), 'frames', file])));
+    } catch (e) {
+        // No session file, or one session.py cannot read: the checks on it fail, and say so.
+    }
+    const text = readText(log);
+    return {saved, split, resaved, names, file, startRows, todoArea,
+        todoMoved: text.includes('GbpTodoPanel moves to the bottom panel'),
+        frameDropped: text.includes('an emptied start frame leaves the sidebar'),
+        unbalanced: text.includes('is not blocked'),
+        todoMined: /Located \d+ TODO items/.test(text)};
+}
+
+// The editor-only workspace (gnome-builder -e): the same switcher over its sidebar.
+async function editorOnly() {
+    await launch(['gnome-builder', '-e', env('APEX_BUILDER_EDITOR_FILE')]);
+    await Scripting.sleep(QUIET_MS);
+    const names = await helper('APEX_BUILDER_ATSPI');
+    await quit();
+    return {names};
+}
+
 async function typing() {
     const log = env('APEX_BUILDER_LOG');
     await spawnWait(['podman', 'stop', '--time', '0', TOOLBOX]);
     GLib.file_set_contents(SLOW_PODMAN, '#!/bin/sh\n[ "$1" = start ] && sleep 3\nexec /usr/bin/podman "$@"\n');
     await spawnWait(['chmod', '755', SLOW_PODMAN]);
-    const st = await launch(['sh', '-c', `GSK_RENDERER=cairo exec gnome-builder -vvv -p '${TYPING_PROJECT}' > '${log}' 2>&1`]);
+    const st = await launch(['sh', '-c', `APEX_BUILDER_SELFTEST=1 GSK_RENDERER=cairo exec gnome-builder -vvv -p '${TYPING_PROJECT}' > '${log}' 2>&1`]);
     await spawnWait(['gnome-builder', TYPING_FILE]);
     const keys = await typeTimed(st.window, TYPING_MS);
     tap(Clutter.KEY_Escape);
@@ -302,8 +403,9 @@ async function typing() {
     const toBottom = [...text.matchAll(/(\S+) moves to the bottom panel/g)].map(m => m[1]);
     // The todo plugin mines the project on its panel's first "presented": a move must not present it.
     const todoMined = /Located \d+ TODO items/.test(text);
+    const canDrop = [...text.matchAll(/selftest: can_drop (\S+) (yes|no)/g)].map(m => [m[1], m[2]]);
     return {keys, completionItems: found, offThread: [...new Set(offThread)], lookups: lookups.length, mainThreadLookups, toBottom,
-        todoMined};
+        todoMined, canDrop};
 }
 
 // Apex Code's own Create Toolbox, pressed in the notification the project shows without a
@@ -453,8 +555,8 @@ async function drive() {
         .create_virtual_device(Clutter.InputDeviceType.KEYBOARD_DEVICE);
     Main.overview.hide();
     const created = env('APEX_BUILDER_CREATE') === 'true' ? await create() : null;
-    return {create: created, ...await underAnotherName(), starts: await starts(), idle: await idle(), typing: await typing(),
-            plain: await plain(), jhbuild: await jhbuild()};
+    return {create: created, ...await underAnotherName(), starts: await starts(), idle: await idle(), outline: await outlineOrder(), typing: await typing(),
+            plain: await plain(), jhbuild: await jhbuild(), session: await splitSession(), editorOnly: await editorOnly()};
 }
 
 // main.js connects to startup-complete only after importing this module, so a startup that
