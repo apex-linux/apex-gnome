@@ -166,3 +166,57 @@ msgstr "%s còn thiếu một số máy chủ ngôn ngữ, nên các ngôn ngữ
 
 msgid "Finish Setup"
 msgstr "Hoàn tất thiết lập"
+
+msgid "Class"
+msgstr "Lớp"
+
+msgid "Struct"
+msgstr "Cấu trúc"
+
+msgid "Enum"
+msgstr "Kiểu liệt kê"
+
+msgid "Interface"
+msgstr "Giao diện"
+
+msgid "Function"
+msgstr "Hàm"
+
+msgid "Method"
+msgstr "Phương thức"
+
+msgid "Constructor"
+msgstr "Hàm khởi tạo"
+
+msgid "Heading"
+msgstr "Tiêu đề"
+
+msgid "Field"
+msgstr "Trường"
+
+msgid "Variable"
+msgstr "Biến"
+
+msgid "Constant"
+msgstr "Hằng"
+
+msgid "Implementation"
+msgstr "Triển khai"
+
+msgid "Symbol"
+msgstr "Ký hiệu"
+
+#. TRANSLATORS: an Outline item's description: the symbol's kind (Class, Function...) and its line.
+#, c-format
+msgid "%s, line %d"
+msgstr "%s, dòng %d"
+
+#, c-format
+msgid "Outline of %s"
+msgstr "Dàn ý của %s"
+
+msgid "Outline"
+msgstr "Dàn ý"
+
+msgid "No outline for this file"
+msgstr "Tệp này không có dàn ý"

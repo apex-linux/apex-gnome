@@ -12,6 +12,7 @@
 #include <libide-gui.h>
 
 #include "apex-i18n.h"
+#include "gbp-apex-outline-pane.h"
 #include "gbp-apex-sidebar.h"
 
 typedef struct
@@ -24,6 +25,7 @@ typedef struct
 /* The board's order: Project, Outline, Search, Version control; the later views add their panes. */
 static const View views[] = {
   { "GbpProjectTreePane", APEX_N_("Project"), "text-x-generic-symbolic" },
+  { "GbpApexOutlinePane", APEX_N_("Outline"), "view-list-symbolic" },
 };
 
 static const View *
@@ -36,6 +38,14 @@ view_of (PanelWidget *page)
       return &views[i];
 
   return NULL;
+}
+
+static guint
+rank_of (PanelWidget *page)
+{
+  const View *view = view_of (page);
+
+  return view != NULL ? (guint) (view - views) : G_N_ELEMENTS (views);
 }
 
 const char *
@@ -114,23 +124,37 @@ select_page (GbpApexSidebarHeader *self,
 }
 
 static void
+add_toggle (GbpApexSidebarHeader *self,
+            PanelWidget          *page,
+            guint                 position)
+{
+  g_autofree char *name = g_strdup_printf ("%u", position);
+  const View *view = view_of (page);
+  AdwToggle *toggle = adw_toggle_new ();
+  const char *label = view != NULL ? APEX_(view->name) : panel_widget_get_title (page);
+
+  adw_toggle_set_name (toggle, name);
+  adw_toggle_set_icon_name (toggle, view != NULL ? view->icon_name : panel_widget_get_icon_name (page));
+  adw_toggle_set_tooltip (toggle, label);
+  adw_toggle_group_add (self->group, toggle);
+}
+
+static void
 rebuild (GbpApexSidebarHeader *self)
 {
   self->syncing = TRUE;
   adw_toggle_group_remove_all (self->group);
 
-  for (guint i = 0; self->pages != NULL && i < g_list_model_get_n_items (self->pages); i++)
+  /* The board's order, whatever order the plugins added their pages in. */
+  for (guint rank = 0; self->pages != NULL && rank <= G_N_ELEMENTS (views); rank++)
     {
-      g_autoptr(PanelWidget) page = page_at (self->pages, i);
-      g_autofree char *name = g_strdup_printf ("%u", i);
-      const View *view = view_of (page);
-      AdwToggle *toggle = adw_toggle_new ();
-      const char *label = view != NULL ? APEX_(view->name) : panel_widget_get_title (page);
+      for (guint i = 0; i < g_list_model_get_n_items (self->pages); i++)
+        {
+          g_autoptr(PanelWidget) page = page_at (self->pages, i);
 
-      adw_toggle_set_name (toggle, name);
-      adw_toggle_set_icon_name (toggle, view != NULL ? view->icon_name : panel_widget_get_icon_name (page));
-      adw_toggle_set_tooltip (toggle, label);
-      adw_toggle_group_add (self->group, toggle);
+          if (rank_of (page) == rank)
+            add_toggle (self, page, i);
+        }
     }
 
   self->syncing = FALSE;
@@ -267,7 +291,6 @@ gbp_apex_sidebar_header_class_init (GbpApexSidebarHeaderClass *klass)
   gtk_widget_class_set_css_name (widget_class, "apexsidebarviews");
 }
 
-/* Builder's style variant reaches AdwStyleManager, not the plugin stylesheet's prefers-color-scheme. */
 static void
 follow_dark (GtkWidget *widget)
 {
@@ -275,6 +298,13 @@ follow_dark (GtkWidget *widget)
     gtk_widget_add_css_class (widget, "dark");
   else
     gtk_widget_remove_css_class (widget, "dark");
+}
+
+void
+gbp_apex_track_dark (GtkWidget *widget)
+{
+  g_signal_connect_object (adw_style_manager_get_default (), "notify::dark", G_CALLBACK (follow_dark), widget, G_CONNECT_SWAPPED);
+  follow_dark (widget);
 }
 
 static void
@@ -294,8 +324,7 @@ gbp_apex_sidebar_header_init (GbpApexSidebarHeader *self)
   g_signal_connect_object (self->group, "notify::active-name", G_CALLBACK (active_name_changed), self, G_CONNECT_SWAPPED);
 
   gtk_accessible_update_property (GTK_ACCESSIBLE (self->group), GTK_ACCESSIBLE_PROPERTY_LABEL, APEX_("Sidebar views"), -1);
-  g_signal_connect_object (adw_style_manager_get_default (), "notify::dark", G_CALLBACK (follow_dark), self, G_CONNECT_SWAPPED);
-  follow_dark (GTK_WIDGET (self));
+  gbp_apex_track_dark (GTK_WIDGET (self));
 }
 
 /* The switcher on the workspace's first start frame, and the start frames' pages; the workspace addin holds it. */
@@ -307,6 +336,7 @@ struct _GbpApexSidebar
   PanelPaned   *paned;
   GPtrArray    *watched;
   GPtrArray    *moved;
+  GtkWidget    *outline;
   guint         relocate_source;
   guint         hidden : 1;
 };
@@ -534,9 +564,22 @@ gbp_apex_sidebar_new (IdeWorkspace *workspace)
   header = PANEL_FRAME_HEADER (g_object_new (GBP_TYPE_APEX_SIDEBAR_HEADER, NULL));
   panel_frame_set_header (self->frame, header);
   panel_frame_header_set_frame (header, self->frame);
+  self->outline = GTK_WIDGET (gbp_apex_outline_pane_new ());
+  g_object_add_weak_pointer (G_OBJECT (self->outline), (gpointer *) &self->outline);
+  ide_workspace_add_pane (workspace, IDE_PANE (self->outline), position);
   relocate (self);
 
   return self;
+}
+
+void
+gbp_apex_sidebar_page_changed (GbpApexSidebar *self,
+                               IdePage        *page)
+{
+  g_return_if_fail (GBP_IS_APEX_SIDEBAR (self));
+
+  if (self->outline != NULL)
+    gbp_apex_outline_pane_set_page (GBP_APEX_OUTLINE_PANE (self->outline), page);
 }
 
 static void
@@ -544,6 +587,9 @@ gbp_apex_sidebar_dispose (GObject *object)
 {
   GbpApexSidebar *self = GBP_APEX_SIDEBAR (object);
 
+  if (self->outline != NULL)
+    g_object_remove_weak_pointer (G_OBJECT (self->outline), (gpointer *) &self->outline);
+  self->outline = NULL;
   g_clear_handle_id (&self->relocate_source, g_source_remove);
   for (guint i = 0; self->watched != NULL && i < self->watched->len; i++)
     g_signal_handlers_disconnect_by_data (g_ptr_array_index (self->watched, i), self);

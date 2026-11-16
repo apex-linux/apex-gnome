@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 # SPDX-License-Identifier: GPL-3.0-or-later
-# Apex Code's names over AT-SPI: the editor's text, every button and toggle button, as E0 listed them, and E0's other gaps' roles; a page tab also says whether it takes keyboard focus and is selected.
+# Apex Code's names over AT-SPI: the editor's text, every button and toggle button, as E0 listed them, and E0's other gaps' roles; a page tab also says whether it takes keyboard focus and is selected, a tree item its description, selection and level.
 import json
 
 import gi
@@ -9,7 +9,7 @@ from gi.repository import Atspi  # noqa: E402
 
 ROLES = {Atspi.Role.BUTTON, Atspi.Role.TOGGLE_BUTTON, Atspi.Role.TEXT, Atspi.Role.PAGE_TAB_LIST,
          Atspi.Role.PROGRESS_BAR, Atspi.Role.ENTRY, Atspi.Role.LIST, Atspi.Role.LABEL, Atspi.Role.PAGE_TAB,
-         Atspi.Role.RADIO_BUTTON}
+         Atspi.Role.RADIO_BUTTON, Atspi.Role.TREE, Atspi.Role.TREE_ITEM}
 
 
 def walk(node, out, depth=0):
@@ -26,6 +26,10 @@ def walk(node, out, depth=0):
             states = node.get_state_set()
             node_out['focusable'] = states.contains(Atspi.StateType.FOCUSABLE)
             node_out['selected'] = states.contains(Atspi.StateType.SELECTED)
+        if role == Atspi.Role.TREE_ITEM:
+            node_out['description'] = node.get_description() or ''
+            node_out['selected'] = node.get_state_set().contains(Atspi.StateType.SELECTED)
+            node_out['level'] = (node.get_attributes() or {}).get('level')
         out.append(node_out)
     for i in range(node.get_child_count()):
         child = node.get_child_at_index(i)

@@ -107,6 +107,12 @@ git -c safe.directory='*' -C "$APEX_ROOT" archive --format=tar --prefix=apex-gno
 rm -f "$project/.buildconfig"
 printf 'import os\n\n\ndef f(a):\n    return undefined_name + a\n' >"$project/tests/e1_lsp.py"
 : >"$project/tests/e2_typing.py"
+# The Outline's order case: its own small project, which ctags indexes in a moment after the first save.
+outline_project=$HOME/Projects/apex-outline
+rm -rf "$outline_project" "$HOME/.cache/gnome-builder/projects/apex-outline" "$HOME/Projects/.gnome-builder/projects/apex-outline"
+mkdir -p "$outline_project"
+printf 'class Engine:\n    def start(self):\n        return 1\n\n\ndef b():\n    return 2\n\n\ndef a():\n    return 3\n' \
+    >"$outline_project/e3_outline.py"
 # The typing case's project builds with meson, whose pipeline looks up ninja as it loads.
 typing_project=$HOME/Projects/apex-meson
 rm -rf "$typing_project" && mkdir -p "$typing_project"
@@ -148,6 +154,8 @@ env XDG_RUNTIME_DIR="$run" XDG_SESSION_TYPE=wayland XDG_CURRENT_DESKTOP=GNOME LA
     APEX_BUILDER_JHBUILD_PROJECT="$HOME/Projects/apex-jhbuild" APEX_BUILDER_JHBUILD_LOG="$OUT/builder-jhbuild.log" \
     APEX_BUILDER_SESSION_PROJECT="$session_project" APEX_BUILDER_SESSION_LOG="$OUT/builder-session.log" \
     APEX_BUILDER_SESSION="$HERE/session.py" APEX_BUILDER_EDITOR_FILE="$editor_file" \
+    APEX_BUILDER_OUTLINE_PROJECT="$outline_project" APEX_BUILDER_OUTLINE_FILE="$outline_project/e3_outline.py" \
+    APEX_BUILDER_OUTLINE_LOG="$OUT/builder-outline.log" \
     APEX_BUILDER_MEM="$HERE/mem.py" APEX_BUILDER_ATSPI="$HERE/atspi.py" APEX_BUILDER_DROP="$drop" APEX_BUILDER_CREATE="$create" APEX_BUILDER_PRESS="$HERE/press.py" \
     APEX_BUILDER_LOG="$OUT/builder-verbose.log" APEX_BUILDER_CREATE_LOG="$OUT/builder-create.log" \
     APEX_BUILDER_RENAMED_LOG="$OUT/builder-renamed.log" APEX_BUILDER_SETUP_LOG="$OUT/builder-setup.log" PROBE="$HERE/probe.js" \
@@ -230,6 +238,21 @@ check "the bottom panel's tabs: Build Pipeline, Manuals, TODO/FIXMEs, Unit Tests
 for name in "Pinned Pages" "Pages"; do
     check "\"$name\" names a tab list" ".idle.names.nodes | any(.role == \"page tab list\" and .name == \"$name\")"
 done
+check "\"Outline\" is the switcher's second segment, after \"Project\"" \
+    '[.idle.names.nodes[] | select(.role == "page tab" and (.name == "Project" or .name == "Outline" or .name == "Search" or .name == "Version control")) | .name][:2] == ["Project", "Outline"]'
+check "the Outline view names its tree for the file, and lists pylsp's symbol f at line 4, current with the cursor below it" \
+    '.idle.outline.pressed and (.idle.outline.names.nodes | any(.role == "tree" and .name == "Outline of e1_lsp.py"))
+     and (.idle.outline.names.nodes | any(.role == "tree item" and .name == "f" and .description == "Function, line 4" and .selected and .level == "1"))'
+check "with Outline hidden behind Project, an edit refreshes it not at all" \
+    '.outline.pressed and .outline.hiddenRefreshes == 0'
+check "a save with symbols listed rebuilds the Outline not at all, so a row keeps keyboard focus" \
+    '.outline.pressed and .outline.savedRebuilds == 0'
+check "ctags's tree, in name order, is listed in line order: Engine, start, b, a; a current with the cursor below it" \
+    '.outline.indexed and .outline.byCtags and ([.outline.items[].name] == ["Engine", "start", "b", "a"])
+     and ([.outline.items[] | select(.selected) | .name] == ["a"])'
+check "each Outline item says its kind and its nesting: Engine a class at level 1, start (ctags's member, Builder's field) at level 2" \
+    '([.outline.items[] | [.name, .description, .level]][:2] == [["Engine", "Class, line 1", "1"], ["start", "Field, line 2", "2"]])
+     and ([.outline.items[2:][] | .level] == ["1", "1"])'
 check "the project tree and its filter are named" '[.idle.names.nodes[] | select(.role == "list" or .role == "entry") | .name] | (index("Project Tree") != null and index("Filter…") != null)'
 check "every typed key drew a frame" '.typing.keys | length > 300 and all(. != null)'
 check "typing for 60 s from a fresh start: no key over ${STALL_MS} ms" '.typing.keys | max <= $stall'
