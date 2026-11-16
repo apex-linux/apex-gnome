@@ -142,8 +142,18 @@ apexsidebarviews.dark toggle-group toggle:checked {
   padding: 0 10px;
   border-radius: 9px;
   background-color: #ffffff;
+}
+
+/* The board draws the entry focused: its accent ring only while it is, in place of Adwaita's outline. */
+.apexsearch entry:focus-within {
   box-shadow: inset 0 0 0 2px var(--accent-bg-color);
   outline: none;
+}
+
+.apexsearch .status {
+  padding: 0 4px;
+  font-size: 12px;
+  color: rgba(29, 29, 33, .62);
 }
 
 .apexsearch entry text {
@@ -207,6 +217,7 @@ apexsidebarviews.dark toggle-group toggle:checked {
   background-color: rgba(255, 255, 255, .09);
 }
 
+.apexsearch.dark .status,
 .apexsearch.dark .header .directory,
 .apexsearch.dark .header .count {
   color: rgba(244, 244, 246, .64);

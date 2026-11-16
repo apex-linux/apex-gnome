@@ -222,8 +222,9 @@ async function idle() {
     await Scripting.sleep(1000);
     const outline = await outlineOf();
     const search = await searchFor('undefined_name');
+    const cap = await searchCap(st.window);
     await quit();
-    return {samples, names, noPage, popover: {pressed, names: popover}, bottom, outline, search, title: st.window.get_title()};
+    return {samples, names, noPage, popover: {pressed, names: popover}, bottom, outline, search, cap, title: st.window.get_title()};
 }
 
 // The Outline view with the cursor at the file's end, then Project again before the quit saves the session.
@@ -256,13 +257,53 @@ async function searchFor(query) {
             break;
     }
     const {pressed: handedOff} = await helper('APEX_BUILDER_PRESS', 'Show *');
-    await Scripting.sleep(2000);
-    const findInFiles = await helper('APEX_BUILDER_ATSPI');
+    let findInFiles;
+    for (let i = 0; i < SEARCH_WAIT_MS / 1000; i++) {
+        await Scripting.sleep(1000);
+        findInFiles = await helper('APEX_BUILDER_ATSPI');
+        if (findInFiles.nodes.some(n => n.role === 'button' && n.name === 'Replace in Project' && n.enabled))
+            break;
+    }
     tap(Clutter.KEY_F9, [Clutter.KEY_Control_L]);
     await Scripting.sleep(1000);
     await helper('APEX_BUILDER_PRESS', 'Project');
     await Scripting.sleep(1000);
     return {pressed, names, handedOff, findInFiles};
+}
+
+const CAP_KEYS_MS = 8000;
+
+// One letter finds tens of thousands of lines in this project: keys timed across the scan and the
+// rows' build (arrows, which leave the query as it is), then the rows, and a query that finds nothing.
+async function searchCap(window) {
+    const {pressed} = await helper('APEX_BUILDER_PRESS', 'Search');
+    await Scripting.sleep(1500);
+    tap(Clutter.KEY_a, [Clutter.KEY_Control_L]);
+    tap(keyval('u'));
+    const keys = [];
+    const end = now() + CAP_KEYS_MS * 1000;
+    for (let i = 0; now() < end; i++) {
+        const t = now();
+        keys.push(await timedTap(window, i % 2 ? Clutter.KEY_Right : Clutter.KEY_Left));
+        const left = KEY_GAP_MS - (now() - t) / 1000;
+        if (left > 0)
+            await Scripting.sleep(left);
+    }
+    let names;
+    for (let i = 0; i < SEARCH_WAIT_MS / 1000; i++) {
+        names = await helper('APEX_BUILDER_ATSPI');
+        if (names.nodes.some(n => n.role === 'button' && n.name.startsWith('Show ')))
+            break;
+        await Scripting.sleep(1000);
+    }
+    tap(Clutter.KEY_a, [Clutter.KEY_Control_L]);
+    await type('zqxjvkzqxj');
+    await Scripting.sleep(3000);
+    const none = await helper('APEX_BUILDER_ATSPI');
+    await helper('APEX_BUILDER_PRESS', 'Project');
+    await Scripting.sleep(1000);
+    return {pressed, keys, names, none,
+        hits: names.nodes.filter(n => n.role === 'button' && n.name.startsWith('Line ')).length};
 }
 
 // A refresh that asked a resolver: one with no buffer yet asks none.

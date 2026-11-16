@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 # SPDX-License-Identifier: GPL-3.0-or-later
-# Apex Code's names over AT-SPI: the editor's text, every button and toggle button, as E0 listed them, and E0's other gaps' roles; a page tab also says whether it takes keyboard focus and is selected, a tree item its description, selection and level.
+# Apex Code's names over AT-SPI: the editor's text, every button (and whether it is enabled) and toggle button, as E0 listed them, and E0's other gaps' roles; a page tab also says whether it takes keyboard focus and is selected, a tree item its description, selection and level.
 import json
 
 import gi
@@ -26,6 +26,8 @@ def walk(node, out, depth=0):
             states = node.get_state_set()
             node_out['focusable'] = states.contains(Atspi.StateType.FOCUSABLE)
             node_out['selected'] = states.contains(Atspi.StateType.SELECTED)
+        if role == Atspi.Role.BUTTON:
+            node_out['enabled'] = node.get_state_set().contains(Atspi.StateType.SENSITIVE)
         if role == Atspi.Role.TREE_ITEM:
             node_out['description'] = node.get_description() or ''
             node_out['selected'] = node.get_state_set().contains(Atspi.StateType.SELECTED)

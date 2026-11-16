@@ -15,6 +15,7 @@
 
 #include "../grep/gbp-grep-model.h"
 #include "../grep/gbp-grep-panel.h"
+#include "../grep/gbp-grep-workspace-addin.h"
 
 #include "apex-i18n.h"
 #include "gbp-apex-search-pane.h"
@@ -22,12 +23,17 @@
 
 #define DIM_ALPHA 40632 /* --dim: the foreground at .62 */
 #define MATCH_ALPHA 15728 /* the board's match: the accent at 24% */
+/* A one-letter query finds tens of thousands of lines: the view builds this many, and says so. */
+#define HIT_CAP 200
+/* A minified line is megabytes: a hit shows this much of it. */
+#define HIT_TEXT_MAX 500
 
 struct _GbpApexSearchPane
 {
   IdePane         parent_instance;
   GtkSearchEntry *entry;
   GtkButton      *show_all;
+  GtkLabel       *status;
   GtkBox         *results;
   GbpGrepModel   *model;
   GCancellable   *cancellable;
@@ -63,6 +69,19 @@ clear_results (GbpApexSearchPane *self)
   while ((child = gtk_widget_get_first_child (GTK_WIDGET (self->results))))
     gtk_box_remove (self->results, child);
   gtk_widget_set_visible (GTK_WIDGET (self->show_all), FALSE);
+  gtk_widget_set_visible (GTK_WIDGET (self->status), FALSE);
+}
+
+/* The view's state, also announced: a screen reader hears that the scan ended, and how. */
+static void
+set_status (GbpApexSearchPane *self,
+            const char        *text,
+            gboolean           announce)
+{
+  gtk_label_set_text (self->status, text);
+  gtk_widget_set_visible (GTK_WIDGET (self->status), TRUE);
+  if (announce)
+    gtk_accessible_announce (GTK_ACCESSIBLE (self), text, GTK_ACCESSIBLE_ANNOUNCEMENT_PRIORITY_MEDIUM);
 }
 
 static void
@@ -82,6 +101,7 @@ hit_row (GbpApexSearchPane      *self,
          const GbpGrepModelLine *line)
 {
   const char *text = line->start_of_message;
+  g_autofree char *shown = NULL;
   gsize skip = 0;
   GtkWidget *button;
   GtkWidget *label;
@@ -117,7 +137,15 @@ hit_row (GbpApexSearchPane      *self,
       pango_attr_list_insert (attrs, attr);
     }
 
-  label = gtk_label_new (text + skip);
+  shown = g_strdup (text + skip);
+  if (strlen (shown) > HIT_TEXT_MAX)
+    {
+      char *end = g_utf8_find_prev_char (shown, shown + HIT_TEXT_MAX + 1);
+
+      *end = '\0';
+    }
+
+  label = gtk_label_new (shown);
   gtk_label_set_attributes (GTK_LABEL (label), attrs);
   gtk_label_set_xalign (GTK_LABEL (label), 0);
   gtk_label_set_ellipsize (GTK_LABEL (label), PANGO_ELLIPSIZE_END);
@@ -126,7 +154,7 @@ hit_row (GbpApexSearchPane      *self,
   button = gtk_button_new ();
   gtk_widget_add_css_class (button, "hit");
   gtk_button_set_child (GTK_BUTTON (button), label);
-  name = g_strdup_printf (APEX_("Line %u: %s"), line->line, text + skip);
+  name = g_strdup_printf (APEX_("Line %u: %s"), line->line, shown);
   gtk_accessible_update_property (GTK_ACCESSIBLE (button), GTK_ACCESSIBLE_PROPERTY_LABEL, name, -1);
   g_object_set_data_full (G_OBJECT (button), "apex-location",
                           ide_location_new (file, line->line > 0 ? line->line - 1 : 0, -1),
@@ -178,9 +206,11 @@ show_results (GbpApexSearchPane *self)
   g_autoptr(GHashTable) counts = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
   g_autofree char *group_path = NULL;
   g_autofree char *label = NULL;
+  g_autofree char *status = NULL;
   GtkWidget *group = NULL;
   GtkTreeIter iter;
-  guint total = 0;
+  guint total = gtk_tree_model_iter_n_children (model, NULL);
+  guint shown = 0;
 
   clear_results (self);
 
@@ -195,7 +225,7 @@ show_results (GbpApexSearchPane *self)
                              GUINT_TO_POINTER (GPOINTER_TO_UINT (g_hash_table_lookup (counts, line->path)) + 1));
     }
 
-  for (gboolean ok = gtk_tree_model_get_iter_first (model, &iter); ok; ok = gtk_tree_model_iter_next (model, &iter))
+  for (gboolean ok = gtk_tree_model_get_iter_first (model, &iter); ok && shown < HIT_CAP; ok = gtk_tree_model_iter_next (model, &iter))
     {
       const GbpGrepModelLine *line = NULL;
 
@@ -212,14 +242,26 @@ show_results (GbpApexSearchPane *self)
         }
 
       gtk_box_append (GTK_BOX (group), hit_row (self, line));
-      total++;
+      shown++;
     }
   G_GNUC_END_IGNORE_DEPRECATIONS
 
-  g_debug ("search: %u results", total);
+  g_debug ("search: %u results, %u shown", total, shown);
   if (total == 0)
-    return;
+    {
+      set_status (self, APEX_("No results"), TRUE);
+      return;
+    }
 
+  if (shown < total)
+    /* TRANSLATORS: the Search view lists the first %u of %u lines found; the plural follows the second. */
+    status = g_strdup_printf (APEX_NG_("Showing %u of %u result", "Showing %u of %u results", total), shown, total);
+  else
+    status = g_strdup_printf (APEX_NG_("%u result", "%u results", total), total);
+  set_status (self, status, TRUE);
+
+  /* TRANSLATORS: Find in Files is Builder's panel title; use Builder's own translation of it for your
+   * language, or keep it as it is if Builder has none. */
   label = g_strdup_printf (APEX_NG_("Show %u result in Find in Files", "Show %u results in Find in Files", total), total);
   gtk_button_set_label (self->show_all, label);
   gtk_widget_set_visible (GTK_WIDGET (self->show_all), TRUE);
@@ -235,8 +277,11 @@ scan_cb (GObject      *object,
 
   if (!gbp_grep_model_scan_finish (GBP_GREP_MODEL (object), result, &error))
     {
-      if (!g_error_matches (error, G_IO_ERROR, G_IO_ERROR_CANCELLED))
-        g_debug ("search: %s", error->message);
+      if (!g_error_matches (error, G_IO_ERROR, G_IO_ERROR_CANCELLED) && (GObject *) self->model == object)
+        {
+          g_debug ("search: %s", error->message);
+          set_status (self, APEX_("Could not search the project"), TRUE);
+        }
       return;
     }
 
@@ -249,7 +294,6 @@ search_changed (GbpApexSearchPane *self)
 {
   const char *query = gtk_editable_get_text (GTK_EDITABLE (self->entry));
   IdeContext *context = ide_widget_get_context (GTK_WIDGET (self));
-  g_autoptr(GFile) workdir = NULL;
 
   g_cancellable_cancel (self->cancellable);
   g_clear_object (&self->cancellable);
@@ -259,43 +303,34 @@ search_changed (GbpApexSearchPane *self)
   if (context == NULL || query[0] == '\0')
     return;
 
-  workdir = ide_context_ref_workdir (context);
+  /* No directory: the project's, as the Find in Files panel's own model, which keeps that panel
+   * project-wide, and without its close button. */
   self->cancellable = g_cancellable_new ();
   self->model = gbp_grep_model_new (context);
-  gbp_grep_model_set_directory (self->model, workdir);
+  set_status (self, APEX_("Searching…"), FALSE);
   gbp_grep_model_set_recursive (self->model, TRUE);
   gbp_grep_model_set_query (self->model, query);
   gbp_grep_model_scan_async (self->model, self->cancellable, scan_cb, g_object_ref (self));
 }
 
-static GtkWidget *
-find_panel (GtkWidget *widget)
-{
-  for (GtkWidget *child = gtk_widget_get_first_child (widget); child; child = gtk_widget_get_next_sibling (child))
-    {
-      GtkWidget *found;
-
-      if (GBP_IS_GREP_PANEL (child))
-        return child;
-      if ((found = find_panel (child)))
-        return found;
-    }
-
-  return NULL;
-}
-
-/* Builder's Find in Files panel, in the bottom panel, takes the same model: its list, and its Replace. */
+/* Builder's Find in Files panel, in the bottom panel, takes the query and scans it afresh, as the
+ * project tree's popover hands it over: the panel's Replace never runs on a consumed model. */
 static void
 show_all_clicked (GbpApexSearchPane *self)
 {
   IdeWorkspace *workspace = ide_widget_get_workspace (GTK_WIDGET (self));
-  GtkWidget *panel;
+  IdeWorkspaceAddin *addin;
+  GbpGrepPanel *panel;
 
-  if (workspace == NULL || self->model == NULL || !(panel = find_panel (GTK_WIDGET (workspace))))
+  if (workspace == NULL || self->model == NULL ||
+      !(addin = ide_workspace_addin_find_by_module_name (workspace, "grep")) ||
+      !(panel = gbp_grep_workspace_addin_get_panel (GBP_GREP_WORKSPACE_ADDIN (addin))))
     return;
 
-  gbp_grep_panel_set_model (GBP_GREP_PANEL (panel), self->model);
+  gbp_grep_panel_set_model (panel, self->model);
   panel_widget_raise (PANEL_WIDGET (panel));
+  gbp_grep_panel_launch_search (panel);
+  gtk_widget_grab_focus (GTK_WIDGET (panel));
 }
 
 static gboolean
@@ -353,12 +388,19 @@ gbp_apex_search_pane_init (GbpApexSearchPane *self)
   gtk_widget_set_visible (GTK_WIDGET (self->show_all), FALSE);
   g_signal_connect_object (self->show_all, "clicked", G_CALLBACK (show_all_clicked), self, G_CONNECT_SWAPPED);
 
+  self->status = GTK_LABEL (gtk_label_new (NULL));
+  gtk_widget_add_css_class (GTK_WIDGET (self->status), "status");
+  gtk_label_set_xalign (self->status, 0);
+  gtk_label_set_wrap (self->status, TRUE);
+  gtk_widget_set_visible (GTK_WIDGET (self->status), FALSE);
+
   self->results = GTK_BOX (gtk_box_new (GTK_ORIENTATION_VERTICAL, 8));
   gtk_scrolled_window_set_policy (GTK_SCROLLED_WINDOW (scroller), GTK_POLICY_NEVER, GTK_POLICY_AUTOMATIC);
   gtk_scrolled_window_set_child (GTK_SCROLLED_WINDOW (scroller), GTK_WIDGET (self->results));
   gtk_widget_set_vexpand (scroller, TRUE);
 
   gtk_box_append (GTK_BOX (box), GTK_WIDGET (self->entry));
+  gtk_box_append (GTK_BOX (box), GTK_WIDGET (self->status));
   gtk_box_append (GTK_BOX (box), GTK_WIDGET (self->show_all));
   gtk_box_append (GTK_BOX (box), scroller);
   gtk_widget_set_vexpand (box, TRUE);
